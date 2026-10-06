@@ -21,6 +21,7 @@ import { agentSessionFailureSentence } from './agent-session-failure-words'
 import {
   agentSessionRefusalFailure,
   agentSessionRpcErrorFailure,
+  parseAgentSessionWriteFailure,
   agentSessionWriteKindForMethod,
   type AgentSessionWriteFailure,
   type AgentSessionWriteKind,
@@ -698,5 +699,65 @@ describe('agentSessionRefusalCauseParts', () => {
     ['an unconfirmed one', { kind: 'unconfirmed' }]
   ])('names nothing for %s', (_label, failure) => {
     expect(agentSessionRefusalCauseParts(failure)).toEqual([])
+  })
+})
+
+describe('saved Arguments refusals', () => {
+  it('keeps generic launch copy when an older reader drops the new detail', () => {
+    const wire = JSON.parse(
+      JSON.stringify({
+        code: 'agent_session_operation_invalid',
+        details: {
+          reason: 'attachFailed',
+          argumentProblem: { agent: 'Codex', option: '--remote', problem: 'unsupportedOption' }
+        }
+      })
+    )
+    // The prior reader kept only its known reason and facts from details.
+    const older = agentSessionRefusalFailure({
+      code: wire.code,
+      details: { reason: wire.details.reason }
+    })
+    expect(agentSessionRefusalCauseParts(older)).toEqual([])
+    expect(agentSessionWriteNoticeEnglish(agentSessionWriteNoticeParts(older, 'send'))).toBe(
+      'Your message was not sent.'
+    )
+  })
+
+  it('keeps the validated cause after durable parsing and names the correction beside Retry', () => {
+    const refused = agentSessionRefusalFailure({
+      code: 'agent_session_operation_invalid',
+      details: {
+        reason: 'attachFailed',
+        argumentProblem: { agent: 'Codex', option: '--remote', problem: 'unsupportedOption' }
+      }
+    })
+    const parsed = parseAgentSessionWriteFailure(JSON.parse(JSON.stringify(refused)))
+    if (!parsed) {
+      throw new Error('saved refusal was not read')
+    }
+    expect(agentSessionWriteNoticeEnglish(agentSessionRefusalCauseParts(parsed))).toBe(
+      "Codex couldn't start. Saved Arguments contain an unsupported option (--remote). Edit them in Settings > Agents > Arguments."
+    )
+  })
+
+  it.each([
+    { agent: 'Codex', option: '--remote', problem: 'futureProblem' },
+    { agent: 'Codex', option: '--remote=private', problem: 'unsupportedOption' }
+  ])('ignores an unrecognized or unsafe argument detail', (argumentProblem) => {
+    const refused = parseAgentSessionWriteFailure({
+      kind: 'refused',
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'attachFailed', argumentProblem }
+    })
+    expect(refused).toEqual({
+      kind: 'refused',
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'attachFailed' }
+    })
+    if (!refused) {
+      throw new Error('refusal was not read')
+    }
+    expect(agentSessionRefusalCauseParts(refused)).toEqual([])
   })
 })

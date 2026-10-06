@@ -4,6 +4,7 @@ import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { dedupeInFlightRun } from '../in-flight-run-dedupe'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+import { writeManagedScript } from '../agent-hooks/installer-utils'
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import { getManagedCommand, getManagedScriptPath } from './codex-hook-definition'
 import { installCodexHooksExclusively } from './codex-hook-local-install'
@@ -14,14 +15,15 @@ import {
 } from './codex-hook-local-maintenance'
 import { installCodexHooksRemote } from './codex-hook-remote-install'
 import { getManagedScript } from './codex-hook-script'
-import { readCodexHookHomeStatus } from './codex-hook-status'
+import { readCodexHookHomeStatus, readCurrentCodexHookStatus } from './codex-hook-status'
 import {
   CODEX_ANSWER_AWAITED,
   CODEX_HOOK_LAUNCH_WAIT_MS,
   readEveryKnownCodexHookHashes,
-  readKnownCodexHookAnswer,
   resolveCodexHookAnswerForLaunch
 } from './codex-hook-hash-lookup'
+import { reconcileCodexHooks } from './codex-hook-reconcile'
+import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
 import { removeStaleWslRuntimeManagedHookTrustEntries } from './codex-hook-trust-cleanup'
 import { runExclusivelyForRuntimeAndSystemTrustConfig } from './codex-hook-trust-queue'
 import {
@@ -199,22 +201,41 @@ export class CodexHookService {
     return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
   }
 
-  /** Status read from a managed home's files, against what Codex last answered. */
-  getStatus(runtimeHomePath: string = getOrcaManagedCodexHomePath()): AgentHookInstallStatus {
-    return readCodexHookHomeStatus(runtimeHomePath, readKnownCodexHookAnswer())
+  /**
+   * Status read from a home's files: the home the next native pane gets when
+   * none is named (~/.codex outside the app), else that home.
+   */
+  getStatus(runtimeHomePath?: string): AgentHookInstallStatus {
+    return readCurrentCodexHookStatus(runtimeHomePath)
+  }
+
+  /**
+   * App start and the setting turning on: reconciles Orca's entry in ~/.codex,
+   * converting an older build's, then sweeps retired forms.
+   */
+  async reconcileHooks(): Promise<AgentHookInstallStatus> {
+    try {
+      // Why here too: like every managed agent's installer, it deploys its shared script.
+      writeManagedScript(getManagedScriptPath(), getManagedScript())
+    } catch (error) {
+      console.warn('[codex-hook-service] could not write the Codex hook script:', error)
+    }
+    await reconcileCodexHooks({ convertOlderForms: true })
+    await cleanupLegacyManagedHookRepresentations()
+    return this.getStatus()
   }
 
   // Why: runtimeHomePath defaults to the shared managed mirror, but a managed
   // account launching against its own self-contained CODEX_HOME passes that
   // per-account home so hooks.json/config.toml/trust land where codex reads.
-  // Only a plain terminal's launch prep skips waiting for Codex's answer.
+  // Only launch prep for a pane that does not run Codex skips waiting for Codex's answer.
   async install(
     runtimeHomePath: string = getOrcaManagedCodexHomePath(),
-    waitsForCodex = true,
+    launchesCodex = true,
     isHooksEnabled: () => boolean = () => true
   ): Promise<AgentHookInstallStatus> {
     const answer =
-      (await resolveCodexHookAnswerForLaunch(waitsForCodex ? CODEX_HOOK_LAUNCH_WAIT_MS : 0)) ??
+      (await resolveCodexHookAnswerForLaunch(launchesCodex ? CODEX_HOOK_LAUNCH_WAIT_MS : 0)) ??
       CODEX_ANSWER_AWAITED
     return runExclusivelyForRuntimeAndSystemTrustConfig(runtimeHomePath, () => {
       // Why decided in the queue: an Off that landed during the wait has already run, and must win.

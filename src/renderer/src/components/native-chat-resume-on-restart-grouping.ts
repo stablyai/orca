@@ -33,7 +33,8 @@ export type ResumeCandidate = {
 export type ResumeFailure = ResumeCandidate & {
   failedAt: number
   outcome: 'refused' | 'unconfirmed'
-  /** The host's or provider's refusal code, verbatim. */
+  /** The host's or provider's refusal code, verbatim; or, for a resume request lost before the
+   *  host reserved anything, this side's own `agent_session_restart_request_failed`. */
   reason: string
   /** Whether a retry would run at all; an older host omits it and the reason decides alone. */
   retryable?: boolean

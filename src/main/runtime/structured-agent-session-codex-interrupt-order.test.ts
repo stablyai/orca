@@ -216,6 +216,7 @@ beforeEach(async () => {
     hostId: 'local',
     claimKeyId: 'key-1',
     resolveWorkspacePath: async () => root,
+    resolveLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
     resolveCodexCommand: () => 'codex',
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),

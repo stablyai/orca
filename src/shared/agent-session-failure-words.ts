@@ -138,6 +138,20 @@ function startRetry(
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
   return (context, fact, _surface, say) => {
     const failed = say(verb, agent(say, context))
+    if (fact.argumentProblem) {
+      const problemCopy = {
+        unsupportedOption: 'argumentsUnsupportedOption',
+        missingValue: 'argumentsMissingValue',
+        multipleValues: 'argumentsMultipleValues',
+        positionalPrompt: 'argumentsPositionalPrompt'
+      } as const
+      return joinSentences([
+        failed,
+        say(problemCopy[fact.argumentProblem.problem], { option: fact.argumentProblem.option }),
+        say('editSavedArguments'),
+        ...startRetry(say, context)
+      ])
+    }
     // Only a terminal agent an older build recorded holds a claim; quitting it frees the chat.
     if (fact.refusal?.details?.reason === 'claimConflicted') {
       return joinSentences([failed, say('terminalAgentHoldsChat'), say('quitTerminalAgent')])

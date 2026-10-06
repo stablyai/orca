@@ -12,7 +12,18 @@
   },
   "settings": {
     "chat": {
-      "description": "チャットの外観を選びます。"
+      "description": "チャットの外観と名前の付け方を選びます。",
+      "names": {
+        "title": "チャット名",
+        "description": "選択したツールが最初のメッセージから新規チャットの名前を生成します。名前が生成されない場合は、Claude Chat または Codex Chat のままです。",
+        "enable": "チャットに自動で名前を付ける",
+        "recipe": "チャット名",
+        "recipeDescription": "新規チャットの最初のメッセージから短い名前を生成します。",
+        "customCommandDescription": "「カスタムコマンド」を選ぶレシピで共有するコマンドです。{prompt} を使うと入力を引数として渡し、使わない場合は標準入力で渡します。",
+        "saveFailed": "チャット名の設定を保存できませんでした。",
+        "searchAgent": "Agent",
+        "searchTemplate": "コマンドテンプレート"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABCまたはU.S. — OptionはAlt/Escシーケンスを送信します",
@@ -8329,8 +8340,8 @@
           "3c88ec55d6": "検索条件に一致する設定が見つかりませんでした:「",
           "c7ad095d96": "設定を読み込んでいます…",
           "acc7bbdefd": "もう一度 ESC を押して設定を終了します",
-          "43b68e10f0": "Git AI Author の変更が保存されていません。離れるとそれらは破棄されます。",
-          "17bdee4ff1": "保存されていない Git AI Author の変更を破棄しますか?",
+          "43b68e10f0": "未保存の AI 設定があります。移動すると変更は破棄されます。",
+          "17bdee4ff1": "未保存の AI 設定を破棄しますか？",
           "084d8fac5b": "プライバシーとセキュリティ",
           "23931df7e8": "リモートホスト",
           "mobile_group": "モバイル",
@@ -17340,16 +17351,12 @@
         "listLabel": "再開されるチャット",
         "dontAskAgain": "二度と質問しないでください (自動的に再開します)",
         "dontAskAgainHint": "これは、「設定」→「実験的機能」→「チャット UI」でオフにできます。",
-        "continuedOne": "1 つのチャットを再開し、続行を依頼しました",
-        "continuedMany": "{{value0}} チャットを再開し、続行するよう依頼しました",
+        "continuedOne": "1 件のチャットを再開しました",
+        "continuedMany": "{{value0}} 件のチャットを再開しました",
         "selectAgent": "{{value0}} チャット「{{value1}}」を {{value2}} で再開します",
         "resumeSelected": "{{value0}} チャットを再開",
         "resumeSelectedOne": "1 チャットを再開",
-        "continueUnconfirmed": "{{value0}}チャットについては継続配信は未確認です。別のメッセージを送信する前に、それらを開いて確認してください。",
-        "continueUnconfirmed_one": "{{value0}}チャットは継続配信未確認です。別のメッセージを送信する前に、開いて確認してください。",
-        "continueUnconfirmed_other": "{{value0}}チャットについては継続配信は未確認です。別のメッセージを送信する前に、それらを開いて確認してください。",
         "dismissAll": "すべて閉じる",
-        "dismissUnconfirmed": "履歴書のオファーの拒否は確認されていません。ステータスバーにまだ表示されている可能性があります。",
         "notContinuedOne": "1 件のチャットを再開できませんでした",
         "notContinuedMany": "{{value0}} 件のチャットを再開できませんでした",
         "notConfirmedOne": "1 件のチャットが再開されたことを確認できませんでした",
@@ -17357,7 +17364,6 @@
         "notConfirmedOtherOne": "他のチャット 1 件が再開されたことを確認できませんでした",
         "notConfirmedOtherMany": "他のチャット {{value0}} 件が再開されたことを確認できませんでした",
         "show": "表示",
-        "dismiss": "閉じる",
         "activityUnnamed": "名前なし",
         "activityApproval": "承認待ち: {{value0}}",
         "activityQuestion": "回答待ち: {{value0}}",
@@ -17453,8 +17459,8 @@
       "NativeChatResumeFailureGuidance": {
         "unconfirmed": "Orca は “continue” メッセージが配信されたことを確認できませんでした。別のメッセージを送る前にチャットを開いて確認してください。",
         "superseded": "チャットを開いて返信してください。再起動の直後に新規作業が届いたため、Orca は “continue” メッセージを送信しませんでした。",
-        "conflict": "別の Orca ウィンドウまたはターミナルがこのセッションをまだ保持しています。閉じてから再試行してください。",
-        "ownershipUnknown": "Orca はこのセッションを所有するプロセスを確認中です。少し待ってから再試行してください。",
+        "conflict": "このチャットは別の Orca ウィンドウまたはターミナルで開かれています。そちらで閉じてから再試行してください。",
+        "ownershipUnknown": "このチャットはまだ再開できる状態ではありません。少し待ってから再試行してください。",
         "notAttached": "チャットが再接続されませんでした。再試行するか、開いて新しいターンを開始してください。",
         "dispatchRejected": "Agent が “continue” メッセージを拒否しました。チャットを開いて自分で送信してください。",
         "unsupported": "このチャットは Orca で再開できません。開いて停止位置を確認してください。",
@@ -17583,6 +17589,7 @@
         "sendToTryAgain": "もう一度試すには、メッセージを送信してください。",
         "sendAgainToTryOnceMore": "メッセージをもう一度送信して、再度お試しください。",
         "couldNotStart": "{{agent}} を起動できませんでした。",
+        "editSavedArguments": "設定 > Agent > 引数で編集してください。",
         "couldNotRestart": "{{agent}} を再起動できませんでした。",
         "notSignedIn": "{{agent}} は選択したアカウントでサインインしていません。",
         "signInFirst": "先にサインインしてください。",
@@ -17630,6 +17637,10 @@
         "stopRefusedQuoted": "{{agent}} は停止しませんでした: {{detail}}。",
         "noTurnToStop": "{{agent}} には停止できる実行中のターンがありませんでした。",
         "answerUnconfirmed": "回答は記録されましたが、Agent は確認しませんでした。",
+        "argumentsMissingValue": "保存された引数の {{option}} に値が必要です。",
+        "argumentsMultipleValues": "保存された引数の {{option}} に複数の値が指定されています。",
+        "argumentsPositionalPrompt": "保存された引数にプロンプトが含まれています。",
+        "argumentsUnsupportedOption": "保存された引数に未対応のオプション（{{option}}）が含まれています。",
         "hostFault": "Orca で問題が発生したため、この操作は完了しませんでした。",
         "hostFaultTryAgain": "Orca で問題が発生したため、この操作は完了しませんでした。もう一度お試しください。",
         "hostStopped": "{{agent}} の起動が完了しなかったため、Orca が停止しました。",
@@ -17935,8 +17946,7 @@
         "deny": "拒否",
         "cancel": "キャンセル",
         "reason": "理由",
-        "blockedPath": "ブロックされたパス",
-        "askRule": "質問ルール",
+        "needsAccess": "アクセスが必要なパス",
         "plan": {
           "file": "計画ファイル"
         }
@@ -17976,7 +17986,8 @@
         "details": "詳細",
         "plan": "プラン",
         "historyRepaired": "このチャットの履歴の一部を読み込めませんでした。",
-        "historyItemTooLarge": "チャットのこの部分は大きすぎるため表示できません。"
+        "historyItemTooLarge": "チャットのこの部分は大きすぎるため表示できません。",
+        "stoppedBeforeStart": "Agent の開始前に停止しました"
       },
       "providerFrame": {
         "byteLength": "{{value0}}バイト"
@@ -18609,7 +18620,9 @@
     "clientHosted": {
       "preparationFailed": "このデスクトップ上でリモートブラウザを起動できませんでした。ペアリングされた接続を確認して、もう一度試してください。",
       "unavailableTitle": "クライアントホスト型ブラウザは利用不可",
-      "unavailableDescription": "このページは別のデスクトップに接続されているか、もう利用できません。",
+      "unavailableDescription": "このページは現在このデスクトップでは利用できません。",
+      "unavailableOtherDesktopDescription": "このページは別のデスクトップで開かれています。",
+      "unavailableHostOfflineDescription": "{{host}} はオフラインです。再接続されると、このページはここで再読み込みされます。",
       "download": {
         "started": "{{filename}}をダウンロード中…",
         "completed": "{{filename}}をダウンロードしました",

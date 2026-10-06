@@ -86,6 +86,9 @@ run(runtimePath, [
 function defaultTestArgs() {
   return [
     ...nodeServerTestPaths({ artifact, crossRuntime }),
+    // Electron probes run in desktop jobs; headless compatibility containers have no display.
+    '--exclude',
+    '**/*.electron.test.ts',
     // A directory selector would otherwise pull them into lanes that lack their inputs.
     ...(crossRuntime ? [] : CROSS_RUNTIME_TEST_PATHS.flatMap((path) => ['--exclude', path]))
   ]

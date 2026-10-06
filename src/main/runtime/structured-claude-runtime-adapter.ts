@@ -24,6 +24,7 @@ import type { ClaudeThinkingDisplaySupport } from '../claude/claude-thinking-dis
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
+  resolveClaudeLaunchArgs: () => Promise<string[]> | string[]
   resolveClaudeCommand?: () => string
   /** Whether a Claude CLI takes the thinking-display flag; absent never passes it. */
   claudeThinkingDisplay?: ClaudeThinkingDisplaySupport
@@ -87,6 +88,7 @@ export function createStructuredClaudeRuntimeAdapter(
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
+      resolveLaunchArgs: deps.resolveClaudeLaunchArgs,
       resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),
       ...(deps.resolveClaudeInheritedEnv

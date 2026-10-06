@@ -27,6 +27,7 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { readOutbox } from './structured-agent-session-outbox-storage'
+import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
 
 const NOT_SIGNED_IN = {
   kind: 'refused',
@@ -163,6 +164,27 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
 
     expect(screen.getByText('Chat could not be started.')).toBeTruthy()
     expect(screen.queryByText(/agent_session_/)).toBeNull()
+  })
+
+  it('shows the saved Arguments cause and correction beside launch Retry', () => {
+    mocks.launchLifecycle = 'failed'
+    mocks.launchFailure = agentSessionRefusalFailure({
+      code: 'agent_session_operation_invalid',
+      details: {
+        reason: 'attachFailed',
+        argumentProblem: { agent: 'Codex', option: '--remote', problem: 'unsupportedOption' }
+      }
+    })
+    render(sessionView())
+
+    expect(
+      screen.getByText(
+        "Codex couldn't start. Saved Arguments contain an unsupported option (--remote). Edit them in Settings > Agents > Arguments."
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText('Chat could not be started.')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(mocks.retryLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
   })
 
   it('keeps a stale reason off a launch that is no longer failed', () => {

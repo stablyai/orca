@@ -251,13 +251,14 @@ describe.runIf(process.platform !== 'win32')(
         const slowStop = join(folder, 'slow-stop.cjs')
         writeFileSync(
           slowStop,
-          `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))
-process.stdin.resume()
+          `process.stdin.resume()
 process.on('SIGTERM', () => setTimeout(() => {
   require('node:fs').writeFileSync(${JSON.stringify(stoppedFile)}, 'stopped')
   process.exit(0)
 }, 300))
 setInterval(() => {}, 60000)
+// Publish readiness only after the signal handler is installed.
+require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))
 `
         )
         const answers = join(folder, 'answers.cjs')

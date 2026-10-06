@@ -40,6 +40,31 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.couldNotRestart,
         values
       ),
+    argumentsUnsupportedOption: (values) =>
+      translate(
+        'components.native-chat.failureWords.argumentsUnsupportedOption',
+        COPY.argumentsUnsupportedOption,
+        values
+      ),
+    argumentsMissingValue: (values) =>
+      translate(
+        'components.native-chat.failureWords.argumentsMissingValue',
+        COPY.argumentsMissingValue,
+        values
+      ),
+    argumentsMultipleValues: (values) =>
+      translate(
+        'components.native-chat.failureWords.argumentsMultipleValues',
+        COPY.argumentsMultipleValues,
+        values
+      ),
+    argumentsPositionalPrompt: () =>
+      translate(
+        'components.native-chat.failureWords.argumentsPositionalPrompt',
+        COPY.argumentsPositionalPrompt
+      ),
+    editSavedArguments: () =>
+      translate('components.native-chat.failureWords.editSavedArguments', COPY.editSavedArguments),
     terminalAgentHoldsChat: () =>
       translate(
         'components.native-chat.writeNotice.terminalAgentHoldsChat',

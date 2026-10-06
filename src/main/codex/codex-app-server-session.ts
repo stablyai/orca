@@ -31,8 +31,8 @@ export type CodexAppServerInvocation = {
   cliPath: string | null
   /** Overlay applied on top of the inherited environment (e.g. CODEX_HOME). */
   env?: Record<string, string>
-  /** Env keys stripped from the inherited environment before spawn (e.g. an
-   *  inherited CODEX_HOME, so a default-home grant runs against the real ~/.codex). */
+  /** Env keys stripped from the inherited environment before spawn (e.g. an inherited
+   *  CODEX_HOME, so `listCodexHooks` with no `codexHome` lists the real ~/.codex). */
   envToDelete?: readonly string[]
   /** Whole-session deadline. The codex child is SIGKILLed when it lapses. */
   timeoutMs: number

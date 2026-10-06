@@ -17,6 +17,11 @@ export const AGENT_SESSION_FAILURE_COPY = {
   sendAgainToTryOnceMore: 'Send your message again to try once more.',
   couldNotStart: "{{agent}} couldn't start.",
   couldNotRestart: "{{agent}} couldn't restart.",
+  argumentsUnsupportedOption: 'Saved Arguments contain an unsupported option ({{option}}).',
+  argumentsMissingValue: 'Saved Arguments need a value for {{option}}.',
+  argumentsMultipleValues: 'Saved Arguments give {{option}} more than one value.',
+  argumentsPositionalPrompt: 'Saved Arguments include a prompt.',
+  editSavedArguments: 'Edit them in Settings > Agents > Arguments.',
   terminalAgentHoldsChat: TERMINAL_AGENT_HOLDS_CHAT,
   quitTerminalAgent: QUIT_TERMINAL_AGENT,
   startNewChat: START_NEW_CHAT,
@@ -97,6 +102,7 @@ export type AgentSessionFailureCopyValues = {
   agent?: string
   command?: string
   detail?: string
+  option?: string
   limit?: string
   size?: string
   attempt?: string

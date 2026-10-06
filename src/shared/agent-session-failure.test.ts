@@ -9,6 +9,7 @@ import {
   readWholeAgentSessionFailureFact,
   withProviderDiagnostic
 } from './agent-session-failure'
+import { AgentSessionFailureFactSchema } from './agent-session-failure-fact-schema'
 import { AGENT_SESSION_REFUSAL_REASONS } from './agent-session-refusal-details'
 
 describe('provider diagnostics', () => {
@@ -60,6 +61,31 @@ describe('reading a failure fact', () => {
       refusal: { code: 'agent_session_conflict', details: { reason: 'claimConflicted' } },
       detail: { text: 'x', audience: 'person' }
     })
+  })
+
+  it('retains safe argument details through schema admission and falls back for unknown details', () => {
+    const fact = {
+      kind: 'startFailed',
+      argumentProblem: { agent: 'Codex', option: '--remote', problem: 'unsupportedOption' }
+    }
+    expect(readWholeAgentSessionFailureFact(AgentSessionFailureFactSchema.parse(fact))).toEqual(
+      fact
+    )
+    expect(readWholeAgentSessionFailureFact({ kind: 'startFailed' })).toEqual({
+      kind: 'startFailed'
+    })
+    for (const argumentProblem of [
+      { agent: 'Future', option: '--remote', problem: 'unsupportedOption' },
+      { agent: 'Codex', option: '--remote', problem: 'futureProblem' },
+      { agent: 'Codex', option: '--remote=private', problem: 'unsupportedOption' }
+    ]) {
+      expect(
+        readWholeAgentSessionFailureFact({ kind: 'startFailed', argumentProblem })
+      ).toBeUndefined()
+      expect(readAgentSessionFailureFact({ kind: 'startFailed', argumentProblem })).toEqual({
+        kind: 'startFailed'
+      })
+    }
   })
 
   it('keeps what a provider said it is retrying, and only that', () => {

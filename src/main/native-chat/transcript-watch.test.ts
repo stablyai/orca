@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import { getActiveNativeChatWatcherCount, readNativeChatTranscriptTail } from './transcript-watch'
 import {
-  getActiveNativeChatWatcherCount,
-  readNativeChatTranscriptTail,
-  subscribeNativeChatTranscript
-} from './transcript-watch'
+  closeNativeChatTestSubscriptions,
+  subscribeNativeChatTranscriptForTest as subscribeNativeChatTranscript
+} from './transcript-watch-test-subscriptions'
 
 let tempRoots: string[] = []
 
@@ -16,6 +16,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  closeNativeChatTestSubscriptions()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })

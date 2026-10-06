@@ -12,7 +12,18 @@
   },
   "settings": {
     "chat": {
-      "description": "Elige el aspecto de los chats."
+      "description": "Elige cómo se ven y se nombran los chats.",
+      "names": {
+        "title": "Nombres de chats",
+        "description": "Usa un agente para nombrar los chats nuevos a partir de su primer mensaje. Si no se genera un nombre, se mantienen como Claude Chat o Codex Chat.",
+        "enable": "Nombrar chats automáticamente",
+        "recipe": "Nombre del chat",
+        "recipeDescription": "Genera un nombre breve a partir del primer mensaje de un chat nuevo.",
+        "customCommandDescription": "Línea de comandos compartida por las recetas que seleccionan Comando personalizado. Usa {prompt} para pasar la entrada como argumento; de lo contrario, se envía por la entrada estándar.",
+        "saveFailed": "No se pudo guardar la configuración de nombres de chats.",
+        "searchAgent": "agente",
+        "searchTemplate": "plantilla de comandos"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC o EE. UU. — Option envía secuencias Alt/Esc",
@@ -8307,8 +8318,8 @@
           "3c88ec55d6": "No se encontraron configuraciones para \"",
           "c7ad095d96": "Cargando ajustes...",
           "acc7bbdefd": "Presiona ESC de nuevo para salir de ajustes",
-          "43b68e10f0": "Tienes cambios no guardados de Git AI Author. Al salir se descartarán.",
-          "17bdee4ff1": "¿Descartar cambios no guardados de Git AI Author?",
+          "43b68e10f0": "Hay cambios de IA sin guardar. Se descartarán al salir.",
+          "17bdee4ff1": "¿Descartar los cambios de IA sin guardar?",
           "084d8fac5b": "Privacidad y seguridad",
           "23931df7e8": "Hosts remotos",
           "mobile_group": "Móvil",
@@ -17335,7 +17346,6 @@
         "notConfirmedOtherOne": "No se pudo confirmar que 1 otro chat se reanudó",
         "notConfirmedOtherMany": "No se pudo confirmar que {{value0}} otros chats se reanudaron",
         "show": "Mostrar",
-        "dismiss": "Descartar",
         "activityApproval": "Esperando tu aprobación: {{value0}}",
         "activityMidReply": "Estaba respondiendo",
         "activityMonitorMany": "Supervisando {{value0}} tareas en segundo plano",
@@ -17352,16 +17362,12 @@
         "listLabel": "Chats que se reanudarían",
         "dontAskAgain": "No volver a preguntar (reanudar automáticamente)",
         "dontAskAgainHint": "Puedes desactivarlo en Ajustes → Experimental → Interfaz de chat.",
-        "continuedOne": "Se reanudó 1 chat y se le pidió continuar",
-        "continuedMany": "Se reanudaron {{value0}} chats y se les pidió continuar",
+        "continuedOne": "Se reanudó 1 chat",
+        "continuedMany": "Se reanudaron {{value0}} chats",
         "selectAgent": "Reanudar {{value0}} chat \"{{value1}}\" en {{value2}}",
         "resumeSelected": "Reanudar {{value0}} chats",
         "resumeSelectedOne": "Reanudar 1 chat",
-        "continueUnconfirmed": "La entrega de la continuación no está confirmada para {{value0}} chats. Ábrelos para comprobarlo antes de enviar otro mensaje.",
-        "continueUnconfirmed_one": "La entrega de la continuación no está confirmada para {{value0}} chat. Ábrelo para comprobarlo antes de enviar otro mensaje.",
-        "continueUnconfirmed_other": "La entrega de la continuación no está confirmada para {{value0}} chats. Ábrelos para comprobarlo antes de enviar otro mensaje.",
-        "dismissAll": "Descartar todo",
-        "dismissUnconfirmed": "No se confirmó el descarte de la oferta de reanudación; es posible que siga en la barra de estado."
+        "dismissAll": "Descartar todo"
       },
       "NativeChatResumeOutcomeRow": {
         "openChat": "Abrir chat",
@@ -17376,8 +17382,8 @@
       "NativeChatResumeFailureGuidance": {
         "unconfirmed": "Orca no pudo confirmar que el mensaje “continue” se entregó. Abre el chat y compruébalo antes de enviar otro.",
         "superseded": "Abre el chat y responde. Llegó trabajo nuevo justo después del reinicio, así que Orca no envió su mensaje “continue”.",
-        "conflict": "Otra ventana de Orca o terminal aún conserva esta sesión. Ciérrala e inténtalo de nuevo.",
-        "ownershipUnknown": "Orca aún está determinando qué proceso posee esta sesión. Espera un momento e inténtalo de nuevo.",
+        "conflict": "Este chat está abierto en otra ventana de Orca o en una terminal. Ciérralo allí e inténtalo de nuevo.",
+        "ownershipUnknown": "Este chat aún no está listo para reanudarse. Espera un momento e inténtalo de nuevo.",
         "notAttached": "El chat no se reconectó. Reinténtalo o ábrelo para empezar un turno nuevo.",
         "dispatchRejected": "El agente rechazó el mensaje “continue”. Abre el chat y envía uno tú mismo.",
         "unsupported": "Orca no puede reanudar este chat. Ábrelo para ver dónde se detuvo.",
@@ -17548,6 +17554,7 @@
         "sendToTryAgain": "Envíe su mensaje para volver a intentarlo.",
         "sendAgainToTryOnceMore": "Vuelva a enviar su mensaje para intentarlo de nuevo.",
         "couldNotStart": "{{agent}} no pudo iniciarse.",
+        "editSavedArguments": "Edítalos en Ajustes > Agentes > Argumentos.",
         "couldNotRestart": "{{agent}} no pudo reiniciarse.",
         "notSignedIn": "{{agent}} no tiene la sesión iniciada con la cuenta seleccionada.",
         "signInFirst": "Inicie sesión primero.",
@@ -17595,6 +17602,10 @@
         "stopRefusedQuoted": "{{agent}} no se detuvo: {{detail}}.",
         "noTurnToStop": "{{agent}} no tenía ningún turno en curso que detener.",
         "answerUnconfirmed": "Su respuesta se registró, pero el agente no la confirmó.",
+        "argumentsMissingValue": "Los argumentos guardados necesitan un valor para {{option}}.",
+        "argumentsMultipleValues": "Los argumentos guardados asignan más de un valor a {{option}}.",
+        "argumentsPositionalPrompt": "Los argumentos guardados incluyen un mensaje.",
+        "argumentsUnsupportedOption": "Los argumentos guardados contienen una opción no compatible ({{option}}).",
         "hostFault": "Orca tuvo un problema, así que esto no se completó.",
         "hostFaultTryAgain": "Orca tuvo un problema, así que esto no se completó. Vuelva a intentarlo.",
         "hostStopped": "{{agent}} no terminó de iniciarse, así que Orca lo detuvo.",
@@ -17900,8 +17911,7 @@
         "deny": "Denegar",
         "cancel": "Cancelar",
         "reason": "Motivo",
-        "blockedPath": "Ruta bloqueada",
-        "askRule": "Regla de solicitud",
+        "needsAccess": "Necesita acceso a",
         "plan": {
           "file": "Archivo de plan"
         }
@@ -18048,7 +18058,8 @@
         "details": "Detalles",
         "plan": "Plan",
         "historyRepaired": "No se pudo cargar parte del historial de este chat.",
-        "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla."
+        "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla.",
+        "stoppedBeforeStart": "Detenido antes de que el agente empezara"
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
@@ -18609,7 +18620,9 @@
     "clientHosted": {
       "preparationFailed": "No se pudo iniciar el navegador remoto en este escritorio. Comprueba la conexión emparejada y vuelve a intentarlo.",
       "unavailableTitle": "Navegador alojado en el cliente no disponible",
-      "unavailableDescription": "Esta página está asociada a otro escritorio o ya no está disponible.",
+      "unavailableDescription": "Esta página no está disponible en este escritorio en este momento.",
+      "unavailableOtherDesktopDescription": "Esta página está abierta en otro escritorio.",
+      "unavailableHostOfflineDescription": "{{host}} está sin conexión. Esta página se volverá a cargar aquí cuando se reconecte.",
       "download": {
         "started": "Descargando {{filename}}…",
         "completed": "{{filename}} descargado",

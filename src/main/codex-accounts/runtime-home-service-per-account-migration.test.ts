@@ -93,7 +93,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const { CodexHookService } = await import('../codex/hook-service')
     const { startCodexHookHashLookup } = await import('../codex/codex-hook-hash-lookup')
-    startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
+    startCodexHookHashLookup(Promise.resolve())
     const service = new CodexRuntimeHomeService(store as never)
     const hookService = new CodexHookService()
 

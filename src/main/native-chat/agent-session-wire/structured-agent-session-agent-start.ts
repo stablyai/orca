@@ -7,8 +7,10 @@
 
 import {
   providerDiagnosticOf,
+  type AgentSessionArgumentProblem,
   type ProviderDiagnostic
 } from '../../../shared/agent-session-failure'
+import { argumentProblemOf } from '../structured-agent-arguments-error'
 import {
   agentSessionRefusalFromReference,
   readAgentSessionRefusalReference,
@@ -48,6 +50,7 @@ export type StructuredAgentSessionResumeOutcome =
       /** What the provider said about the failed start, for the chat's own record; host-side
        *  only, never on the refusal. */
       diagnostic?: ProviderDiagnostic
+      argumentProblem?: AgentSessionArgumentProblem
     }
 
 /** The attach's caller key: the ledger row a start settles is Orca's own. */
@@ -193,7 +196,13 @@ function withDiagnostic(
   error: unknown
 ): StructuredAgentSessionResumeOutcome {
   const diagnostic = providerDiagnosticOf(error)
-  return { ok: false, refusal, ...(diagnostic ? { diagnostic } : {}) }
+  const argumentProblem = argumentProblemOf(error)
+  return {
+    ok: false,
+    refusal,
+    ...(diagnostic ? { diagnostic } : {}),
+    ...(argumentProblem ? { argumentProblem } : {})
+  }
 }
 
 function settledResumeRefusal(

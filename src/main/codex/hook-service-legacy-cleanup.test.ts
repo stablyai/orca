@@ -403,6 +403,6 @@ describe('CodexHookService', () => {
     expect(systemToml).toContain('codex_hooks = true')
     expect(systemToml).not.toContain(':session_start:0:0')
     expect(existsSync(legacyProfilePath)).toBe(false)
-    expect(service.getStatus().state).toBe('installed')
+    expect(service.getStatus(managedCodexHome).state).toBe('installed')
   })
 })

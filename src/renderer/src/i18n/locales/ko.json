@@ -12,7 +12,18 @@
   },
   "settings": {
     "chat": {
-      "description": "채팅 모양을 선택하세요."
+      "description": "채팅 모양과 이름 지정 방식을 선택하세요.",
+      "names": {
+        "title": "채팅 이름",
+        "description": "에이전트가 첫 메시지를 바탕으로 새 채팅의 이름을 생성합니다. 이름이 생성되지 않으면 Claude Chat 또는 Codex Chat으로 유지됩니다.",
+        "enable": "채팅 이름 자동 지정",
+        "recipe": "채팅 이름",
+        "recipeDescription": "새 채팅의 첫 메시지에서 짧은 이름을 생성합니다.",
+        "customCommandDescription": "사용자 지정 명령을 선택한 레시피가 공유하는 명령줄입니다. {prompt}를 사용하면 입력을 인수로 전달하고, 그렇지 않으면 표준 입력으로 전달합니다.",
+        "saveFailed": "채팅 이름 설정을 저장하지 못했습니다.",
+        "searchAgent": "에이전트",
+        "searchTemplate": "명령 템플릿"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC 또는 U.S. — Option 키가 Alt/Esc 시퀀스를 전송합니다",
@@ -8292,8 +8303,8 @@
           "3c88ec55d6": "\"에 대한 설정을 찾을 수 없습니다.",
           "c7ad095d96": "설정 로드 중...",
           "acc7bbdefd": "설정을 종료하려면 ESC를 다시 누르세요.",
-          "43b68e10f0": "저장되지 않은 Git AI Author 변경사항이 있습니다. 떠나면 폐기됩니다.",
-          "17bdee4ff1": "저장되지 않은 Git AI Author 변경사항을 삭제하시겠습니까?",
+          "43b68e10f0": "저장하지 않은 AI 설정이 있습니다. 나가면 변경 사항이 버려집니다.",
+          "17bdee4ff1": "저장하지 않은 AI 설정을 버리시겠습니까?",
           "084d8fac5b": "개인 정보 보호 및 보안",
           "23931df7e8": "원격 호스트",
           "mobile_group": "모바일",
@@ -17340,16 +17351,12 @@
         "listLabel": "재개될 채팅",
         "dontAskAgain": "다시 묻지 않음(자동으로 재개)",
         "dontAskAgainHint": "설정 → 실험적 → 채팅 UI에서 이 기능을 끌 수 있습니다.",
-        "continuedOne": "채팅 1개를 재개하고 계속하도록 요청했습니다.",
-        "continuedMany": "{{value0}} 채팅을 재개하고 계속하도록 요청했습니다.",
+        "continuedOne": "채팅 1개를 재개했습니다",
+        "continuedMany": "{{value0}}개의 채팅을 재개했습니다",
         "selectAgent": "{{value2}}에서 {{value0}} 채팅 \"{{value1}}\" 재개",
         "resumeSelected": "{{value0}} 채팅 재개",
         "resumeSelectedOne": "채팅 1개 재개",
-        "continueUnconfirmed": "{{value0}} 채팅에 대한 계속 전달이 확인되지 않았습니다. 다른 메시지를 보내기 전에 열어서 확인하세요.",
-        "continueUnconfirmed_one": "{{value0}} 채팅에 대한 계속 전달이 확인되지 않았습니다. 다른 메시지를 보내기 전에 열어서 확인하세요.",
-        "continueUnconfirmed_other": "{{value0}} 채팅에 대한 계속 전달이 확인되지 않았습니다. 다른 메시지를 보내기 전에 열어서 확인하세요.",
         "dismissAll": "모두 닫기",
-        "dismissUnconfirmed": "이력서 제안 닫기가 확인되지 않았습니다. 여전히 상태 표시줄에 있을 수 있습니다.",
         "notContinuedOne": "채팅 1개를 재개하지 못했습니다",
         "notContinuedMany": "{{value0}}개의 채팅을 재개하지 못했습니다",
         "notConfirmedOne": "채팅 1개가 재개되었는지 확인하지 못했습니다",
@@ -17357,7 +17364,6 @@
         "notConfirmedOtherOne": "다른 채팅 1개가 재개되었는지 확인하지 못했습니다",
         "notConfirmedOtherMany": "다른 채팅 {{value0}}개가 재개되었는지 확인하지 못했습니다",
         "show": "표시",
-        "dismiss": "닫기",
         "activityUnnamed": "이름 없음",
         "activityApproval": "승인 대기 중: {{value0}}",
         "activityQuestion": "답변 대기 중: {{value0}}",
@@ -17453,8 +17459,8 @@
       "NativeChatResumeFailureGuidance": {
         "unconfirmed": "Orca가 “continue” 메시지가 전달되었는지 확인하지 못했습니다. 다른 메시지를 보내기 전에 채팅을 열어 확인하세요.",
         "superseded": "채팅을 열고 답장하세요. 다시 시작한 직후 새 작업이 도착해서 Orca가 “continue” 메시지를 보내지 않았습니다.",
-        "conflict": "다른 Orca 창이나 터미널이 아직 이 세션을 가지고 있습니다. 닫은 뒤 다시 시도하세요.",
-        "ownershipUnknown": "Orca가 이 세션을 소유한 프로세스를 아직 파악 중입니다. 잠시 기다렸다가 다시 시도하세요.",
+        "conflict": "이 채팅은 다른 Orca 창이나 터미널에서 열려 있습니다. 그곳에서 닫은 다음 다시 시도하세요.",
+        "ownershipUnknown": "이 채팅은 아직 재개할 준비가 되지 않았습니다. 잠시 기다린 다음 다시 시도하세요.",
         "notAttached": "채팅이 다시 연결되지 않았습니다. 다시 시도하거나 열어서 새 턴을 시작하세요.",
         "dispatchRejected": "에이전트가 “continue” 메시지를 거부했습니다. 채팅을 열어 직접 보내세요.",
         "unsupported": "이 채팅은 Orca에서 재개할 수 없습니다. 열어서 중단된 위치를 확인하세요.",
@@ -17583,6 +17589,7 @@
         "sendToTryAgain": "다시 시도하려면 메시지를 보내세요.",
         "sendAgainToTryOnceMore": "메시지를 다시 보내 한 번 더 시도하세요.",
         "couldNotStart": "{{agent}}을(를) 시작하지 못했습니다.",
+        "editSavedArguments": "설정 > 에이전트 > 인수에서 수정하세요.",
         "couldNotRestart": "{{agent}}을(를) 다시 시작하지 못했습니다.",
         "notSignedIn": "{{agent}}이(가) 선택한 계정으로 로그인되어 있지 않습니다.",
         "signInFirst": "먼저 로그인하세요.",
@@ -17630,6 +17637,10 @@
         "stopRefusedQuoted": "{{agent}}이(가) 중지되지 않았습니다: {{detail}}.",
         "noTurnToStop": "{{agent}}에 중지할 실행 중인 턴이 없었습니다.",
         "answerUnconfirmed": "응답이 기록되었지만 에이전트가 확인하지 않았습니다.",
+        "argumentsMissingValue": "저장된 인수의 {{option}}에 값이 필요합니다.",
+        "argumentsMultipleValues": "저장된 인수에 {{option}}의 값이 여러 개 지정되어 있습니다.",
+        "argumentsPositionalPrompt": "저장된 인수에 프롬프트가 포함되어 있습니다.",
+        "argumentsUnsupportedOption": "저장된 인수에 지원하지 않는 옵션({{option}})이 포함되어 있습니다.",
         "hostFault": "Orca에 문제가 발생하여 이 작업이 완료되지 않았습니다.",
         "hostFaultTryAgain": "Orca에 문제가 발생하여 이 작업이 완료되지 않았습니다. 다시 시도하세요.",
         "hostStopped": "{{agent}}이(가) 시작을 마치지 못해 Orca가 중지했습니다.",
@@ -17935,8 +17946,7 @@
         "deny": "거부",
         "cancel": "취소",
         "reason": "이유",
-        "blockedPath": "차단된 경로",
-        "askRule": "규칙을 묻다",
+        "needsAccess": "접근이 필요한 경로",
         "plan": {
           "file": "계획 파일"
         }
@@ -17976,7 +17986,8 @@
         "details": "세부",
         "plan": "계획",
         "historyRepaired": "이 채팅 기록의 일부를 불러올 수 없습니다.",
-        "historyItemTooLarge": "채팅의 이 부분은 너무 커서 표시할 수 없습니다."
+        "historyItemTooLarge": "채팅의 이 부분은 너무 커서 표시할 수 없습니다.",
+        "stoppedBeforeStart": "에이전트가 시작되기 전에 중지됨"
       },
       "providerFrame": {
         "byteLength": "{{value0}}바이트"
@@ -18609,7 +18620,9 @@
     "clientHosted": {
       "preparationFailed": "이 데스크톱에서 원격 브라우저를 시작할 수 없습니다. 페어링된 연결을 확인하고 다시 시도하세요.",
       "unavailableTitle": "클라이언트 호스팅 브라우저를 사용할 수 없음",
-      "unavailableDescription": "이 페이지는 다른 데스크탑에 연결되어 있거나 더 이상 사용할 수 없습니다.",
+      "unavailableDescription": "이 페이지는 현재 이 데스크탑에서 사용할 수 없습니다.",
+      "unavailableOtherDesktopDescription": "이 페이지는 다른 데스크탑에서 열려 있습니다.",
+      "unavailableHostOfflineDescription": "{{host}}이(가) 오프라인입니다. 다시 연결되면 이 페이지가 여기에서 다시 로드됩니다.",
       "download": {
         "started": "{{filename}} 다운로드 중…",
         "completed": "{{filename}}을(를) 다운로드했습니다.",

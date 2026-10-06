@@ -111,9 +111,11 @@ export function removeStaleRuntimeHookTrustEntries(
 
 export function removeSystemManagedHookTrustEntries(
   systemHomePath: string,
-  sourcePaths: readonly [string, ...string[]]
+  sourcePaths: readonly [string, ...string[]],
+  codexHashes: readonly CodexHookHashes[]
 ): void {
   removeCodexManagedHookTrustEntries({
+    codexHashes,
     tomlPath: getSystemCodexConfigTomlPath(),
     runtimeHomePath: systemHomePath,
     sourcePaths,

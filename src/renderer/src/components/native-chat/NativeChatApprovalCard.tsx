@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { approvalBlockedPathToShow } from '../../../../shared/agent-session-approval-blocked-path'
 import {
   isNewerApprovalSubject,
   isPlanApprovalSubject
@@ -45,13 +46,13 @@ export function NativeChatApprovalCard({
   allowFileUriLinks = false
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
+  const neededPath = approvalBlockedPathToShow(approval)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
   const newerSubject = isNewerApprovalSubject(approval.subject)
   const hasContext = Boolean(
     approval.description ||
     approval.decisionReason ||
-    approval.blockedPath ||
-    approval.matchedAskRule ||
+    neededPath ||
     approval.subject ||
     approval.detail
   )
@@ -117,24 +118,13 @@ export function NativeChatApprovalCard({
                   {approval.decisionReason}
                 </p>
               ) : null}
-              {approval.blockedPath ? (
+              {neededPath ? (
                 <p className="break-words">
                   <span className="font-medium text-foreground/80">
-                    {translate('components.native-chat.approval.blockedPath', 'Blocked path')}:{' '}
+                    {translate('components.native-chat.approval.needsAccess', 'Needs access to')}
+                    :{' '}
                   </span>
-                  <span className="font-mono">{approval.blockedPath}</span>
-                </p>
-              ) : null}
-              {approval.matchedAskRule ? (
-                <p className="break-words">
-                  <span className="font-medium text-foreground/80">
-                    {translate('components.native-chat.approval.askRule', 'Ask rule')}:{' '}
-                  </span>
-                  {approval.matchedAskRule.ruleContent ?? approval.matchedAskRule.toolName}
-                  <span className="text-muted-foreground/80">
-                    {' · '}
-                    {approval.matchedAskRule.source}
-                  </span>
+                  <span className="font-mono">{neededPath}</span>
                 </p>
               ) : null}
               {isPlanApprovalSubject(approval.subject) ? (

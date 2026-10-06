@@ -27,10 +27,7 @@ import { getCodexManagedScriptFileName } from './codex-hook-identity'
 import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
 import { getManagedScript } from './codex-hook-script'
 import type { CodexHookHashes } from './codex-hook-trust-derivation'
-import {
-  readsEntryAtApprovedSlot,
-  writeCodexHookApprovalsBeforeEntries
-} from './codex-hook-approval-first-write'
+import { writeCodexHookApprovalsBeforeEntries } from './codex-hook-approval-first-write'
 import { removeStaleRuntimeHookTrustEntries } from './codex-hook-trust-cleanup'
 import {
   promoteCodexRuntimeHookApprovalsToSystem,
@@ -168,7 +165,7 @@ export async function installCodexHooksExclusively(
       tomlPath,
       managedTrustEntries,
       () => writeCodexHooksJson(configPath, nextHooks),
-      readsEntryAtApprovedSlot(configPath)
+      configPath
     )
   } catch (error) {
     return trustWriteError(configPath, false, error)

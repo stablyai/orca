@@ -146,6 +146,7 @@ function resolvedLaunch(permissionMode: PermissionMode, launchArgs: string[] = [
     launchArgs
   } as unknown as AgentSessionRecord
   return createClaudeStructuredLaunchResolver({
+    resolveLaunchArgs: () => launchArgs,
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async () => '/repos/workspace-1',
     resolveCommand: () => FAKE_CLI,
@@ -329,7 +330,18 @@ describe('Claude Agent SDK contract pins', () => {
     const spawns: SpawnSeen[] = []
     // Driven by the real resolver, so the argv walk covers its option set and merge order,
     // not a hand-written options literal.
-    const launch = await resolvedLaunch('bypassPermissions', ['--model', 'claude-sonnet-4-5'])
+    const launch = await resolvedLaunch('bypassPermissions', [
+      '--model',
+      'claude-sonnet-4-5',
+      '--dangerously-skip-permissions',
+      '--output-format',
+      'text',
+      '--session-id=wrong-session',
+      '--add-dir',
+      '/repo/one',
+      '/repo/two',
+      '--add-dir=/repo/three'
+    ])
     await drainQuery({
       ...launch.options,
       pathToClaudeCodeExecutable: FAKE_CLI,
@@ -346,9 +358,15 @@ describe('Claude Agent SDK contract pins', () => {
     expect(argv.filter((arg) => arg === '--dangerously-skip-permissions')).toHaveLength(1)
     expect(argv).not.toContain('--allow-dangerously-skip-permissions')
     expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('default')
-    // Configured CLI arguments are a terminal concern; a record written before they stopped
-    // being read must not smuggle one back into the child's argv.
-    expect(argv).not.toContain('--model')
+    expect(argv[argv.indexOf('--model') + 1]).toBe('claude-sonnet-4-5')
+    expect(argv.flatMap((arg, index) => (arg === '--add-dir' ? [argv[index + 1]] : []))).toEqual([
+      '/repo/one',
+      '/repo/two',
+      '/repo/three'
+    ])
+    expect(argv.filter((arg) => arg === '--model')).toHaveLength(1)
+    expect(argv.filter((arg) => arg === '--output-format')).toHaveLength(1)
+    expect(argv[argv.indexOf('--output-format') + 1]).toBe('stream-json')
     // Headless print mode is the SDK's only mode; `query()` never passes `-p`,
     // and if the SDK ever started passing it this pin would notice.
     const impliedByHeadlessQuery = new Set(['-p'])

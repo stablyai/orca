@@ -40,7 +40,7 @@ export function useStructuredAgentSessionStop(input: {
     stopsConversation,
     stop: (turnId, withdrawUnsent) => {
       if (stopsConversation) {
-        // Unsent text this client still owns goes back to its composer — a local move.
+        // Unsent text this client still owns goes back to an empty composer — a local move.
         // Host-held drafts are never withdrawn by a Stop: the host pauses them and
         // they stay visible as cards, on every device, until the user acts on one.
         withdrawUnsent()

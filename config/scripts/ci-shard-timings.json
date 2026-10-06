@@ -1237,7 +1237,6 @@
       "src/main/codex/codex-persistent-command-retention.test.ts": 276,
       "src/main/codex/codex-pinned-rollout-proof.test.ts": 53,
       "src/main/codex/codex-prompt-registry-retention.test.ts": 376,
-      "src/main/codex/codex-real-home-hook-install.test.ts": 339,
       "src/main/codex/codex-real-home-path.test.ts": 57,
       "src/main/codex/codex-requested-close-turn-timing.test.ts": 134,
       "src/main/codex/codex-rollout-session-meta.test.ts": 81,

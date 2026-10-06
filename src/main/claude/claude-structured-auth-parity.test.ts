@@ -42,6 +42,7 @@ function resolverFor(options: {
   authSwitchSettleTimeoutMs?: number
 }): ReturnType<typeof createClaudeStructuredLaunchResolver> {
   return createClaudeStructuredLaunchResolver({
+    resolveLaunchArgs: () => [],
     store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
@@ -67,6 +68,7 @@ function realResolverAdapter(
   } as unknown as AgentSessionRecord
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: createClaudeStructuredLaunchResolver({
+      resolveLaunchArgs: () => [],
       store: { getRecord: () => resumable, pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',

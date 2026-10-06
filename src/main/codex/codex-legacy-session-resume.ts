@@ -29,7 +29,7 @@ const materializations = new Map<string, Promise<void>>()
 export async function prepareLegacySharedCodexSessionResume(
   args: AiVaultPrepareSessionResumeArgs,
   options: {
-    isHostSystemDefaultRealHome: () => boolean
+    isHostSystemDefaultRealHomeSelected: () => boolean
     getSelectedHostAccountCodexHomePath?: () => string | null
     legacyCodexHomePath?: string
     systemCodexHomePath?: string
@@ -47,7 +47,7 @@ export async function prepareLegacySharedCodexSessionResume(
     args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     !args.codexHome ||
     !sameRuntimePath(args.codexHome, legacyCodexHomePath) ||
-    !options.isHostSystemDefaultRealHome()
+    !options.isHostSystemDefaultRealHomeSelected()
   ) {
     return { useRealCodexHome: false }
   }

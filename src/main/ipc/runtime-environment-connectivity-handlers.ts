@@ -14,6 +14,7 @@ import { RuntimeRpcCallQueueOverloadError } from '../../shared/runtime-rpc-call-
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { Store } from '../persistence'
+import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { clearBrowserRoutePartitionStorageForEnvironment } from '../browser/browser-route-partition-storage-runtime'
 import { retireBrowserRoutePartitionStorageForEnvironment } from '../browser/browser-route-partition-storage-retirement'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
@@ -65,9 +66,11 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   ipcMain.handle('runtimeEnvironments:getStatusSnapshots', () =>
     getRuntimeEnvironmentStatusSnapshots()
   )
-  ipcMain.handle('runtimeEnvironments:list', () =>
-    listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
-  )
+  ipcMain.handle('runtimeEnvironments:list', () => {
+    const environments = listEnvironments(getUserDataPath())
+    readSettingsWithRuntimeEnvironmentPreference(store, getUserDataPath())
+    return environments.map(redactRuntimeEnvironment)
+  })
   ipcMain.handle(
     'runtimeEnvironments:addFromPairingCode',
     (

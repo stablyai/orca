@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
+import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 
 const STRUCTURED_PREFERENCE = {
@@ -29,6 +29,7 @@ function harness(options: {
   terminalPromptDelivered?: boolean
   /** Whether the surface reports that its typed line took the offered prompt. */
   lineCarriesPrompt?: boolean
+  onSurfacePublished?: AgentLaunchExecution['onSurfacePublished']
 }) {
   const calls: string[] = []
   const carried = (startupPrompt: string | undefined) =>
@@ -96,7 +97,8 @@ function harness(options: {
           deliverStructuredPrompt,
           deliverTerminalPrompt
         },
-        workspaces: { createWorktree }
+        workspaces: { createWorktree },
+        ...(options.onSurfacePublished ? { onSurfacePublished: options.onSurfacePublished } : {})
       })
   }
 }
@@ -504,10 +506,14 @@ describe('caller-supplied launch inputs', () => {
     expect(h.createStructuredSession).not.toHaveBeenCalled()
   })
 
-  // A custom launch command applies to terminal launches only; native chat ignores it.
+  // Command values never change the selected chat surface.
   it.each([
     ['claude', 'claude-wrapper'],
-    ['codex', 'codex-nightly']
+    ['codex', 'codex-nightly'],
+    ['claude', 'npx claude'],
+    ['codex', 'wrapper --arg'],
+    ['claude', '/missing/claude'],
+    ['codex', './codex']
   ] as const)('opens a structured %s session despite launch command %s', async (agent, command) => {
     const h = harness({
       settings: { ...STRUCTURED_PREFERENCE, agentCmdOverrides: { [agent]: command } }
@@ -587,7 +593,7 @@ describe('caller-supplied launch inputs', () => {
     const result = await h.run({ agent: 'claude', target: EXISTING, agentArgs: '--model opus' })
 
     expect(result.outcome.kind).toBe('structured')
-    expect(result.warning).toContain('does not apply launch arguments')
+    expect(result.warning).toContain('per-launch argument override was ignored')
   })
 
   it('warns when a structured session ignored an explicit "no arguments" too', async () => {
@@ -597,7 +603,7 @@ describe('caller-supplied launch inputs', () => {
     // The structured path reads the bypass-permissions bit from the user's SETTINGS default, so a
     // caller that asked for no arguments can still get a session with more permission than it asked
     // for. Staying silent about that is the failure mode worth a test.
-    expect(result.warning).toContain('does not apply launch arguments')
+    expect(result.warning).toContain('per-launch argument override was ignored')
   })
 
   it('leaves a structured launch unwarned when it carried no arguments at all', async () => {
@@ -605,5 +611,83 @@ describe('caller-supplied launch inputs', () => {
     const result = await h.run({ agent: 'claude', target: EXISTING })
 
     expect(result.warning).toBeUndefined()
+  })
+})
+
+describe('the surface is published as the launch stands, before its prompt is delivered', () => {
+  const PROMPTED_EXISTING: AgentLaunchIntent = {
+    agent: 'claude',
+    target: { kind: 'existing', worktree: 'wt-7' },
+    prompt: { text: 'fix the build', delivery: 'submit' }
+  }
+
+  function publishing(options: Parameters<typeof harness>[0]) {
+    const published: AgentLaunchResult[] = []
+    const launch = harness({
+      ...options,
+      onSurfacePublished: (surface) => {
+        launch.calls.push('published')
+        published.push(surface)
+      }
+    })
+    return { launch, published }
+  }
+
+  it('records a prompt still owed as unconfirmed, then delivers it', async () => {
+    const { launch, published } = publishing({ settings: {}, lineCarriesPrompt: false })
+
+    const result = await launch.run(PROMPTED_EXISTING)
+
+    expect(launch.calls).toEqual(['createTerminalAgent', 'published', 'deliverTerminalPrompt'])
+    expect(published).toEqual([
+      {
+        outcome: { kind: 'terminal', handle: 'term_1' },
+        worktreeId: 'wt-7',
+        receipt: result.receipt,
+        // A host that stops mid-paste cannot say whether it landed, so it must not say "not sent".
+        prompt: { delivery: 'submit', outcome: 'unconfirmed' }
+      }
+    ])
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+  })
+
+  it('records a draft as not delivered, since the host never delivers one', async () => {
+    const { launch, published } = publishing({ settings: {}, lineCarriesPrompt: false })
+
+    const result = await launch.run({
+      ...PROMPTED_EXISTING,
+      prompt: { text: 'fix the build', delivery: 'draft' }
+    })
+
+    expect(published[0]?.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
+    expect(result.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
+  })
+
+  it('records a prompt the launch command carried as already handed over', async () => {
+    const { launch, published } = publishing({ settings: {}, lineCarriesPrompt: true })
+
+    const result = await launch.run(PROMPTED_EXISTING)
+
+    expect(published[0]?.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(published[0]).toEqual(result)
+    expect(launch.deliverTerminalPrompt).not.toHaveBeenCalled()
+  })
+
+  it('records a chat before its first message is committed', async () => {
+    const { launch, published } = publishing({})
+
+    const result = await launch.run(PROMPTED_EXISTING)
+
+    expect(launch.calls).toEqual([
+      'createSupport',
+      'createStructuredSession',
+      'published',
+      'deliverStructuredPrompt'
+    ])
+    expect(published[0]).toEqual({
+      ...result,
+      prompt: { delivery: 'submit', outcome: 'unconfirmed' }
+    })
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'journaled', messageId: 'msg-1' })
   })
 })

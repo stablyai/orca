@@ -18,10 +18,7 @@ import { NativeChatDiffView } from './NativeChatDiffView'
 import { nativeChatToolLineLabel } from './native-chat-tool-line-label'
 import { diffFromText, diffFromToolCall, type DiffLine } from './native-chat-diff'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
-import {
-  createToolInputDisplay,
-  truncateToolDetail
-} from './native-chat-tool-summary'
+import { createToolInputDisplay, truncateToolDetail } from './native-chat-tool-summary'
 
 /** A tool sentence with input and output behind its own remembered disclosure. */
 export function NativeChatToolLine({

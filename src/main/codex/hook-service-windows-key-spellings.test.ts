@@ -36,7 +36,7 @@ const homes = setupCodexHookHomes(homedirMock, getPathMock)
 describe('a managed home on Windows', () => {
   it('rewrites the backslash approval key that Codex reads when only the forward-slash one is left', async () => {
     lookupInternals.resetForTesting()
-    startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
+    startCodexHookHashLookup(Promise.resolve())
     const service = new CodexHookService()
     expect((await service.install()).state).toBe('installed')
     const tomlPath = join(homes.userDataDir, 'codex-runtime-home', 'home', 'config.toml')
@@ -50,7 +50,9 @@ describe('a managed home on Windows', () => {
       installed.replace(/^\[hooks\.state\.'C:\\[^\n]*\n(?:(?!\[)[^\n]*\n?)*/gm, '')
     )
     expect(readFileSync(tomlPath, 'utf-8')).not.toMatch(/^\[hooks\.state\.'C:\\/m)
-    expect(service.getStatus().state).toBe('partial')
+    expect(service.getStatus(join(homes.userDataDir, 'codex-runtime-home', 'home')).state).toBe(
+      'partial'
+    )
 
     expect((await service.install()).state).toBe('installed')
 
@@ -61,7 +63,7 @@ describe('a managed home on Windows', () => {
 
   it('replaces a legacy forward-slash table with the backslash one, as main repairs it', async () => {
     lookupInternals.resetForTesting()
-    startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
+    startCodexHookHashLookup(Promise.resolve())
     const service = new CodexHookService()
     await service.install()
     const home = join(homes.userDataDir, 'codex-runtime-home', 'home')
@@ -73,7 +75,7 @@ describe('a managed home on Windows', () => {
     expect(installed).toContain(canonical)
     writeFileSync(tomlPath, installed.replace(canonical, legacy))
 
-    expect(service.getStatus().state).toBe('partial')
+    expect(service.getStatus(home).state).toBe('partial')
     expect((await service.install()).state).toBe('installed')
 
     const repaired = readFileSync(tomlPath, 'utf-8')

@@ -31,9 +31,11 @@ import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-sessio
 import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
-import { AgentSessionRecordStore } from './agent-session-record-store'
-import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
-import { openStructuredAgentSessionJournalDatabase } from './structured-agent-session-journal-open'
+import {
+  openAgentSessionRecordStoreOnce,
+  releaseAgentSessionRecordStore,
+  type OpenedAgentSessionRecordStore
+} from './agent-session-record-store-slot'
 import { legacyAgentSessionStorePath } from './agent-session-record-store-file'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
 import { journalDatabaseHoldsAgentSessions } from '../native-chat/agent-session-journal/journal-database'
@@ -101,7 +103,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
-  resolveLaunchArgs?: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
+  /** Required, and asserted at install time — saved Arguments must never be silently omitted. */
+  resolveLaunchArgs: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
   resolveLaunchEnv?: () => Promise<NodeJS.ProcessEnv>
   resolveLaunchEnvOverlay?: () => Promise<Record<string, string>> | Record<string, string>
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
@@ -137,6 +140,9 @@ let installing: Promise<InstalledRuntime> | null = null
 /** Thrown when the host is installed without a Claude auth policy resolver. */
 export const CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED =
   'structured agent-session host requires a Claude auth policy resolver'
+
+export const STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED =
+  'structured agent-session host requires a launch arguments resolver'
 
 /** Thrown when the host is installed without a logger: every failure it carries on past would
  *  otherwise reach nobody. */
@@ -192,6 +198,14 @@ export async function stopStructuredAgentSessionRuntime(options?: {
   if (installed) {
     outstanding.push(installed)
   }
+  // A store admission opened with no host built on it has no teardown to close its database.
+  const recordStore = await releaseAgentSessionRecordStore()
+  if (
+    recordStore &&
+    !outstanding.some((runtime) => runtime.journalDatabase === recordStore.journalDatabase)
+  ) {
+    recordStore.journalDatabase.close()
+  }
   const failures: unknown[] = []
   for (const runtime of outstanding) {
     try {
@@ -217,34 +231,28 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   if (typeof deps.resolveClaudeAuthPolicy !== 'function') {
     throw new Error(CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED)
   }
+  if (typeof deps.resolveLaunchArgs !== 'function') {
+    throw new Error(STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED)
+  }
   const declared: Partial<StructuredAgentSessionLogger> | undefined = deps.logger
   if (typeof declared?.warn !== 'function' || typeof declared.error !== 'function') {
     throw new Error(STRUCTURED_AGENT_SESSION_LOGGER_REQUIRED)
   }
   const logger = neverThrowingStructuredAgentSessionLogger(deps.logger)
-  const journalDatabase = await openStructuredAgentSessionJournalDatabase({
+  // The store launch admission may already have opened; a failed install leaves it to that slot.
+  const recordStore = await openAgentSessionRecordStoreOnce({
     stateDirectory: deps.stateDirectory,
     hostId: deps.hostId,
     logger
   })
-  try {
-    return await installOnJournal({ ...deps, logger }, journalDatabase)
-  } catch (error) {
-    // Nothing else holds the connection yet, and the next install opens its own.
-    journalDatabase.close()
-    throw error
-  }
+  return await installOnJournal({ ...deps, logger }, recordStore)
 }
 
 async function installOnJournal(
   deps: StructuredAgentSessionRuntimeDeps,
-  journalDatabase: JournalHostDatabase
+  { journalDatabase, store }: OpenedAgentSessionRecordStore
 ): Promise<InstalledRuntime> {
   const envResolvers = createStructuredAgentEnvironmentResolvers(deps)
-  const store = AgentSessionRecordStore.open({
-    journalDatabase,
-    hostId: deps.hostId
-  })
   let host: StructuredAgentSessionHost | null = null
   const lifecycle = createStructuredAgentSessionLifecycleDelivery({
     handle: (event) => host?.handleAdapterEvent(event),
@@ -284,12 +292,6 @@ async function installOnJournal(
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
     resolveWorkspacePath: deps.resolveWorkspacePath,
-    ...(deps.resolveLaunchArgs
-      ? {
-          resolveLaunchArgs: async (provider: AgentSessionRecord['provider']) =>
-            await deps.resolveLaunchArgs!(provider)
-        }
-      : {}),
     logger: deps.logger,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),

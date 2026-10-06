@@ -1,7 +1,10 @@
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { listStructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
 import { extname } from 'node:path'
 import { hasUnsafeProviderSessionIdChars } from '../../shared/agent-session-resume'
 import {
   AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT,
+  type AiVaultSessionTitle,
   type AiVaultSessionTitleRequest,
   type AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
@@ -13,6 +16,22 @@ function normalizeRequest(request: AiVaultSessionTitleRequest): AiVaultSessionTi
   const sessionId = request.sessionId.trim()
   if (!sessionId || sessionId.length > 512 || hasUnsafeProviderSessionIdChars(sessionId)) {
     return null
+  }
+  if (request.structuredSession !== undefined) {
+    const owner = request.structuredSession
+    if (
+      !owner ||
+      typeof owner.workspaceId !== 'string' ||
+      !owner.workspaceId.trim() ||
+      owner.workspaceId.length > 4096 ||
+      typeof owner.sessionId !== 'string' ||
+      !owner.sessionId.trim() ||
+      owner.sessionId.length > 512 ||
+      hasUnsafeProviderSessionIdChars(owner.sessionId)
+    ) {
+      return null
+    }
+    return { agent: request.agent, sessionId, structuredSession: owner }
   }
   const transcriptPath = request.transcriptPath?.trim()
   if (
@@ -36,11 +55,50 @@ export async function resolveLocalAiVaultSessionTitles(
     if (!normalized) {
       continue
     }
-    const key = `${normalized.agent}\0${normalized.sessionId}`
+    const key = JSON.stringify([
+      normalized.agent,
+      normalized.sessionId,
+      normalized.structuredSession
+    ])
     const previous = deduped.get(key)
     if (!previous?.transcriptPath || normalized.transcriptPath) {
       deduped.set(key, normalized)
     }
   }
-  return resolveAiVaultSessionTitlesInBackground([...deduped.values()], signal)
+  if (signal?.aborted) {
+    return { titles: [] }
+  }
+  const titles: AiVaultSessionTitle[] = []
+  const legacy: AiVaultSessionTitleRequest[] = []
+  for (const request of deduped.values()) {
+    const owner = request.structuredSession
+    if (!owner) {
+      legacy.push(request)
+      continue
+    }
+    const record = getStructuredAgentSessionHost()?.deps.store.getRecord(owner.sessionId)
+    if (
+      !record ||
+      record.location.executionHostId !== 'local' ||
+      record.location.wslDistro !== null ||
+      record.location.workspaceId !== owner.workspaceId ||
+      record.provider !== request.agent ||
+      !record.conversationName ||
+      !listStructuredProviderSessionOwnership([record]).some(
+        (ownership) => ownership.providerSessionId === request.sessionId
+      )
+    ) {
+      continue
+    }
+    titles.push({
+      agent: request.agent,
+      sessionId: request.sessionId,
+      title: record.conversationName,
+      structuredSession: owner
+    })
+  }
+  if (legacy.length) {
+    titles.push(...(await resolveAiVaultSessionTitlesInBackground(legacy, signal)).titles)
+  }
+  return signal?.aborted ? { titles: [] } : { titles }
 }

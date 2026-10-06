@@ -29,7 +29,7 @@ export type CodexHookAnswer =
   /** Codex answered, and its answer cannot approve Orca's entry: too old, unrecognized, inconsistent. */
   | { kind: 'refused'; codexVersion: string; failure: string }
   /** No answer yet (not asked, not found, or Codex failed before answering); asking again may get one. */
-  | { kind: 'pending'; failure: string }
+  | { kind: 'pending'; failure: string; codexMissing?: true }
 
 // Why this long off the launch path: macOS assesses a new codex on its first run, measured at 10-12 s.
 const VERSION_TIMEOUT_MS = 30_000

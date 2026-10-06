@@ -2,7 +2,6 @@ import { nativeChatApprovalAcceptKey } from '../../../../shared/native-chat-agen
 import { translate } from '@/i18n/i18n'
 import type {
   AgentJournalApprovalItem,
-  AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject
 } from '../../../../shared/agent-session-journal-types'
 import {
@@ -41,7 +40,6 @@ export type ChatApproval = {
   description?: string
   decisionReason?: string
   blockedPath?: string
-  matchedAskRule?: AgentJournalApprovalMatchedAskRule
   subject?: AgentJournalApprovalSubject
   detail?: string
   options: { label: string; send: string }[]
@@ -55,7 +53,6 @@ export function chatApprovalFromJournal(body: AgentJournalApprovalItem): ChatApp
     ...(body.description ? { description: body.description } : {}),
     ...(body.decisionReason ? { decisionReason: body.decisionReason } : {}),
     ...(body.blockedPath ? { blockedPath: body.blockedPath } : {}),
-    ...(body.matchedAskRule ? { matchedAskRule: body.matchedAskRule } : {}),
     ...(body.subject ? { subject: body.subject } : {}),
     ...(body.detail ? { detail: body.detail } : {}),
     options: body.options.map((option) => ({ label: option.label, send: option.id }))

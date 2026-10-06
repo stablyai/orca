@@ -380,6 +380,8 @@ describe('NativeChatStructuredSession', () => {
         body: {
           kind: 'approval',
           title: 'Allow command?',
+          blockedPath: '/outside/repo/.git/config',
+          matchedAskRule: { source: 'projectSettings', toolName: 'Bash' },
           detail: 'pnpm test',
           options: [
             { id: 'allow', label: 'Allow' },
@@ -415,6 +417,9 @@ describe('NativeChatStructuredSession', () => {
       awaitingInput: 'shown'
     })
     expect(mocks.approvalCardProps?.approval.title).toBe('Allow command?')
+    // The card decides whether to show the path; the ask rule never reaches it.
+    expect(mocks.approvalCardProps?.approval.blockedPath).toBe('/outside/repo/.git/config')
+    expect(mocks.approvalCardProps?.approval).not.toHaveProperty('matchedAskRule')
     expect(screen.queryByTestId('structured-composer')).toBeNull()
     expect(document.querySelector('[data-native-chat-background-tasks="true"]')).not.toBeNull()
 

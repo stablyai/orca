@@ -307,6 +307,7 @@ describe('installing the runtime', () => {
           hostId: 'local',
           claimKeyId: 'key-1',
           resolveWorkspacePath: async () => root,
+          resolveLaunchArgs: () => [],
           resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
         } as unknown as Parameters<typeof ensureStructuredAgentSessionHost>[0]
       )
@@ -323,6 +324,7 @@ describe('installing the runtime', () => {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       logger: {
         warn: () => {

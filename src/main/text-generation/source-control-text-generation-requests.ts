@@ -54,7 +54,7 @@ export function commandBackslashMode(
   return platform === 'win32' && target.kind === 'local' && !target.wslDistro ? 'literal' : 'escape'
 }
 
-async function executeGenerationPlan(input: {
+export async function executeGenerationPlan(input: {
   params: GenerateParams
   plan: CommitMessagePlan
   target: CommitMessageGenerationTarget

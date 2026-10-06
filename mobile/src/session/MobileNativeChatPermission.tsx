@@ -1,6 +1,7 @@
 import { memo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
+import { approvalBlockedPathToShow } from '../../../src/shared/agent-session-approval-blocked-path'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -29,14 +30,6 @@ function MobileNativeChatPermissionImpl({
   const submittingRef = useRef(false)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
   const newerSubject = isNewerApprovalSubject(permission.subject)
-  const hasContext = Boolean(
-    permission.description ||
-    permission.decisionReason ||
-    permission.blockedPath ||
-    permission.matchedAskRule ||
-    permission.subject ||
-    permission.detail
-  )
   const respond = async (send: string): Promise<void> => {
     if (submittingRef.current) {
       return
@@ -68,53 +61,7 @@ function MobileNativeChatPermissionImpl({
           disabled={submitting}
         />
       </View>
-      {hasContext ? (
-        <ScrollView
-          testID="native-chat-approval-content"
-          style={styles.contentScroll}
-          contentContainerStyle={styles.content}
-          nestedScrollEnabled
-        >
-          {permission.description ? (
-            <Text style={styles.detail}>{permission.description}</Text>
-          ) : null}
-          {permission.decisionReason ? (
-            <Text style={styles.detail}>
-              <Text style={styles.contextLabel}>Reason: </Text>
-              {permission.decisionReason}
-            </Text>
-          ) : null}
-          {permission.blockedPath ? (
-            <Text style={styles.detail}>
-              <Text style={styles.contextLabel}>Blocked path: </Text>
-              {permission.blockedPath}
-            </Text>
-          ) : null}
-          {permission.matchedAskRule ? (
-            <Text style={styles.detail}>
-              <Text style={styles.contextLabel}>Ask rule: </Text>
-              {permission.matchedAskRule.ruleContent ?? permission.matchedAskRule.toolName}
-              {' · '}
-              {permission.matchedAskRule.source}
-            </Text>
-          ) : null}
-          {isPlanApprovalSubject(permission.subject) ? (
-            <View>
-              <MobileMarkdown content={permission.subject.text} />
-              {permission.subject.filePath ? (
-                <Text style={styles.planFile}>Plan file: {permission.subject.filePath}</Text>
-              ) : null}
-            </View>
-          ) : permission.detail ? (
-            <Text style={styles.detail}>{permission.detail}</Text>
-          ) : null}
-          {newerSubject ? (
-            <Text testID="native-chat-approval-needs-newer-orca" style={styles.detail}>
-              This request needs a newer version of Orca.
-            </Text>
-          ) : null}
-        </ScrollView>
-      ) : null}
+      <MobileNativeChatPermissionContext permission={permission} newerSubject={newerSubject} />
       <View testID="native-chat-approval-actions" style={styles.options}>
         {permission.options.map((option, index) => {
           const isPrimary = index === 0
@@ -143,6 +90,62 @@ function MobileNativeChatPermissionImpl({
 }
 
 export const MobileNativeChatPermission = memo(MobileNativeChatPermissionImpl)
+
+function MobileNativeChatPermissionContext({
+  permission,
+  newerSubject
+}: {
+  permission: MobileChatPermission
+  newerSubject: boolean
+}): React.JSX.Element | null {
+  const neededPath = approvalBlockedPathToShow(permission)
+  if (
+    !permission.description &&
+    !permission.decisionReason &&
+    !neededPath &&
+    !permission.subject &&
+    !permission.detail
+  ) {
+    return null
+  }
+  return (
+    <ScrollView
+      testID="native-chat-approval-content"
+      style={styles.contentScroll}
+      contentContainerStyle={styles.content}
+      nestedScrollEnabled
+    >
+      {permission.description ? <Text style={styles.detail}>{permission.description}</Text> : null}
+      {permission.decisionReason ? (
+        <Text style={styles.detail}>
+          <Text style={styles.contextLabel}>Reason: </Text>
+          {permission.decisionReason}
+        </Text>
+      ) : null}
+      {neededPath ? (
+        <Text style={styles.detail}>
+          <Text style={styles.contextLabel}>Needs access to: </Text>
+          {neededPath}
+        </Text>
+      ) : null}
+      {isPlanApprovalSubject(permission.subject) ? (
+        <View>
+          <MobileMarkdown content={permission.subject.text} />
+          {permission.subject.filePath ? (
+            <Text style={styles.planFile}>Plan file: {permission.subject.filePath}</Text>
+          ) : null}
+        </View>
+      ) : permission.detail ? (
+        <Text style={styles.detail}>{permission.detail}</Text>
+      ) : null}
+      {newerSubject ? (
+        <Text testID="native-chat-approval-needs-newer-orca" style={styles.detail}>
+          This request needs a newer version of Orca.
+        </Text>
+      ) : null}
+    </ScrollView>
+  )
+}
 
 const styles = StyleSheet.create({
   card: {

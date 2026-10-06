@@ -12,7 +12,18 @@
   },
   "settings": {
     "chat": {
-      "description": "选择聊天的外观。"
+      "description": "选择聊天的外观和命名方式。",
+      "names": {
+        "title": "聊天名称",
+        "description": "使用智能体根据首条消息为新聊天生成名称。未生成名称时，聊天仍显示为 Claude Chat 或 Codex Chat。",
+        "enable": "自动为聊天命名",
+        "recipe": "聊天名称",
+        "recipeDescription": "根据新聊天的首条消息生成简短名称。",
+        "customCommandDescription": "选择自定义命令的配置共用此命令行。使用 {prompt} 将输入作为参数传递，否则通过标准输入传递。",
+        "saveFailed": "无法保存聊天命名设置。",
+        "searchAgent": "智能体",
+        "searchTemplate": "命令模板"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC 或 U.S. — Option 键发送 Alt/Esc 序列",
@@ -8292,8 +8303,8 @@
           "3c88ec55d6": "找不到“的设置",
           "c7ad095d96": "正在加载设置...",
           "acc7bbdefd": "再按一次 ESC 退出设置",
-          "43b68e10f0": "您有未保存的 Git AI Author 更改。离开将丢弃它们。",
-          "17bdee4ff1": "放弃未保存的 Git AI Author 更改？",
+          "43b68e10f0": "你有未保存的 AI 设置。离开后这些更改将被放弃。",
+          "17bdee4ff1": "放弃未保存的 AI 设置？",
           "084d8fac5b": "隐私与安全",
           "23931df7e8": "远程主机",
           "mobile_group": "移动端",
@@ -17340,16 +17351,12 @@
         "listLabel": "将恢复的聊天",
         "dontAskAgain": "不再询问（自动恢复）",
         "dontAskAgainHint": "您可以在“设置”→“实验”→“聊天 UI”中关闭此功能。",
-        "continuedOne": "恢复了 1 次聊天并要求继续",
-        "continuedMany": "恢复 {{value0}} 聊天并要求他们继续",
+        "continuedOne": "已恢复 1 个聊天",
+        "continuedMany": "已恢复 {{value0}} 个聊天",
         "selectAgent": "在 {{value2}} 中恢复 {{value0}} 聊天“{{value1}}”",
         "resumeSelected": "恢复 {{value0}} 聊天",
         "resumeSelectedOne": "恢复 1 次聊天",
-        "continueUnconfirmed": "对于 {{value0}} 聊天，未确认继续传送。在发送另一条消息之前打开它们进行检查。",
-        "continueUnconfirmed_one": "对于 {{value0}} 聊天，未确认继续传送。在发送另一条消息之前打开它进行检查。",
-        "continueUnconfirmed_other": "对于 {{value0}} 聊天，未确认继续传送。在发送另一条消息之前打开它们进行检查。",
         "dismissAll": "全部关闭",
-        "dismissUnconfirmed": "拒绝简历邀请尚未得到确认——它可能仍在状态栏中。",
         "notContinuedOne": "1 个聊天无法恢复",
         "notContinuedMany": "{{value0}} 个聊天无法恢复",
         "notConfirmedOne": "无法确认 1 个聊天已恢复",
@@ -17357,7 +17364,6 @@
         "notConfirmedOtherOne": "无法确认另外 1 个聊天已恢复",
         "notConfirmedOtherMany": "无法确认另外 {{value0}} 个聊天已恢复",
         "show": "显示",
-        "dismiss": "关闭",
         "activityUnnamed": "未命名",
         "activityApproval": "等待您的批准：{{value0}}",
         "activityQuestion": "等待您的回答：{{value0}}",
@@ -17453,8 +17459,8 @@
       "NativeChatResumeFailureGuidance": {
         "unconfirmed": "Orca 无法确认“continue”消息已送达。请打开聊天进行检查，确认后再发送其他消息。",
         "superseded": "请打开聊天并回复。重启后紧接着有新的工作到达，因此 Orca 未发送其“continue”消息。",
-        "conflict": "另一个 Orca 窗口或终端仍持有此会话。请将其关闭，然后重试。",
-        "ownershipUnknown": "Orca 仍在确认哪个进程持有此会话。请稍候，然后重试。",
+        "conflict": "此聊天已在另一个 Orca 窗口或终端中打开。请在那里关闭后重试。",
+        "ownershipUnknown": "此聊天尚未准备好恢复。请稍等片刻后重试。",
         "notAttached": "聊天未能重新连接。请重试，或将其打开以开始新的轮次。",
         "dispatchRejected": "智能体拒绝了“continue”消息。请打开聊天并自行发送一条。",
         "unsupported": "此聊天无法由 Orca 恢复。请将其打开以查看停止位置。",
@@ -17548,6 +17554,7 @@
         "sendToTryAgain": "请发送您的消息以重试。",
         "sendAgainToTryOnceMore": "请重新发送您的消息，再试一次。",
         "couldNotStart": "{{agent}} 无法启动。",
+        "editSavedArguments": "请在设置 > 智能体 > 参数中编辑。",
         "couldNotRestart": "{{agent}} 无法重新启动。",
         "notSignedIn": "{{agent}} 未使用所选账户登录。",
         "signInFirst": "请先登录。",
@@ -17595,6 +17602,10 @@
         "stopRefusedQuoted": "{{agent}} 未停止：{{detail}}。",
         "noTurnToStop": "{{agent}} 没有正在运行的轮次可停止。",
         "answerUnconfirmed": "您的回答已记录，但智能体未确认。",
+        "argumentsMissingValue": "已保存的参数需要为 {{option}} 指定一个值。",
+        "argumentsMultipleValues": "已保存的参数为 {{option}} 指定了多个值。",
+        "argumentsPositionalPrompt": "已保存的参数中包含提示词。",
+        "argumentsUnsupportedOption": "已保存的参数包含不支持的选项（{{option}}）。",
         "hostFault": "Orca 遇到问题，因此此操作未完成。",
         "hostFaultTryAgain": "Orca 遇到问题，因此此操作未完成。请重试。",
         "hostStopped": "{{agent}} 始终未完成启动，因此 Orca 已将其停止。",
@@ -17900,8 +17911,7 @@
         "deny": "拒绝",
         "cancel": "取消",
         "reason": "原因",
-        "blockedPath": "路径受阻",
-        "askRule": "询问规则",
+        "needsAccess": "需要访问的路径",
         "plan": {
           "file": "计划文件"
         }
@@ -17941,7 +17951,8 @@
         "details": "细节",
         "plan": "计划",
         "historyRepaired": "此聊天的部分历史记录无法加载。",
-        "historyItemTooLarge": "聊天的这一部分过大，无法显示。"
+        "historyItemTooLarge": "聊天的这一部分过大，无法显示。",
+        "stoppedBeforeStart": "在智能体开始前已停止"
       },
       "providerFrame": {
         "byteLength": "{{value0}} 字节"
@@ -18609,7 +18620,9 @@
     "clientHosted": {
       "preparationFailed": "无法在此桌面上启动远程浏览器。检查配对连接并重试。",
       "unavailableTitle": "客户端托管的浏览器不可用",
-      "unavailableDescription": "此页面已附加到其他桌面或不再可用。",
+      "unavailableDescription": "此页面目前在此桌面上不可用。",
+      "unavailableOtherDesktopDescription": "此页面已在另一台桌面上打开。",
+      "unavailableHostOfflineDescription": "{{host}} 已离线。重新连接后，此页面将在此处重新加载。",
       "download": {
         "started": "正在下载 {{filename}}...",
         "completed": "已下载{{filename}}",

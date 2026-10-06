@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionStatusObserverOptions } from './structured-agent-session-status-observation'
 // The host's answer to "what is every structured session doing", fanned out to session lists.
 //
 // A client used to learn whether a turn was running by replaying the journal through its own
@@ -11,8 +12,6 @@
 // republishes them.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
-import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -21,8 +20,7 @@ import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
-import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
-import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'
+import { structuredAgentSessionStatusSummary } from './structured-agent-session-status-summary'
 import { structuredStatusChildWork } from './structured-agent-session-status-child-work'
 import {
   StructuredAgentSessionJournalProjections,
@@ -61,7 +59,10 @@ export type StructuredAgentSessionStatusFeedDeps = {
   logger: StructuredAgentSessionLogger
   /** Every projection change, whether or not anyone is subscribed. `replay` marks a re-projection
    *  of state the host already knew (restore, an arriving subscriber) rather than a journal edge. */
-  onStatusChanged?: (summary: AgentSessionStatusSummary, options: { replay: boolean }) => void
+  onStatusChanged?: (
+    summary: AgentSessionStatusSummary,
+    options: StructuredAgentSessionStatusObserverOptions
+  ) => void
   /** Resolved on every call: the host builds this feed in a field initializer, before its own
    *  deps are assigned. The sink holds the session's child records; the summary reads them there. */
   statusSink?: () => StructuredAgentSessionStatusSink | undefined
@@ -105,7 +106,13 @@ export class StructuredAgentSessionStatusFeed {
     this.deps.statusSink?.()
   )
   private readonly subscribers = new Map<string, StructuredAgentSessionStatusSubscriber>()
-  private readonly published = new Map<string, AgentSessionStatusSummary>()
+  private readonly published = new Map<
+    string,
+    {
+      summary: AgentSessionStatusSummary
+      firstInputSubmissionKey: string | null
+    }
+  >()
   /** The user's newest accepted send each session was last projected with; a new one retires
    *  settled children. */
   private readonly acceptedSends = new Map<string, string>()
@@ -125,7 +132,10 @@ export class StructuredAgentSessionStatusFeed {
       this.publish(sessionId, undefined, { replay: true })
     }
     this.subscribers.set(subscriber.id, subscriber)
-    this.emit(subscriber, { type: 'snapshot', sessions: [...this.published.values()] })
+    this.emit(subscriber, {
+      type: 'snapshot',
+      sessions: [...this.published.values()].map(({ summary }) => summary)
+    })
     return () => this.unsubscribe(subscriber.id)
   }
 
@@ -146,13 +156,17 @@ export class StructuredAgentSessionStatusFeed {
     } catch (error) {
       this.logFailure('status-sink-forget', 'status sink forget failed', sessionId, error)
     }
-    const previous = this.published.get(sessionId)
+    const publication = this.published.get(sessionId)
+    const previous = publication?.summary
     if (!previous || (!previous.children && !previous.backgroundTasks)) {
       return
     }
     const { children: _children, backgroundTasks: _backgroundTasks, ...rest } = previous
     const retained = { ...rest, ...this.childWorkFields(sessionId, previous.agent) }
-    this.published.set(sessionId, retained)
+    this.published.set(sessionId, {
+      summary: retained,
+      firstInputSubmissionKey: publication?.firstInputSubmissionKey ?? null
+    })
     this.broadcast({ type: 'status', session: retained })
   }
 
@@ -172,7 +186,8 @@ export class StructuredAgentSessionStatusFeed {
   /** Revoke live execution authority while retaining the last projection for reload history. A
    *  Stop still ending work is live state too: with the host gone, nothing here is ending it. */
   revokeLive(sessionId: string): void {
-    const previous = this.published.get(sessionId)
+    const publication = this.published.get(sessionId)
+    const previous = publication?.summary
     if (!previous) {
       return
     }
@@ -182,7 +197,10 @@ export class StructuredAgentSessionStatusFeed {
       stopping: _stopping,
       ...retained
     } = previous
-    this.published.set(sessionId, retained)
+    this.published.set(sessionId, {
+      summary: retained,
+      firstInputSubmissionKey: publication?.firstInputSubmissionKey ?? null
+    })
     this.sink(retained)
     this.broadcast({
       type: 'status',
@@ -211,22 +229,42 @@ export class StructuredAgentSessionStatusFeed {
     const record = this.deps.getRecord(sessionId)
     const projection = this.projections.read(source, record)
     this.retireSettledChildrenOnNewTurn(sessionId, session, projection.acceptedSendKey)
-    const summary = this.summaryFor(sessionId, session, source, record, projection)
-    const previous = this.published.get(sessionId)
-    if (previous && structuredStatusSummariesEqual(previous, summary)) {
+    const summary = structuredAgentSessionStatusSummary({
+      sessionId,
+      session,
+      journal: source,
+      record,
+      state: projection.state,
+      stopping: projection.stopping,
+      childWork: this.childWorkFields(sessionId, session.params.provider),
+      now: this.deps.now
+    })
+    const publication = this.published.get(sessionId)
+    const previous = publication?.summary
+    const summaryChanged = !previous || !structuredStatusSummariesEqual(previous, summary)
+    const inputChanged = publication?.firstInputSubmissionKey !== projection.firstInputSubmissionKey
+    if (!summaryChanged && !inputChanged) {
       if (!this.ownership.matchesLocation(sessionId, session.params.location)) {
         this.sink(summary, session.params.location)
       }
       return
     }
-    this.published.set(sessionId, summary)
-    this.sink(summary, session.params.location)
-    this.broadcast({ type: 'status', session: summary })
+    this.published.set(sessionId, {
+      summary,
+      firstInputSubmissionKey: projection.firstInputSubmissionKey
+    })
+    if (summaryChanged) {
+      this.sink(summary, session.params.location)
+      this.broadcast({ type: 'status', session: summary })
+    }
     if (summary.hostExecutionPhase === 'ready' && previous?.hostExecutionPhase !== 'ready') {
       this.deps.onAgentStarted?.(sessionId)
     }
     try {
-      this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
+      this.deps.onStatusChanged?.(summary, {
+        replay: options?.replay === true,
+        firstInputSubmissionKey: projection.firstInputSubmissionKey
+      })
     } catch (error) {
       // An observer must never cost the subscribers their status event.
       this.logFailure('status-observer', 'status observer failed', sessionId, error)
@@ -253,43 +291,6 @@ export class StructuredAgentSessionStatusFeed {
       return
     }
     this.admitChildWork(sessionId, session, [{ type: 'turn-started', observedAt: this.deps.now() }])
-  }
-
-  private summaryFor(
-    sessionId: string,
-    session: StatusFeedSession,
-    journal: AgentSessionJournal,
-    record: AgentSessionRecord | null,
-    { state, stopping }: Pick<StructuredAgentSessionJournalProjection, 'state' | 'stopping'>
-  ): AgentSessionStatusSummary {
-    const projected = state.summary
-    const providerSession = structuredAgentSessionProviderSessionMetadata(record)
-    // The journal has no model: the record's acknowledged options are where a mid-session
-    // switch lands, so the row follows whichever is in force.
-    const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
-    const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
-    return {
-      sessionId,
-      workspaceId: session.params.location.workspaceId,
-      agent: session.params.provider,
-      ...(session.child
-        ? {
-            hostExecutionOwned: true as const,
-            hostExecutionPhase: session.child.phase
-          }
-        : {}),
-      ...projected,
-      // Only a working session is still being stopped; any other status already ended that work.
-      ...(stopping && projected.status === 'working' ? { stopping: true as const } : {}),
-      ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
-        ? { rewindBlockedReason: 'outcome-unknown' as const }
-        : {}),
-      ...(model ? { model } : {}),
-      ...this.childWorkFields(sessionId, session.params.provider),
-      ...(providerSession ? { providerSession } : {}),
-      ...(launchDirectory ? { launchDirectory } : {}),
-      updatedAt: journal.lastActivityAt() || this.deps.now()
-    }
   }
 
   /** The summary's child fields, from the records the store holds for the session. Usage is

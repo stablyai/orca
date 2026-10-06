@@ -54,18 +54,57 @@ function resolverFor(
   value: AgentSessionRecord | null,
   resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
   resolveRollout: () => Promise<string | null> = async () => null,
-  agentDefaultArgs: Record<string, string> = { codex: '' }
+  agentDefaultArgs: Record<string, string> = { codex: '' },
+  resolveLaunchArgs?: () => string[]
 ) {
   return createCodexStructuredLaunchResolver({
     store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
     resolveRollout,
+    resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? []),
     resolvePermissionPolicy: () => codexStructuredPermissionPolicyForSettings({ agentDefaultArgs })
   })
 }
 
 describe('codex structured launch resolution', () => {
+  it.each(['start', 'resume'] as const)(
+    're-reads saved Arguments after a refusal on %s',
+    async (mode) => {
+      let args = ['--remote', 'wss://host']
+      const resolve = resolverFor(
+        record({
+          launchArgs: ['--enable', 'stale'],
+          providerHandleChain:
+            mode === 'resume'
+              ? [
+                  {
+                    linkId: 'link-current',
+                    handle: codexProviderHandle('thread-current'),
+                    origin: 'created',
+                    mintedAtFence: 1,
+                    observedAt: 1
+                  }
+                ]
+              : []
+        }),
+        undefined,
+        undefined,
+        { codex: '' },
+        () => args
+      )
+      await expect(resolve({ identity: IDENTITY })).rejects.toThrow(/Arguments/)
+      args = ['--enable', 'unified_exec']
+      expect((await resolve({ identity: IDENTITY })).args).toEqual([
+        '--enable',
+        'unified_exec',
+        'app-server'
+      ])
+      args = []
+      expect((await resolve({ identity: IDENTITY })).args).toEqual(['app-server'])
+    }
+  )
+
   it('resumes a floating session in its pinned folder, not the current floating setting', async () => {
     const pinned = mkdtempSync(join(tmpdir(), 'orca-codex-floating-'))
     const resolveWorkspacePath = vi.fn(async () => '/floating/current-setting')
@@ -90,6 +129,7 @@ describe('codex structured launch resolution', () => {
           }),
         pinLaunchDirectory
       },
+      resolveLaunchArgs: () => [],
       resolveWorkspacePath: async () => '/floating/start-folder',
       resolveCommand: () => '/usr/local/bin/codex'
     })
@@ -119,6 +159,7 @@ describe('codex structured launch resolution', () => {
 
     await withPlatform('win32', async () => {
       const resolveLaunch = createCodexStructuredLaunchResolver({
+        resolveLaunchArgs: () => [],
         store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
         resolveCommand: () => command
@@ -135,6 +176,7 @@ describe('codex structured launch resolution', () => {
     isWindowsProcessStartTimeAvailable.mockReturnValue(false)
     await withPlatform('win32', async () => {
       const resolveLaunch = createCodexStructuredLaunchResolver({
+        resolveLaunchArgs: () => [],
         store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
         resolveCommand: () => 'codex.exe'
@@ -190,8 +232,7 @@ describe('codex structured launch resolution', () => {
     expect(fresh).not.toHaveProperty('supersedeIfUnsaved')
   })
 
-  // Agent Permissions is the only thing derived from the arguments field. app-server owns it on
-  // the thread RPC rather than through the interactive CLI's process flags.
+  // app-server owns the permission posture on the thread RPC, not process flags.
   it('resolves the bypass posture as app-server thread policy', async () => {
     const launch = await resolverFor(record(), undefined, undefined, {
       codex: '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol'
@@ -236,14 +277,27 @@ describe('codex structured launch resolution', () => {
     expect(launch.model).toBe('gpt-chosen')
   })
 
-  // The configured CLI arguments are a terminal concern: a durable record written before they
-  // stopped being read must not smuggle one back into app-server's argv.
-  it("ignores the record's durable launch arguments", async () => {
+  it('uses saved arguments before app-server on a fresh launch', async () => {
     const launch = await resolverFor(
-      record({ launchArgs: ['--profile', 'review', '-c', 'model_reasoning_effort=high'] })
+      record({
+        launchArgs: [
+          '--profile',
+          'review',
+          '-c',
+          'model_reasoning_effort=high',
+          '--model',
+          'gpt-5.6-sol'
+        ]
+      })
     )({ identity: IDENTITY })
 
-    expect(launch.args).toEqual(['app-server'])
+    expect(launch.args).toEqual([
+      '-c',
+      'model_reasoning_effort=high',
+      '--model',
+      'gpt-5.6-sol',
+      'app-server'
+    ])
   })
 
   it('pins resume to the rollout file that proved the durable thread', async () => {
@@ -251,6 +305,7 @@ describe('codex structured launch resolution', () => {
     const launch = await resolverFor(
       record({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
+        launchArgs: ['--enable', 'unified_exec', '-c', 'model_reasoning_effort=high'],
         providerHandleChain: [
           { handle: codexProviderHandle('thread-current') }
         ] as AgentSessionRecord['providerHandleChain']
@@ -261,6 +316,13 @@ describe('codex structured launch resolution', () => {
 
     expect(resolveRollout).toHaveBeenCalledWith('/home/work/.codex', 'thread-current')
     expect(launch.resumePath).toBe('/home/work/.codex/sessions/rollout.jsonl')
+    expect(launch.args).toEqual([
+      '--enable',
+      'unified_exec',
+      '-c',
+      'model_reasoning_effort=high',
+      'app-server'
+    ])
   })
 
   it('refuses a session pinned to another host rather than starting a second writer here', async () => {

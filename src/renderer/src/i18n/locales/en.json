@@ -82,7 +82,9 @@
     "clientHosted": {
       "preparationFailed": "Couldn't start the remote browser on this desktop. Check the paired connection and try again.",
       "unavailableTitle": "Client-hosted browser unavailable",
-      "unavailableDescription": "This page is attached to a different desktop or is no longer available.",
+      "unavailableDescription": "This page isn't available on this desktop right now.",
+      "unavailableOtherDesktopDescription": "This page is open on another desktop.",
+      "unavailableHostOfflineDescription": "{{host}} is offline. This page will reload here once it reconnects.",
       "download": {
         "started": "Downloading {{filename}}…",
         "completed": "Downloaded {{filename}}",
@@ -175,7 +177,18 @@
   },
   "settings": {
     "chat": {
-      "description": "Choose how chats look."
+      "description": "Choose how chats look and get their names.",
+      "names": {
+        "title": "Chat names",
+        "description": "Use an agent to name new chats from their first message. Without a generated name, chats stay Claude Chat or Codex Chat.",
+        "enable": "Name chats automatically",
+        "recipe": "Chat name",
+        "recipeDescription": "Generate a short name from the first message in a new chat.",
+        "customCommandDescription": "Command line shared by recipes that select Custom command. Use {prompt} to pass the input as an argument; otherwise it is piped to stdin.",
+        "saveFailed": "Could not save chat name settings.",
+        "searchAgent": "agent",
+        "searchTemplate": "command template"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC or U.S. — Option sends Alt/Esc sequences",
@@ -2090,16 +2103,12 @@
         "listLabel": "Chats that would be resumed",
         "dontAskAgain": "Don't ask again (resume automatically)",
         "dontAskAgainHint": "You can turn this off in Settings → Experimental → Chat UI.",
-        "continuedOne": "Resumed 1 chat and asked it to continue",
-        "continuedMany": "Resumed {{value0}} chats and asked them to continue",
+        "continuedOne": "Resumed 1 chat",
+        "continuedMany": "Resumed {{value0}} chats",
         "selectAgent": "Resume {{value0}} chat \"{{value1}}\" in {{value2}}",
         "resumeSelected": "Resume {{value0}} chats",
         "resumeSelectedOne": "Resume 1 chat",
-        "continueUnconfirmed": "Continuation delivery is unconfirmed for {{value0}} chats. Open them to check before sending another message.",
-        "continueUnconfirmed_one": "Continuation delivery is unconfirmed for {{value0}} chat. Open it to check before sending another message.",
-        "continueUnconfirmed_other": "Continuation delivery is unconfirmed for {{value0}} chats. Open them to check before sending another message.",
         "dismissAll": "Dismiss all",
-        "dismissUnconfirmed": "Dismissing the resume offer was not confirmed — it may still be in the status bar.",
         "notContinuedOne": "1 chat couldn’t be resumed",
         "notContinuedMany": "{{value0}} chats couldn’t be resumed",
         "notConfirmedOne": "Couldn’t confirm 1 chat was resumed",
@@ -2107,7 +2116,6 @@
         "notConfirmedOtherOne": "Couldn’t confirm 1 other chat was resumed",
         "notConfirmedOtherMany": "Couldn’t confirm {{value0}} other chats were resumed",
         "show": "Show",
-        "dismiss": "Dismiss",
         "activityUnnamed": "unnamed",
         "activityApproval": "Waiting for your approval: {{value0}}",
         "activityQuestion": "Waiting for your answer: {{value0}}",
@@ -8572,8 +8580,8 @@
           "3c88ec55d6": "No settings found for \"",
           "c7ad095d96": "Loading settings...",
           "acc7bbdefd": "Press ESC again to exit settings",
-          "43b68e10f0": "You have unsaved Git AI Author changes. Leaving will discard them.",
-          "17bdee4ff1": "Discard unsaved Git AI Author changes?",
+          "43b68e10f0": "You have unsaved AI settings. Leaving will discard them.",
+          "17bdee4ff1": "Discard unsaved AI settings?",
           "084d8fac5b": "Privacy & Security",
           "23931df7e8": "Remote Hosts",
           "mobile_group": "Mobile",
@@ -17638,8 +17646,8 @@
       "NativeChatResumeFailureGuidance": {
         "unconfirmed": "Orca couldn’t confirm the “continue” message was delivered. Open the chat and check before sending another.",
         "superseded": "Open the chat and reply. New work arrived in it right after the restart, so Orca didn’t send its “continue” message.",
-        "conflict": "Another Orca window or terminal still owns this session. Close it, then retry.",
-        "ownershipUnknown": "Orca is still working out which process owns this session. Wait a moment, then retry.",
+        "conflict": "This chat is open in another Orca window or terminal. Close it there, then retry.",
+        "ownershipUnknown": "This chat isn’t ready to resume yet. Wait a moment, then retry.",
         "notAttached": "The chat didn’t reconnect. Retry, or open it to start a fresh turn.",
         "dispatchRejected": "The agent refused the “continue” message. Open the chat and send one yourself.",
         "unsupported": "This chat can’t be resumed by Orca. Open it to see where it stopped.",
@@ -17828,7 +17836,12 @@
         "providerRetryNumber": "Retry {{attempt}}.",
         "providerRetryNumberOf": "Retry {{attempt}} of {{maxRetries}}.",
         "providerRetryLastError": "Last error: {{detail}}.",
-        "previousExitUnverifiable": "Couldn't stop {{agent}} from before."
+        "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
+        "argumentsUnsupportedOption": "Saved Arguments contain an unsupported option ({{option}}).",
+        "argumentsMissingValue": "Saved Arguments need a value for {{option}}.",
+        "argumentsMultipleValues": "Saved Arguments give {{option}} more than one value.",
+        "argumentsPositionalPrompt": "Saved Arguments include a prompt.",
+        "editSavedArguments": "Edit them in Settings > Agents > Arguments."
       },
       "writeNotice": {
         "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -17922,7 +17935,8 @@
         "details": "Details",
         "plan": "Plan",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
-        "historyItemTooLarge": "This part of the chat was too large to show."
+        "historyItemTooLarge": "This part of the chat was too large to show.",
+        "stoppedBeforeStart": "Stopped before the agent started"
       },
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",
@@ -18217,8 +18231,7 @@
         "deny": "Deny",
         "cancel": "Cancel",
         "reason": "Reason",
-        "blockedPath": "Blocked path",
-        "askRule": "Ask rule",
+        "needsAccess": "Needs access to",
         "needsNewerOrca": "This request needs a newer version of Orca.",
         "plan": {
           "file": "Plan file"

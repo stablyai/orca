@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionStatusObserverOptions } from './structured-agent-session-status-observation'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
@@ -147,7 +148,7 @@ export type StructuredAgentSessionHostDeps = {
    *  already knew (restore, an arriving subscriber) rather than a fresh journal edge. */
   onSessionStatusChanged?: (
     summary: AgentSessionStatusSummary,
-    options: { replay: boolean }
+    options: StructuredAgentSessionStatusObserverOptions
   ) => void
   /** The agent-status store every held session's projection is written to and, on close,
    *  removed from. Both production hosts pass one — the desktop and headless `orcad`; absent,

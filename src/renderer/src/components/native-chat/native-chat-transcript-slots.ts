@@ -24,6 +24,7 @@ import {
   type NativeChatTurnFoldRow
 } from '../../../../shared/native-chat-turn-fold'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
+import { isStoppedBeforeStartBlock } from '../../../../shared/native-chat-stopped-before-start'
 import {
   type NativeChatRowTypography,
   estimateNativeChatRowHeight,
@@ -134,10 +135,14 @@ export function buildNativeChatTranscriptSlots(
     turnKey: turnKeys[index],
     role: message.role,
     rendersProse: nativeChatRowRendersProse(message),
+    draws: receipts.has(message.id) || nativeChatRowRendersContent(message.blocks),
     // The raw blocks, not the renderable ones: a childless roster draws no row
     // and its plain-text twin is then the only record the spawn happened.
     outlivesTurn: message.blocks.some(
-      (block) => isSubagentGroupBlock(block) || isBackgroundTaskBlock(block)
+      (block) =>
+        isSubagentGroupBlock(block) ||
+        isBackgroundTaskBlock(block) ||
+        isStoppedBeforeStartBlock(block)
     ),
     reportsFailure: message.blocks.some((block) => block.type === 'text' && block.tone === 'error'),
     reportsCompaction: message.blocks.some(

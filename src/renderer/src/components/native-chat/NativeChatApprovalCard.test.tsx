@@ -158,16 +158,12 @@ describe('NativeChatApprovalCard', () => {
   it('keeps all oversized provider context in one bounded scroller above the actions', () => {
     const description = `Read access outside the workspace ${'description '.repeat(400)}`
     const decisionReason = `The path is outside the allowed root. ${'reason '.repeat(400)}`
-    const blockedPath = `/repo/${'nested/'.repeat(400)}secrets.txt`
-    const ruleContent = `/repo/${'**/'.repeat(400)}`
     render(
       <NativeChatApprovalCard
         approval={{
           title: 'Claude wants to read secrets.txt '.repeat(400),
           description,
           decisionReason,
-          blockedPath,
-          matchedAskRule: { source: 'project', toolName: 'Read', ruleContent },
           detail: 'x'.repeat(4_000),
           options: [{ label: 'Allow', send: 'allow' }]
         }}
@@ -188,12 +184,67 @@ describe('NativeChatApprovalCard', () => {
     expect(content?.getAttribute('tabindex')).toBe('0')
     expect(content?.textContent).toContain(description.trim())
     expect(content?.textContent).toContain(decisionReason.trim())
-    expect(content?.textContent).toContain(blockedPath)
-    expect(content?.textContent).toContain(ruleContent)
     expect(content?.contains(detail)).toBe(true)
     expect(content?.contains(allow)).toBe(false)
     expect(actions?.contains(allow)).toBe(true)
     expect(actions?.classList.contains('shrink-0')).toBe(true)
+  })
+
+  // The path is what the request touches; the provider's ask-rule bookkeeping is not something to decide on.
+  it('names a blocked path the request does not show, but never the matched ask rule', () => {
+    const fromJournal = {
+      title: 'Claude wants to run git push',
+      decisionReason: 'Pushing changes the remote',
+      blockedPath: 'C:\\qa\\demo\\.git\\config',
+      matchedAskRule: {
+        source: 'projectSettings',
+        toolName: 'Bash',
+        ruleContent: 'Bash(git push:*)'
+      },
+      detail: 'git push origin main',
+      options: [{ label: 'Allow', send: 'allow' }]
+    }
+    render(<NativeChatApprovalCard approval={fromJournal} onChoose={() => {}} />)
+    const content = document.querySelector('[data-native-chat-approval-content="true"]')
+    expect(content?.textContent).toContain('Reason: Pushing changes the remote')
+    expect(content?.textContent).toContain('git push origin main')
+    expect(content?.textContent).toContain('Needs access to: C:\\qa\\demo\\.git\\config')
+    for (const internal of ['Ask rule', 'Bash(git push:*)', 'projectSettings', 'Blocked path']) {
+      expect(content?.textContent).not.toContain(internal)
+    }
+  })
+
+  it('does not repeat a blocked path the request already shows', () => {
+    const blockedPath = 'C:\\qa\\demo\\notes.md'
+    render(
+      <NativeChatApprovalCard
+        approval={{
+          title: 'Claude wants to write notes.md',
+          blockedPath,
+          detail: JSON.stringify({ file_path: blockedPath, content: 'hi' }, null, 2),
+          options: [{ label: 'Allow', send: 'allow' }]
+        }}
+        onChoose={() => {}}
+      />
+    )
+    const content = document.querySelector('[data-native-chat-approval-content="true"]')
+    expect(content?.textContent).toContain('notes.md')
+    expect(content?.textContent).not.toContain('Needs access to')
+  })
+
+  it('shows the blocked path alone when the provider sent nothing else to show', () => {
+    render(
+      <NativeChatApprovalCard
+        approval={{
+          title: 'Allow Read?',
+          blockedPath: '/outside/repo/secrets.txt',
+          options: [{ label: 'Allow', send: 'allow' }]
+        }}
+        onChoose={() => {}}
+      />
+    )
+    const content = document.querySelector('[data-native-chat-approval-content="true"]')
+    expect(content?.textContent).toBe('Needs access to: /outside/repo/secrets.txt')
   })
 
   it('renders a plan as markdown inside the same bounded scroller', () => {

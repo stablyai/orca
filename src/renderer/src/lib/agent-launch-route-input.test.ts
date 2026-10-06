@@ -260,10 +260,14 @@ describe('buildAgentLaunchRouteInput', () => {
     expect(input.startsOutsideWorkspaceRoot).toBe(true)
   })
 
-  // A custom launch command applies to terminal launches only; native chat ignores it.
+  // Command values never change the selected chat surface.
   it.each([
     ['claude', 'claude-wrapper'],
-    ['codex', 'codex-nightly']
+    ['codex', 'codex-nightly'],
+    ['claude', 'npx claude'],
+    ['codex', 'wrapper --arg'],
+    ['claude', '/missing/claude'],
+    ['codex', './codex']
   ] as const)('keeps %s structured with launch command %s', (agent, command) => {
     const appStore = store({ ...STRUCTURED_SETTINGS, agentCmdOverrides: { [agent]: command } })
     const args = {

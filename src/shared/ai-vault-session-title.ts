@@ -7,12 +7,14 @@ export type AiVaultSessionTitle = {
   agent: Extract<AiVaultAgent, 'claude' | 'codex'>
   sessionId: string
   title: string
+  structuredSession?: { workspaceId: string; sessionId: string }
 }
 
 export type AiVaultSessionTitleRequest = {
   agent: AiVaultSessionTitle['agent']
   sessionId: string
   transcriptPath?: string
+  structuredSession?: { workspaceId: string; sessionId: string }
 }
 
 export type AiVaultSessionTitlesArgs = {

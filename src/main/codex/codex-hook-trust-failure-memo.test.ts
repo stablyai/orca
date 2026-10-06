@@ -34,7 +34,7 @@ let codexPath: string
 /** A fresh process that may ask Codex, as after an app restart. */
 function startProcess(): void {
   _internals.resetForTesting()
-  startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
+  startCodexHookHashLookup(Promise.resolve())
 }
 
 /** Stands in for Codex's app-server, listing Stop with `movedHash` for the copy after the dummy group. */

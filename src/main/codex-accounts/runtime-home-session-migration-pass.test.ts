@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createStore,
-  getRuntimeCodexHomePath,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
   testState
@@ -105,9 +104,7 @@ describe('host system default session migration pass preparation', () => {
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
-    // Why: an unusable hook lane is the migration-eligible route onto the mirror.
-    service.setRealHomeLaneGate(() => false)
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(null, { reattached: true })).toBe(
       false
     )
 
@@ -144,9 +141,7 @@ describe('host system default session migration pass preparation', () => {
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
-    // Why: an unusable hook lane is the migration-eligible route onto the mirror.
-    service.setRealHomeLaneGate(() => false)
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(null, { reattached: true })).toBe(
       false
     )
 

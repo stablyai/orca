@@ -39,19 +39,10 @@ const derivations = new Map<string, Promise<CodexHookAnswer>>()
 // is hydrated; a lookup before that, or in another process such as the CLI, reads the memo.
 let appPathReady: Promise<unknown> | null = null
 
-/**
- * App start, main process only: lets lookups ask Codex once the shell PATH is
- * hydrated, and asks right then when hooks are on, so the first managed
- * launch usually finds the answer ready.
- */
-export function startCodexHookHashLookup(options: {
-  pathReady: Promise<unknown>
-  isEnabled: () => boolean
-}): void {
-  const pathReady = options.pathReady.catch(() => {})
+/** App start, main process only: lets lookups ask Codex once `pathReady`, which never rejects, settles. */
+export function startCodexHookHashLookup(pathReady: Promise<unknown>): void {
   appPathReady = pathReady
   void sweepStaleCodexScratchHomes()
-  void pathReady.then(() => (options.isEnabled() ? resolveCodexHookAnswer() : undefined))
 }
 
 /**
@@ -158,7 +149,11 @@ export const CODEX_ANSWER_AWAITED: CodexHookAnswer = {
 }
 
 function codexNotFound(codexPath: string): CodexHookAnswer {
-  return { kind: 'pending', failure: `Orca could not find Codex at ${codexPath}` }
+  return {
+    kind: 'pending',
+    failure: `Orca could not find Codex at ${codexPath}`,
+    codexMissing: true
+  }
 }
 
 /** The answer for a launch, waiting at most `waitMs` for one not known yet; null when none came in time. */

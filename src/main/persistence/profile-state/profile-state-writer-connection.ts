@@ -1,4 +1,3 @@
-import { Worker } from 'node:worker_threads'
 import { resolveProfileStateWriterWorkerPath } from './profile-state-writer-worker-path'
 import {
   createProfileStateWriterRequest,
@@ -13,22 +12,32 @@ import {
 import {
   isProfileStateWriterResponse,
   type ProfileStateWriterCommand,
+  type ProfileStateWriterFailureOutcome,
   type ProfileStateWriterInitialization
 } from './profile-state-writer-protocol'
+import { recordProfileStateWriterFault } from './profile-state-writer-diagnostics'
+import { ProfileStateWriterThread } from './profile-state-writer-thread'
 
 const REQUEST_TIMEOUT_MS = 30_000
+
+export type ProfileStateWriterConnectionOptions = {
+  workerPath?: string
+  timeoutMs?: number
+  onFailure?: (error: Error) => void
+  reportInitializationFailure?: boolean
+  /** Monotonic milliseconds; tests replace it to model a stalled main loop. */
+  clock?: () => number
+}
 
 /** One materialized command; Store owns coalescing and never queues snapshots here. */
 export class ProfileStateWriterConnection {
   readonly ready: Promise<void>
-  private worker: Worker | undefined
+  private thread: ProfileStateWriterThread | undefined
   private active: PendingProfileStateWriterRequest | undefined
   private nextId = 1
   private failure: Error | undefined
   private draining = false
   private closePromise: Promise<void> | undefined
-  private readonly exit = Promise.withResolvers<void>()
-  private didExit = false
   private closeAcknowledged = false
   private readonly timeoutMs: number
   private readonly initialRevision: number
@@ -36,12 +45,7 @@ export class ProfileStateWriterConnection {
 
   constructor(
     initialization: ProfileStateWriterInitialization,
-    private readonly options: {
-      workerPath?: string
-      timeoutMs?: number
-      onFailure?: (error: Error) => void
-      reportInitializationFailure?: boolean
-    } = {}
+    private readonly options: ProfileStateWriterConnectionOptions = {}
   ) {
     this.initialRevision = initialization.revision
     this.timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS
@@ -51,59 +55,34 @@ export class ProfileStateWriterConnection {
     // Initialization failures remain observable through ready without an unhandled rejection.
     void this.ready.catch(() => {})
     try {
-      const worker = new Worker(options.workerPath ?? resolveProfileStateWriterWorkerPath(), {
-        workerData: initialization,
-        execArgv: []
-      })
-      this.worker = worker
-      worker.on('message', (response: unknown) => this.receive(response))
-      worker.on('error', (cause: Error) =>
-        this.fault(
-          new ProfileStateWriterError(
-            'profile-state-writer-exit',
-            'Profile state writer failed',
-            this.dispatchedOutcome(),
-            { cause }
-          )
-        )
+      this.thread = new ProfileStateWriterThread(
+        options.workerPath ?? resolveProfileStateWriterWorkerPath(),
+        initialization,
+        {
+          message: (response) => this.receive(response),
+          error: (cause) =>
+            this.faultWith('profile-state-writer-exit', 'Profile state writer failed', { cause }),
+          exit: (code) => {
+            if (!this.closeAcknowledged || code !== 0) {
+              const message = `Profile state writer exited without a completed close (${code})`
+              this.faultWith('profile-state-writer-exit', message, { exitCode: code })
+            }
+          }
+        },
+        { timeoutMs: this.timeoutMs, now: options.clock }
       )
-      worker.once('exit', (code) => {
-        this.didExit = true
-        this.exit.resolve()
-        if (!this.closeAcknowledged || code !== 0) {
-          this.fault(
-            new ProfileStateWriterError(
-              'profile-state-writer-exit',
-              `Profile state writer exited without a completed close (${code})`,
-              this.dispatchedOutcome()
-            )
-          )
-        }
-      })
     } catch (cause) {
-      this.didExit = true
-      this.exit.resolve()
-      this.fault(
-        new ProfileStateWriterError(
-          'profile-state-writer-unavailable',
-          'Profile state writer could not start',
-          'known-failure',
-          { cause }
-        )
-      )
+      this.faultWith('profile-state-writer-unavailable', 'Profile state writer could not start', {
+        cause,
+        outcome: 'known-failure'
+      })
     }
   }
 
   /** Abandoning an active wait cannot establish whether SQLite committed. */
   async abort(): Promise<void> {
-    this.fault(
-      new ProfileStateWriterError(
-        'profile-state-writer-aborted',
-        'Profile state writer was aborted',
-        this.dispatchedOutcome()
-      )
-    )
-    await this.exit.promise
+    this.faultWith('profile-state-writer-aborted', 'Profile state writer was aborted')
+    await this.thread?.exitPromise
   }
 
   stopAdmission(): void {
@@ -126,34 +105,36 @@ export class ProfileStateWriterConnection {
     return this.latestRevision
   }
 
+  /** The last revision this worker confirmed, kept after a fault for diagnostics. */
+  get lastAcknowledgedRevision(): number {
+    return this.latestRevision ?? this.initialRevision
+  }
+
+  private get didExit(): boolean {
+    return this.thread?.exited ?? true
+  }
+
   private async finishClose(): Promise<void> {
     await this.active?.promise.catch(() => {})
     if (!this.failure && !this.didExit) {
       try {
         await this.dispatch({ command: 'close' })
       } finally {
-        const timer = setTimeout(
-          () =>
-            this.fault(
-              new ProfileStateWriterError(
-                'profile-state-writer-close-timeout',
-                'Profile state writer did not exit after close',
-                'indeterminate'
-              )
-            ),
-          this.timeoutMs
-        )
-        try {
-          await this.exit.promise
-        } finally {
-          clearTimeout(timer)
+        if (!(await (this.thread?.waitForExit() ?? true))) {
+          this.faultWith(
+            'profile-state-writer-close-timeout',
+            'Profile state writer did not exit after close',
+            { outcome: 'indeterminate' }
+          )
         }
+        // Termination is asynchronous; close must retain ownership until exit is confirmed.
+        await this.thread?.exitPromise
       }
       if (this.failure) {
         throw this.failure
       }
     } else {
-      await this.exit.promise
+      await this.thread?.exitPromise
     }
   }
 
@@ -188,7 +169,7 @@ export class ProfileStateWriterConnection {
     const pending = this.createPending(this.nextId++, command.command)
     this.active = pending
     try {
-      this.worker?.postMessage({ ...command, id: pending.id })
+      this.thread?.post({ ...command, id: pending.id })
     } catch (cause) {
       // postMessage did not dispatch a message when serialization fails.
       this.settle(
@@ -208,15 +189,17 @@ export class ProfileStateWriterConnection {
     id: number,
     command: PendingProfileStateWriterRequest['command']
   ): PendingProfileStateWriterRequest {
-    return createProfileStateWriterRequest(id, command, this.timeoutMs, () =>
-      this.fault(
-        new ProfileStateWriterError(
-          'profile-state-writer-timeout',
-          'Profile state writer command timed out',
-          this.dispatchedOutcome()
-        )
-      )
-    )
+    const pending = createProfileStateWriterRequest(id, command, this.timeoutMs, {
+      now: this.options.clock,
+      acknowledgedRevision: () => this.lastAcknowledgedRevision,
+      onTimeout: () => {
+        // A cleared or superseded request must never fault its successor.
+        if (this.active === pending) {
+          this.faultWith('profile-state-writer-timeout', 'Profile state writer command timed out')
+        }
+      }
+    })
+    return pending
   }
 
   private receive(value: unknown): void {
@@ -260,7 +243,7 @@ export class ProfileStateWriterConnection {
     if (!pending) {
       return
     }
-    clearTimeout(pending.timer)
+    pending.clearDeadline()
     if (response) {
       pending.resolve(response)
     } else {
@@ -268,28 +251,35 @@ export class ProfileStateWriterConnection {
     }
   }
 
-  private dispatchedOutcome(): 'known-failure' | 'indeterminate' {
+  private dispatchedOutcome(): ProfileStateWriterFailureOutcome {
     return this.active?.command === 'initialize' ? 'known-failure' : 'indeterminate'
   }
 
   private invalidResponse(): void {
-    const error = new ProfileStateWriterError(
-      'profile-state-writer-protocol',
-      'Invalid profile state writer response',
-      this.dispatchedOutcome()
-    )
-    this.fault(error)
+    this.faultWith('profile-state-writer-protocol', 'Invalid profile state writer response')
   }
 
-  private fault(error: Error): void {
+  private faultWith(
+    code: string,
+    message: string,
+    {
+      cause,
+      exitCode,
+      outcome = this.dispatchedOutcome()
+    }: { cause?: unknown; exitCode?: number; outcome?: ProfileStateWriterFailureOutcome } = {}
+  ): void {
+    const options = cause === undefined ? undefined : { cause }
+    this.fault(new ProfileStateWriterError(code, message, outcome, options), exitCode)
+  }
+
+  private fault(error: Error, exitCode?: number): void {
     if (this.failure) {
       return
     }
     this.failure = error
-    this.settle(undefined, this.failure)
-    if (!this.didExit) {
-      void this.worker?.terminate().catch(() => {})
-    }
+    recordProfileStateWriterFault(error, this.active, this.lastAcknowledgedRevision, exitCode)
+    this.settle(undefined, error)
+    this.thread?.terminate()
     // Startup failures already reject ready; admitted writers must also alert idle callers.
     if (this.latestRevision !== undefined || this.options.reportInitializationFailure) {
       try {

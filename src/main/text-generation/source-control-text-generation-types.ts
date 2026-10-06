@@ -38,7 +38,11 @@ export type RemoteCommitMessageExecResult = {
   spawnError?: string
 }
 
-export type TextGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
+export type TextGenerationOperation =
+  | 'commit-message'
+  | 'pull-request-fields'
+  | 'branch-name'
+  | 'conversation-name'
 
 export type CommitMessageGenerationTarget =
   | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
@@ -65,6 +69,15 @@ export type InternalTextGenerationResult =
 
 export type GenerateBranchNameResult =
   | { success: true; slug: string; agentLabel?: string }
+  | {
+      success: false
+      error: string
+      canceled?: boolean
+      failureOutput?: AgentGenerationFailureOutput
+    }
+
+export type GenerateConversationNameResult =
+  | { success: true; name: string; agentLabel?: string }
   | {
       success: false
       error: string

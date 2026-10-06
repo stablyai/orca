@@ -153,14 +153,14 @@ describe('CodexHookService', () => {
       const legacyToml = readFileSync(runtimeTomlPath, 'utf-8')
       expect(legacyToml).toContain(legacyPermissionHeader)
       // Why partial: Codex on Windows reads only the backslash key, so it would ask to review this hook.
-      expect(service.getStatus().state).toBe('partial')
+      expect(service.getStatus(managedCodexHome).state).toBe('partial')
 
       expect((await service.install()).state).toBe('installed')
 
       const repairedToml = readFileSync(runtimeTomlPath, 'utf-8')
       expect(repairedToml).not.toContain(legacyPermissionHeader)
       expect(repairedToml).toContain(canonicalPermissionHeader)
-      expect(service.getStatus().state).toBe('installed')
+      expect(service.getStatus(managedCodexHome).state).toBe('installed')
     }
   )
 

@@ -11,6 +11,84 @@
   },
   "gates": [
     {
+      "id": "native-chat.transcript-consumed-boundary",
+      "title": "Transcript replacement remains visible when it races message publication",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "native-chat",
+      "layer": "host-file-reader-and-renderer",
+      "surfaces": ["native chat live transcript"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Real local JSONL files exercise the shared host reader with Claude records; hidden Electron proof traverses actual host IPC and chat rendering. No physical remote or Windows/Linux deployment claim.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/actions/runs/37524761640"],
+      "invariant": "A retained transcript cursor fingerprint contains only bytes actually consumed at that cursor. A larger in-place rewrite during publication must be delivered, and subsequent ordinary appends arrive once. Closing or failing a test leaves no active watcher.",
+      "oracle": "Synchronous larger rewrites during append, initial snapshot and replacement snapshot callbacks deliver new exactly once, followed by followup exactly once. A 4 MiB read retains an independent 64-byte backing allocation. Hidden Electron reproduces the same ordering at snapshot IPC publication and asserts the new rendered text replaces the old conversation.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/transcript-watch-inplace-drain-race.test.ts src/main/native-chat/transcript-file-version.test.ts src/main/native-chat/transcript-watch.test.ts --maxWorkers=2",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e tests/e2e/native-chat-inplace-drain-race.spec.ts --workers=1"
+      ],
+      "testFiles": [
+        "src/main/native-chat/transcript-watch-inplace-drain-race.test.ts",
+        "src/main/native-chat/transcript-file-version.test.ts",
+        "src/main/native-chat/transcript-watch.test.ts",
+        "tests/e2e/native-chat-inplace-drain-race.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/native-chat/transcript-watch-inplace-drain-race.test.ts",
+          "assertions": ["delivers a larger rewrite while publishing a completed %s"]
+        },
+        {
+          "file": "src/main/native-chat/transcript-file-version.test.ts",
+          "assertions": ["owns only the final 64 bytes of a large read"]
+        },
+        {
+          "file": "tests/e2e/native-chat-inplace-drain-race.spec.ts",
+          "assertions": [
+            "renders a larger transcript rewrite during snapshot publication, then ordinary appends"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/transcript-watch-inplace-drain-race.test.ts src/main/native-chat/transcript-file-version.test.ts src/main/native-chat/transcript-watch.test.ts --maxWorkers=2",
+          "result": "passed",
+          "durationSeconds": 2.85,
+          "summary": "32 tests in three files pass, including all three publication modes, replacement sizes, partial records and watcher teardown."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Focused local unit command; CI/platform soak not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Deterministic publication ordering replaces a timing-dependent filesystem race; no long-term soak claim."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Identical append callback regression fails on parent main with only old observed and passes with consumed-byte fingerprinting."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "At most 64 owned, unpooled bytes per cursor. Fingerprint capture reuses already-read chunks and removes the post-publication filesystem read; no new timers, polls or subprocesses."
+      },
+      "knownGaps": [
+        "Physical SSH/WSL/runtime hosts and native Linux/Windows remain unverified.",
+        "This gate targets rewrites during publication, not atomic snapshots of arbitrary concurrent multi-chunk file overwrites."
+      ],
+      "promotionCriteria": [
+        "Collect policy soak and native/remote host evidence without weakening delivery or resource assertions."
+      ],
+      "demotionRule": "Remain experimental until soak and platform coverage; investigate missing replacements without retries or longer timeouts."
+    },
+    {
       "id": "terminal-input.prompt-reply-occurrence-acknowledgment",
       "title": "Terminal chat replies hide only the acknowledged prompt occurrence",
       "maturity": "experimental",

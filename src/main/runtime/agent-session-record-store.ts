@@ -7,7 +7,6 @@ import {
   commitConversationCommandRecord,
   type AgentSessionConversationClear
 } from './agent-session-conversation-command-record'
-import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
 import {
   agentSessionOperationKey,
@@ -77,6 +76,11 @@ import type { JournalHostDatabase } from '../native-chat/agent-session-journal/j
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+import {
+  compareAndSetAgentSessionRecordName,
+  type CompareAndSetConversationName,
+  setAgentSessionRecordConversationName
+} from './agent-session-record-conversation-name'
 
 type AgentSessionOperationSettlement = Parameters<typeof settleAgentSessionOperationInto>[1]
 
@@ -168,6 +172,9 @@ export class AgentSessionRecordStore {
       setAgentSessionRecordConversationName(record, name, Date.now())
     )
 
+  compareAndSetConversationName: CompareAndSetConversationName = (sessionId, name, expected) =>
+    compareAndSetAgentSessionRecordName((apply) => this.mutate(sessionId, apply), name, expected)
+
   /** Unfenced like the name: it records where a launch ran and never contends with the lease. */
   pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>
     this.mutate(sessionId, (record) =>
@@ -193,13 +200,8 @@ export class AgentSessionRecordStore {
     )
   }
 
-  async commitProcessIdentity(
-    args: AgentSessionProcessIdentityCommit
-  ): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) =>
-      commitAgentSessionProcessIdentity({ ...args, record })
-    )
-  }
+  commitProcessIdentity = (args: AgentSessionProcessIdentityCommit): Promise<AgentSessionRecord> =>
+    this.mutate(args.sessionId, (record) => commitAgentSessionProcessIdentity({ ...args, record }))
 
   async proveOwner(args: {
     sessionId: string

@@ -2,10 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  readsEntryAtApprovedSlot,
-  writeCodexHookApprovalsBeforeEntries
-} from './codex-hook-approval-first-write'
+import { writeCodexHookApprovalsBeforeEntries } from './codex-hook-approval-first-write'
 import {
   computeTrustKey,
   escapeTomlString,
@@ -58,7 +55,7 @@ describe('writeCodexHookApprovalsBeforeEntries', () => {
         )?.trustedHash
         writeHooks()
       },
-      readsEntryAtApprovedSlot(hooksPath())
+      hooksPath()
     )
 
     expect(approvedAtWrite).toBe('sha256:codex-stop')
@@ -72,7 +69,7 @@ describe('writeCodexHookApprovalsBeforeEntries', () => {
       tomlPath(),
       [approval('stop', 'sha256:codex-stop')],
       writeHooks,
-      readsEntryAtApprovedSlot(hooksPath())
+      hooksPath()
     )
 
     expect(readFileSync(tomlPath(), 'utf-8')).toBe(before)
@@ -92,7 +89,7 @@ describe('writeCodexHookApprovalsBeforeEntries', () => {
           upsertHookTrustEntries(tomlPath(), [approval('session_start', 'sha256:other-writer')])
           throw new Error('disk full')
         },
-        readsEntryAtApprovedSlot(hooksPath())
+        hooksPath()
       )
     ).toThrow('disk full')
 
@@ -116,7 +113,7 @@ describe('writeCodexHookApprovalsBeforeEntries', () => {
           writeHooks()
           throw new Error('later step failed')
         },
-        readsEntryAtApprovedSlot(hooksPath())
+        hooksPath()
       )
     ).toThrow('later step failed')
 

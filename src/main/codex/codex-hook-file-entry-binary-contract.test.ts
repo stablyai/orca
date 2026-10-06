@@ -1,5 +1,13 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -23,6 +31,7 @@ import {
 } from './codex-hook-trust-derivation'
 import { _internals as lookupInternals, startCodexHookHashLookup } from './codex-hook-hash-lookup'
 import { memoizeCodexHookAnswer } from './codex-hook-trust-memo'
+import { reconcileRealHomeCodexHookEntries } from './codex-real-home-hook-install'
 import {
   getCodexExplicitHomeHookSourcePath,
   computeTrustKey,
@@ -46,10 +55,10 @@ vi.mock('electron', () => ({
 import { CodexHookService } from './hook-service'
 
 // Why this file exists: Orca approves its status hook in managed Codex homes
-// with the hash Codex reports for it in a throwaway home. Only a real binary can
-// say whether that hash is the same wherever the entry sits, whether Codex then
-// lists Orca's managed-home entry as trusted, and whether it runs in a real turn
-// with no review. If any of those drift, users meet a review screen or lose
+// and in ~/.codex with the hash Codex reports for it in a throwaway home. Only a
+// real binary can say whether that hash is the same wherever the entry sits,
+// whether Codex then lists Orca's entry as trusted, and whether it runs in a real
+// turn with no review. If any of those drift, users meet a review screen or lose
 // status while every unit test stays green.
 
 const execFileAsync = promisify(execFile)
@@ -94,6 +103,8 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
     vi.stubEnv('USERPROFILE', home)
     vi.stubEnv('CODEX_HOME', join(root, 'never-used-codex-home'))
     vi.stubEnv('ORCA_USER_DATA_PATH', join(home, 'user-data'))
+    // Why: the app's userData always exists; the memo is written there.
+    mkdirSync(join(home, 'user-data'))
     const codexVersion = await probeCodexVersion(binary!)
     expect(codexVersion).not.toBeNull()
     const derived = await deriveCodexHookHashes(binary!, command(), codexVersion!)
@@ -117,7 +128,7 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
     mkdirSync(join(home, '.codex'), { recursive: true })
     // Why saved: the app's lookup then re-probes the version and finds the answer, with no second hooks/list.
     memoizeCodexHookAnswer(binary!, fingerprintCodex(binary!)!, command(), answer)
-    startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
+    startCodexHookHashLookup(Promise.resolve())
     expect((await new CodexHookService().install(accountHome())).state).toBe('installed')
   }
 
@@ -271,16 +282,140 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
     }
   )
 
-  /** A TUI Codex in a pty on the managed home: start, type a prompt, quit; the screen without spaces or escapes. */
-  async function runCodexTui(): Promise<{ screen: string; posts: string[] }> {
+  describe('~/.codex', () => {
+    /** A disposable HOME whose ~/.codex holds Orca's reconciled entry; a symlink, so both key spellings count. */
+    async function freshRealHomeWithEntry(name: string): Promise<void> {
+      home = join(root, `${name}-home`)
+      symlinkSync(mkdtempSync(join(root, `${name}-`)), home, 'junction')
+      vi.stubEnv('HOME', home)
+      vi.stubEnv('USERPROFILE', home)
+      vi.stubEnv('CODEX_HOME', '')
+      vi.stubEnv('ORCA_USER_DATA_PATH', join(home, 'user-data'))
+      mkdirSync(join(home, 'user-data'))
+      await reconcileRealHome()
+    }
+
+    async function reconcileRealHome(): Promise<void> {
+      await reconcileRealHomeCodexHookEntries({
+        hashes,
+        isEnabled: () => true,
+        convertOlderForms: false
+      })
+    }
+
+    const realCodexHome = (): string => join(home, '.codex')
+
+    async function realHomeListings(): Promise<CodexListedHook[]> {
+      // Why a cwd outside any project: only the home's own hooks.json is listed.
+      const cwd = mkdtempSync(join(root, 'cwd-'))
+      return (await listCodexHooks(binary!, null, cwd)).filter(
+        (listing) => listing.command === command()
+      )
+    }
+
+    function stopAt(groupIndex: number): Parameters<typeof computeTrustKey>[0] {
+      return {
+        sourcePath: join(realCodexHome(), 'hooks.json'),
+        eventLabel: 'stop',
+        groupIndex,
+        handlerIndex: 0,
+        command: command()
+      }
+    }
+
+    async function listedStop(groupIndex: number): Promise<CodexListedHook | undefined> {
+      const key = normalizeHookTrustKeyForLookup(computeTrustKey(stopAt(groupIndex)))
+      return (await realHomeListings()).find(
+        (listing) => normalizeHookTrustKeyForLookup(listing.key) === key
+      )
+    }
+
+    it('lists every entry Orca wrote as trusted and enabled, and a second check writes nothing', async () => {
+      await freshRealHomeWithEntry('trusted')
+      const files = ['hooks.json', 'config.toml'].map((name) => join(realCodexHome(), name))
+      const before = files.map((file) => readFileSync(file, 'utf-8'))
+
+      const listings = await realHomeListings()
+
+      expect(listings.map((listing) => listing.key.split(':').at(-3)).sort()).toEqual(
+        Object.keys(hashes).sort()
+      )
+      expect(listings.every((listing) => listing.trustStatus === 'trusted')).toBe(true)
+      expect(listings.every((listing) => listing.enabled !== false)).toBe(true)
+      await reconcileRealHome()
+      expect(files.map((file) => readFileSync(file, 'utf-8'))).toEqual(before)
+    })
+
+    it("turns the entry back on over the user's /hooks switch-off", async () => {
+      await freshRealHomeWithEntry('switched-off')
+      upsertHookTrustEntries(join(realCodexHome(), 'config.toml'), [
+        { ...stopAt(0), trustedHash: hashes.stop!, enabled: false }
+      ])
+      expect((await listedStop(0))?.enabled).toBe(false)
+
+      await reconcileRealHome()
+
+      expect(await listedStop(0)).toMatchObject({ trustStatus: 'trusted', enabled: true })
+    })
+
+    it('lists the entry for review after a user inserts a hook ahead, until the next check', async () => {
+      await freshRealHomeWithEntry('inserted')
+      const hooksPath = join(realCodexHome(), 'hooks.json')
+      const file = JSON.parse(readFileSync(hooksPath, 'utf-8'))
+      file.hooks.Stop.unshift({ hooks: [{ type: 'command', command: 'true' }] })
+      writeFileSync(hooksPath, `${JSON.stringify(file, null, 2)}\n`)
+      expect((await listedStop(1))?.trustStatus).not.toBe('trusted')
+
+      await reconcileRealHome()
+
+      expect((await listedStop(1))?.trustStatus).toBe('trusted')
+      expect((await realHomeListings()).every((listing) => listing.trustStatus === 'trusted')).toBe(
+        true
+      )
+    })
+
+    it('leaves a config.toml with inline hook approvals loadable, writing nothing to it', async () => {
+      await freshRealHomeWithEntry('inline')
+      const tomlPath = join(realCodexHome(), 'config.toml')
+      const inline = `model = "m"\n[hooks]\nstate = { ${JSON.stringify(`${join(realCodexHome(), 'hooks.json')}:stop:0:0`)} = { trusted_hash = "sha256:user" } }\n`
+      writeFileSync(tomlPath, inline)
+      const file = JSON.parse(readFileSync(join(realCodexHome(), 'hooks.json'), 'utf-8'))
+      file.hooks.Stop.unshift({ hooks: [{ type: 'command', command: 'true' }] })
+      writeFileSync(join(realCodexHome(), 'hooks.json'), `${JSON.stringify(file, null, 2)}\n`)
+
+      await reconcileRealHome()
+
+      expect(readFileSync(tomlPath, 'utf-8')).toBe(inline)
+      // Why: Codex refuses to start at all with a config.toml it cannot load.
+      await expect(realHomeListings()).resolves.toBeDefined()
+    })
+
+    it.skipIf(process.platform === 'win32' || !hasPython())(
+      'shows no review in a real TUI start on ~/.codex, and the hook posts',
+      async () => {
+        await freshRealHomeWithEntry('tui')
+        const { screen, posts } = await runCodexTui(null)
+        expect(screen).not.toMatch(/eeds?review/i)
+        expect(posts.length).toBeGreaterThan(0)
+      }
+    )
+  })
+
+  /** A TUI Codex in a pty: start, type a prompt, quit; the screen without spaces or escapes. */
+  async function runCodexTui(
+    codexHome: string | null = accountHome()
+  ): Promise<{ screen: string; posts: string[] }> {
+    const codexHomeEnv = codexHome ? { CODEX_HOME: codexHome } : {}
     const posts: string[] = []
     const receiver = await listen(recordPosts(posts))
     const model = await startMockResponses()
-    const workdir = join(home, 'tui-work')
+    // Why resolved: Codex 0.158 matches the trusted project only by the real path, and a symlinked
+    // HOME (the ~/.codex case) left it untrusted, so the turn never ran and no hook posted.
+    const workdir = join(realpathSync(home), 'tui-work')
     mkdirSync(workdir, { recursive: true })
     const out = join(home, 'tui.out')
     const help = await execFileAsync(binary!, ['--help'], {
-      env: { PATH: process.env.PATH, HOME: home, CODEX_HOME: accountHome() }
+      env: { PATH: process.env.PATH, HOME: home, ...codexHomeEnv }
     })
     try {
       await execFileAsync(
@@ -308,7 +443,7 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
           env: {
             PATH: process.env.PATH,
             HOME: home,
-            CODEX_HOME: accountHome(),
+            ...codexHomeEnv,
             TERM: 'xterm-256color',
             ORCA_CONTRACT_MOCK_KEY: 'x',
             ORCA_PANE_KEY: 'contract-pane',

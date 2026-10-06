@@ -38,7 +38,9 @@
     "clientHosted": {
       "preparationFailed": "Impossible de démarrer le navigateur distant sur ce bureau. Vérifiez la connexion couplée et réessayez.",
       "unavailableTitle": "Navigateur hébergé par le client indisponible",
-      "unavailableDescription": "Cette page est attachée à un autre bureau ou n'est plus disponible.",
+      "unavailableDescription": "Cette page n'est pas disponible sur ce bureau pour le moment.",
+      "unavailableOtherDesktopDescription": "Cette page est ouverte sur un autre bureau.",
+      "unavailableHostOfflineDescription": "{{host}} est hors ligne. Cette page se rechargera ici dès sa reconnexion.",
       "download": {
         "started": "Téléchargement de {{filename}}…",
         "completed": "Téléchargé {{filename}}",
@@ -111,7 +113,18 @@
   },
   "settings": {
     "chat": {
-      "description": "Choisissez l’apparence des chats."
+      "description": "Choisissez l’apparence et le nom des chats.",
+      "names": {
+        "title": "Noms des chats",
+        "description": "Utilisez un agent pour nommer les nouveaux chats à partir de leur premier message. Sans nom généré, ils restent Claude Chat ou Codex Chat.",
+        "enable": "Nommer automatiquement les chats",
+        "recipe": "Nom du chat",
+        "recipeDescription": "Génère un nom court à partir du premier message d’un nouveau chat.",
+        "customCommandDescription": "Ligne de commande partagée par les recettes qui sélectionnent Commande personnalisée. Utilisez {prompt} pour transmettre le texte en argument ; sinon, il est envoyé sur l’entrée standard.",
+        "saveFailed": "Impossible d’enregistrer les paramètres de nom des chats.",
+        "searchAgent": "agent",
+        "searchTemplate": "modèle de commande"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC ou U.S. — Option envoie des séquences Alt/Esc",
@@ -8448,8 +8461,8 @@
           "3c88ec55d6": "Aucun paramètre trouvé pour \"",
           "c7ad095d96": "Chargement des paramètres...",
           "acc7bbdefd": "Appuyez à nouveau sur ESC pour quitter les paramètres",
-          "43b68e10f0": "Vous avez des modifications Git AI Author non enregistrées. Quitter les abandonnera.",
-          "17bdee4ff1": "Abandonner les modifications Git AI Author non enregistrées ?",
+          "43b68e10f0": "Des modifications IA ne sont pas enregistrées. Elles seront abandonnées en quittant.",
+          "17bdee4ff1": "Abandonner les modifications IA non enregistrées ?",
           "084d8fac5b": "Confidentialité et sécurité",
           "23931df7e8": "Hôtes distants",
           "mobile_group": "Mobile",
@@ -17454,16 +17467,12 @@
         "listLabel": "Des discussions qui reprendraient",
         "dontAskAgain": "Ne plus demander (reprendre automatiquement)",
         "dontAskAgainHint": "Vous pouvez désactiver cette option dans Paramètres → Expérimental → Chat UI.",
-        "continuedOne": "J'ai repris 1 chat et lui ai demandé de continuer",
-        "continuedMany": "J'ai repris les discussions {{value0}} et leur ai demandé de continuer",
+        "continuedOne": "1 chat a été repris",
+        "continuedMany": "{{value0}} chats ont été repris",
         "selectAgent": "Reprendre le chat {{value0}} \"{{value1}}\" dans {{value2}}",
         "resumeSelected": "Reprendre les discussions {{value0}}",
         "resumeSelectedOne": "Reprendre 1 discussion",
-        "continueUnconfirmed": "La livraison continue n'est pas confirmée pour les discussions {{value0}}. Ouvrez-les pour vérifier avant d'envoyer un autre message.",
-        "continueUnconfirmed_one": "La livraison continue n'est pas confirmée pour le chat {{value0}}. Ouvrez-le pour vérifier avant d'envoyer un autre message.",
-        "continueUnconfirmed_other": "La livraison continue n'est pas confirmée pour les discussions {{value0}}. Ouvrez-les pour vérifier avant d'envoyer un autre message.",
         "dismissAll": "Tout rejeter",
-        "dismissUnconfirmed": "Le rejet de l'offre de CV n'a pas été confirmé – il se peut qu'elle soit toujours dans la barre d'état.",
         "notContinuedOne": "1 chat n'a pas pu reprendre",
         "notContinuedMany": "{{value0}} chats n'ont pas pu reprendre",
         "notConfirmedOne": "Impossible de confirmer qu'1 chat a repris",
@@ -17471,7 +17480,6 @@
         "notConfirmedOtherOne": "Impossible de confirmer qu'1 autre chat a repris",
         "notConfirmedOtherMany": "Impossible de confirmer que {{value0}} autres chats ont repris",
         "show": "Afficher",
-        "dismiss": "Ignorer",
         "activityUnnamed": "sans nom",
         "activityApproval": "En attente de votre approbation : {{value0}}",
         "activityQuestion": "En attente de votre réponse : {{value0}}",
@@ -17552,8 +17560,8 @@
       "NativeChatResumeFailureGuidance": {
         "unconfirmed": "Orca n'a pas pu confirmer que le message “continue” a été livré. Ouvrez le chat et vérifiez avant d'en envoyer un autre.",
         "superseded": "Ouvrez le chat et répondez. Du nouveau travail est arrivé juste après le redémarrage, donc Orca n'a pas envoyé son message “continue”.",
-        "conflict": "Une autre fenêtre Orca ou un autre terminal détient toujours cette session. Fermez l’autre fenêtre Orca ou le terminal concerné, puis réessayez.",
-        "ownershipUnknown": "Orca détermine encore quel processus détient cette session. Patientez un instant, puis réessayez.",
+        "conflict": "Ce chat est ouvert dans une autre fenêtre Orca ou un terminal. Fermez-le là-bas, puis réessayez.",
+        "ownershipUnknown": "Ce chat n’est pas encore prêt à reprendre. Patientez un instant, puis réessayez.",
         "notAttached": "Le chat ne s'est pas reconnecté. Réessayez ou ouvrez-le pour démarrer un nouveau tour.",
         "dispatchRejected": "L'agent a refusé le message “continue”. Ouvrez le chat et envoyez-en un vous-même.",
         "unsupported": "Orca ne peut pas reprendre ce chat. Ouvrez-le pour voir où il s'est arrêté.",
@@ -17647,6 +17655,7 @@
         "sendToTryAgain": "Envoyez votre message pour réessayer.",
         "sendAgainToTryOnceMore": "Renvoyez votre message pour réessayer.",
         "couldNotStart": "{{agent}} n'a pas pu démarrer.",
+        "editSavedArguments": "Modifiez-les dans Paramètres > Agents > Arguments.",
         "couldNotRestart": "{{agent}} n'a pas pu redémarrer.",
         "notSignedIn": "{{agent}} n'est pas connecté avec le compte sélectionné.",
         "signInFirst": "Connectez-vous d'abord.",
@@ -17694,6 +17703,10 @@
         "stopRefusedQuoted": "{{agent}} ne s'est pas arrêté : {{detail}}.",
         "noTurnToStop": "{{agent}} n'avait aucun tour en cours à arrêter.",
         "answerUnconfirmed": "Votre réponse a été enregistrée, mais l'agent ne l'a pas confirmée.",
+        "argumentsMissingValue": "Les arguments enregistrés nécessitent une valeur pour {{option}}.",
+        "argumentsMultipleValues": "Les arguments enregistrés donnent plusieurs valeurs à {{option}}.",
+        "argumentsPositionalPrompt": "Les arguments enregistrés contiennent un message.",
+        "argumentsUnsupportedOption": "Les arguments enregistrés contiennent une option non prise en charge ({{option}}).",
         "hostFault": "Orca a rencontré un problème, l'opération n'a donc pas abouti.",
         "hostFaultTryAgain": "Orca a rencontré un problème, l'opération n'a donc pas abouti. Réessayez.",
         "hostStopped": "{{agent}} n'a jamais fini de démarrer, Orca l'a donc arrêté.",
@@ -17999,8 +18012,7 @@
         "deny": "Refuser",
         "cancel": "Annuler",
         "reason": "Raison",
-        "blockedPath": "Chemin bloqué",
-        "askRule": "Demander la règle",
+        "needsAccess": "Nécessite l'accès à",
         "plan": {
           "file": "Dossier de planification"
         }
@@ -18040,7 +18052,8 @@
         "details": "Détails",
         "plan": "Plan",
         "historyRepaired": "Une partie de l'historique de ce chat n'a pas pu être chargée.",
-        "historyItemTooLarge": "Cette partie du chat était trop volumineuse pour être affichée."
+        "historyItemTooLarge": "Cette partie du chat était trop volumineuse pour être affichée.",
+        "stoppedBeforeStart": "Arrêté avant le démarrage de l'agent"
       },
       "providerFrame": {
         "byteLength": "{{value0}} octets"

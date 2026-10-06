@@ -103,8 +103,7 @@ export function createPtyWriteInput(deps: {
     verify: boolean
   ): boolean | Promise<boolean> => {
     if (!verify) {
-      provider.write(id, data)
-      return true
+      return provider.write(id, data) !== false
     }
     const settlement = provider.writeWithSettlement(id, data)
     return isSettledWrite(settlement)
@@ -210,6 +209,21 @@ export function createPtyWriteInput(deps: {
     runtime?.terminalRunFacts?.recordInput(args.id, args.inputKind, args.data)
   }
 
+  const writeAndObserveInput = (
+    provider: IPtyProvider,
+    args: PtyWritePayload,
+    verify = false
+  ): boolean | Promise<boolean> => {
+    const observe = (accepted: boolean): boolean => {
+      if (accepted && args.inputKind === 'driving' && ptyOwnership.get(args.id) === null) {
+        runtime?.observeClaudeTerminalEvidence?.(args.id, { kind: 'input', data: args.data })
+      }
+      return accepted
+    }
+    const result = writePtyProviderInput(provider, args.id, args.data, verify)
+    return typeof result === 'boolean' ? observe(result) : result.then(observe)
+  }
+
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
     if (runtime?.getDriver(args.id).kind === 'mobile') {
@@ -221,7 +235,7 @@ export function createPtyWriteInput(deps: {
     }
     try {
       noteRendererPtyInput(args)
-      return writePtyProviderInput(provider, args.id, args.data)
+      return writeAndObserveInput(provider, args)
     } catch {
       return false
     }
@@ -236,7 +250,7 @@ export function createPtyWriteInput(deps: {
       return false
     }
     noteRendererPtyInput(args)
-    return writePtyProviderInput(provider, args.id, args.data, true)
+    return writeAndObserveInput(provider, args, true)
   }
 
   const writePtyInputAccepted = (args: PtyWritePayload): boolean | Promise<boolean> => {
@@ -256,7 +270,7 @@ export function createPtyWriteInput(deps: {
     }
     try {
       noteRendererPtyInput(args)
-      return writePtyProviderInput(provider, args.id, args.data)
+      return writeAndObserveInput(provider, args)
     } catch {
       return false
     }

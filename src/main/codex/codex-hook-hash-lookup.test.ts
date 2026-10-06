@@ -44,7 +44,7 @@ const hashesOf = (answer: CodexHookAnswer | null): CodexHookHashes | null =>
   answer?.kind === 'hashes' ? answer.hashes : null
 
 function allowAsking(): void {
-  startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
+  startCodexHookHashLookup(Promise.resolve())
 }
 
 beforeEach(() => {
@@ -177,7 +177,8 @@ describe('what a lookup may spawn', () => {
 
     expect(missing).toEqual({
       kind: 'pending',
-      failure: `Orca could not find Codex at ${mocks.codexPath}`
+      failure: `Orca could not find Codex at ${mocks.codexPath}`,
+      codexMissing: true
     })
     writeFileSync(mocks.codexPath, 'codex 0.150.1')
     expect(hashesOf(await resolveCodexHookAnswer())).toEqual(HASHES)
@@ -232,7 +233,8 @@ describe('the answer status reads', () => {
 
     expect(readKnownCodexHookAnswer()).toEqual({
       kind: 'pending',
-      failure: `Orca could not find Codex at ${mocks.codexPath}`
+      failure: `Orca could not find Codex at ${mocks.codexPath}`,
+      codexMissing: true
     })
   })
 })
@@ -245,36 +247,13 @@ describe('when a lookup runs', () => {
     await expect(resolveCodexHookAnswerForLaunch(10)).resolves.toBeNull()
   })
 
-  it('warms the answer at app start only once the shell PATH is hydrated', async () => {
-    let hydrate: () => void = () => {}
-    const pathReady = new Promise<void>((resolve) => {
-      hydrate = resolve
-    })
-
-    startCodexHookHashLookup({ pathReady, isEnabled: () => true })
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
-
-    hydrate()
-    await vi.waitFor(() => expect(hashesOf(readKnownCodexHookAnswer())).toEqual(HASHES))
-    expect(mocks.probeCodexVersion).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not warm the answer while hooks are off', async () => {
-    startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
-    await new Promise((resolve) => setTimeout(resolve, 10))
-
-    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
-  })
-
   it('makes a launch before PATH hydration wait for it, then ask', async () => {
     let hydrate: () => void = () => {}
-    startCodexHookHashLookup({
-      pathReady: new Promise<void>((resolve) => {
+    startCodexHookHashLookup(
+      new Promise<void>((resolve) => {
         hydrate = resolve
-      }),
-      isEnabled: () => false
-    })
+      })
+    )
 
     const launch = resolveCodexHookAnswerForLaunch(5_000)
     await new Promise((resolve) => setTimeout(resolve, 10))
