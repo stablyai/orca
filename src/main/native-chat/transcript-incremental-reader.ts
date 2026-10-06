@@ -2,6 +2,7 @@ import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/na
 import { transcriptFallbackId } from './transcript-fallback-id'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
+  stampTranscriptRowOffset,
   type NativeChatLineDecoder
 } from './transcript-tail-reader'
 import { openTranscriptReadStream, wslGatedStat } from './wsl-transcript-fs-access'
@@ -122,7 +123,7 @@ export async function readIncrementalTranscriptMessages(
     if (!message) {
       return
     }
-    messages.push(message)
+    messages.push(stampTranscriptRowOffset(message, state.pendingStart))
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
       onBatch(messages.splice(0))
     }

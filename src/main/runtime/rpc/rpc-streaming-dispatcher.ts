@@ -21,6 +21,7 @@ import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { routeDispatcherClientHostedBrowserRpc } from './dispatcher-client-browser-routing'
 import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
 import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
+import { createDispatcherReplySizeGuard } from './dispatcher-reply-size-guard'
 import {
   needsOrchestrationCallerResolution,
   resolveOrchestrationSessionCaller,
@@ -41,13 +42,21 @@ export class RpcStreamingDispatcher {
   // Why: streaming dispatch sends multiple responses through the reply callback instead of a Promise.
   async dispatch(
     rawRequest: RpcRequest,
-    reply: (response: string) => void,
+    transportReply: (response: string) => void,
     options?: RpcDispatchStreamingOptions
   ): Promise<void> {
     let request = rawRequest
     const { runtime, registry, orchestrationMutations, legacyOrchestration, meta } =
       this.dependencies
     const envelopeMeta = meta()
+    const replyGuard = createDispatcherReplySizeGuard({
+      requestId: request.id,
+      meta: envelopeMeta,
+      reply: transportReply,
+      replyFitsTransport: options?.replyFitsTransport,
+      signal: options?.signal
+    })
+    const reply = replyGuard.reply
     const method = registry.get(request.method)
     if (!method) {
       reply(
@@ -187,7 +196,7 @@ export class RpcStreamingDispatcher {
         params,
         {
           runtime,
-          signal: options?.signal,
+          signal: replyGuard.streamSignal(),
           requestId: request.id,
           connectionId: options?.connectionId,
           clientId: options?.clientId,

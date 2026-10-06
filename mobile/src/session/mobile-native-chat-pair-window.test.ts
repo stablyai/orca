@@ -76,7 +76,8 @@ describe('mobile complete-pair stream windows', () => {
     expect(result).toEqual({
       kind: 'messages',
       messages: [...base.slice(2), row('latest')],
-      cursorInvalidated: true
+      cursorInvalidated: true,
+      hasMore: true
     })
     expect(merger.indexById.has('opencode:oldest')).toBe(false)
     expect(merger.indexById.has('opencode:oldest:reasoning')).toBe(false)
@@ -127,7 +128,8 @@ describe('mobile complete-pair stream windows', () => {
     expect(result).toEqual({
       kind: 'messages',
       messages: [row('claude-answer'), row('latest')],
-      cursorInvalidated: true
+      cursorInvalidated: true,
+      hasMore: true
     })
     expect(merger.list).toHaveLength(2)
   })

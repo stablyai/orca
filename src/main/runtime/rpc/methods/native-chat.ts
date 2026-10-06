@@ -68,7 +68,7 @@ function pageForClient(
   const sanitized = (isOpenCode ? messages : windowTranscript(messages, limit)).map((message) =>
     sanitizeMessage(message, clientKind)
   )
-  return isOpenCode
+  return isOpenCode || clientKind === 'mobile'
     ? boundNativeChatRpcPageByBytes(sanitized, hasMore, beforeOffset)
     : { messages: sanitized, hasMore, beforeOffset }
 }
@@ -189,10 +189,15 @@ export const NATIVE_CHAT_METHODS = [
           }
           const sanitized = sanitizeAppendForClient(messages, clientKind)
           const batches =
-            sanitized.length > 0 && resolveNativeChatTranscriptAgent(params.agent) === 'opencode'
+            sanitized.length > 0 &&
+            (clientKind === 'mobile' ||
+              resolveNativeChatTranscriptAgent(params.agent) === 'opencode')
               ? nativeChatRpcAppendBatches(sanitized)
               : [sanitized]
           for (const batch of batches) {
+            if (closed) {
+              return
+            }
             emit({
               type: 'appended',
               messages: batch,

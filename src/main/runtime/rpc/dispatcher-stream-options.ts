@@ -6,6 +6,9 @@ export type RpcDispatchStreamingOptions = {
   authenticatedCallerFingerprint?: string
   connectionId?: string
   signal?: AbortSignal
+  /** Set by transports that drop the connection on an oversized frame; the dispatcher fails the
+   *  one request instead. Unset means uncapped (desktop IPC, in-process callers). */
+  replyFitsTransport?: (response: string) => boolean
   clientId?: string
   pairedDeviceId?: string
   clientKind?: 'mobile' | 'runtime'

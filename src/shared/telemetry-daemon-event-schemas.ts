@@ -40,9 +40,10 @@ export const runtimeRpcStartFailedSchema = z
   .object({ error_class: runtimeRpcStartErrorClassSchema })
   .strict()
 
-// Why: classify session-killing 1013 closures as producer size failures or queue backpressure.
+// Why: classify session-killing 1013 closures as producer size failures or queue backpressure;
+// `reply-size` is an oversized RPC reply the dispatcher failed alone, without closing the session.
 export const remoteOutboundBudgetCloseSchema = z
-  .object({ emitter: z.enum(['size', 'queue']) })
+  .object({ emitter: z.enum(['size', 'queue', 'reply-size']) })
   .strict()
 
 // Why: a deadlocked main thread never crashes, so it produces no crash report and no user report

@@ -42,6 +42,11 @@ function decode(line: string, id: string): NativeChatMessage | null {
   }
 }
 
+/** What a reader emits for the record at `offset`: its fallback id and its row cursor. */
+function readAt(line: string, path: string, offset: number): NativeChatMessage {
+  return { ...decode(line, transcriptFallbackId(path, offset))!, transcriptOffset: offset }
+}
+
 function observeBufferCopies() {
   const concat = Buffer.concat
   const copiedBytes: number[] = []
@@ -65,7 +70,7 @@ describe('native transcript record copies', () => {
     const path = await transcript(content)
     let offset = Buffer.byteLength(prefix)
     const expected = records.map((record) => {
-      const message = decode(record, transcriptFallbackId(path, offset))
+      const message = readAt(record, path, offset)
       offset += Buffer.byteLength(record) + 2
       return message
     })
@@ -99,10 +104,7 @@ describe('native transcript record copies', () => {
     const small = JSON.stringify({ text: 'last' })
     const content = `${large}\r\n${small}\n`
     const path = await transcript(content)
-    const expected = [
-      decode(large, transcriptFallbackId(path, 0)),
-      decode(small, transcriptFallbackId(path, Buffer.byteLength(large) + 2))
-    ]
+    const expected = [readAt(large, path, 0), readAt(small, path, Buffer.byteLength(large) + 2)]
     const { copiedBytes, copiedParts } = observeBufferCopies()
     const incremental = await readIncrementalTranscriptMessages(
       path,
@@ -127,15 +129,12 @@ describe('native transcript record copies', () => {
     const path = await transcript(Buffer.concat([Buffer.from(complete), next.subarray(0, split)]))
     const state = createIncrementalTranscriptState()
     const first = await readIncrementalTranscriptMessages(path, state, decode)
-    expect(first).toEqual([decode(complete.slice(0, -1), transcriptFallbackId(path, 0))])
+    expect(first).toEqual([readAt(complete.slice(0, -1), path, 0)])
     expect(state.pendingBytes).toBe(split)
     await appendFile(path, next.subarray(split))
     const appended = await readIncrementalTranscriptMessages(path, state, decode)
     expect(appended).toEqual([
-      decode(
-        next.toString('utf8').slice(0, -1),
-        transcriptFallbackId(path, Buffer.byteLength(complete))
-      )
+      readAt(next.toString('utf8').slice(0, -1), path, Buffer.byteLength(complete))
     ])
     expect(state.pendingBytes).toBe(0)
     expect(state.offset).toBe(Buffer.byteLength(complete) + next.length)

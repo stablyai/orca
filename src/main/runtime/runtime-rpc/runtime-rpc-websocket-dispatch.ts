@@ -11,6 +11,7 @@ import type { DeviceScope } from '../device-registry'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
+import { isMobileE2EETextPayloadWithinLimit } from '../rpc/mobile-e2ee-outbound-admission'
 
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
@@ -149,6 +150,8 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
             : undefined,
         pairing: pairingContext,
         signal: abortRegistration?.signal,
+        // Why: the same check the E2EE channel applies before it closes the socket on overflow.
+        replyFitsTransport: isMobileE2EETextPayloadWithinLimit,
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>
           this.registerBinaryStreamHandler(connectionId, streamId, handler),

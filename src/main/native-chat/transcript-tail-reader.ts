@@ -34,6 +34,16 @@ export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
 export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
 
+/** The record's byte offset is the row cursor byte-bounded pages resume from; tail and incremental reads must agree. */
+export function stampTranscriptRowOffset(
+  message: NativeChatMessage,
+  recordOffset: number
+): NativeChatMessage {
+  return message.transcriptOffset === undefined
+    ? { ...message, transcriptOffset: recordOffset }
+    : message
+}
+
 export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   if (transcriptAgent === 'claude') {
@@ -209,7 +219,7 @@ export async function readNativeChatTranscriptTailFile(
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
     const message = decode(line, fallbackId)
     if (message) {
-      messages.push({ message, offset: lineOffset })
+      messages.push({ message: stampTranscriptRowOffset(message, lineOffset), offset: lineOffset })
     }
   }
 }

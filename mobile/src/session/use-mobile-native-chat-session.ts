@@ -207,18 +207,19 @@ export function useMobileNativeChatSession(args: {
         }
         setMessages(applied.messages)
         if (!applied.windowReplaced && applied.hasMore != null) {
-          setHasMore(applied.hasMore)
+          // A live trim at the retention ceiling leaves nothing loadEarlier may fetch.
+          setHasMore(applied.hasMore && applied.messages.length < MAX_MESSAGES)
         }
         if (!applied.windowReplaced && applied.beforeOffset != null) {
           beforeOffsetRef.current = applied.beforeOffset
         }
         if (applied.cursorInvalidated) {
-          // Fall back to a growing-tail read so history trimmed by live appends
-          // cannot leave a gap between the retained window and the old cursor.
+          // Re-cut the cursor at the new oldest retained row; rows without one (older hosts)
+          // fall back to a growing-tail read so trimmed history cannot leave a gap.
           streamGenerationRef.current += 1
           loadingEarlierRef.current = false
           setLoadingEarlier(false)
-          beforeOffsetRef.current = null
+          beforeOffsetRef.current = applied.messages[0]?.transcriptOffset ?? null
         }
         setRead({ client, identity, status: applied.pending ? 'awaiting-transcript' : 'ready' })
       }
@@ -238,12 +239,14 @@ export function useMobileNativeChatSession(args: {
     // apply this read's result onto the new session (mirrors desktop's guard).
     const requestSessionId = sessionId
     const requestGeneration = streamGenerationRef.current
-    const nextLimit = Math.min(limitRef.current + PAGE, MAX_MESSAGES)
-    const pageLimit = nextLimit - limitRef.current
+    // Why: the ceiling counts rows actually retained; byte-bounded pages can return far fewer than asked.
+    const retained = mergerRef.current.list.length
+    const pageLimit = Math.min(PAGE, MAX_MESSAGES - retained)
     if (pageLimit <= 0) {
       setHasMore(false)
       return
     }
+    const nextLimit = retained + pageLimit
     const beforeOffset = beforeOffsetRef.current
     loadingEarlierRef.current = true
     setLoadingEarlier(true)
@@ -278,18 +281,19 @@ export function useMobileNativeChatSession(args: {
         ) {
           return
         }
-        limitRef.current = nextLimit
-        if (beforeOffset !== null && result.beforeOffset != null) {
+        const cursorPage = beforeOffset !== null && result.beforeOffset != null
+        // Older runtimes ignore the cursor and return the growing tail.
+        setList(cursorPage ? [...result.messages, ...mergerRef.current.list] : result.messages)
+        const kept = mergerRef.current.list.length
+        // Live appends keep the window at least as long as the history actually loaded.
+        limitRef.current = Math.min(Math.max(limitRef.current, kept), MAX_MESSAGES)
+        if (result.beforeOffset != null) {
           beforeOffsetRef.current = result.beforeOffset
-          setList([...result.messages, ...mergerRef.current.list])
-          setHasMore(
-            nextLimit < MAX_MESSAGES && (result.hasMore ?? result.messages.length >= pageLimit)
-          )
-        } else {
-          // Older runtimes ignore the cursor and return the growing tail.
-          setList(result.messages)
-          setHasMore(result.messages.length >= nextLimit)
         }
+        setHasMore(
+          kept < MAX_MESSAGES &&
+            (result.hasMore ?? result.messages.length >= (cursorPage ? pageLimit : nextLimit))
+        )
       } catch {
         // Nothing awaits this page, so a rejected request — a transport drop, or the client
         // abandoning it at teardown — would otherwise reach the document as an unhandled

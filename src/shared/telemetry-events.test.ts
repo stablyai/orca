@@ -563,7 +563,7 @@ describe('exported enum schemas', () => {
 
 describe('remote_outbound_budget_close schema', () => {
   it('round-trips every emitter', () => {
-    for (const emitter of ['size', 'queue']) {
+    for (const emitter of ['size', 'queue', 'reply-size']) {
       expect(eventSchemas.remote_outbound_budget_close.safeParse({ emitter }).success).toBe(true)
     }
   })
