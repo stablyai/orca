@@ -53,11 +53,20 @@ import {
 } from '../../../../preload/preload-runtime-support'
 
 // Uses the production drop listener, subscriber fan-out, attachment hook, and scope cache.
-function ComposerProbe({ pane, hidden = false }: { pane: string; hidden?: boolean }) {
+function ComposerProbe({
+  pane,
+  draft = pane,
+  hidden = false
+}: {
+  pane: string
+  /** The draft's owner; a structured chat's composers share their conversation's. */
+  draft?: string
+  hidden?: boolean
+}) {
   const textareaRef = useRef<NativeChatComposerInput>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const attachments = useNativeChatComposerAttachments({
-    attachmentScopeKey: pane,
+    attachmentScopeKey: draft,
     allowWithoutTarget: true,
     caret: 0,
     disabled: false,
@@ -79,7 +88,7 @@ function ComposerProbe({ pane, hidden = false }: { pane: string; hidden?: boolea
     <div data-pane={pane} style={{ display: hidden ? 'none' : 'block' }}>
       <div data-native-file-drop-target="composer" data-composer-scope-key={pane}>
         <NativeChatPromptEditor
-          scopeKey={pane}
+          scopeKey={draft}
           inputRef={textareaRef}
           initialValue="untouched draft"
           disabled={false}
@@ -240,6 +249,36 @@ describe('native chat composer drop scoping', () => {
     view.unmount()
     const returned = render(<ComposerProbe pane="chat-b" />)
     expect(returned.container.querySelector('output')?.textContent).toBe('[]')
+  })
+
+  it('attaches a drop once, from the pane it landed on, when two panes share a conversation’s draft', async () => {
+    const view = render(
+      <>
+        <ComposerProbe pane="chat-a" draft="agent-session:s1" />
+        <ComposerProbe pane="chat-b" draft="agent-session:s1" />
+      </>
+    )
+
+    await dropTwoImages(view.container.querySelector('[data-pane="chat-a"] .ProseMirror')!)
+    await settleAttachments()
+
+    expect(electron.send).toHaveBeenCalledExactlyOnceWith('terminal:file-dropped-from-preload', {
+      target: 'composer',
+      scopeKey: 'chat-a',
+      paths: ['/repro/first.png', '/repro/second.png']
+    })
+    expect(readNativeChatAttachmentCache('agent-session:s1').map(({ path }) => path)).toEqual([
+      '/repro/first.png',
+      '/repro/second.png'
+    ])
+    // Both panes show the one shared draft.
+    const shown = [...view.container.querySelectorAll('output:not([data-notice])')].map(
+      (output) => output.textContent
+    )
+    expect(shown).toEqual([
+      JSON.stringify(['/repro/first.png', '/repro/second.png']),
+      JSON.stringify(['/repro/first.png', '/repro/second.png'])
+    ])
   })
 
   it('keeps a drop into an unscoped composer out of every chat pane', async () => {

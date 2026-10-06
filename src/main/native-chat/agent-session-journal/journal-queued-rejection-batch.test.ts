@@ -8,6 +8,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentSessionJournalIdentity
@@ -23,7 +24,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null }
+  providerHandle: claudeProviderHandle('native-1', null)
 }
 
 const START_FAILED = agentSessionFailureWords(agentSessionFailureFact('providerStartFailed'), {

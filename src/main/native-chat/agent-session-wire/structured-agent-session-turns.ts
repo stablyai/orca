@@ -15,6 +15,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
 import {
   refuse,
   type AgentSessionRefusalReason,
@@ -43,6 +44,7 @@ import {
   journalOpenRefusal
 } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
 export { performCancel } from './structured-agent-session-turns-cancel'
@@ -52,6 +54,10 @@ export type AgentSessionTurnContext = {
   journal: AgentSessionJournal
   fence: number
   adapter: StructuredAgentSessionAdapter
+  /** What each agent declares; the session's own answer is `agents.capabilities(agent)`. */
+  agents: StructuredAgentRegistry
+  /** The session's agent. */
+  agent: string
   logger: StructuredAgentSessionLogger
   persistedOptions?: Readonly<Record<string, string>>
   persistOptions: (options: Readonly<Record<string, string>>) => Promise<void>
@@ -127,6 +133,8 @@ export async function performSend(
     body: AgentJournalMessageItem
     /** Who asked for the turn; absent on callers that predate it. */
     origin?: 'client' | 'host'
+    /** Who it is from; the submission keeps the kind only. */
+    source?: AgentSessionMessageSource
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal
@@ -231,6 +239,7 @@ export async function handOverSubmission(
               state: 'rejected',
               reason: outcome.reason,
               rejection: outcome.rejection,
+              ...(outcome.answeredInTurn ? { answeredInTurn: outcome.answeredInTurn } : {}),
               fence: ctx.fence
             }
           : { clientMessageId, state: 'unknown', reason: outcome.reason, fence: ctx.fence }

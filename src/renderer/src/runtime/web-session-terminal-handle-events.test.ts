@@ -119,4 +119,24 @@ describe('accepted web-session terminal handle events', () => {
     })
     unsubscribe()
   })
+
+  it('says nothing about a surface from a frame the host synthesized before publishing', async () => {
+    const listener = vi.fn()
+    const unsubscribe = subscribeAcceptedWebSessionTerminalHandle(
+      { environmentId: 'env-1', worktreeId: 'wt-1', hostTabId: 'tab-1', leafId: 'leaf-1' },
+      listener
+    )
+    const unpublished = { ...snapshot([]), snapshotVersion: 0 }
+
+    queueAcceptedWebSessionTerminalSnapshot({ ...unpublished, publicationEpoch: 'none' }, 'env-1')
+    await Promise.resolve()
+    queueAcceptedWebSessionTerminalSnapshot(
+      { ...unpublished, publicationEpoch: 'none:client-navigation' },
+      'env-1'
+    )
+    await Promise.resolve()
+
+    expect(listener).not.toHaveBeenCalled()
+    unsubscribe()
+  })
 })

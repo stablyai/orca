@@ -78,7 +78,7 @@ function createReconnectScheduler(args: { shouldStop: () => boolean; reconnect: 
 }
 
 export function startStructuredAgentSessionReadTransport(args: {
-  applyEvent: (event: AgentSessionSubscribeEvent) => void
+  applyEvent: (event: AgentSessionSubscribeEvent, options?: { opensSubscription: true }) => void
   /** `message` is the failure's own text, for logs; `refusal` is what a surface words. */
   applyError: (message: string, refusal?: AgentSessionRefusalReference) => void
   getCursor: () => AgentJournalCursor | null
@@ -97,6 +97,8 @@ export function startStructuredAgentSessionReadTransport(args: {
   let unattachedSince: number | null = null
   let opening = false
   let openGeneration = 0
+  /** The open generation whose first frame has not arrived yet. */
+  let openingFrameGeneration = 0
   let stateGeneration = 0
   let unsubscribe = (): void => {}
   let shouldStopCoalescedEvent = (): boolean => true
@@ -182,6 +184,19 @@ export function startStructuredAgentSessionReadTransport(args: {
       connected = false
       reconnectScheduler.schedule()
     }
+    const opensSubscription = event.type !== 'end' && openingFrameGeneration === eventOpenGeneration
+    if (opensSubscription) {
+      openingFrameGeneration = 0
+    }
+    // A resumed subscription's first batch replaces state the client held while detached, so it is
+    // applied alone, never merged into a later batch that would read as "unchanged".
+    if (opensSubscription && event.type === 'batch') {
+      coalescer.flush()
+      if (isCurrentOpenGeneration(eventOpenGeneration)) {
+        args.applyEvent(event, { opensSubscription: true })
+      }
+      return
+    }
     shouldStopCoalescedEvent = captureHistoryReadGuard()
     coalescer.push(event)
   }
@@ -200,6 +215,7 @@ export function startStructuredAgentSessionReadTransport(args: {
       return
     }
     const currentOpenGeneration = ++openGeneration
+    openingFrameGeneration = currentOpenGeneration
     args.onHistoryReadInvalidated()
     unsubscribe()
     unsubscribe = (): void => {}

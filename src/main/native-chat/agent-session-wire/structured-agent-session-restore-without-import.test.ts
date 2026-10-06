@@ -4,6 +4,7 @@
 // every chat had its own file, and opens no file it does not restore.
 
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { QUEUED_MESSAGE_PAUSED_KEPT } from '../../../shared/agent-session-queued-message-wire'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -40,6 +41,8 @@ import { createStructuredAgentSessionRestartOfferWithdrawal } from './structured
 import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
 
 const { readOnlyOpens, openReadOnly } = vi.hoisted(() => ({
   readOnlyOpens: new Array<string>(),
@@ -87,7 +90,7 @@ function recordFor(sessionId: string): AgentSessionRecord {
     providerHandleChain: [
       {
         linkId: `codex-1-${sessionId}`,
-        handle: { provider: 'codex', threadId: `thread-${sessionId}` },
+        handle: codexProviderHandle(`thread-${sessionId}`),
         origin: 'created',
         mintedAtFence: 1,
         observedAt: 1
@@ -113,7 +116,7 @@ function legacyDirFor(sessionId: string): string {
 }
 
 /** What the run before the upgrade left open in a chat, for its restore to settle. */
-type MidWork = 'running tool call' | 'unresolved send'
+type MidWork = 'running tool call' | 'unresolved send' | 'never handed over'
 
 /** A chat as an earlier build left it: real rows in its own per-chat file, nothing in the host's. */
 async function seedLegacyChat(
@@ -133,7 +136,11 @@ async function seedLegacyChat(
     payloadFingerprint: 'fp-1',
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: PROMPT }] },
     fence: 1,
-    handoverRecorded: true
+    handoverRecorded: true,
+    // A person's send that run accepted and quit before handing over.
+    ...(midWork === 'never handed over'
+      ? { origin: 'client' as const, source: USER_MESSAGE_SOURCE }
+      : {})
   })
   if (midWork === 'running tool call') {
     await journal.appendItem(
@@ -141,6 +148,10 @@ async function seedLegacyChat(
       { kind: 'tool-call', name: 'Read', input: {}, state: 'running' },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
+  }
+  if (midWork === 'never handed over') {
+    await journal.close()
+    return writeLegacyChat(sessionId, scratch, journal.epoch)
   }
   await journal.resolveDispatch(
     midWork === 'unresolved send'
@@ -171,11 +182,16 @@ async function seedLegacyChat(
     )
   }
   await journal.close()
-  const rows = readTestJournalRows(
-    openTestJournalHostDatabase(scratch).db,
-    sessionId,
-    journal.epoch
-  )
+  return writeLegacyChat(sessionId, scratch, journal.epoch)
+}
+
+/** Moves the rows a scratch host wrote into the chat's own per-chat file, as an older build kept it. */
+async function writeLegacyChat(
+  sessionId: string,
+  scratch: string,
+  epoch: string
+): Promise<JournalStoredRow[]> {
+  const rows = readTestJournalRows(openTestJournalHostDatabase(scratch).db, sessionId, epoch)
   const path = legacyJournalDatabaseFile(legacyDirFor(sessionId))
   await mkdir(dirname(path), { recursive: true })
   const db = new Database(path)
@@ -328,7 +344,7 @@ describe('startup restore of chats still in their per-chat files', () => {
 
   // Restore copies a chat only to write to it itself, settling what the last run left open (a
   // turn, tool call, approval, question, send or subagent). A settled chat is never copied here.
-  it.each(['running tool call', 'unresolved send'] as const)(
+  it.each(['running tool call', 'unresolved send', 'never handed over'] as const)(
     'copies during restore only a chat it settles (%s)',
     async (midWork) => {
       const rows = await seedLegacyChat('chat-mid-work', 1, midWork)
@@ -348,6 +364,31 @@ describe('startup restore of chats still in their per-chat files', () => {
       expect(importCount()).toBe(1)
     }
   )
+
+  // A send the last run never handed over is kept as a card in the same database the copy wrote,
+  // after the copy: the card and the rejected send both land behind the chat's own rows.
+  it('keeps a send the last run never handed over as a card, after the copy', async () => {
+    const rows = await seedLegacyChat('chat-kept', 0, 'never handed over')
+
+    const { sessions } = await restore(['chat-kept'])
+
+    const journal = sessions.get('chat-kept')!.journal
+    await journal.whenImported()
+    const copied = readTestJournalRows(hostDb(), 'chat-kept', rows[0]!.epoch)
+    expect(copied.slice(0, rows.length)).toEqual(rows)
+    expect(copied).toHaveLength(rows.length + 1)
+    expect(JSON.parse(copied.at(-1)!.rowJson)).toMatchObject({
+      kind: 'dispatch',
+      clientMessageId: 'client-chat-kept',
+      state: 'rejected'
+    })
+    const cards = hostDb()
+      .prepare('SELECT message_id, hold_reason, state FROM queued_messages WHERE session_id = ?')
+      .all('chat-kept')
+    expect(cards).toEqual([
+      { message_id: 'client-chat-kept', hold_reason: QUEUED_MESSAGE_PAUSED_KEPT, state: 'waiting' }
+    ])
+  })
 
   it('lets other work run while it reads a large per-chat file', async () => {
     // Past one batch of the file's rows.
@@ -518,7 +559,8 @@ describe('startup restore of chats still in their per-chat files', () => {
       messageId: 'draft-1',
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'later' }] },
       fingerprint: 'fp-draft-1',
-      hostInstance: 'proc-1'
+      hostInstance: 'proc-1',
+      source: { kind: 'user' }
     })
 
     expect(journal.importPending).toBe(false)

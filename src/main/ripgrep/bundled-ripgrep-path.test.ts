@@ -73,7 +73,8 @@ describe('bundled ripgrep path', () => {
     const key = bundledRipgrepContentKey(platform)
 
     expect(key).toMatch(/^[0-9a-f]{16}$/)
-    expect(bundledRipgrepContentKey('win32-x64')).not.toBe(key)
+    const otherPlatform = platform === 'win32-x64' ? 'linux-x64' : 'win32-x64'
+    expect(bundledRipgrepContentKey(otherPlatform)).not.toBe(key)
   })
 
   it('picks the distro-arch Linux build and fails closed when its drive is unavailable', () => {

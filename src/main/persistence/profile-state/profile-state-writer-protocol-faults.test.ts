@@ -58,13 +58,13 @@ describe('writer protocol refuses uncertain acknowledgements', () => {
   })
 
   it.each(['undefined', 'null', '0', '2'])(
-    'refuses a compatibility export with revision %s for an admitted revision of one',
+    'refuses a versioned export with revision %s for an admitted revision of one',
     async (exportedRevision) => {
       const client = clientFor(`parentPort.postMessage({
         id: request.id, ok: true, revision: 1, exportedRevision: ${exportedRevision}
       })`)
       await client.ready
-      await expect(client.writeJsonCompatibilityExportAsync('unused.json')).rejects.toMatchObject({
+      await expect(client.writeLatestJsonExport('unused.json')).rejects.toMatchObject({
         code: 'profile-state-writer-protocol',
         outcome: 'indeterminate'
       })

@@ -168,6 +168,9 @@ export function createRelayServer(
     recordAssignmentRejectionReason: (lane, reason) =>
       observability.recordAssignmentRejectionReason?.(lane, reason),
     recordDrainReturnRetryAfter: (seconds) => observability.recordDrainReturnRetryAfter?.(seconds),
+    recordAdmissionServiceMs: (lane, durationMs) =>
+      observability.recordAdmissionServiceMs?.(lane, durationMs),
+    recordAssignmentUnavailable: (cause) => observability.recordAssignmentUnavailable?.(cause),
     recordRegionRequest: (region) => observability.recordRegionRequest?.(region),
     recordRegionSelection: (input) => observability.recordRegionSelection?.(input)
   })

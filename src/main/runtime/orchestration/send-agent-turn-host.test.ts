@@ -2,6 +2,7 @@
 // host's own admission: a fingerprint over other fields than the send carries is refused there.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -20,6 +21,25 @@ import {
 
 let rig: QueuedMessageTestRig
 
+const MAIL_SOURCE: AgentMessageSource = {
+  kind: 'agent',
+  senders: [
+    {
+      party: {
+        address: 'term_peer',
+        terminalHandle: 'term_peer',
+        orcaSessionId: null
+      }
+    }
+  ],
+  orchestration: {
+    message: 'mail-notice',
+    mailbox: 'dispatch:d1',
+    dispatchId: 'd1',
+    messages: [{ messageId: 'm1', runId: 'r1', from: 'term_peer' }]
+  }
+}
+
 beforeEach(async () => {
   rig = await createQueuedMessageTestRig()
 })
@@ -36,7 +56,12 @@ function sendTurn(
     host,
     sessionId: SESSION,
     callerKey: 'trusted-local:orchestration:d1',
-    turn: { body: hostTestMessage('mail'), delivery, operationId, expectedRuntimeFence: 1 }
+    turn: {
+      body: hostTestMessage('mail'),
+      operationId,
+      expectedRuntimeFence: 1,
+      ...(delivery === 'queue' ? { delivery, source: MAIL_SOURCE } : { delivery })
+    }
   })
 }
 
@@ -47,6 +72,15 @@ describe('sendAgentTurn through the real host', () => {
       kind: 'queued',
       queued: { position: 1, state: 'waiting' }
     })
+    // Stored with the card, read back whole: who it is from survives the round trip.
+    expect(
+      rig.host
+        .collaboratorsForTests()
+        .sessions.get(SESSION)
+        ?.journal.queuedMessages.list()
+        .map(({ state, source }) => ({ state, source }))
+    ).toEqual([{ state: 'waiting', source: MAIL_SOURCE }])
+    // Shown in the chat's queue like the person's own card.
     expect(await rig.drafts()).toMatchObject([{ state: 'waiting' }])
   })
 
@@ -91,8 +125,10 @@ describe('sendAgentTurn through the real host', () => {
   })
 
   /** Settles a handed-over send as the provider taking it; the turn's wait ends on that. */
-  async function sendTurnAccepted(delivery: AgentTurnDelivery) {
-    const operationId = hostTestOperationId()
+  async function sendTurnAccepted(
+    delivery: AgentTurnDelivery,
+    operationId = hostTestOperationId()
+  ) {
     const outcome = sendTurn(delivery, operationId)
     await eventually(async () =>
       expect((await rig.submission(operationId))?.handedOverAt).toBeDefined()
@@ -107,6 +143,16 @@ describe('sendAgentTurn through the real host', () => {
       submission: { dispatchState: 'accepted' }
     })
     expect(await rig.drafts()).toEqual([])
+  })
+
+  // An idle chat sends the mail at once: its submission says it is an agent's, without the senders
+  // the card keeps host-only, so a restart or a close rejects it rather than keep it as a card.
+  it('records an idle chat’s mail as an agent’s, by kind only', async () => {
+    const operationId = hostTestOperationId()
+    await sendTurnAccepted('queue', operationId)
+    const submission = await rig.submission(operationId)
+    expect(submission?.source).toEqual({ kind: 'agent' })
+    expect(JSON.stringify(submission)).not.toContain('term_peer')
   })
 
   it('has a `now` send join the running turn, never the queue', async () => {

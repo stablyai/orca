@@ -18,6 +18,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
+import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
 
 let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
@@ -89,7 +90,10 @@ describe('a mutation while an import is owed', () => {
   it('a goal set sees the goal and the turn the provider wrote, and replaces it in that turn', async () => {
     await attach()
     const changeThreadGoal = vi.fn(async () => ({ ok: true as const }))
-    Object.assign(host.deps.adapter, { changeThreadGoal, supportsThreadGoal: () => true })
+    Object.assign(host.deps.adapter, {
+      changeThreadGoal,
+      capabilities: () => CODEX_STRUCTURED_AGENT.capabilities
+    })
     const owed = oweImport()
     providerOpensTurn('turn-g', 901)
     providerEvents().appendItem(

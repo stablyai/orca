@@ -9,7 +9,8 @@ import {
 /** How long a conflicted target keeps watching the catalog for the rows it could not place. The
  *  catalog for a remote host often only fills in when the user opens the worktree, which is minutes
  *  after connect, and `conflict` has no other exit: it suppresses uploads and holds terminal
- *  authority at `unverifiable` until a reconnect or an unsolicited host push happens to arrive. */
+ *  authority for those paths at `unverifiable` until a reconnect or an unsolicited host push
+ *  happens to arrive. */
 const DEFERRED_SNAPSHOT_PLACEMENT_TIMEOUT_MS = 600_000
 
 /** A retry's own apply can report paths it still could not place, which arms the next watch. If the

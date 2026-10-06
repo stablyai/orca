@@ -91,32 +91,40 @@ describe('execution-host OpenCode launch preparation', () => {
     expect(finalEnv.OPENCODE_CONFIG_DIR).toBe('/private/owned-overlay')
     expect(finalEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe('/private/real-source')
   })
-  it('removes only the automatic verified v2 prompt argument, retaining explicit run and manual flags', async () => {
-    probe.mockResolvedValue(getOpenCodeCliCapabilities('2.0.16'))
-    const env = {
-      ORCA_AGENT_LAUNCH_TOKEN: 'admitted-launch',
-      [OPENCODE_STARTUP_PROMPT_SHA256_ENV]: createHash('sha256').update('task').digest('hex'),
-      [OPENCODE_STARTUP_PROMPT_BODY_ENV]: 'task',
-      [OPENCODE_STARTUP_PROMPT_SHELL_ENV]: 'posix'
+  it.each(['2.0.12', '2.0.16'])(
+    'removes only the automatic %s prompt argument, retaining explicit run and manual flags',
+    async (version) => {
+      probe.mockResolvedValue(getOpenCodeCliCapabilities(version))
+      const env = {
+        ORCA_AGENT_LAUNCH_TOKEN: 'admitted-launch',
+        [OPENCODE_STARTUP_PROMPT_SHA256_ENV]: createHash('sha256').update('task').digest('hex'),
+        [OPENCODE_STARTUP_PROMPT_BODY_ENV]: 'task',
+        [OPENCODE_STARTUP_PROMPT_SHELL_ENV]: 'posix'
+      }
+      const options = { env, envToDelete: [], isFreshLaunch: true }
+      expect(
+        (
+          await prepareOpenCodePtyLaunch({
+            ...options,
+            command: "opencode --standalone --prompt 'task'"
+          })
+        ).command
+      ).toBe('opencode --standalone')
+      expect(
+        (await prepareOpenCodePtyLaunch({ ...options, command: "opencode run --prompt 'task'" }))
+          .command
+      ).toBe("opencode run --prompt 'task'")
+      expect(
+        (
+          await prepareOpenCodePtyLaunch({
+            ...options,
+            env: {},
+            command: "opencode --prompt 'task'"
+          })
+        ).command
+      ).toBe("opencode --prompt 'task'")
     }
-    const options = { env, envToDelete: [], isFreshLaunch: true }
-    expect(
-      (
-        await prepareOpenCodePtyLaunch({
-          ...options,
-          command: "opencode --standalone --prompt 'task'"
-        })
-      ).command
-    ).toBe('opencode --standalone')
-    expect(
-      (await prepareOpenCodePtyLaunch({ ...options, command: "opencode run --prompt 'task'" }))
-        .command
-    ).toBe("opencode run --prompt 'task'")
-    expect(
-      (await prepareOpenCodePtyLaunch({ ...options, env: {}, command: "opencode --prompt 'task'" }))
-        .command
-    ).toBe("opencode --prompt 'task'")
-  })
+  )
   it.each(['inherited', 'explicit', 'deleted'] as const)(
     'passes the %s config environment used by the execution-host version probe to the prompt installer',
     async (selection) => {
@@ -178,9 +186,16 @@ describe('execution-host OpenCode launch preparation', () => {
       expect(result.env).not.toHaveProperty('ORCA_OPENCODE_STARTUP_PROMPT_NONCE')
     }
   )
-  it.each(['1.1.23', '2.0.16', '2.0.17', 'unknown'])(
-    'gates native intent against the executing %s capability',
-    async (version) => {
+  it.each([
+    { version: '1.1.23', nativeIntent: false },
+    { version: '2.0.12', nativeIntent: true },
+    { version: '2.0.16', nativeIntent: true },
+    { version: '2.0.17', nativeIntent: false },
+    { version: '2.0.21', nativeIntent: false },
+    { version: 'unknown', nativeIntent: false }
+  ])(
+    'gates native intent against the executing $version capability',
+    async ({ version, nativeIntent }) => {
       probe.mockResolvedValue(getOpenCodeCliCapabilities(version))
       const envToDelete: string[] = []
       const fingerprint = createHash('sha256').update('task').digest('hex')
@@ -195,10 +210,8 @@ describe('execution-host OpenCode launch preparation', () => {
         envToDelete,
         isFreshLaunch: true
       })
-      expect(env?.[OPENCODE_STARTUP_PROMPT_SHA256_ENV]).toBe(
-        version === '2.0.16' ? fingerprint : undefined
-      )
-      expect(envToDelete.includes(OPENCODE_STARTUP_PROMPT_SHA256_ENV)).toBe(version !== '2.0.16')
+      expect(env?.[OPENCODE_STARTUP_PROMPT_SHA256_ENV]).toBe(nativeIntent ? fingerprint : undefined)
+      expect(envToDelete.includes(OPENCODE_STARTUP_PROMPT_SHA256_ENV)).toBe(!nativeIntent)
     }
   )
 
@@ -266,7 +279,7 @@ describe('execution-host OpenCode launch preparation', () => {
     expect(finalEnv).not.toHaveProperty('KEEP_DELETED')
   })
 
-  it.each(['1.1.23', '2.0.16'])(
+  it.each(['1.1.23', '2.0.12', '2.0.16'])(
     'selects the probed %s plugin for the execution host',
     async (version) => {
       const capabilities = getOpenCodeCliCapabilities(version)

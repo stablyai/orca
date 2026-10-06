@@ -19,6 +19,7 @@ import {
   turnVerdictFromDeathEvidence,
   UNVERIFIABLE_TURN_VERDICT
 } from './structured-agent-session-stale-turn-verdict'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const THREAD = 'thread-1'
 const RUNNING_IDENTITY = {
@@ -368,7 +369,7 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
         stateDirectory: root,
         now: () => 1_000
@@ -422,7 +423,7 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
         stateDirectory: root,
         now: () => now
@@ -488,7 +489,7 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
         stateDirectory: root,
         now: () => now
@@ -559,7 +560,7 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
         stateDirectory: root,
         now: () => now
@@ -619,7 +620,7 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
         stateDirectory: root,
         now: () => now

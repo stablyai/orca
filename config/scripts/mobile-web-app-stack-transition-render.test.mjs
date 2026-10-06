@@ -30,6 +30,7 @@ const LIST_ROUTE = `/${MOBILE_WEB_APP_ROUTE_ROOT}/${HOST_ID}`
 const SESSION_HREF = `${LIST_ROUTE}/session/wt-1`
 const VIEWPORT = { width: 390, height: 844 }
 const SAMPLE_MS = 1500
+const SETTLED_GRACE_MS = 150
 
 const bundles = mobileWebAppDependenciesPresent()
 const describeRender = bundles ? describe : describe.skip
@@ -173,9 +174,13 @@ async function openList(browser, { animation = 'default', reducedMotion = 'no-pr
  * Runs `action` on the probe, then reads both screens' left edge once per animation frame, and
  * which screen a tap at the centre would land on. A hidden screen, or no screen hit, reads as null.
  */
-function sampleFrames(page, action, { followUp = null, afterFrames = 0 } = {}) {
+function sampleFrames(
+  page,
+  action,
+  { followUp = null, afterFrames = 0, observeFullWindow = false } = {}
+) {
   return page.evaluate(
-    ([name, sampleMs, nextAction, followAt]) =>
+    ([name, sampleMs, nextAction, followAt, settledGraceMs, fullWindow]) =>
       new Promise((resolve) => {
         const leftOf = (id) => {
           const node = document.querySelector(`[data-testid="${id}"]`)
@@ -190,6 +195,9 @@ function sampleFrames(page, action, { followUp = null, afterFrames = 0 } = {}) {
             ?.replace('stack-probe-', '') ?? null
         const frames = []
         const start = performance.now()
+        let settledAt = null
+        const destination = nextAction ?? name
+        const pushing = destination === 'push' || destination === 'pushOther'
         globalThis.__orcaStackProbe[name]()
         const tick = () => {
           if (nextAction !== null && frames.length === followAt) {
@@ -202,7 +210,17 @@ function sampleFrames(page, action, { followUp = null, afterFrames = 0 } = {}) {
             // Where the running slide starts, which is how a slide that restarts from 0 shows.
             from: document.getAnimations()[0]?.effect?.getKeyframes()[0]?.transform ?? null
           })
-          if (performance.now() - start < sampleMs) {
+          const last = frames.at(-1)
+          const arrived = pushing
+            ? last.list === null && last.session === 0 && last.hit === 'session'
+            : last.list === 0 && last.session === null && last.hit === 'list'
+          const followUpDelivered = nextAction === null || frames.length > followAt
+          const settled = arrived && followUpDelivered && document.getAnimations().length === 0
+          const now = performance.now()
+          settledAt = settled ? (settledAt ?? now) : null
+          // Observe cleanup after actual arrival; retain the full window for interruption races.
+          const finished = !fullWindow && settledAt !== null && now - settledAt >= settledGraceMs
+          if (!finished && now - start < sampleMs) {
             requestAnimationFrame(tick)
           } else {
             resolve(frames)
@@ -210,7 +228,7 @@ function sampleFrames(page, action, { followUp = null, afterFrames = 0 } = {}) {
         }
         requestAnimationFrame(tick)
       }),
-    [action, SAMPLE_MS, followUp, afterFrames]
+    [action, SAMPLE_MS, followUp, afterFrames, SETTLED_GRACE_MS, observeFullWindow]
   )
 }
 
@@ -283,7 +301,11 @@ describeRender('the host stack transition on the page', () => {
         const { errors, page } = await open()
         await sampleFrames(page, 'push')
         const pushed = await nodeCount(page)
-        const frames = await sampleFrames(page, 'back', { followUp: 'push', afterFrames: 3 })
+        const frames = await sampleFrames(page, 'back', {
+          followUp: 'push',
+          afterFrames: 3,
+          observeFullWindow: true
+        })
         expect(frames.slice(0, 3).some((frame) => between(frame.session))).toBe(true)
         expect(frames.at(-1)).toEqual(SESSION_SETTLED)
         expect(await nodeCount(page)).toBe(pushed)
@@ -303,7 +325,11 @@ describeRender('the host stack transition on the page', () => {
         await sampleFrames(page, 'back')
         const baseline = await nodeCount(page)
         const mounts = await sessionMounts(page)
-        const frames = await sampleFrames(page, 'push', { followUp: 'back', afterFrames: 6 })
+        const frames = await sampleFrames(page, 'push', {
+          followUp: 'back',
+          afterFrames: 6,
+          observeFullWindow: true
+        })
         expect(between(frames[5].session)).toBe(true)
         // Leaves from where the push stopped, not from 0: the exit's first keyframe is mid-screen.
         const exitFrom = frames.slice(6).find((frame) => frame.from?.startsWith('matrix'))?.from

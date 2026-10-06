@@ -21,6 +21,8 @@ import {
   evaluateAgentSessionMutationOperation,
   admitAgentSessionOperationInto,
   claimAgentSessionOperationInto,
+  admitAndClaimAgentSessionOperationInto,
+  type ClaimAfterAdmission,
   settleAgentSessionOperationInto,
   type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
@@ -85,16 +87,14 @@ export class AgentSessionRecordStore {
     readonly hostId: string
   ) {}
 
-  /** Reads every row once; nothing re-reads them. `hostId` is the execution host this runtime is. */
+  /** Reads every structurally valid row, independently of which agents this host can start. */
   static open(args: {
     journalDatabase: JournalHostDatabase
     hostId: string
   }): AgentSessionRecordStore {
-    const loaded = loadAgentSessionStoreRows(args.journalDatabase.db, args.hostId)
-    return new AgentSessionRecordStore(
-      new AgentSessionStoreTransactions(args.journalDatabase, loaded),
-      args.hostId
-    )
+    const rows = loadAgentSessionStoreRows(args.journalDatabase.db, args.hostId)
+    const transactions = new AgentSessionStoreTransactions(args.journalDatabase, rows)
+    return new AgentSessionRecordStore(transactions, args.hostId)
   }
 
   private get state(): AgentSessionStoreState {
@@ -297,6 +297,12 @@ export class AgentSessionRecordStore {
     operationId: string
   }): Promise<AgentSessionOperationClaim> =>
     this.transact((draft) => claimAgentSessionOperationInto(draft, args))
+
+  /** Admission and, when `claimAfter` allows, the claim: one durable write before the effect. */
+  admitAndClaimOperation = (
+    args: AgentSessionOperationAdmission,
+    claimAfter: ClaimAfterAdmission
+  ) => this.transact((draft) => admitAndClaimAgentSessionOperationInto(draft, args, claimAfter))
 
   async recordOperationOutcome(args: AgentSessionOperationSettlement): Promise<void> {
     await this.transact((draft) => settleAgentSessionOperationInto(draft, args))

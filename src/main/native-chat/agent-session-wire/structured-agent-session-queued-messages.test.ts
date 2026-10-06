@@ -12,6 +12,7 @@ import {
   type AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
+import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import {
@@ -634,6 +635,31 @@ describe('/clear', () => {
       ok: true,
       value: { submission: expect.anything() }
     })
+  })
+
+  it('carries who each card is from', async () => {
+    const notice = {
+      message: 'mail-notice',
+      mailbox: 'run:r1',
+      dispatchId: null,
+      messages: []
+    } as const
+    const source: AgentMessageSource = { kind: 'agent', senders: [], orchestration: notice }
+    const working = await workingSend()
+    await send('pointer', 'queue-if-active', { internal: true, source }).result
+    await send('typed', 'queue-if-active').result
+    await stop()
+    await settleAccepted(working, 'a')
+    const cleared = await clear(hostTestOperationId())
+    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
+    if (!replacementId) {
+      throw new Error('expected a replacement session')
+    }
+    const journal = host.collaboratorsForTests().sessions.get(replacementId)?.journal
+    expect(journal?.queuedMessages.list().map((row) => row.source)).toEqual([
+      source,
+      { kind: 'user' }
+    ])
   })
 
   it("the replacement's 'cleared' pause lifts through Resume exactly like a Stop's", async () => {

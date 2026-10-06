@@ -1,5 +1,10 @@
 import type { AgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import {
+  buildAgentDraftLaunchPlan,
+  buildAgentStartupPlan,
+  type AgentStartupPlan
+} from '../../shared/tui-agent-startup'
+import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
 import { buildSleepingAgentLaunchConfig } from '../../shared/sleeping-agent-launch-config'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -160,6 +165,22 @@ export async function buildExecutionHostAgentStartupPlan(
     plan.sessionOptions = { ...options.inputs.sessionOptions }
   }
   return plan
+}
+
+/** `buildExecutionHostAgentStartupPlan` for a caller that delivers an uncarried prompt itself. */
+export async function planExecutionHostStartupWithPromptCandidate(
+  options: StartupScope & {
+    prompt: string
+    host: { shellName?: string; provesAgentInFront: boolean }
+  }
+): Promise<{ plan: AgentStartupPlan | null; promptCarried: boolean }> {
+  const prepared = await prepareOpenCodeModelStartupInputs(options)
+  const offered = planStartupWithPromptCandidate(prepared.inputs, options.prompt, options.host)
+  if (offered.plan && prepared.launchConfig) {
+    offered.plan.launchConfig = prepared.launchConfig
+    offered.plan.sessionOptions = { ...options.inputs.sessionOptions }
+  }
+  return offered
 }
 
 export function assertOpenCodeModelLaunchPreferencesAbsent(

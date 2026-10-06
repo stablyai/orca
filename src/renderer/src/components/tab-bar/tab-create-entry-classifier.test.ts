@@ -10,6 +10,14 @@ import {
 
 const readyFiles = (files: string[]) => ({ files, loading: false, loadError: null })
 
+it.each(['.env api', 'api .env'])('offers the multi-term file match for %s', (query) => {
+  const options = getTabEntryOptions(query, readyFiles(['apps/api/.env', 'apps/web/.env']))
+  expect(options.map((option) => option.classification)).toEqual([
+    { kind: 'search', engine: 'google', query },
+    { kind: 'existing-file', matchKind: 'fuzzy', relativePath: 'apps/api/.env' }
+  ])
+})
+
 describe('tab create entry classification', () => {
   // Kept word-for-word in step with the omnibox placeholder (see
   // TabBarCreateEntry.keyboard.test.tsx), so the two never drift apart.
@@ -254,7 +262,7 @@ describe('tab create entry classification', () => {
       getTabEntryOptions('type script', readyFiles(['docs/typescript-guide.md'])).map(
         (option) => option.classification.kind
       )
-    ).toEqual(['search'])
+    ).toEqual(['search', 'existing-file'])
   })
 
   it('never offers to create a file from a spaced phrase without path syntax', () => {

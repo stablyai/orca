@@ -10,10 +10,13 @@ import type { ProviderDiagnostic } from '../../../shared/agent-session-failure'
 
 /** `refusal`: the provider answered the Stop and declined it, in its own words when it gave any.
  *  `turnNotRunning`: its refusal is the kind it gives for a turn not running there, so the Stop keeps
- *  the child; absent, it could not interrupt that turn, which may run on. */
+ *  the child; absent, it could not interrupt that turn, which may run on. `turnMayOpen`: no turn
+ *  was there to interrupt, but one a send is owed may still open. `turnId`: the journal turn a Stop
+ *  that took interrupted, which the Stop then binds. */
 export type AgentSessionCancelOutcome = {
   cancelled: boolean
-  refusal?: { detail?: ProviderDiagnostic; turnNotRunning?: true }
+  refusal?: { detail?: ProviderDiagnostic; turnNotRunning?: true; turnMayOpen?: true }
+  turnId?: string
 }
 
 /** Where a card's Cancel goes: a dismissal (`dismissPrompt`), or the chat's Stop. */

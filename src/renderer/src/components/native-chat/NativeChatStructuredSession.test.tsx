@@ -1,3 +1,4 @@
+import { getDefaultSettings } from '../../../../shared/constants'
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -17,7 +18,7 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
 )
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
-vi.mock('./use-native-chat-font-scale', () => moduleFactories.useNativeChatFontScale())
+vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
 vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
@@ -28,14 +29,47 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 
 describe('NativeChatStructuredSession', () => {
+  it('applies persisted appearance at the chat root and updates it live', () => {
+    const original = useAppStore.getState().settings
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        nativeChatAppearance: { fontSize: 18, codeFontSize: 11, width: 'wide' }
+      }
+    })
+    const { container } = render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="appearance-tab"
+        sessionId="appearance-session"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const root = container.querySelector<HTMLElement>('[data-native-chat-root]')
+    expect(root?.style.getPropertyValue('--chat-font-size')).toBe('18px')
+    expect(root?.style.getPropertyValue('--chat-code-font-size')).toBe('11px')
+    expect(root?.style.getPropertyValue('--chat-content-max-width')).toBe('60rem')
+    act(() =>
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('/tmp'), nativeChatAppearance: { width: 'full' } }
+      })
+    )
+    expect(root?.style.getPropertyValue('--chat-font-size')).toBe('14px')
+    expect(root?.style.getPropertyValue('--chat-content-max-width')).toBe('none')
+    act(() => useAppStore.setState({ settings: original }))
+  })
+
   afterEach(() => {
     cleanup()
     resetStructuredSessionMocks()
   })
 
-  it('gives what a Stop withdrew back to the composer this pane shows', () => {
+  it("gives the composer this pane shows the conversation's own draft, and Stop returns text there", () => {
     render(
       <NativeChatStructuredSession
         isVisible
@@ -47,8 +81,14 @@ describe('NativeChatStructuredSession', () => {
       />
     )
     const paneKey = structuredAgentSessionPaneKey('structured-tab-1', 'session-1')
-    expect(mocks.composerProps).toMatchObject({ paneKey })
-    expect(mocks.controllerProps).toMatchObject({ composerScopeKey: paneKey })
+    // The pane routes drops and pickers; the draft belongs to the conversation, whatever pane shows it.
+    expect(mocks.composerProps).toMatchObject({
+      paneKey,
+      draftScopeKey: structuredAgentSessionDraftScopeKey('session-1')
+    })
+    expect(mocks.controllerProps).toMatchObject({
+      composerScopeKey: structuredAgentSessionDraftScopeKey('session-1')
+    })
   })
 
   it('routes the launch draft and app-menu paste to the structured composer', () => {

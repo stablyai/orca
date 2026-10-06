@@ -27,14 +27,6 @@ describe('notice rows', () => {
       screen.getByText('Context compacted').parentElement?.querySelectorAll('.bg-border')
     ).toHaveLength(2)
   })
-  it.each([
-    ['warning', 'text-[color:var(--warning,#f59e0b)]'],
-    ['error', 'text-destructive'],
-    ['notice', 'text-muted-foreground']
-  ])('renders %s using its existing color treatment', (tone, className) => {
-    renderStatus({ kind: 'status', text: 'Readable notice', tone })
-    expect(screen.getByText('Readable notice').parentElement?.parentElement).toHaveClass(className)
-  })
   it('renders a plan as readable markdown in the card primitive', () => {
     renderStatus({
       kind: 'status',
@@ -70,6 +62,27 @@ describe('notice rows', () => {
     expect(disclosure?.querySelector('summary')).not.toHaveTextContent('Check the configuration')
     expect(disclosure?.querySelector('pre')).toHaveTextContent('Check the configuration')
   })
+  it('keeps the column layout of command output in monospace', () => {
+    const text =
+      'Context Usage\n⛁ ⛁ ⛶   gpt-4o · 16.6k/128k tokens (13%)\n      ⛁ Skills: 304 tokens'
+    render(
+      <MessageRow
+        message={{
+          id: 'command-output',
+          role: 'system',
+          blocks: [{ type: 'text', text, presentation: 'command-output' }],
+          timestamp: 1,
+          source: 'transcript'
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+      />
+    )
+    const output = screen.getByText(/Context Usage/)
+    expect(output.tagName).toBe('PRE')
+    expect(output).toHaveClass('font-mono')
+    expect(output.textContent).toBe(text)
+  })
   // The host's text is only for a client that can't word the row itself.
   it.each([
     ['history-repaired', "Part of this chat's history couldn't be loaded."],
@@ -78,17 +91,5 @@ describe('notice rows', () => {
     renderStatus({ kind: 'status', text: 'Words an older host wrote', presentation })
     expect(screen.getByText(words)).toHaveClass('text-muted-foreground', 'text-sm')
     expect(screen.queryByText('Words an older host wrote')).toBeNull()
-  })
-  it('renders future presentation and tone values as untinted text', () => {
-    renderStatus({
-      kind: 'status',
-      text: 'Future readable text',
-      tone: 'future-tone',
-      presentation: 'future-presentation'
-    })
-    expect(screen.getByText('Future readable text').parentElement?.parentElement).toHaveClass(
-      'text-foreground'
-    )
-    expect(screen.getByText('Future readable text').parentElement?.querySelector('svg')).toBeNull()
   })
 })

@@ -4,7 +4,7 @@ import type {
   DocPreviewFileAccessRequest,
   DocPreviewFileAccessResult
 } from '../../shared/doc-preview-file-access'
-import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
+import type { DirEntry, FsChangeEvent, MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
 export type FileStat = {
@@ -51,7 +51,7 @@ export class FileRangeReadUnsupportedError extends Error {
 }
 
 export type IFilesystemProvider = {
-  readDir(dirPath: string): Promise<DirEntry[]>
+  readDir(dirPath: string, options?: { followSymlinks?: boolean }): Promise<DirEntry[]>
   readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
   readDocPreviewFile?(request: DocPreviewFileAccessRequest): Promise<DocPreviewFileAccessResult>
   /** Positional read. Optional because an older remote host cannot serve one.
@@ -98,7 +98,7 @@ export type IFilesystemProvider = {
   renameNoClobber(oldPath: string, newPath: string): Promise<void>
   copy(source: string, destination: string): Promise<void>
   realpath(filePath: string): Promise<string>
-  search(opts: SearchOptions): Promise<SearchResult>
+  search(opts: SearchOptions, options?: { signal?: AbortSignal }): Promise<SearchResult>
   listFiles(
     rootPath: string,
     options?: {
@@ -106,9 +106,19 @@ export type IFilesystemProvider = {
       signal?: AbortSignal
       maxResults?: number
       searchQuery?: string
+      candidatePaths?: string[]
+      includeIgnored?: boolean
+      followSymlinks?: boolean
     }
   ): Promise<string[]>
-  supportsQuickOpenSearch?(options?: { signal?: AbortSignal }): Promise<boolean>
+  listMarkdownDocuments?(
+    rootPath: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<MarkdownDocument[]>
+  supportsQuickOpenSearch?(options?: {
+    signal?: AbortSignal
+    minimumVersion?: number
+  }): Promise<boolean>
   scanWorkspaceSpace?(
     rootPath: string,
     options?: { signal?: AbortSignal }

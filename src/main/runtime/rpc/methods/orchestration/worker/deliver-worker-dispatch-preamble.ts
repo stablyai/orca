@@ -9,6 +9,7 @@ import { canonicalOrcaSessionId } from '../../../../orchestration/canonical-orca
 import { orcaSessionIdOrHandle } from '../../../../orchestration/orchestration-party'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
+import { createWorkerBriefWriteGuard } from '../../../../launched-agent-write-guard'
 import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
@@ -36,6 +37,8 @@ export async function deliverWorkerDispatchPreamble(args: {
   coordinatorHandle: string
   devMode: boolean | undefined
   requestId: string
+  /** The agent this worker start launched into `terminalHandle`; absent for a caller's terminal. */
+  launchedAgent?: string | null
 }): Promise<{
   prompt?: RuntimeTerminalSend['prompt']
   structuredTurnStart?: WorkerTurnStartObservation
@@ -78,14 +81,18 @@ export async function deliverWorkerDispatchPreamble(args: {
             }
     }
   }
-  return {
-    prompt: (
-      await sendAgentTurn({
-        kind: 'terminal',
-        runtime,
-        handle: terminalHandle,
-        turn: { purpose: 'dispatch-preamble', body: preamble, operationId: args.requestId }
-      })
-    ).prompt
+  // A shell back at its prompt also reads as ready, so the brief needs the agent found in front.
+  const briefGuard = createWorkerBriefWriteGuard(runtime, args.launchedAgent, !!args.launchedAgent)
+  try {
+    const sent = await sendAgentTurn({
+      kind: 'terminal',
+      runtime,
+      handle: terminalHandle,
+      ...(briefGuard ? { beforeWrite: briefGuard.beforeWrite } : {}),
+      turn: { purpose: 'dispatch-preamble', body: preamble, operationId: args.requestId }
+    })
+    return { prompt: sent.prompt }
+  } finally {
+    briefGuard?.dispose()
   }
 }

@@ -18,6 +18,7 @@ import { openTestAttachConversation } from './structured-agent-session-attach-te
 import { performAttach } from './structured-agent-session-attach-flow'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -81,6 +82,7 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
     setOption: unused
   }
   const input = {
+    agents: NO_STRUCTURED_AGENTS,
     store,
     adapter,
     logger: createStructuredAgentSessionLogger(),

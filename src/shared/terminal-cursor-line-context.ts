@@ -47,32 +47,30 @@ function undimmedText<Cell extends TerminalCursorCell>(
   return trimRight ? text.trimEnd() : text
 }
 
-function firstVisibleCellIsBold<Cell extends TerminalCursorCell>(
+function readUndimmedTextAndFirstVisibleStyle<Cell extends TerminalCursorCell>(
   line: TerminalCursorLine<Cell>,
+  trimRight: boolean,
+  style: 'bold' | 'customForeground',
   reusableCell?: Cell
-): boolean {
+): { text: string; firstVisibleStyle: boolean } {
+  let text = ''
+  let firstVisibleStyle = false
+  let foundVisibleCell = false
   for (let x = 0; x < line.length; x += 1) {
     const cell = line.getCell(x, reusableCell)
-    if (!cell || cell.getWidth() === 0 || !cell.getChars().trim()) {
+    if (!cell || cell.getWidth() === 0) {
       continue
     }
-    return Boolean(cell.isBold())
-  }
-  return false
-}
-
-function firstVisibleCellHasCustomForeground<Cell extends TerminalCursorCell>(
-  line: TerminalCursorLine<Cell>,
-  reusableCell?: Cell
-): boolean {
-  for (let x = 0; x < line.length; x += 1) {
-    const cell = line.getCell(x, reusableCell)
-    if (!cell || cell.getWidth() === 0 || !cell.getChars().trim()) {
-      continue
+    const chars = cell.getChars()
+    if (!foundVisibleCell && chars.trim()) {
+      firstVisibleStyle = style === 'bold' ? Boolean(cell.isBold()) : !cell.isFgDefault()
+      foundVisibleCell = true
     }
-    return !cell.isFgDefault()
+    if (!cell.isDim()) {
+      text += chars || ' '
+    }
   }
-  return false
+  return { text: trimRight ? text.trimEnd() : text, firstVisibleStyle }
 }
 
 export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
@@ -96,8 +94,11 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
     const line = buffer.getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
     rows.push(line?.translateToString(!nextLineIsWrapped) ?? '')
-    typedRows.push(line ? undimmedText(line, 0, !nextLineIsWrapped, reusableCell) : '')
-    promptGlyphBoldRows.push(line ? firstVisibleCellIsBold(line, reusableCell) : false)
+    const scan = line
+      ? readUndimmedTextAndFirstVisibleStyle(line, !nextLineIsWrapped, 'bold', reusableCell)
+      : undefined
+    typedRows.push(scan?.text ?? '')
+    promptGlyphBoldRows.push(scan?.firstVisibleStyle ?? false)
     rowsWrapped.push(line?.isWrapped ?? false)
   }
   const rowsBelow: string[] = []
@@ -109,11 +110,17 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
     const line = buffer.getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
     rowsBelow.push(line?.translateToString(!nextLineIsWrapped) ?? '')
-    typedRowsBelow.push(line ? undimmedText(line, 0, !nextLineIsWrapped, reusableCell) : '')
+    const scan = line
+      ? readUndimmedTextAndFirstVisibleStyle(
+          line,
+          !nextLineIsWrapped,
+          'customForeground',
+          reusableCell
+        )
+      : undefined
+    typedRowsBelow.push(scan?.text ?? '')
     rowsBelowWrapped.push(line?.isWrapped ?? false)
-    rowsBelowCustomForeground.push(
-      line ? firstVisibleCellHasCustomForeground(line, reusableCell) : false
-    )
+    rowsBelowCustomForeground.push(scan?.firstVisibleStyle ?? false)
   }
   return {
     rows,

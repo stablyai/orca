@@ -15,7 +15,7 @@ import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-t
 import type { RetiredAgentSessionClaimKey } from './agent-session-record-store-file'
 import type { PersistedAgentSessionTab } from './agent-session-tab-table'
 
-/** A record row a load keeps in `records` rather than quarantining. */
+/** Valid stored identity, independent of provider availability. */
 export function isReadableAgentSessionStoreRecord(
   sessionId: string,
   value: unknown

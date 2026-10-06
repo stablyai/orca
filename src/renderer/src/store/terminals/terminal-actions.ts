@@ -178,7 +178,6 @@ export type TerminalActions = {
   markCodexRestartNotices: (
     notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
       Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {
-        homeRouteChanged?: boolean
         ptyId: string
       })[]
   ) => string[]

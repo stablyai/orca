@@ -32,7 +32,7 @@ afterEach(cleanup)
 const EMPTY: never[] = []
 const loadEarlier = () => Promise.resolve('exhausted' as const)
 function Transcript({ items }: { items: AgentJournalRenderItem[] }) {
-  const messages = useStructuredAgentSessionMessages(items, EMPTY, EMPTY, EMPTY)
+  const messages = useStructuredAgentSessionMessages(items, EMPTY, EMPTY)
   const session: NativeChatLiveSession = {
     messages,
     status: 'working',
@@ -44,7 +44,7 @@ function Transcript({ items }: { items: AgentJournalRenderItem[] }) {
     loadEarlier,
     readPhase: 'ready'
   }
-  return <NativeChatMessageList session={session} isWorking expandSignal fontScale={1} />
+  return <NativeChatMessageList session={session} isWorking expandSignal />
 }
 
 function row(index: number, body: AgentJournalRenderItem['body']): AgentJournalRenderItem {

@@ -85,6 +85,21 @@ export function mutateWithChatStop<TValue>(
           )
         )
         const child = context.sessions.get(ctx.sessionId)?.child
+        if (child?.close) {
+          // A close an earlier stop began: this Stop joins it, retrying the exit's proof, rather
+          // than asking a child that takes no input to stop again. Its event, issued ahead of that
+          // retry, records only the withdrawal.
+          const effect = hadQueued ? tookEffect() : Promise.resolve()
+          await stopChild().catch((error: unknown) =>
+            context.deps.logger.warn('ending the agent process on Stop failed', {
+              scope: 'stop-child',
+              sessionId,
+              error
+            })
+          )
+          await effect
+          return { ok: true, value: { ...named, cancelled: await withdrew } }
+        }
         if (child?.phase === 'starting') {
           // A start that may never land is the one thing here Stop has to end; the chat stays.
           // The event is issued first and lands behind the withdrawal, in the journal's queue order.
@@ -109,9 +124,17 @@ export function mutateWithChatStop<TValue>(
           }
           return { ok: true, value: { ...named, cancelled: withdrewAny } }
         }
+        const reach = hadQueued ? 'unrecorded' : stopReachesUnrecordedWork(ctx, turnId)
+        const priorStop = ctx.journal.stopMarks.latest()
         // Issued, not awaited, before the interrupt or any child end; the `finally` awaits it.
-        const effect =
-          hadQueued || stopReachesUnrecordedWork(ctx, turnId) ? tookEffect() : Promise.resolve()
+        const effect = reach === 'unrecorded' ? tookEffect() : Promise.resolve()
+        // Its settle binds the latest Stop only when that Stop is this press's own, or the one in
+        // force this press repeats; a late Stop or an event not yet written binds nothing. A write
+        // is in the fold by its call's return, so a newer latest Stop is this press's event.
+        const ownsLatestStop =
+          reach === 'unrecorded'
+            ? ctx.journal.stopMarks.latest()?.sequence !== priorStop?.sequence
+            : reach === 'repeat'
         try {
           return await performCancel(
             { ...ctx, failureTextContext: structuredAgentSessionFailureWordsContext(record) },
@@ -130,7 +153,8 @@ export function mutateWithChatStop<TValue>(
               endSession: (owed) => {
                 windDown = owed
               },
-              withdrewQueued: withdrew
+              withdrewQueued: withdrew,
+              ...(ownsLatestStop ? { opensSettle: true as const } : {})
             }
           )
         } finally {

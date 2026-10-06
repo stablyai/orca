@@ -16,8 +16,7 @@ import {
 import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
 import {
   hasRecordedLegacySharedCodexPane,
-  getCodexPaneAccount,
-  type CodexPaneHomeRoute
+  getCodexPaneAccount
 } from '../codex/codex-pane-account-registry'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
@@ -92,13 +91,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       : { kind: 'skip' }
   }
 
-  getSelectedHostCodexHomeRoute(): CodexPaneHomeRoute {
-    if (this.getSelfContainedManagedHostAccount()) {
-      return 'account-home'
-    }
-    return this.isHostSystemDefaultRealHome() ? 'real-home' : 'shared-home'
-  }
-
   getRetainedHostCodexHookHomePaths(ptyIds: readonly string[]): string[] {
     const settings = this.store.getSettings()
     const homes = new Map<string, string>()
@@ -107,11 +99,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       if (!record || record.selectionKey !== 'host') {
         continue
       }
-      if (
-        record.homeRoute === undefined ||
-        record.homeRoute === 'shared-home' ||
-        record.homeRoute === 'custom-home'
-      ) {
+      if (record.homeRoute === undefined || record.homeRoute === 'shared-home') {
         const homePath = this.getRuntimeHomePath()
         homes.set(normalizeRuntimePathForComparison(homePath), homePath)
         continue

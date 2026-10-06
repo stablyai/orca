@@ -1,3 +1,4 @@
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
 import {
   getDefaultSettings,
@@ -69,8 +70,12 @@ export function mergeHostWebUIState(
     hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true,
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder,
+    sidebarOpen: local.sidebarOpen,
     agentsVisibleHostIds: local.agentsVisibleHostIds,
     agentsFilterRepoIds: local.agentsFilterRepoIds,
+    agentsHideWorkspacesFromOtherDevices: local.agentsHideWorkspacesFromOtherDevices === true,
+    agentsHideAutomationGeneratedWorkspaces: local.agentsHideAutomationGeneratedWorkspaces === true,
+    agentsHideCliCreatedWorkspaces: local.agentsHideCliCreatedWorkspaces === true,
     agentsShowChildAgents: local.agentsShowChildAgents,
     agentsCompactMode: local.agentsCompactMode,
     agentsShowSearch: local.agentsShowSearch,
@@ -164,6 +169,11 @@ export function mergeSettings(
       : (base.activeRuntimeEnvironmentId ?? null),
     terminalCustomThemes: normalizeTerminalCustomThemes(
       updates.terminalCustomThemes ?? base.terminalCustomThemes
+    ),
+    nativeChatAppearance: normalizeNativeChatAppearanceSettings(
+      Object.hasOwn(updates, 'nativeChatAppearance')
+        ? updates.nativeChatAppearance
+        : base.nativeChatAppearance
     ),
     uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
   }

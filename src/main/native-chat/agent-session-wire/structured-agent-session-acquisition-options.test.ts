@@ -21,6 +21,8 @@ import { performAttach } from './structured-agent-session-attach-flow'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'legacy-session'
@@ -90,7 +92,7 @@ function adapter(input: {
         },
         link: {
           linkId: `${input.origin}-link`,
-          handle: { provider: 'codex', threadId: 'legacy-thread' },
+          handle: codexProviderHandle('legacy-thread'),
           origin: input.origin,
           mintedAtFence: fence,
           observedAt: NOW
@@ -139,7 +141,7 @@ describe('structured session acquisition options', () => {
           },
           link: {
             linkId: `${origin}-link`,
-            handle: { provider: 'codex', threadId: 'legacy-thread' },
+            handle: codexProviderHandle('legacy-thread'),
             origin,
             mintedAtFence: input.fence,
             observedAt: NOW
@@ -152,6 +154,7 @@ describe('structured session acquisition options', () => {
 
     let firstJournal: AgentSessionJournal | undefined
     const first = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store: initialStore,
       adapter: withHistory('created'),
@@ -190,6 +193,7 @@ describe('structured session acquisition options', () => {
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 
     const second = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: withHistory('resumed'),
@@ -222,6 +226,7 @@ describe('structured session acquisition options', () => {
     const recordPhase = vi.fn<AgentSessionCreatePhaseRecorder>()
 
     const created = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: sessionAdapter,
@@ -252,6 +257,7 @@ describe('structured session acquisition options', () => {
     const sessionAdapter = adapter({ origin: 'created' })
     const attempt = async (options: Readonly<Record<string, string>>, spawnToken: string) =>
       performAttach({
+        agents: NO_STRUCTURED_AGENTS,
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter: sessionAdapter,
@@ -283,6 +289,7 @@ describe('structured session acquisition options', () => {
     const store = await openTestAgentSessionRecordStore(root)
 
     const created = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: adapter({ origin: 'created' }),
@@ -314,6 +321,7 @@ describe('structured session acquisition options', () => {
     })
     const releasedFence = resumedStore.getRecord(SESSION)?.lease.runtimeFence ?? 0
     const resumed = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store: resumedStore,
       adapter: adapter({
@@ -357,6 +365,7 @@ describe('structured session acquisition options', () => {
     })
 
     const created = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: sessionAdapter,
@@ -394,6 +403,7 @@ describe('structured session acquisition options', () => {
 
     await expect(
       performAttach({
+        agents: NO_STRUCTURED_AGENTS,
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter: failingAdapter,
@@ -460,7 +470,7 @@ describe('structured session acquisition options', () => {
           },
           link: {
             linkId: `link-${fence}`,
-            handle: { provider: 'codex', threadId: 'legacy-thread' },
+            handle: codexProviderHandle('legacy-thread'),
             origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
             mintedAtFence: fence,
             observedAt: NOW
@@ -473,28 +483,26 @@ describe('structured session acquisition options', () => {
         }
         return cleanup
       })
-      const failingAdapter = {
-        ...base,
-        acquire,
-        readOptions,
-        releaseAcquisition,
-        ...(failurePoint === 'journal'
-          ? { historyFilePath: vi.fn().mockRejectedValueOnce(injected).mockResolvedValue(null) }
-          : {})
-      }
+      const failingAdapter = { ...base, acquire, readOptions, releaseAcquisition }
+      let journalFailure = failurePoint === 'journal' ? injected : null
       const perform = (
         target: AgentSessionRecordStore,
         operationId: string,
         fence: number | null
       ) =>
         performAttach({
+          agents: NO_STRUCTURED_AGENTS,
           logger: createStructuredAgentSessionLogger(),
           store: target,
           adapter: failingAdapter,
-          openConversation: openTestAttachConversation(
-            openTestJournalHostDatabase(root!),
-            failingAdapter
-          ),
+          openConversation: async (record) => {
+            const failure = journalFailure
+            journalFailure = null
+            if (failure) {
+              throw failure
+            }
+            return openTestAttachConversation(openTestJournalHostDatabase(root!))(record)
+          },
           authority: {
             spawnToken: operationId === CREATE_OPERATION ? 'spawn-a' : 'spawn-b',
             claimKeyId: 'key-1',
@@ -590,6 +598,7 @@ describe('the tab a create reserves', () => {
 
   function attachWith(store: AgentSessionRecordStore, surfaceTabId?: string) {
     return performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: adapter({ origin: 'created' }),

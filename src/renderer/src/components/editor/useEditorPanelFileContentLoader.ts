@@ -4,7 +4,7 @@ import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/conn
 import { useAppStore } from '@/store'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { getRuntimeFileReadScope } from '@/runtime/runtime-file-client'
-import { readEditorCsvFileContent } from './editor-csv-file-content'
+import { readEditorCsvFileContent } from './csv/csv-file-content'
 import { RuntimeRpcCallError, settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connection-phase'

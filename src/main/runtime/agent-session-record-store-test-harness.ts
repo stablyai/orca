@@ -7,6 +7,11 @@
 
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
 import type { PersistedAgentSessionRecord } from '../../shared/agent-session-legacy-handoff-lease'
+import {
+  encodePersistedAgentSessionProviderHandle,
+  isAgentSessionProviderHandle
+} from '../../shared/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { JOURNAL_DB_SCHEMA_VERSION } from '../native-chat/agent-session-journal/journal-database-schema'
 import {
   closeTestJournalHostDatabase,
@@ -98,15 +103,32 @@ function writePersisted(db: Database.Database, persisted: PersistedTestAgentSess
   }
 }
 
+/** A seed may be an in-memory fixture or a hand-written row; a row holds handles in stored form. */
+export function storedTestAgentSessionRecord(
+  record: AgentSessionRecord | PersistedAgentSessionRecord
+): PersistedAgentSessionRecord {
+  return {
+    ...record,
+    providerHandleChain: record.providerHandleChain.map((link) => ({
+      ...link,
+      handle: isAgentSessionProviderHandle(link.handle)
+        ? encodePersistedAgentSessionProviderHandle(link.handle)
+        : link.handle
+    }))
+  }
+}
+
 /** Leaves `records` behind as an earlier run of the app would have, before anything opens it. */
 export async function seedTestAgentSessionRecordStore(
   stateDirectory: string,
-  seed: { records: readonly PersistedAgentSessionRecord[] }
+  seed: { records: readonly (AgentSessionRecord | PersistedAgentSessionRecord)[] }
 ): Promise<void> {
   writePersisted(databaseFor(stateDirectory), {
     schemaVersion: AGENT_SESSION_STORE_SCHEMA_VERSION,
     hostId: TEST_HOST_ID,
-    records: Object.fromEntries(seed.records.map((record) => [record.sessionId, record])),
+    records: Object.fromEntries(
+      seed.records.map((record) => [record.sessionId, storedTestAgentSessionRecord(record)])
+    ),
     operations: {},
     retiredClaimKeys: [],
     unusableRecords: {}

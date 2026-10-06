@@ -209,3 +209,17 @@ export async function dismissClaudeStructuredPrompt(input: {
     session.prompts.releaseClaim(claim)
   }
 }
+
+/** An answered or dismissed request frees the child it blocked before the host records the card,
+ *  so no row reads the child waiting beside a closed card; no provider frame says so first. */
+export function settleClaudePromptFreeingChild<R extends { commit: () => Promise<void> }>(
+  input: { request: R; sessions: Map<string, ClaudeSession>; free: () => void },
+  settle: (input: { request: R; sessions: Map<string, ClaudeSession> }) => Promise<void>
+): Promise<void> {
+  const { request, sessions, free } = input
+  const commit = async (): Promise<void> => {
+    free()
+    await request.commit()
+  }
+  return settle({ request: { ...request, commit }, sessions }).finally(free)
+}

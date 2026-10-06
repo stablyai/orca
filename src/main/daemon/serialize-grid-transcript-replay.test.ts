@@ -40,6 +40,15 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'opencode-1-18-32-timed-boot-slow': 16,
   'opencode-1-18-32-timed-first-launch': 16,
   'opencode-2-0-18-timed-boot-hidden-pane': 14,
+  // STA-9359 OpenCode 2 captures, serializer untouched: every background diff is the live pen's
+  // panel colour on restored cells, plus the rows kept below the source after a shrink.
+  'opencode-2-0-14-timed-cold-standalone': 4,
+  'opencode-2-0-21-timed-cold-standalone': 36,
+  'opencode-2-0-21-timed-cold-standalone-hidden-pane': 6,
+  'opencode-2-0-21-timed-natural-load-enter-dropped': 12,
+  'opencode-cmd-2-0-21-timed-warm-server': 21,
+  // The same, plus the cursor one column short after a shrink and the pen's bold bit on a glyph.
+  'opencode-2-0-21-timed-narrow-pane': 8,
   // Shrink leaves the cursor one column short; also present in the pre-Qoder serializer.
   'qoder-no-account': 2,
   'qoder-ready': 2,
@@ -65,6 +74,11 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'codex-0-158-0-approval': 12,
   'codex-0-158-0-timed-turn': 20,
   'codex-0-158-0-trustprompt': 36,
+  // Fullscreen startup captures diverge identically with the base b58f8197dc36 serializer.
+  'codex-fullscreen-custom-footer': 18,
+  'codex-fullscreen-early-input': 4,
+  'codex-fullscreen-multiline-early-input': 10,
+  'codex-fullscreen-startup': 14,
   'claude-dialog-trust-workspace-answered': 13,
   // DSH-TUI's whale intro paints whole rows of 24-bit background, and every one of this
   // transcript's divergences is the same shape: `visible-grid row=0`, a true-colour

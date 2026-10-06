@@ -10,11 +10,14 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from './agent-session-background-task-wire'
+import type { AgentSessionTokenUsage } from './agent-session-context-usage'
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
   AgentJournalPosition,
-  AgentJournalProducerLinkage
+  AgentJournalProducerLinkage,
+  AgentJournalToolCallEnding,
+  AgentJournalToolCallState
 } from './agent-session-journal-types'
 import type { AgentType } from './agent-status-types'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
@@ -70,7 +73,9 @@ export type NativeChatToolCallBlock = NativeChatToolMetadata & {
   /** Provider-supplied identity within this item stream; absent on legacy transcripts and peers. */
   callId?: string
   /** Provider lifecycle when the structured app-server path can supply it. */
-  state?: 'running' | 'completed' | 'failed'
+  state?: AgentJournalToolCallState
+  /** See the journal tool-call item: read with `state` through `agentJournalToolCallLifecycle`. */
+  endedAs?: AgentJournalToolCallEnding
 }
 
 /** One resolved hunk from a provider's edit result, carrying true file ranges. */
@@ -207,11 +212,22 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   source: NativeChatSource
   /** Optional provider row cursor; split projections share it for whole-row paging. */
   transcriptOffset?: number
+  /** Model id that produced an assistant response, as the provider API names it. */
+  model?: string
+  /** The agent's provider that served `model`, where the agent records one. */
+  provider?: string
+  /** On assistant responses whose accounting reflects the prompt the model read. */
+  usage?: AgentSessionTokenUsage
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** `id` of the transcript row this one follows in the agent's own conversation
+   *  tree, where the decoder carries the agent's link. Absent from older hosts. */
+  parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
+  /** On a conversation command the user sent, such as `/compact`: the command it names. */
+  command?: { name: string }
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
   /** Shown as not sent: in no turn, so a newer turn's bar and clock never land on it. Drawn where

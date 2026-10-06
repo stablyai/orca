@@ -10,6 +10,7 @@ import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
 import type { NativeChatSessionOptionRecord } from '../../../../shared/native-chat-session-option-state'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait,
@@ -61,7 +62,7 @@ export function useHostModelCatalogUpgrade(args: {
     isHostModelListingWaitInFlight(waitKey)
   )
   useEffect(() => {
-    if (!enabled || !optionCatalog || (agent !== 'claude' && agent !== 'codex')) {
+    if (!enabled || !optionCatalog || !isAgentSessionHandleProvider(agent)) {
       return
     }
     let stale = false

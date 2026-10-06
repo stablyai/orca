@@ -44,7 +44,7 @@ const blockers: StructuredNativeChatBlocker[] = [
   'reused-terminal',
   'agent-without-structured-session',
   'floating-workspace',
-  'tui-launch-command',
+  'custom-start-directory',
   'remote-execution-host',
   'project-runtime',
   'runtime-capability',
@@ -57,8 +57,8 @@ describe('shared feasibility owns every caller decision', () => {
     (placement) => {
       for (const agent of ['claude', 'codex', 'grok', 'openclaude'] as const) {
         for (const customized of [false, true]) {
-          // Arguments and environment are customized on BOTH passes, so the flag below tracks the
-          // launch command alone. A caller that resumed reading either one fails here.
+          // Arguments and environment are customized on BOTH passes and the launch command on one;
+          // none of them reaches the verdict. A caller that resumed reading any of them fails here.
           const launchSettings: Partial<GlobalSettings> & typeof settings = {
             ...settings,
             agentDefaultArgs: { [agent]: '--custom' },
@@ -73,7 +73,7 @@ describe('shared feasibility owns every caller decision', () => {
               agent,
               executionHostId: 'local',
               reusesTerminal: Boolean(placement.terminal),
-              requiresTuiLaunchCommand: customized
+              startsOutsideWorkspaceRoot: false
             })
           )
           for (const blocker of blockers) {
@@ -118,7 +118,7 @@ describe('shared feasibility owns every caller decision', () => {
             executionHostId,
             promptDelivery,
             hostCapabilities: RUNTIME_CAPABILITIES,
-            requiresTuiLaunchCommand: true,
+            startsOutsideWorkspaceRoot: true,
             workspaceKind: 'folder',
             initialSessionOptions: { model: 'model-1', effort: 'high' }
           }
@@ -129,7 +129,7 @@ describe('shared feasibility owns every caller decision', () => {
             expect.objectContaining({
               agent,
               executionHostId,
-              requiresTuiLaunchCommand: true,
+              startsOutsideWorkspaceRoot: true,
               workspaceKind: 'folder'
             })
           )

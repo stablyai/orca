@@ -11,6 +11,9 @@
     "retrying": "재시도 중…"
   },
   "settings": {
+    "chat": {
+      "description": "채팅 모양을 선택하세요."
+    },
     "terminal": {
       "optionLayoutAlt": "ABC 또는 U.S. — Option 키가 Alt/Esc 시퀀스를 전송합니다",
       "optionLayoutCompose": "이 배열에서는 Option 키로 @, €, [, ] 같은 문자를 입력합니다",
@@ -41,7 +44,8 @@
         "portsToggleDescription": "라이브 워크스페이스 포트를 표시합니다. 워크스페이스 범위 포트 및 외부 수신기를 보려면 클릭하세요.",
         "antigravityToggleDescription": "활성 워크스페이스에 대한 Antigravity 구독 사용량을 표시합니다.",
         "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다.",
-        "cursorToggleDescription": "cursor-agent 또는 Cursor IDE로 로그인한 경우 Cursor 플랜 사용량을 표시합니다."
+        "cursorToggleDescription": "cursor-agent 또는 Cursor IDE로 로그인한 경우 Cursor 플랜 사용량을 표시합니다.",
+        "zcodeToggleDescription": "ZCode 코딩 계획 할당량 사용량을 표시합니다."
       },
       "menuBarIcon": {
         "title": "메뉴 바 아이콘 표시",
@@ -51,6 +55,22 @@
           "statusItem": "상태 항목",
           "activity": "활동"
         }
+      },
+      "chat": {
+        "title": "채팅",
+        "textSize": "텍스트 크기",
+        "textSizeDescription": "메시지, 도구 활동 및 메시지 입력란. 채팅에서 {{increase}} / {{decrease}} 키로도 변경할 수 있습니다.",
+        "codeTextSize": "코드 텍스트 크기",
+        "codeTextSizeDescription": "코드 블록, 인라인 코드, 명령 및 도구 출력.",
+        "width": "너비",
+        "widthDescription": "넓은 패널에서 메시지와 입력란이 확장될 수 있는 최대 너비입니다.",
+        "resetAppearance": "채팅 모양 초기화",
+        "resetDescription": "위의 기본값으로 복원합니다.",
+        "comfortable": "편안하게",
+        "wide": "넓게",
+        "full": "전체",
+        "pixels": "px",
+        "reset": "초기화"
       }
     },
     "browser": {
@@ -96,6 +116,16 @@
         "optionNativeTooltip": "정리된 ID를 거부하는 사이트에 대해 Electron의 내장 ID를 유지합니다. 기본 모드에서는 Google 로그인을 사용할 수 없습니다.",
         "restartRequired": "다시 시작해야 함",
         "unavailable": "브라우저 ID를 사용할 수 없습니다."
+      }
+    },
+    "agents": {
+      "codexTerminalServerIsolation": {
+        "title": "자체 서버에서 각 Codex 터미널 실행",
+        "description": "Orca의 상태와 닫는 탭이 올바르게 작동하도록 유지합니다. CODEX의 공유 서버와 에이전트 개요를 사용하려면 기능을 끄십시오. 새 터미널에 적용됩니다."
+      },
+      "codexSharedServerWarning": {
+        "title": "Codex 탭이 서버를 공유할 때 경고",
+        "description": "에이전트 상태가 잘못되었을 수 있으므로 서버를 다른 탭과 공유할 때 직접 시작한 Codex에 대한 알림을 표시합니다."
       }
     }
   },
@@ -504,7 +534,11 @@
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
           "zcode_label": "ZCode",
-          "jcode_label": "Jcode"
+          "jcode_label": "Jcode",
+          "freebuff_label": "Freebuff",
+          "dsh_label": "DeepSeek Harness",
+          "qoder_label": "Qoder CLI",
+          "qoder_cn_label": "Qoder CLI China"
         },
         "skill": {
           "cli": {
@@ -879,7 +913,8 @@
             "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
             "invalidImage": "{{fileName}} is not a valid supported image.",
             "additionalErrors": "{{count}} additional images could not be attached.",
-            "totalTooLarge": "{{fileName}}을(를) 포함하면 첨부 파일 합계가 {{maxSize}}를 초과합니다."
+            "totalTooLarge": "{{fileName}}을(를) 포함하면 첨부 파일 합계가 {{maxSize}}를 초과합니다.",
+            "compressed": "{{fileName}}을(를) 첨부 파일 한도에 맞추기 위해 {{originalSize}}에서 {{size}}(으)로 압축했습니다."
           }
         }
       },
@@ -918,6 +953,16 @@
         "tooLarge": "너무 커서 복사할 수 없어 Orca가 에이전트에 전달하지 못했습니다.",
         "storageFull": "드롭한 파일을 위한 Orca 저장 공간이 가득 차서 Orca가 에이전트에 전달하지 못했습니다.",
         "generic": "다시 드롭해 보세요."
+      },
+      "reveal": {
+        "in": {
+          "file": {
+            "manager": {
+              "notFound": "파일을 찾을 수 없습니다. 이동되었거나 삭제되었을 수 있습니다.",
+              "launchFailed": "파일을 표시할 수 없습니다."
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -1113,11 +1158,7 @@
         "a4c8e1b2f7": "Codex가 아직 {{value0}} 계정으로 로그인되어 있습니다",
         "d3e8a1f4b2": "계정 전환됨",
         "9375620cc3": "{{value0}}을(를) 사용하려면 이 세션을 다시 시작하세요. 다시 시작하기 전까지는 이전 계정이 유지됩니다.",
-        "6133594b12": "이전 계정 유지",
-        "8f0d5c92a1": "Codex 설정이 변경되었습니다.",
-        "3ea91b5c07": "이 Codex 세션은 오래된 구성을 사용하고 있습니다.",
-        "e6b7139d2a": "현재 Codex 구성을 로드하려면 이 세션을 다시 시작하세요.",
-        "7b1d20f4c8": "현재 세션 유지"
+        "6133594b12": "이전 계정 유지"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "알림 닫기",
@@ -3035,7 +3076,14 @@
             "c6460cf584": "제어권 가져오기",
             "c44659e09f": "휴대폰 조작 중",
             "3eed73394f": "키보드가 일시중지되었습니다.",
-            "c7e4a2b8f1": "휴대폰이 제어 중"
+            "c7e4a2b8f1": "휴대폰이 제어 중",
+            "4b7e1c9a20": "휴대 전화에 맞게 크기가 조정됩니다.",
+            "9d2f6a3e58": "전화 세션이 종료되었습니다. 이 창에 맞게 복원하세요.",
+            "1e5c8b7d43": "복원",
+            "6a3d9f2c71": "모든 창 복구",
+            "8c1a5e9f36": "데스크톱 타이핑이 일시 중지되었습니다. 출력은 계속 스트리밍됩니다.",
+            "2f7b4d1e95": "모두 회수",
+            "3a9c5f7e12": "최소화"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "컨텍스트 복사",
@@ -3324,10 +3372,7 @@
             "1d04b1630b": "아래로 분할",
             "6b3efb106e": "위로 분할",
             "fdd29eb669": "탭 고정",
-            "8e9d603a09": "탭 고정 해제",
-            "revealInFinder": "Finder에 공개",
-            "openContainingFolder": "포함된 폴더 열기",
-            "revealInFileExplorer": "파일 탐색기에 표시"
+            "8e9d603a09": "탭 고정 해제"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent 설정…",
@@ -3688,10 +3733,12 @@
             "grokUsageAria": "Grok 사용량 세부 정보 열기",
             "grokUsageMenu": "Grok 사용량",
             "floatingTerminalNewActivity": "{{label}}, 새 활동",
+            "4fba7dc1e7": "잔액 {{value0}}",
             "codexSignInSuccess": "Codex에 로그인했습니다",
             "codexSignInError": "Codex 로그인에 실패했습니다. 다시 시도해 주세요.",
             "cursorUsageMenu": "Cursor 사용량",
-            "hiddenUsageProviders": "그 외: {{value0}}"
+            "hiddenUsageProviders": "그 외: {{value0}}",
+            "zcodeUsageMenu": "ZCode 사용"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -3873,6 +3920,9 @@
                 "message": "Orca가 실행 중인 컴퓨터의 터미널에서 cursor-agent login을 실행한 뒤 사용량을 다시 시도하세요."
               },
               "plan": "플랜"
+            },
+            "zcode": {
+              "mcp": "MCP"
             }
           },
           "SshTargetStatusRow": {
@@ -3987,6 +4037,15 @@
             "resumingAriaOne": "채팅 1개 재개 중. 자세히 보려면 클릭하세요.",
             "resumingAria": "채팅 {{value0}}개 재개 중. 자세히 보려면 클릭하세요.",
             "resumingTooltip": "중단된 채팅을 복원하고 계속하도록 요청하는 중…"
+          },
+          "provider": {
+            "extra": {
+              "usage": {
+                "section": {
+                  "135d51c19f": "한도 {{value0}}"
+                }
+              }
+            }
           }
         }
       },
@@ -6202,6 +6261,7 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
+          "preparing": "첨부 파일을 준비하는 중…",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}",
           "screenshotsHint": "최대 {{count}}장, 총 {{maxSize}}까지 스크린샷을 첨부하세요."
@@ -6309,6 +6369,11 @@
           "copied": "명령이 복사됨",
           "retry": "지금 다시 시도",
           "restored": "Git이 다시 작동합니다. 워크트리를 새로고침했습니다."
+        },
+        "manualSortSwitch": {
+          "title": "정렬이 수동으로 변경됨",
+          "description": "매뉴얼 은 워크스페이스를 드롭하는 위치에 유지합니다.",
+          "restore": "{{label}} (으) 로 돌아가기"
         }
       },
       "shared": {
@@ -6411,8 +6476,8 @@
           "96f3649526": "Gemini CLI 자격 증명 사용(실험적)",
           "d676c41fc6": "Google 인증을 위해 로컬 Gemini CLI 설치에서 OAuth 자격 증명을 추출합니다. 이는 Orca가 아닌 Gemini CLI 앱에 발급된 자격 증명을 사용합니다. Google이 CLI를 업데이트하면 중단될 수 있습니다. 자신의 책임하에 사용하십시오.",
           "0c7f915b01": "Gemini CLI 자격 증명 사용",
-          "973741a871": "Gemini 공급자 설정을 구성합니다.",
-          "0c64dc2a64": "Gemini",
+          "973741a871": "기존 Gemini CLI 세션은 계속 사용할 수 있습니다. Gemini 자격 증명으로는 Antigravity에 로그인되지 않습니다.",
+          "0c64dc2a64": "Gemini CLI (레거시)",
           "db209ee572": "제거",
           "8a0f870153": "재인증",
           "3d245ef7d9": "Codex에서 이 로그인이 오래되었다고 보고했습니다.",
@@ -7091,8 +7156,8 @@
             "shellEnvCopy": "Codex 및 Claude 채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
             "shellEnvToggleLabel": "셸 환경 사용 전환",
             "structuredTitle": "업데이트된 구조화된 기본 채팅 사용",
-            "structuredCopy": "새 Codex 및 Claude 에이전트를 구조화된 채팅으로 엽니다. 끄면 터미널 지원 채팅으로 엽니다. 이미 있는 채팅은 그대로 유지됩니다.",
-            "structuredScope": "이 컴퓨터와 이를 지원하는 버전을 실행하는 페어링된 Orca 서버에서 실행됩니다. 이전 서버는 터미널 채팅을 유지합니다. WSL 및 SSH 호스트는 계속해서 터미널 채팅을 사용하며 Orca가 프로세스 시작 시간을 읽을 수 없으면 Windows는 이 채팅을 사용합니다.",
+            "structuredCopy": "새 Codex 및 Claude 에이전트를 구조화된 채팅으로 엽니다. 끄면 터미널 기반 채팅으로 엽니다. 이미 있는 채팅은 그대로 유지됩니다.",
+            "structuredScope": "이 컴퓨터와 이를 지원하는 버전을 실행하는 페어링된 Orca 서버에서 실행됩니다. 이전 서버는 터미널 채팅을 유지합니다. WSL 및 SSH 호스트는 계속해서 터미널 채팅을 사용하며 Orca가 프로세스 시작 시간을 읽을 수 없으면 Windows는 터미널 채팅으로 대체됩니다.",
             "structuredToggleLabel": "업데이트된 구조화된 기본 채팅 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
@@ -7136,7 +7201,7 @@
           "80c454e8a6": "이를 공급자의 캐시 TTL과 일치시킵니다."
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "모든 markdown 보기에서 markdown 메모 컨트롤을 표시하고 agent 전달 작업에 해당 메모를 포함합니다.",
+          "f80603d293": "모든 markdown 보기에서 markdown 메모 컨트롤을 표시하고 에이전트 전달 작업에 해당 메모를 포함합니다.",
           "4edc104f0f": "Markdown 리뷰 노트",
           "5f02e6fb21": "markdown 파일에서 로컬 markdown 리뷰 노트 컨트롤을 표시합니다.",
           "51161d1647": "파일을 편집할 때 미니맵 개요를 표시합니다.",
@@ -7561,7 +7626,8 @@
           "pairingCodeReady": "페어링 코드 준비됨",
           "copyPairingCode": "페어링 코드 복사",
           "diagnosticsCopied": "진단이 복사되었습니다.",
-          "diagnosticsCopyFailed": "진단을 복사하지 못했습니다."
+          "diagnosticsCopyFailed": "진단을 복사하지 못했습니다.",
+          "5e2c7a1f84": "휴대전화에서 단말기를 사용하는 동안 Orca는 휴대전화 화면에 맞게 단말기를 축소합니다. 앱을 닫거나 끄면 휴대전화 크기가 유지되는지 (대화형 CLI 도구가 리플로우되지 않도록) 또는 데스크톱으로 다시 크기가 조정되는지 여부를 제어합니다. 언제든지 배너에서 복원 또는 모두 복원을 사용하여 수동으로 크기를 조정할 수 있습니다."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub 릴리스",
@@ -8469,7 +8535,12 @@
           "addTitle": "SSH 호스트 추가",
           "editDescription": "이 머신의 연결 세부 정보를 업데이트합니다. 변경 사항은 다음 연결 시 적용됩니다.",
           "addDescription": "SSH로 로그인할 수 있는 영구 머신을 추가합니다.",
-          "editingPrefix": "편집 중"
+          "editingPrefix": "편집 중",
+          "remoteRuntime": "런타임",
+          "remoteRuntimeHelp": "어떤 Node.js가 이 호스트에서 ORCA를 실행하는지. Orca 관리 노드는 자체적으로 업로드하며 npm이 필요하지 않습니다. 호스트 노드는 이미 설치된 Node.js를 사용합니다.",
+          "remoteRuntimeAuto": "자동",
+          "remoteRuntimePinnedNode": "ORCA 관리 노드",
+          "remoteRuntimeHostNode": "호스트 노드"
         },
         "TasksPane": {
           "f71d8a9dd3": "작업 제공자",
@@ -8646,7 +8717,38 @@
             "fastDescription": "수정 키로 스크롤할 때 적용되는 추가 배율.",
             "tui": "TUI",
             "tuiDescription": "전체 화면 터미널 앱을 위한 개별 휠 보고."
-          }
+          },
+          "8dbe0bc942": "셸 인수, 한 줄에 하나",
+          "f58cb71f53": "--rcfile\n/path/to/rcfile",
+          "48b91a3ed2": "사용자 지정 인수",
+          "7bd83fc1d0": "-l (기본)",
+          "5ffc4777b6": "셸 인수 모드",
+          "578ec79449": "한 줄에 인수 하나를 입력하세요. 비워 두면 인수를 전달하지 않습니다.",
+          "884a006065": "-l로 셸을 로그인 셸로 시작합니다.",
+          "01c600daff": "셸 인수",
+          "e3ae5aed18": ". 시스템 셸로 전환하거나 이 호스트의 실행 파일을 선택하세요.",
+          "59573d0b33": "PATH에 있는 셸 이름이나 실행 파일 경로를 입력하세요. Orca가 로그인 셸로 실행합니다.",
+          "5e06e87730": "사용자 지정 셸 실행 파일",
+          "c2bf02ce2f": "fish, nu 또는 /bin/zsh",
+          "f51cc79784": "사용자 지정 셸",
+          "dd3f4c35da": "시스템 셸 ({{value0}})",
+          "fd05fb109c": "터미널 셸",
+          "69724e8f0c": "새 로컬 터미널 창에서 Orca가 열 셸을 선택합니다.",
+          "c2ddb189e7": "rcfile",
+          "73c211e979": "래퍼",
+          "4faf688f78": "로그인",
+          "44f8a56f66": "인수",
+          "af893aa433": "인수",
+          "ddc72a4860": "기본값",
+          "d469840b75": "nushell",
+          "17ad899ba4": "bash",
+          "c9bc93d343": "zsh",
+          "0cbe5ad727": "fish",
+          "81694f1584": "터미널",
+          "a909136b3f": "셸",
+          "1c29734248": "새 터미널 창에 사용할 셸",
+          "9589abc009": "기본 셸",
+          "5a5eac2f44": "셸을 찾을 수 없음: {{value0}}"
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} 테마 미리보기",
@@ -8783,7 +8885,8 @@
           "f9a9cf6928": "음성 받아쓰기를 활성화하려면 마이크 권한이 필요합니다.",
           "1eac933202": "macOS 개인 정보 보호 및 보안을 열었습니다. 액세스 권한을 부여한 후 받아쓰기를 다시 활성화하세요.",
           "cd9fe37556": "마이크 권한이 부여되었습니다.",
-          "6fa734ed95": "{{value0}} 삭제"
+          "6fa734ed95": "{{value0}} 삭제",
+          "openAiKeyName": "OpenAI 트랜스크립션 키"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",
@@ -8898,6 +9001,18 @@
                 "usage": "사용량"
               },
               "title": "Cursor 사용량"
+            },
+            "zcodePlan": {
+              "title": "GLM 코딩 계획",
+              "description": "Z.AI 또는 Zhipu (BigModel) GLM 코딩 계획 사용 추적. 사이트를 선택하고 요금제 API 키를 저장합니다.",
+              "kw": {
+                "glm": "glm",
+                "zai": "zai",
+                "zhipu": "zhipu",
+                "bigmodel": "bigmodel",
+                "codingPlan": "코딩 계획",
+                "rateLimit": "속도 제한 :"
+              }
             }
           }
         },
@@ -8989,7 +9104,12 @@
             "yolo": "욜로",
             "manual": "수동",
             "skip": "건너뛰다",
-            "checks": "검사"
+            "checks": "검사",
+            "7e15b89f6e": "서버",
+            "ff457e1e7b": "데몬.",
+            "9f3becc4e8": "공유됨",
+            "34337ed5c7": "격리",
+            "9a84e65118": "에이전트 개요"
           }
         },
         "appearance": {
@@ -9164,7 +9284,12 @@
                 "cursor": "cursor"
               },
               "title": "Cursor 사용량"
-            }
+            },
+            "zcodeUsageTitle": "ZCode 사용",
+            "zcodeUsageDescription": "상태 표시줄에 ZCode 코딩 계획 할당량 사용을 표시합니다.",
+            "zcode": "zcode",
+            "zai": "zai",
+            "glm": "glm"
           }
         },
         "auto": {
@@ -9856,7 +9981,8 @@
               "9a9f8d4910": "Jira Cloud를 연결하여 이슈를 찾아보고 생성하고 연결하세요.",
               "74f3063026": "{{value0}} 사이트{{value1}}이(가) 연결되었습니다.",
               "statusConnected": "연결됨",
-              "statusNotConnected": "연결되지 않음"
+              "statusNotConnected": "연결되지 않음",
+              "jiraTokenName": "Jira API 토큰"
             }
           }
         },
@@ -10590,7 +10716,19 @@
               "statusline": "상태 표시줄",
               "dim": "어둑한",
               "colors": "그림 물감"
-            }
+            },
+            "d31ed1ac1c": "rcfile",
+            "d9e29543a1": "래퍼",
+            "50ba80b6dd": "로그인",
+            "36ba1a1357": "인수",
+            "5304b12d5c": "인수",
+            "7c3ede6f12": "nushell",
+            "bf09070e31": "bash",
+            "d26257a80d": "zsh",
+            "454df22a5e": "fish",
+            "ddd5efe113": "셸",
+            "3de504994c": "새 로컬 대화형 터미널 창에 사용할 셸과 인수",
+            "1733ccd3e9": "터미널 셸"
           },
           "windows": {
             "search": {
@@ -10693,7 +10831,9 @@
           "modeDescriptionWindows": "켜짐, 에이전트 또는 꺼짐을 선택합니다. 에이전트 모드는 에이전트가 작업하는 동안 활성 상태를 유지합니다. 덮개 닫힘 동작은 이 기기의 전원 설정을 따릅니다.",
           "modeDescriptionMac": "켜짐, 에이전트 또는 꺼짐을 선택합니다. 에이전트 모드는 에이전트가 작업하는 동안 유휴 절전을 방지하므로 덮개를 연 상태로 긴 작업을 완료할 수 있습니다. 덮개를 닫으면 이 Mac이 절전 모드로 전환됩니다.",
           "modeDescriptionDefault": "켜짐, 에이전트 또는 꺼짐을 선택합니다. 에이전트 모드는 에이전트가 작업하는 동안 활성 상태를 유지합니다. Orca는 또한 전원 정책에 따라 덮개가 닫혀 있을 때 이 기기가 활성 상태를 유지하도록 요청합니다.",
-          "lidNoteMac": "덮개를 연 상태에서는 유휴 절전을 방지합니다. 덮개를 닫으면 이 Mac이 절전 모드로 전환됩니다."
+          "lidNoteMac": "덮개를 연 상태에서는 유휴 절전을 방지합니다. 덮개를 닫으면 이 Mac이 절전 모드로 전환됩니다.",
+          "lidNoteWindows": "뚜껑 닫기 동작은 이 장치의 전원 설정을 따릅니다.",
+          "lidNoteDefault": "Orca는 또한 전원 정책에 따라 뚜껑을 닫을 때 이 장치를 깨어 있도록 요청합니다."
         },
         "AgentAwakeSetting": {
           "on": "켜짐",
@@ -10843,7 +10983,8 @@
                 "2d60ec7921": "API 토큰으로 Jira Cloud 사이트를 연결하거나, 개인 액세스 토큰 또는 사용자 이름과 비밀번호로 자체 호스팅 Jira를 연결하세요. 자격 증명은 선택한 원격 런타임으로 전송되어 런타임이 지원하는 암호화로 저장됩니다.",
                 "977e360b71": "API 토큰으로 Jira Cloud 사이트를 연결하거나, 개인 액세스 토큰 또는 사용자 이름과 비밀번호로 자체 호스팅 Jira를 연결하세요. 자격 증명은 로컬에 저장되며 로컬 런타임 저장소가 지원하는 경우 암호화됩니다.",
                 "statusConnected": "연결됨",
-                "statusNotConnected": "연결되지 않음"
+                "statusNotConnected": "연결되지 않음",
+                "linearTokenName": "Linear API 토큰"
               }
             }
           }
@@ -12010,7 +12151,8 @@
               "notConfigured": "Atlassian API 토큰 또는 액세스 토큰을 사용하여 Bitbucket Cloud 계정을 연결하세요. ORCA_BITBUCKET_* 환경 변수도 작동하며 우선 적용됩니다.",
               "disconnectFailed": "저장된 Bitbucket 사용자 인증 정보를 삭제할 수 없습니다.",
               "statusLoadFailed": "저장된 Bitbucket 자격 증명을 확인할 수 없습니다.",
-              "replaceCredentials": "자격 증명 추가 또는 교체"
+              "replaceCredentials": "자격 증명 추가 또는 교체",
+              "credentialName": "Bitbucket 자격 증명"
             }
           }
         },
@@ -12071,6 +12213,51 @@
           "offCount": "{{count}}대 꺼짐",
           "machines": "머신",
           "machinesDescription": "이 컴퓨터에 알림을 표시할 수 있는 컴퓨터를 선택합니다. 페어링된 서버의 스위치는 해당 서버를 통해 수행하는 작업에도 적용됩니다."
+        },
+        "UnsealedCredentialNotice": {
+          "body": "{{credential}} 은 암호화되지 않은 상태로 저장됩니다. 이 시스템에는 ORCA가 사용할 수 있는 OS 키링이 없습니다. 디스크나 디스크의 백업을 읽을 수 있는 사람은 자격 증명을 읽을 수 있습니다. 그놈 키링 또는 kwallet을 설치하고 잠금 해제한 다음 다시 저장하여 봉인합니다."
+        },
+        "ZcodePlanAccountsSection": {
+          "site": {
+            "bigmodel": "Zhipu · BigModel (open.bigmodel.cn)",
+            "zai": "Z.AI (z.ai)"
+          },
+          "window": {
+            "session": "5시간",
+            "weekly": "주간",
+            "mcp": "매월 MCP"
+          },
+          "resetIn": "— {{value0}} 후 초기화",
+          "keyRequired": "GLM 코딩 계획 API 키가 필요합니다.",
+          "keySaved": "GLM 코딩 계획 API 키가 저장되었습니다.",
+          "keySaveFailed": "GLM 코딩 계획 자격 증명 업데이트에 실패했습니다.",
+          "title": "GLM 코딩 계획",
+          "subtitle": "상태 표시줄에서 Z.AI 또는 Zhipu (BigModel) GLM 코딩 계획 사용을 추적합니다. 요금제 API 키를 여기에 저장하세요. ZCode CLI 설정이 필요하지 않습니다.",
+          "consoleLink": "받기 위한 v3 API 키",
+          "keyStored": "API 키 저장 완료 · {{value0}}",
+          "keyStoredHelp": "로컬로 저장되고 사용량 갱신을 위해 선택한 사이트로만 전송됩니다. ZCode CLI 로그인보다 우선합니다.",
+          "usingCli": "ZCode CLI 로그인 사용",
+          "usingCliHelp": "ORCA는 ~/.zcode/cli/config.json에서 코딩 계획 키를 읽습니다. 요금제를 여기에 연결하려면 아래에 API 키를 저장하세요.",
+          "notConfigured": "연결된 GLM 코딩 계획 없음",
+          "notConfiguredHelp": "아래에 요금제 API 키를 저장하거나 이 컴퓨터에서 ZCode CLI로 로그인합니다.",
+          "refreshUsage": "사용량 새로 고침",
+          "siteTitle": "사이트 계획",
+          "siteDescription": "코딩 계획이 속한 콘솔을 선택하십시오: 국제 사이트는 Z.AI, 본토 사이트는 Zhipu BigModel.",
+          "keyTitle": "API 키",
+          "keyDescription": "선택한 콘솔의 API 키 페이지에서 API 키를 붙여넣습니다. 로컬에 저장되고 OS가 지원할 때 암호화되며 사용량 새로 고침을 위해 해당 사이트로만 전송됩니다.",
+          "saved": "저장했습니다",
+          "notSaved": "저장 안 됨",
+          "keyPlaceholder": "GLM 코딩 계획 API 키 붙여넣기",
+          "replace": "교체",
+          "save": "저장",
+          "forgetKey": "키 분실",
+          "keyHelp": "코딩 도구가 계획에 사용하는 것과 동일한 키 (예: ANTHROPIC_BASE_URL이 있는 Claude Code가 사이트를 가리킴). 위의 사이트를 전환하면 수신하는 호스트가 변경됩니다.",
+          "usageTitle": "사용 계획",
+          "usageDescription": "상태 표시줄 사용 주기로 새로 고쳐진 연결된 코딩 계획의 라이브 할당량 창.",
+          "planLevel": "요금제: {{value0}}",
+          "hostOnly": "ORCA를 실행하는 컴퓨터의 데스크톱 앱에서 요금제 사이트 및 API 키를 변경합니다.",
+          "detailsUnavailable": "플랜 자격 증명 세부 정보는 ORCA를 실행하는 컴퓨터에서만 읽을 수 있습니다.",
+          "siteUnavailable": "호스트 요금제 사이트 이용 불가"
         }
       },
       "right": {
@@ -14853,7 +15040,12 @@
         "CsvViewer": {
           "eedd0d37a7": "열",
           "ac31d2cd60": "행",
-          "a233d55b77": "빈 파일"
+          "a233d55b77": "빈 파일",
+          "delimiterComma": "콤마",
+          "delimiterSemicolon": "세미콜론(쌍반점)",
+          "delimiterTab": "탭",
+          "delimiterAuto": "자동 ({{delimiter}})",
+          "delimiter": "분리자"
         },
         "DiffNotesSendMenu": {
           "f1aa04b5cf": "이 파일",
@@ -14908,10 +15100,7 @@
           "f0fd4174b5": "풍부한 markdown 편집을 사용하려면 파일 탭을 엽니다.",
           "a10d9b8337": "파일 열기",
           "2076ecfc9c": "이전 변경",
-          "631dab0df3": "다음 변경",
-          "revealInFinder": "Finder에 공개",
-          "openContainingFolder": "포함된 폴더 열기",
-          "revealInFileExplorer": "파일 탐색기에 표시"
+          "631dab0df3": "다음 변경"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDF로 내보내기",
@@ -15391,7 +15580,9 @@
           }
         },
         "richMarkdownLargeTextPaste": {
-          "tooLarge": "붙여넣기 내용이 너무 큽니다."
+          "tooLarge": "붙여넣기 내용이 너무 큽니다.",
+          "stopped": "큰 페이스트는 완성되기 전에 멈췄습니다.",
+          "cancelled": "원래 대상이 변경되어 큰 붙여넣기가 취소되었습니다."
         },
         "CheckRunJobs": {
           "1c0a4d7e02": "성공",
@@ -15486,6 +15677,10 @@
           "a0af0198aa": "큰 diff는 기본적으로 렌더링되지 않습니다.",
           "c3d9f4a712": "이 diff의 크기는 아직 알려지지 않았으므로 요청 시 로드됩니다.",
           "f7fa7a40d0": "로드 차이"
+        },
+        "richMarkdownImageInsertionFeedback": {
+          "importedFileKept": "목적지가 변경되어 이미지 삽입이 취소되었습니다. 가져온 파일이 보관되었습니다.",
+          "destinationChanged": "목적지가 변경되어 이미지 삽입이 취소되었습니다. 다시 시도하십시오."
         }
       },
       "diff": {
@@ -15855,6 +16050,7 @@
             "effd75e330": "주변 컨텍스트",
             "7d1480fbf1": "HTML",
             "9098b118ab": "페이지",
+            "accessibleNameOpenQuote": "\"",
             "eb98a0971a": "\"",
             "d053db279d": "역할=",
             "a759d8f866": "선택된 요소",
@@ -16511,7 +16707,6 @@
           "770d458144": "그룹화 기준",
           "795cbf26e2": "필터...",
           "4616ea39fd": "워크스페이스로 이동",
-          "threadListOptionsFiltered": "스레드 목록 옵션, 필터 활성화됨",
           "showSearch": "검색 표시",
           "markThreadRead": "스레드를 읽은 것으로 표시",
           "59b131fbd9": "스레드를 읽지 않은 것으로 표시",
@@ -16539,11 +16734,17 @@
             "permission": "주의 필요"
           },
           "filtersSection": "필터",
-          "viewSection": "보기"
+          "viewSection": "보기",
+          "threadListOptionsActive": "스레드 목록 옵션 ({{value0}} 활성)",
+          "activityOptionsActive": "활동 옵션 ({{value0}})"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "모든 호스트 및 프로젝트 표시",
-          "hiddenCount": "{{value0}} 숨김"
+          "hiddenCount": "{{value0}} 숨김",
+          "hideAutomationCreated": "자동화로 생성된 워크스페이스 숨기기",
+          "hideCliCreated": "CLI로 생성된 워크스페이스 숨기기",
+          "hideOtherClientsAria": "공유 원격 서버에서 다른 Orca 클라이언트로 만든 워크스페이스의 에이전트 숨기기",
+          "hideOtherClients": "다른 클라이언트 에이전트 숨기기"
         },
         "ActivityThreadRow": {
           "clearNotification": "알림 지우기"
@@ -16568,6 +16769,25 @@
           "workspace": "워크스페이스",
           "copyPath": "경로 복사",
           "jumpToWorkspace": "워크스페이스로 이동"
+        },
+        "ActivityThreadContextMenu": {
+          "copyTitle": "제목 복사",
+          "copyPath": "경로 복사",
+          "open": "열기",
+          "markRead": "읽음으로 표시",
+          "markUnread": "읽지 않은 것으로 표시",
+          "goToWorkspace": "워크스페이스로 이동",
+          "clear": "목록에서 지우기",
+          "agentSection": "에이전트",
+          "markManyRead_one": "에이전트 {{count}}개 읽음으로 표시",
+          "markManyRead_other": "에이전트 {{count}}개 읽음으로 표시",
+          "markManyUnread_one": "에이전트 {{count}}개 읽지 않은 것으로 표시",
+          "markManyUnread_other": "에이전트 {{count}}개 읽지 않은 것으로 표시",
+          "clearMany_one": "목록에서 에이전트 {{count}}개 지우기",
+          "clearMany_other": "목록에서 에이전트 {{count}}개 지우기",
+          "markManyRead": "에이전트 {{count}}개 읽음으로 표시",
+          "markManyUnread": "에이전트 {{count}}개 읽지 않은 것으로 표시",
+          "clearMany": "목록에서 에이전트 {{count}}개 지우기"
         }
       },
       "confirmation": {
@@ -16947,6 +17167,7 @@
           "tool": {
             "arrow": "화살표",
             "ellipse": "타원",
+            "eraser": "지우개",
             "highlight": "형광펜",
             "pen": "펜",
             "rect": "사각형",
@@ -17358,6 +17579,7 @@
         "providerStartFailed": "{{agent}}이(가) 시작을 마치기 전에 중지되었습니다.",
         "runCommandAgain": "/{{command}}을(를) 다시 실행하세요.",
         "sendToTryAgain": "다시 시도하려면 메시지를 보내세요.",
+        "sendAgainToTryOnceMore": "메시지를 다시 보내 한 번 더 시도하세요.",
         "couldNotStart": "{{agent}}을(를) 시작하지 못했습니다.",
         "couldNotRestart": "{{agent}}을(를) 다시 시작하지 못했습니다.",
         "notSignedIn": "{{agent}}이(가) 선택한 계정으로 로그인되어 있지 않습니다.",
@@ -17411,7 +17633,7 @@
         "providerRateLimited": "{{agent}}이(가) 속도 제한에 걸려 다시 시도하고 있습니다.",
         "providerRetrying": "{{agent}}에 일시적인 문제가 발생하여 다시 시도하고 있습니다.",
         "providerRetryingQuoted": "{{agent}}이(가) 다시 시도하고 있습니다: {{detail}}.",
-        "previousExitUnverifiable": "이전에 실행된 {{agent}}이(가) 아직 실행 중일 수 있습니다. 중지되면 메시지가 전송됩니다."
+        "previousExitUnverifiable": "이전에 실행된 {{agent}}을(를) 중지하지 못했습니다."
       },
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",
@@ -17435,6 +17657,8 @@
         "historyUnavailable": "Orca가 지금 이 채팅의 기록을 열지 못했습니다.",
         "savedByNewerOrca": "채팅이 최신 버전의 Orca에서 저장되었습니다.",
         "updateOrcaToKeepUsing": "계속 사용하려면 Orca를 업데이트하세요.",
+        "chatSavedByNewerOrca": "이 채팅은 최신 버전의 Orca에서 저장되었습니다.",
+        "updateOrcaToOpenChat": "열려면 Orca를 업데이트하세요.",
         "unsupported": "이 채팅을 실행 중인 컴퓨터에 최신 버전의 Orca가 필요합니다. 해당 컴퓨터에서 Orca를 업데이트한 후 다시 시도하세요.",
         "notAvailable": "이 채팅에서는 사용할 수 없습니다.",
         "unreachable": "Orca가 에이전트에 연결하지 못했습니다.",
@@ -17482,6 +17706,13 @@
         "localAttachmentUnsupported": "원격 세션에는 로컬 첨부 파일을 사용할 수 없습니다.",
         "removeAttachment": "첨부파일 삭제",
         "pastedImageLabel": "붙여넣은 이미지",
+        "draftNotSaved": "이 초안을 아직 저장하지 못했습니다. Orca가 계속 다시 시도합니다.",
+        "imageNotBroughtBack": "{{name}}을(를) 이 초안과 함께 복원하지 못했습니다. 다시 첨부하거나 제거하세요.",
+        "pastedImageNotBroughtBack": "이 붙여넣은 이미지를 이 초안과 함께 복원하지 못했습니다. 제거한 후 필요하면 다시 붙여넣으세요.",
+        "removeImageToSend": "복원하지 못한 이미지가 있습니다. 보내려면 제거하세요.",
+        "removeImagesToSend": "복원하지 못한 이미지가 있습니다. 보내려면 제거하세요.",
+        "imageAttachAgainLabel": "다시 첨부",
+        "pastedImageNotKeptLabel": "보존되지 않음",
         "imagePasteFailed": "이미지 붙여넣기 실패.",
         "worktreeNotReady": "워크트리가 준비되지 않았습니다 — 잠시 후 다시 시도하세요.",
         "pasteUnavailable": "붙여넣을 수 없습니다 — 이 채팅은 지금 입력을 받을 수 없습니다.",
@@ -17543,6 +17774,8 @@
         "moreCalls": "+{{value0}} 이상",
         "failedCount": "{{value0}} 실패",
         "failedCallsLabel": "도구 호출 실패: {{value0}}",
+        "interruptedCount": "{{value0}} 중단됨",
+        "interruptedCallsLabel": "중단된 도구 호출: {{value0}}",
         "runningPreview": "{{preview}} 실행 중",
         "runningCommand": "실행 명령",
         "runningNamedPreview": "{{toolName}} {{preview}} 실행 중",
@@ -17553,13 +17786,35 @@
         "ranCommandsManyToolsSummary": "{{commandCount}} 명령을 실행하고 {{toolCount}} 도구를 사용했습니다.",
         "usedOneSummary": "도구 1개 사용",
         "usedManySummary": "{{toolCount}} 도구를 사용했습니다.",
-        "editedFile": "편집된 파일",
-        "addedFile": "추가된 파일",
-        "deletedFile": "삭제된 파일",
-        "renamedFile": "이름이 바뀐 파일",
         "copyDiff": "차이점 복사",
         "diffGap": "표시되지 않는 라인",
         "diffTruncated": "잘린 차이점",
+        "row": {
+          "running": "실행 중",
+          "reading": "읽는 중",
+          "editing": "수정 중",
+          "searching": "검색 중",
+          "searchingWeb": "웹 검색 중",
+          "fetching": "가져오는 중",
+          "listed": "목록 표시",
+          "listing": "목록 표시 중",
+          "ran": "실행",
+          "read": "읽음",
+          "edited": "수정",
+          "searched": "검색",
+          "searchedWeb": "웹 검색",
+          "fetched": "가져옴",
+          "added": "추가",
+          "deleted": "삭제",
+          "renamed": "이름 변경",
+          "subagent": "서브에이전트",
+          "triedRead": "읽기 시도",
+          "triedEdit": "수정 시도",
+          "triedSearch": "검색 시도",
+          "triedList": "목록 표시 시도",
+          "triedFetch": "가져오기 시도",
+          "triedSearchWeb": "웹 검색 시도"
+        },
         "runReadOne": "파일 1개 읽기",
         "runReadMany": "{{value0}} 파일 읽기",
         "runSearchOne": "1회 검색됨",
@@ -17659,6 +17914,7 @@
         "sending": "전송 중…"
       },
       "approval": {
+        "needsNewerOrca": "이 요청에는 최신 버전의 Orca가 필요합니다.",
         "title": "{{value0}}을(를) 허용하시겠습니까?",
         "allow": "허용",
         "deny": "거부",
@@ -17788,6 +18044,12 @@
         "subtitle": "파일은 에이전트가 읽을 수 있는 경로로 메시지에 추가됩니다."
       },
       "copyCode": "코드 복사",
+      "context": {
+        "unavailable": "컨텍스트 사용량을 아직 알 수 없습니다. agent가 다음에 응답하면 확인할 수 있습니다.",
+        "summary": "컨텍스트: {{used}}/{{window}} 토큰 ({{percent}}%), 마지막 응답 기준 추정치입니다.",
+        "used": "컨텍스트: {{used}} 토큰 사용, 마지막 응답 기준 추정치입니다.",
+        "unreported": "이 세션에서는 컨텍스트 사용량을 확인할 수 없습니다."
+      },
       "goal": {
         "placeholder": "목표를 설명하고, 최상의 결과를 위해 측정 가능한 결과를 정의하세요.",
         "clear": "명확한 목표",
@@ -17834,6 +18096,7 @@
         "turnOffQueueing": "대기열 사용 안 함",
         "withdrawnHold": "전송 전에 중지됨",
         "pausedSendFailed": "보낼 수 없습니다. 보내기를 눌러 다시 시도하세요.",
+        "pausedKept": "아직 보내지 않았습니다. 보내기를 눌러 보내세요.",
         "paused": "일시 중지됨",
         "queuePausedStopped": "중단했기 때문에 대기열이 일시 중지되었습니다",
         "queuePausedRestarted": "Orca가 다시 시작되어 대기열이 일시 중지되었습니다",
@@ -18104,6 +18367,16 @@
         "workspaceReadyToast": "워크스페이스 {{name}} 준비 완료",
         "goToWorktree": "작업 트리로 이동",
         "goToWorkspace": "워크스페이스로 이동"
+      },
+      "delete": {
+        "changes": {
+          "permanentLoss": "Git 워크스페이스의 커밋되지 않은 변경 사항이나 추적되지 않은 변경 사항은 영구적으로 삭제됩니다.",
+          "clean": "커밋되지 않았거나 추적되지 않은 변경 사항 없음",
+          "unavailable": "변경 사항을 확인할 수 없습니다",
+          "checking": "변경 사항 확인 중…",
+          "checkingDetails": "확인 중…",
+          "unavailableDetails": "세부 정보를 사용할 수 없음"
+        }
       }
     },
     "agentSessionContinuation": {
@@ -18186,6 +18459,11 @@
     },
     "agentChildRow": {
       "ended": "종료됨"
+    },
+    "jiraIssueAssigneeField": {
+      "label": "담당자",
+      "automatic": "자동",
+      "assignToMe": "나에게 할당 ({{name}})"
     }
   },
   "dashboardPopout": {
@@ -18517,6 +18795,10 @@
   "sourceControl": {
     "unlinkedPr": {
       "status": "PR #{{number}} 연결 해제됨"
+    },
+    "discard": {
+      "restoreStagedVersionDescription": "이렇게 하면 마지막 단계 버전이 복원되고 삭제가 취소됩니다. 이 작업은 취소할 수 없습니다.",
+      "unstagedChangesDescription": "이렇게 하면 단계가 지정되지 않은 변경 사항이 이 파일로 되돌아갑니다. 이 작업은 취소할 수 없습니다."
     }
   },
   "rendererRecovery": {
@@ -18534,7 +18816,10 @@
     "launchFailedMessage": "Orca가 창을 그리는 프로세스를 시작하지 못했습니다.",
     "launchFailedDetail": "Orca가 {{recoveryCount}}번 다시 시도했지만 성공하지 못했습니다.",
     "processLimitDetail": "사용자 계정이 프로세스 수 한도에 도달하여 시스템이 새 프로세스 생성을 거부했습니다. 폭주한 터미널, 개발 서버 또는 에이전트가 원인인 경우가 많습니다. 일부를 종료한 다음 다시 시도를 클릭하세요.",
-    "launchFailedGenericDetail": "시스템이 시작을 거부했습니다. 메모리를 확보하거나 다른 앱을 종료한 다음 다시 시도를 클릭하세요. 계속 발생하면 Orca를 다시 설치하세요."
+    "launchFailedGenericDetail": "시스템이 시작을 거부했습니다. 메모리를 확보하거나 다른 앱을 종료한 다음 다시 시도를 클릭하세요. 계속 발생하면 Orca를 다시 설치하세요.",
+    "lowCommitMessage": "Windows의 메모리가 부족합니다.",
+    "lowCommitDetail": "Windows에는 앱용 메모리가 {{availableMB}} MB밖에 남아 있지 않으므로 다시 로드한 후 다시 메모리가 부족합니다.",
+    "lowCommitAdvice": "사용하지 않는 앱이나 ORCA 워크스페이스를 닫거나 Windows 페이지 파일 크기를 늘려 메모리를 확보한 다음 다시 로드 를 클릭합니다."
   },
   "sessionSearch": {
     "panel": {
@@ -18563,7 +18848,8 @@
       "sessionsOther": "{{count}} 세션",
       "sessionsOfLoaded": "{{value1}} 세션 중 {{value0}}",
       "showMoreSessions": "더 많은 세션 보기",
-      "loadingMoreSessions": "추가 세션 로드 중…"
+      "loadingMoreSessions": "추가 세션 로드 중…",
+      "unsupportedAgent": "이 컴퓨터는 선택한 에이전트에 대한 이력 검색을 지원하지 않습니다. 해당 컴퓨터에서 ORCA를 업데이트하거나 다른 에이전트를 선택하십시오."
     }
   },
   "sessionHistory": {
@@ -18616,7 +18902,12 @@
       "loading": "하위 에이전트 로드 중…",
       "loadError": "모든 하위 에이전트를 로드할 수 없습니다.",
       "empty": "하위 에이전트를 찾을 수 없습니다."
-    }
+    },
+    "antigravityReferenceDescription": "이 대본을 참고 자료로 사용하여 새로운 Antigravity CLI 대화에서 계속합니다.",
+    "antigravityIdeToCli": "IDE → CLI",
+    "antigravity2ToCli": "2.0 → CLI",
+    "continueInCli": "CLI에서 계속",
+    "continueInCliNewTab": "새 탭의 CLI에서 계속"
   },
   "common": {
     "retry": "다시 시도"
@@ -18693,6 +18984,141 @@
       "removeTitle": "관리 계정을 삭제할까요?",
       "removeDescription": "먼저 이 프로필을 사용하는 에이전트를 중지하세요. 삭제하면 저장된 자격 증명과 대화 데이터가 지워집니다. 시스템 로그인은 변경되지 않습니다.",
       "cancel": "취소"
+    },
+    "antigravity": {
+      "scope": "{{host}} 에서 기본 Agy 계정을 관리합니다.",
+      "signIn": "이 호스트에서 AGY를 시작하고 브라우저 로그인을 완료한 다음 현재 계정을 저장하세요. 다른 계정을 추가하려면 agy에서/logout을 사용하고 다시 로그인하세요.",
+      "docs": "로그인 안내",
+      "retry": "다시 시도",
+      "identityUnknown": "로그인한 ID를 사용할 수 없음",
+      "signedOut": "로그인된 기본 Agy 계정이 없습니다.",
+      "changed": "기본 계정이 변경되었습니다. AGY를 시작하기 전에 저장된 계정을 다시 선택하십시오.",
+      "save": "현재계정",
+      "refresh": "계정 새로고침",
+      "usage": "사용량 새로 고침",
+      "working": "계정 업데이트",
+      "usageReading": "세션: {{session}} · 주간: {{weekly}}",
+      "saved": "저장된 Google 계정",
+      "nativeActive": "기본 계정",
+      "selected": "선택됨",
+      "select": "선택",
+      "remove": "제거",
+      "sessions": "선택은 이 호스트의 새로운 애기 세션에 적용됩니다. 기존 세션은 이전 계정을 유지할 수 있습니다.",
+      "searchTitle": "Antigravity 계정",
+      "searchDescription": "실행 호스트에서 기본 agy Google 계정을 저장하고 선택합니다.",
+      "title": "Antigravity",
+      "keyword": {
+        "antigravity": "반중력",
+        "agy": "agy",
+        "google": "Google",
+        "accounts": "있습니다"
+      }
+    }
+  },
+  "osDocumentOpen": {
+    "failed": "파일을 열지 못했습니다."
+  },
+  "terminal": {
+    "sessionSaveFailure": {
+      "title": "터미널 세션을 저장할 수 없습니다",
+      "capacity": "이 터미널을 저장하는 장치가 전체 스토리지 또는 초과된 스토리지 할당량을 보고했습니다. 해당 장치의 여유 공간을 확보한 다음 다시 시도하십시오.",
+      "unknown": "ORCA는 터미널 상태를 저장할 수 없습니다. 다시 시도하세요. 이 문제가 계속되면 원인을 파악할 수 있도록 지원팀과 ORCA 로그를 공유하세요."
+    },
+    "codexTerminalServerIsolationNotice": {
+      "title": "ORCA는 이제 공유 서버 없이 CODEX를 실행합니다",
+      "description": "이를 통해 에이전트 상태를 더욱 안정적으로 유지할 수 있습니다. 설정에서 다시 켤 수 있습니다.",
+      "openSettings": "설정 열기 "
+    },
+    "codexSharedSettingsNotice": {
+      "title": "Orca의 Codex는 이제 ~/.codex를 사용합니다",
+      "description": "Codex는 폴더를 신뢰하거나 명령을 승인하도록 다시 요청할 수 있습니다. ORCA에서만 추가한 MCP 서버를 다시 추가합니다."
+    },
+    "codexSharedServerBanner": {
+      "title": "이 Codex는 다른 Codex 탭과 서버를 공유합니다",
+      "body": "세션이 예기치 않게 종료될 수 있으며 에이전트 상태가 잘못되었을 수 있습니다.",
+      "openedBeforeUpdateBody": "이 터미널은 ORCA가 각 Codex에게 자체 서버를 제공하기 전에 열렸습니다.",
+      "oldTerminalDialogTitle": "이 Codex가 서버를 공유하는 이유",
+      "oldTerminalDialogRisk": "서버를 공유하는 Codex 세션은 함께 종료될 수 있으며 에이전트 상태가 잘못될 수 있습니다.",
+      "oldTerminalDialogCause": "이전 터미널은 여전히 Codex 서버를 공유합니다. 새 터미널을 열어 별도의 서버에서 Codex를 실행합니다.",
+      "fix": "자물쇠",
+      "openNewTerminal": "새 터미널 열기",
+      "dontShowAgain": "다시 보지 않기",
+      "dismiss": "닫기",
+      "dialogTitle": "각 Codex 탭에 자체 서버를 제공합니다",
+      "dialogDescription": "Codex 세션은 터미널 공유 백그라운드 서버에서 직접 시작되었습니다. ORCA는 시작되는 Codex 세션을 별도로 유지합니다. 세션이 서버를 공유할 때 서버를 닫으면 다른 세션이 종료될 수 있으며 에이전트 상태가 잘못될 수 있습니다.",
+      "copy": "복사",
+      "copied": "복사됨",
+      "done": "완료",
+      "step1Title": "Codex 서버 공유 끄기",
+      "step1Note": "이렇게 하면 Codex 설정이 변경되므로 ORCA 외부에서도 적용됩니다.",
+      "step2Title": "실행 중인 공유 서버 중지",
+      "undo": "되돌리려면 codex features enable daemon_auto_start를 실행하세요.",
+      "step2Warning": "서버를 공유하는 열려 있는 Codex 세션을 닫습니다.",
+      "learnMore": "자세히 알아보기",
+      "turnOff": "끄기",
+      "turningOff": "끄는 중...",
+      "turnedOff": "껐어요",
+      "turnOffFailed": "Orca는 이 기능을 끌 수 없었다.",
+      "stopServer": "서버 중지",
+      "stopping": "정지 중",
+      "stopped": "중지됨",
+      "stopFailed": "Orca는 서버를 멈출 수 없었다.",
+      "confirmStopTitle": "공유 서버를 중지하시겠습니까?",
+      "confirmStopDescription": "이는 ORCA 외부 세션을 포함하여 이를 공유하는 모든 공개 Codex 세션을 종료합니다.",
+      "cancel": "취소",
+      "runs": "Runs"
+    }
+  },
+  "fileSearch": {
+    "failed": "검색에 실패했습니다. 다시 시도하세요."
+  },
+  "csv": {
+    "detectingDelimiter": "분리자 감지 중…",
+    "indexProgress": "CSV 인덱싱 중… {{percent}}%",
+    "loadingCell": "로드 중…",
+    "nextRows": "다음 행",
+    "previousRows": "이전 행",
+    "readOnlyPreview": "대용량 파일 미리보기 · 읽기 전용",
+    "resizeColumn": "열 {{column}} 크기 조정",
+    "rowWindow": "행 {{first}}–{{last}}",
+    "editor": "CSV 편집기",
+    "editCell": "행 {{row}}, 열 {{column}} 편집",
+    "filterRows": "행 필터",
+    "edit": "셀 편집",
+    "copy": "복사",
+    "paste": "붙여넣기",
+    "rows": "행",
+    "insertRowAbove": "위에 행 삽입",
+    "insertRowBelow": "아래에 행 삽입",
+    "deleteRows": "선택한 행 삭제",
+    "columns": "열",
+    "newColumn": "열 {{column}}",
+    "insertColumnBefore": "앞에 열 삽입",
+    "insertColumnAfter": "뒤에 열 삽입",
+    "moveColumnLeft": "열 왼쪽으로 이동",
+    "moveColumnRight": "열 오른쪽으로 이동",
+    "deleteColumns": "선택한 열 삭제",
+    "sort": "정렬",
+    "sortAscending": "선택한 열을 오름차순으로 정렬",
+    "sortDescending": "선택한 열을 내림차순으로 정렬",
+    "originalOrder": "원래 행 순서",
+    "save": "저장",
+    "inspectionOnly": "검사 전용 · 파일 행 순서 변경 없음"
+  },
+  "worktree": {
+    "nestedRemoval": {
+      "refreshFailed": "워크스페이스 목록을 새로고침하지 못했습니다",
+      "review": "중첩 워크트리와 함께 삭제…",
+      "title": "워크스페이스와 중첩 워크트리를 삭제할까요?",
+      "description": "\"{{name}}\", 아래에 나열된 모든 중첩 워크트리, 그리고 커밋되지 않은 변경 사항을 포함한 그 안의 모든 파일이 영구적으로 삭제됩니다. 해당 터미널과 에이전트는 중지됩니다.",
+      "detached": "분리된 HEAD",
+      "loading": "중첩 워크트리 확인 중…",
+      "order": "중첩 워크트리가 먼저 삭제됩니다. 하나가 실패하면 삭제가 중단되고 상위 워크트리는 유지됩니다. 브랜치는 기존 삭제 설정을 따릅니다.",
+      "cancel": "취소",
+      "retry": "다시 검토",
+      "deleting": "삭제 중…",
+      "confirm": "나열된 모든 워크트리 삭제",
+      "preservedBranches": "일부 중첩 워크트리 브랜치가 유지되었습니다"
     }
   }
 }

@@ -7,7 +7,30 @@
     "previousRows": "Previous rows",
     "readOnlyPreview": "Large file preview · Read-only",
     "resizeColumn": "Resize column {{column}}",
-    "rowWindow": "Rows {{first}}–{{last}}"
+    "rowWindow": "Rows {{first}}–{{last}}",
+    "editor": "CSV editor",
+    "editCell": "Edit row {{row}}, column {{column}}",
+    "filterRows": "Filter rows",
+    "edit": "Edit cell",
+    "copy": "Copy",
+    "paste": "Paste",
+    "rows": "Rows",
+    "insertRowAbove": "Insert row above",
+    "insertRowBelow": "Insert row below",
+    "deleteRows": "Delete selected rows",
+    "columns": "Columns",
+    "newColumn": "Column {{column}}",
+    "insertColumnBefore": "Insert column before",
+    "insertColumnAfter": "Insert column after",
+    "moveColumnLeft": "Move column left",
+    "moveColumnRight": "Move column right",
+    "deleteColumns": "Delete selected columns",
+    "sort": "Sort",
+    "sortAscending": "Sort selected column ascending",
+    "sortDescending": "Sort selected column descending",
+    "originalOrder": "Original row order",
+    "save": "Save",
+    "inspectionOnly": "Inspection only · File row order unchanged"
   },
   "osDocumentOpen": {
     "failed": "Failed to open the file."
@@ -151,6 +174,9 @@
     "retrying": "Retrying…"
   },
   "settings": {
+    "chat": {
+      "description": "Choose how chats look."
+    },
     "terminal": {
       "optionLayoutAlt": "ABC or U.S. — Option sends Alt/Esc sequences",
       "optionLayoutCompose": "layout uses Option to compose characters like @, €, [, ]",
@@ -192,6 +218,22 @@
           "statusItem": "status item",
           "activity": "activity"
         }
+      },
+      "chat": {
+        "title": "Chat",
+        "textSize": "Text size",
+        "textSizeDescription": "Messages, tool activity and the message box. {{increase}} / {{decrease}} in a chat change this too.",
+        "codeTextSize": "Code text size",
+        "codeTextSizeDescription": "Code blocks, inline code, commands and tool output.",
+        "width": "Width",
+        "widthDescription": "How wide messages and the message box can grow in a wide pane.",
+        "resetAppearance": "Reset chat appearance",
+        "resetDescription": "Restore the defaults above.",
+        "comfortable": "Comfortable",
+        "wide": "Wide",
+        "full": "Full",
+        "pixels": "px",
+        "reset": "Reset"
       }
     },
     "browser": {
@@ -248,7 +290,15 @@
         "title": "Warn when a Codex tab shares a server",
         "description": "Shows a notice on a Codex you started yourself when it shares a server with other tabs, because its agent status may be wrong."
       }
-    }
+    },
+    "followSymlinkedDirectoriesKeywords": {
+      "symlink": "symlink",
+      "linkedFolder": "linked folder",
+      "quickOpen": "quick open",
+      "fileExplorer": "file explorer"
+    },
+    "followSymlinkedDirectories": "Follow symlinked directories",
+    "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer."
   },
   "menu": {
     "checkForUpdates": "Check for Updates...",
@@ -1034,7 +1084,8 @@
             "totalTooLarge": "{{fileName}} would bring the attachments over {{maxSize}} in total.",
             "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
             "invalidImage": "{{fileName}} is not a valid supported image.",
-            "additionalErrors": "{{count}} additional images could not be attached."
+            "additionalErrors": "{{count}} additional images could not be attached.",
+            "compressed": "{{fileName}} was compressed from {{originalSize}} to {{size}} to fit the attachment limit."
           }
         }
       },
@@ -1073,6 +1124,16 @@
         "tooLarge": "Too large to copy, so Orca couldn't hand it to the agent.",
         "storageFull": "Orca's storage for dropped files is full, so Orca couldn't hand it to the agent.",
         "generic": "Try the drop again."
+      },
+      "reveal": {
+        "in": {
+          "file": {
+            "manager": {
+              "notFound": "File not found. It may have been moved or deleted.",
+              "launchFailed": "Could not reveal the file."
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -1272,11 +1333,7 @@
         "9263e75f49": "Codex is using the previous account",
         "d3e8a1f4b2": "Account switched",
         "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
-        "6133594b12": "Keep old account",
-        "8f0d5c92a1": "Codex setup changed",
-        "3ea91b5c07": "This Codex session is using an outdated configuration",
-        "e6b7139d2a": "Restart this session to load your current Codex configuration.",
-        "7b1d20f4c8": "Keep current session"
+        "6133594b12": "Keep old account"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Dismiss notice",
@@ -3526,10 +3583,7 @@
             "1d04b1630b": "Split Down",
             "6b3efb106e": "Split Up",
             "fdd29eb669": "Pin Tab",
-            "8e9d603a09": "Unpin Tab",
-            "revealInFinder": "Reveal in Finder",
-            "openContainingFolder": "Open Containing Folder",
-            "revealInFileExplorer": "Reveal in File Explorer"
+            "8e9d603a09": "Unpin Tab"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
@@ -3882,6 +3936,9 @@
             "grokUsageAria": "Open Grok usage details",
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
+            "4fba7dc1e7": "{{value0}} bal",
+            "4025a6f62f": "Unlimited",
+            "a95969101f": "{{value0}} credits",
             "codexSignInSuccess": "Signed in to Codex",
             "codexSignInError": "Codex sign-in failed. Please try again.",
             "cursorUsageMenu": "Cursor Usage",
@@ -4032,6 +4089,16 @@
               }
             }
           },
+          "provider": {
+            "extra": {
+              "usage": {
+                "section": {
+                  "135d51c19f": "Limit {{value0}}",
+                  "apiKeyBalanceUnavailable": "Balance is not included in this usage response."
+                }
+              }
+            }
+          },
           "tooltip": {
             "zcode": {
               "mcp": "MCP"
@@ -4069,6 +4136,14 @@
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
             "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "fbc80d8be2": "Zen balance",
+            "c03c61f53f": "Balance",
+            "f6a27a3c0a": "{{value0}} available",
+            "7404abbece": "Usage credits",
+            "473d45cd0f": "Balance {{value0}}",
+            "f21b2ba897": "Credits",
+            "56c0d70577": "Unlimited",
+            "87b5bda4d3": "{{value0}} credits available",
             "minimax": {
               "expired": {
                 "label": "Sign-in expired",
@@ -6384,6 +6459,7 @@
         "SidebarFeedbackImageAttachments": {
           "screenshotsHint": "Attach up to {{count}} screenshots, {{maxSize}} total",
           "attachImages": "Attach",
+          "preparing": "Preparing attachments…",
           "removeImage": "Remove {{fileName}}"
         },
         "WorkspaceKanbanSearchField": {
@@ -8925,7 +9001,38 @@
             "fastDescription": "Extra multiplier while scrolling with a modifier key.",
             "tui": "TUI",
             "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
-          }
+          },
+          "8dbe0bc942": "Shell arguments, one per line",
+          "f58cb71f53": "--rcfile\n/path/to/rcfile",
+          "48b91a3ed2": "Custom args",
+          "7bd83fc1d0": "-l (default)",
+          "5ffc4777b6": "Shell argument mode",
+          "578ec79449": "Enter one argument per line. Leave it empty to pass no arguments.",
+          "884a006065": "Starts the shell as a login shell with -l.",
+          "01c600daff": "Shell arguments",
+          "e3ae5aed18": ". Switch to System shell or choose an executable on this host.",
+          "59573d0b33": "Enter a shell name on PATH or an executable path. Orca starts it as a login shell.",
+          "5e06e87730": "Custom shell executable",
+          "c2bf02ce2f": "fish, nu, or /bin/zsh",
+          "f51cc79784": "Custom shell",
+          "dd3f4c35da": "System shell ({{value0}})",
+          "fd05fb109c": "Terminal shell",
+          "69724e8f0c": "Choose what Orca opens for new local terminal panes.",
+          "c2ddb189e7": "rcfile",
+          "73c211e979": "wrapper",
+          "4faf688f78": "login",
+          "44f8a56f66": "args",
+          "af893aa433": "arguments",
+          "ddc72a4860": "default",
+          "d469840b75": "nushell",
+          "17ad899ba4": "bash",
+          "c9bc93d343": "zsh",
+          "0cbe5ad727": "fish",
+          "81694f1584": "terminal",
+          "a909136b3f": "shell",
+          "1c29734248": "Shell used for new terminal panes",
+          "9589abc009": "Default shell",
+          "5a5eac2f44": "Shell not found: {{value0}}"
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",
@@ -10890,7 +10997,19 @@
               "statusline": "statusline",
               "dim": "dim",
               "colors": "colors"
-            }
+            },
+            "d31ed1ac1c": "rcfile",
+            "d9e29543a1": "wrapper",
+            "50ba80b6dd": "login",
+            "36ba1a1357": "args",
+            "5304b12d5c": "arguments",
+            "7c3ede6f12": "nushell",
+            "bf09070e31": "bash",
+            "d26257a80d": "zsh",
+            "454df22a5e": "fish",
+            "ddd5efe113": "shell",
+            "3de504994c": "Shell and arguments used for new local interactive terminal panes",
+            "1733ccd3e9": "Terminal shell"
           },
           "windows": {
             "search": {
@@ -15203,10 +15322,7 @@
           "f0fd4174b5": "Open file tab to use rich markdown editing",
           "a10d9b8337": "Open file",
           "2076ecfc9c": "Previous change",
-          "631dab0df3": "Next change",
-          "revealInFinder": "Reveal in Finder",
-          "openContainingFolder": "Open Containing Folder",
-          "revealInFileExplorer": "Reveal in File Explorer"
+          "631dab0df3": "Next change"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",
@@ -15787,6 +15903,9 @@
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "Image insertion canceled because the destination changed. The imported file was kept.",
           "destinationChanged": "Image insertion canceled because the destination changed. Try again."
+        },
+        "useMarkdownDocuments": {
+          "listFailed": "Failed to list Markdown documents."
         }
       },
       "diff": {
@@ -16156,6 +16275,7 @@
             "effd75e330": "Nearby Context",
             "7d1480fbf1": "HTML",
             "9098b118ab": "Page",
+            "accessibleNameOpenQuote": "\"",
             "eb98a0971a": "\"",
             "d053db279d": "role=",
             "a759d8f866": "Selected Element",
@@ -16824,7 +16944,6 @@
           "showUnreadOnly": "Show unread only",
           "showChildAgents": "Show child agents",
           "activityOptions": "Activity options",
-          "threadListOptionsFiltered": "Thread list options, filters active",
           "showSearch": "Show search",
           "interrupted": "Interrupted",
           "state": {
@@ -16840,7 +16959,9 @@
             "permission": "Needs attention"
           },
           "filtersSection": "Filters",
-          "viewSection": "View"
+          "viewSection": "View",
+          "threadListOptionsActive": "Thread list options ({{value0}} active)",
+          "activityOptionsActive": "Activity options ({{value0}})"
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",
@@ -16858,7 +16979,11 @@
         },
         "ActivityScopeFilterControls": {
           "hiddenCount": "{{value0}} hidden",
-          "resetScope": "Show all hosts and projects"
+          "resetScope": "Show all hosts and projects",
+          "hideAutomationCreated": "Hide automation-created",
+          "hideCliCreated": "Hide CLI-created",
+          "hideOtherClientsAria": "Hide agents in workspaces created from other Orca clients on shared remote servers",
+          "hideOtherClients": "Hide other-client agents"
         },
         "ActivityThreadHoverCard": {
           "pathCopied": "Path copied to clipboard",
@@ -16869,6 +16994,25 @@
         },
         "ActivityThreadRow": {
           "clearNotification": "Clear notification"
+        },
+        "ActivityThreadContextMenu": {
+          "copyTitle": "Copy Title",
+          "copyPath": "Copy Path",
+          "open": "Open",
+          "markRead": "Mark Read",
+          "markUnread": "Mark Unread",
+          "goToWorkspace": "Go to Workspace",
+          "clear": "Clear from List",
+          "agentSection": "Agent",
+          "markManyRead_one": "Mark {{count}} Agent Read",
+          "markManyRead_other": "Mark {{count}} Agents Read",
+          "markManyUnread_one": "Mark {{count}} Agent Unread",
+          "markManyUnread_other": "Mark {{count}} Agents Unread",
+          "clearMany_one": "Clear {{count}} Agent from List",
+          "clearMany_other": "Clear {{count}} Agents from List",
+          "markManyRead": "Mark {{count}} Agents Read",
+          "markManyUnread": "Mark {{count}} Agents Unread",
+          "clearMany": "Clear {{count}} Agents from List"
         }
       },
       "confirmation": {
@@ -17254,6 +17398,7 @@
           "tool": {
             "arrow": "Arrow",
             "ellipse": "Ellipse",
+            "eraser": "Eraser",
             "highlight": "Highlighter",
             "pen": "Pen",
             "rect": "Rectangle",
@@ -17607,6 +17752,11 @@
         }
       }
     },
+    "jiraIssueAssigneeField": {
+      "label": "Assignee",
+      "automatic": "Automatic",
+      "assignToMe": "Assign to me ({{name}})"
+    },
     "jiraUserPicker": {
       "select": "Select {{value0}}",
       "search": "Search users",
@@ -17618,6 +17768,7 @@
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
         "runCommandAgain": "Run /{{command}} again.",
         "sendToTryAgain": "Send your message to try again.",
+        "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "couldNotStart": "{{agent}} couldn't start.",
         "couldNotRestart": "{{agent}} couldn't restart.",
         "notSignedIn": "{{agent}} is not signed in for the selected account.",
@@ -17671,7 +17822,7 @@
         "providerRateLimited": "{{agent}} is rate-limited and retrying.",
         "providerRetrying": "{{agent}} hit a temporary problem and is retrying.",
         "providerRetryingQuoted": "{{agent}} is retrying: {{detail}}.",
-        "previousExitUnverifiable": "{{agent}} from before may still be running. Your messages will send once it stops."
+        "previousExitUnverifiable": "Couldn't stop {{agent}} from before."
       },
       "writeNotice": {
         "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -17695,6 +17846,8 @@
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
         "savedByNewerOrca": "Chats were saved by a newer Orca.",
         "updateOrcaToKeepUsing": "Update Orca to keep using them.",
+        "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
+        "updateOrcaToOpenChat": "Update Orca to open it.",
         "unsupported": "This needs a newer Orca on the computer running this chat. Update Orca there, then try again.",
         "notAvailable": "This isn't available in this chat.",
         "unreachable": "Orca couldn't reach the agent.",
@@ -17793,6 +17946,13 @@
         "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
         "removeAttachment": "Remove attachment",
         "pastedImageLabel": "Pasted image",
+        "draftNotSaved": "This draft couldn't be saved yet. Orca keeps trying.",
+        "imageNotBroughtBack": "{{name}} couldn't be brought back with this draft. Attach it again or remove it.",
+        "pastedImageNotBroughtBack": "This pasted image couldn't be brought back with this draft. Remove it, and paste it again if you still need it.",
+        "removeImageToSend": "An image couldn't be brought back. Remove it to send.",
+        "removeImagesToSend": "Some images couldn't be brought back. Remove them to send.",
+        "imageAttachAgainLabel": "Attach again",
+        "pastedImageNotKeptLabel": "Not kept",
         "imagePasteFailed": "Image paste failed.",
         "imageSaving": "Saving pasted image…",
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
@@ -17839,6 +17999,8 @@
         "moreCalls": "+{{value0}} more",
         "failedCount": "{{value0}} failed",
         "failedCallsLabel": "Failed tool calls: {{value0}}",
+        "interruptedCount": "{{value0}} interrupted",
+        "interruptedCallsLabel": "Interrupted tool calls: {{value0}}",
         "runningPreview": "Running {{preview}}",
         "runningCommand": "Running command",
         "runningNamedPreview": "Running {{toolName}} {{preview}}",
@@ -17849,13 +18011,35 @@
         "ranCommandsManyToolsSummary": "Ran {{commandCount}} commands and used {{toolCount}} tools",
         "usedOneSummary": "Used 1 tool",
         "usedManySummary": "Used {{toolCount}} tools",
-        "editedFile": "Edited file",
-        "addedFile": "Added file",
-        "deletedFile": "Deleted file",
-        "renamedFile": "Renamed file",
         "copyDiff": "Copy diff",
         "diffGap": "Lines not shown",
         "diffTruncated": "Diff truncated",
+        "row": {
+          "running": "Running",
+          "reading": "Reading",
+          "editing": "Editing",
+          "searching": "Searching",
+          "searchingWeb": "Searching the web",
+          "fetching": "Fetching",
+          "listed": "Listed",
+          "listing": "Listing",
+          "ran": "Ran",
+          "read": "Read",
+          "edited": "Edited",
+          "searched": "Searched",
+          "searchedWeb": "Searched the web",
+          "fetched": "Fetched",
+          "added": "Added",
+          "deleted": "Deleted",
+          "renamed": "Renamed",
+          "subagent": "Subagent",
+          "triedRead": "Tried to read",
+          "triedEdit": "Tried to edit",
+          "triedSearch": "Tried to search",
+          "triedList": "Tried to list",
+          "triedFetch": "Tried to fetch",
+          "triedSearchWeb": "Tried to search the web"
+        },
         "runReadOne": "Read 1 file",
         "runReadMany": "Read {{value0}} files",
         "runSearchOne": "Searched 1 time",
@@ -18014,6 +18198,7 @@
         "reason": "Reason",
         "blockedPath": "Blocked path",
         "askRule": "Ask rule",
+        "needsNewerOrca": "This request needs a newer version of Orca.",
         "plan": {
           "file": "Plan file"
         }
@@ -18043,11 +18228,38 @@
       "conversationCommand": {
         "pendingWork": "Wait for pending work and messages to finish before using this command."
       },
+      "rewind": {
+        "unsupported": "This chat can't go back to an earlier message.",
+        "historyNotPaginated": "This older Codex chat can't go back to an earlier message. Start a new chat to use Rewind to here.",
+        "busy": "Available once the agent is idle and nothing in this chat is waiting on you.",
+        "staleEpoch": "The conversation changed. Review the latest messages and try again.",
+        "invalidTarget": "The conversation can't go back to this message. Nothing was changed.",
+        "historyLimit": "This conversation is too long to go back in. Nothing was changed.",
+        "providerRefused": "The agent couldn't go back to this message.",
+        "proofMismatch": "The agent's history didn't match this chat. Check the conversation before continuing.",
+        "outcomeUnknown": "Orca couldn't confirm whether the conversation went back to an earlier message. It checks before your next message is sent.",
+        "outcomeUnknownReturned": "Orca couldn't confirm whether the conversation went back to this message. Your message is back in the composer, and Orca checks the conversation before your next message is sent.",
+        "timeout": "The chat didn't update after going back to this message. Reopen it to see the latest.",
+        "refused": "Orca couldn't go back to this message. Check the conversation before continuing.",
+        "unavailable": "Wait for the chat to finish connecting.",
+        "pending": "Wait for the conversation to go back to the earlier message.",
+        "title": "Rewind to here?",
+        "confirmation": "Discard this message and everything after it? The message returns to the composer so you can edit and resend it. File changes on disk are kept.",
+        "confirm": "Rewind",
+        "cancel": "Cancel",
+        "action": "Rewind to here"
+      },
       "drop": {
         "title": "Drop to attach to this chat",
         "subtitle": "Files are added to your message as paths the agent can read."
       },
       "copyCode": "Copy code",
+      "context": {
+        "unavailable": "Context usage is not known yet. It becomes available after the agent next responds.",
+        "summary": "Context: {{used}} / {{window}} tokens ({{percent}}%), estimated from the last response.",
+        "used": "Context: {{used}} tokens used, estimated from the last response.",
+        "unreported": "Context usage is not available for this session."
+      },
       "goal": {
         "placeholder": "Describe your goal, define measurable outcomes for best results",
         "clear": "Clear goal",
@@ -18100,6 +18312,7 @@
         "editAlreadySent": "Already sent — your text is still in the composer.",
         "withdrawnHold": "Stopped before it was sent",
         "pausedSendFailed": "Couldn't send — press Send to retry.",
+        "pausedKept": "Not sent yet — press Send to send it.",
         "paused": "Paused",
         "queuePausedStopped": "Queue paused because you interrupted",
         "queuePausedRestarted": "Queue paused because Orca restarted",
@@ -18625,7 +18838,8 @@
     }
   },
   "quickOpen": {
-    "moreMatchesAvailable": "More matches may be available. Refine your search to narrow the results."
+    "moreMatchesAvailable": "More matches may be available. Refine your search to narrow the results.",
+    "recentValidationFailed": "Recent files could not be checked: {{error}}"
   },
   "checksPanel": {
     "unlinked": {
@@ -18934,5 +19148,42 @@
   },
   "fileSearch": {
     "failed": "Search failed. Try again."
-  }
+  },
+  "worktree": {
+    "nestedRemoval": {
+      "refreshFailed": "Could not refresh the workspace list",
+      "review": "Delete with nested worktrees…",
+      "title": "Delete workspace and nested worktrees?",
+      "description": "This permanently deletes \"{{name}}\", every nested worktree listed below, and all files inside them, including uncommitted changes. Their terminals and agents will be stopped.",
+      "detached": "Detached HEAD",
+      "loading": "Checking nested worktrees…",
+      "order": "Nested worktrees are deleted first. If one fails, deletion stops and the parent is kept. Branches follow your existing deletion settings.",
+      "cancel": "Cancel",
+      "retry": "Review again",
+      "deleting": "Deleting…",
+      "confirm": "Delete all listed worktrees",
+      "preservedBranches": "Some nested worktree branches were kept"
+    }
+  },
+  "projectBoard": {
+    "noColumnField": "This board view has no single-select or iteration field to group by, so Orca is listing items instead.",
+    "noField": "No {{field}}"
+  },
+  "projectBoardCard": {
+    "restrictedItem": "Restricted item",
+    "itemLabel": "{{number}} — {{title}}"
+  },
+  "projectViews": {
+    "layout": {
+      "board": "Board"
+    },
+    "unsupported": {
+      "switchLayout": "Switch to a Table, Board, or Roadmap view to work with this project in Orca.",
+      "description": "Orca renders table, board, and roadmap project views. This view uses a layout it cannot render yet."
+    }
+  },
+  "projectField": {
+    "updateFailed": "Failed to update project field"
+  },
+  "settings.appearance.chat.title": "Chat"
 }

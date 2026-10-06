@@ -1,5 +1,5 @@
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { CsvFilePreview } from './editor-csv-file-content'
+import type { CsvFilePreview } from './csv/csv-file-content'
 
 /**
  * Thrown when a worktree's host owner is not yet known (the backing repo has

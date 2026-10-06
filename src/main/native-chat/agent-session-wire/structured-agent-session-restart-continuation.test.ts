@@ -105,10 +105,30 @@ it.each([
   ).resolves.toEqual({
     sessionId: SESSION,
     outcome: 'refused',
-    reason: code
+    reason: code,
+    refusal: { code }
   })
   expect(deps.awaitSettlement).not.toHaveBeenCalled()
   expect(deps.note).toHaveBeenCalledExactlyOnceWith(...note)
+})
+
+// A newer Orca's refusal keeps its reason, as a reference without the wire prose.
+it('reports a newer-Orca send refusal with its reason', async () => {
+  const deps = dependencies('accepted')
+  const refusal = {
+    code: 'agent_session_journal_unreadable',
+    details: { reason: 'journalWrittenByNewerOrca' }
+  } as const
+  deps.send.mockResolvedValue({ ok: false, refusal: { ...refusal, message: 'Update Orca.' } })
+
+  await expect(
+    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker(), 'operation-1')
+  ).resolves.toEqual({
+    sessionId: SESSION,
+    outcome: 'refused',
+    reason: 'agent_session_journal_unreadable',
+    refusal
+  })
 })
 
 it('reports an unattached chat without sending', async () => {

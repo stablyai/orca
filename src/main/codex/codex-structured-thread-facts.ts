@@ -21,13 +21,6 @@ export function readCodexThreadId(payload: unknown): string | null {
   return nonEmptyString(record(root.thread)?.id) ?? nonEmptyString(root.threadId)
 }
 
-/** Rollout file for the thread, when Codex reports one. Journal recovery reads
- *  it; a null just falls back to the existing session-file resolver. */
-export function readCodexThreadPath(payload: unknown): string | null {
-  const root = record(payload)
-  return root ? nonEmptyString(record(root.thread)?.path) : null
-}
-
 /** `turn/start` responses carry `turn.id`; `turn/started` notifications carry
  *  the same under `turn`, and older builds put `turnId` on the envelope. */
 export function readCodexTurnId(payload: unknown): string | null {

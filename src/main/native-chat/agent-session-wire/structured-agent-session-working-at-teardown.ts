@@ -178,12 +178,11 @@ export function structuredAgentSessionWorkingAtStop(input: {
   now: number
 }): AgentSessionResumeMarker | null {
   const { sessionId, session } = input
-  // A journal this host cannot read tells us nothing about what the turn was doing.
-  if (!session?.child || session.journal.isReadOnly) {
+  if (!session?.child) {
     return null
   }
   const snapshot = session.journal.snapshot()
-  // A queued message reached no agent, so it is no work to resume: quit rejects it as never sent.
+  // A queued message reached no agent, so it is no work to resume: the next open settles it.
   const handedOver = snapshot.submissions.filter(
     (submission) => !isQueuedAgentJournalSubmission(submission)
   )

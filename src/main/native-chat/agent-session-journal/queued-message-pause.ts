@@ -5,8 +5,9 @@
 //     supersedes it; only a person's pauses.
 //   - 'cleared': a card /clear carried into this conversation waits, and no person's turn or
 //     Resume has happened here since.
-//   - 'restarted': a waiting card was written by another host process, and no person's turn has
-//     started since this conversation opened.
+//   - 'restarted': a waiting card with no hold of its own was written by another host process, and
+//     no person's turn has started since this conversation opened.
+// A card held on its own (`hold_reason`) is outside every pause: only an action on it releases it.
 // A person's turn is an accepted submission of origin `client`. Orchestration mail, a restart
 // continuation, a launch prompt and the queue's own drain are `host` and never lift it.
 
@@ -15,9 +16,13 @@ import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema
 
 export type QueuePauseReason = 'stopped' | 'cleared' | 'restarted'
 
+/** What a person's Stop that named no turn binds, held in memory and never read from a row, so a
+ *  reopen binds nothing: while it settles, every turn that ends; once settled, the turn it stopped. */
+export type JournalStopSettle = { settling: boolean; turnId?: string }
+
 /** The latest Stop event, whatever its reason, and the latest Resume row, folded by the reducer. */
 export type JournalQueuePauseMarks = {
-  latestStop: { sequence: number; event: JournalStopEvent } | null
+  latestStop: { sequence: number; event: JournalStopEvent; settle?: JournalStopSettle } | null
   /** 0 when none. */
   resumedSequence: number
 }
@@ -124,7 +129,11 @@ export function deriveQueuePauses(input: {
   if (carried.length > 0 && latestPersonTurnSequence === 0 && marks.resumedSequence === 0) {
     pauses.push({ reason: 'cleared', since: null })
   }
-  if (!input.restartEnded && waiting.some((card) => card.hostInstance !== input.hostInstance)) {
+  // A card held on its own waits for its own Send whoever wrote it, so it pauses nothing else.
+  const foreign = waiting.some(
+    (card) => card.holdReason === null && card.hostInstance !== input.hostInstance
+  )
+  if (!input.restartEnded && foreign) {
     // The process that wrote a card is gone: every card waits, whenever it was written.
     pauses.push({ reason: 'restarted', since: null })
   }
@@ -148,8 +157,8 @@ function queuedBeforePause(pause: DerivedQueuePause, card: QueueCard): boolean {
 }
 
 // Product decision: a card queued AFTER a Stop is a new instruction and is not held; only cards
-// queued before it, and a steer it withdrew, wait. It still never jumps ahead of a held card: the
-// drain stops at the first one. true instead holds every waiting card, whenever it was queued.
+// queued before it, and a steer it withdrew, wait. It still never jumps ahead of one a pause holds:
+// the drain stops at the first one. true instead holds every waiting card, whenever it was queued.
 const PAUSE_HOLDS_CARDS_QUEUED_AFTER_IT = false
 
 /** THE rule for which cards are held: by ANY pause in force, named by the first that holds it, so
@@ -166,8 +175,9 @@ export function queuePauseHolding(
 }
 
 /** The card the queue sends next: the oldest waiting one with no hold of its own, unless a
- *  returned card or a held one comes first. The queue never reorders, so a newer card never
- *  overtakes a held one. The drain's pick and its consume both read this. */
+ *  returned card or one a pause holds comes first. The queue never reorders, so a newer card never
+ *  overtakes one a pause holds; a card held on its own is passed over. The drain's pick and its
+ *  consume both read this. */
 export function nextSendableQueuedCard<T extends QueueCard>(
   pauses: readonly DerivedQueuePause[],
   cards: readonly T[]

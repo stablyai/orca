@@ -11,6 +11,10 @@ import {
   assertLegacyAiVaultResumeCommandAllowed,
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../shared/agent-session-provider-handle-encoding'
 
 const PROVIDER_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
@@ -93,6 +97,7 @@ function installOwnership(overrides: Partial<StructuredProviderSessionOwnership>
     ...overrides
   }
   const record = agentSessionRecordFixture(ownership.lease)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listRecords`; the rest of the host is never reached.
   setStructuredAgentSessionHost({
     deps: {
       store: {
@@ -105,7 +110,10 @@ function installOwnership(overrides: Partial<StructuredProviderSessionOwnership>
             providerHandleChain: [
               {
                 ...record.providerHandleChain[0]!,
-                handle: { provider: ownership.provider, threadId: ownership.providerSessionId }
+                handle:
+                  ownership.provider === 'claude'
+                    ? claudeProviderHandle(ownership.providerSessionId, null)
+                    : codexProviderHandle(ownership.providerSessionId)
               }
             ],
             lease: { ...ownership.lease, sessionId: ownership.sessionId }

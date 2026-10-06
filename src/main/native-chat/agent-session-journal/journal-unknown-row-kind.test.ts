@@ -1,6 +1,7 @@
-// A newer build's row kind is never repaired away: like a newer row version, it latches this build
-// read-only with every row kept, so the newer build still reads the whole chat after an upgrade.
-// A row whose stored sequence and body disagree is damage at its stored sequence.
+// A newer build's row kind is never damage: like a newer row version, it fails this build's load as
+// a newer Orca's chat with every row kept, so the newer build still reads the whole chat after an
+// upgrade.
+// A row whose stored sequence and body disagree is damage, which fails the load with every row kept.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -17,16 +18,25 @@ import {
   createTrackedJournalOpener,
   insertTestJournalRowJson,
   liveTestJournalRows,
-  openTestJournalHostDatabase
+  openTestJournalHostDatabase,
+  SAVED_BY_NEWER_ORCA
 } from './journal-host-database-test-support'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
+import {
+  agentSessionJournalProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
+
+const UNLOADABLE = {
+  refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
+}
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-newer-kind',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 const SCOPE = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
 
@@ -70,7 +80,8 @@ function open() {
 
 /** Closes the chat, applies `edit` to its stored rows as a newer build or a bad write would, and
  *  reopens it as a restarted host would. */
-async function restartAfter(edit: (put: (seq: number, json: string) => void) => void = () => {}) {
+/** Rewrites rows with every journal closed, so the caller's next open replays them. */
+async function rewriteClosed(edit: (put: (seq: number, json: string) => void) => void = () => {}) {
   await journals.closeAll()
   const { db } = openTestJournalHostDatabase(root)
   edit((seq, json) => {
@@ -81,6 +92,10 @@ async function restartAfter(edit: (put: (seq: number, json: string) => void) => 
     insertTestJournalRowJson(db, IDENTITY.sessionId, seq, json, 5_000 + seq)
   })
   closeTestJournalHostDatabase(root)
+}
+
+async function restartAfter(edit: (put: (seq: number, json: string) => void) => void = () => {}) {
+  await rewriteClosed(edit)
   return open()
 }
 
@@ -105,7 +120,7 @@ async function journalWithOneItem(): Promise<string> {
  *  fails to compile. */
 function rowOfEveryKind(): { [Kind in JournalRow['kind']]: Extract<JournalRow, { kind: Kind }> } {
   const base = { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch: 'epoch-1', fence: 1, ts: 1 }
-  const providerHandle = IDENTITY.providerHandle
+  const providerHandle = agentSessionJournalProviderHandle(IDENTITY)
   return {
     epoch: { ...base, seq: 1, kind: 'epoch', reason: 'session_created', providerHandle },
     item: {
@@ -167,6 +182,7 @@ describe('parsing a row of a kind this build does not know', () => {
     ['a string timestamp', { ts: '5007' }],
     ['an empty epoch', { epoch: '' }],
     ['an empty kind', { kind: '' }],
+    ['a kind of only whitespace', { kind: ' \t' }],
     ['a kind that is not a string', { kind: 7 }]
   ])('reads one with %s as malformed', (_name, broken) => {
     const parsed = parseJournalRow(JSON.stringify(newerRow('epoch-1', 7, broken)))
@@ -189,7 +205,7 @@ describe('parsing a row of a kind this build does not know', () => {
 })
 
 describe("a journal holding a newer build's row kind", () => {
-  it('opens read-only with the rows before it, refuses writes, keeps every row, and reads whole once the kind is known', async () => {
+  it("fails the load as a newer Orca's chat, keeps every row, and reads whole once the kind is known", async () => {
     const first = await open()
     for (const ordinal of [0, 1, 2, 3]) {
       await first.appendItem(item(ordinal), { kind: 'status', text: `item ${ordinal}` }, SCOPE)
@@ -199,32 +215,24 @@ describe("a journal holding a newer build's row kind", () => {
     const known = stored().find((row) => row.seq === 3)?.rowJson ?? ''
     const newer = JSON.stringify(newerRow(epoch, 3))
 
-    const journal = await restartAfter((put) => put(3, newer))
-    const latched = stored()
-    expect(journal.isReadOnly).toBe(true)
-    expect(journal.repair).toEqual({ malformedRows: 0 })
-    expect(itemIds(journal)).toEqual(['codex:thread-1:turn-1:0'])
-    await expect(
-      journal.appendItem(item(4), { kind: 'status', text: 'after' }, SCOPE)
-    ).rejects.toMatchObject({ code: 'journal_read_only' })
-
-    const reopened = await restartAfter()
-    expect(reopened.isReadOnly).toBe(true)
-    expect(stored()).toEqual(latched)
+    await rewriteClosed((put) => put(3, newer))
+    const refused = stored()
+    await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+    await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+    expect(stored()).toEqual(refused)
     expect(stored().find((row) => row.seq === 3)?.rowJson).toBe(newer)
 
     // Stand-in for the newer build after an upgrade: the same place holds a kind it reads.
     const upgraded = await restartAfter((put) => put(3, known))
-    expect(upgraded.isReadOnly).toBe(false)
     expect(itemIds(upgraded)).toHaveLength(4)
     await upgraded.appendItem(item(4), { kind: 'status', text: 'after' }, SCOPE)
     expect(upgraded.cursor().sequence).toBe(6)
   })
 
-  it('stays read-only with nothing deleted when the row names another sequence than its key', async () => {
+  it("fails the load as a newer Orca's chat with nothing deleted when the row names another sequence than its key", async () => {
     const epoch = await journalWithOneItem()
-    const journal = await restartAfter((put) => put(3, JSON.stringify(newerRow(epoch, 9))))
-    expect(journal.isReadOnly).toBe(true)
+    await rewriteClosed((put) => put(3, JSON.stringify(newerRow(epoch, 9))))
+    await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
     expect(storedKinds()).toEqual([
       [1, 'epoch'],
       [2, 'item'],
@@ -232,18 +240,15 @@ describe("a journal holding a newer build's row kind", () => {
     ])
   })
 
-  it('reads a newer kind whose envelope is broken as malformed and drops from it', async () => {
+  it('reads a newer kind whose envelope is broken as damage, and keeps it', async () => {
     const epoch = await journalWithOneItem()
-    const journal = await restartAfter((put) =>
-      put(3, JSON.stringify(newerRow(epoch, 3, { fence: 'one' })))
-    )
-    expect(journal.isReadOnly).toBe(false)
-    expect(journal.repair).toEqual({ malformedRows: 1 })
-    // 3 is the disclosure the repair appends where the broken row was.
+    await expect(
+      restartAfter((put) => put(3, JSON.stringify(newerRow(epoch, 3, { fence: 'one' }))))
+    ).rejects.toMatchObject(UNLOADABLE)
     expect(storedKinds()).toEqual([
       [1, 'epoch'],
       [2, 'item'],
-      [3, 'item']
+      [3, 'future-mark']
     ])
   })
 })
@@ -252,25 +257,16 @@ describe('a row whose body names another sequence than its stored key', () => {
   it.each([
     ['an earlier', 2],
     ['a later', 9]
-  ])(
-    'is dropped at its key when it names %s one, and the next write succeeds',
-    async (_name, seq) => {
-      const epoch = await journalWithOneItem()
-      const tombstone = { ...newerRow(epoch, seq), kind: 'tombstone', itemId: 'gone', revision: 1 }
-      const journal = await restartAfter((put) => put(3, JSON.stringify(tombstone)))
-      expect(journal.repair).toEqual({ malformedRows: 1 })
-      expect(journal.needsRebuild).toBe(true)
-      // The valid row at 2 stays; 3 is the disclosure the repair appends.
-      expect(storedKinds()).toEqual([
-        [1, 'epoch'],
-        [2, 'item'],
-        [3, 'item']
-      ])
-
-      await journal.appendItem(item(1), { kind: 'status', text: 'after' }, SCOPE)
-      const reopened = await restartAfter()
-      expect(reopened.cursor().sequence).toBe(4)
-      expect(itemIds(reopened)).toHaveLength(3)
-    }
-  )
+  ])('fails the load and is kept when it names %s one', async (_name, seq) => {
+    const epoch = await journalWithOneItem()
+    const tombstone = { ...newerRow(epoch, seq), kind: 'tombstone', itemId: 'gone', revision: 1 }
+    await expect(restartAfter((put) => put(3, JSON.stringify(tombstone)))).rejects.toMatchObject(
+      UNLOADABLE
+    )
+    expect(storedKinds()).toEqual([
+      [1, 'epoch'],
+      [2, 'item'],
+      [3, 'tombstone']
+    ])
+  })
 })

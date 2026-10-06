@@ -1,7 +1,7 @@
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
-import CommentMarkdown, {
-  type CommentMarkdownLinkClickHandler
-} from '@/components/sidebar/CommentMarkdown'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -49,6 +49,14 @@ export function NativeChatNoticeRow({
       </div>
     )
   }
+  if (block.presentation === 'command-output') {
+    // Why: command output is laid out in columns; proportional type breaks its grid.
+    return (
+      <pre className="whitespace-pre-wrap break-words font-mono text-xs text-foreground">
+        {block.text}
+      </pre>
+    )
+  }
   if (isAgentSessionHostStatusPresentation(block.presentation)) {
     // The look of any other host status line; only the words are the reader's.
     return (
@@ -66,10 +74,11 @@ export function NativeChatNoticeRow({
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 text-sm leading-relaxed text-foreground">
-          <CommentMarkdown
+          <NativeChatMarkdown
             content={block.text}
             variant="document"
-            className="text-sm"
+            renderCodeBlock={NativeChatCodeBlock}
+            className="text-sm text-chat-foreground"
             onLinkClick={onLinkClick}
             allowFileUriLinks={allowFileUriLinks}
             linkifyFilePaths={onLinkClick !== undefined}

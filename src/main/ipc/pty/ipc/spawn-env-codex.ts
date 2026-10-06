@@ -39,7 +39,8 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         launchAgent: args.launchAgent,
         providerSession: args.resumeProviderSession,
         target: ctx.codexSelectionTarget,
-        launchEnv: ctx.baseEnv
+        launchEnv: ctx.baseEnv,
+        ...(args.replacesPtyId ? { useSelectedAccount: true } : {})
       })
   ctx.codexResumeLaunch = codexResumePreparation
     ? await ctx.deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)

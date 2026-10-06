@@ -88,25 +88,6 @@ describe('findPaneCodex', () => {
 describe('resolveCodexPaneHome', () => {
   it.each([
     [{ selectionKey: 'host', accountId: null, homeRoute: 'real-home' }, '/home/me/.codex'],
-    [
-      {
-        selectionKey: 'host',
-        accountId: null,
-        homeRoute: 'real-home',
-        environmentHomeOverride: { codexHome: '/custom/codex' }
-      },
-      '/custom/codex'
-    ],
-    [
-      {
-        selectionKey: 'host',
-        accountId: null,
-        homeRoute: 'custom-home',
-        shellStartupHomeOverride: { home: '/home/me', codexHome: '/rc/codex' }
-      },
-      '/rc/codex'
-    ],
-    [{ selectionKey: 'host', accountId: null, homeRoute: 'custom-home' }, null],
     // Orca's mirror: a fallback lane or a pre-upgrade pane's retired home.
     [{ selectionKey: 'host', accountId: null, homeRoute: 'shared-home' }, null],
     [{ selectionKey: 'host', accountId: 'acct', homeRoute: 'account-home' }, null],

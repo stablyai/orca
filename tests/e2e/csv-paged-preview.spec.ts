@@ -128,6 +128,17 @@ test('CSV preview bounds memory and DOM size, resizes columns and reaches the fi
   await separator.dispatchEvent('pointermove', { pointerId: 1, clientX: handleBox.x + 60 })
   await separator.dispatchEvent('pointerup', { pointerId: 1, clientX: handleBox.x + 60 })
   await expect(separator).toHaveAttribute('aria-valuenow', String(width + 100))
+  await orcaPage.evaluate(() => {
+    const state = window.__store?.getState()
+    const file = state?.openFiles.find((file) => file.filePath.endsWith('wide-preview.csv'))
+    if (!state || !file) {
+      throw new Error('Missing wide preview tab')
+    }
+    state.closeFile(file.id)
+  })
+  await openFile(wideName)
+  await expect(separator).toHaveAttribute('aria-valuenow', String(width + 100))
+  await expect(orcaPage.getByRole('button', { name: 'Edit cell', exact: true })).toHaveCount(0)
   await orcaPage.getByTestId('csv-scroll').evaluate((element) => {
     element.scrollLeft = element.scrollWidth
   })

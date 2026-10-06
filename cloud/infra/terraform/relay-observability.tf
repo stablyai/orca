@@ -53,6 +53,10 @@ locals {
       description = "Relay statements Postgres cancelled after waiting out their lock timeout; a burst means one transaction is holding rows every other relay process needs."
       filter      = "resource.type=\"cloudsql_database\" AND resource.labels.database_id=\"${var.project_id}:${local.relay_database_instance_name}\" AND textPayload:\"db=orca_relay,\" AND textPayload:\"canceling statement due to lock timeout\""
     }
+    reservation_drift = {
+      description = "Cells whose reserved_requests disagreed with their lease units when reconciliation corrected them; should trend to zero."
+      filter      = "((resource.type=\"cloud_run_revision\" AND (${local.relay_service_log_filter})) OR resource.type=\"gce_instance\") AND jsonPayload.event=\"orca_relay_reservation_drift\""
+    }
   }
 
   relay_runtime_metrics = {
@@ -108,6 +112,18 @@ locals {
     cell_inventory_holds               = { field = "cellInventoryHolds", description = "Cell-inventory locks acquired in the interval; the percentiles above summarise these." }
     cell_inventory_lock_unavailable    = { field = "cellInventoryLockUnavailable", description = "Fail-fast cell-inventory acquisitions that found the lock held. Includes background sweeps, which step aside by design, so this is contention pressure rather than user-visible failure." }
     cell_inventory_lock_timeouts       = { field = "cellInventoryLockTimeouts", description = "Bounded cell-inventory waits that expired, counted per attempt rather than per request. This is the user-visible lane." }
+    inventory_hold_ms_p99              = { field = "inventoryHoldMsP99", description = "Cell-inventory lock (every row, or every general row) hold p99 in the interval, this site only." }
+    rehome_target_row_hold_ms_p99      = { field = "rehomeTargetRowHoldMsP99", description = "Rehome target-row lock hold p99 in the interval, this site only." }
+    isolated_replacement_hold_ms_p99   = { field = "isolatedReplacementHoldMsP99", description = "Drain-return regional target-row lock hold p99 in the interval, this site only." }
+    isolated_replacement_holds         = { field = "isolatedReplacementHolds", description = "Drain-return regional target-row locks acquired in the interval." }
+    drain_return_service_ms_p50        = { field = "drainReturnServiceMsP50", description = "Drain-return lane slot hold p50; lane capacity is concurrency / this. Omitted when no drain return ran." }
+    drain_return_service_ms_p95        = { field = "drainReturnServiceMsP95", description = "Drain-return lane slot hold p95 in the interval." }
+    sticky_service_ms_p50              = { field = "stickyServiceMsP50", description = "Sticky lane slot hold p50, verification included; herd recovery is concurrency / this." }
+    sticky_service_ms_p99              = { field = "stickyServiceMsP99", description = "Sticky lane slot hold p99 in the interval." }
+    assign_non_drain_503s              = { field = "assignNonDrain503sDelta", description = "Director /v1/assign 503s other than scheduled drain-return deferrals; the per-cause split is assign503sByCauseDelta." }
+    db_lock_wait_samples               = { field = "dbLockWaitSamplesDelta", description = "Relay-database lock-wait samples taken by this director in the interval; divide the waiter sums below by this." }
+    db_cell_row_lock_waiters_director  = { field = "dbCellRowLockWaitersDirectorDelta", description = "Director backends waiting on a relay_cells row lock, summed over samples." }
+    db_cell_row_lock_waiters_cell      = { field = "dbCellRowLockWaitersCellDelta", description = "Cell backends waiting on a relay_cells row lock, summed over samples." }
   }
 
   # Regions the director can hint or select. Pinned to relay-contract's RELAY_REGIONS by
@@ -323,7 +339,7 @@ resource "google_logging_metric" "relay_snapshot" {
   metric_descriptor {
     metric_kind = "DELTA"
     value_type  = "DISTRIBUTION"
-    unit        = contains(["sql_latency_ms", "control_rtt_ms_p50", "control_rtt_ms_p95", "control_rtt_ms_max", "client_accept_total_ms_p50", "client_accept_total_ms_p95", "client_accept_total_ms_max", "client_accept_assignment_ms_p95", "client_accept_credential_ms_p95", "client_accept_activity_ms_p95", "client_accept_attach_ms_p95", "client_accept_basis_ms_p95", "control_renewal_latency_ms_p50", "control_renewal_latency_ms_p95", "control_renewal_latency_ms_max", "http_latency_ms", "event_loop_ms_p99", "db_oldest_wait_ms", "db_wait_ms_max"], each.key) ? "ms" : each.key == "queued_bytes" || each.key == "heap_used_bytes" || each.key == "forwarded_bytes" ? "By" : "1"
+    unit        = contains(["sql_latency_ms", "control_rtt_ms_p50", "control_rtt_ms_p95", "control_rtt_ms_max", "client_accept_total_ms_p50", "client_accept_total_ms_p95", "client_accept_total_ms_max", "client_accept_assignment_ms_p95", "client_accept_credential_ms_p95", "client_accept_activity_ms_p95", "client_accept_attach_ms_p95", "client_accept_basis_ms_p95", "control_renewal_latency_ms_p50", "control_renewal_latency_ms_p95", "control_renewal_latency_ms_max", "http_latency_ms", "event_loop_ms_p99", "db_oldest_wait_ms", "db_wait_ms_max", "inventory_hold_ms_p99", "rehome_target_row_hold_ms_p99", "isolated_replacement_hold_ms_p99", "drain_return_service_ms_p50", "drain_return_service_ms_p95", "sticky_service_ms_p50", "sticky_service_ms_p99"], each.key) ? "ms" : each.key == "queued_bytes" || each.key == "heap_used_bytes" || each.key == "forwarded_bytes" ? "By" : "1"
 
     labels {
       key         = "role"
@@ -1068,6 +1084,71 @@ resource "google_monitoring_alert_policy" "relay_region_hint_skew" {
   }
 
   depends_on = [google_logging_metric.relay_snapshot]
+}
+
+# Declared for a targeted apply after the step-2 wave. Cells only: a director-only fix must not
+# raise the level the cells are held to. sum / count of the distribution is the exact level.
+resource "google_logging_metric" "relay_cell_fix_level" {
+  project         = var.project_id
+  name            = "orca_relay_cell_fix_level"
+  description     = "RELAY_FIX_LEVEL reported by each cell's runtime metrics line."
+  filter          = "${local.relay_runtime_log_filter} AND jsonPayload.role=\"cell\" AND jsonPayload.fixLevel:*"
+  value_extractor = "EXTRACT(jsonPayload.fixLevel)"
+  label_extractors = {
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+  }
+
+  bucket_options {
+    linear_buckets {
+      num_finite_buckets = 64
+      width              = 1
+      offset             = 0
+    }
+  }
+}
+
+locals {
+  relay_cell_fix_level_hourly = "(sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_cell_fix_level_sum{monitored_resource=\"gce_instance\"}[1h])) / sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_cell_fix_level_count{monitored_resource=\"gce_instance\"}[1h])))"
+  relay_cell_serving          = "(sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_controls_sum{monitored_resource=\"gce_instance\",role=\"cell\"}[1h])) > 0)"
+}
+
+# One PromQL condition per policy, and log-based metrics allow at most 25 h of lookback, so the
+# floor is a fixed variable rather than a fleet maximum: raise it with a targeted apply once a
+# wave has rolled every serving cell. Images from before the field report no level at all.
+resource "google_monitoring_alert_policy" "relay_cell_outdated_fix_level" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell left on an outdated image"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Serving cell below fix level ${var.relay_cell_min_fix_level} for 6 hours"
+
+    condition_prometheus_query_language {
+      query    = "((${local.relay_cell_fix_level_hourly} < ${var.relay_cell_min_fix_level}) or (${local.relay_cell_serving} unless on (cell_id) ${local.relay_cell_fix_level_hourly})) and on (cell_id) ${local.relay_cell_serving}"
+      duration = "21600s"
+    }
+  }
+
+  documentation {
+    content   = "A cell holding desktops runs an image below `relay_cell_min_fix_level`, or one too old to report `fixLevel`. On 2026-09-28, 18 cells still ran images without the pg connection-error fix and crashed in a two-minute database failover, dropping ~16.3k hosts. Roll the named cell with a same-capacity roll to the current digest. Empty cells do not fire because they hold no controls. Raise the floor only after a wave has rolled every serving cell."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_cell_fix_level]
 }
 
 # Why: the four signals that had to be assembled by hand during the 2026-09-04 incident.

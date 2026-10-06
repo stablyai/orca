@@ -93,10 +93,12 @@ export function getSidebarRowRevealAncestorKeys(args: {
 export function getPinnedWorktreeRevealCollapsedGroupKeys({
   worktree,
   collapsedGroups,
+  groupKey = PINNED_GROUP_KEY,
   inPinnedSection = worktree.isPinned
 }: {
   worktree: Worktree
   collapsedGroups: ReadonlySet<string>
+  groupKey?: string
   inPinnedSection?: boolean
 }): string[] {
   if (!inPinnedSection) {
@@ -104,8 +106,8 @@ export function getPinnedWorktreeRevealCollapsedGroupKeys({
   }
   const keys: string[] = []
   // Why: the reveal effect already opens this host; re-returning it would toggle it back closed.
-  if (collapsedGroups.has(PINNED_GROUP_KEY)) {
-    keys.push(PINNED_GROUP_KEY)
+  if (collapsedGroups.has(groupKey)) {
+    keys.push(groupKey)
   }
   return keys
 }

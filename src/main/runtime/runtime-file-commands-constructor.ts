@@ -1,5 +1,9 @@
 // @ts-nocheck -- mechanically split class members.
 import {
+  QUICK_OPEN_SEARCH_VERSION,
+  isQuickOpenQueryTooLarge
+} from '../../shared/quick-open-path-search'
+import {
   RuntimeFileCommandsWithActiveRuntimeTextSearches,
   RuntimeFileCommandsWithActiveRuntimeTextSearches as RuntimeFileCommands
 } from './runtime-file-commands-active-runtime-text-searches'
@@ -19,7 +23,6 @@ import {
   isMobilePreviewableImagePath
 } from './runtime-file-commands-mobile-file-list-limit'
 import { rankRuntimeMobileFilePaths } from './runtime-mobile-file-path-search'
-import { isQuickOpenQueryTooLarge } from '../../shared/quick-open-path-search'
 import { searchQuickOpenFilePaths as searchHostQuickOpenFilePaths } from '../ipc/filesystem-search-file-paths'
 import { stat } from 'node:fs/promises'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
@@ -42,8 +45,19 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     const route = runtimeFileRouteForTarget(target)
     const files =
       route.kind === 'ssh'
-        ? await this.listRemoteMobileFiles(worktree.path, route.provider, undefined, options.signal)
-        : await listQuickOpenFiles(worktree.path, store, undefined, options.signal)
+        ? await this.listRemoteMobileFiles(
+            worktree.path,
+            route.provider,
+            MOBILE_FILE_LIST_LIMIT + 1,
+            options.signal
+          )
+        : await listQuickOpenFiles(
+            worktree.path,
+            store,
+            undefined,
+            options.signal,
+            MOBILE_FILE_LIST_LIMIT + 1
+          )
     const entries = files
       .filter((relativePath) => isSafeMobileRelativePath(relativePath))
       .sort((a, b) => a.localeCompare(b))
@@ -118,11 +132,26 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     query: string,
     limit: number,
     excludePaths?: string[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options: {
+      includeIgnored?: boolean
+      followSymlinks?: boolean
+      allowLegacyIncludeIgnored?: boolean
+    } = {}
   ): Promise<RuntimeFileListResult> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
+    const quickOpenSearchVersion =
+      route.kind !== 'ssh'
+        ? QUICK_OPEN_SEARCH_VERSION
+        : (await route.provider?.supportsQuickOpenSearch?.({ signal, minimumVersion: 3 }))
+          ? 3
+          : (await route.provider?.supportsQuickOpenSearch?.({ signal, minimumVersion: 2 }))
+            ? 2
+            : (await route.provider?.supportsQuickOpenSearch?.({ signal, minimumVersion: 1 }))
+              ? 1
+              : 0
     const result =
       !query.trim() || isQuickOpenQueryTooLarge(query)
         ? { paths: [], totalCount: 0, truncated: false }
@@ -133,9 +162,11 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
               query,
               limit,
               excludePaths,
-              signal
+              signal,
+              options
             )
           : await searchHostQuickOpenFilePaths(worktree.path, this.host.requireStore(), {
+              ...options,
               query,
               limit,
               excludePaths,
@@ -150,6 +181,7 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
         kind: isMobileBinaryPath(relativePath) ? ('binary' as const) : ('text' as const)
       })),
       totalCount: result.totalCount,
+      quickOpenSearchVersion,
       truncated: result.truncated
     }
   }

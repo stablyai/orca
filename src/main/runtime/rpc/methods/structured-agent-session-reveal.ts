@@ -56,7 +56,9 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         agent: revealed.agent,
         activate: true
       })
-      return { ok: true as const, ...revealed }
+      // Named fields only: the host's reasons a journal did not open stay on the host.
+      const { sessionId, workspaceId, agent, readable } = revealed
+      return { ok: true as const, sessionId, workspaceId, agent, readable }
     }
   })
 ]

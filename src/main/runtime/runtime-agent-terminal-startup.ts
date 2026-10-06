@@ -4,7 +4,12 @@ import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-termi
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
-import { buildExecutionHostAgentStartupPlan } from '../opencode/opencode-model-startup-plan'
+import { planExecutionHostStartupWithPromptCandidate } from '../opencode/opencode-model-startup-plan'
+import { agentPromptRidesLaunchCommand } from '../../shared/tui-agent-startup'
+import {
+  launchHostProvesAgentInFront,
+  nameLocalTypedLineShell
+} from './agent-launch-typed-line-shell'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
@@ -35,7 +40,12 @@ export async function buildRuntimeAgentTerminalStartupOptions(
     return opts
   }
 
-  const startupPlan = await buildExecutionHostAgentStartupPlan({
+  // A prompt this launch command cannot carry has nowhere to go from here — the create returns
+  // options, not a live PTY — so refuse rather than spawn the agent and drop the text.
+  if (opts.startupPrompt && !agentPromptRidesLaunchCommand(agent)) {
+    throw new Error(`Agent ${agent} does not take a startup prompt on its launch command.`)
+  }
+  const { plan: startupPlan, promptCarried } = await planExecutionHostStartupWithPromptCandidate({
     inputs: resolveAgentStartupPlanInputs({
       agent,
       settings,
@@ -48,7 +58,17 @@ export async function buildRuntimeAgentTerminalStartupOptions(
     }),
     prompt: opts.startupPrompt ?? '',
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
-    hostIdentity
+    hostIdentity,
+    host: {
+      shellName: nameLocalTypedLineShell({
+        isRemote,
+        ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
+        ...(settings.terminalDefaultShell
+          ? { defaultShellSetting: settings.terminalDefaultShell }
+          : {})
+      }),
+      provesAgentInFront: launchHostProvesAgentInFront({ isRemote, launchPlatform: platform })
+    }
   })
   if (!startupPlan) {
     // Why: an explicit agent that yields no plan would otherwise spawn a bare
@@ -58,10 +78,8 @@ export async function buildRuntimeAgentTerminalStartupOptions(
     }
     return opts
   }
-  // A prompt this launch command cannot carry has nowhere to go from here — the create returns
-  // options, not a live PTY — so refuse rather than spawn the agent and drop the text.
-  if (opts.startupPrompt && 'followupPrompt' in startupPlan && startupPlan.followupPrompt) {
-    throw new Error(`Agent ${agent} does not take a startup prompt on its launch command.`)
+  if (opts.startupPrompt) {
+    opts.onStartupPromptCarry?.(promptCarried)
   }
 
   return {

@@ -4,10 +4,6 @@ import { Label } from '@/components/ui/label'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { translate } from '@/i18n/i18n'
-import {
-  isImeOwnedKeyboardEvent,
-  useImeEnterGestureOwnership
-} from '@/lib/ime-composition-keyboard-event'
 
 type WorktreeDisplayNameFieldProps = {
   disabled: boolean
@@ -27,7 +23,6 @@ export function WorktreeDisplayNameField({
   value
 }: WorktreeDisplayNameFieldProps): React.JSX.Element {
   const inputId = useId()
-  const enterGesture = useImeEnterGestureOwnership()
   const emojiInput = useWorkspaceEmojiShortcodeInput({
     disabled,
     inputRef,
@@ -47,19 +42,9 @@ export function WorktreeDisplayNameField({
         onChange={(event) =>
           emojiInput.handleValueChange(event.target.value, event.target.selectionStart)
         }
-        onCompositionStart={() => enterGesture.setComposing(true)}
-        onCompositionEnd={() => enterGesture.setComposing(false)}
-        onKeyUp={enterGesture.onKeyUp}
-        onBlur={enterGesture.reset}
         onSelect={(event) => emojiInput.syncCursor(event.currentTarget)}
         onKeyDown={(event) => {
-          if (
-            enterGesture.ownsKeyDown(event) ||
-            enterGesture.isComposing() ||
-            isImeOwnedKeyboardEvent(event) ||
-            emojiInput.handleKeyDown(event) ||
-            event.key !== 'Enter'
-          ) {
+          if (emojiInput.handleKeyDown(event) || event.key !== 'Enter') {
             return
           }
           event.preventDefault()

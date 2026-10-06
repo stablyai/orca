@@ -61,7 +61,48 @@ test('draws and copies a screenshot from a client-hosted browser without replaci
     await client.page.mouse.down()
     await client.page.mouse.move(bounds.x + 240, bounds.y + 60, { steps: 10 })
     await client.page.mouse.up()
-    await expect(overlay.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled()
+    const undo = overlay.getByRole('button', { name: 'Undo', exact: true })
+    await expect(undo).toBeEnabled()
+
+    // A later stroke and a text label, then erase only the first stroke and the label.
+    await client.page.mouse.move(bounds.x + 40, bounds.y + 140)
+    await client.page.mouse.down()
+    await client.page.mouse.move(bounds.x + 240, bounds.y + 140, { steps: 10 })
+    await client.page.mouse.up()
+    await overlay.getByRole('button', { name: 'Text', exact: true }).click()
+    await client.page.mouse.click(bounds.x + 40, bounds.y + 200)
+    await overlay.getByRole('textbox', { name: 'Annotation text', exact: true }).fill('gy')
+    await client.page.keyboard.press('Enter')
+    const firstStroke = { x: 30, y: 50, width: 220, height: 20 }
+    const laterStroke = { x: 30, y: 130, width: 220, height: 20 }
+    const label = { x: 30, y: 190, width: 80, height: 40 }
+    const hasInk = (region: typeof firstStroke): Promise<boolean> =>
+      canvas.evaluate((element, rect) => {
+        if (!(element instanceof HTMLCanvasElement)) {
+          throw new Error('Markup overlay canvas is not a canvas element')
+        }
+        const scale = element.width / element.getBoundingClientRect().width
+        const pixels = element
+          .getContext('2d')
+          ?.getImageData(rect.x * scale, rect.y * scale, rect.width * scale, rect.height * scale)
+        return pixels ? pixels.data.some((value, index) => index % 4 === 3 && value > 0) : false
+      }, region)
+    await expect.poll(() => hasInk(label)).toBe(true)
+
+    await overlay.getByRole('button', { name: 'Eraser', exact: true }).click()
+    await client.page.mouse.click(bounds.x + 140, bounds.y + 60)
+    await client.page.mouse.click(bounds.x + 48, bounds.y + 216)
+    await expect.poll(() => hasInk(firstStroke)).toBe(false)
+    await expect.poll(() => hasInk(label)).toBe(false)
+    expect(await hasInk(laterStroke)).toBe(true)
+    await testInfo.attach('client-hosted-markup-erased', {
+      body: await client.page.screenshot({ path: testInfo.outputPath('markup-erased.png') }),
+      contentType: 'image/png'
+    })
+    await undo.click()
+    await undo.click()
+    await expect.poll(() => hasInk(firstStroke)).toBe(true)
+    await expect.poll(() => hasInk(label)).toBe(true)
     await testInfo.attach('client-hosted-markup', {
       body: await client.page.screenshot({ path: testInfo.outputPath('markup.png') }),
       contentType: 'image/png'

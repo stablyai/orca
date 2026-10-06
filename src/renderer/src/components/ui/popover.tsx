@@ -5,6 +5,7 @@ import { Popover as PopoverPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
 import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
+import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
 const consumerPreventedWheelEvents = new WeakSet<WheelEvent>()
@@ -194,6 +195,7 @@ function PopoverContent({
         onWheel={handleConsumerWheel}
         onWheelCapture={handleConsumerWheelCapture}
         {...props}
+        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </PopoverPrimitive.Portal>
   )

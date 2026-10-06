@@ -2,10 +2,6 @@ import React, { useCallback, useId, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-  isImeOwnedKeyboardEvent,
-  useImeEnterGestureOwnership
-} from '@/lib/ime-composition-keyboard-event'
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
@@ -92,7 +88,6 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
     onKeyDown
   } = props
 
-  const enterGesture = useImeEnterGestureOwnership()
   // Why: the helper `<p>` is the only surface for the invalid and displacement
   // states, so it has to be announced with the field rather than just seen.
   const helperId = useId()
@@ -177,20 +172,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
           aria-describedby={helperId}
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
-          onCompositionStart={() => enterGesture.setComposing(true)}
-          onCompositionEnd={() => enterGesture.setComposing(false)}
-          onKeyUp={enterGesture.onKeyUp}
-          onBlur={enterGesture.reset}
-          onKeyDown={(event) => {
-            if (
-              enterGesture.ownsKeyDown(event) ||
-              enterGesture.isComposing() ||
-              isImeOwnedKeyboardEvent(event)
-            ) {
-              return
-            }
-            onKeyDown(event)
-          }}
+          onKeyDown={onKeyDown}
           disabled={isReadOnly}
           aria-invalid={isInvalid || undefined}
           placeholder={translate(

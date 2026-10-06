@@ -1,3 +1,4 @@
+import { OPENCODE_NATIVE_PROMPT_VERSIONS } from '../../shared/opencode-cli-version'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import { parseAgentHookEndpointFile } from '../../shared/agent-hook-endpoint-file'
 import {
@@ -40,7 +41,7 @@ async function submitStartupPrompt(ctx) {
   const nonce = process.env.${OPENCODE_STARTUP_PROMPT_NONCE_ENV};
   const endpoint = process.env.${OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV};
   const prompt = process.env.${OPENCODE_STARTUP_PROMPT_BODY_ENV};
-  if (ctx?.app?.version !== "2.0.16" || !/^[a-f0-9]{64}$/.test(digest || "") || !nonce || !endpoint || !prompt) return noop;
+  if (!${JSON.stringify(OPENCODE_NATIVE_PROMPT_VERSIONS)}.includes(ctx?.app?.version) || !/^[a-f0-9]{64}$/.test(digest || "") || !nonce || !endpoint || !prompt) return noop;
   const input = ctx.renderer?.keyInput;
   if (typeof ctx.storage?.memory !== "function" || typeof input?.on !== "function" ||
       typeof input?.off !== "function" || typeof ctx.keymap?.dispatch !== "function" ||

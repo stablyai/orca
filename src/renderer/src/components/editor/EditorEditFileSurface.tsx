@@ -106,6 +106,7 @@ export function EditorEditFileSurface({
       <CsvPagedViewer
         key={activeFile.id}
         file={fileContent.csvPreview}
+        preferenceKey={pdfPreferenceKey}
         filePath={activeFile.filePath}
         onReload={() => reloadContent(activeFile)}
       />
@@ -260,6 +261,12 @@ export function EditorEditFileSurface({
       filePath={activeFile.filePath}
       worktreeId={activeFile.worktreeId}
       runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
+      preferenceKey={pdfPreferenceKey}
+      fileId={activeFile.id}
+      isDirty={activeFile.isDirty}
+      onDirtyStateHint={activeFile.readOnly ? undefined : handleDirtyStateHint}
+      onContentChange={activeFile.readOnly ? undefined : handleContentChange}
+      onSave={activeFile.readOnly ? undefined : handleSave}
     />
   ) : isNotebook && mdViewMode === 'rich' ? (
     <IpynbViewer

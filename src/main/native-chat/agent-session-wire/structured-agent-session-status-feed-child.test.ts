@@ -7,6 +7,7 @@ import { createTrackedJournalOpener } from '../agent-session-journal/journal-hos
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'status-session'
 const journals = createTrackedJournalOpener()
@@ -28,7 +29,7 @@ it('publishes the provider child startup phase, not which child it is', async ()
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     stateDirectory: root
   })

@@ -1,3 +1,8 @@
+import { cn } from '@/lib/utils'
+import {
+  NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
+  useNativeChatAppearanceStyle
+} from './native-chat-appearance-style'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
 import { useAppStore } from '../../store'
@@ -8,7 +13,7 @@ import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { useNativeChatLaunchPromptDeliveryNotice } from './use-native-chat-launch-prompt-delivery-notice'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
-import { useNativeChatFontScale } from './use-native-chat-font-scale'
+import { useNativeChatFontSize } from './use-native-chat-font-size'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { useNativeChatInteractivePromptCard } from './use-native-chat-interactive-prompt-card'
@@ -46,6 +51,7 @@ import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
+import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -180,8 +186,8 @@ export function NativeChatResolvedView({
     [record]
   )
   const onSlashCommand = useCallback(
-    (command: string) => {
-      setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command))
+    (command: string, output?: string) => {
+      setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command, Date.now(), output))
     },
     [commandMarkerScope]
   )
@@ -203,6 +209,8 @@ export function NativeChatResolvedView({
       ? sessionWithLaunchPrompt
       : { ...sessionWithLaunchPrompt, messages }
   }, [sessionWithLaunchPrompt, commandMarkers])
+  // Why: answer from the conversation the pane shows, so a `/clear` sent here reads as reset.
+  const answerLocally = useNativeChatLocalCommandAnswer(agent, sessionAfterCommandBoundaries)
   const launchPromptDeliveryNotices = useNativeChatLaunchPromptDeliveryNotice(
     paneLaunchPrompt?.failed ? launchPromptMessage?.id : null,
     sessionAfterCommandBoundaries.messages
@@ -305,9 +313,10 @@ export function NativeChatResolvedView({
     { sessionId, isVisible }
   )
 
-  // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
-  // the chord is inert on the loading/empty/error states and elsewhere.
-  const fontScale = useNativeChatFontScale(isConversation)
+  // Only the focused conversation accepts chat text-size shortcuts.
+  useNativeChatFontSize(isConversation && isVisible && isFocusedGroup, rootRef)
+  const appearanceSettings = useAppStore((state) => state.settings?.nativeChatAppearance)
+  const appearanceStyle = useNativeChatAppearanceStyle({ nativeChatAppearance: appearanceSettings })
 
   return (
     <div
@@ -345,7 +354,11 @@ export function NativeChatResolvedView({
       onMouseUpCapture={contextMenu.onSelectionCapture}
       onKeyUpCapture={contextMenu.onSelectionCapture}
       onContextMenuCapture={contextMenu.onContextMenuCapture}
-      className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
+      className={cn(
+        NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
+        'flex h-full min-h-0 w-full flex-col focus:outline-none'
+      )}
+      style={appearanceStyle}
     >
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
@@ -360,7 +373,6 @@ export function NativeChatResolvedView({
             isVisible={isVisible}
             isWorking={turnActive}
             expandSignal={false}
-            fontScale={fontScale.scale}
             {...turnTiming}
             awaitingInput={awaitingInput}
             onLinkClick={onLinkClick}
@@ -396,6 +408,7 @@ export function NativeChatResolvedView({
           onOptimisticSendCanceled={delivery.cancel}
           optimisticSendOutcome={delivery}
           onSlashCommand={onSlashCommand}
+          answerCommandLocally={answerLocally}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft }}

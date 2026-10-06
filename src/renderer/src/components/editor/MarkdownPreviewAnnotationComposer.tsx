@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -101,7 +102,7 @@ export function MarkdownPreviewAnnotationComposer({
       <div className="orca-diff-comment-popover-label">
         {translate('auto.components.editor.MarkdownPreview.b1bfc04034', 'Selected text')}
       </div>
-      <textarea
+      <ImeTextarea
         ref={focusTextareaRef}
         className="orca-diff-comment-popover-textarea"
         placeholder={translate(

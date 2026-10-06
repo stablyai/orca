@@ -1,6 +1,8 @@
 import { MobileSelectableText as Text } from '../components/MobileSelectableText'
-import { memo } from 'react'
-import { Image, Text as NativeText, View } from 'react-native'
+import { memo, useCallback, useState, type ComponentProps, type ReactNode } from 'react'
+import { Image, Text as NativeText, Pressable, View } from 'react-native'
+import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
+import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageActionsSheet'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
@@ -20,17 +22,23 @@ function Prose({
   block,
   invert,
   fontScale,
-  onOpenFile
+  onOpenFile,
+  onLongPress
 }: {
   block: NativeChatBlock
   invert?: boolean
   fontScale: number
   onOpenFile?: (relativePath: string) => void
+  /** Android only: routes a long press on a link span to the row's actions sheet. */
+  onLongPress?: () => void
 }): React.JSX.Element | null {
   if (isTextBlock(block)) {
     if (isAgentSessionHostStatusPresentation(block.presentation)) {
       return (
-        <Text selectable style={[styles.hostNotice, { fontSize: TEXT_SIZE * fontScale }]}>
+        <Text
+          selectable={INLINE_TEXT_SELECTION}
+          style={[styles.hostNotice, { fontSize: TEXT_SIZE * fontScale }]}
+        >
           {AGENT_SESSION_HOST_STATUS_COPY[block.presentation]}
         </Text>
       )
@@ -39,7 +47,10 @@ function Prose({
     // markdown renderer's light-on-dark palette.
     if (invert) {
       return (
-        <Text selectable style={[styles.userText, { fontSize: TEXT_SIZE * fontScale }]}>
+        <Text
+          selectable={INLINE_TEXT_SELECTION}
+          style={[styles.userText, { fontSize: TEXT_SIZE * fontScale }]}
+        >
           {block.text}
         </Text>
       )
@@ -50,6 +61,7 @@ function Prose({
         rangeSelectable
         textScale={1.25 * fontScale}
         onOpenFile={onOpenFile}
+        onLongPress={onLongPress}
       />
     )
   }
@@ -74,6 +86,25 @@ function Prose({
     )
   }
   return null
+}
+
+// Keep the existing responder hierarchy on platforms with inline selection.
+function Content({
+  onLongPress,
+  style,
+  children
+}: {
+  onLongPress?: () => void
+  style: ComponentProps<typeof View>['style']
+  children: ReactNode
+}): React.JSX.Element {
+  return onLongPress ? (
+    <Pressable onLongPress={onLongPress} style={style}>
+      {children}
+    </Pressable>
+  ) : (
+    <View style={style}>{children}</View>
+  )
 }
 
 function MobileNativeChatMessageImpl({
@@ -129,6 +160,11 @@ function MobileNativeChatMessageImpl({
     !turnExpanded &&
     !toolsExpanded
   const showToolRun = tools.length > 0 && !settledToolsHidden
+  // Mount selection UI only for the message being copied.
+  const [actionsOpen, setActionsOpen] = useState(false)
+  // Keep the memoized Markdown context stable as the message streams.
+  const openActions = useCallback(() => setActionsOpen(true), [])
+  const onLongPress = INLINE_TEXT_SELECTION ? undefined : openActions
 
   const statusRow = turnStatus ? (
     <MobileNativeChatTurnStatus
@@ -144,7 +180,8 @@ function MobileNativeChatMessageImpl({
       {/* A turn with no user bubble carries its bar above its first row. */}
       {turnStatusAbove ? statusRow : null}
       <View style={[styles.row, isUser && styles.rowUser]}>
-        <View
+        <Content
+          onLongPress={onLongPress}
           style={[styles.content, isUser && styles.userBubble, isReasoning && styles.reasoning]}
         >
           {prose.map((block, index) => (
@@ -154,6 +191,7 @@ function MobileNativeChatMessageImpl({
               invert={isUser}
               fontScale={fontScale}
               onOpenFile={onOpenFile}
+              onLongPress={onLongPress}
             />
           ))}
           {showToolRun ? (
@@ -168,8 +206,14 @@ function MobileNativeChatMessageImpl({
               onOpenFile={onOpenFile}
             />
           ) : null}
-        </View>
+        </Content>
       </View>
+      {actionsOpen ? (
+        <MobileNativeChatMessageActionsSheet
+          message={message}
+          onClose={() => setActionsOpen(false)}
+        />
+      ) : null}
       {turnStatusAbove ? null : statusRow}
     </>
   )

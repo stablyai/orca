@@ -14,7 +14,7 @@ import {
   type WorkspaceSessionTerminalTabCloseResult
 } from '../../shared/workspace-session-terminal-tab-close'
 import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
-import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 import type { DurableProfileStateMutation } from '../persistence/loading-store/store-runtime-state'
 import type { ExecutionHostId } from '../../shared/execution-host'
 

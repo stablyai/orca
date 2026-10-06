@@ -47,7 +47,7 @@ export async function performThreadGoalChange(
   ctx: AgentSessionTurnContext,
   input: { clientOperationId: string; change: AgentSessionThreadGoalChange }
 ): Promise<TurnOutcome<AgentSessionThreadGoalResult>> {
-  if (!ctx.adapter.changeThreadGoal || !ctx.adapter.supportsThreadGoal?.(ctx.sessionId)) {
+  if (!ctx.adapter.changeThreadGoal || !ctx.agents.capabilities(ctx.agent)?.threadGoal) {
     return refused('goalsUnsupported', 'Goals are unavailable for this chat session.')
   }
   const { change } = input

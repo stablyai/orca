@@ -269,6 +269,7 @@ export async function startLocalWorker(args: {
       devMode: params.devMode,
       requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
       agent: agent ?? null,
+      launchedAgent: params.terminal ? null : (agent ?? null),
       setupReceipt,
       launchReceipt: launch.receipt,
       mode,

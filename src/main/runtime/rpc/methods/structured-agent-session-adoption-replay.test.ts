@@ -15,6 +15,8 @@ import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 
 const SESSION = 'session-adoption-replay'
 const THREAD = 'thread-adoption-replay'
@@ -43,7 +45,7 @@ function adapter(): StructuredAgentSessionAdapter {
         },
         link: {
           linkId: `codex-${fence}-${THREAD}`,
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'resumed',
           mintedAtFence: fence,
           observedAt: 1_800_000_000_000
@@ -186,6 +188,7 @@ describe('committed adopting create RPC replay', () => {
     const store = await openTestAgentSessionRecordStore(root)
     const sessionAdapter = adapter()
     host = new StructuredAgentSessionHost({
+      agents: claudeAndCodexAgents(sessionAdapter),
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: sessionAdapter,

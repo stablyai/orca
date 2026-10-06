@@ -39,7 +39,7 @@ on:
         required: false
         type: string
       evidence-run-id:
-        description: Staging evidence run ID for C27, C27 canary run ID for C28/C29; C30-C33 take none and each proves itself by its own canary
+        description: Staging evidence run ID for C27, C27 canary run ID for C28/C29; C30-C34 take none and each proves itself by its own canary
         required: false
         type: string
       evidence-run-attempt:
@@ -156,7 +156,7 @@ jobs:
                 evidence_kind=c27
                 artifact_name="relay-asia-c27-canary-${EVIDENCE_RUN_ID}-${EVIDENCE_RUN_ATTEMPT}"
                 ;;
-              production-gce-c30|production-gce-c31)
+              production-gce-c30|production-gce-c31|production-gce-c34)
                 # No earlier proof binds a later cell's generation; its own canary below rolls it back on failure.
                 canary_cell="${TARGET_CELL_IDS}"
                 ;;
@@ -330,7 +330,7 @@ jobs:
               verify_cells=production-gce-c27,production-gce-c28,production-gce-c29
               expected_states='{"production-gce-c27":"general","production-gce-c28":"migration-only","production-gce-c29":"migration-only"}'
               ;;
-            production-gce-c30|production-gce-c31|production-gce-c32|production-gce-c33)
+            production-gce-c30|production-gce-c31|production-gce-c32|production-gce-c33|production-gce-c34)
               verify_cells="${CANARY_CELL}"
               expected_states="{\"${CANARY_CELL}\":\"general\"}"
               ;;

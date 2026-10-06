@@ -114,7 +114,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       continue
     }
     // "Ask me later", not an answer: a worktree the host holds no entry for still answers a forced
-    // inventory, with `none` at version 0. Absence there proves nothing, so it neither applies nor
+    // inventory, with the `none` placeholder epoch. Absence there proves nothing, so it neither applies nor
     // records — recording it would retire the epoch below. Its cursor is left alone, so a genuinely
     // stale frame arriving late is still fenced.
     if (!hostSnapshotAffirmsWorktreeContents(snapshot)) {

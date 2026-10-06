@@ -73,6 +73,7 @@ export function createTabsCloseActions(
           console.warn('[structured-agent-session] close found no owning host', tab.entityId)
         }
         get().clearNativeChatLaunchDraft(structuredAgentSessionTabId(tab.entityId))
+        // The unsent draft stays: it belongs to the conversation, which can be reopened from history.
       }
       // Why: on closing the active tab, walk the MRU stack to the previously-active tab; pickNextActiveTab falls back to the neighbor.
       const nextActiveTabId =

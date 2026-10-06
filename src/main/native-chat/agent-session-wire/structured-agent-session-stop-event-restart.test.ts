@@ -1,7 +1,7 @@
-// A Stop that took effect still decides its turn after Orca restarts before the turn's end was
-// written: the relaunch's settle reads the Stop's event, so the turn reads "Interrupted after N"
-// with the muted mark, not "Failed". A turn nobody stopped, and one a Stop never named, still read
-// as the news they are.
+// A Stop that took effect still decides the turn it named after Orca restarts before the turn's end
+// was written: the relaunch's settle reads the Stop's event, so the turn reads "Interrupted after N"
+// with the muted mark, not "Failed". A turn nobody stopped, one a Stop never named, and one a
+// turnless Stop was still settling when Orca died, still read as the news they are.
 
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
@@ -138,6 +138,26 @@ describe('a restart between a Stop and its turn end', () => {
     expect(errorRows).toEqual([])
   })
 
+  // A Stop naming its turn, as the phone sends one: its event names the turn, which is what a
+  // relaunch reads, so it still counts though Orca died with its interrupt out.
+  it.each([
+    ['Claude', CLAUDE_TURN],
+    ['Codex', CODEX_TURN]
+  ])('reads Interrupted after N for a %s Stop that named its turn', async (_label, identity) => {
+    await runningTurn(identity)
+    rig.cancelTurn.mockImplementationOnce(() => new Promise<never>(() => undefined))
+    void rig.host.cancel(QUEUED_RIG_CALLER, {
+      envelope: rig.envelope({ turnId: TURN }, 'agentSession.cancel', hostTestOperationId()),
+      turnId: TURN
+    })
+    await expect.poll(() => journal().stopMarks.latest()?.event.turnId).toBe(TURN)
+
+    await restartAndSettle()
+
+    expect(settled().turn).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
+    expect(settled().label).toMatch(/^Interrupted after /)
+  })
+
   it('reads Interrupted after N, marked interrupted: a close of the chat that died midway', async () => {
     await runningTurn(CODEX_TURN)
     // The host dies inside the close: the provider's close never answers, and nothing settles.
@@ -158,7 +178,8 @@ describe('a restart between a Stop and its turn end', () => {
     expect(errorRows).toEqual([])
   })
 
-  it('reads Failed after N, marked failed, when nobody stopped it', async () => {
+  // The notice row is the one explanation; the turn bar reads like a finished turn.
+  it('reads Worked for N, marked failed, when nobody stopped it', async () => {
     await runningTurn(CODEX_TURN)
 
     await restartAndSettle()
@@ -166,7 +187,7 @@ describe('a restart between a Stop and its turn end', () => {
     const { turn, label, mark, errorRows } = settled()
     expect(turn).toMatchObject({ state: 'interrupted' })
     expect(turn).not.toHaveProperty('outcome')
-    expect(label).toMatch(/^Failed after /)
+    expect(label).toMatch(/^Worked for /)
     expect(mark).toBe('failed')
     expect(errorRows).toEqual([
       expect.stringContaining('stopped while this response was in progress')
@@ -272,10 +293,11 @@ describe('a restart between a Stop and its turn end', () => {
     expect(settled().turn).not.toHaveProperty('outcome')
   })
 
-  // A Stop pressed before any turn showed stopped the turn its send was about to open, and no other.
+  // A Stop pressed before any turn showed stopped the turn its interrupt took, and no other.
   it('reads a turn a host send opened after the turnless Stop ended its own turn as no Stop of its', async () => {
     rig = await createQueuedMessageTestRig()
     const stopped = await rig.workingSend()
+    rig.cancelTurn.mockResolvedValueOnce({ cancelled: true, turnId: TURN })
     expect(await rig.stop()).toMatchObject({ ok: true })
     expect(journal().stopMarks.latest()?.event.turnId).toBeUndefined()
     await rig.settleAccepted(stopped, 'stopped')
@@ -320,6 +342,35 @@ describe('a restart between a Stop and its turn end', () => {
 
     expect(settled(NEXT_TURN).turn).toMatchObject({ state: 'interrupted' })
     expect(settled(NEXT_TURN).turn).not.toHaveProperty('outcome')
+  })
+
+  // What a turnless Stop binds is held in memory: a relaunch finds it unsettled, and it binds none.
+  it('reads the turn a turnless Stop was settling when Orca died as no Stop of its', async () => {
+    rig = await createQueuedMessageTestRig()
+    const stopped = await rig.workingSend()
+    // Orca dies while the interrupt is out: the Stop never settles.
+    rig.cancelTurn.mockImplementationOnce(async () => {
+      await journal().appendItem(
+        CODEX_TURN,
+        {
+          kind: 'turn',
+          turnId: TURN,
+          state: 'running',
+          startedAt: Date.now(),
+          userItemId: agentJournalSubmissionKey(stopped)
+        },
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+      return new Promise<never>(() => undefined)
+    })
+    void rig.stop()
+    await expect.poll(() => journal().activeTurnId()).toBe(TURN)
+    expect(journal().stopMarks.latest()?.event.turnId).toBeUndefined()
+
+    await restartAndSettle('exit-observed')
+
+    expect(settled(TURN).turn).toMatchObject({ state: 'interrupted' })
+    expect(settled(TURN).turn).not.toHaveProperty('outcome')
   })
 
   // A refusal is no record: the first Stop stays the one in force, so pressing again repeats it.

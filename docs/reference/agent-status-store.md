@@ -26,11 +26,11 @@ the structured-session mapping and nothing else.
 An audit on 2026-09-09 found six producers and three consumers, and three
 separate copies of the same row inside the main process alone:
 
-| Main-process copy                 | Keyed by  | Owned by                                                                          | Persisted          | Evicted                      |
-| --------------------------------- | --------- | --------------------------------------------------------------------------------- | ------------------ | ---------------------------- |
-| hook server `lastStatusByPaneKey` | paneKey   | `src/main/agent-hooks/server.ts`                                                  | `last-status.json` | tab close, pty exit, hydrate |
-| runtime `RuntimeAgentRowStore`    | paneKey   | `runtime-agent-row-store.ts` (deleted in PR 1b)                                   | no                 | pty exit only                |
-| structured feed `published`       | sessionId | `src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.ts` | no                 | never (a broadcast cache)    |
+| Main-process copy                 | Keyed by  | Owned by                                                                          | Persisted          | Evicted                                        |
+| --------------------------------- | --------- | --------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------- |
+| hook server `lastStatusByPaneKey` | paneKey   | `src/main/agent-hooks/server.ts`                                                  | `last-status.json` | tab close, pty exit, hydrate, worktree removal |
+| runtime `RuntimeAgentRowStore`    | paneKey   | `runtime-agent-row-store.ts` (deleted in PR 1b)                                   | no                 | pty exit only                                  |
+| structured feed `published`       | sessionId | `src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.ts` | no                 | never (a broadcast cache)                      |
 
 The second copy is a duplicate write: the OSC status parsed in main is
 forwarded to the hook server _and_ retained in the runtime store from the same
@@ -432,6 +432,7 @@ writers:
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Command Code output seeds, parked-pane seeds, pty-exit removal    | delete; main already emits the same facts                                                                |
 | structured bridge status writes                                   | delete; main now publishes the row                                                                       |
+| structured bridge failed-start row (the host refused the create)  | keep; a refused create leaves the host no session, so the bridge writes it from the launch record        |
 | launch placeholder seeds (a user launched an agent with a prompt) | keep for now; main holds the launch config and can seed later                                            |
 | dismissal, acknowledgement, unmount                               | keep; user facts and component lifecycle                                                                 |
 | remote-runtime OSC parse (bytes never transit local main)         | keep, fenced behind the host's published row once the host is new enough; rule 3 of the wire doc applies |

@@ -5,6 +5,7 @@ import { XIcon } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
@@ -75,6 +76,7 @@ function DialogContent({
           className
         )}
         {...props}
+        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       >
         {children}
         {showCloseButton && (

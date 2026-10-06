@@ -7,7 +7,9 @@ import { useMarkdownDocuments } from './useMarkdownDocuments'
 
 const runtime = vi.hoisted(() => ({
   stat: vi.fn(),
-  list: vi.fn()
+  list: vi.fn(),
+  toastError: vi.fn(),
+  translate: vi.fn()
 }))
 let runtimeConnectionId: string | null = null
 const target = {
@@ -36,6 +38,8 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 vi.mock('./markdown-document-list-request', () => ({
   requestSharedMarkdownDocumentList: runtime.list
 }))
+vi.mock('sonner', () => ({ toast: { error: runtime.toastError } }))
+vi.mock('@/i18n/i18n', () => ({ translate: runtime.translate }))
 
 let root: Root
 let container: HTMLDivElement
@@ -72,6 +76,7 @@ beforeEach(() => {
   runtimeConnectionId = null
   runtime.stat.mockResolvedValue({ isDirectory: false })
   runtime.list.mockResolvedValue([target])
+  runtime.translate.mockReturnValue('Localized listing failure')
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -84,6 +89,55 @@ afterEach(() => {
 })
 
 describe('Markdown document navigation', () => {
+  it('localizes a non-Error failure at settlement without restarting the request', async () => {
+    let rejectListing: (reason: unknown) => void = () => {}
+    runtime.list.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectListing = reject
+      })
+    )
+    await render(sourceFile('edit'), 'source')
+    runtime.translate.mockReturnValue('Current language listing failure')
+    await render(sourceFile('edit'), 'source')
+    await act(async () => rejectListing(null))
+
+    expect(runtime.list).toHaveBeenCalledOnce()
+    expect(runtime.translate).toHaveBeenCalledWith(
+      'auto.components.editor.useMarkdownDocuments.listFailed',
+      'Failed to list Markdown documents.'
+    )
+    expect(runtime.toastError).toHaveBeenCalledWith('Current language listing failure')
+    expect(controller.markdownDocuments).toEqual([])
+  })
+
+  it('preserves actual listing error detail', async () => {
+    runtime.list.mockRejectedValueOnce(new Error('SSH listing timed out'))
+    await render(sourceFile('edit', 'runtime-owner'), 'source')
+
+    expect(runtime.toastError).toHaveBeenCalledWith('SSH listing timed out')
+    expect(runtime.translate).not.toHaveBeenCalled()
+  })
+
+  it.each(['superseded', 'unmounted'])('ignores a %s listing failure', async (reason) => {
+    let rejectListing: (error: unknown) => void = () => {}
+    runtime.list.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectListing = reject
+      })
+    )
+    await render(sourceFile('edit'), 'source')
+    await (reason === 'superseded'
+      ? render(sourceFile('edit', 'next-owner'), 'source')
+      : act(async () => root.render(null)))
+    await act(async () => rejectListing(null))
+
+    expect(runtime.toastError).not.toHaveBeenCalled()
+    expect(runtime.translate).not.toHaveBeenCalled()
+    if (reason === 'superseded') {
+      expect(controller.markdownDocuments).toEqual([target])
+    }
+  })
+
   it.each([
     ['markdown-preview', 'source'],
     ['edit', 'preview'],

@@ -1,6 +1,8 @@
+import { toast } from 'sonner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import { getConnectionId } from '@/lib/connection-context'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -59,12 +61,17 @@ export function useMarkdownDocuments(
   const worktreePath = useAppStore((s) => selectMarkdownDocumentWorktreePath(s, worktreeId))
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
-  const [markdownDocumentsByWorktree, setMarkdownDocumentsByWorktree] = useState<
-    Record<string, MarkdownDocument[]>
-  >({})
-  const requestRef = useRef(0)
-
   const connectionId = getConnectionId(worktreeId)
+  const scopeKey = JSON.stringify([
+    activeFile.runtimeEnvironmentId,
+    connectionId,
+    worktreeId,
+    worktreePath
+  ])
+  const [snapshot, setSnapshot] = useState<{ key: string; documents: MarkdownDocument[] } | null>(
+    null
+  )
+  const requestRef = useRef(0)
 
   const refreshMarkdownDocuments = useCallback(
     async (requireFresh = false): Promise<void> => {
@@ -91,21 +98,25 @@ export function useMarkdownDocuments(
         if (requestRef.current !== requestId) {
           return
         }
-        setMarkdownDocumentsByWorktree((prev) => ({
-          ...prev,
-          [worktreeId]: documents
-        }))
+        setSnapshot({ key: scopeKey, documents })
       } catch (err) {
         console.error('Failed to list markdown documents:', err)
         if (requestRef.current === requestId) {
-          setMarkdownDocumentsByWorktree((prev) => ({
-            ...prev,
-            [worktreeId]: []
-          }))
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : translate(
+                  'auto.components.editor.useMarkdownDocuments.listFailed',
+                  'Failed to list Markdown documents.'
+                )
+          )
+        }
+        if (requestRef.current === requestId) {
+          setSnapshot({ key: scopeKey, documents: [] })
         }
       }
     },
-    [activeFile.runtimeEnvironmentId, connectionId, worktreeId, worktreePath]
+    [activeFile.runtimeEnvironmentId, connectionId, worktreeId, worktreePath, scopeKey]
   )
 
   const openMarkdownDocument = useCallback(
@@ -180,11 +191,14 @@ export function useMarkdownDocuments(
       return
     }
     void refreshMarkdownDocuments()
+    return () => {
+      requestRef.current += 1
+    }
   }, [activeFile.id, isMarkdown, viewMode, refreshMarkdownDocuments])
 
   const markdownDocuments = useMemo(
-    () => (worktreeId ? (markdownDocumentsByWorktree[worktreeId] ?? []) : []),
-    [worktreeId, markdownDocumentsByWorktree]
+    () => (snapshot?.key === scopeKey ? snapshot.documents : []),
+    [scopeKey, snapshot]
   )
 
   const previewProps = useMemo(

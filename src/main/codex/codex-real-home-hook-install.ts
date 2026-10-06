@@ -9,8 +9,10 @@ import {
   assertHooksJsonGeneration,
   backupRealHomeHooksJsonOnce,
   getRealHomeConfigTomlPath,
+  getRealHomeHookKeySourcePaths,
   getRealHomeHooksJsonPath
 } from './codex-real-home-hooks-json'
+import { upsertHookTrustEntries, type CodexTrustEntry } from './config-toml-trust'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
 import {
   CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS,
@@ -212,6 +214,9 @@ async function settleApproval(
       console.warn('[codex-real-home-hooks] background trust grant failed:', error)
     }
   }
+  if (outcome?.lane === 'rpc' && readCodexHooksEnabled()) {
+    approveOtherRealHomeKeySpellings(outcome.entries)
+  }
   installRetryAfterMs = recordRealHomeApprovalOutcome(outcome)
   approval = null
   // Why from the settings: hooks turned off during the session must not read as
@@ -268,7 +273,7 @@ async function installRealHomeCodexHook(
   if (plan.changed) {
     backupRealHomeHooksJsonOnce(userDataPath, previousRaw)
     mutateRealHomeHooksPreservingUserTrust({
-      sourcePath: hooksJsonPath,
+      sourcePaths: getRealHomeHookKeySourcePaths(),
       tomlPath: getRealHomeConfigTomlPath(),
       beforeHooks: config.hooks ?? {},
       afterHooks: plan.hooks,
@@ -295,12 +300,34 @@ async function installRealHomeCodexHook(
     useDefaultCodexHome: true,
     background: true
   }
-  if (await findCurrentManagedCodexHookTrust(grantPlan)) {
+  const current = await findCurrentManagedCodexHookTrust(grantPlan)
+  if (current) {
+    approveOtherRealHomeKeySpellings(current)
     return { verdict: 'installed' }
   }
   return {
     verdict: 'approving',
     grant: { plan: grantPlan, writes: plan.writes, command: material.command }
+  }
+}
+
+/**
+ * Codex's grant keys ~/.codex as spelled; a pane whose CODEX_HOME names a
+ * symlinked home keys it resolved. Codex's hash ignores the path, so it carries.
+ */
+function approveOtherRealHomeKeySpellings(granted: readonly CodexTrustEntry[]): void {
+  const [, ...otherSpellings] = getRealHomeHookKeySourcePaths()
+  if (otherSpellings.length === 0 || granted.length === 0) {
+    return
+  }
+  try {
+    upsertHookTrustEntries(
+      getRealHomeConfigTomlPath(),
+      otherSpellings.flatMap((sourcePath) => granted.map((entry) => ({ ...entry, sourcePath })))
+    )
+  } catch (error) {
+    // Why not a failure: the spelled key Codex wrote still approves default-home panes.
+    console.warn('[codex-real-home-hooks] could not approve the resolved ~/.codex key:', error)
   }
 }
 
@@ -320,7 +347,7 @@ export async function removeRealHomeCodexHookForOptOut(): Promise<RealHomeCodexH
         readCodexTrustGrantLedgerHomeForReconciliation(systemHomePath) !== null
       ) {
         // Why: the ledger outlives a sweep that removed the entry but not its trust.
-        removeSystemManagedHookTrustEntries(systemHomePath, getRealHomeHooksJsonPath())
+        removeSystemManagedHookTrustEntries(systemHomePath, getRealHomeHookKeySourcePaths())
       }
       return lane
     })

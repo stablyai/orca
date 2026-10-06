@@ -3,7 +3,7 @@ import { readRuntimeFileRange, statRuntimeReadTarget } from './runtime-file-rang
 import {
   readEditorCsvFileContent,
   CSV_PAGED_PREVIEW_BYTES
-} from '../components/editor/editor-csv-file-content'
+} from '../components/editor/csv/csv-file-content'
 import {
   fsReadFile,
   fsReadFileChunk,

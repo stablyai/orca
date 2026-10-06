@@ -127,6 +127,7 @@ export const UiUpdateFields = z
     // Why: sync hydration ignores this persisted startup view, so paired windows stay put.
     activeView: TopLevelViewSchema.optional(),
     sidebarWidth: z.number().finite().optional(),
+    sidebarOpen: z.boolean().optional(),
     rightSidebarOpen: z.boolean().optional(),
     rightSidebarTab: RightSidebarTabParam.optional(),
     rightSidebarExplorerView: z.enum(['files', 'search']).optional(),
@@ -145,6 +146,9 @@ export const UiUpdateFields = z
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
     agentsVisibleHostIds: z.array(z.string()).nullable().optional(),
     agentsFilterRepoIds: StringArray.optional(),
+    agentsHideWorkspacesFromOtherDevices: z.boolean().optional(),
+    agentsHideAutomationGeneratedWorkspaces: z.boolean().optional(),
+    agentsHideCliCreatedWorkspaces: z.boolean().optional(),
     agentsShowChildAgents: z.boolean().optional(),
     agentsCompactMode: z.boolean().optional(),
     agentsShowSearch: z.boolean().optional(),

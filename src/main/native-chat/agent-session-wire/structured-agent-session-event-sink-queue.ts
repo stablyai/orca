@@ -8,6 +8,7 @@ import type {
   StructuredAgentSessionSinkState,
   StructuredAgentSessionSinkWatermarks
 } from './structured-agent-session-event-sink'
+import type { StructuredAgentSessionTransitionJournal } from './structured-agent-session-transition'
 
 export type StructuredAgentSessionSinkOperation = {
   sequence: number
@@ -85,8 +86,10 @@ export class StructuredAgentSessionSinkQueue {
 
   journalLinkage = (): StructuredAgentSessionLinkageJournal | null => this.target?.journal ?? null
 
-  journalStopDecidesTurn = (turnId: string, endedAt: number, openedBy?: string): boolean =>
-    this.target?.journal.stopMarks.personStopDecides(turnId, endedAt, openedBy) ?? false
+  journalItems = (): StructuredAgentSessionTransitionJournal | null => this.target?.journal ?? null
+
+  journalStopDecidesTurn = (turnId: string, endedAt: number): boolean =>
+    this.target?.journal.stopMarks.personStopDecides(turnId, endedAt) ?? false
 
   bindReadingControl(control: StructuredAgentSessionReadingControl): () => void {
     this.readingControl = control

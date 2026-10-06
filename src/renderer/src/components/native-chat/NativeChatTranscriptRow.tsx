@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
@@ -12,6 +12,8 @@ import type { NativeChatSubagentDisclosure } from './native-chat-subagent-sectio
 import type { NativeChatTaskListPredecessors } from './native-chat-task-list-history'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
+import { NativeChatRewindContext } from './native-chat-rewind-context'
+import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
 
 /** Everything a row needs that is the same for every row. Held as one memoized
  *  object so a row's props change only when that row's own slot does. */
@@ -44,6 +46,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   slot: NativeChatTranscriptSlot
   context: NativeChatTranscriptRowContext
 }): React.JSX.Element {
+  // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
+  const rewind = useContext(NativeChatRewindContext)
   // A subagent's section is set off from the conversation it sits in.
   const sectionClassName = cn(
     slot.depth > 0 && 'border-l-2 border-border/60 pl-3',
@@ -73,6 +77,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     )
   }
   const { message, turnKey, status, receipt, turnDiff } = slot
+  const deliveryNotice = context.deliveryNotices?.get(message.id)
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
   const statusRow = status ? (
@@ -106,12 +111,17 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           onScrollMessageToTop={context.onScrollMessageToTop}
           onLinkClick={context.onLinkClick}
           allowFileUriLinks={context.allowFileUriLinks}
-          deliveryNotice={context.deliveryNotices?.get(message.id)}
+          deliveryNotice={deliveryNotice}
           folded={slot.folded}
           subagentRoster={slot.subagentRoster}
           subagentDisclosure={context.subagentDisclosure}
           inSubagentSection={slot.depth > 0}
           runtimeContext={context.runtimeContext}
+          rewind={
+            nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined)
+              ? rewind
+              : undefined
+          }
         />
       )}
       {slot.statusAbove ? null : statusRow}

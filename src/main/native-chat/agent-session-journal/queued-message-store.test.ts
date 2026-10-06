@@ -13,6 +13,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { QUEUED_MESSAGE_PAUSED_KEPT } from '../../../shared/agent-session-queued-message-wire'
 import Database from '../../sqlite/sync-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'
@@ -22,17 +23,19 @@ import {
   QueuedMessageNotConsumableError
 } from './journal-queued-messages'
 import type { AgentSessionJournal } from './journal-store'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
 import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener
 } from './journal-host-database-test-support'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-q',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null }
+  providerHandle: claudeProviderHandle('native-1', null)
 }
 
 let root: string
@@ -80,14 +83,20 @@ async function queueDraft(journal: AgentSessionJournal, messageId: string, text 
     messageId,
     body: message(text),
     fingerprint: `fp-${messageId}`,
-    hostInstance: 'proc-1'
+    hostInstance: 'proc-1',
+    source: { kind: 'user' }
   })
 }
 
 async function consumeDraft(
   journal: AgentSessionJournal,
   messageId: string,
-  options: { as?: string; expect?: 'waiting' | 'returned'; settledByOp?: string | null } = {}
+  options: {
+    as?: string
+    expect?: 'waiting' | 'returned'
+    settledByOp?: string | null
+    origin?: 'client' | 'host'
+  } = {}
 ) {
   const draft = journal.queuedMessages.get(messageId)
   await journal.appendSubmission(
@@ -96,7 +105,8 @@ async function consumeDraft(
       payloadFingerprint: draft?.fingerprint ?? `fp-${messageId}`,
       body: draft?.body ?? message('queued text'),
       fence: 0,
-      handoverRecorded: true
+      handoverRecorded: true,
+      ...(options.origin ? { origin: options.origin } : {})
     },
     {
       messageId,
@@ -125,7 +135,7 @@ describe('draft rows', () => {
     try {
       const version = Number(db.pragma('user_version', { simple: true }))
       // An old build compares stored == supported and keeps writing; a bump
-      // would latch it read-only after downgrade.
+      // would cost it every chat after a downgrade.
       expect(version).toBe(JOURNAL_DB_SCHEMA_VERSION)
       const table = db
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
@@ -150,7 +160,6 @@ describe('draft rows', () => {
     db.exec('DROP TABLE queued_messages')
     db.close()
     const journal = await open()
-    expect(journal.isReadOnly).toBe(false)
     const row = await queueDraft(journal, 'draft-1')
     expect(row.position).toBe(1)
   })
@@ -172,6 +181,53 @@ describe('draft rows', () => {
     const again = await queueDraft(journal, 'draft-1')
     expect(again.position).toBe(1)
     expect(journal.queuedMessages.list()).toHaveLength(1)
+  })
+
+  it("keeps who queued a card across reopen; a card with no readable sender is the person's", async () => {
+    const agent: AgentSessionMessageSource = {
+      kind: 'agent',
+      senders: [
+        {
+          party: {
+            address: 'structworker_1',
+            terminalHandle: 'structworker_1',
+            orcaSessionId: null
+          }
+        }
+      ],
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'run:r1',
+        dispatchId: 'd1',
+        messages: [{ messageId: 'm1', runId: 'r1', from: 'structworker_1' }]
+      }
+    }
+    const first = await open()
+    await first.queuedMessages.insert({
+      messageId: 'agent-card',
+      body: message('You have 1 orchestration message. Run `orca orchestration check --run r1`.'),
+      fingerprint: 'fp-agent-card',
+      hostInstance: 'proc-1',
+      source: agent
+    })
+    await queueDraft(first, 'before-the-column')
+    await queueDraft(first, 'unreadable')
+    await first.close()
+    closeTestJournalHostDatabases()
+    const db = new Database(journalDatabasePath(root))
+    db.prepare('UPDATE queued_messages SET source_json = NULL WHERE message_id = ?').run(
+      'before-the-column'
+    )
+    db.prepare('UPDATE queued_messages SET source_json = \'{"v":9}\' WHERE message_id = ?').run(
+      'unreadable'
+    )
+    db.close()
+    const reopened = await open()
+    expect(reopened.queuedMessages.list().map((row) => [row.messageId, row.source])).toEqual([
+      ['agent-card', agent],
+      ['before-the-column', { kind: 'user' }],
+      ['unreadable', { kind: 'user' }]
+    ])
   })
 
   it('drafts survive epoch replacement, which deletes only journal rows', async () => {
@@ -351,25 +407,32 @@ describe('returned transition (D1/N4)', () => {
     expect(journal.submission('sub-draft-1')?.queuedMessageId).toBe('draft-1')
   })
 
-  it("a restart between consume and handover sends the draft back to waiting under the restart's pause", async () => {
-    let journal = await open()
-    await queueDraft(journal, 'draft-1')
-    await consumeDraft(journal, 'draft-1')
-    await journal.close()
-    journal = await open()
-    expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
-    await journal.rejectQueuedSubmissions(0, HOST_RESTARTED, (submission) =>
-      journal.wroteBeforeOpen(submission.acceptedSequence)
-    )
-    // No stored hold: the restart's pause derives from the row's host instance.
-    expect(journal.queuedMessages.get('draft-1')).toMatchObject({
-      state: 'waiting',
-      holdReason: null,
-      hostInstance: 'proc-1',
-      consumedAs: null,
-      returnedReason: null
-    })
-  })
+  it.each([
+    { by: 'the queue', origin: 'host' as const, holdReason: null },
+    { by: 'the person', origin: 'client' as const, holdReason: QUEUED_MESSAGE_PAUSED_KEPT }
+  ])(
+    'a restart between $by’s consume and handover sends the draft back to waiting',
+    async ({ origin, holdReason }) => {
+      let journal = await open()
+      await queueDraft(journal, 'draft-1')
+      await consumeDraft(journal, 'draft-1', { origin })
+      await journal.close()
+      journal = await open()
+      expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
+      await journal.rejectQueuedSubmissions(0, HOST_RESTARTED, (submission) =>
+        journal.wroteBeforeOpen(submission.acceptedSequence)
+      )
+      // The queue's own hand-off waits under the restart's pause, derived from the row's host
+      // instance; a Send the person asked for waits for them, kept.
+      expect(journal.queuedMessages.get('draft-1')).toMatchObject({
+        state: 'waiting',
+        holdReason,
+        hostInstance: 'proc-1',
+        consumedAs: null,
+        returnedReason: null
+      })
+    }
+  )
 
   it('refuse → Send under a fresh id → refuse again returns the card again; a late duplicate of the first refusal never touches the re-send (N4)', async () => {
     const journal = await open()
@@ -519,6 +582,46 @@ describe('open-time repair and retention', () => {
       warn.mockRestore()
     }
   })
+
+  // The repair reaches the live hook's answer from the stored rejection and who asked for it.
+  it.each([
+    {
+      origin: 'client' as const,
+      cause: 'hostRestarted' as const,
+      holdReason: QUEUED_MESSAGE_PAUSED_KEPT
+    },
+    { origin: 'host' as const, cause: 'hostRestarted' as const, holdReason: null },
+    {
+      origin: 'client' as const,
+      cause: 'chatClosed' as const,
+      holdReason: QUEUED_MESSAGE_PAUSED_KEPT
+    },
+    { origin: 'host' as const, cause: 'chatClosed' as const, holdReason: null }
+  ])(
+    'a skipped hook for a $origin hand-off cut short ($cause) is repaired at open, holdReason $holdReason',
+    async ({ origin, cause, holdReason }) => {
+      let journal = await open()
+      await queueDraft(journal, 'draft-1')
+      await consumeDraft(journal, 'draft-1', { origin })
+      await journal.rejectQueuedSubmissions(
+        0,
+        agentSessionFailureWords(agentSessionFailureFact(cause), { surface: 'rejection' })
+      )
+      await journal.close()
+      // The hook "was skipped": the draft is back to dispatched behind the stored rejection.
+      const db = new Database(journalDatabasePath(root))
+      db.prepare(
+        "UPDATE queued_messages SET state = 'dispatched', hold_reason = NULL, consumed_as = 'sub-draft-1' WHERE message_id = ?"
+      ).run('draft-1')
+      db.close()
+      journal = await open()
+      expect(journal.queuedMessages.get('draft-1')).toMatchObject({
+        state: 'waiting',
+        holdReason,
+        consumedAs: null
+      })
+    }
+  )
 
   it('returns a dispatched row whose loaded submission is effectively rejected (downgrade wrote no hook)', async () => {
     let journal = await open()

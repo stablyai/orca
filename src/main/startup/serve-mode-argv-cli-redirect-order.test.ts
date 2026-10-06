@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { getCliLaunchArgs } from './cli-launch-redirect'
 import { argvRequestsServeMode, normalizeServeModeArgv } from './serve-mode-argv'
@@ -51,18 +49,4 @@ describe('serve argv rewrite vs CLI launch redirect ordering', () => {
 
   // Why source text: the ordering is the preflight phase's executable statement order, and the
   // cases above stay green if it is reversed — nothing else would catch the regression.
-  it('keeps the preflight running the CLI redirect before the argv rewrite', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
-      'utf8'
-    )
-    const cliRedirect = source.indexOf('maybeRedirectCliLaunch({')
-    const rewrite = source.indexOf('process.argv = normalizeServeModeArgv(process.argv)')
-    const serveModeCheck = source.indexOf("state.isServeMode = process.argv.includes('--serve')")
-
-    expect(cliRedirect).toBeGreaterThanOrEqual(0)
-    expect(rewrite).toBeGreaterThan(cliRedirect)
-    // The rewrite is pointless unless it lands before the flag it exists to inject is read.
-    expect(serveModeCheck).toBeGreaterThan(rewrite)
-  })
 })

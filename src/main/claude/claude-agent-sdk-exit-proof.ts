@@ -361,6 +361,8 @@ export function createClaudeChildTreeReaper(
  */
 export function proveClaudeChildExit(input: ClaudeChildExitProofInput): Promise<boolean> {
   return proveClaudeChildExitWithReaper(input, () =>
-    createClaudeChildTreeReaper(input.child, { exited: input.exited })
+    createClaudeChildTreeReaper(input.managed.child, {
+      exited: () => input.managed.rootVerdict === 'exited'
+    })
   )
 }

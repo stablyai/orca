@@ -1,14 +1,19 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
   getAiVaultAgentProviderSession,
   buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree
 } from './ai-vault-resume-command'
+import { dropDeletedSshResumeCwd } from './ai-vault-session-resume-preparation'
 
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 type RuntimePreference = { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
 
@@ -303,7 +308,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      "Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue; Remove-Item Env:ORCA_CODEX_HOME -ErrorAction SilentlyContinue; Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; codex 'resume' 'session one'"
+      "Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue; Remove-Item Env:ORCA_CODEX_HOME -ErrorAction SilentlyContinue; Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
     )
   })
 
@@ -324,7 +329,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      'set "CODEX_HOME=" & set "ORCA_CODEX_HOME=" & cd /d "C:\\Users\\alice\\repo" && codex "resume" "session one"'
+      'set "CODEX_HOME=" & set "ORCA_CODEX_HOME=" & cd /d "C:\\Users\\alice\\repo" && codex "-c" "tui.resume_cwd=current" "resume" "session one"'
     )
   })
 
@@ -345,7 +350,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex 'resume' 'session one'`
+      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'`
     )
   })
 
@@ -366,7 +371,7 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(command).toBe(
-      "cd '/home/alice/repo' && CODEX_HOME='/home/alice/custom-codex' codex 'resume' 'session one'"
+      "cd '/home/alice/repo' && CODEX_HOME='/home/alice/custom-codex' codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
     )
     expect(command).not.toContain('unset CODEX_HOME')
   })
@@ -422,7 +427,9 @@ describe('ai vault resume command runtime', () => {
           codexHome: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
         }
       })
-    ).toBe("CODEX_HOME='/home/alice/.codex' codex 'resume' 'session one'")
+    ).toBe(
+      "CODEX_HOME='/home/alice/.codex' codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
+    )
   })
 
   it('converts WSL UNC OMP transcript paths before building Linux resume commands', () => {
@@ -461,9 +468,40 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toMatchObject({
-      command: "codex 'resume' 'session one'",
+      command: "codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'",
       cwd: '/home/alice/repo',
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
+    })
+  })
+
+  it('resumes an SSH session at the workspace root once the host reports its folder deleted', async () => {
+    const pathExists = vi.fn().mockResolvedValue(false)
+    vi.stubGlobal('window', { api: { fs: { pathExists } } })
+    const session = {
+      agent: 'codex' as const,
+      sessionId: 'session one',
+      cwd: '/home/alice/wt/feat-x',
+      codexHome: '/home/alice/.codex',
+      executionHostId: 'ssh:dev-box' as const,
+      executionHostPlatform: 'linux' as const,
+      resumeCommand:
+        "cd '/home/alice/wt/feat-x' && CODEX_HOME='/home/alice/.codex' codex resume 'session one'"
+    }
+
+    const startup = buildAiVaultResumeStartupForWorktree({
+      state: makeState({ worktreePath: '/home/alice/wt/main' }),
+      worktreeId: 'repo-1::worktree-1',
+      session: await dropDeletedSshResumeCwd(session)
+    })
+
+    // Why: typing `cd <deleted folder> && …` into the SSH shell stopped the agent, and Codex
+    // resumed at the root would still prompt with the deleted folder preselected (#17745).
+    expect(startup.command).not.toContain('feat-x')
+    expect(startup.command).toContain("'-c' 'tui.resume_cwd=current' 'resume'")
+    expect(startup.cwd).toBeUndefined()
+    expect(pathExists).toHaveBeenCalledWith({
+      filePath: '/home/alice/wt/feat-x',
+      connectionId: 'dev-box'
     })
   })
 
@@ -485,7 +523,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toMatchObject({
-      command: "codex 'resume' 'session one'",
+      command: "codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'",
       cwd: '/home/alice/repo',
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       providerSession: { key: 'session_id', id: 'session one' }
@@ -510,7 +548,7 @@ describe('ai vault resume command runtime', () => {
           resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
         }
       })
-    ).toBe("codex 'resume' 'session one'")
+    ).toBe("codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'")
   })
 
   it('copies remote real-home Codex commands with explicit environment cleanup', () => {
@@ -532,7 +570,7 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(command).toBe(
-      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex 'resume' 'session one'`
+      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'`
     )
     expect(command).not.toContain('/retired/shared-home')
   })
@@ -555,7 +593,7 @@ describe('ai vault resume command runtime', () => {
           resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
         }
       })
-    ).toBe("my-codex 'resume' 'session one'")
+    ).toBe("my-codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'")
   })
 
   it('rebuilds overridden remote commands with the recorded remote host platform', () => {
@@ -581,7 +619,9 @@ describe('ai vault resume command runtime', () => {
             'cmd /d /s /c "cd /d ""C:/Users/alice/repo"" && set ""CODEX_HOME=C:/Users/alice/.codex"" && codex resume ""session one"""'
         }
       })
-    ).toBe("$env:CODEX_HOME='C:/Users/alice/.codex'; my-codex 'resume' 'session one'")
+    ).toBe(
+      "$env:CODEX_HOME='C:/Users/alice/.codex'; my-codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
+    )
   })
 
   it('applies the user default args to local Copilot AI Vault resumes', () => {
@@ -639,6 +679,6 @@ describe('ai vault resume command runtime', () => {
           resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
         }
       })
-    ).toBe("codex 'resume' 'session one'")
+    ).toBe("codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'")
   })
 })

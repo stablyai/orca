@@ -229,19 +229,4 @@ describeRender('the tasks route in a real browser', () => {
   }, 60_000)
 })
 
-/**
- * What this file deliberately does not claim.
- *
- * The three seams this series added — the barrel's `Linking`, the router handoff and the clipboard
- * verb — are each reached from a control that only renders once the screen has provider data, and
- * the shell double answers no provider RPC. A case that posted those frames onto the channel
- * itself would prove the double and the transport, which the bridge suites already prove, and
- * would read as a tap that it never performed.
- *
- * Where each is proved instead: the barrel's export and the router's, by the source census in
- * `mobile/src/tasks/mobile-tasks-external-link.test.ts`; the closure having no react-native
- * `Linking` left in it, by `mobile-web-app-tasks-external-links.test.mjs`; the verb end to end,
- * by the host and port-pair suites. A tap-level proof needs provider replies lifted from the
- * recorded corpus, the way the agent-history check lifts its session list, and belongs with the
- * device proof rather than here.
- */
+// The shell has no provider replies, so this suite does not claim taps on provider-backed controls.

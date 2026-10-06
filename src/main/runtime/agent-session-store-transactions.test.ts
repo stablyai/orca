@@ -16,6 +16,7 @@ import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from './agent-session-record-store-test-harness'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 
@@ -76,7 +77,7 @@ async function liveChat(
     fence,
     link: {
       linkId: `link-${counter}`,
-      handle: { provider: 'claude', sessionId: `provider-${counter}`, leafUuid: null },
+      handle: claudeProviderHandle(`provider-${counter}`, null),
       origin: 'created',
       mintedAtFence: fence,
       observedAt: NOW

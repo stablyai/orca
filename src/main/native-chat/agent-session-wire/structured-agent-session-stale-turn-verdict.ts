@@ -6,6 +6,10 @@
 // ladder — carries none, and neither does a later owner's death; the turn is then `unverifiable`
 // with no end at all, until a proof naming its owner is written and revises it.
 
+import {
+  interruptedAgentJournalToolCall,
+  isUnverifiedEndAgentJournalToolCall
+} from '../../../shared/agent-journal-tool-call-lifecycle'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -116,6 +120,35 @@ export function provenUnverifiableTurnRevisions(
           turn,
           turnVerdictFromDeathEvidence(evidence, ownerFence, stopFoundTurnLiveAt(journal, item))
         )
+      : []
+  })
+}
+
+/** The calls those settles closed with no proof, revised by the same proof: each only when it names
+ *  the owner that wrote the call, so a call that failed on its own stays failed. */
+export function provenUnverifiedToolCallRevisions(
+  items: readonly AgentJournalRenderItem[],
+  evidence: AgentSessionDeathEvidence | null | undefined,
+  journal: Pick<AgentSessionJournal, 'itemFence'>
+): JournalLifecycleMutationInput[] {
+  const ownerFence = evidence?.ownerFence
+  if (ownerFence === undefined) {
+    return []
+  }
+  return items.flatMap((item): JournalLifecycleMutationInput[] => {
+    const identity = parseAgentJournalItemKey(item.itemId)
+    return identity &&
+      item.body.kind === 'tool-call' &&
+      isUnverifiedEndAgentJournalToolCall(item.body) &&
+      journal.itemFence(item.itemId) === ownerFence
+      ? [
+          {
+            kind: 'item',
+            identity,
+            body: interruptedAgentJournalToolCall(item.body),
+            turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+          }
+        ]
       : []
   })
 }

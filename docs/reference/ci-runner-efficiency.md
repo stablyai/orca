@@ -2519,3 +2519,111 @@ catalog subjects and declared qualification inputs survive the rebase unchanged.
 These are fresh-process wall times for this cohort, excluding dependency setup,
 queues and other test shards. They do not measure full-shard balance, total PR
 runner demand, or a change to the dashboard's PR runtime percentiles.
+
+## October 5 fused terminal cursor row scans
+
+Readiness checks repeatedly read terminal rows to recognize composer text.
+The shared reader now collects undimmed text and the first visible glyph's style
+in one pass. The cursor suffix remains a separate scan; dim glyph attributes,
+empty cells, wide characters and wrapped spaces keep their existing behavior.
+No grid data is retained between calls.
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/37263358478)
+used source `1bec53ceb23b5f296a38ffa0e085778d32fc7849`, Linux ARM,
+Node 24.21.0, pnpm 12.8.1 and one worker. All six fresh processes ran the same
+49-case readiness census module, with separate empty Vite caches, filesystem
+transform caching disabled and Node compile caching disabled.
+
+| Complete focused process | Original | Candidate | Paired saving |
+| ------------------------ | -------- | --------- | ------------- |
+| Pair 1                   | 66.412s  | 60.464s   | 5.948s        |
+| Pair 2, reversed order   | 66.880s  | 61.061s   | 5.819s        |
+| Pair 3                   | 68.056s  | 65.821s   | 2.234s        |
+
+The median paired saving is 5.819 seconds, or 8.7% of this fixed workload.
+All 294 timed case outcomes passed. Separate qualification preserves complete
+context/composer outputs on 98 recordings and the logical cursor/projection
+outputs of all 192 Runtime census cases. Nine actual scanner faults fail the
+intended assertions; the 89-case IME/composer slice also passes. Blank-row tests
+bound cell reads to 72 instead of the original 132 for a 12-column, five-row grid,
+with and without a reusable cell adapter.
+
+The raw timer-driven polling trace differed and was excluded from equivalence
+evidence. Logical per-frame output captures match; no raw polling-count equality
+is claimed. These measurements exclude setup, queues and other modules and do
+not establish a change in full-shard balance, PR percentiles or runner demand.
+
+## October 5 Qoder test import guards
+
+The direct Qoder Runtime tests now import the existing unused-default-RPC guard
+before their Runtime fixture. Their complete test bodies remain unchanged.
+The guard rejects an unexpected registry access instead of loading the full
+default-method graph. The three real registry catalogs remain unmocked.
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/37266875139)
+used fixed source `1bec53ceb23b5f296a38ffa0e085778d32fc7849`, Linux ARM,
+Node 24.21.0, pnpm 12.8.1 and four isolated fork workers. Every fresh process ran
+both Qoder files and all three catalogs: 85 cases across five files. Each invocation
+used a distinct empty Vite cache, with results, filesystem transform and Node
+compile caching disabled. All 510 timed outcomes passed.
+
+| Complete five-file process | Original | Candidate | Paired saving |
+| -------------------------- | -------- | --------- | ------------- |
+| Pair 1                     | 17.677s  | 16.323s   | 1.354s        |
+| Pair 2, reversed order     | 16.827s  | 16.021s   | 0.806s        |
+| Pair 3                     | 17.324s  | 16.211s   | 1.113s        |
+
+The median paired saving is 1.113 seconds, or 6.4% of this fixed workload.
+Separate actual faults in retained launch recipes, Qoder command selection and
+method registration fail the same intended assertions before and after the
+imports. Generated launch IDs and shifted stack lines differ in the raw failure
+messages; they were preserved and are not claimed byte-identical.
+
+The single hosted trial occupied 134 runner-seconds including all six samples,
+shared setup and upload. That is trial cost, not a production saving. These
+focused process measurements do not establish full-shard savings, PR runtime
+percentiles, queue relief or a change in the organization's runner allowance.
+
+## October 5 localization gate work
+
+The localization coverage audit now classifies only AST nodes that can emit string
+parts, and reuses the class-property exclusion set. It still visits every child and
+handles JSX text separately. The extraction scope skips only source extensions and
+test paths explicitly excluded by the real extractor configuration. Catalogs,
+assets, unknown extensions, configuration changes and mixed production changes
+still select extraction; both sides of a rename remain covered.
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/37360932616)
+used fixed source `761d63a4e52ff7915d4432c004df13182db63010`, Linux ARM,
+Node 24.21.0 and pnpm 12.8.1. Dependency setup was shared outside the samples.
+Each timed check was a fresh process with Node compile caching disabled.
+
+| Complete coverage audit | Original | Candidate | Paired saving |
+| ----------------------- | -------- | --------- | ------------- |
+| Pair 1                  | 9.182s   | 4.924s    | 4.258s        |
+| Pair 2, reversed order  | 9.133s   | 4.924s    | 4.209s        |
+| Pair 3                  | 8.930s   | 4.924s    | 4.007s        |
+
+The median paired saving is 4.209 seconds, or
+46.1% of this audit. All three pairs improved; the original range was
+0.252 seconds. Complete JSON finding inventories match byte-for-byte,
+including all 13 findings and their source locations. All 53 candidate tests pass.
+Four real audit mutations fail their intended assertions. An ignored test fixture
+passes the real extraction gate; renaming it into production source selects the
+gate and fails on the deliberately missing translation key.
+
+For an existing ignored test path, three conditional comparisons avoid a median
+27.628 seconds of extraction work. Original arms really run the full gate
+and pass; candidate extraction arms are explicitly `not_selected`. The routing
+tests pin the actual extractor inputs and exclusions, so configuration drift fails
+the tests. This saving applies only when every changed source path is ignored.
+
+Relay integration also omits desktop native preparation and the Electron archive
+cache. Its existing two files use Node's SQLite, HTTP and WebSocket paths; general
+unit shards retain their desktop setup. The existing 16 relay cases pass locally
+on Node 24.20.0 and 26.7.0. Removed setup work is not a measured timing saving.
+
+These comparisons exclude queues and other checks. Extraction already overlaps
+other preflight work, so conditional avoidance does not translate directly into
+preflight wall time. No change to full-PR percentiles or the concurrency allowance
+is established.

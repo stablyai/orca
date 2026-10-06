@@ -27,8 +27,12 @@ function harness(options: {
   structuredCreateError?: Error
   deliveredMessageId?: string | null
   terminalPromptDelivered?: boolean
+  /** Whether the surface reports that its typed line took the offered prompt. */
+  lineCarriesPrompt?: boolean
 }) {
   const calls: string[] = []
+  const carried = (startupPrompt: string | undefined) =>
+    startupPrompt && (options.lineCarriesPrompt ?? true) ? { promptRodeLaunchCommand: true } : {}
   const createWorktree = vi.fn(
     async (args: {
       create: Record<string, unknown>
@@ -38,7 +42,8 @@ function harness(options: {
       calls.push(`createWorktree(startupAgent=${String(args.startupAgent)})`)
       return {
         worktreeId: 'wt-new',
-        startupTerminalHandle: args.startupAgent ? 'term_agent_first' : undefined
+        startupTerminalHandle: args.startupAgent ? 'term_agent_first' : undefined,
+        ...carried(args.startupPrompt)
       }
     }
   )
@@ -56,9 +61,9 @@ function harness(options: {
     }
     return { sessionId: 'sess-1', handle: 'handle_structured', fence: 4 }
   })
-  const createTerminalAgent = vi.fn(async (_args: { startupPrompt?: string }) => {
+  const createTerminalAgent = vi.fn(async (args: { startupPrompt?: string }) => {
     calls.push('createTerminalAgent')
-    return { handle: 'term_1' }
+    return { handle: 'term_1', ...carried(args.startupPrompt) }
   })
   const deliverStructuredPrompt = vi.fn(async () => {
     calls.push('deliverStructuredPrompt')
@@ -297,10 +302,10 @@ describe('the prompt receipt', () => {
 })
 
 /**
- * A terminal takes its prompt one of two ways, and which one is not a preference: an agent whose
- * CLI accepts a prompt argument must get it on argv, because that is the transport that survives
- * multi-line and special-character text. Only an agent with no such argument is written to as
- * keystrokes. `claude` is argv-mode, `aider` is `stdin-after-start` — the two halves of the table.
+ * A terminal takes its prompt one of two ways. An agent whose CLI accepts a prompt argument is
+ * offered it on the launch command, and the surface that types that line reports whether it rode;
+ * everything else is written as keystrokes once the agent is ready. `claude` is argv-mode, `aider`
+ * is `stdin-after-start` — the two halves of the table.
  */
 describe('delivering a launch prompt to a terminal agent', () => {
   const SUBMIT = { text: 'do the thing', delivery: 'submit' } as const
@@ -329,6 +334,8 @@ describe('delivering a launch prompt to a terminal agent', () => {
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
     expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
       handle: 'term_1',
+      agent: 'aider',
+      freshLaunch: true,
       prompt: SUBMIT
     })
     // Folding it into argv would have appended it as an argument the CLI does not accept.
@@ -348,6 +355,39 @@ describe('delivering a launch prompt to a terminal agent', () => {
     expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
   })
 
+  it('pastes an argv agent’s prompt after start when the surface reports its typed line could not carry it', async () => {
+    const h = harness({
+      createSupport: { supported: false, reason: 'wsl' },
+      lineCarriesPrompt: false
+    })
+    const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
+
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    // Offered to the launch command; the surface, not the executor, decided it did not ride.
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({
+      startupPrompt: 'do the thing'
+    })
+    expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
+      handle: 'term_1',
+      agent: 'claude',
+      freshLaunch: true,
+      prompt: SUBMIT
+    })
+  })
+
+  it('pastes into an agent-first create’s startup terminal when its typed line could not carry the prompt', async () => {
+    const h = harness({ settings: null, lineCarriesPrompt: false })
+    const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
+
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
+      handle: 'term_agent_first',
+      agent: 'claude',
+      freshLaunch: true,
+      prompt: SUBMIT
+    })
+  })
+
   it('writes into a reused terminal, whose process started before the launch existed', async () => {
     const h = harness({})
     const result = await h.run({
@@ -361,6 +401,8 @@ describe('delivering a launch prompt to a terminal agent', () => {
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
     expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
       handle: 'term_existing',
+      agent: 'claude',
+      freshLaunch: false,
       prompt: SUBMIT
     })
   })
@@ -455,12 +497,29 @@ describe('caller-supplied launch inputs', () => {
     // A structured session runs in its workspace, so honouring the cwd and honouring the
     // preference are mutually exclusive; the receipt has to say which one lost.
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
-    expect(result.receipt).toMatchObject({
+    expect(result.receipt).toEqual({
       mode: 'terminal',
       preferred: 'structured',
-      reason: 'tui_launch_command'
+      reason: 'tui_launch_command',
+      detail:
+        'Your default is a structured chat session, but it asks to start in a folder other than its workspace; started a terminal agent instead.'
     })
     expect(h.createStructuredSession).not.toHaveBeenCalled()
+  })
+
+  // A custom launch command applies to terminal launches only; native chat ignores it.
+  it.each([
+    ['claude', 'claude-wrapper'],
+    ['codex', 'codex-nightly']
+  ] as const)('opens a structured %s session despite launch command %s', async (agent, command) => {
+    const h = harness({
+      settings: { ...STRUCTURED_PREFERENCE, agentCmdOverrides: { [agent]: command } }
+    })
+    const result = await h.run({ agent, target: EXISTING })
+
+    expect(result.outcome.kind).toBe('structured')
+    expect(result.receipt).toMatchObject({ mode: 'structured', reason: 'user_default' })
+    expect(h.createTerminalAgent).not.toHaveBeenCalled()
   })
 
   it('still opens a structured session when the cwd names the workspace root', async () => {

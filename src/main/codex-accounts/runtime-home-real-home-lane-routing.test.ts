@@ -145,14 +145,13 @@ describe('CodexRuntimeHomeService', () => {
     const service = new CodexRuntimeHomeService(store as never)
 
     expect(service.isHostSystemDefaultRealHome()).toBe(true)
-    expect(service.getSelectedHostCodexHomeRoute()).toBe('real-home')
     expect(service.prepareForCodexLaunch()).toBeNull()
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([
       getRuntimeCodexHomePath(),
       getSystemCodexHomePath()
     ])
     service.setRealHomeLaneGate(() => false)
-    expect(service.getSelectedHostCodexHomeRoute()).toBe('shared-home')
+    expect(service.isHostSystemDefaultRealHome()).toBe(false)
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
     const markerPath = join(
       testState.userDataDir,

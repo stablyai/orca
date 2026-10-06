@@ -10,6 +10,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const roots: string[] = []
@@ -56,7 +57,7 @@ async function liveStore(): Promise<AgentSessionRecordStore> {
     fence: reserved.record.lease.runtimeFence,
     link: {
       linkId: 'link-renewal',
-      handle: { provider: 'codex', threadId: 'thread-renewal' },
+      handle: codexProviderHandle('thread-renewal'),
       origin: 'created',
       mintedAtFence: reserved.record.lease.runtimeFence,
       observedAt: NOW

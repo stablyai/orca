@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
@@ -262,7 +263,7 @@ export function SourceControlHeaderToolbar({
                 beside PR links or overflow actions — collapse to reach those. */}
             <div className="flex min-w-0 w-full flex-1 items-center gap-1.5">
               <Search className="size-3.5 shrink-0 text-muted-foreground" />
-              <input
+              <ImeInput
                 ref={filterInputRef}
                 data-testid="source-control-filter-input"
                 type="text"

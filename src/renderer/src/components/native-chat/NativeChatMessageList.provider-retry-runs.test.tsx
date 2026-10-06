@@ -10,8 +10,6 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
-const NO_CARDS: readonly string[] = []
-
 let restoreViewport = (): void => {}
 beforeAll(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
@@ -44,7 +42,7 @@ function transcript(items: AgentJournalRenderItem[]) {
   return (
     <NativeChatMessageList
       session={{
-        messages: projectStructuredAgentSessionMessages(items, [], [], NO_CARDS),
+        messages: projectStructuredAgentSessionMessages(items, [], []),
         status: 'ready',
         sessionId: 'live-codex',
         agent: 'codex',
@@ -56,7 +54,6 @@ function transcript(items: AgentJournalRenderItem[]) {
       }}
       isWorking={false}
       expandSignal
-      fontScale={1}
     />
   )
 }
