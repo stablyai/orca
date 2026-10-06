@@ -1,4 +1,5 @@
 import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu'
 import {
@@ -7,6 +8,7 @@ import {
   getLocalFileManagerLabel,
   openOpenInAppsSettings,
   openWorktreePath,
+  WorktreeOpenInMenuItems,
   WorktreeOpenInSubMenu
 } from './WorktreeOpenInMenu'
 
@@ -14,6 +16,34 @@ type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>
 }
+
+type MenuItemProps = { onSelect?: () => void; disabled?: boolean; children?: React.ReactNode }
+
+const items = vi.hoisted((): { list: MenuItemProps[] } => ({ list: [] }))
+const owner = vi.hoisted(
+  (): { runtimeEnvironmentId: string | null; connectionId: string | null | undefined } => ({
+    runtimeEnvironmentId: null,
+    connectionId: undefined
+  })
+)
+
+vi.mock(import('@/components/ui/dropdown-menu'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  DropdownMenuItem: (props: MenuItemProps) => {
+    items.list.push(props)
+    return null
+  }
+}))
+
+vi.mock(import('@/lib/worktree-runtime-owner'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getLocalOpenRuntimeOwnerForWorktree: () => owner.runtimeEnvironmentId
+}))
+
+vi.mock(import('@/lib/connection-owner-resolution'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getConnectionIdFromState: () => owner.connectionId
+}))
 
 const {
   mockState,
@@ -88,6 +118,9 @@ function findByType(node: unknown, type: unknown): ReactElementLike {
 describe('WorktreeOpenInMenu', () => {
   beforeEach(() => {
     mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [] }
+    items.list = []
+    owner.runtimeEnvironmentId = null
+    owner.connectionId = undefined
     toastErrorMock.mockReset()
     openInFileManagerMock.mockReset()
     openInExternalEditorMock.mockReset()
@@ -312,6 +345,35 @@ describe('WorktreeOpenInMenu', () => {
       path: '/home/ada/project',
       command: 'code',
       connectionId: 'ssh-1'
+    })
+  })
+
+  it('treats an SSH folder workspace as SSH even though its repo prop has no connection', () => {
+    // Why: a folder workspace's synthetic repo has no connectionId; an SSH route has no runtime.
+    mockState.settings = {
+      activeRuntimeEnvironmentId: 'runtime-1',
+      openInApplications: [{ id: 'vscode', label: 'VS Code', command: 'code' }]
+    }
+    owner.connectionId = 'ssh-1'
+
+    renderToStaticMarkup(
+      <WorktreeOpenInMenuItems
+        worktreeId="folder:fw-1"
+        worktreePath="/home/ada/project"
+        connectionId={null}
+      />
+    )
+    const [vsCode, fileManager] = items.list
+
+    expect(fileManager.disabled).toBe(true)
+    expect(renderToStaticMarkup(<>{fileManager.children}</>)).toContain('Local only')
+    expect(vsCode.disabled).toBe(false)
+    vsCode.onSelect?.()
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/home/ada/project',
+      command: 'code',
+      connectionId: 'ssh-1',
+      runtimeEnvironmentId: null
     })
   })
 

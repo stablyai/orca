@@ -15,6 +15,7 @@ import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { getExternalEditorOpenCapability } from '@/lib/external-editor-open-capability'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import { getLocalOpenRuntimeOwnerForWorktree } from '@/lib/worktree-runtime-owner'
+import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { ShellOpenExternalEditorResult } from '../../../../shared/shell-open-types'
@@ -324,9 +325,12 @@ export function WorktreeOpenInMenuItems({
   const runtimeEnvironmentId = useAppStore((s) =>
     getLocalOpenRuntimeOwnerForWorktree(s, worktreeId, executionHostId)
   )
+  // Why: a folder workspace's synthetic repo has no connectionId, so the caller's prop misses SSH.
+  const ownerConnectionId =
+    useAppStore((s) => getConnectionIdFromState(s, worktreeId)) ?? connectionId
   const openInWorktreePath = useOpenInWorktreePath({
     worktreePath,
-    connectionId,
+    connectionId: ownerConnectionId,
     runtimeEnvironmentId
   })
   const openInApplications = useAppStore(
@@ -342,7 +346,7 @@ export function WorktreeOpenInMenuItems({
         const availability = getOpenInEntryAvailability(
           entry,
           settings,
-          connectionId,
+          ownerConnectionId,
           runtimeEnvironmentId
         )
         return (
