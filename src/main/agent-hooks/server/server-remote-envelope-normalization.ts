@@ -12,6 +12,7 @@ export type RemoteAgentStatusEnvelope = {
   env?: string
   version?: string
   launchToken?: string
+  hostTurnRevision?: unknown
   hasExplicitPrompt?: boolean
   promptInteractionKey?: string
   agentPresence?: unknown

@@ -85,9 +85,10 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
   const dirsToRefresh = new Set<string>()
   const childPathIndexes = new Map<string, Map<string, TreeNode>>()
   let hasLinkedCache: boolean | undefined
+  let cachedDirKeys: string[] | undefined
   let cachedDirPathIndex: ReadonlyMap<string, string> | undefined
   const cachePathIndex = (): ReadonlyMap<string, string> =>
-    (cachedDirPathIndex ??= createCachedDirPathIndex(cache))
+    (cachedDirPathIndex ??= createCachedDirPathIndex(cache, (cachedDirKeys ??= Object.keys(cache))))
   const cachedDirsToPurge = new Set<string>()
   const reconciledRenameSources = new Set<string>()
   let needsFullRefresh = false
@@ -236,7 +237,11 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
     }
   }
 
-  purgeDirCacheSubtrees(setDirCache, cachedDirsToPurge)
+  purgeDirCacheSubtrees(
+    setDirCache,
+    cachedDirsToPurge,
+    cachedDirKeys ? { cache, keys: cachedDirKeys } : undefined
+  )
   purgeExpandedDirsSubtrees(worktreeId, cachedDirsToPurge)
 
   if (needsFullRefresh) {

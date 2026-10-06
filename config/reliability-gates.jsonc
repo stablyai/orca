@@ -11,6 +11,115 @@
   },
   "gates": [
     {
+      "id": "agent-status.claude-task-wakeup-cycle",
+      "title": "Claude task wake-ups cannot finish an automation before its lead turn",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-status",
+      "layer": "execution-host-hooks-and-runtime-wait",
+      "surfaces": [
+        "canonical agent status",
+        "terminal automation completion",
+        "local and relayed cancellation"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "remote-runtime"
+      ],
+      "coverageNotes": "Real HTTP hook ingress and relay forwarding, production runtime automation observer, and captured Claude native ready bytes run locally on macOS. SSH/WSL transport ownership is simulated; physical remote hosts and native Windows/Linux are not verified.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/24878",
+        "https://github.com/stablyai/orca/issues/23942"
+      ],
+      "invariant": "An ended tracked task stays pending until its wake-up and finishing turn end; missing wake-ups expire only after 60 idle seconds. Cancellation remains owned by the executing host, duplicate delivery cannot create a fresh completion veto, and fresh native rest can recover a lost finishing Stop.",
+      "oracle": "Replay captured hook ordering through production HTTP entry points and native ready bytes through the actual automation observer. Check local/relay state, cancellation/new-turn fencing, fresh versus retained rest, bounded task/timer ownership, and zero global status reads during indexed runtime waits.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts src/main/runtime/tui-idle-claude-task-wakeup.test.ts src/main/runtime/claude-task-wakeup-indexed-read.test.ts src/shared/claude-owed-notification-resource-contract.test.ts src/shared/agent-hook-listener-claude-task-notification.test.ts src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts src/relay/agent-hook-interrupt-reconciliation.test.ts src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts"
+      ],
+      "testFiles": [
+        "src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts",
+        "src/main/runtime/tui-idle-claude-task-wakeup.test.ts",
+        "src/main/runtime/claude-task-wakeup-indexed-read.test.ts",
+        "src/shared/claude-owed-notification-resource-contract.test.ts",
+        "src/shared/agent-hook-listener-claude-task-notification.test.ts",
+        "src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts",
+        "src/relay/agent-hook-interrupt-reconciliation.test.ts",
+        "src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts",
+          "assertions": [
+            "does not reopen notification debt for a duplicate child-end post",
+            "waits on captured ready bytes through task finishing or missing wake-up expiry: %s"
+          ]
+        },
+        {
+          "file": "src/main/runtime/claude-task-wakeup-indexed-read.test.ts",
+          "assertions": [
+            "reads only its pane with 512 unrelated agents, including an empty index: pending=%s"
+          ]
+        },
+        {
+          "file": "src/shared/claude-owed-notification-resource-contract.test.ts",
+          "assertions": [
+            "caps live task records without evicting a tracked running task",
+            "shares one timer across 512 panes and publishes nothing for closed owners"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts src/main/runtime/tui-idle-claude-task-wakeup.test.ts src/main/runtime/claude-task-wakeup-indexed-read.test.ts src/shared/claude-owed-notification-resource-contract.test.ts src/shared/agent-hook-listener-claude-task-notification.test.ts src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts src/relay/agent-hook-interrupt-reconciliation.test.ts src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts",
+          "result": "passed",
+          "durationSeconds": 8.62,
+          "summary": "Exact stored command with repository Vitest configuration passes 148 tests across eight files including out-of-order launch/end/delivery controls. Includes real HTTP/relay ingress, 12 blank/padded Agent/Bash/Monitor IDs, captured-native-rest automation completion, duplicate/cancellation controls, owner/phase gates, timer/task bounds and indexed reads. Three upstream interrupt suites pass 28 more tests separately."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Focused local host/relay/runtime suite; CI p95 and platform soak not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Deterministic local fake-clock replay and real HTTP ingress pass; no 100-run or cross-platform soak claim."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Identical corrected production automation test with actual Claude launch ownership prematurely completes on both parent main and the original PR; repaired candidate holds through task finishing. Same endpoint captures fail 12 of 18 parent tests. Indexed runtime counters fail before targeted reads and pass after."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "At most 256 tracked tasks per pane, one shared host deadline timer across 512 panes, no publication after pane cleanup, and zero full-store reads with 512 irrelevant agents on the indexed automation wait path. Uses existing hook-server pane index; no reader cache or polling loop added."
+      },
+      "knownGaps": [
+        "Missing notifications intentionally postpone completion up to 60 idle seconds plus the existing runtime polling interval.",
+        "Older remote hosts without optional phase/revision metadata retain their previous behavior.",
+        "Physical SSH/WSL, native Windows/Linux, packaged Electron and an authenticated end-to-end Claude automation run are unverified."
+      ],
+      "promotionCriteria": [
+        "Collect cross-platform and physical remote-host evidence plus the policy soak threshold without relaxing owner, phase, deadline or resource assertions."
+      ],
+      "demotionRule": "Remain experimental until platform and soak evidence; investigate failures without extending deadlines or accepting foreign/stale ownership."
+    },
+    {
       "id": "profile-storage.sqlite-authority-without-automatic-json",
       "title": "SQLite remains authoritative after automatic JSON snapshots are retired",
       "maturity": "experimental",
