@@ -15662,6 +15662,9 @@
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "由于目的地更改，图像插入被取消。导入的文件被保留。",
           "destinationChanged": "由于目的地更改，图像插入被取消。再试一次。"
+        },
+        "RichMarkdownEmojiMenu": {
+          "dialogLabel": "表情选择器"
         }
       },
       "diff": {

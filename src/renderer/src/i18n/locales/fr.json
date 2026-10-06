@@ -15765,6 +15765,9 @@
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "Insertion d'image annulée car la destination a changé. Le fichier importé a été conservé.",
           "destinationChanged": "Insertion d'image annulée car la destination a changé. Essayer à nouveau."
+        },
+        "RichMarkdownEmojiMenu": {
+          "dialogLabel": "Sélecteur d'emoji"
         }
       },
       "diff": {

@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import { useId, type RefObject } from 'react'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeReviewProvider } from './worktree-meta-updates'
@@ -11,6 +11,7 @@ type WorktreeReviewLinkFieldProps = {
   value: string
 }
 
+/** Labelled GitHub PR / GitLab MR link input for the worktree meta dialog. */
 export function WorktreeReviewLinkField({
   inputRef,
   onKeyDown,
@@ -19,14 +20,16 @@ export function WorktreeReviewLinkField({
   value
 }: WorktreeReviewLinkFieldProps): React.JSX.Element {
   const isGitLab = provider === 'gitlab'
+  const inputId = useId()
   return (
     <div className="space-y-1">
-      <label className="text-[11px] font-medium text-muted-foreground">
+      <label htmlFor={inputId} className="text-[11px] font-medium text-muted-foreground">
         {isGitLab
           ? translate('auto.components.sidebar.WorktreeMetaDialog.gitlabMR', 'GitLab MR')
           : translate('auto.components.sidebar.WorktreeMetaDialog.1b91db7e14', 'GH PR')}
       </label>
       <Input
+        id={inputId}
         ref={inputRef}
         value={value}
         onChange={(event) => onValueChange(event.target.value)}

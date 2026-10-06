@@ -20,6 +20,7 @@ type FolderWorkspacePrChecksRowProps = {
   onLoadCheckDetails: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
 }
 
+/** Expandable PR checks summary row, with an open-externally button kept outside the toggle. */
 export function FolderWorkspacePrChecksRow({
   row,
   expanded,
@@ -56,57 +57,60 @@ export function FolderWorkspacePrChecksRow({
         expanded ? 'border-border bg-card' : 'hover:bg-accent'
       )}
     >
-      <div
-        role="button"
-        tabIndex={0}
-        className="flex w-full min-w-0 items-start gap-2 rounded-md px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        onClick={onToggle}
-        onKeyDown={(event) => {
-          if (event.key !== 'Enter' && event.key !== ' ') {
-            return
-          }
-          event.preventDefault()
-          onToggle()
-        }}
-        aria-expanded={expanded}
-        aria-label={toggleDetailsLabel}
-      >
-        <ChevronRight
-          className={cn(
-            'mt-0.5 size-3 shrink-0 text-muted-foreground transition-transform',
-            expanded && 'rotate-90'
-          )}
-        />
-        <ReviewIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <PrChecksRowHeader row={row} />
-          <div className="mt-1 truncate text-[12px] text-foreground/90">{row.title}</div>
-          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-            {showStatusIcon ? (
-              <StatusIcon
-                className={cn(
-                  'size-3 shrink-0',
-                  CHECK_COLOR[row.checkTone],
-                  animateStatusIcon && 'animate-spin'
-                )}
-              />
-            ) : null}
-            <span className="truncate">{row.summary}</span>
-            {row.repo ? <span className="shrink-0">· {row.repo.displayName}</span> : null}
-            {row.branch ? <span className="truncate">· {row.branch}</span> : null}
-          </div>
-          {row.detailNames.length > 0 ? (
-            <div className="mt-1 truncate text-[11px] text-muted-foreground">
-              {row.detailNames.join(', ')}
+      {/* Why: an ARIA button's descendants are presentational, so the external-open button sits beside the toggle. */}
+      <div className="flex w-full min-w-0 items-start">
+        <div
+          role="button"
+          tabIndex={0}
+          className="flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onClick={onToggle}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+              return
+            }
+            event.preventDefault()
+            onToggle()
+          }}
+          aria-expanded={expanded}
+          aria-label={toggleDetailsLabel}
+        >
+          <ChevronRight
+            className={cn(
+              'mt-0.5 size-3 shrink-0 text-muted-foreground transition-transform',
+              expanded && 'rotate-90'
+            )}
+          />
+          <ReviewIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <PrChecksRowHeader row={row} />
+            <div className="mt-1 truncate text-[12px] text-foreground/90">{row.title}</div>
+            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+              {showStatusIcon ? (
+                <StatusIcon
+                  className={cn(
+                    'size-3 shrink-0',
+                    CHECK_COLOR[row.checkTone],
+                    animateStatusIcon && 'animate-spin'
+                  )}
+                />
+              ) : null}
+              <span className="truncate">{row.summary}</span>
+              {row.repo ? <span className="shrink-0">· {row.repo.displayName}</span> : null}
+              {row.branch ? <span className="truncate">· {row.branch}</span> : null}
             </div>
-          ) : null}
+            {row.detailNames.length > 0 ? (
+              <div className="mt-1 truncate text-[11px] text-muted-foreground">
+                {row.detailNames.join(', ')}
+              </div>
+            ) : null}
+          </div>
         </div>
         {row.reviewUrl ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className="rounded p-1 text-muted-foreground opacity-80 hover:bg-accent hover:text-foreground group-hover:opacity-100"
+                className="mr-2 mt-2 rounded p-1 text-muted-foreground opacity-80 hover:bg-accent hover:text-foreground group-hover:opacity-100"
                 aria-label={openExternalLabel}
                 onClick={(event) => {
                   event.stopPropagation()

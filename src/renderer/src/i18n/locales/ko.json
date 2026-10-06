@@ -15662,6 +15662,9 @@
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "목적지가 변경되어 이미지 삽입이 취소되었습니다. 가져온 파일이 보관되었습니다.",
           "destinationChanged": "목적지가 변경되어 이미지 삽입이 취소되었습니다. 다시 시도하십시오."
+        },
+        "RichMarkdownEmojiMenu": {
+          "dialogLabel": "이모지 선택기"
         }
       },
       "diff": {

@@ -179,6 +179,16 @@ describe('FolderWorkspacePrChecksRow', () => {
     )
   })
 
+  it('keeps the open-externally button out of the toggle so it keeps its own role', () => {
+    renderRow(makeRow())
+
+    const toggle = container.querySelector<HTMLElement>('[role="button"][aria-expanded]')
+    const openExternal = container.querySelector<HTMLElement>('button[aria-label$="externally"]')
+    expect(toggle).toBeTruthy()
+    expect(openExternal).toBeTruthy()
+    expect(toggle?.contains(openExternal)).toBe(false)
+  })
+
   it('spins pending summary status like regular pending check rows', () => {
     renderRow(
       makeRow({

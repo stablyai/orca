@@ -432,6 +432,13 @@ describe('WorktreeMetaDialog issue link row', () => {
     expect(updateWorktreeMeta.mock.calls[0]?.[2]).toEqual({ suppressHostedReviewRefresh: true })
   })
 
+  it('names the review link and comment fields by their visible labels', () => {
+    openDialog()
+
+    expect(screen.getByRole('textbox', { name: 'GH PR' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
+  })
+
   it('replaces a completed emoji shortcode in the display name', () => {
     openDialog()
     const displayNameInput = screen.getByRole('textbox', { name: 'Display Name' })

@@ -56,8 +56,9 @@ export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element 
     setPressedAt(point)
     onActivate()
   }
-  const activateOnEnter = (event: React.KeyboardEvent): void => {
-    if (event.key === 'Enter' && event.target === event.currentTarget) {
+  /** Opens the cell on Enter or Space; Space must be consumed, or it scrolls the notebook instead. */
+  const activateOnKey = (event: React.KeyboardEvent): void => {
+    if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) {
       event.preventDefault()
       activate(null)
     }
@@ -70,7 +71,7 @@ export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element 
         tabIndex={0}
         className="min-h-8 cursor-text rounded-md px-3 py-1 outline-none focus-visible:ring-1 focus-visible:ring-ring"
         onDoubleClick={() => activate(null)}
-        onKeyDown={activateOnEnter}
+        onKeyDown={activateOnKey}
       >
         <IpynbMarkdownCell source={source} />
       </div>
@@ -93,7 +94,7 @@ export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element 
               activate({ x: event.clientX, y: event.clientY })
             }
           }}
-          onKeyDown={activateOnEnter}
+          onKeyDown={activateOnKey}
         >
           <IpynbCodePreview source={source} language={cell.language} />
         </div>

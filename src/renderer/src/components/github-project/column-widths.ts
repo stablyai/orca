@@ -56,6 +56,27 @@ export function saveColumnWidths(scopeKey: string, widths: Record<string, number
   writeMap(map)
 }
 
+/** Rounds a resized pair to whole weights, clamping the first so the second absorbs the rest. */
+export function splitColumnPair(width: number, nextWidth: number): [number, number] {
+  const pairTotal = Math.round(width + nextWidth)
+  const clamped = Math.max(
+    MIN_COLUMN_WIDTH,
+    Math.min(pairTotal - MIN_COLUMN_WIDTH, Math.round(width))
+  )
+  return [clamped, Math.max(MIN_COLUMN_WIDTH, pairTotal - clamped)]
+}
+
+/** Smallest `fr` weight a keyboard nudge may leave: the 60px floor once laid out, never under the stored floor. */
+export function keyboardResizeFloor(
+  totalFr: number,
+  totalPx: number,
+  stepFraction: number
+): number {
+  const layoutFloor = totalPx > 0 ? (totalFr * MIN_COLUMN_WIDTH) / totalPx : totalFr * stepFraction
+  // resolveWidth discards stored weights under MIN_COLUMN_WIDTH, so the handle must not propose one.
+  return Math.max(MIN_COLUMN_WIDTH, layoutFloor)
+}
+
 export function defaultWidthFor(field: GitHubProjectField): number {
   return field.dataType === 'TITLE' ? DEFAULT_TITLE_WIDTH : DEFAULT_FIELD_WIDTH
 }

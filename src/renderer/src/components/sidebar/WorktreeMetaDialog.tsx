@@ -1,4 +1,3 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -23,7 +22,7 @@ import {
 import { useWorktreeIssueLink } from './use-worktree-issue-link'
 import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
 import { WorktreeIssueLinkField } from './WorktreeIssueLinkField'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
@@ -35,6 +34,7 @@ import {
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
 import { WorktreeReviewLinkField } from './WorktreeReviewLinkField'
+import { WorktreeCommentField } from './WorktreeCommentField'
 import { resizeCommentTextarea } from './worktree-comment-textarea-sizing'
 
 /** Only read before the first open, when nothing can be saved yet. */
@@ -46,6 +46,7 @@ const EMPTY_SNAPSHOT: WorktreeMetaSnapshot = {
   prInput: ''
 }
 
+/** Edits a worktree's display name, linked issue/review and comment, reseeding the drafts on each open. */
 const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
@@ -377,34 +378,12 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
             value={reviewInput}
           />
 
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.sidebar.WorktreeMetaDialog.9c1d1e9b71', 'Comment')}
-            </label>
-            <ImeTextarea
-              ref={setCommentTextareaRef}
-              value={commentInput}
-              onChange={handleCommentChange}
-              onKeyDown={handleCommentKeyDown}
-              placeholder={translate(
-                'auto.components.sidebar.WorktreeMetaDialog.030d484fc0',
-                'Notes about this worktree...'
-              )}
-              rows={3}
-              className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
-            />
-            <p className="text-[10px] text-muted-foreground">
-              {translate(
-                'auto.components.sidebar.WorktreeMetaDialog.7f0be5e9a6',
-                'Supports **markdown** — bold, lists, `code`, links. Press Enter or'
-              )}{' '}
-              {getScreenSubmitShortcutLabel()}{' '}
-              {translate(
-                'auto.components.sidebar.WorktreeMetaDialog.b48c271d39',
-                'to save, Shift+Enter for a new line.'
-              )}
-            </p>
-          </div>
+          <WorktreeCommentField
+            textareaRef={setCommentTextareaRef}
+            value={commentInput}
+            onChange={handleCommentChange}
+            onKeyDown={handleCommentKeyDown}
+          />
         </div>
 
         {saveError ? (
