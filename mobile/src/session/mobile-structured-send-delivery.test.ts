@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
 import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
 import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
@@ -122,6 +124,34 @@ describe('mobileStructuredSendDelivery', () => {
       outcome: 'rejected',
       operationIdSpent: true,
       error: "Orca couldn't reach the agent. Your message was not sent. Send it again."
+    })
+  })
+
+  it('reports a send its own hook blocked as sent, never handing its text back', () => {
+    // Drawn as a sent message on every client, so a restored draft would show it twice.
+    const answer = structuredSendResultFixture('rejected')
+    if (!('submission' in answer)) {
+      throw new Error('the fixture answers with a submission')
+    }
+    const blocked: StructuredAgentSessionMutationCallResult<AgentSessionSendResult> = {
+      status: 'accepted',
+      value: {
+        ...answer,
+        submission: {
+          ...answer.submission,
+          ...agentSessionFailureWords(
+            agentSessionFailureFact('hookBlocked', {
+              detail: { text: 'No secrets in prompts.', audience: 'person' }
+            }),
+            { surface: 'rejection', agentName: 'Codex' }
+          )
+        }
+      }
+    }
+    expect(mobileStructuredSendDelivery(blocked)).toEqual({
+      outcome: 'accepted',
+      operationIdSpent: true,
+      error: null
     })
   })
 

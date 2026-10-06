@@ -4,8 +4,10 @@
 // which is the whole reason it was split out.
 
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionFailureFact } from './agent-session-failure'
-import type { AgentJournalSubmission } from './agent-session-journal-types'
+import { agentSessionFailureFact, type AgentSessionFailureFact } from './agent-session-failure'
+import { agentSessionFailureWords } from './agent-session-failure-words'
+import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import type { AgentSessionMutationResult, AgentSessionSendResult } from './agent-session-wire'
 import {
   DISPATCH_REJECTED_CANCELLED,
@@ -23,6 +25,7 @@ import {
 } from './structured-agent-session-outbox'
 import { reconcileStructuredAgentSessionOutbox } from './structured-agent-session-outbox-reconcile'
 import { structuredAgentSessionEntryHeldForRetry } from './structured-agent-session-outbox-admission'
+import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
 const entry: StructuredAgentSessionOutboxEntry = createStructuredAgentSessionOutboxEntry({
   clientMessageId: 'client-1',
@@ -110,6 +113,45 @@ describe('a queued draft answer', () => {
     })
     expect(disposition.entries).toEqual([])
     expect(disposition.error).toBeNull()
+  })
+})
+
+describe('a send its own hook blocked', () => {
+  it('leaves no not-sent copy, before or after its row loads', () => {
+    const blocked = agentSessionFailureWords(
+      agentSessionFailureFact('hookBlocked', {
+        detail: { text: 'No secrets in prompts.', audience: 'person' }
+      }),
+      { surface: 'rejection', agentName: 'Codex' }
+    )
+    const result = rejectedWith(blocked.reason, { rejection: blocked.rejection })
+    if (!result.ok || !('submission' in result.value)) {
+      throw new Error('expected rejected submission fixture')
+    }
+    const disposition = disposeStructuredAgentSessionSendResult({
+      entries: [entry],
+      entry,
+      result,
+      createOperationId: () => 'unused'
+    })
+    // Before its row loads: no outbox copy to draw as not sent, and no notice.
+    expect(disposition).toEqual({ entries: [], error: null })
+    // After: the row draws it once, as sent.
+    const item: AgentJournalRenderItem = {
+      itemId: agentJournalSubmissionKey('client-1'),
+      revision: 0,
+      sequence: 10,
+      observedAt: 10,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
+    }
+    const drawn = projectStructuredAgentSessionMessages(
+      [item],
+      disposition.entries,
+      [result.value.submission],
+      { rejectedInPlace: true }
+    ).filter(({ id }) => id === item.itemId)
+    expect(drawn).toHaveLength(1)
+    expect(drawn[0]).not.toHaveProperty('unsent')
   })
 })
 

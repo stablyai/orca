@@ -95,6 +95,7 @@ const KIND_CATEGORY = {
   managedAccountUnsupported: 'startFailed',
   restartFailed: 'startFailed',
   providerRejected: 'content',
+  hookBlocked: 'content',
   attachmentInvalid: 'content',
   attachmentUnreadable: 'content',
   emptyMessage: 'content',
@@ -121,6 +122,8 @@ const KIND_VERDICT = {
   managedAccountUnsupported: 'failure',
   restartFailed: 'failure',
   providerRejected: 'failure',
+  // A queued card it blocked is returned for the person to edit, never re-sent into the same hook.
+  hookBlocked: 'failure',
   attachmentInvalid: 'failure',
   attachmentUnreadable: 'failure',
   emptyMessage: 'failure',
@@ -249,6 +252,22 @@ export function dispatchWasWithdrawn(
   return (
     submission?.dispatchState === 'rejected' &&
     classifyDispatchRejection(submission).category === 'withdrawn'
+  )
+}
+
+/** Rejected, yet every client draws it as a sent message: the person's own hook refused it once the
+ *  agent had it, which is no failure to show, and its reason stays unshown. A queued card's
+ *  message is the card's to show. */
+export function rejectionDrawnAsSent(
+  submission: Pick<
+    AgentJournalSubmission,
+    'dispatchState' | 'reason' | 'rejection' | 'queuedMessageId'
+  >
+): boolean {
+  return (
+    submission.dispatchState === 'rejected' &&
+    submission.queuedMessageId === undefined &&
+    classifyDispatchRejection(submission).kind === 'hookBlocked'
   )
 }
 

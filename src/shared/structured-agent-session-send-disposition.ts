@@ -21,7 +21,10 @@ import {
 } from './agent-session-write-failure'
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type { AgentSessionFailureWordsContext } from './agent-session-failure-words'
-import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
+import {
+  classifyDispatchRejection,
+  rejectionDrawnAsSent
+} from './structured-agent-session-dispatch-rejection'
 import {
   classifyStructuredAgentSessionSendFailure,
   requeueStructuredAgentSessionSendRefusal,
@@ -261,7 +264,8 @@ export function disposeStructuredAgentSessionSendResult(
       error: ['sendOutcomeLost']
     }
   }
-  if (submission.dispatchState === 'accepted') {
+  // One its own hook blocked is drawn as sent from its row: a not-sent copy until then would flash.
+  if (submission.dispatchState === 'accepted' || rejectionDrawnAsSent(submission)) {
     return {
       entries: dropEntry(input),
       error: null

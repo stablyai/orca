@@ -240,6 +240,9 @@ const FAILURE_SENTENCES = {
   restartFailed: couldNot('couldNotRestart'),
   providerRejected: (_context, fact, _surface, say) =>
     quotingPersonDetail(say, 'providerRejected', 'providerRejectedQuoted', fact.detail),
+  // The person's own hook refused it: drawn as sent, so only an older client shows this, as the
+  // agent's refusal. The hook's reason stays on the fact, unshown.
+  hookBlocked: (_context, _fact, _surface, say) => say('providerRejected'),
   attachmentInvalid: (context, fact, _surface, say) =>
     fact.attachment
       ? ATTACHMENT_SENTENCES[fact.attachment.reason](say, context, fact.attachment)

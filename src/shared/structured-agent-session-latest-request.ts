@@ -5,6 +5,7 @@
 // A request is either a turn, whose record carries the provider's verdict, or a send that never
 // became one because the agent or its start refused it. A send its handover placed inside a
 // running turn (a steer) is not a request of its own: the turn it joined answers for it. Nor is a
+// send the person's own hook blocked: the turn it was blocked in answers for it. Nor is a
 // conversation command. Nor is a message waiting out a refused start: a try is booked, so it has no
 // verdict yet, and the session reads as it did before it was sent.
 
@@ -100,9 +101,12 @@ function requestOf(
     }
   }
   const submission = rejected.get(item.itemId)
+  const rejection = submission ? classifyDispatchRejection(submission) : null
   if (
-    !submission ||
-    classifyDispatchRejection(submission).verdict !== 'failure' ||
+    !rejection ||
+    rejection.verdict !== 'failure' ||
+    // The person's own hook refused it: nothing failed, and the turn it was blocked in answers.
+    rejection.kind === 'hookBlocked' ||
     // Handed into a running turn (a steer): that turn answers for it.
     item.turnScope?.kind === 'turn'
   ) {
@@ -113,7 +117,7 @@ function requestOf(
     id: item.itemId,
     turnState: null,
     outcome: 'failure',
-    settledAt: submission.resolvedAt ?? undefined
+    settledAt: submission?.resolvedAt ?? undefined
   }
 }
 

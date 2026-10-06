@@ -4,7 +4,12 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from './agent-session-journal-types'
-import { AGENT_SESSION_FAILURE_KINDS, isSubmissionRejectionKind } from './agent-session-failure'
+import {
+  AGENT_SESSION_FAILURE_KINDS,
+  agentSessionFailureFact,
+  isSubmissionRejectionKind
+} from './agent-session-failure'
+import { agentSessionFailureWords } from './agent-session-failure-words'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import {
   classifyDispatchRejection,
@@ -83,6 +88,22 @@ const rejected = (clientMessageId: string, reason: string, handedOverAt?: number
     ...(handedOverAt !== undefined ? { handedOverAt } : {})
   })
 
+/** Rejected with a typed fact, as the host writes it. */
+const rejectedWith = (
+  clientMessageId: string,
+  fact: Parameters<typeof agentSessionFailureWords>[0],
+  resolvedAt = 20
+) =>
+  sent(clientMessageId, {
+    dispatchState: 'rejected',
+    resolvedAt,
+    ...agentSessionFailureWords(fact, { surface: 'rejection', agentName: 'Codex' })
+  })
+
+const HOOK_BLOCKED = agentSessionFailureFact('hookBlocked', {
+  detail: { text: 'No secrets in prompts.', audience: 'person' }
+})
+
 type Row = {
   name: string
   items: AgentJournalRenderItem[]
@@ -93,6 +114,37 @@ type Row = {
 }
 
 const ROWS: Row[] = [
+  // Nothing failed: the person's own hook refused it, and the chat is idle. Drawn where it was
+  // rejected (after the turn's end), it is still not the news; the turn it was blocked in is.
+  {
+    name: 'a steer a Codex hook blocked, after the turn it joined completed (the turn, not Failed)',
+    items: [
+      userEntry('m1', 1),
+      turn('t1', 2, { state: 'completed', outcome: 'success', completedAt: 15 }),
+      userEntry('m2', 3)
+    ],
+    submissions: [sent('m1', { dispatchState: 'accepted' }), rejectedWith('m2', HOOK_BLOCKED, 16)],
+    outcome: 'success',
+    listed: true
+  },
+  {
+    name: 'a first message a Codex hook blocked, with the turn it opened (the turn, not Failed)',
+    items: [
+      turn('t1', 2, { state: 'completed', outcome: 'success', completedAt: 15 }),
+      userEntry('m1', 3)
+    ],
+    submissions: [rejectedWith('m1', HOOK_BLOCKED, 16)],
+    outcome: 'success',
+    listed: true
+  },
+  // Its tries ran out: it reads Failed, as before.
+  {
+    name: 'a start refused before it ran, its tries spent (Failed)',
+    items: [userEntry('m1', 1)],
+    submissions: [rejectedWith('m1', { kind: 'accountSwitchInProgress' })],
+    outcome: 'failure',
+    listed: true
+  },
   {
     name: 'a send the agent start refused',
     items: [userEntry('m1', 1)],
@@ -316,7 +368,10 @@ describe('the latest request and its verdict', () => {
 
 describe('the sidebar verdict agrees with the rejection classifier', () => {
   // A sentence as the reason, so only the typed fact can make a kind read as no verdict.
-  const typed = AGENT_SESSION_FAILURE_KINDS.filter(isSubmissionRejectionKind).map((kind) => ({
+  // A hook's block is the one exception, pinned below.
+  const typed = AGENT_SESSION_FAILURE_KINDS.filter(
+    (kind) => isSubmissionRejectionKind(kind) && kind !== 'hookBlocked'
+  ).map((kind) => ({
     name: `typed ${kind}`,
     submission: sent('m1', {
       dispatchState: 'rejected',
@@ -348,6 +403,14 @@ describe('the sidebar verdict agrees with the rejection classifier', () => {
     const { verdict } = classifyDispatchRejection(submission)
     expect(latestStructuredAgentSessionRequest(items, [submission])?.outcome ?? null).toBe(verdict)
     expect(hasStructuredAgentSessionRequest(items, [submission])).toBe(verdict === 'failure')
+  })
+
+  // Returned as a card for the person to edit (a failure to the queue), but nothing broke, so it
+  // is no verdict of its own: the turn it was blocked in reads instead.
+  it('reads a send a hook blocked as no verdict, though the classifier calls it a failure', () => {
+    const submission = rejectedWith('m1', HOOK_BLOCKED)
+    expect(classifyDispatchRejection(submission).verdict).toBe('failure')
+    expect(latestStructuredAgentSessionRequest([userEntry('m1', 1)], [submission])).toBeNull()
   })
 
   const failedNobody = new Set([

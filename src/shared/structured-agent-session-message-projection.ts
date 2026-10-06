@@ -4,7 +4,10 @@ import { isQueuedAgentJournalSubmission } from './agent-session-queued-submissio
 import { isRetryingStructuredAgentSessionStart } from './structured-agent-session-start-retry'
 import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
 import type { NativeChatMessage } from './native-chat-types'
-import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
+import {
+  dispatchWasWithdrawn,
+  rejectionDrawnAsSent
+} from './structured-agent-session-dispatch-rejection'
 import type { StructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
 import { structuredAgentSessionEntryHeldForRetry } from './structured-agent-session-outbox-admission'
 import { reconcileStructuredAgentSessionOutboxWithQueue } from './structured-agent-session-draft-hand-off'
@@ -37,7 +40,8 @@ export function structuredAgentSessionCommandItemIds(
  * The rejected submissions the host's history shows in place as not sent, by item id; `submissions`
  * in submission order, as the client keeps them. A withdrawn one went back to its sender, one the
  * queue holds (a draft's hand-off, or a card under its id) is drawn as its card, and a command such
- * as `/compact` has its rejection reported as its own reply.
+ * as `/compact` has its rejection reported as its own reply. One the person's own hook refused is
+ * drawn as sent instead (`rejectionDrawnAsSent`).
  */
 export function structuredAgentSessionRejectedShownInPlace(
   submissions: readonly AgentJournalSubmission[],
@@ -65,6 +69,7 @@ export function structuredAgentSessionRejectedShownInPlace(
     if (
       submission.dispatchState !== 'rejected' ||
       dispatchWasWithdrawn(submission) ||
+      rejectionDrawnAsSent(submission) ||
       submission.queuedMessageId !== undefined ||
       cards.has(submission.clientMessageId) ||
       commandItemIds.has(agentJournalSubmissionKey(submission.clientMessageId)) ||
@@ -113,12 +118,22 @@ export function projectStructuredAgentSessionMessages(
         )
       : []
   )
+  // Drawn as sent on every client, where the journal placed it (`rejectionDrawnAsSent`).
+  const shownAsSent = new Set(
+    submissions
+      .filter(rejectionDrawnAsSent)
+      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
+  )
   const visibleItems: AgentJournalRenderItem[] = []
   const unsentItems: AgentJournalRenderItem[] = []
   for (const item of items) {
     if (inPlace.has(item.itemId)) {
       unsentItems.push(item)
-    } else if (!rejected.has(item.itemId) || unsentElsewhere.has(item.itemId)) {
+    } else if (
+      !rejected.has(item.itemId) ||
+      unsentElsewhere.has(item.itemId) ||
+      shownAsSent.has(item.itemId)
+    ) {
       visibleItems.push(item)
     }
   }
