@@ -38,6 +38,7 @@ describe('NativeChatSupportedAgents', () => {
   afterEach(async () => {
     await i18n.changeLanguage('en')
     i18n.removeResourceBundle('test', 'translation')
+    await i18n.loadNamespaces('translation')
   })
 
   it('keeps the advertised list and support predicate on the independent contract', () => {
@@ -93,5 +94,15 @@ describe('NativeChatSupportedAgents', () => {
     const markup = renderToStaticMarkup(<NativeChatSupportedAgents />)
 
     expect(markup).toContain('Supported agents:')
+  })
+
+  it('renders the translated label in Spanish', async () => {
+    await i18n.changeLanguage('es')
+    expect(i18n.language).toBe('es')
+    expect(i18n.getResource('es', 'translation', SUPPORTED_AGENTS_LABEL_KEY)).toBe('Agentes apoyados:')
+
+    const markup = renderToStaticMarkup(<NativeChatSupportedAgents />)
+
+    expect(markup).toContain('Agentes apoyados:')
   })
 })

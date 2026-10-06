@@ -150,7 +150,8 @@ export function prepareTerminalPaneMount(
       request: deps.requestTerminalLinkAction,
       focusTerminal: () => pane.terminal.focus(),
       plainClickBehavior,
-      middleClickBehavior
+      middleClickBehavior,
+      sourceOwner: getHttpLinkSourceOwnerForPane(paneId)
     }
   }
   const pathExistsCache = new Map<string, boolean>()

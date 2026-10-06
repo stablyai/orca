@@ -1033,6 +1033,16 @@
         "tooLarge": "Trop volumineux pour être copié : Orca n'a pas pu le transmettre à l'agent.",
         "storageFull": "L'espace de stockage d'Orca pour les fichiers déposés est plein : Orca n'a pas pu le transmettre à l'agent.",
         "generic": "Réessayez de déposer les fichiers."
+      },
+      "reveal": {
+        "in": {
+          "file": {
+            "manager": {
+              "notFound": "Fichier introuvable. Il a peut-être été déplacé ou supprimé.",
+              "launchFailed": "Impossible d’afficher le fichier."
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -3446,10 +3456,7 @@
             "1d04b1630b": "Scinder vers le bas",
             "6b3efb106e": "Scinder vers le haut",
             "fdd29eb669": "Épingler l'onglet",
-            "8e9d603a09": "Détacher l'onglet",
-            "revealInFinder": "Révéler dans le Finder",
-            "openContainingFolder": "Ouvrir le dossier contenant",
-            "revealInFileExplorer": "Révéler dans l'explorateur de fichiers"
+            "8e9d603a09": "Détacher l'onglet"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Paramètres de l'agent…",
@@ -15177,10 +15184,7 @@
           "f0fd4174b5": "Ouvrez un onglet de fichier pour utiliser l'édition Markdown enrichie",
           "a10d9b8337": "Ouvrir le fichier",
           "2076ecfc9c": "Modification précédente",
-          "631dab0df3": "Modification suivante",
-          "revealInFinder": "Révéler dans le Finder",
-          "openContainingFolder": "Ouvrir le dossier contenant",
-          "revealInFileExplorer": "Révéler dans l'explorateur de fichiers"
+          "631dab0df3": "Modification suivante"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Exporter en PDF",

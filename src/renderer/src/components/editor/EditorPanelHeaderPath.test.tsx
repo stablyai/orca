@@ -51,7 +51,6 @@ function renderPath(file: OpenFile): (next: OpenFile) => void {
       canShowMarkdownPreview={false}
       onCopyPath={vi.fn()}
       onOpenMarkdownPreview={vi.fn()}
-      onOpenContainingFolder={vi.fn()}
     />
   )
   return (next) =>
@@ -62,7 +61,6 @@ function renderPath(file: OpenFile): (next: OpenFile) => void {
         canShowMarkdownPreview={false}
         onCopyPath={vi.fn()}
         onOpenMarkdownPreview={vi.fn()}
-        onOpenContainingFolder={vi.fn()}
       />
     )
 }
@@ -245,5 +243,43 @@ describe('EditorPanelHeaderPath inline rename', () => {
     const input = getRenameInput('Rename file Makefile')
     expect(input.selectionStart).toBe(0)
     expect(input.selectionEnd).toBe('Makefile'.length)
+  })
+})
+
+describe('EditorPanelHeaderPath reveal in file manager', () => {
+  const openInFileManager = vi.fn()
+
+  function openPathMenu(): HTMLElement {
+    const pathRow = document.querySelector('.editor-header-path-row')
+    if (!pathRow) {
+      throw new Error('Missing editor header path row')
+    }
+    fireEvent.contextMenu(pathRow)
+    return screen.getByRole('menuitem', { name: /Open Containing Folder/ })
+  }
+
+  beforeEach(() => {
+    openInFileManager.mockReset().mockResolvedValue({ ok: true })
+    Object.assign(window, { api: { shell: { openInFileManager } } })
+  })
+
+  it('reveals the open file through the shared reveal action', () => {
+    renderPath(baseFile())
+
+    fireEvent.click(openPathMenu())
+
+    expect(openInFileManager).toHaveBeenCalledWith('/repo/notes.md')
+  })
+
+  it.each([
+    ['a remote runtime owns', { runtimeEnvironmentId: 'env-1' }],
+    ['opened from an SSH host outside the workspace', { externalSshTargetId: 'ssh-1' }]
+  ])('disables reveal as local-only for a file %s', (_owner, overrides) => {
+    renderPath(baseFile(overrides))
+
+    const reveal = openPathMenu()
+
+    expect(reveal.getAttribute('aria-disabled')).toBe('true')
+    expect(reveal.textContent).toContain('Local only')
   })
 })

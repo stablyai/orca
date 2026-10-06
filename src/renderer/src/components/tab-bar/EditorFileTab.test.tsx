@@ -215,11 +215,6 @@ vi.mock('@/components/editor/markdown-preview-controls', () => ({
   canOpenMarkdownPreview: () => false
 }))
 
-vi.mock('@/lib/local-path-open-guard', () => ({
-  shouldBlockEditorTabLocalOpen: () => false,
-  showLocalPathOpenBlockedToast: vi.fn()
-}))
-
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>

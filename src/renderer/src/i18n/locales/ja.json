@@ -934,6 +934,16 @@
         "tooLarge": "サイズが大きすぎてコピーできないため、Orca は Agent に渡せませんでした。",
         "storageFull": "ドロップされたファイル用の Orca の保存先がいっぱいのため、Orca は Agent に渡せませんでした。",
         "generic": "もう一度ドロップしてください。"
+      },
+      "reveal": {
+        "in": {
+          "file": {
+            "manager": {
+              "notFound": "ファイルが見つかりません。移動または削除された可能性があります。",
+              "launchFailed": "ファイルを表示できませんでした。"
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -3343,10 +3353,7 @@
             "1d04b1630b": "下に分割",
             "6b3efb106e": "上に分割",
             "fdd29eb669": "ピンタブ",
-            "8e9d603a09": "タブの固定を解除する",
-            "revealInFinder": "ファインダーで表示",
-            "openContainingFolder": "含まれているフォルダーを開く",
-            "revealInFileExplorer": "ファイルエクスプローラーで表示"
+            "8e9d603a09": "タブの固定を解除する"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent 設定…",
@@ -15074,10 +15081,7 @@
           "f0fd4174b5": "ファイルタブを開いてリッチ markdown 編集を使用する",
           "a10d9b8337": "ファイルを開く",
           "2076ecfc9c": "前の変更",
-          "631dab0df3": "次の変更",
-          "revealInFinder": "ファインダーで表示",
-          "openContainingFolder": "含まれているフォルダーを開く",
-          "revealInFileExplorer": "ファイルエクスプローラーで表示"
+          "631dab0df3": "次の変更"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDFとしてエクスポート",

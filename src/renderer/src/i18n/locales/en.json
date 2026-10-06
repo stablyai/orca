@@ -1097,6 +1097,16 @@
         "tooLarge": "Too large to copy, so Orca couldn't hand it to the agent.",
         "storageFull": "Orca's storage for dropped files is full, so Orca couldn't hand it to the agent.",
         "generic": "Try the drop again."
+      },
+      "reveal": {
+        "in": {
+          "file": {
+            "manager": {
+              "notFound": "File not found. It may have been moved or deleted.",
+              "launchFailed": "Could not reveal the file."
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -3546,10 +3556,7 @@
             "1d04b1630b": "Split Down",
             "6b3efb106e": "Split Up",
             "fdd29eb669": "Pin Tab",
-            "8e9d603a09": "Unpin Tab",
-            "revealInFinder": "Reveal in Finder",
-            "openContainingFolder": "Open Containing Folder",
-            "revealInFileExplorer": "Reveal in File Explorer"
+            "8e9d603a09": "Unpin Tab"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
@@ -15288,10 +15295,7 @@
           "f0fd4174b5": "Open file tab to use rich markdown editing",
           "a10d9b8337": "Open file",
           "2076ecfc9c": "Previous change",
-          "631dab0df3": "Next change",
-          "revealInFinder": "Reveal in Finder",
-          "openContainingFolder": "Open Containing Folder",
-          "revealInFileExplorer": "Reveal in File Explorer"
+          "631dab0df3": "Next change"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",

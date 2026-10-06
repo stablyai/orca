@@ -934,6 +934,16 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "El texto es demasiado grande para copiarlo."
+      },
+      "reveal": {
+        "in": {
+          "file": {
+            "manager": {
+              "notFound": "No se encontró el archivo. Puede que se haya movido o eliminado.",
+              "launchFailed": "No se pudo mostrar el archivo."
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -3343,10 +3353,7 @@
             "1d04b1630b": "Dividir hacia abajo",
             "6b3efb106e": "Dividir hacia arriba",
             "fdd29eb669": "Fijar pestaña",
-            "8e9d603a09": "Desanclar pestaña",
-            "revealInFinder": "Revelar en Finder",
-            "openContainingFolder": "Abrir carpeta contenedora",
-            "revealInFileExplorer": "Revelar en el Explorador de archivos"
+            "8e9d603a09": "Desanclar pestaña"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Ajustes de Agents…",
@@ -5712,7 +5719,7 @@
           "3921d3d9a5": "No se encontró la carpeta del espacio de trabajo.",
           "f387af445b": "La ruta del espacio de trabajo no es una ruta local válida.",
           "3ec372b664": "gestor de archivos",
-          "localOnly": "Local only",
+          "localOnly": "Solo local",
           "remoteSsh": "Remote SSH",
           "remoteRuntimeUnsupported": "Opening this path in a local app is not available.",
           "remoteRuntimeUnsupportedDetail": "Switch to a local or SSH workspace, then try again.",
@@ -15074,10 +15081,7 @@
           "f0fd4174b5": "Abre la pestaña de archivo para usar la edición enriquecida de Markdown",
           "a10d9b8337": "Abrir archivo",
           "2076ecfc9c": "Cambio anterior",
-          "631dab0df3": "Cambio siguiente",
-          "revealInFinder": "Revelar en Finder",
-          "openContainingFolder": "Abrir carpeta contenedora",
-          "revealInFileExplorer": "Revelar en el Explorador de archivos"
+          "631dab0df3": "Cambio siguiente"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Exportar como PDF",
