@@ -39,7 +39,6 @@ function mainWindowDialogController(fileId: string): TerminalEditorCloseDialogAc
     releaseCloseDialogGuardAfterDebounce: vi.fn(),
     saveDialogFileId: fileId,
     setSaveDialogFileId: vi.fn(),
-    waitForFileClosed: vi.fn(async () => true),
     windowCloseAfterDirtyRef: { current: null }
   }
 }

@@ -17,31 +17,6 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     setSaveDialogFileId,
     windowCloseAfterDirtyRef
   } = controller
-  const waitForFileClosed = useCallback((fileId: string, timeoutMs: number): Promise<boolean> => {
-    if (!useAppStore.getState().openFiles.some((file) => file.id === fileId)) {
-      return Promise.resolve(true)
-    }
-    return new Promise((resolve) => {
-      let unsub: (() => void) | null = null
-      const timeoutId = window.setTimeout(() => {
-        unsub?.()
-        resolve(false)
-      }, timeoutMs)
-      unsub = useAppStore.subscribe((state) => {
-        if (!state.openFiles.some((file) => file.id === fileId)) {
-          window.clearTimeout(timeoutId)
-          unsub?.()
-          resolve(true)
-        }
-      })
-      if (!useAppStore.getState().openFiles.some((file) => file.id === fileId)) {
-        window.clearTimeout(timeoutId)
-        unsub?.()
-        resolve(true)
-      }
-    })
-  }, [])
-
   const getNextQueuedEditorClose = useCallback((): string | null => {
     while (pendingEditorCloseQueueRef.current.length > 0) {
       const fileId = pendingEditorCloseQueueRef.current[0]
@@ -125,7 +100,6 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
   )
 
   return {
-    waitForFileClosed,
     getNextQueuedEditorClose,
     advanceEditorCloseQueue,
     queueEditorCloseRequests,

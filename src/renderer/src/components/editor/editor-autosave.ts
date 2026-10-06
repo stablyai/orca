@@ -46,6 +46,14 @@ export type EditorSaveFileDetail = EditorSaveFileTarget & {
   reject: (message: string) => void
 }
 
+export type EditorSaveAndCloseResult = 'closed' | 'retained' | 'failed'
+
+export type EditorSaveAndCloseDetail = {
+  fileId: string
+  claim?: () => void
+  resolve?: (result: EditorSaveAndCloseResult) => void
+}
+
 export type EditorFileSavedDetail = {
   fileId: string
   content: string
@@ -208,6 +216,31 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
     // while dropping the user's save entirely.
     if (!claimed) {
       reject(new Error('Editor save controller is unavailable.'))
+    }
+  })
+}
+
+export function requestEditorSaveAndClose(fileId: string): Promise<EditorSaveAndCloseResult> {
+  return new Promise((resolve) => {
+    const finish = (result: EditorSaveAndCloseResult): void => {
+      window.clearTimeout(timeout)
+      resolve(result)
+    }
+    const timeout = window.setTimeout(() => finish('failed'), 10_000)
+    let claimed = false
+    window.dispatchEvent(
+      new CustomEvent<EditorSaveAndCloseDetail>(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, {
+        detail: {
+          fileId,
+          claim: () => {
+            claimed = true
+          },
+          resolve: finish
+        }
+      })
+    )
+    if (!claimed) {
+      finish('failed')
     }
   })
 }
