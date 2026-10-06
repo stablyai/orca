@@ -9,9 +9,11 @@ export type FilePathSegment =
   | { type: 'text'; value: string }
   | { type: 'file'; value: string; path: string }
 
-// Common source/code/config extensions we treat as openable file paths. Kept
-// explicit (rather than "any extension") so prose like "etc." or "e.g." and
-// domain-ish tokens like "example.com" don't get matched.
+// Extensions we treat as openable file paths: source/config the text viewer
+// shows as code, plus the artifacts the viewer can actually present (image,
+// text) or hand to the OS (PDF, audio, video). Kept explicit (rather than "any
+// extension") so prose like "etc." or "e.g." and domain-ish tokens like
+// "example.com" don't get matched.
 const FILE_EXTENSIONS = [
   'ts',
   'tsx',
@@ -79,7 +81,27 @@ const FILE_EXTENSIONS = [
   'gradle',
   'dockerfile',
   'gitignore',
-  'npmrc'
+  'npmrc',
+  // Agent artifacts the viewer can present. Images render in-app
+  // (IMAGE_EXTENSIONS), text renders as text, and the rest are the MIME types
+  // the OS handoff opens (MEDIA_HANDOFF_MIME_TYPES). Adding an extension here
+  // that neither list covers would only produce a dead tap, so
+  // markdown-file-path-detection.test.ts pins this group against both.
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'bmp',
+  'ico',
+  'log',
+  'pdf',
+  'mp4',
+  'm4v',
+  'mov',
+  'mp3',
+  'm4a',
+  'wav'
 ] as const
 
 const EXTENSION_SET = new Set<string>(FILE_EXTENSIONS)

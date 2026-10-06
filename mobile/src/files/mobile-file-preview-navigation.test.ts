@@ -60,9 +60,12 @@ describe('mobile-file-preview-navigation', () => {
     expect(scheduleClose).toHaveBeenCalledWith(expect.any(Function), 0)
   })
 
-  it('keeps non-image binary rows disabled while previewing text and raster images', () => {
+  it('opens text, raster image, and OS-handoff (PDF/media) rows while keeping other binaries disabled', () => {
     expect(canPreviewMobileFileRow({ kind: 'text', relativePath: 'src/app.ts' })).toBe(true)
     expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'assets/logo.webp' })).toBe(true)
+    expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'docs/demo.mp4' })).toBe(true)
+    expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'docs/talk.mp3' })).toBe(true)
+    expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'docs/契約書.pdf' })).toBe(true)
     expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'archive.zip' })).toBe(false)
   })
 })
