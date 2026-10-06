@@ -37,7 +37,7 @@ describe('terminal process incarnation liveness', () => {
     ).resolves.toBe('live')
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness('remote:ssh-1:pty-1:inc-old', SSH_SCOPE)
-    ).resolves.toBe('exited')
+    ).resolves.toBe('unverifiable')
     expect(listProcesses).toHaveBeenNthCalledWith(1, 'ssh-1')
     expect(listProcesses).toHaveBeenNthCalledWith(2, 'ssh-1')
   })
@@ -85,7 +85,7 @@ describe('terminal process incarnation liveness', () => {
 
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness('local-pty:inc-1', JSON.stringify(scope))
-    ).resolves.toBe('exited')
+    ).resolves.toBe('unverifiable')
     expect(listProcesses).toHaveBeenCalledWith(connectionId)
   })
 })

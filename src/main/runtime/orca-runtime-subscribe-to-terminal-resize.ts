@@ -20,7 +20,8 @@ import type {
 } from '../../shared/runtime-types'
 import {
   classifyWorkerTerminalProcessIncarnation,
-  parseWorkerTerminalHostScope
+  parseWorkerTerminalHostScope,
+  workerTerminalPtyIdForDeathProbe
 } from './orchestration/worker-terminal-process-liveness'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
@@ -182,7 +183,38 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     if (!listed.ok) {
       return 'unverifiable'
     }
-    return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
+    const inventoryVerdict = classifyWorkerTerminalProcessIncarnation(
+      processIncarnation,
+      listed.value
+    )
+    if (inventoryVerdict !== 'exited') {
+      return inventoryVerdict
+    }
+    const ptyId = workerTerminalPtyIdForDeathProbe(processIncarnation, hostScope)
+    const probe = this.ptyController.probePtyLiveness?.bind(this.ptyController)
+    if (!ptyId || !probe) {
+      return 'unverifiable'
+    }
+    const probed = await withTimeoutResult(
+      Promise.resolve().then(() => probe(ptyId)),
+      PTY_CONTROLLER_LIST_TIMEOUT_MS
+    )
+    if (!probed.ok || probed.value !== false) {
+      return 'unverifiable'
+    }
+    // Discovery can change while the owning provider answers; re-check after that await.
+    const fresh = await withTimeoutResult(
+      this.ptyController.listProcesses(hostScope.kind === 'ssh' ? hostScope.targetId : null),
+      PTY_CONTROLLER_LIST_TIMEOUT_MS
+    )
+    if (!fresh.ok) {
+      return 'unverifiable'
+    }
+    const freshVerdict = classifyWorkerTerminalProcessIncarnation(processIncarnation, fresh.value)
+    if (freshVerdict !== 'exited') {
+      return freshVerdict
+    }
+    return fresh.value.some((session) => session.id === ptyId) ? 'unverifiable' : 'exited'
   }
 
   protected getTerminalTopologyRevision(worktreeId: string): number {

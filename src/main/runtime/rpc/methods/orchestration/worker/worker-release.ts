@@ -50,12 +50,17 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
           (await runtime.inspectTerminalProcessIncarnationLiveness(
             processIncarnation,
             resource.host_scope
-          )) === 'exited'
+          )) === 'exited' &&
+          !runtime.resolveTerminalHandleByProcessIncarnation(
+            processIncarnation,
+            resource.host_scope
+          )
         ) {
           const reconciled = db.settleDeadWorkerTerminalRelease({
             requestingDispatchId: params.dispatch,
             resourceId: resource.id,
-            processIncarnation
+            processIncarnation,
+            expectedResource: resource
           })
           if (reconciled.disposition === 'released') {
             runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
