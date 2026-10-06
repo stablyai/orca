@@ -9,7 +9,7 @@ import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { HiddenProjects } from '../project/catalog/hidden-projects'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './sections/group-keys'
 import { appendOrderedGroups, type SectionAppendContext } from './sections/group-sections'
-
+import { filterProjectGroupsForRepoFilter } from './sections/project-filter-group-scope'
 import {
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
@@ -108,7 +108,6 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     lineageParentIdentities,
     worktreeMap,
     nestLineage,
-    projectGroups,
     placeholderRepoIds,
     importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,
@@ -117,9 +116,9 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     folderWorkspaces,
     hostLabelById,
     defaultHostId,
-    pinnedDisplayPolicy,
-    filterRepoIds
+    pinnedDisplayPolicy
   } = inputs
+  const projectGroups = filterProjectGroupsForRepoFilter(inputs)
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Resolve folder membership before groupBy; every mode renders the same set (#15362).
@@ -139,7 +138,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
         worktrees,
         lineageById,
         worktreeMap,
-        filterRepoIds,
+        inputs.filterRepoIds,
         lineageParentIdentities,
         folders.rows
       )
