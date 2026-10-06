@@ -103,7 +103,12 @@ describe('CodexAccountService config sync', () => {
 
     await service.addAccount()
 
-    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock.mock.calls.filter(([, args]) => args.includes('login'))).toHaveLength(1)
+    const managedHome = store.getSettings().codexManagedAccounts[0].managedHomePath
+    const managedStates = (await import('../codex/config-toml-trust')).readHookTrustEntries(
+      join(managedHome, 'config.toml')
+    )
+    expect([...managedStates.values()].filter((state) => state.enabled === true)).toHaveLength(8)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
     // Why: the desktop add path must pass the new account's selection target, as
     // reauthenticate and select already do. Called with no argument, a WSL add
@@ -168,7 +173,7 @@ describe('CodexAccountService config sync', () => {
 
     await service.addAccount()
 
-    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock.mock.calls.filter(([, args]) => args.includes('login'))).toHaveLength(1)
   })
 
   it('rejects OAuth account add when canonical config pins a custom provider', async () => {

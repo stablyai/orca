@@ -6,6 +6,7 @@ import { dedupeInFlightRun } from '../in-flight-run-dedupe'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import { getManagedScriptPath } from './codex-hook-definition'
+import { enableProvisionedCodexManagedHooks } from './codex-managed-hook-provision'
 import { installCodexHooksExclusively } from './codex-hook-local-install'
 import {
   refreshCodexRuntimeUserHooksExclusively,
@@ -35,6 +36,23 @@ function launchPrepKey(lane: 'install' | 'refresh', runtimeHomePath: string): st
 }
 
 export class CodexHookService {
+  async provisionManagedAccountHome(
+    managedHomePath: string,
+    target?: CodexWslRuntimeHookTarget
+  ): Promise<void> {
+    const status = await this.prepareRuntimeHomeForLaunch(managedHomePath, target, true)
+    if (status.state === 'error' || status.state === 'not_installed') {
+      throw new Error(status.detail ?? 'Orca could not install the managed Codex hook')
+    }
+    enableProvisionedCodexManagedHooks(managedHomePath, target)
+    if (target?.runtime !== 'wsl') {
+      const verified = this.getStatus(managedHomePath)
+      if (verified.state !== 'installed') {
+        throw new Error(verified.detail ?? 'Orca managed Codex hook trust is incomplete')
+      }
+    }
+  }
+
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
   }
