@@ -13,6 +13,7 @@ import type {
 } from '../../../../shared/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
 import { NativeChatToolRun } from './NativeChatToolRun'
+import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
@@ -92,7 +93,6 @@ export const MessageRow = memo(function MessageRow({
   onLinkClick,
   allowFileUriLinks = false,
   deliveryNotice,
-  folded = false,
   subagentRoster,
   subagentDisclosure,
   inSubagentSection = false,
@@ -112,8 +112,6 @@ export const MessageRow = memo(function MessageRow({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   deliveryNotice?: NativeChatDeliveryNotice
-  /** Behind a folded turn: the row keeps only what outlives the turn. */
-  folded?: boolean
   /** On a roster row: its list's state and the subagents whose rows open below it. */
   subagentRoster?: NativeChatSubagentRosterState
   subagentDisclosure?: NativeChatSubagentDisclosure
@@ -149,12 +147,6 @@ export const MessageRow = memo(function MessageRow({
     subagentGroups.length === 0 &&
     backgroundTasks.length === 0
   ) {
-    return null
-  }
-
-  // Behind a folded turn this row is the work, not the answer. Rows that outlive
-  // their turn never reach here — the fold leaves them out.
-  if (folded) {
     return null
   }
 
@@ -248,9 +240,22 @@ export const MessageRow = memo(function MessageRow({
     )
   }
 
-  // Plain assistant prose is the copyable unit; reasoning/system asides stay
-  // chrome-free. Controls reveal on hover/keyboard focus and stay visible on touch.
-  const showControls = !isReasoning && !isSystem && markdown.length > 0
+  if (isReasoning) {
+    return (
+      <div ref={rowRef}>
+        <NativeChatReasoningRow
+          message={message}
+          turnIsWorking={activeTurnIsWorking}
+          markdown={markdown}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+        />
+      </div>
+    )
+  }
+
+  // Assistant controls reveal on hover and keyboard focus; system asides stay chrome-free.
+  const showControls = !isSystem && markdown.length > 0
 
   return (
     <div

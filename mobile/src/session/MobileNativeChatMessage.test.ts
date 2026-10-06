@@ -26,6 +26,8 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Platform: { OS: 'ios' },
     Pressable: 'Pressable',
+    ScrollView: ({ children, ...props }: { children?: unknown }) =>
+      React.createElement('ScrollView', props, children),
     Text,
     View: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('View', props, children),
@@ -35,6 +37,7 @@ vi.mock('react-native', async () => {
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  Brain: 'Brain',
   ChevronDown: 'ChevronDown',
   Copy: 'Copy',
   SquareChevronRight: 'SquareChevronRight',
@@ -79,6 +82,7 @@ describe('MobileNativeChatMessage', () => {
         workedSeconds: number | null
       } | null
       onToggleTurn?: () => void
+      reasoningIsLive?: boolean
     } = {}
   ): ReactTestRenderer {
     act(() => {
@@ -373,6 +377,88 @@ describe('MobileNativeChatMessage', () => {
         structuredActivityUi: true
       })
       expect(textIn(tree.root)).toEqual(['go'])
+    })
+  })
+
+  describe('a reasoning row', () => {
+    const reasoning = (fields: Partial<NativeChatMessage> = {}): NativeChatMessage => ({
+      id: 'r1',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'Weighing two approaches' }],
+      timestamp: 1_000,
+      source: 'transcript',
+      state: 'completed',
+      completedAt: 4_000,
+      ...fields
+    })
+    const toggleOf = (tree: ReactTestRenderer): ReactTestInstance =>
+      tree.root.find(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityRole === 'button'
+      )
+    const markdownIn = (tree: ReactTestRenderer): ReactTestInstance[] =>
+      tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')
+
+    it('starts collapsed to its headline, with its text unmounted', () => {
+      const tree = render(reasoning())
+      expect(textIn(tree.root)).toContain('Thought for 3s')
+      expect(toggleOf(tree).props.accessibilityState).toEqual({ expanded: false })
+      // Said with what it is, as desktop's screen-reader prefix does, on a 32 + 2 × 6 pt target.
+      expect(toggleOf(tree).props.accessibilityLabel).toBe('Reasoning: Thought for 3s')
+      expect(toggleOf(tree).props.hitSlop).toBe(6)
+      expect(markdownIn(tree)).toHaveLength(0)
+    })
+
+    it('leads its headline with the brain, as desktop does', () => {
+      const [first] = toggleOf(render(reasoning())).children
+      expect(typeof first === 'string' ? first : first?.type).toBe('Brain')
+    })
+
+    it('mounts its text once opened', () => {
+      const tree = render(reasoning())
+      act(() => toggleOf(tree).props.onPress())
+      expect(toggleOf(tree).props.accessibilityState).toEqual({ expanded: true })
+      expect(markdownIn(tree).map((node) => node.props.content)).toEqual([
+        'Weighing two approaches'
+      ])
+    })
+
+    it('draws nothing while the live line discloses it, or when blank', () => {
+      expect(
+        render(reasoning({ state: 'running' }), {
+          activeTurnIsWorking: true,
+          reasoningIsLive: true
+        }).toJSON()
+      ).toBeNull()
+      expect(render(reasoning({ blocks: [{ type: 'text', text: ' \n ' }] })).toJSON()).toBeNull()
+    })
+
+    // The turn's bar is not the block's: hiding the block must not hide the bar it sits on.
+    it("still draws its turn's bar while the live line discloses it", () => {
+      const tree = render(reasoning({ state: 'running' }), {
+        activeTurnIsWorking: true,
+        reasoningIsLive: true,
+        turnStatus: { startedAt: 1_000, thinking: true, workedSeconds: null }
+      })
+      expect(tree.root.findAll((node) => String(node.type) === 'Pressable')).toHaveLength(0)
+      expect(textIn(tree.root).some((text) => text.startsWith('Working for'))).toBe(true)
+    })
+
+    // Only the block the line discloses hides: a subagent's or a stale open block draws, unended.
+    it('draws any other open block in its working turn as Reasoning', () => {
+      const child = render(reasoning({ state: 'running', agentId: 'sub-1' }), {
+        activeTurnIsWorking: true
+      })
+      expect(textIn(child.root)).toContain('Reasoning')
+      expect(toggleOf(child).props.accessibilityLabel).toBe('Reasoning')
+    })
+
+    it('says only what the host saw', () => {
+      expect(textIn(render(reasoning({ state: 'running' })).root)).toContain('Thought')
+      const unknown = render(reasoning({ state: undefined, completedAt: undefined }))
+      expect(textIn(unknown.root)).toContain('Reasoning')
+      // No "Reasoning: Reasoning".
+      expect(toggleOf(unknown).props.accessibilityLabel).toBe('Reasoning')
+      expect(textIn(render(reasoning({ completedAt: 1_300 })).root)).toContain('Thought for 1s')
     })
   })
 })

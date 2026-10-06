@@ -14,6 +14,7 @@ import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import {
+  endedUnseenMessageBody,
   requiresTerminalSettlement,
   runningCallEnd,
   terminalAgentJournalBody
@@ -181,9 +182,10 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     const bodies = new Map(items.map((item) => [item.itemId, item.body]))
     for (const item of items) {
       const identity = parseAgentJournalItemKey(item.itemId)
-      // Ended as its turn is: a proven death cuts a running call short.
+      // Ended as its turn is: a proven death cuts a running call short. An open reasoning row is
+      // ended too, but is not unfinished work: its running turn already says so.
       const end = runningCallEnd(item.turnScope, (id) => bodies.get(id), input.verdict.state)
-      const body = terminalAgentJournalBody(item.body, end)
+      const body = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
       if (identity && body) {
         mutations.push({
           kind: 'item',
@@ -246,7 +248,7 @@ export async function settleStaleStructuredAgentSessionState(input: {
     // A turn already settled (a person's Stop) ends its calls as it ended; only a turn still running
     // leaves them to the evidence.
     const end = runningCallEnd(item.turnScope, (id) => journal.itemBody(id), verdictFor(item).state)
-    const body = terminalAgentJournalBody(item.body, end)
+    const body = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
     if (identity && body) {
       mutations.push({
         kind: 'item',
