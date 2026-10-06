@@ -276,6 +276,68 @@ describe('getSpawnArgsForWindows', () => {
       }
     })
   })
+
+  it('routes unsafe argv through an existing sibling PowerShell shim when allowed', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-win-powershell-shim-'))
+    try {
+      const batchShim = join(tempDir, 'cursor-agent.cmd')
+      const powerShellShim = join(tempDir, 'cursor-agent.ps1')
+      writeFileSync(batchShim, '@echo off\r\n')
+      writeFileSync(powerShellShim, 'exit 0\r\n')
+
+      withPlatform('win32', () => {
+        expect(
+          getSpawnArgsForWindows(batchShim, ['--version'], {
+            allowPowerShellShimFallback: true
+          })
+        ).toEqual({
+          spawnCmd: getCmdExePath(),
+          spawnArgs: ['/d', '/c', batchShim, '--version']
+        })
+        expect(
+          getSpawnArgsForWindows(batchShim, ['--print', 'line one\nline two'], {
+            allowPowerShellShimFallback: true,
+            env: { SystemRoot: 'C:\\Windows' }
+          })
+        ).toEqual({
+          spawnCmd: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+          spawnArgs: [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            powerShellShim,
+            '--print',
+            'line one\nline two'
+          ]
+        })
+        expect(() => getSpawnArgsForWindows(batchShim, ['--print', 'line one\nline two'])).toThrow(
+          UnsafeWindowsBatchArgumentsError
+        )
+      })
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('still rejects unsafe argv when the sibling PowerShell shim is missing', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-win-powershell-shim-missing-'))
+    try {
+      const batchShim = join(tempDir, 'cursor-agent.cmd')
+      writeFileSync(batchShim, '@echo off\r\n')
+      withPlatform('win32', () => {
+        expect(() =>
+          getSpawnArgsForWindows(batchShim, ['--print', 'line one\nline two'], {
+            allowPowerShellShimFallback: true,
+            env: { SystemRoot: 'C:\\Windows' }
+          })
+        ).toThrow(UnsafeWindowsBatchArgumentsError)
+      })
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('resolveWindowsCommand', () => {

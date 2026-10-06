@@ -1,4 +1,5 @@
 import { win32 } from 'node:path'
+import { getWindowsPowerShellShimSpawn } from './windows-powershell-shim-spawn'
 
 /** Full path to cmd.exe for GUI and service-launched processes. */
 export function getCmdExePath(): string {
@@ -56,6 +57,14 @@ export type GetSpawnArgsForWindowsOptions = {
    * spaces) must leave this off.
    */
   detachedGui?: boolean
+  /**
+   * Opt-in: when argv is unsafe for cmd.exe, spawn a sibling `.ps1` via
+   * `powershell -File` instead of rejecting. Off by default so editors, git,
+   * and setup runners keep the batch-safe reject.
+   */
+  allowPowerShellShimFallback?: boolean
+  /** Environment used to resolve SystemRoot for powershell.exe. */
+  env?: NodeJS.ProcessEnv
 }
 
 export function getSpawnArgsForWindows(
@@ -64,7 +73,16 @@ export function getSpawnArgsForWindows(
   options: GetSpawnArgsForWindowsOptions = {}
 ): { spawnCmd: string; spawnArgs: string[] } {
   if (isWindowsBatchScript(command)) {
-    assertWindowsCmdSafeTokens([command, ...args])
+    if ([command, ...args].some(hasUnsafeWindowsBatchSyntax)) {
+      // Why: sibling -File avoids cmd.exe re-parsing multiline prompt text.
+      const fallback = options.allowPowerShellShimFallback
+        ? getWindowsPowerShellShimSpawn(command, args, options.env ?? process.env)
+        : null
+      if (fallback) {
+        return fallback
+      }
+      throw new UnsafeWindowsBatchArgumentsError()
+    }
 
     // Why: separate argv entries let Node quote spaces without breaking cmd.
     if (options.detachedGui) {
