@@ -40,20 +40,27 @@ function renderHeader({
   modifierHintDestination = 'system-browser'
 }: {
   canUnlinkReview?: boolean
-  provider?: 'github' | 'gitlab'
+  provider?: 'github' | 'gitlab' | 'bitbucket'
   modifierHintDestination?: ChecksPanelHostedReviewModifierDestination
 } = {}): string {
   const isGitLab = provider === 'gitlab'
+  const isBitbucket = provider === 'bitbucket'
   return renderToStaticMarkup(
     <ChecksPanelReviewHeader
       review={{
         provider,
-        number: isGitLab ? 31 : 2964,
-        title: isGitLab ? 'Fix GitLab MR creation' : 'fix: pr-bug-scan validated finding',
+        number: isGitLab ? 31 : isBitbucket ? 12 : 2964,
+        title: isGitLab
+          ? 'Fix GitLab MR creation'
+          : isBitbucket
+            ? 'Fix Bitbucket PR'
+            : 'fix: pr-bug-scan validated finding',
         state: 'open',
         url: isGitLab
           ? 'https://gitlab.com/acme/orca/-/merge_requests/31'
-          : 'https://github.com/stablyai/orca/pull/2964',
+          : isBitbucket
+            ? 'https://bitbucket.org/acme/orca/pull-requests/12'
+            : 'https://github.com/stablyai/orca/pull/2964',
         status: 'pending',
         updatedAt: '2026-05-31T22:58:01Z',
         mergeable: 'UNKNOWN'
@@ -135,5 +142,18 @@ describe('ChecksPanelReviewHeader', () => {
       'Orca will hide MR !31 details for this workspace. The MR and branch on GitLab won’t be changed.'
     )
     expect(markup).toContain('Link another MR')
+  })
+
+  it('shows Bitbucket PR identity with provider-appropriate link management actions', () => {
+    const markup = renderHeader({ provider: 'bitbucket' })
+
+    expect(markup).toContain('Open on Bitbucket')
+    expect(markup).toContain('#12')
+    expect(markup).toContain('More PR actions')
+    expect(markup).toContain('Unlink PR from workspace')
+    expect(markup).toContain(
+      'Orca will hide PR #12 details for this workspace. The PR and branch on Bitbucket won’t be changed.'
+    )
+    expect(markup).not.toContain('Link another PR')
   })
 })

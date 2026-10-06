@@ -32,9 +32,12 @@ export function selectChecksPanelReview({
   linkedAzureDevOpsPR,
   linkedGiteaPR
 }: ChecksPanelReviewSelectionInput): ChecksPanelReview | null {
-  const gitLabHostedReview = hostedReview?.provider === 'gitlab' ? hostedReview : null
-  if (gitLabHostedReview) {
-    return gitLabHostedReview
+  const supportedHostedReview =
+    hostedReview?.provider === 'gitlab' || hostedReview?.provider === 'bitbucket'
+      ? hostedReview
+      : null
+  if (supportedHostedReview) {
+    return supportedHostedReview
   }
   const hasNonGitHubLinkedReview =
     linkedGitLabMR !== null ||

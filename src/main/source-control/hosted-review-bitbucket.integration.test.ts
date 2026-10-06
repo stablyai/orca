@@ -210,4 +210,46 @@ describe('Bitbucket hosted review integration', () => {
       })
     }
   })
+
+  it('rejects merging a Bitbucket PR over insecure HTTP', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-bitbucket-merge-'))
+    try {
+      process.env.ORCA_BITBUCKET_API_BASE_URL = 'http://127.0.0.1:9999/2.0'
+      await execFileAsync('git', ['init'], { cwd: repoPath })
+      await execFileAsync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:team/repo.git'], {
+        cwd: repoPath
+      })
+
+      const { mergeBitbucketPullRequest } = await import('../bitbucket/pull-request-merge')
+      const result = await mergeBitbucketPullRequest(repoPath, 42, 'fast_forward', true)
+
+      expect(result).toEqual({
+        ok: false,
+        error: 'Merge failed: Bitbucket API URL must use HTTPS.'
+      })
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects declining a Bitbucket PR over insecure HTTP', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-bitbucket-decline-'))
+    try {
+      process.env.ORCA_BITBUCKET_API_BASE_URL = 'http://127.0.0.1:9999/2.0'
+      await execFileAsync('git', ['init'], { cwd: repoPath })
+      await execFileAsync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:team/repo.git'], {
+        cwd: repoPath
+      })
+
+      const { declineBitbucketPullRequest } = await import('../bitbucket/pull-request-merge')
+      const result = await declineBitbucketPullRequest(repoPath, 42)
+
+      expect(result).toEqual({
+        ok: false,
+        error: 'Close failed: Bitbucket API URL must use HTTPS.'
+      })
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
 })

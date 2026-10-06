@@ -20,6 +20,7 @@ import { translate } from '@/i18n/i18n'
 
 type ChecksPanelCommentMutationsInput = Pick<
   ChecksPanelControllerState,
+  | 'activeWorktree'
   | 'addPRConversationComment'
   | 'addPRReviewCommentReply'
   | 'branch'
@@ -31,10 +32,12 @@ type ChecksPanelCommentMutationsInput = Pick<
 > &
   Pick<ChecksPanelCommentResolutionState, 'commentsDisabledReason'> &
   Pick<ChecksPanelComposerState, 'isCurrentAsyncResult'> &
-  Pick<ChecksPanelContextState, 'pr' | 'prCacheKey' | 'prNumber'>
+  Pick<ChecksPanelContextState, 'activeReview' | 'pr' | 'prCacheKey' | 'prNumber'>
 
 export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutationsInput) {
   const {
+    activeReview,
+    activeWorktree,
     addPRConversationComment,
     addPRReviewCommentReply,
     branch,
@@ -51,6 +54,26 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
   } = model
   const handleAddPRComment = useCallback(
     async (body: string) => {
+      if (activeReview?.provider === 'bitbucket') {
+        if (!repo || !activeReview.number) {
+          return { ok: false as const, error: commentsDisabledReason ?? 'Commenting unavailable.' }
+        }
+        const targetPrNumber = activeReview.number
+        const result = await window.api.bitbucket.addPRComment({
+          repoPath: repo.path,
+          prNumber: targetPrNumber,
+          body,
+          executionHostId: activeWorktree?.hostId
+        })
+        if (!result.ok) {
+          toast.error(result.error)
+          return result
+        }
+        if (activeReview?.provider === 'bitbucket' && activeReview.number === targetPrNumber) {
+          setComments((prev) => mergePRCommentIntoList(prev, result.comment))
+        }
+        return { ok: true as const }
+      }
       if (!repo || !prNumber || !pr?.prRepo) {
         return { ok: false as const, error: commentsDisabledReason ?? 'Commenting unavailable.' }
       }
@@ -76,6 +99,9 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       return { ok: true as const }
     },
     [
+      activeReview?.number,
+      activeReview?.provider,
+      activeWorktree?.hostId,
       addPRConversationComment,
       branch,
       commentsDisabledReason,
@@ -200,6 +226,40 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
   const handleReplyToComment = useCallback(
     async (comment: PRComment, body: string, options: { notifyOnFailure?: boolean } = {}) => {
       const notifyOnFailure = options.notifyOnFailure !== false
+      if (activeReview?.provider === 'bitbucket') {
+        if (!repo || !activeReview.number) {
+          return { ok: false as const, error: commentsDisabledReason ?? 'Commenting unavailable.' }
+        }
+        const targetPrNumber = activeReview.number
+        const parentId = comment.id
+        const threadId = comment.threadId ?? String(parentId)
+        const rootCommentId = Number(threadId)
+        const result = await window.api.bitbucket.replyPRComment({
+          repoPath: repo.path,
+          prNumber: targetPrNumber,
+          parentId,
+          body,
+          executionHostId: activeWorktree?.hostId,
+          rootCommentId:
+            Number.isInteger(rootCommentId) && rootCommentId > 0 ? rootCommentId : undefined
+        })
+        if (!result.ok) {
+          if (notifyOnFailure) {
+            toast.error(result.error)
+          }
+          return result
+        }
+        if (activeReview?.provider === 'bitbucket' && activeReview.number === targetPrNumber) {
+          const commentWithThread: PRComment = {
+            ...result.comment,
+            threadId,
+            path: result.comment.path ?? comment.path,
+            line: result.comment.line ?? comment.line
+          }
+          setComments((prev) => mergePRCommentIntoList(prev, commentWithThread))
+        }
+        return { ok: true as const }
+      }
       if (!repo || !prNumber || !pr?.prRepo) {
         return { ok: false as const, error: commentsDisabledReason ?? 'Commenting unavailable.' }
       }
@@ -256,6 +316,9 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       return { ok: true as const }
     },
     [
+      activeReview?.number,
+      activeReview?.provider,
+      activeWorktree?.hostId,
       addPRConversationComment,
       addPRReviewCommentReply,
       branch,
