@@ -62,8 +62,6 @@ export default function TabGroupPanel({
   isTabDragActive?: boolean
   hoveredTabInsertion?: HoveredTabInsertion | null
 }): React.JSX.Element {
-  const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
-  const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
     activeTab,
@@ -268,7 +266,8 @@ export default function TabGroupPanel({
       >
         <div className="flex h-full items-stretch pr-1.5">
           {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
-          {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+          {/* Why: width comes from the app root, which knows which sidebar holds the left slot; it resolves to 0 when nothing floats there. */}
+          {reserveCollapsedSidebarHeaderSpace ? (
             <div
               className="shrink-0"
               style={
@@ -334,12 +333,12 @@ export default function TabGroupPanel({
             </div>
           </div>
           {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
-          {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
+          {reserveClosedExplorerToggleSpace ? (
             <div
               className="shrink-0"
               style={
                 {
-                  width: 'calc(40px + var(--window-controls-width, 0px))',
+                  width: 'var(--collapsed-trailing-chrome-width)',
                   WebkitAppRegion: 'no-drag'
                 } as React.CSSProperties
               }

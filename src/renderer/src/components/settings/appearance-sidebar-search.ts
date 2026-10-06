@@ -33,6 +33,44 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): Settings
   ]
 }))
 
+export const getWorkspaceSidebarPositionEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.appearance.search.workspaceSidebarPosition.title',
+    'Workspace List Position'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.search.workspaceSidebarPosition.description',
+    'Pick the edge for the workspace list. Explorer, Agents, and Source Control move to the opposite edge.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.workspaceSidebarPosition.position',
+      'position'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.workspaceSidebarPosition.swap',
+      'swap'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.workspaceSidebarPosition.left',
+      'left'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.workspaceSidebarPosition.right',
+      'right'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.workspaceSidebarPosition.explorer',
+      'explorer'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.workspaceSidebarPosition.layout',
+      'layout'
+    )
+  ]
+}))
+
 export const getWorkspaceCardLayoutEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate(
     'auto.components.settings.appearance.search.workspaceCardLayout.title',
@@ -189,5 +227,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
+  getWorkspaceSidebarPositionEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])

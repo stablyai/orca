@@ -6977,6 +6977,12 @@
           "showPinnedWorktreesInGroups": {
             "title": "Also show pinned worktrees in their original lists",
             "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
+          },
+          "workspaceSidebarPosition": {
+            "title": "Workspace List Position",
+            "rowDescription": "Pick the edge for the workspace list. Explorer, Agents, and Source Control move to the opposite edge.",
+            "left": "Left",
+            "right": "Right"
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -9520,6 +9526,16 @@
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
             "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "workspaceSidebarPosition": {
+              "title": "Workspace List Position",
+              "description": "Pick the edge for the workspace list. Explorer, Agents, and Source Control move to the opposite edge.",
+              "position": "position",
+              "swap": "swap",
+              "left": "left",
+              "right": "right",
+              "explorer": "explorer",
+              "layout": "layout"
+            },
             "zcodeUsageTitle": "ZCode Usage",
             "zcodeUsageDescription": "Show ZCode Coding Plan quota usage in the status bar.",
             "zcode": "zcode",

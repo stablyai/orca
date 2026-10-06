@@ -36,7 +36,8 @@ import type {
   OpenInApplication,
   SourceControlGroupOrder,
   SourceControlViewMode,
-  TaskViewPresetId
+  TaskViewPresetId,
+  WorkspaceSidebarPositionSettings
 } from './ui-chrome-types'
 import type { SetupScriptLaunchMode } from './worktree/launch-types'
 import type {
@@ -537,7 +538,8 @@ export type GlobalSettings = {
   voice?: VoiceSettings
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
   aiVaultSearch?: AiVaultSearchSettings
-}
+  // Why: this file sits at the max-lines ceiling, so the sidebar-edge key lives with its type in ui-chrome-types.
+} & WorkspaceSidebarPositionSettings
 
 // Re-exported so existing importers keep one entry point; the shape lives in its
 // own file because this one is at the max-lines ceiling.

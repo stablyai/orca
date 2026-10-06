@@ -6866,6 +6866,12 @@
           "showPinnedWorktreesInGroups": {
             "title": "Afficher aussi les worktrees épinglés dans leurs listes d'origine",
             "description": "Les worktrees épinglés restent dans Épinglés et apparaissent aussi dans Tous, Projet, Statut et PR."
+          },
+          "workspaceSidebarPosition": {
+            "title": "Position de la liste des espaces de travail",
+            "rowDescription": "Choisissez le bord où placer la liste des espaces de travail. L'explorateur, les agents et le contrôle de code source passent sur le bord opposé.",
+            "left": "Gauche",
+            "right": "Droite"
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -9404,6 +9410,16 @@
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Pourcentages d'utilisation",
             "usagePercentageDisplayDescription": "Choisissez si les limites des fournisseurs affichent le pourcentage utilisé ou restant.",
+            "workspaceSidebarPosition": {
+              "title": "Position de la liste des espaces de travail",
+              "description": "Choisissez le bord où placer la liste des espaces de travail. L'explorateur, les agents et le contrôle de code source passent sur le bord opposé.",
+              "position": "position",
+              "swap": "inverser",
+              "left": "gauche",
+              "right": "droite",
+              "explorer": "explorateur",
+              "layout": "disposition"
+            },
             "tray": {
               "tray": "plateau",
               "system": "barre d'état système",

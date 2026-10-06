@@ -30,6 +30,7 @@ export function createCodexAccountSettings(
     diffShowWhitespace: overrides.diffShowWhitespace ?? false,
     localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
+    workspaceSidebarPosition: overrides.workspaceSidebarPosition ?? 'left',
     appFontFamily: overrides.appFontFamily ?? 'Geist',
     agentStatusHooksEnabled: overrides.agentStatusHooksEnabled ?? true,
     tabAutoGenerateTitle: overrides.tabAutoGenerateTitle ?? false

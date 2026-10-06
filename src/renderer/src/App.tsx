@@ -82,7 +82,14 @@ function App(): React.JSX.Element {
       className="app-layout"
       style={
         {
-          '--collapsed-sidebar-header-width': `${layout.collapsedSidebarHeaderWidth}px`,
+          // Why: tab strips reserve their edge gutters from these two vars alone, so the reservation has to
+          // collapse to 0 here when nothing floats — a tab strip can't tell which sidebar owns which slot.
+          '--collapsed-sidebar-header-width': layout.leftColumnHeaderFloating
+            ? `${layout.collapsedSidebarHeaderWidth}px`
+            : '0px',
+          '--collapsed-trailing-chrome-width': layout.trailingSlotOpen
+            ? '0px'
+            : 'calc(40px + var(--window-controls-width, 0px))',
           // Shared so surfaces can avoid the Windows/Linux window-controls overlay without hardcoding 138px everywhere.
           '--window-controls-width': WINDOW_CONTROLS_WIDTH,
           // Side-position activity bar uses this to push icons below the Windows/Linux window-controls overlay.
