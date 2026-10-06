@@ -264,6 +264,7 @@ function gh(world, args, input) {
       key: `${workflow.file}:${inputs.mode ?? 'deploy'}`,
       dispatched: true,
       headSha: world.main,
+      polls: world.polls?.[`${workflow.file}:${inputs.mode ?? 'deploy'}`] ?? 0,
       artifacts: {},
       log: ''
     }
@@ -284,9 +285,12 @@ function gh(world, args, input) {
     return world.unreadableLogs?.(run) ? { status: 1, stdout: '', stderr: 'HTTP 502' } : ok(run.log)
   }
   if (args[1] === 'view') {
+    world.onView?.(run)
+    const running = run.polls > 0
+    if (running) run.polls -= 1
     return ok({
-      status: 'completed',
-      conclusion: run.conclusion,
+      status: running ? 'in_progress' : 'completed',
+      conclusion: running ? '' : run.conclusion,
       attempt: 1,
       headSha: run.headSha,
       headBranch: 'main',
@@ -353,7 +357,6 @@ function dependencies(world) {
   return {
     run: (program, args, input) =>
       program === 'gh' ? gh(world, args, input) : gcloud(world, args),
-    stream: () => 0,
     now: () => world.now,
     sleep: async (ms) => {
       world.now += ms
@@ -418,13 +421,13 @@ const MONITOR = `${WORKFLOWS.monitor.file}:dry-run`
 const report = (world) => world.printed.join('\n')
 const live = (world) => [world.control.generation, world.control.enabled]
 
-test('publishes before pausing, types every phrase, and enables on the digests now serving', async () => {
+test('publishes first, types every phrase, and enables on the digests now serving', async () => {
   const world = fakeWorld()
   assert.equal((await start(world)).done, true)
   assert.deepEqual(keys(world), [
+    'publish-relay-production:publish',
     'operate-relay-asia-admission:inspect',
     'operate-relay-production-rehome:inspect',
-    'publish-relay-production:publish',
     'operate-relay-production-rehome:pause',
     'deploy-relay-production-director:deploy',
     'operate-relay-production-rehome:inspect',
@@ -436,6 +439,7 @@ test('publishes before pausing, types every phrase, and enables on the digests n
     'PAUSE_REGIONAL_REHOMING',
     'ENABLE_REGIONAL_REHOMING'
   ])
+  assert.ok(world.questions.every((question) => question.endsWith('\n')))
   assert.ok(
     world.questions.some((question) =>
       question.includes(
@@ -467,10 +471,11 @@ test('publishes before pausing, types every phrase, and enables on the digests n
   assert.deepEqual(live(world), [41, true])
 })
 
-test('a wrong phrase stops before the first mutation', async () => {
+test('a wrong phrase stops before rehome or the director is touched', async () => {
   const world = fakeWorld({ answer: () => 'yes' })
   assert.match((await stopped(start(world))).message, /expected DEPLOY aaaaaaaaaaaa/)
   assert.deepEqual(keys(world), [
+    'publish-relay-production:publish',
     'operate-relay-asia-admission:inspect',
     'operate-relay-production-rehome:inspect'
   ])
@@ -482,7 +487,9 @@ test('F2: rehome found paused is never adopted; --leave-rehome-paused deploys an
     (await stopped(start(world))).message,
     /did not pause it.*--pause-run.*--leave-rehome-paused/s
   )
-  assert.equal(dispatched(world, PUBLISH).length, 0)
+  assert.match(report(world), /drive-relay-director-deploy\.mjs .*--publish-run \d+/)
+  await rerun(world).catch(() => {})
+  assert.equal(dispatched(world, PUBLISH).length, 1)
   await start(world, ['--leave-rehome-paused'])
   assert.equal(
     dispatched(world, REHOME('pause')).length + dispatched(world, REHOME('enable')).length,
@@ -509,11 +516,60 @@ test('F2: main moving is caught before any rehome change, and after the pause it
   assert.deepEqual(live(world), [41, true])
 })
 
+test('ops-log 22:59Z: main moving during the inspects and the typed phrase no longer stops the deploy', async () => {
+  const world = fakeWorld()
+  const deps = dependencies(world)
+  const run = deps.run
+  deps.run = (program, args, input) => {
+    const result = run(program, args, input)
+    if (args[0] === 'workflow' && JSON.parse(input).mode === 'inspect') world.main = 'b'.repeat(40)
+    return result
+  }
+  assert.equal((await start(world, [], deps)).done, true)
+  assert.equal(dispatched(world, PUBLISH)[0].headSha, COMMIT)
+  assert.equal(dispatched(world, DEPLOY)[0].inputs['image-digest'], NEW)
+})
+
+test('main moving between the check and the publish stops untouched, naming the reuse command', async () => {
+  const world = fakeWorld()
+  const deps = dependencies(world)
+  const run = deps.run
+  deps.run = (program, args, input) => {
+    if (args[0] === 'workflow') world.main = 'b'.repeat(40)
+    return run(program, args, input)
+  }
+  assert.match((await stopped(start(world, [], deps))).message, /main moved/)
+  const publishRun = String(dispatched(world, PUBLISH)[0].id)
+  assert.deepEqual(keys(world), ['publish-relay-production:publish'])
+  // The only command printed is the one that reuses the build.
+  const commands = world.printed.filter((line) => line.includes('&& node dev/scripts/'))
+  assert.equal(commands.length, 1)
+  assert.match(commands[0], new RegExp(`--commit ${world.main} --publish-run ${publishRun}$`))
+  assert.equal((await rerun(world)).done, true)
+  assert.equal(dispatched(world, PUBLISH).length, 1)
+  assert.deepEqual(live(world), [41, true])
+})
+
+test('a running workflow is summarised, not streamed', async () => {
+  const world = fakeWorld({ polls: { [PUBLISH]: 40 } })
+  assert.equal((await start(world)).done, true)
+  assert.deepEqual(
+    world.printed
+      .filter((line) => / publish: (in_progress|success)/.test(line))
+      .map((line) => line.slice(25)),
+    [
+      'publish: in_progress, 0 min',
+      'publish: in_progress, 5 min',
+      `publish: success https://github.com/${REPOSITORY}/actions/runs/${dispatched(world, PUBLISH)[0].id}`
+    ]
+  )
+})
+
 test('a publish whose log disagrees with the registry stops before rehome is touched', async () => {
   const world = fakeWorld({ pushLogDigest: CELL })
   assert.match((await stopped(start(world))).message, /tag moved/)
   assert.equal(dispatched(world, REHOME('pause')).length, 0)
-  assert.match(report(world), /rehome: generation 39 as last read, enabled/)
+  assert.match(report(world), /rehome: not read; this run did not change it/)
 })
 
 test('dry run dispatches nothing and prints every step', async () => {
@@ -566,13 +622,12 @@ test('F1: an interrupt while the pause is in flight says rehome is changing, and
   const world = fakeWorld()
   const deps = dependencies(world)
   let driver
-  deps.stream = () => {
+  world.onView = () => {
     if (world.dispatches().at(-1)?.inputs.mode === 'pause' && !world.interrupted) {
       world.interrupted = true
       driver.interrupt('SIGINT')
       throw new Error('killed')
     }
-    return 0
   }
   driver = createDriver(
     parseDriverArguments(['--commit', COMMIT, '--log-directory', logDirectory()]),
@@ -594,9 +649,8 @@ test('F1: an interrupt while the enable is in flight never says rehome is paused
   const world = fakeWorld()
   const deps = dependencies(world)
   let driver
-  deps.stream = () => {
+  world.onView = () => {
     if (world.dispatches().at(-1)?.inputs.mode === 'enable') driver.interrupt('SIGTERM')
-    return 0
   }
   driver = createDriver(
     parseDriverArguments(['--commit', COMMIT, '--log-directory', logDirectory()]),
@@ -840,10 +894,11 @@ test('Q1 and C1: after a hard kill mid-pause, the re-run names the pause its log
   const deps = dependencies(world)
   const directory = logDirectory()
   let logAtKill
-  deps.stream = () => {
-    if (world.dispatches().at(-1)?.key !== REHOME('pause')) return 0
+  world.onView = () => {
+    if (world.dispatches().at(-1)?.key !== REHOME('pause')) return
     // SIGKILL writes no stop report: only what was logged before the watch survives.
     logAtKill = readFileSync(join(directory, readdirSync(directory)[0]), 'utf8')
+    world.onView = undefined
     throw new Error('SIGKILL')
   }
   await stopped(
@@ -934,16 +989,15 @@ test('C2: --leave-rehome-paused refuses an enabled switch instead of pausing it'
     (await stopped(start(world, ['--leave-rehome-paused']))).message,
     /accepts only a paused switch/
   )
-  assert.equal(dispatched(world, REHOME('pause')).length + dispatched(world, PUBLISH).length, 0)
+  assert.equal(dispatched(world, REHOME('pause')).length, 0)
 })
 
 test('G4: an interrupt during the enable prints both commands that can finish', async () => {
   const world = fakeWorld()
   const deps = dependencies(world)
   let driver
-  deps.stream = () => {
+  world.onView = () => {
     if (world.dispatches().at(-1)?.inputs.mode === 'enable') driver.interrupt('SIGINT')
-    return 0
   }
   driver = createDriver(
     parseDriverArguments(['--commit', COMMIT, '--log-directory', logDirectory()]),

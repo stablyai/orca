@@ -60,6 +60,9 @@ const DIRECTOR_5XX_FILTER = [
 const LOG_COUNT_LIMIT = 5_000
 const LOG_ATTEMPTS = 6
 const LOG_INTERVAL_MS = 10_000
+const WATCH_INTERVAL_MS = 10_000
+// A run still going is reported this often, so a long monitor never looks hung.
+const WATCH_REPORT_MS = 5 * 60_000
 const REHOME_HISTORY_RUNS = 5
 const RUN_ID = /^[1-9][0-9]*$/
 
@@ -118,6 +121,7 @@ export function createDriver(config, deps) {
   // A pause or enable this run cannot vouch for: `changing` while it may still apply on its own,
   // `unconfirmed` once it finished without a usable result. { kind, name, runId?, url? }
   let uncertain
+  let movedBuild // { commit, runId }: a publish that built a newer main than the reviewed commit
   let login
   const ownRunIds = new Set()
   let enabled = false
@@ -205,18 +209,24 @@ export function createDriver(config, deps) {
     )
   }
 
+  // One line per status change and one every WATCH_REPORT_MS, never a stream of job steps.
   async function waitForRun(run) {
+    const started = deps.now()
+    let reported
+    let reportedAt
     for (;;) {
-      deps.stream(
-        'gh',
-        words(`run watch ${run.runId} -R ${REPOSITORY} --exit-status --interval 10`)
-      )
       const view = viewRun(run.runId)
       if (view.status === 'completed') {
         log(`${run.name}: ${view.conclusion} ${run.url}`)
         return { ...run, conclusion: view.conclusion, attempt: view.attempt }
       }
-      await deps.sleep(LOG_INTERVAL_MS)
+      if (view.status !== reported || deps.now() - reportedAt >= WATCH_REPORT_MS) {
+        const minutes = Math.floor((deps.now() - started) / 60_000)
+        log(`${run.name}: ${view.status}, ${minutes} min`)
+        reported = view.status
+        reportedAt = deps.now()
+      }
+      await deps.sleep(WATCH_INTERVAL_MS)
     }
   }
 
@@ -298,7 +308,8 @@ export function createDriver(config, deps) {
 
   async function typed(phrase, meaning = '') {
     if (typedPhrases.has(phrase)) return phrase
-    const answer = (await deps.prompt(`Type ${phrase} to continue${meaning}: `)).trim()
+    // Ends in a newline, so the prompt is never left mid-line where it can be missed.
+    const answer = (await deps.prompt(`Type ${phrase} to continue${meaning}:\n`)).trim()
     if (answer !== phrase)
       throw new DriverStop(`expected ${phrase}; nothing further was dispatched`)
     typedPhrases.set(phrase, answer)
@@ -314,8 +325,9 @@ export function createDriver(config, deps) {
       throw new DriverStop(`${runUrl(runId)} is not a successful ${WORKFLOWS.publish.file} run`)
     }
     if (view.headSha !== config.commit) {
+      movedBuild = { commit: view.headSha, runId }
       throw new DriverStop(
-        `publish ${runUrl(runId)} built ${view.headSha}, not the reviewed ${config.commit}; do not deploy it`
+        `publish ${runUrl(runId)} built ${view.headSha}, not the reviewed ${config.commit}: main moved`
       )
     }
     const tag = `${IMAGE_REPOSITORY}:sha-${config.commit}`
@@ -488,24 +500,6 @@ export function createDriver(config, deps) {
     } else {
       requireQuietLane()
     }
-    if (published) {
-      published.digest = await publishedDigest(published.runId)
-    } else {
-      const main = gh(['api', `repos/${REPOSITORY}/commits/${WORKFLOW_REF}`, '--jq', '.sha']).trim()
-      if (main !== config.commit) {
-        throw new DriverStop(
-          `${WORKFLOW_REF} is at ${main}, not the reviewed ${config.commit}; review the difference and run with --commit ${main}`
-        )
-      }
-    }
-    known.director = readDirector()
-    if (known.director.servingDigest !== published?.digest) {
-      rollbackPoint = {
-        revision: known.director.servingRevision,
-        digest: known.director.servingDigest
-      }
-    }
-    log(describeDirector(known.director))
     let claim
     if (config.pauseRun) {
       // Only this operator's own rehome-control run can prove a pause belongs to this driver.
@@ -530,6 +524,27 @@ export function createDriver(config, deps) {
         )
       }
     }
+    if (published) {
+      published.digest = await publishedDigest(published.runId)
+    } else {
+      const main = gh(['api', `repos/${REPOSITORY}/commits/${WORKFLOW_REF}`, '--jq', '.sha']).trim()
+      if (main !== config.commit) {
+        throw new DriverStop(
+          `${WORKFLOW_REF} is at ${main}, not the reviewed ${config.commit}; review the difference and run with --commit ${main}`
+        )
+      }
+      // The workflow builds main's head at dispatch, so it is dispatched seconds after the check
+      // rather than after the inspects and the typed phrase; publishing changes nothing serving.
+      if (!config.dryRun) await publishStep.run(publishStep)
+    }
+    known.director = readDirector()
+    if (known.director.servingDigest !== published?.digest) {
+      rollbackPoint = {
+        revision: known.director.servingRevision,
+        digest: known.director.servingDigest
+      }
+    }
+    log(describeDirector(known.director))
     // A director safety pause moves the generation without a run; the inspect then fails closed.
     const generation = config.rehomeGeneration ?? (await lastKnownRehomeGeneration())
     if (config.dryRun) {
@@ -598,6 +613,20 @@ export function createDriver(config, deps) {
     ]
   }
 
+  const publishStep = {
+    name: 'publish',
+    workflow: WORKFLOWS.publish,
+    inputs: publishInputs,
+    when: () => !published,
+    run: async (step) => {
+      const run = await dispatch(step)
+      requireSuccess(run)
+      published = { runId: run.runId }
+      published.digest = await publishedDigest(run.runId)
+      log(`published ${IMAGE_REPOSITORY}@${published.digest}`)
+    }
+  }
+
   // The one ordered plan. `when` reads live state, so a re-run skips what is already done; a dry run
   // prints every step whose need it cannot know yet.
   function plan() {
@@ -605,19 +634,7 @@ export function createDriver(config, deps) {
     let verified
     let monitor
     return [
-      {
-        name: 'publish',
-        workflow: WORKFLOWS.publish,
-        inputs: publishInputs,
-        when: () => !published,
-        run: async (step) => {
-          const run = await dispatch(step)
-          requireSuccess(run)
-          published = { runId: run.runId }
-          published.digest = await publishedDigest(run.runId)
-          log(`published ${IMAGE_REPOSITORY}@${published.digest}`)
-        }
-      },
+      publishStep,
       {
         name: 'pause',
         workflow: WORKFLOWS.rehome,
@@ -806,11 +823,14 @@ export function createDriver(config, deps) {
     ]
   }
 
-  function rerunCommand(pauseRun = owned?.runId) {
+  function rerunCommand(
+    pauseRun = owned?.runId,
+    build = published?.digest ? { commit: config.commit, runId: published.runId } : undefined
+  ) {
     return [
       'node dev/scripts/drive-relay-director-deploy.mjs',
-      `--commit ${config.commit}`,
-      ...(published?.digest ? [`--publish-run ${published.runId}`] : []),
+      `--commit ${build?.commit ?? config.commit}`,
+      ...(build ? [`--publish-run ${build.runId}`] : []),
       ...(pauseRun ? [`--pause-run ${pauseRun}`] : []),
       ...(config.leaveRehomePaused ? ['--leave-rehome-paused'] : []),
       ...config.configure.map(
@@ -875,7 +895,14 @@ export function createDriver(config, deps) {
         `  ${ghCommand(WORKFLOWS.director, directorDeployInputs({ imageDigest: rollbackPoint.digest, predecessorDigest: rollbackPoint.digest, rehomeGeneration: owned?.generation ?? '<paused generation>' }))}`
       )
     }
-    if (!config.dryRun && !uncertain) {
+    if (movedBuild) {
+      // Re-running the reviewed commit would only build the moved main again.
+      lines.push(
+        '',
+        `Review ${config.commit}..${movedBuild.commit}, then deploy that build without rebuilding:`,
+        `  cd cloud && ${rerunCommand(undefined, movedBuild)}`
+      )
+    } else if (!config.dryRun && !uncertain) {
       lines.push(
         '',
         `Re-run to finish from here (it re-reads everything and skips what is done):`,
@@ -947,8 +974,6 @@ function defaultDependencies() {
         maxBuffer: 256 * 1024 * 1024,
         stdio: ['pipe', 'pipe', 'pipe']
       }),
-    stream: (program, args) =>
-      spawnSync(program, args, { stdio: ['ignore', 'inherit', 'inherit'] }).status,
     now: () => Date.now(),
     sleep: (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms)),
     print: (line) => process.stdout.write(`${line}\n`),

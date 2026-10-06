@@ -21,45 +21,15 @@ import {
   olderPeerAgentStatusLegacyMode
 } from '../../../shared/agent-status-legacy-adapter'
 import { isValidPiProviderSessionOnly } from './server-status-identity'
-import { normalizeRemoteEnvelopeFields } from './server-remote-envelope-normalization'
+import {
+  normalizeRemoteEnvelopeFields,
+  type RemoteAgentStatusEnvelope
+} from './server-remote-envelope-normalization'
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
   /** Ingest a payload from the relay JSON-RPC channel (not the local HTTP server); connectionId is stamped here. Main is still the SSH trust boundary, so re-run the canonical normalizer before caching. */
-  ingestRemote(
-    envelope: {
-      paneKey: string
-      tabId?: string
-      worktreeId?: string
-      env?: string
-      version?: string
-      launchToken?: string
-      hasExplicitPrompt?: boolean
-      promptInteractionKey?: string
-      agentPresence?: unknown
-      hookEventName?: string
-      source?: unknown
-      providerPromptId?: unknown
-      grokPromptBoundary?: unknown
-      compactTrigger?: unknown
-      toolUseId?: string
-      toolAgentId?: string
-      teammateName?: string
-      toolAgentType?: string
-      providerSession?: unknown
-      providerSessionOnly?: unknown
-      isReplay?: boolean
-      /** Payload fields the relay dropped to fit an oversized frame; validated below. */
-      shedFields?: unknown
-      claudeRunningNonAgentTask?: unknown
-      /** The producing peer's advertised run-capability set — a property of the peer/connection that built this envelope, not an orthogonal call parameter. Absent (older relay/HTTP paths) defaults to the unadvertised-legacy-peer set. */
-      advertisedAgentStatusCapabilities?: readonly string[]
-      statusUnavailable?: unknown
-      evidenceAgeMs?: unknown
-      payload: unknown
-    },
-    connectionId: string | null
-  ): void {
+  ingestRemote(envelope: RemoteAgentStatusEnvelope, connectionId: string | null): void {
     if (
       !canAdmitLegacyAgentStatus(
         'main-status-update',
@@ -194,7 +164,13 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       hookEventName,
       isReplay: envelope.isReplay === true,
       hasExplicitPrompt: envelope.hasExplicitPrompt === true,
-      launchToken: envelope.launchToken
+      launchToken: envelope.launchToken,
+      retainedLaunchTokenHash: envelope.launchToken?.trim()
+        ? undefined
+        : this.retainedOwnerLaunchTokenHash(paneKey, {
+            worktreeId,
+            connectionId: trimmedConnectionId
+          })
     })
     if (statusDisposition === 'suppress') {
       return

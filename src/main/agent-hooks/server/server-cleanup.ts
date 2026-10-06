@@ -1,11 +1,19 @@
 import type { AgentProcessPresence } from '../../../shared/agent-process-presence'
 import {
   admitLegacyAgentStatus,
+  clearPaneCacheState,
   deleteLegacyAgentStatus,
   paneHasStateClaims
 } from '../../../shared/agent-hook-listener/listener-state'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import type { AgentStatusCacheIdentity } from '../../../shared/agent-status-types'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  parseExecutionHostId,
+  type ExecutionHostScope
+} from '../../../shared/execution-host'
+import { worktreeIdsEqual } from '../../../shared/worktree/id'
+import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 
@@ -169,6 +177,79 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
    *  different file. */
   protected hasLiveClaimsForPaneKey(paneKey: string): boolean {
     return Boolean(this.getTmuxSelectedStatus(paneKey)) || paneHasStateClaims(this.state, paneKey)
+  }
+
+  /** Retire the panes a removed worktree occupied on `host`, and its leftover claim on any other pane. */
+  dropStatusEntriesForRemovedWorktree(worktreeId: string, host?: ExecutionHostScope): void {
+    const parsed = host === ALL_EXECUTION_HOSTS_SCOPE ? null : parseExecutionHostId(host ?? 'local')
+    // Why: a runtime host keeps its own store, so no row here is its to retire.
+    if (host !== ALL_EXECUTION_HOSTS_SCOPE && (!parsed || parsed.kind === 'runtime')) {
+      return
+    }
+    const ownedByRemoved = (claim: { connectionId: string | null; worktreeId?: string }): boolean =>
+      Boolean(claim.worktreeId && worktreeIdsEqual(claim.worktreeId, worktreeId)) &&
+      (!parsed ||
+        (parsed.kind === 'ssh'
+          ? claim.connectionId === parsed.targetId
+          : // Why: WSL panes are local; their relay only stamps transport provenance.
+            claim.connectionId === null || isWslHookRelayConnectionId(claim.connectionId)))
+    // The startup snapshot may outlive its replaced map entry; revoke only the removed owner.
+    for (const commitment of this.hydratedAuthorityCommitments) {
+      if (ownedByRemoved(commitment)) {
+        this.revokedHydratedAuthorityCommitments.add(commitment)
+      }
+    }
+    const paneKeys = new Set<string>()
+    for (const claim of [
+      ...this.state.lastStatusByPaneKey.values(),
+      ...this.persistedAuthorityCommitmentsByPaneKey.values()
+    ]) {
+      if (ownedByRemoved(claim)) {
+        paneKeys.add(claim.paneKey)
+      }
+    }
+    for (const paneKey of paneKeys) {
+      const row = this.state.lastStatusByPaneKey.get(paneKey)
+      const commitment = this.persistedAuthorityCommitmentsByPaneKey.get(paneKey)
+      if (row && ownedByRemoved(row) && commitment && !ownedByRemoved(commitment)) {
+        // A tokenless repaint cannot prove a foreign launch exited; retain it behind its token fence.
+        const observation = this.currentAuthorityObservations.get(paneKey)
+        const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
+        clearPaneCacheState(this.state, paneKey)
+        if (observation && !ownedByRemoved(observation)) {
+          this.currentAuthorityObservations.set(paneKey, observation)
+        }
+        this.restartedStatusLaunchTokenHashByPaneKey.set(paneKey, {
+          hash: commitment.launchTokenHash,
+          allowRetainedOwner: true
+        })
+        this.observations.forget(paneKey)
+        this.commitStatusRowMutation(deleted, undefined)
+        this.scheduleStatusPersist()
+        this.notifyStatusChangeListeners()
+        this.emitPaneStatusCleared({ paneKey })
+        continue
+      }
+      const occupant = row ?? commitment
+      if (occupant && !ownedByRemoved(occupant)) {
+        // Another owner has the pane now; only our outlived commitment is left to clear.
+        if (commitment && ownedByRemoved(commitment)) {
+          this.persistedAuthorityCommitmentsByPaneKey.delete(paneKey)
+          this.hydratedLaunchTokenHashByPaneKey.delete(paneKey)
+          this.scheduleStatusPersist()
+        }
+        const observation = this.currentAuthorityObservations.get(paneKey)
+        if (observation && ownedByRemoved(observation)) {
+          this.currentAuthorityObservations.delete(paneKey)
+        }
+        continue
+      }
+      // Why a pane fence, not a tab one: a surviving same-id host keeps the shared tab.
+      this.retirePaneAuthority(paneKey)
+      if (row) {
+        this.emitPaneStatusCleared({ paneKey })
+      }
+    }
   }
 
   /** Clear statuses proven to belong to one lost SSH transport. */

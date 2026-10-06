@@ -148,7 +148,10 @@ export abstract class AgentHookServerState {
   protected promptSentHashSalt = randomBytes(16).toString('hex')
   protected closedAgentStatusTabIds = new Set<string>()
   protected closedAgentStatusPaneKeys = new Set<string>()
-  protected restartedStatusLaunchTokenHashByPaneKey = new Map<string, string>()
+  protected restartedStatusLaunchTokenHashByPaneKey = new Map<
+    string,
+    { hash: string; allowRetainedOwner?: true }
+  >()
   protected connectionTimestampWatermarkById = new Map<string, number>()
   // Why: survives the row itself. A transport clear deletes the pane's status row on purpose
   // (absence, not completion), but the *age* of the evidence a later replay restates is not a
@@ -191,6 +194,7 @@ export abstract class AgentHookServerState {
       isReplay?: boolean
       hasExplicitPrompt?: boolean
       launchToken?: string
+      retainedLaunchTokenHash?: string
     }
   ): 'accept' | 'restart' | 'suppress'
   protected abstract isClosedAgentStatusTabForPaneKey(paneKey: string): boolean

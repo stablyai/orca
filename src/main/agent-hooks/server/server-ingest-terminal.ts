@@ -47,12 +47,23 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       return
     }
     const tabId = paneKey !== physicalPaneKey ? parsedPaneKey?.tabId : reportedTabId
+    const worktreeId = event.worktreeId?.trim() || undefined
+    const connectionId =
+      typeof event.connectionId === 'string' && event.connectionId.trim().length > 0
+        ? event.connectionId.trim()
+        : null
+    const retainedLaunchTokenHash = this.retainedOwnerLaunchTokenHash(paneKey, {
+      worktreeId,
+      connectionId
+    })
     // Why: a verified process-lifetime Working proves a new agent run, as a hook new-turn event does.
     const disposition = this.getAgentStatusDisposition(
       paneKey,
       event.origin === 'process' && event.payload.state === 'working'
         ? { processNewTurn: true }
-        : undefined
+        : this.restartedStatusLaunchTokenHashByPaneKey.get(paneKey)?.allowRetainedOwner
+          ? { retainedLaunchTokenHash }
+          : undefined
     )
     if (disposition === 'suppress') {
       return
@@ -60,14 +71,6 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     if (disposition === 'restart') {
       this.observations.rebind(paneKey)
     }
-    const worktreeId =
-      event.worktreeId !== undefined && event.worktreeId.trim().length > 0
-        ? event.worktreeId.trim()
-        : undefined
-    const connectionId =
-      typeof event.connectionId === 'string' && event.connectionId.trim().length > 0
-        ? event.connectionId.trim()
-        : null
     const terminalHandle =
       typeof event.terminalHandle === 'string' && event.terminalHandle.trim().length > 0
         ? event.terminalHandle.trim()

@@ -102,11 +102,11 @@
     "agents": {
       "codexTerminalServerIsolation": {
         "title": "在自己的服务器上运行每个 Codex 终端",
-        "description": "保持 Orca 的状态和关闭选项卡正常工作。关闭以使用 Codex 的共享服务器及其代理概述。适用于新终端。"
+        "description": "保持 Orca 的状态和关闭选项卡正常工作。关闭以使用 Codex 的共享服务器及其智能体概述。适用于新终端。"
       },
       "codexSharedServerWarning": {
         "title": "当 Codex 选项卡共享服务器时发出警告",
-        "description": "当您自己启动的 Codex 与其他选项卡共享服务器时，在您自己启动的 Codex 上显示一条通知，因为它的代理状态可能是错误的。"
+        "description": "当您自己启动的 Codex 与其他选项卡共享服务器时，在您自己启动的 Codex 上显示一条通知，因为它的智能体状态可能是错误的。"
       }
     }
   },
@@ -652,11 +652,11 @@
             "bddc4c09b8": "运行分阶段工作流程",
             "ab0e9803b7": "移交给另一个工作树",
             "5e0d489fe1": "移交活动任务",
-            "handoffSummary": "将所有权移交给另一个有足够上下文的代理以继续。",
-            "worktreeHandoffSummary": "将工作移至已在不同分支中运行的代理。",
-            "childSequenceSummary": "当每个阶段依赖于最后一个阶段时，依次使用子代理。",
-            "childParallelSummary": "在子代理之间拆分非重叠的调查或实施任务。",
-            "prSplitSummary": "为每个子代理提供自己的工作树，以便并行实施保持可审查。"
+            "handoffSummary": "将所有权移交给另一个有足够上下文的智能体以继续。",
+            "worktreeHandoffSummary": "将工作移至已在不同分支中运行的智能体。",
+            "childSequenceSummary": "当每个阶段依赖于最后一个阶段时，依次使用子智能体。",
+            "childParallelSummary": "在子智能体之间拆分非重叠的调查或实施任务。",
+            "prSplitSummary": "为每个子智能体提供自己的工作树，以便并行实施保持可审查。"
           }
         }
       },
@@ -900,7 +900,7 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "结构化代理会话尚不可用。稍后重试。",
+        "unavailable": "结构化智能体会话尚不可用。稍后重试。",
         "gone": "此聊天不再在此主机上，因此无法在此处重新打开。",
         "hostCannotOpen": "在 Orca 更新之前，无法重新打开此聊天。"
       },
@@ -931,8 +931,8 @@
         "storageNotPrivate": "Orca 用于拖放文件的存储位置可被其他用户读取，因此未复制任何内容。",
         "timedOut": "复制耗时过长。请重新拖放。",
         "busy": "仍有太多拖放正在复制。请稍候再试。",
-        "tooLarge": "文件太大，无法复制，因此 Orca 无法将其交给代理。",
-        "storageFull": "Orca 用于拖放文件的存储空间已满，因此 Orca 无法将其交给代理。",
+        "tooLarge": "文件太大，无法复制，因此 Orca 无法将其交给智能体。",
+        "storageFull": "Orca 用于拖放文件的存储空间已满，因此 Orca 无法将其交给智能体。",
         "generic": "请重新拖放。"
       },
       "reveal": {
@@ -1084,7 +1084,7 @@
         "artifactsTitle": "工件",
         "artifactsDescription": "与您的团队共享 HTML 和 Markdown 文件并管理他们的公共链接。",
         "automationsTitle": "自动化",
-        "automationsDescription": "安排代理工作并选择自动化是否显示在侧栏中。",
+        "automationsDescription": "安排智能体工作并选择自动化是否显示在侧栏中。",
         "shareSkillsTitle": "分享技能",
         "shareSkillsDescription": "通过未列出的链接分享您的技能。任何拥有它的人都可以安装它们。",
         "floatingWorkspaceWebDescription": "全局终端和 Markdown 选项卡。"
@@ -1097,7 +1097,7 @@
       },
       "useMacosTccPromptNotice": {
         "title": "看到“Orca 想要访问…”提示？",
-        "description": "当 Orca 中运行的代理或终端工具尝试访问受保护的文件时，macOS 可能会显示权限信息。请在“设置”中授予“完全磁盘访问权限”，以减少此类提示。",
+        "description": "当 Orca 中运行的智能体或终端工具尝试访问受保护的文件时，macOS 可能会显示权限信息。请在“设置”中授予“完全磁盘访问权限”，以减少此类提示。",
         "openSettings": "打开设置",
         "dismiss": "不再显示"
       },
@@ -3516,7 +3516,7 @@
             "splitTerminal": "拆分终端"
           },
           "TerminalTabLeadingIcon": {
-            "7ab2964bea": "未读的代理完成"
+            "7ab2964bea": "未读的智能体完成"
           },
           "TabBarQuickCommandAddActions": {
             "45a2f36d51": "命令",
@@ -4418,7 +4418,7 @@
           "aa59462502": "存储库",
           "571c5818c1": "主目录",
           "0bc1379f4c": "所有来源",
-          "38e0951c3a": "代理技能",
+          "38e0951c3a": "智能体技能",
           "fb6bf60b52": "Claude",
           "426be2aac6": "Codex",
           "39b6998ddb": "所有提供商",
@@ -4903,14 +4903,14 @@
           "bundleSkillsMissing": "此版本不包含任何已安装的内置技能。",
           "reconnectBeforeVersionChange": "在更改版本之前重新连接您的 Orca 帐户。",
           "removeFailed": "Orca 无法安全地移除该技能。",
-          "agentsLabel": "代理",
+          "agentsLabel": "智能体",
           "agentsCanonical": "始终为 {{value0}} 安装，读取为 {{value1}}。",
-          "agentsNoneChosen": "无需额外代理",
+          "agentsNoneChosen": "无需额外智能体",
           "agentsSummary": "另：{{value0}}",
           "agentNotInstalled": "未安装",
           "bundleDestinationSummary": "{{value0}} 新的 · {{value1}} 已安装 · {{value2}} 需要决定",
           "trustNote": "技能是来自其作者的指令和代码。安装您信任的内容。",
-          "agentsNone": "没有选择代理",
+          "agentsNone": "没有选择智能体",
           "agentsSelected": "安装：{{value0}}",
           "agentAlways": "总是",
           "agentsCanonicalNote": "{{value0}} 读取 {{value1}}，每个安装都会写入。",
@@ -4926,17 +4926,17 @@
           "reviewSupportingFiles": "包括支持文件",
           "reviewInstructions": "关于这个技能",
           "supportingFileWarning": "所选技能包括 SKILL.md 之外的 {{fileCount}}。",
-          "agentAccessWarning": "技能包含您的代理可能遵循的说明。仅当您信任此共享链接的来源时才继续。",
+          "agentAccessWarning": "技能包含您的智能体可能遵循的说明。仅当您信任此共享链接的来源时才继续。",
           "fileBinary": "二进制",
           "fileRunnable": "可运行",
           "agentsCountBadge": "已选择 {{count}}",
           "agentsCountLabel": "{{count}} {{label}}",
-          "targetAgentsHeader": "目标代理",
+          "targetAgentsHeader": "目标智能体",
           "deselectAll": "取消选择可选",
           "selectAll": "选择全部",
-          "canonicalHeader": "标准代理（始终包含）",
-          "canonicalExplanation": "这些代理本机读取 {{root}}，Orca 默认安装到该位置：",
-          "additionalAgentsHeader": "其他代理目录"
+          "canonicalHeader": "标准智能体（始终包含）",
+          "canonicalExplanation": "这些智能体本机读取 {{root}}，Orca 默认安装到该位置：",
+          "additionalAgentsHeader": "其他智能体目录"
         },
         "SkillSharedLinkRow": {
           "contentsUnavailable": "无法加载此链接包含的内容。",
@@ -4983,7 +4983,7 @@
           "bundleDescription": "涵盖每个警告级别的预览包。",
           "instructionsOnlyDescription": "说明完全包含在 SKILL.md 中。",
           "supportingFilesDescription": "包括主要说明之外的可读参考文件。",
-          "runnableFilesDescription": "包括代理可以使用您的访问权限运行的脚本。",
+          "runnableFilesDescription": "包括智能体可以使用您的访问权限运行的脚本。",
           "binaryFilesDescription": "包括不透明资产和可执行二进制文件。"
         }
       },
@@ -5827,8 +5827,8 @@
               "lockedReason": "此工作区被 Git 锁定。Git 报告：{{value0}}。请在其仓库中运行 git worktree unlock <worktree-path>，然后重试删除。",
               "unstoppedPty": "Orca 无法确认此工作区中的每个终端都已退出，因此它在删除任何文件之前停止。无论如何，请使用强制删除将其删除。",
               "unstoppedPtyLive": "该工作区仍然有正在运行的终端，因此 Orca 在删除任何文件之前停止了。强制删除将杀死它们并丢弃它们持有的任何未提交的工作。",
-              "runningAgentSession": "Orca 无法确认此工作区中的每个代理会话都已关闭，因此它在删除任何文件之前停止。无论如何，请使用强制删除将其删除。",
-              "runningAgentSessionLive": "此工作区仍然有 Orca 无法关闭的正在运行的代理会话，因此它在删除任何文件之前停止了。强制删除将丢弃他们持有的任何工作。"
+              "runningAgentSession": "Orca 无法确认此工作区中的每个智能体会话都已关闭，因此它在删除任何文件之前停止。无论如何，请使用强制删除将其删除。",
+              "runningAgentSessionLive": "此工作区仍然有 Orca 无法关闭的正在运行的智能体会话，因此它在删除任何文件之前停止了。强制删除将丢弃他们持有的任何工作。"
             },
             "failure": {
               "archive": {
@@ -6384,14 +6384,14 @@
           "d9657ac204": "终端会话关闭请求已发送。",
           "e8f25bd903": "无法完成终端清理。",
           "a702d4196e": "这将关闭所有工作区中的每个终端标签页，并请求关闭其当前终端会话。任何未保存的终端工作将丢失。守护进程本身将继续运行，可以立即打开新终端。此操作不可撤销。",
-          "01d6b7c64e": "打开终端，代理将重新启动。远程主机上的终端不受影响。",
+          "01d6b7c64e": "打开终端，智能体将重新启动。远程主机上的终端不受影响。",
           "922548bc66": "重启终端服务？"
         },
         "MacFolderAccessFixDialog": {
           "stepAllow": "在文件和文件夹下允许 Orca",
           "openSystemSettings": "打开系统设置",
           "stepRestart": "重启 Orca 的终端服务",
-          "restartConsequence": "打开终端，代理将重新启动。",
+          "restartConsequence": "打开终端，智能体将重新启动。",
           "restarting": "正在重新启动...",
           "restart": "重新启动",
           "restartFailed": "重启失败。从设置 → 终端 → 管理会话重试。",
@@ -6688,7 +6688,7 @@
           "remoteDetectionFailed": "无法检测已安装的智能体。请检查主机连接后重试。",
           "retryDetection": "Retry",
           "storedDefaultUndetected": "已保存为默认值，但目前未检测到",
-          "noAgentsDetected": "未检测到代理。如果安装了探测器，探测器可能会超时。"
+          "noAgentsDetected": "未检测到智能体。如果安装了探测器，探测器可能会超时。"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -7045,7 +7045,7 @@
           "e7bb06007c": "局域网",
           "4a73f5217a": "用于控制其他本地应用程序的脚本的 Apple 事件。",
           "e119f0d66b": "自动化",
-          "7ca17b62c8": "当 Orca 运行的代理读取其他应用的数据时，macOS 会显示 Orca，因为 Orca 是执行终端命令的进程。请为 Orca 授予此权限，以减少此类提示。然后退出并重新打开 Orca。",
+          "7ca17b62c8": "当 Orca 运行的智能体读取其他应用的数据时，macOS 会显示 Orca，因为 Orca 是执行终端命令的进程。请为 Orca 授予此权限，以减少此类提示。然后退出并重新打开 Orca。",
           "c566bca278": "完全磁盘访问权限",
           "9f35980756": "击键注入、窗口控制和 UI 自动化工具。",
           "5b2f22ca2d": "无障碍",
@@ -7137,7 +7137,7 @@
             "shellEnvCopy": "Codex 和 Claude 聊天启动时会带上登录 shell 导出的所有变量，与终端一致。关闭后可选择传递哪些变量。",
             "shellEnvToggleLabel": "切换使用 shell 环境",
             "structuredTitle": "使用更新的结构化本机聊天",
-            "structuredCopy": "将新的 Codex 和 Claude 代理作为结构化聊天打开。关闭时会在基于终端的聊天中打开。已有的聊天保持不变。",
+            "structuredCopy": "将新的 Codex 和 Claude 智能体作为结构化聊天打开。关闭时会在基于终端的聊天中打开。已有的聊天保持不变。",
             "structuredScope": "在本机和运行支持该功能版本的已配对 Orca 服务器上运行；较旧的服务器保留终端聊天。WSL 和 SSH 主机继续使用终端聊天，Windows 会回退到它，除非 Orca 可以读取进程启动时间。",
             "structuredToggleLabel": "切换更新的结构化本机聊天",
             "resumeTitle": "重启后自动恢复工作聊天",
@@ -7182,7 +7182,7 @@
           "80c454e8a6": "将此与您的提供商的缓存 TTL 相匹配。"
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "在所有 Markdown 视图中显示 Markdown 笔记控件，并在代理交接操作中包含这些笔记。",
+          "f80603d293": "在所有 Markdown 视图中显示 Markdown 笔记控件，并在智能体交接操作中包含这些笔记。",
           "4edc104f0f": "Markdown 评审笔记",
           "5f02e6fb21": "在 Markdown 文件中显示本地 Markdown 评审笔记控件。",
           "51161d1647": "编辑文件时显示小地图概述。",
@@ -7240,7 +7240,7 @@
           "editor_preview_tabs": "浏览文件时重复使用预览选项卡",
           "editor_preview_tabs_description": "单击资源管理器中的文件，或点击 Markdown 源中的链接，可以重复使用每组一个斜体预览选项卡，而不是打开一个新选项卡。编辑、双击或固定可以使该选项卡保持打开状态。关闭此选项可为每个文件提供自己的选项卡。",
           "confirm_running_terminal_close": "关闭运行终端前确认",
-          "confirm_running_terminal_close_description": "关闭终端时，在停止正在运行的代理或命令之前询问。"
+          "confirm_running_terminal_close_description": "关闭终端时，在停止正在运行的智能体或命令之前询问。"
         },
         "GeneralSupportSection": {
           "af7d9f4396": "感谢您的支持！",
@@ -7701,7 +7701,7 @@
           "2aacdb0517": "跨切换、工作树切换和子智能体工作协调编码智能体。",
           "191ac34567": "智能体编排",
           "nestedWorkerDepthTitle": "嵌套工人深度",
-          "nestedWorkerDepthDescription": "多少代的派遣工可能会产生自己的工人。 1 保持代理树平坦：协调者调度工人，而那些工人不调度。"
+          "nestedWorkerDepthDescription": "多少代的派遣工可能会产生自己的工人。 1 保持智能体树平坦：协调者调度工人，而那些工人不调度。"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "使智能体能够通过 Orca 传递上下文并协调工作。",
@@ -7711,8 +7711,8 @@
           "6dec5ce2d2": "智能体覆盖范围",
           "ffe13e36fb": "缺失",
           "1e8f8d8fae": "就绪",
-          "checking": "检查已安装的代理和技能路径...",
-          "noAgents": "在 PATH 上未检测到代理 CLI。在“设置”→“代理”中安装代理，然后重新检查。",
+          "checking": "检查已安装的智能体和技能路径...",
+          "noAgents": "在 PATH 上未检测到智能体 CLI。在“设置”→“智能体”中安装智能体，然后重新检查。",
           "fullCoverage_one": "所有 1 名已检测的智能体都拥有该技能。",
           "fullCoverage_other": "所有 {{value0}} 已检测的智能体都拥有该技能。",
           "noCoverage": "安装上面的技能，然后重新检查。",
@@ -9078,8 +9078,8 @@
             "agentRuntime": "智能体运行时",
             "agentRuntimeDescription": "选择默认在 Windows 还是 WSL 中检测并启动智能体。",
             "runtime": "运行时",
-            "agentLocation": "代理位置",
-            "installedAgentsWsl": "在 wsl 中安装代理",
+            "agentLocation": "智能体位置",
+            "installedAgentsWsl": "在 wsl 中安装智能体",
             "permission": "允许",
             "permissions": "权限",
             "yolo": "约洛",
@@ -9090,7 +9090,7 @@
             "ff457e1e7b": "守护进程",
             "9f3becc4e8": "共享",
             "34337ed5c7": "隔离",
-            "9a84e65118": "代理概览"
+            "9a84e65118": "智能体概览"
           }
         },
         "appearance": {
@@ -9597,14 +9597,14 @@
               "openclaude": "开放克劳德",
               "omp": "奥普",
               "terminal": "终端",
-              "agent": "代理",
+              "agent": "智能体",
               "queue": "队列"
             },
             "agentDashboard": {
               "title": "智能体仪表盘",
               "description": "用于监控跨工作树的智能体的看板，支持窗口内或弹出窗口显示。",
               "dashboard": "仪表盘",
-              "agent": "代理",
+              "agent": "智能体",
               "kanban": "看板",
               "popout": "弹出",
               "board": "木板",
@@ -9813,7 +9813,7 @@
             "afa37a34e1": "关闭",
             "running_terminal": "跑步",
             "terminal": "终端",
-            "agent": "代理",
+            "agent": "智能体",
             "command": "命令",
             "confirm": "确认",
             "close": "关闭",
@@ -10344,7 +10344,7 @@
             "copy": "复制",
             "clone": "克隆",
             "apfs": "apfs",
-            "waitForSetupBeforeAgent": "启动代理之前等待设置",
+            "waitForSetupBeforeAgent": "启动智能体之前等待设置",
             "external": "外部的",
             "visibility": "能见度",
             "sidebar": "侧边栏",
@@ -10360,7 +10360,7 @@
             "windowsHost": "视窗主机",
             "wsl": "wsl",
             "distro": "发行版",
-            "agentRuntime": "代理运行时",
+            "agentRuntime": "智能体运行时",
             "skillRuntime": "技能运行时间"
           }
         },
@@ -10681,7 +10681,7 @@
             "close_terminal": "关闭",
             "running": "跑步",
             "command": "命令",
-            "agent": "代理",
+            "agent": "智能体",
             "process": "过程",
             "prompt": "提示词",
             "stop": "停止",
@@ -10809,9 +10809,9 @@
           "95d3031db2": "在智能体工作时保持此电脑和显示器唤醒。合盖行为遵循此设备的电源设置。",
           "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。",
           "modeTitle": "防止电脑休眠",
-          "modeDescriptionWindows": "选择“打开”、“代理”或“关闭”。代理工作时代理模式保持唤醒状态；盖子关闭行为遵循该设备的电源设置。",
-          "modeDescriptionMac": "选择“打开”、“代理”或“关闭”。代理模式会在代理工作时防止空闲休眠，因此开盖即可完成长时间任务。合上盖子仍会使此 Mac 进入睡眠状态。",
-          "modeDescriptionDefault": "选择“打开”、“代理”或“关闭”。当代理工作时，代理模式保持唤醒状态。 Orca 还要求该设备在盖子关闭时保持唤醒状态，具体取决于其电源策略。",
+          "modeDescriptionWindows": "选择“打开”、“智能体”或“关闭”。智能体工作时智能体模式保持唤醒状态；盖子关闭行为遵循该设备的电源设置。",
+          "modeDescriptionMac": "选择“打开”、“智能体”或“关闭”。智能体模式会在智能体工作时防止空闲休眠，因此开盖即可完成长时间任务。合上盖子仍会使此 Mac 进入睡眠状态。",
+          "modeDescriptionDefault": "选择“打开”、“智能体”或“关闭”。当智能体工作时，智能体模式保持唤醒状态。 Orca 还要求该设备在盖子关闭时保持唤醒状态，具体取决于其电源策略。",
           "lidNoteMac": "开盖时防止空闲休眠；合上盖子仍会使此 Mac 进入睡眠状态。",
           "lidNoteWindows": "合盖行为遵循该设备的电源设置。",
           "lidNoteDefault": "Orca 还要求该设备在盖子关闭时保持唤醒状态，具体取决于其电源策略。"
@@ -11963,7 +11963,7 @@
           "howToTitle": "如何使用神器",
           "howToDescription": "将 HTML 或 Markdown 文件发布为公共链接，然后与您的团队共享。",
           "shareStepTitle": "选择要共享的文件",
-          "shareStepDescription": "打开 HTML 或 Markdown 文件并选择共享为工件，或要求代理共享它。",
+          "shareStepDescription": "打开 HTML 或 Markdown 文件并选择共享为工件，或要求智能体共享它。",
           "linkStepTitle": "复制公共链接",
           "linkStepDescription": "发布后，复制链接并将其发送给您的团队。",
           "manageStepTitle": "在 Orca 中管理它",
@@ -12025,17 +12025,17 @@
           "showButton": "显示自动化按钮",
           "showButtonDescription": "在侧边栏中显示自动化快捷方式。",
           "howItWorksTitle": "自动化如何工作",
-          "howItWorksDescription": "安排代理工作一次，然后让 Orca 创建每次运行并将其结果保存在一起。",
+          "howItWorksDescription": "安排智能体工作一次，然后让 Orca 创建每次运行并将其结果保存在一起。",
           "defineStepTitle": "描述工作",
-          "defineStepDescription": "选择项目、代理、提示和时间表。",
+          "defineStepDescription": "选择项目、智能体、提示和时间表。",
           "runStepTitle": "Orca 开始每次跑步",
-          "runStepDescription": "当时间表到期时，选定的代理将获得一个新的工作区。",
+          "runStepDescription": "当时间表到期时，选定的智能体将获得一个新的工作区。",
           "reviewStepTitle": "查看结果",
           "reviewStepDescription": "检查最近的运行并在需要时继续工作。",
           "openAutomations": "开放式自动化",
           "openAutomationsDescription": "创建时间表并检查最近的运行。",
           "title": "自动化",
-          "description": "安排代理工作并选择自动化是否显示在侧栏中。",
+          "description": "安排智能体工作并选择自动化是否显示在侧栏中。",
           "keywordAutomations": "自动化",
           "keywordSchedule": "日程",
           "keywordAgent": "智能体",
@@ -12044,7 +12044,7 @@
         "shareSkills": {
           "title": "分享技能",
           "description": "通过未列出的链接分享您的技能。任何拥有它的人都可以安装它们。",
-          "allowAgentPublishing": "允许代理和 Orca CLI 发布技能链接",
+          "allowAgentPublishing": "允许智能体和 Orca CLI 发布技能链接",
           "allowAgentPublishingDescription": "让命令发布明确命名的已安装技能。技能文件夹可以包含脚本、配置或机密，因此默认情况下此功能处于关闭状态。",
           "allowAgentPublishingWebDescription": "仅限桌面。在主机设备上打开“设置”→“共享技能”以更改此设置。",
           "selectTitle": "选择一项或多项技能",
@@ -12145,7 +12145,7 @@
           "confirm": "停止清理"
         },
         "NativeChatSupportedAgents": {
-          "label": "支持代理："
+          "label": "支持智能体："
         },
         "contrast": {
           "title": "色彩对比",
@@ -12710,7 +12710,7 @@
             "c06193ef57": "无法复制{{value0}}",
             "d172a4f068": "提交哈希",
             "e283b50179": "提交信息",
-            "f394c6128a": "没有可用于解释此提交的代理",
+            "f394c6128a": "没有可用于解释此提交的智能体",
             "04a5d7239b": "此仓库没有受支持的网页远程库",
             "15b6e834ac": "无法在浏览器中打开提交",
             "d37e68f61d": "正在准备分支以供评审…",
@@ -13347,7 +13347,7 @@
                   "4cbd0cd9d2": "正在进行中……",
                   "e7876a2bde": "暂存至少一个文件以生成消息。",
                   "0904be2505": "清除消息以重新生成。",
-                  "1ea9ba37aa": "在“设置”->“Git”->“源代码管理 AI”中选择一个代理。"
+                  "1ea9ba37aa": "在“设置”->“Git”->“源代码管理 AI”中选择一个智能体。"
                 }
               }
             }
@@ -13817,7 +13817,7 @@
           "69af7e9c1c": "尚未加入 PATH。Orca 会将其设为默认，你可随时安装。",
           "1eee1c7bd8": "PATH 中未检测到智能体。可选择一个稍后安装，或使用空白终端继续。",
           "hideAgents": "隐藏智能体",
-          "showMoreAgents": "显示另外 {{value0}} 个代理 →",
+          "showMoreAgents": "显示另外 {{value0}} 个智能体 →",
           "yoloModeLabel": "Yolo 模式",
           "yoloPermissionsDescription": "智能体会在不询问的情况下运行命令和编辑文件，部分智能体还会绕过沙箱。仅在你信任的项目中使用。"
         },
@@ -13866,7 +13866,7 @@
           "ac80d97e02": "更改自定义文件",
           "56b836215c": "正在检查通知权限…",
           "fd84d3e9b8": "通知已启用",
-          "4f7bce5644": "当代理完成或终端需要处理时，macOS 会提醒你。",
+          "4f7bce5644": "当智能体完成或终端需要处理时，macOS 会提醒你。",
           "95d99b52fa": "允许 Orca 发送通知",
           "94562ba367": "macOS 正在请求权限。在对话框中点按允许，此步骤会自动更新。",
           "4f6a1da718": "打开系统设置",
@@ -14607,17 +14607,17 @@
                     "copy": {
                       "62bac8f43c": "同时在 2 个不同的工作树中工作。每个项目都是独立的（即使在同一个项目中）。非常适合同时处理 2 个功能。",
                       "908898c3ee": "使用 Orca 浏览器",
-                      "43781563c3": "无需离开 Orca 即可浏览您的网络应用程序。抓取任何元素，然后一键将其确切的来源和样式发送给代理。",
+                      "43781563c3": "无需离开 Orca 即可浏览您的网络应用程序。抓取任何元素，然后一键将其确切的来源和样式发送给智能体。",
                       "29aa2c2077": "打开通知",
-                      "71bd9a8c95": "了解代理完成、需要关注或被阻止的时刻。",
-                      "46db810da8": "选择您的默认代理",
-                      "b8e5bae17f": "通过已选择的首选代理，更快地开始新工作。",
+                      "71bd9a8c95": "了解智能体完成、需要关注或被阻止的时刻。",
+                      "46db810da8": "选择您的默认智能体",
+                      "b8e5bae17f": "通过已选择的首选智能体，更快地开始新工作。",
                       "ad342dd4c6": "连接集成",
-                      "06fe30fdb0": "一键从任务启动代理并查看 PR 状态。",
+                      "06fe30fdb0": "一键从任务启动智能体并查看 PR 状态。",
                       "eddc532e58": "自动化工作区设置",
-                      "56049b74c2": "自动运行安装和设置命令，以便每个新工作树都为代理做好准备。",
+                      "56049b74c2": "自动运行安装和设置命令，以便每个新工作树都为智能体做好准备。",
                       "2cf795433b": "在多个存储库中开始工作",
-                      "42525ba8a4": "将您的关键存储库带入 Orca，这样您就可以开始代理工作，而无需寻找文件夹。",
+                      "42525ba8a4": "将您的关键存储库带入 Orca，这样您就可以开始智能体工作，而无需寻找文件夹。",
                       "workOnTwoTasks": "同时处理两项任务",
                       "agentSkillsName": "为智能体提供 Orca 技能",
                       "agentSkillsDescription": "安装智能体用于操作 Orca 浏览器、控制你的电脑以及协调多步骤工作的技能。"
@@ -15789,7 +15789,7 @@
                   "automations": {
                     "intro": {
                       "title": "什么是自动化？",
-                      "body": "自动化按计划运行代理工作。单击此按钮添加自动化。"
+                      "body": "自动化按计划运行智能体工作。单击此按钮添加自动化。"
                     },
                     "results": {
                       "title": "查找结果",
@@ -16219,7 +16219,7 @@
           "0a75e5e2fa": "创建 Hermes 自动化",
           "03142e7721": "编辑 Hermes 自动化",
           "17086b48ee": "编辑自动化",
-          "4c8e1a72b9": "重复代理任务"
+          "4c8e1a72b9": "重复智能体任务"
         },
         "AutomationMissedRunGraceField": {
           "0f4459e91d": "48小时",
@@ -16724,8 +16724,8 @@
           "hiddenCount": "{{value0}} 隐藏",
           "hideAutomationCreated": "隐藏自动化创建的工作区",
           "hideCliCreated": "隐藏 CLI 创建的工作区",
-          "hideOtherClientsAria": "隐藏共享远程服务器上由其他 Orca 客户端创建的工作区中的代理",
-          "hideOtherClients": "隐藏其他客户端的代理"
+          "hideOtherClientsAria": "隐藏共享远程服务器上由其他 Orca 客户端创建的工作区中的智能体",
+          "hideOtherClients": "隐藏其他客户端的智能体"
         },
         "ActivityThreadRow": {
           "clearNotification": "清除通知"
@@ -16737,7 +16737,7 @@
         },
         "clearCompleted": {
           "clearedOne": "清除 1 个已完成的智能体",
-          "clearedMany": "已清除 {{count}} 已完成的代理",
+          "clearedMany": "已清除 {{count}} 已完成的智能体",
           "undo": "撤消"
         },
         "standaloneWorktree": {
@@ -16759,16 +16759,16 @@
           "markUnread": "标记为未读",
           "goToWorkspace": "转到工作区",
           "clear": "从列表中清除",
-          "agentSection": "代理",
-          "markManyRead_one": "将 {{count}} 个代理标记为已读",
-          "markManyRead_other": "将 {{count}} 个代理标记为已读",
-          "markManyUnread_one": "将 {{count}} 个代理标记为未读",
-          "markManyUnread_other": "将 {{count}} 个代理标记为未读",
-          "clearMany_one": "从列表中清除 {{count}} 个代理",
-          "clearMany_other": "从列表中清除 {{count}} 个代理",
-          "markManyRead": "将 {{count}} 个代理标记为已读",
-          "markManyUnread": "将 {{count}} 个代理标记为未读",
-          "clearMany": "从列表中清除 {{count}} 个代理"
+          "agentSection": "智能体",
+          "markManyRead_one": "将 {{count}} 个智能体标记为已读",
+          "markManyRead_other": "将 {{count}} 个智能体标记为已读",
+          "markManyUnread_one": "将 {{count}} 个智能体标记为未读",
+          "markManyUnread_other": "将 {{count}} 个智能体标记为未读",
+          "clearMany_one": "从列表中清除 {{count}} 个智能体",
+          "clearMany_other": "从列表中清除 {{count}} 个智能体",
+          "markManyRead": "将 {{count}} 个智能体标记为已读",
+          "markManyUnread": "将 {{count}} 个智能体标记为未读",
+          "clearMany": "从列表中清除 {{count}} 个智能体"
         }
       },
       "confirmation": {
@@ -17200,14 +17200,14 @@
           "signInCopy": "登录以查看和管理通过您的帐户共享的工件。",
           "signIn": "登录 Orca",
           "empty": "没有共享工件",
-          "emptyCopy": "打开 HTML 或 Markdown 文件并选择共享为工件，或要求您的代理共享它。",
+          "emptyCopy": "打开 HTML 或 Markdown 文件并选择共享为工件，或要求您的智能体共享它。",
           "openArtifact": "打开神器",
           "deleteArtifact": "删除工件",
           "moreAvailable": "更多工件可用",
           "moreAvailableCopy": "加载下一页以继续。",
           "loadMoreFailed": "无法加载更多工件。",
           "publishingOff": "发布已关闭",
-          "publishingOffCopy": "此设备上的任何内容都无法创建公共工件链接。允许在“设置”→“工件”中进行发布，然后从打开的 HTML 或 Markdown 文件进行共享或询问您的代理。",
+          "publishingOffCopy": "此设备上的任何内容都无法创建公共工件链接。允许在“设置”→“工件”中进行发布，然后从打开的 HTML 或 Markdown 文件进行共享或询问您的智能体。",
           "openArtifactsSettings": "打开设置 → 工件",
           "retry": "重试",
           "reconnectHeading": "再次登录 Orca",
@@ -17313,8 +17313,8 @@
       },
       "NativeChatResumeOnRestartModal": {
         "title": "恢复中断的聊天？",
-        "body": "当 Orca 关闭时，这些聊天正在工作。恢复会将每个聊天还原到停止的位置及其完整上下文，并要求代理在继续之前检查它正在做的事情。您自己的提示不会重新发送。",
-        "updateBody": "当 Orca 安装更新时，这些聊天正在工作。恢复会将每个聊天还原到停止的位置及其完整上下文，并要求代理在继续之前检查它正在做的事情。您自己的提示不会重新发送。",
+        "body": "当 Orca 关闭时，这些聊天正在工作。恢复会将每个聊天还原到停止的位置及其完整上下文，并要求智能体在继续之前检查它正在做的事情。您自己的提示不会重新发送。",
+        "updateBody": "当 Orca 安装更新时，这些聊天正在工作。恢复会将每个聊天还原到停止的位置及其完整上下文，并要求智能体在继续之前检查它正在做的事情。您自己的提示不会重新发送。",
         "resuming": "正在恢复…",
         "untitled": "无标题聊天",
         "listLabel": "将恢复的聊天",
@@ -17342,8 +17342,8 @@
         "activityApproval": "等待您的批准：{{value0}}",
         "activityQuestion": "等待您的回答：{{value0}}",
         "activityMidReply": "回复进行中",
-        "activitySubagentOne": "子代理运行中：{{value0}}",
-        "activitySubagentMany": "{{value0}} 个子代理运行中",
+        "activitySubagentOne": "子智能体运行中：{{value0}}",
+        "activitySubagentMany": "{{value0}} 个子智能体运行中",
         "activityMonitorOne": "正在监控：{{value0}}",
         "activityMonitorMany": "正在监控 {{value0}} 个后台任务"
       },
@@ -17364,7 +17364,7 @@
         "53e1559f99": "需要手动安装",
         "a7ac6ec78b": "Orca 下载了系统包。从终端完成更新之前退出 Orca。",
         "82c6dbea00": "复制命令，退出 Orca，然后在安装 Orca 的计算机上的系统终端中运行它。完成后重新打开 Orca。",
-        "53c4b8e148": "没有可用的身份验证代理响应特权安装请求。",
+        "53c4b8e148": "没有可用的身份验证智能体响应特权安装请求。",
         "c732bcbf8f": "检查包裹...",
         "aa57fa4f80": "命令已复制。退出 Orca，在系统终端中运行它以安装 {{value0}}，然后重新打开 Orca。",
         "b7e7c5bc95": "Orca 在构建此命令时根据发布元数据检查下载的文件。系统包本身没有经过签名检查，之后 Orca 无法为该文件提供担保。"
@@ -17436,7 +17436,7 @@
         "conflict": "另一个 Orca 窗口或终端仍持有此会话。请将其关闭，然后重试。",
         "ownershipUnknown": "Orca 仍在确认哪个进程持有此会话。请稍候，然后重试。",
         "notAttached": "聊天未能重新连接。请重试，或将其打开以开始新的轮次。",
-        "dispatchRejected": "代理拒绝了“continue”消息。请打开聊天并自行发送一条。",
+        "dispatchRejected": "智能体拒绝了“continue”消息。请打开聊天并自行发送一条。",
         "unsupported": "此聊天无法由 Orca 恢复。请将其打开以查看停止位置。",
         "fallback": "Orca 无法恢复此聊天。请将其打开以手动继续。"
       },
@@ -17596,7 +17596,7 @@
         "restartFailed": "智能体无法重新启动。",
         "capacity": "Orca 在过去一天内收到的请求过多。",
         "outcomeUnknown": "Orca 无法确认发生了什么。请查看聊天。",
-        "sendOutcomeLost": "Orca 无法确认你的消息已送达代理。请查看聊天，如有需要请重新发送。",
+        "sendOutcomeLost": "Orca 无法确认你的消息已送达智能体。请查看聊天，如有需要请重新发送。",
         "questionChanged": "此问题已被回答或已更改。",
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录。",
         "historyUnusable": "无法加载此聊天。",
@@ -17751,7 +17751,7 @@
         "runWebSearchMany": "网络搜索 {{value0}} 次",
         "runIntegrationOne": "使用 1 集成",
         "runIntegrationMany": "使用 {{value0}} 集成",
-        "runAgentOne": "然 1 代理",
+        "runAgentOne": "然 1 智能体",
         "runAgentMany": "然 {{value0}} 智能体",
         "runPlanOne": "更新了计划",
         "runPlanMany": "更新计划 {{value0}} 次",
@@ -17773,8 +17773,8 @@
         "runLiveWebSearchMany": "搜索网络 {{value0}} 次",
         "runLiveIntegrationOne": "使用 1 集成",
         "runLiveIntegrationMany": "使用 {{value0}} 集成",
-        "runLiveAgentOne": "运行 1 个代理",
-        "runLiveAgentMany": "运行 {{value0}} 代理",
+        "runLiveAgentOne": "运行 1 个智能体",
+        "runLiveAgentMany": "运行 {{value0}} 智能体",
         "runLivePlanOne": "更新计划",
         "runLivePlanMany": "更新计划 {{value0}} 次",
         "runLiveToolOne": "使用 1 个工具",
@@ -17901,7 +17901,7 @@
         "outputFile": "输出：{{value0}}",
         "detailsUnavailable": "此会话的任务详细信息不可用。",
         "countAgentsOne": "1 个智能体",
-        "countAgentsMany": "{{value0}} 代理",
+        "countAgentsMany": "{{value0}} 智能体",
         "countShellOne": "1 个外壳",
         "countShellMany": "{{value0}} 贝壳",
         "countShellCommandOne": "1 个 shell 命令",
@@ -17922,7 +17922,7 @@
         "stateUnverifiableCount": "{{value0}} 暂无近期更新",
         "reasonWaiting": "需要批准",
         "reasonBlocked": "失败的",
-        "groupAgents": "代理",
+        "groupAgents": "智能体",
         "groupShell": "壳",
         "groupMonitors": "显示器",
         "groupWorkflows": "工作流程",
@@ -17951,19 +17951,19 @@
           "stoppedCount": "{{value0}} 已停止",
           "unverifiableCount": "{{value0}} 暂无近期更新"
         },
-        "startedOne": "踢掉 1 个子代理",
-        "startedN": "启动 {{value0}} 子代理",
-        "ranOne": "Ran 1 子代理",
-        "ranN": "Ran {{value0}} 子代理",
+        "startedOne": "踢掉 1 个子智能体",
+        "startedN": "启动 {{value0}} 子智能体",
+        "ranOne": "Ran 1 子智能体",
+        "ranN": "Ran {{value0}} 子智能体",
         "tokens": "{{value0}} 代币",
-        "unnamed": "子代理"
+        "unnamed": "子智能体"
       },
       "conversationCommand": {
         "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成。"
       },
       "drop": {
         "title": "拖放以附加到此聊天",
-        "subtitle": "文件将作为代理可以读取的路径添加到您的消息中。"
+        "subtitle": "文件将作为智能体可以读取的路径添加到您的消息中。"
       },
       "copyCode": "复制代码",
       "context": {
@@ -18083,7 +18083,7 @@
             "selectableOnly": "仅可删除",
             "kind": {
               "status": "状态",
-              "agent": "代理",
+              "agent": "智能体",
               "git": "Git",
               "review": "审查",
               "reviewState": "审查状态",
@@ -18102,7 +18102,7 @@
               "comment": "评论",
               "prunable": "可修剪",
               "locked": "已锁定",
-              "retainedAgents": "已完成的代理"
+              "retainedAgents": "已完成的智能体"
             }
           },
           "noSizes": "尚未测量工作区大小。",
@@ -18168,7 +18168,7 @@
           "pinned": "已固定",
           "unread": "未读",
           "comment": "有评论",
-          "retainedDoneAgents": "代理成绩单完成",
+          "retainedDoneAgents": "智能体成绩单完成",
           "contextPresence": "打开选项卡、终端、评论",
           "completelyEmpty": "没有什么可失去的",
           "noWorkspaces": "未找到工作区。",
@@ -18338,7 +18338,7 @@
     "onboarding": {
       "flow": {
         "stepTooltip": {
-          "agent": "默认代理",
+          "agent": "默认智能体",
           "theme": "外观",
           "windowsTerminal": "Windows 终端",
           "notifications": "通知",
@@ -18393,7 +18393,7 @@
     "settings": {
       "TerminalInteraction": {
         "copyTrimsGutter": "修剪副本上的装订线",
-        "copyTrimsGutterDescription": "将左侧装订线代理输出绘制在后面，因此复制的文本不会缩进。仅删除每个选定行共享的缩进。"
+        "copyTrimsGutterDescription": "将左侧装订线智能体输出绘制在后面，因此复制的文本不会缩进。仅删除每个选定行共享的缩进。"
       },
       "terminal": {
         "clipboard": {
@@ -18682,9 +18682,9 @@
     "voice": {
       "demoPrompt": "查看此差异以了解边缘情况，并为您发现的任何内容添加测试。",
       "startDictation": "开始听写",
-      "agentPromptTitle": "代理提示",
+      "agentPromptTitle": "智能体提示",
       "listening": "听...",
-      "focusPaneInstruction": "聚焦终端、编辑器或代理提示符，然后按",
+      "focusPaneInstruction": "聚焦终端、编辑器或智能体提示符，然后按",
       "startInstruction": "开始语音听写。按",
       "stopInstruction": "再次停止。",
       "unassignedInstruction": "在焦点窗格中开始语音听写之前指定听写快捷方式。",
@@ -18695,7 +18695,7 @@
       "ageHours": "2小时",
       "ageMinutes": "12分钟",
       "ageYesterday": "1天",
-      "agentsInstruction": "您的代理也可以搜索。让它“找到我们修复登录超时的那次会话”。",
+      "agentsInstruction": "您的智能体也可以搜索。让它“找到我们修复登录超时的那次会话”。",
       "consentInstruction": "随时可在以下位置更改或关闭",
       "continueInBackground": "在后台继续",
       "demoHit1Age": "3天",
@@ -18721,10 +18721,10 @@
       "demoRoleAssistant": "助手",
       "demoRoleUser": "用户",
       "enableFailed": "无法开启会话搜索。请重试。",
-      "indexingDescription": "Orca 正在读取您过去的代理会话记录，以便您可以搜索它们。这可能需要几分钟。",
-      "indexingTitle": "正在索引您的代理会话",
+      "indexingDescription": "Orca 正在读取您过去的智能体会话记录，以便您可以搜索它们。这可能需要几分钟。",
+      "indexingTitle": "正在索引您的智能体会话",
       "progressStarting": "正在查找您的会话…",
-      "readyDescription": "现在可以通过会话内容找到此电脑上的每个代理会话。",
+      "readyDescription": "现在可以通过会话内容找到此电脑上的每个智能体会话。",
       "readyTitle": "会话搜索已就绪",
       "readyToast": "会话搜索已就绪",
       "readyToastOpen": "打开",
@@ -18734,7 +18734,7 @@
       "recent2Title": "更新 lockfile",
       "recent3Text": "这是按领域分组的记录初稿。",
       "recent3Title": "发布说明草稿",
-      "settingsLink": "设置 → 代理会话搜索",
+      "settingsLink": "设置 → 智能体会话搜索",
       "startSearching": "开始搜索"
     }
   },
@@ -18771,7 +18771,7 @@
     "tryAgain": "重试",
     "launchFailedMessage": "Orca 无法启动绘制其窗口的进程。",
     "launchFailedDetail": "Orca 重试了 {{recoveryCount}} 次，但未成功。",
-    "processLimitDetail": "由于你的用户帐户已达到进程数上限，系统拒绝创建新进程。这通常由失控的终端、开发服务器或代理导致。请关闭其中一些，然后点击“重试”。",
+    "processLimitDetail": "由于你的用户帐户已达到进程数上限，系统拒绝创建新进程。这通常由失控的终端、开发服务器或智能体导致。请关闭其中一些，然后点击“重试”。",
     "launchFailedGenericDetail": "系统拒绝启动它。请释放内存或关闭其他应用，然后点击“重试”。如果问题持续出现，请重新安装 Orca。",
     "lowCommitMessage": "Windows 内存不足。",
     "lowCommitDetail": "Windows 只剩下 {{availableMB}} MB 内存供应用程序使用，因此窗口在重新加载后再次耗尽内存。",
@@ -18788,7 +18788,7 @@
       "sortRelevance": "最相关的",
       "sortNewest": "最新",
       "sortResultsAriaLabel": "排序结果：{{value0}}",
-      "consent": "启用全文搜索吗？ Orca 根据本地代理记录在此计算机上构建索引，包括完整对话和每个工具输出最多 3,072 个字符。内容未经过编辑。经过身份验证的配对客户端可以搜索它。",
+      "consent": "启用全文搜索吗？ Orca 根据本地智能体记录在此计算机上构建索引，包括完整对话和每个工具输出最多 3,072 个字符。内容未经过编辑。经过身份验证的配对客户端可以搜索它。",
       "remoteDisabled": "此计算机上已禁用搜索。在该计算机上启用转录索引以搜索其会话。",
       "notReady": "搜索索引尚未准备好。稍后再试。",
       "noService": "在此计算机上无法进行搜索。它可能需要 Orca 更新或具有搜索支持的运行时。",
@@ -18805,7 +18805,7 @@
       "sessionsOfLoaded": "{{value0}} 次（共 {{value1}} 次）",
       "showMoreSessions": "显示更多会话",
       "loadingMoreSessions": "正在加载更多会话...",
-      "unsupportedAgent": "此计算机不支持所选代理的历史搜索。更新该计算机上的 Orca 或选择其他代理。"
+      "unsupportedAgent": "此计算机不支持所选智能体的历史搜索。更新该计算机上的 Orca 或选择其他智能体。"
     }
   },
   "sessionHistory": {
@@ -18825,17 +18825,17 @@
       "advanced": "高级",
       "deleteIndexCopy": "清除搜索数据",
       "deleteTitle": "清除这台计算机上的搜索数据吗？",
-      "deleteEnabled": "关闭搜索并从此计算机中删除可搜索副本。您的代理会话不受影响。",
-      "deleteDisabled": "从此计算机中删除可搜索副本。您的代理会话不受影响。",
+      "deleteEnabled": "关闭搜索并从此计算机中删除可搜索副本。您的智能体会话不受影响。",
+      "deleteDisabled": "从此计算机中删除可搜索副本。您的智能体会话不受影响。",
       "delete": "清除",
       "cleared": "搜索数据已清除。",
       "clearError": "无法清除搜索数据。再试一次。",
       "webUnsupported": "从该计算机上的 Orca 桌面应用程序打开会话搜索。",
-      "title": "代理会话搜索",
-      "description": "在此计算机和任何配对的 Orca 服务器上搜索您的代理所说和所做的一切。",
+      "title": "智能体会话搜索",
+      "description": "在此计算机和任何配对的 Orca 服务器上搜索您的智能体所说和所做的一切。",
       "searchDescription": "打开此计算机和配对服务器的会话搜索，或清除搜索数据。",
       "indexComputers": "在会话内搜索",
-      "computersConsent": "每台计算机都保留自己的代理对话和工具输出的可搜索副本。没有任何东西离开那台计算机。",
+      "computersConsent": "每台计算机都保留自己的智能体对话和工具输出的可搜索副本。没有任何东西离开那台计算机。",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "搜索 {{host}} 上的会话",
       "serverOffline": "离线",
@@ -18848,16 +18848,16 @@
       "showMore": "显示 {{count}} 更多",
       "showFewer": "显示较少",
       "openInSidebar": "在侧边栏中打开",
-      "openInSidebarCopy": "输入您记得的内容，或询问代理：“找到我们修复登录超时的会话。”",
+      "openInSidebarCopy": "输入您记得的内容，或询问智能体：“找到我们修复登录超时的会话。”",
       "open": "打开",
       "enableOnAll": "在所有计算机上启用"
     }
   },
   "aiVault": {
     "subagents": {
-      "loading": "正在加载子代理...",
-      "loadError": "无法加载所有子代理。",
-      "empty": "未找到子代理。"
+      "loading": "正在加载子智能体...",
+      "loadError": "无法加载所有子智能体。",
+      "empty": "未找到子智能体。"
     },
     "antigravityReferenceDescription": "使用此记录作为参考继续新的Antigravity CLI 对话。",
     "antigravityIdeToCli": "IDE → CLI",
@@ -18928,7 +18928,7 @@
   },
   "accounts": {
     "managedData": {
-      "description": "在 Orca 主机的终端中运行此命令以添加账户。选择适用于该主机上新启动的代理；直接 SSH 连接和 Windows 托管的 WSL 使用各自的凭据。",
+      "description": "在 Orca 主机的终端中运行此命令以添加账户。选择适用于该主机上新启动的智能体；直接 SSH 连接和 Windows 托管的 WSL 使用各自的凭据。",
       "copied": "已复制",
       "add": "复制添加账户命令",
       "refresh": "刷新账户",
@@ -18938,7 +18938,7 @@
       "select": "选择",
       "remove": "移除",
       "removeTitle": "移除托管账户？",
-      "removeDescription": "请先停止使用此配置的代理。移除将删除其保存的凭据和对话数据。系统登录不受影响。",
+      "removeDescription": "请先停止使用此配置的智能体。移除将删除其保存的凭据和对话数据。系统登录不受影响。",
       "cancel": "取消"
     },
     "antigravity": {
@@ -18982,7 +18982,7 @@
     },
     "codexTerminalServerIsolationNotice": {
       "title": "Orca 现在无需共享服务器即可运行 Codex",
-      "description": "这使得代理状态更加可靠。您可以在“设置”中将其重新打开。",
+      "description": "这使得智能体状态更加可靠。您可以在“设置”中将其重新打开。",
       "openSettings": "打开设置"
     },
     "codexSharedSettingsNotice": {
@@ -18991,17 +18991,17 @@
     },
     "codexSharedServerBanner": {
       "title": "此 Codex 与您的其他 Codex 选项卡共享服务器",
-      "body": "会话可能会意外结束，并且代理状态可能会错误。",
+      "body": "会话可能会意外结束，并且智能体状态可能会错误。",
       "openedBeforeUpdateBody": "这个终端是在 Orca 开始为每个 Codex 提供自己的服务器之前打开的。",
       "oldTerminalDialogTitle": "为什么此 Codex 共享服务器",
-      "oldTerminalDialogRisk": "共享服务器的 Codex 会话可能会一起结束，并且代理状态可能会错误。",
+      "oldTerminalDialogRisk": "共享服务器的 Codex 会话可能会一起结束，并且智能体状态可能会错误。",
       "oldTerminalDialogCause": "较旧的终端仍然共享 Codex 服务器。打开一个新终端以在单独的服务器上运行 Codex。",
       "fix": "使固定",
       "openNewTerminal": "打开新终端",
       "dontShowAgain": "不再显示",
       "dismiss": "关闭",
       "dialogTitle": "为每个 Codex 选项卡提供自己的服务器",
-      "dialogDescription": "Codex 会话直接在共享一台后台服务器的终端中启动。 Orca 将其启动的 Codex 会话分开保存。当会话共享一台服务器时，关闭一个服务器可能会结束其他服务器，并且代理状态可能会错误。",
+      "dialogDescription": "Codex 会话直接在共享一台后台服务器的终端中启动。 Orca 将其启动的 Codex 会话分开保存。当会话共享一台服务器时，关闭一个服务器可能会结束其他服务器，并且智能体状态可能会错误。",
       "copy": "复制",
       "copied": "已复制",
       "done": "完成",
@@ -19066,7 +19066,7 @@
       "refreshFailed": "无法刷新工作区列表",
       "review": "连同嵌套工作树一起删除…",
       "title": "删除工作区和嵌套工作树？",
-      "description": "这将永久删除“{{name}}”、下面列出的每个嵌套工作树及其中的所有文件（包括未提交的更改）。它们的终端和代理将被停止。",
+      "description": "这将永久删除“{{name}}”、下面列出的每个嵌套工作树及其中的所有文件（包括未提交的更改）。它们的终端和智能体将被停止。",
       "detached": "分离 HEAD",
       "loading": "正在检查嵌套工作树…",
       "order": "嵌套工作树会先被删除。如果其中一个失败，删除将停止并保留父工作树。分支遵循您现有的删除设置。",

@@ -107,3 +107,17 @@ Method (reproducible):
   R3 sign-off clean on all five locales (0 errors, 0 warns; placeholders byte-identical,
   0 stale changed keys, 0 generic-term regressions).
 
+## Terminology change 2026-10-06 — zh Agent is 智能体, not 代理
+
+- Standardized Simplified Chinese on 智能体 for the Agent concept. Converted 131 zh values
+  (incl. 子代理 -> 子智能体) and updated the pipeline so it is not reverted:
+  `locale-phrase-fixes.mjs` now maps 客服人员/代理商/座席 -> 智能体 and replaces 代理 -> 智能体
+  when the English names an agent (guarded to exclude "user agent"); the old
+  智能体 -> 代理 rule was removed.
+- 代理 stays for proxy senses: HTTP/network proxy, SSH Proxy Command, reverse proxy, and
+  browser "user agent" (26 zh values left untouched). Overrides updated to match
+  (locale-value-overrides, locale-key-overrides, locale-macos-tcc-key-overrides,
+  locale-zh-value-overrides, locale-search-keyword-overrides agent/agents -> 智能体, proxy -> 代理).
+- Gates: catalog verify, coverage --check, extraction, runtime-catalog pass; 296 locale
+  tests pass (policy, zh-round5, generic-terms, etc.).
+
