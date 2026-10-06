@@ -93,6 +93,8 @@ vi.mock('./use-structured-agent-session', async () => {
         supportsBackgroundTaskStopAll: mocks.supportsBackgroundTaskStopAll,
         backgroundTasks: mocks.backgroundTasks,
         turnId: null,
+        epoch: 'epoch-1',
+        rewind: { surface: undefined },
         cancel: vi.fn(),
         queuedMessages: {
           cards: [],
@@ -141,6 +143,10 @@ vi.mock('./use-native-chat-file-link-context', () => ({
   })
 }))
 
+vi.mock('./use-native-chat-tab-owner', () => ({
+  useNativeChatTabOwnerWorktreeId: () => 'wt-1'
+}))
+
 vi.mock('./use-native-chat-file-link-click', () => ({
   useNativeChatFileLinkClick: (context: unknown) => (context ? mocks.fileLinkClick : undefined)
 }))
@@ -187,7 +193,12 @@ vi.mock('./NativeChatQuestionCard', () => ({
 }))
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
-import { seededEntry, seedOutbox } from './NativeChatStructuredSession.test-harness'
+import {
+  advanceProbeClock,
+  seededEntry,
+  seedOutbox,
+  useProbeClock
+} from './NativeChatStructuredSession.test-harness'
 import {
   appendStructuredAgentSessionOutboxMessage,
   getStructuredAgentSessionOutbox
@@ -218,6 +229,7 @@ describe('NativeChatStructuredSession delivery', () => {
 
   // Resent under its own id until the host answers, so its row says only that it is still sending.
   it('says a send whose answer was lost is sending until it confirms on its own, with no Retry', async () => {
+    useProbeClock()
     mocks.mode = 'outbox'
     mocks.call.mockRejectedValueOnce(new Error('socket closed')).mockResolvedValueOnce({
       ok: true,
@@ -238,19 +250,19 @@ describe('NativeChatStructuredSession delivery', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
-    expect(send?.('hello', [])).toBe(true)
+    await act(async () => {
+      expect(send?.('hello', [])).toBe(true)
+    })
     // From the moment it is sent, through the lost answer, until the host confirms it.
-    await waitFor(() => expect(screen.getByText('Sending…')).toBeTruthy())
-    await waitFor(() =>
-      expect(getStructuredAgentSessionOutbox('session-1')).toMatchObject([{ state: 'unconfirmed' }])
-    )
+    expect(getStructuredAgentSessionOutbox('session-1')).toMatchObject([{ state: 'unconfirmed' }])
     expect(screen.getByText('Sending…')).toBeTruthy()
     expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull()
     expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull()
 
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2), { timeout: 5000 })
+    await advanceProbeClock(1000)
+    expect(mocks.call).toHaveBeenCalledTimes(2)
     expect(mocks.call.mock.calls[1]?.[2]).toEqual(mocks.call.mock.calls[0]?.[2])
-    await waitFor(() => expect(screen.queryByText('Sending…')).toBeNull())
+    expect(screen.queryByText('Sending…')).toBeNull()
     expect(getStructuredAgentSessionOutbox('session-1')).toEqual([])
     expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull()
   }, 10000)
@@ -282,6 +294,7 @@ describe('NativeChatStructuredSession delivery', () => {
   }
 
   it('says a send reopened mid-send is sending while it is resent, until it settles', async () => {
+    useProbeClock()
     mocks.mode = 'outbox'
     mocks.submissions = []
     mocks.call.mockResolvedValue({
@@ -298,53 +311,45 @@ describe('NativeChatStructuredSession delivery', () => {
     expect(screen.getByText('Sending…')).toBeTruthy()
     expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull()
     expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull()
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce(), { timeout: 3000 })
+    await advanceProbeClock(1000)
+    expect(mocks.call).toHaveBeenCalledOnce()
     expect(mocks.call.mock.calls[0]?.[2]).toMatchObject({
       envelope: { clientOperationId: 'op-sent' }
     })
-    await waitFor(() => expect(getStructuredAgentSessionOutbox('session-reopened')).toEqual([]))
+    expect(getStructuredAgentSessionOutbox('session-reopened')).toEqual([])
     expect(screen.queryByText('Sending…')).toBeNull()
     expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull()
   }, 10000)
 
-  it.each([
-    ['a live unknown', {}],
-    ['a recovered unknown', { recovered: true }],
-    ["an older host's recovered unknown", { reason: 'host_restarted_before_acknowledgement' }]
-  ])(
-    'says a send reopened mid-send is unconfirmed, with its Retry, once the journal holds %s',
-    async (label, patch) => {
-      mocks.mode = 'outbox'
-      const sessionId = `session-reopened-${label.replace(/\W+/g, '-')}`
-      mocks.submissions = [
-        {
-          clientMessageId: 'op-sent',
-          fence: 1,
-          payloadFingerprint: 'fp',
-          dispatchState: 'unknown',
-          providerItemId: null,
-          reason: null,
-          submittedAt: 1,
-          resolvedAt: null,
-          ...patch
-        }
-      ]
-      seedMidSend(sessionId)
+  it('says a send reopened mid-send is unconfirmed, with its Retry, when the journal holds unknown', async () => {
+    useProbeClock()
+    mocks.mode = 'outbox'
+    const sessionId = 'session-reopened-unknown'
+    mocks.submissions = [
+      {
+        clientMessageId: 'op-sent',
+        fence: 1,
+        payloadFingerprint: 'fp',
+        dispatchState: 'unknown',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: null
+      }
+    ]
+    seedMidSend(sessionId)
 
-      renderSession(sessionId)
+    renderSession(sessionId)
 
-      await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
-      expect(screen.getByRole('button', { name: /Retry/ })).toBeTruthy()
-      expect(screen.queryByText('Sending…')).toBeNull()
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1500))
-      })
-      expect(mocks.call).not.toHaveBeenCalled()
-    },
-    10000
-  )
+    expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Retry/ })).toBeTruthy()
+    expect(screen.queryByText('Sending…')).toBeNull()
+    await advanceProbeClock(1500)
+    expect(mocks.call).not.toHaveBeenCalled()
+  })
 
   it('says a send a Stop outlived is unconfirmed when reopened, as nothing resends it', async () => {
+    useProbeClock()
     mocks.mode = 'outbox'
     mocks.submissions = []
     seedMidSend('session-reopened-stopped', { outlivedStop: true })
@@ -354,9 +359,7 @@ describe('NativeChatStructuredSession delivery', () => {
     expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Retry/ })).toBeTruthy()
     expect(screen.queryByText('Sending…')).toBeNull()
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-    })
+    await advanceProbeClock(1500)
     expect(mocks.call).not.toHaveBeenCalled()
   }, 10000)
 

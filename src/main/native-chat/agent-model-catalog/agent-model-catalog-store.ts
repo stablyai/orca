@@ -14,13 +14,10 @@ import type { AgentModelCatalogPersistence } from './agent-model-catalog-persist
 export const AGENT_MODEL_CATALOG_FRESH_MS = 10 * 60_000
 export const AGENT_MODEL_CATALOG_FAILURE_TTL_MS = 30_000
 export const AGENT_MODEL_CATALOG_PICKER_WAIT_MS = 30_000
-/** A validation read younger than this trusts the entry even when the picked
- *  model is missing; older, it waits for one bounded refresh before refusing. */
-export const AGENT_MODEL_CATALOG_VALIDATION_MIN_AGE_MS = 60_000
 export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 
 export type AgentModelCatalogEntry = {
-  agent: 'claude' | 'codex'
+  agent: string
   fingerprint: string
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
@@ -128,11 +125,6 @@ export class AgentModelCatalogStore {
     return this.now() - entry.fetchedAt >= AGENT_MODEL_CATALOG_FRESH_MS
   }
 
-  /** Young enough for a validation read to trust even without the picked model. */
-  withinValidationMinAge(entry: AgentModelCatalogEntry): boolean {
-    return this.now() - entry.fetchedAt < AGENT_MODEL_CATALOG_VALIDATION_MIN_AGE_MS
-  }
-
   failureDetail(fingerprint: string): string | null {
     return this.hasActiveFailure(fingerprint)
       ? (this.failures.get(fingerprint)?.detail ?? null)
@@ -153,7 +145,7 @@ export class AgentModelCatalogStore {
 
   recordSuccess(
     fingerprint: string,
-    agent: 'claude' | 'codex',
+    agent: string,
     success: AgentModelCatalogSuccess
   ): AgentModelCatalogEntry | null {
     const entry = this.writeSuccess(fingerprint, agent, success, ++this.nextListingOrder)
@@ -163,7 +155,7 @@ export class AgentModelCatalogStore {
 
   private entryFromSuccess(
     fingerprint: string,
-    agent: 'claude' | 'codex',
+    agent: string,
     success: AgentModelCatalogSuccess
   ): AgentModelCatalogEntry | null {
     if (success.models.length === 0) {
@@ -184,7 +176,7 @@ export class AgentModelCatalogStore {
 
   private writeSuccess(
     fingerprint: string,
-    agent: 'claude' | 'codex',
+    agent: string,
     success: AgentModelCatalogSuccess,
     order: number
   ): AgentModelCatalogEntry | null {
@@ -216,7 +208,7 @@ export class AgentModelCatalogStore {
    *  whether this chat starts. Resolves with the entry on success, null on failure. */
   refresh(
     fingerprint: string,
-    agent: 'claude' | 'codex',
+    agent: string,
     lister: AgentModelCatalogLister,
     listModels: () => Promise<AgentModelCatalogSuccess>
   ): Promise<AgentModelCatalogEntry | null> {

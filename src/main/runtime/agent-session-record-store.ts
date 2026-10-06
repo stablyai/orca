@@ -8,7 +8,7 @@ import {
   type AgentSessionConversationClear
 } from './agent-session-conversation-command-record'
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
-
+import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
 import {
   agentSessionOperationKey,
   type AgentSessionOperationClaim,
@@ -67,7 +67,12 @@ import {
   type AgentSessionReserveResult
 } from './agent-session-reservation-admission'
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
-import { setAgentSessionTabVisibility, showAgentSessionTabs } from './agent-session-tab-table'
+import {
+  agentSessionVisibleTabIndex,
+  listVisibleAgentSessionIds,
+  setAgentSessionTabVisibility,
+  showAgentSessionTabs
+} from './agent-session-tab-table'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
@@ -87,16 +92,14 @@ export class AgentSessionRecordStore {
     readonly hostId: string
   ) {}
 
-  /** Reads every row once; nothing re-reads them. `hostId` is the execution host this runtime is. */
+  /** Reads every structurally valid row, independently of which agents this host can start. */
   static open(args: {
     journalDatabase: JournalHostDatabase
     hostId: string
   }): AgentSessionRecordStore {
-    const loaded = loadAgentSessionStoreRows(args.journalDatabase.db, args.hostId)
-    return new AgentSessionRecordStore(
-      new AgentSessionStoreTransactions(args.journalDatabase, loaded),
-      args.hostId
-    )
+    const rows = loadAgentSessionStoreRows(args.journalDatabase.db, args.hostId)
+    const transactions = new AgentSessionStoreTransactions(args.journalDatabase, rows)
+    return new AgentSessionRecordStore(transactions, args.hostId)
   }
 
   private get state(): AgentSessionStoreState {
@@ -116,20 +119,10 @@ export class AgentSessionRecordStore {
   /** Whether this host has recorded a chat, readable or not. Nothing removes a record row. */
   holdsRecords = (): boolean => this.state.records.size > 0 || this.state.unreadableRecords.size > 0
 
-  listVisibleSessionIds = (): string[] =>
-    (this.state.sessionTabs?.sessionIds() ?? []).filter((sessionId) =>
-      this.state.records.has(sessionId)
-    )
+  listVisibleSessionIds = (): string[] => listVisibleAgentSessionIds(this.state)
 
-  /** Unrecorded, `sessionIds` are the tab rows a chat opened while the import was owed left. */
-  getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } => ({
-    present: this.state.sessionTabs !== null,
-    sessionIds: this.state.sessionTabs
-      ? this.listVisibleSessionIds()
-      : (this.state.unrecordedSessionTabs?.sessionIds() ?? []).filter((sessionId) =>
-          this.state.records.has(sessionId)
-        )
-  })
+  getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } =>
+    agentSessionVisibleTabIndex(this.state)
 
   /** The id of the chat tab showing this conversation, if one does. */
   getSessionTabId = (sessionId: string): string | null =>
@@ -173,6 +166,12 @@ export class AgentSessionRecordStore {
   setConversationName = (sessionId: string, name: string | null): Promise<AgentSessionRecord> =>
     this.mutate(sessionId, (record) =>
       setAgentSessionRecordConversationName(record, name, Date.now())
+    )
+
+  /** Unfenced like the name: it records where a launch ran and never contends with the lease. */
+  pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>
+    this.mutate(sessionId, (record) =>
+      pinAgentSessionRecordLaunchDirectory(record, launchDirectory, Date.now())
     )
 
   /** A record this build cannot validate: readable as present, never grantable as a writer. */

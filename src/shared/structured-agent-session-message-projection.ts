@@ -13,8 +13,6 @@ export type StructuredAgentSessionMessageProjectionOptions = {
   /** Draw a message the host accepted and then rejected where the host recorded it, as not sent.
    *  Off for a client that hands such a message back to its composer instead. */
   rejectedInPlace: boolean
-  /** The queue's live cards: a rejected message one of them holds is drawn there, not here. */
-  queuedMessageIds?: readonly string[]
 }
 
 /** The loaded items that are a conversation command such as `/compact`, by item id. */
@@ -31,15 +29,13 @@ export function structuredAgentSessionCommandItemIds(
 /**
  * The rejected submissions the host's history shows in place as not sent, by item id; `submissions`
  * in submission order, as the client keeps them. A withdrawn one went back to its sender, one the
- * queue holds (a draft's hand-off, or a card under its id) is drawn as its card, and a command such
- * as `/compact` has its rejection reported as its own reply.
+ * queue holds (a draft's hand-off, or a send kept as a card) is drawn as its card, and a command
+ * such as `/compact` has its rejection reported as its own reply.
  */
 export function structuredAgentSessionRejectedShownInPlace(
   submissions: readonly AgentJournalSubmission[],
-  queuedMessageIds: readonly string[],
   commandItemIds: ReadonlySet<string>
 ): Set<string> {
-  const cards = new Set(queuedMessageIds)
   // Each body's copies, as positions in submission order. A withdrawn one is hidden too, so it
   // supersedes nothing.
   const copies = new Map<string, { index: number; submittedAt: number }[]>()
@@ -61,7 +57,8 @@ export function structuredAgentSessionRejectedShownInPlace(
       submission.dispatchState !== 'rejected' ||
       dispatchWasWithdrawn(submission) ||
       submission.queuedMessageId !== undefined ||
-      cards.has(submission.clientMessageId) ||
+      // Recorded on the send itself, so an Edit or Delete of its card brings no row back.
+      submission.keptAsQueuedMessageId !== undefined ||
       commandItemIds.has(agentJournalSubmissionKey(submission.clientMessageId)) ||
       // Collapses resends of a rejected message: past Retries resent it under a new id, and the
       // host re-delivers its own messages under new ids. Only a later copy sent once the rejection
@@ -95,7 +92,6 @@ export function projectStructuredAgentSessionMessages(
   const inPlace = options.rejectedInPlace
     ? structuredAgentSessionRejectedShownInPlace(
         submissions,
-        options.queuedMessageIds ?? [],
         structuredAgentSessionCommandItemIds(items)
       )
     : new Set<string>()
@@ -141,7 +137,9 @@ export function projectStructuredAgentSessionMessages(
         blocks: entry.body.blocks,
         ...(entry.state === 'rejected' || structuredAgentSessionEntryHeldForRetry(entry)
           ? { unsent: true as const }
-          : {})
+          : entry.sentWhileStopping
+            ? { sentWhileStopping: true as const }
+            : {})
       }))
   ]
 }

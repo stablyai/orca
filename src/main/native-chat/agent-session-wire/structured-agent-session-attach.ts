@@ -8,7 +8,7 @@
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type {
-  AgentSessionHandleProvider,
+  StructuredAgentId,
   AgentSessionProviderHandleLink
 } from '../../../shared/agent-session-provider-handle'
 import {
@@ -56,8 +56,8 @@ import { structuredAgentSessionRefusalMessage } from './structured-agent-session
 export type AgentSessionAttachParams = {
   envelope: AgentSessionMutationEnvelope
   location: AgentSessionExecutionLocation
-  provider: AgentSessionHandleProvider
-  agent: AgentSessionHandleProvider
+  provider: StructuredAgentId
+  agent: StructuredAgentId
   accountHome: AgentSessionAccountHome
   /** Always `native`; kept on the params because the operation fingerprint covers it. */
   runtimeKind: 'native'
@@ -87,6 +87,7 @@ export type AgentSessionAttachParams = {
 
 /** Host-supplied half of the reservation. */
 export type AgentSessionAttachAuthority = {
+  launchDirectory?: string
   spawnToken: string | (() => string)
   claimKeyId: string
   handoffOperationId: string | null
@@ -122,6 +123,17 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
 export function admitAttachOrRefuse(
   params: AgentSessionAttachParams
 ): { ok: true; fingerprint: string } | { ok: false; refusal: AgentSessionWireRefusal } {
+  // The start check judges the record's agent and the router starts `agent`'s adapter: one agent.
+  if (params.agent !== params.provider) {
+    return {
+      ok: false,
+      refusal: refuse(
+        'agent_session_operation_invalid',
+        { reason: 'requestMalformed' },
+        `A ${params.provider} session cannot be started as ${params.agent}.`
+      )
+    }
+  }
   if (
     params.providerHandle &&
     !agentSessionProviderHandleBelongsTo(
@@ -308,6 +320,7 @@ export function reserveRequestFor(input: {
       : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
+    ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
     ...(params.adopt
       ? {
           // Fence 1 is a new record's first, and the owner probe requires the head link to carry

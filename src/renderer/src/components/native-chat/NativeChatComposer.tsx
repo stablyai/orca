@@ -59,6 +59,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       agent,
       canSend = true,
       isWorking = false,
+      isStopping = false,
+      afterStop,
       onStop,
       onOptimisticSend,
       optimisticSendOutcome,
@@ -69,7 +71,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       readTerminalScreen,
       launchSeed,
       structuredTransport,
-      steerQueued
+      steerQueued,
+      inputOwnedByCard = false
     },
     ref
   ): React.JSX.Element {
@@ -100,7 +103,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
       terminalTabId,
       targetPtyId,
-      onOptimisticSendCanceled
+      onOptimisticSendCanceled,
+      { inputOwnedByCard, onPendingSendRetired: optimisticSendOutcome?.reject }
     )
 
     const { agentCommands, sessionSkillNames } = useNativeChatComposerCatalog(
@@ -138,9 +142,10 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       return { ptyId: targetPtyId, settings: getSettingsForAgentTabRuntimeOwner(terminalTabId) }
     }, [targetPtyId, terminalTabId])
 
+    // Why inputOwnedByCard: the hidden field can still hold keyboard focus for a frame.
     const [hasPty, disabled] = structuredTransport
       ? [true, !canSend]
-      : [targetPtyId !== null, targetPtyId === null || !canSend]
+      : [targetPtyId !== null, targetPtyId === null || !canSend || inputOwnedByCard]
 
     const syncCaret = useCallback((el: NativeChatComposerInput) => {
       setCaret(el.selectionStart ?? el.value.length)
@@ -213,7 +218,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     })
 
-    const { pickAttachment } = useNativeChatFileAttachmentActions(paneKey, attachExternalPaths)
+    const { pickAttachments } = useNativeChatFileAttachmentActions(paneKey, attachExternalPaths)
     const dictation = useNativeChatDictation(textareaRef)
     const { dispatch: dispatchSessionOptionCommand, isDispatching: isDispatchingSessionOption } =
       useNativeChatSessionOptionCommand({
@@ -290,6 +295,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     })
 
     const interrupt = useNativeChatComposerInterrupt({
+      inert: inputOwnedByCard,
       cancelPendingSends,
       isWorking,
       onStop,
@@ -367,6 +373,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         sendButtonDisabled={sendButtonDisabled}
         sendBlockedReason={imageBlock.reason}
         isWorking={isWorking}
+        isStopping={isStopping}
+        afterStop={afterStop}
         attachDisabled={disabled}
         dictationDisabled={dictation.dictationDisabled}
         isDictating={dictation.isDictating}
@@ -403,7 +411,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
           requestAnimationFrame(() => textarea?.setSelectionRange(result.caret, result.caret))
         }}
         onRemoveImageAttachment={(id) => removeImageAttachment(id)}
-        onAttach={pickAttachment}
+        onAttach={pickAttachments}
         onDictationToggle={dictation.toggleDictation}
         onDictationHoldStart={dictation.startHoldDictation}
         onDictationHoldEnd={dictation.stopHoldDictation}

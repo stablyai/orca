@@ -99,6 +99,21 @@ describe('adopted handle chain seeding', () => {
   })
 })
 
+describe('floating launch directory reservation', () => {
+  it('stores the host-selected folder when the record is first reserved', () => {
+    const request = reserveRequest({ launchDirectory: '/host/first-folder' })
+    const { record, disposition } = applyAgentSessionReservation(
+      storeState(),
+      request,
+      LEASE_TTL_MS
+    )
+
+    expect(disposition).toBe('created')
+    expect(record.launchDirectory).toBe('/host/first-folder')
+    expect(record.lease.claimStatus).toBe('reserved')
+  })
+})
+
 describe('adopted conversation ownership', () => {
   it('refuses when another record already holds the same conversation root', () => {
     // The held link names a leaf; the adoption names none. Same root is the whole test: keying on
@@ -149,6 +164,7 @@ describe('adopted conversation ownership', () => {
       ),
       location: LOCATION,
       accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
+      launchDirectory: '/original-folder',
       providerHandleChain: [link]
     }
 
@@ -156,6 +172,7 @@ describe('adopted conversation ownership', () => {
       storeState([committed]),
       reserveRequest({
         adoptedHandleLink: link,
+        launchDirectory: '/changed-folder',
         expectedFence: 1,
         handoffOperationId: 'handoff-1'
       }),
@@ -164,6 +181,7 @@ describe('adopted conversation ownership', () => {
 
     expect(disposition).toBe('retry-reservation')
     expect(record.providerHandleChain).toEqual([link])
+    expect(record.launchDirectory).toBe('/original-folder')
   })
 
   it('refuses a Codex adoption another record already holds', () => {

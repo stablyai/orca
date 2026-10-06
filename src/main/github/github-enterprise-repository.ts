@@ -1,3 +1,4 @@
+import { githubReadExecutionScope } from './github-read-execution-scope'
 import { ghExecFileAsync } from '../git/runner'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import {
@@ -31,7 +32,8 @@ export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
 // host `gh auth status` reports as logged-in is definitively a GitHub host. This
 // mirrors the `glab auth status` signal GitLab self-hosted detection uses, so a
 // GHES remote is not left to fall through to Gitea (#8312).
-const HOST_AUTH_TTL_MS = 60_000
+const HOST_AUTH_TTL_MS = 15 * 60_000
+const HOST_AUTH_MISS_TTL_MS = 60_000
 const HOST_AUTH_CACHE_MAX_ENTRIES = 512
 
 type HostAuthCacheEntry = {
@@ -145,7 +147,7 @@ async function resolveAuthenticatedGitHubHost(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<string | null | undefined> {
   const normalizedHost = normalizeGitHubHost(host)?.authority ?? host.trim().toLowerCase()
-  const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}`
+  const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}\0${githubReadExecutionScope({ ghAccount: localGitOptions.ghAccount })}`
   const now = Date.now()
   pruneHostAuthCache(now)
   const cached = hostAuthCache.get(cacheKey)
@@ -179,7 +181,7 @@ async function resolveAuthenticatedGitHubHost(
     }
     hostAuthCache.set(cacheKey, {
       authenticatedHost,
-      expiresAt: Date.now() + HOST_AUTH_TTL_MS
+      expiresAt: Date.now() + (authenticatedHost ? HOST_AUTH_TTL_MS : HOST_AUTH_MISS_TTL_MS)
     })
     pruneHostAuthCache(Date.now())
     return authenticatedHost

@@ -1,16 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  AcpAuthRequiredError,
-  AcpConnectionClosedError,
-  AcpRequestTimeoutError,
-  AcpRpcError
-} from './acp-errors'
+import { AcpAuthRequiredError, AcpConnectionClosedError, AcpRpcError } from './acp-errors'
 import {
   AcpSessionRuntime,
   type AcpSessionRuntimeOptions,
   type AcpSessionEvent
 } from './acp-session-runtime'
-import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
+import { AcpScriptedAgent, deferred } from './acp-scripted-agent.test-support'
 import type {
   AgentCapabilities,
   RequestPermissionResponse
@@ -162,10 +157,9 @@ describe('ACP session runtime', () => {
     })
   })
 
-  it('cancels open and late permissions and waits for the agent cancellation response', async () => {
+  it('leaves open and late permission decisions with their owner after cancel', async () => {
     const requested = deferred<AbortSignal>()
     const decision = deferred<RequestPermissionResponse>()
-    const responses: unknown[] = []
     const { runtime, agent } = fixture(
       {},
       {
@@ -175,35 +169,23 @@ describe('ACP session runtime', () => {
         }
       }
     )
-    agent.on('session/prompt', (frame) => {
-      void agent
-        .request('permission', 'session/request_permission', permission)
-        .then((response) => responses.push(response.result))
-      agent.on('session/cancel', (cancel) => {
-        expect(cancel.id).toBeUndefined()
-        void agent
-          .request('late-permission', 'session/request_permission', permission)
-          .then((response) => {
-            responses.push(response.result)
-            agent.reply(frame, { stopReason: 'cancelled' })
-          })
-      })
-    })
+    agent.on('session/prompt', () => {})
     await runtime.start(startOptions)
     const prompt = runtime.prompt([...textPrompt])
+    const open = agent.request('open', 'session/request_permission', permission)
     const signal = await requested.promise
-    const cancel = runtime.cancel()
-    expect(runtime.cancel()).toBe(cancel)
-    expect(await prompt).toEqual({ stopReason: 'cancelled' })
-    await cancel
-    expect(signal.aborted).toBe(true)
-    expect(responses).toEqual([
-      { outcome: { outcome: 'cancelled' } },
-      { outcome: { outcome: 'cancelled' } }
-    ])
-    decision.resolve({ outcome: { outcome: 'selected', optionId: 'allow' } })
-    await tick()
-    expect(agent.frames.filter((frame) => frame.id === 'permission')).toHaveLength(1)
+    await runtime.cancel()
+    expect(signal.aborted).toBe(false)
+    const late = agent.request('late', 'session/request_permission', permission)
+    decision.resolve({ outcome: { outcome: 'cancelled' } })
+    expect(await open).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
+    expect(await late).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
+    const frame = agent.frames.find((frame) => frame.method === 'session/prompt')
+    if (!frame) {
+      throw new Error('missing prompt')
+    }
+    agent.reply(frame, { stopReason: 'cancelled' })
+    await prompt
   })
 
   it('surfaces authentication-required errors with code and data', async () => {
@@ -409,88 +391,24 @@ describe('ACP session runtime', () => {
     await expect(runtime.setMode('plan')).rejects.toBeInstanceOf(AcpConnectionClosedError)
   })
 
-  it('closes an unconfirmed cancellation rather than allowing another prompt', async () => {
+  it('writes cancel immediately without waiting, coalescing, timing out, or closing', async () => {
     vi.useFakeTimers()
-    const { runtime, agent } = fixture({}, { cancelTimeoutMs: 100 })
-    agent.on('session/prompt', () => {})
+    const { runtime, agent } = fixture()
+    const frame = deferred<Parameters<AcpScriptedAgent['reply']>[0]>()
+    agent.on('session/prompt', (prompt) => frame.resolve(prompt))
     await runtime.start(startOptions)
     const prompt = runtime.prompt([...textPrompt])
-    const rejectedPrompt = expect(prompt).rejects.toBeInstanceOf(AcpRequestTimeoutError)
-    const cancelled = expect(runtime.cancel()).rejects.toBeInstanceOf(AcpRequestTimeoutError)
-    await vi.advanceTimersByTimeAsync(100)
-    await Promise.all([rejectedPrompt, cancelled])
-    await expect(runtime.prompt([...textPrompt])).rejects.toBeInstanceOf(AcpRequestTimeoutError)
-  })
-
-  describe("a steer's cancel", () => {
-    const cancels = (agent: AcpScriptedAgent) =>
-      agent.frames.filter((frame) => frame.method === 'session/cancel')
-
-    it("asks once, never times out or closes, and the prompt's own reply ends it", async () => {
-      vi.useFakeTimers()
-      const signals: AbortSignal[] = []
-      const { runtime, agent } = fixture(
-        {},
-        {
-          cancelTimeoutMs: 100,
-          // Would allow every request it is asked; a steer's cancel keeps late ones from it.
-          onPermission: (_request, context) => {
-            signals.push(context.signal)
-            return new Promise<RequestPermissionResponse>(() => {})
-          }
-        }
-      )
-      const promptFrame = deferred<Parameters<AcpScriptedAgent['reply']>[0]>()
-      agent.on('session/prompt', (frame) => promptFrame.resolve(frame))
-      await runtime.start(startOptions)
-      const prompt = runtime.prompt([...textPrompt])
-      const frame = await promptFrame.promise
-      const open = agent.request('open', 'session/request_permission', permission)
-      await vi.waitFor(() => expect(signals).toHaveLength(1))
-
-      const steer = runtime.requestSteerCancel()
-      expect(runtime.requestSteerCancel()).toBe(steer)
-      await steer
-      await vi.advanceTimersByTimeAsync(1_000)
-
-      expect(cancels(agent)).toHaveLength(1)
-      expect(signals[0]?.aborted).toBe(true)
-      expect(await open).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
-      expect(await agent.request('late', 'session/request_permission', permission)).toMatchObject({
-        result: { outcome: { outcome: 'cancelled' } }
-      })
-      expect(signals).toHaveLength(1)
-      agent.reply(frame, { stopReason: 'cancelled' })
-      expect(await prompt).toEqual({ stopReason: 'cancelled' })
-      // The connection is still open, so the steer's own prompt follows.
-      agent.on('session/prompt', (next) => agent.reply(next, { stopReason: 'end_turn' }))
-      expect(await runtime.prompt([...textPrompt])).toEqual({ stopReason: 'end_turn' })
-    })
-
-    it('leaves a later Stop bounded, closing the connection when the prompt never settles', async () => {
-      vi.useFakeTimers()
-      const { runtime, agent } = fixture({}, { cancelTimeoutMs: 100 })
-      agent.on('session/prompt', () => {})
-      await runtime.start(startOptions)
-      const prompt = runtime.prompt([...textPrompt])
-      const rejectedPrompt = expect(prompt).rejects.toBeInstanceOf(AcpRequestTimeoutError)
-
-      await runtime.requestSteerCancel()
-      const stopped = expect(runtime.cancel()).rejects.toBeInstanceOf(AcpRequestTimeoutError)
-      await vi.advanceTimersByTimeAsync(100)
-
-      await Promise.all([rejectedPrompt, stopped])
-      expect(cancels(agent)).toHaveLength(2)
-      await expect(runtime.prompt([...textPrompt])).rejects.toBeInstanceOf(AcpRequestTimeoutError)
-    })
-
-    it("writes nothing with no prompt of Orca's running", async () => {
-      const { runtime, agent } = fixture()
-      await expect(runtime.requestSteerCancel()).resolves.toBeUndefined()
-      await runtime.start(startOptions)
-      await runtime.requestSteerCancel()
-      await tick()
-      expect(cancels(agent)).toHaveLength(0)
-    })
+    const sent = await frame.promise
+    await runtime.cancel()
+    await runtime.cancel()
+    expect(agent.frames.filter((frame) => frame.method === 'session/cancel')).toHaveLength(2)
+    expect(vi.getTimerCount()).toBe(0)
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(runtime.closed).toBe(false)
+    await expect(runtime.prompt([...textPrompt])).rejects.toThrow('already in progress')
+    agent.reply(sent, { stopReason: 'cancelled' })
+    expect(await prompt).toEqual({ stopReason: 'cancelled' })
+    agent.on('session/prompt', (next) => agent.reply(next, { stopReason: 'end_turn' }))
+    expect(await runtime.prompt([...textPrompt])).toEqual({ stopReason: 'end_turn' })
   })
 })

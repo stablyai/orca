@@ -1,3 +1,4 @@
+import type { RemoteAgentInterruptDispatch } from '../../../shared/agent-hook-interrupt-reconciliation'
 import {
   markClaudeLeadTurnInterrupted,
   clearClaudeAnsweredQuestionWait
@@ -20,6 +21,15 @@ import { AgentHookServerRowOwnership } from './server-row-ownership'
 import { foldMainAgentWithRowChildWork } from './server-row-child-work-fold'
 
 export abstract class AgentHookServerStatusInference extends AgentHookServerRowOwnership {
+  private remoteInterruptListeners = new Set<(command: RemoteAgentInterruptDispatch) => void>()
+
+  subscribeRemoteInterruptRequests(
+    listener: (command: RemoteAgentInterruptDispatch) => void
+  ): () => void {
+    this.remoteInterruptListeners.add(listener)
+    return () => this.remoteInterruptListeners.delete(listener)
+  }
+
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {
     if (!isValidPaneKey(request.paneKey)) {
       return false
@@ -103,6 +113,9 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
       providerSession: existing.providerSession,
+      launchToken: existing.launchToken,
+      hostTurnRevision: existing.hostTurnRevision,
+      source: existing.source,
       // Why: a cancel leaves the shell fact as it was; dropping it would stop restart from seeding
       // the cancelled main agent, so a child's later drain could never settle the row.
       ...(existing.claudeRunningNonAgentTask !== undefined
@@ -110,6 +123,12 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
         : {}),
       payload: {
         state,
+        claudeTaskWakeupPending:
+          state !== 'done'
+            ? local
+              ? local.claudeTaskWakeupPending
+              : payload.claudeTaskWakeupPending
+            : undefined,
         ...(workingMode ? { workingMode } : {}),
         prompt: payload.prompt,
         agentType,
@@ -128,6 +147,31 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     })
     if (!inferred) {
       return false
+    }
+    if (
+      agentType === 'claude' &&
+      request.intent === 'ctrl-c' &&
+      existing.connectionId &&
+      existing.hostTurnRevision &&
+      existing.providerSession
+    ) {
+      const command: RemoteAgentInterruptDispatch = {
+        connectionId: existing.connectionId,
+        request: {
+          paneKey: existing.paneKey,
+          hostTurnRevision: existing.hostTurnRevision,
+          launchToken: existing.launchToken,
+          providerSession: existing.providerSession,
+          intent: 'ctrl-c'
+        }
+      }
+      for (const listener of this.remoteInterruptListeners) {
+        try {
+          listener(command)
+        } catch (error) {
+          console.warn('[agent-hooks] remote interrupt dispatch failed', error)
+        }
+      }
     }
     console.debug('[agent-hooks] inferred interrupted agent status', {
       paneKey: inferred.paneKey,
@@ -178,8 +222,17 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
       providerSession: existing.providerSession,
+      launchToken: existing.launchToken,
+      hostTurnRevision: existing.hostTurnRevision,
+      source: existing.source,
       payload: {
         state: restored.state,
+        claudeTaskWakeupPending:
+          restored.state !== 'done'
+            ? existing.connectionId
+              ? payload.claudeTaskWakeupPending
+              : restored.claudeTaskWakeupPending
+            : undefined,
         ...(restored.workingMode ? { workingMode: restored.workingMode } : {}),
         prompt: payload.prompt,
         agentType: payload.agentType,

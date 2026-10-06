@@ -5,7 +5,6 @@
 
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionBackgroundTaskState,
   type AgentSessionSlashCommand,
   type AgentSessionSubscribeEvent,
   type AgentSessionTurnActivity
@@ -40,16 +39,14 @@ export function deliverToSubscriber(
     journal: AgentSessionJournal
     hostNow: number
     emitCheckpoint: boolean
-    backgroundTasks?: AgentSessionBackgroundTaskState | null | undefined
     activity?: AgentSessionTurnActivity | null | undefined
   }
 ): void {
-  const { subscriber, journal, hostNow, emitCheckpoint, backgroundTasks, activity } = input
+  const { subscriber, journal, hostNow, emitCheckpoint, activity } = input
   const checkpointActivity = emitCheckpoint ? port.activity(subscriber.sessionId) : undefined
   const publishedActivity = activity !== undefined ? activity : checkpointActivity
   const shared = {
     hostNow,
-    ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
     ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
   }
   // Caught up, so there are no rows to read: every publish behind a commit's own delivery.
@@ -96,6 +93,7 @@ export function deliverToSubscriber(
           submissions: page.submissions
         },
         fence: subscriber.fence,
+        ...(page.latestTurn !== undefined ? { latestTurn: page.latestTurn } : {}),
         ...shared
       },
       // On a multi-page catch-up the draft list rides only the final page, or a
@@ -115,7 +113,6 @@ function emitCaughtUp(
   emitCheckpoint: boolean,
   shared: {
     hostNow: number
-    backgroundTasks?: AgentSessionBackgroundTaskState | null
     activity?: AgentSessionTurnActivity | null
   }
 ): void {

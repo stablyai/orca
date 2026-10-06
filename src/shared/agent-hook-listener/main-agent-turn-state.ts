@@ -4,6 +4,8 @@ import type { AgentTurnOutcome } from '../agent-turn-outcome'
 /** The Claude main agent's own turn record, published on every row as `mainAgent`. */
 export type ClaudeLeadTurnState = {
   state: AgentStatusState
+  /** A known background task opened this foreground finishing turn. */
+  taskWakeupTurn?: true
   /** The recorded verdict on the turn this record closed (the provider's, or a `cancellation`
    *  Orca inferred from the interrupt keystroke, or whatever a persisted row it was seeded from
    *  held); only meaningful while `state` is done. `cancellation` is what the fold reads as an
@@ -20,8 +22,15 @@ export type ClaudeLeadTurnState = {
   /** Main agent state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
   stateBeforeWait?: Pick<
     ClaudeLeadTurnState,
-    'state' | 'outcome' | 'stateStartedAt' | 'turnCompletedAt'
+    'state' | 'outcome' | 'stateStartedAt' | 'turnCompletedAt' | 'taskWakeupTurn'
   >
+}
+
+/** When the main agent's own turn last ended, while it has not started another. */
+export function mainAgentIdleSince(
+  record: Pick<ClaudeLeadTurnState, 'state' | 'stateStartedAt'> | undefined
+): number | undefined {
+  return record?.state === 'done' ? record.stateStartedAt : undefined
 }
 
 /** The Codex root's own record, folded with its roster into the combined `state`. A child's wait

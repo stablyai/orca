@@ -6,7 +6,10 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionBackgroundTaskState,
+  AgentSessionSubscribeEvent
+} from '../../../shared/agent-session-wire'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import { mobileE2EETextPayloadAdmissionBytes } from '../../runtime/rpc/mobile-e2ee-outbound-admission'
 import {
@@ -62,7 +65,8 @@ describe('structured agent-session outbound admission', () => {
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
     )
 
-    const subscribers = new AgentSessionSubscribers()
+    let roster: AgentSessionBackgroundTaskState | null = null
+    const subscribers = new AgentSessionSubscribers({ readBackgroundTasks: () => roster })
     const initial: AgentSessionSubscribeEvent[] = []
     const dispose = subscribers.open({
       id: 'initial',
@@ -75,7 +79,8 @@ describe('structured agent-session outbound admission', () => {
     expect(initial[0]).toMatchObject({ type: 'snapshot', page: { hasOlder: true } })
     expectAdmitted(initial[0])
 
-    subscribers.backgroundTasks(SESSION, null, 2)
+    roster = { state: 'monitoring' }
+    subscribers.republishBackgroundTasks(SESSION, 2)
     subscribers.snapshot(SESSION, journal, 2)
     expect(initial.slice(1)).toHaveLength(2)
     initial.slice(1).forEach(expectAdmitted)

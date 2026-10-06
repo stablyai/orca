@@ -13,9 +13,12 @@ import type { StructuredAgentSessionQueuedMessagesController } from './use-struc
  */
 export function NativeChatQueuedMessageList({
   controller,
+  steerHeld = false,
   focusComposer
 }: {
   controller: StructuredAgentSessionQueuedMessagesController
+  /** The chat reads Stopping: no card steers into the turn a Stop is ending. */
+  steerHeld?: boolean
   /** Where focus goes once Steer, Edit or Delete takes the focused card away. */
   focusComposer?: () => void
 }): React.JSX.Element {
@@ -23,6 +26,10 @@ export function NativeChatQueuedMessageList({
   const queueRef = useRef<HTMLDivElement>(null)
   const { cards } = controller
   const newest = cards.at(-1)
+  // Only a host that queues sends has queueing to turn off; a kept card shows without it.
+  const turnOffQueueing = controller.queueCapable
+    ? () => void updateSettings({ nativeChatQueueFollowUps: false })
+    : undefined
   // A pause over cards Resume would not send (returned, held on their own, or behind a returned
   // one) offers nothing to press.
   const pause = cards.some((card) => card.hold === 'queue-paused') ? controller.pause : null
@@ -60,11 +67,12 @@ export function NativeChatQueuedMessageList({
                 <NativeChatQueuedMessageCard
                   key={card.messageId}
                   card={card}
-                  showsSteerShortcut={card === newest}
+                  showsSteerShortcut={controller.queueCapable && card === newest}
+                  steerHeld={steerHeld}
                   onSteer={() => refocusAfter(controller.steer(card.messageId))}
                   onDelete={() => refocusAfter(controller.remove(card.messageId))}
                   onEdit={() => refocusAfter(controller.edit(card.messageId))}
-                  onTurnOffQueueing={() => void updateSettings({ nativeChatQueueFollowUps: false })}
+                  onTurnOffQueueing={turnOffQueueing}
                 />
               ))}
             </ul>

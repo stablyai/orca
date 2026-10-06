@@ -77,6 +77,45 @@ export function useStructuredAgentSessionHostExecutionPhase(
   )
 }
 
+/** Whether the host says a person's Stop is still ending the work; an older host never does. */
+export function useStructuredAgentSessionHostStopping(
+  sessionId: string,
+  target: RuntimeClientTarget
+): boolean {
+  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
+  useEffect(() => feed.activate(), [feed])
+  return useSyncExternalStore(
+    feed.subscribe,
+    () => feed.getSnapshot().get(sessionId)?.stopping === true,
+    () => false
+  )
+}
+
+/** The host's startup phase and its word on a Stop, each re-rendering the chat only on a change. */
+export function useStructuredAgentSessionHostExecution(
+  sessionId: string,
+  target: RuntimeClientTarget
+): { phase: ReturnType<typeof useStructuredAgentSessionHostExecutionPhase>; stopping: boolean } {
+  return {
+    phase: useStructuredAgentSessionHostExecutionPhase(sessionId, target),
+    stopping: useStructuredAgentSessionHostStopping(sessionId, target)
+  }
+}
+
+/** Only the host's rewind recovery latch, so a chat re-renders when that changes, not on every status. */
+export function useStructuredAgentSessionRewindBlockedReason(
+  sessionId: string,
+  target: RuntimeClientTarget
+): NonNullable<AgentSessionStatusSummary['rewindBlockedReason']> | null {
+  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
+  useEffect(() => feed.activate(), [feed])
+  return useSyncExternalStore(
+    feed.subscribe,
+    () => feed.getSnapshot().get(sessionId)?.rewindBlockedReason ?? null,
+    () => null
+  )
+}
+
 /** The host's child records for the row, and the legacy roster readers of `subagents` keep. A host
  *  that publishes views is copied verbatim; only an older host's task list is converted here. */
 function childWorkFor(summary: AgentSessionStatusSummary): {
@@ -159,7 +198,8 @@ function projectStatus(
   const agentStatus = structuredAgentSessionAgentStatus({
     status: summary.status,
     childWork: children ?? summary.backgroundTasks,
-    turnOutcome: summary.turnOutcome
+    turnOutcome: summary.turnOutcome,
+    ...(summary.stopping ? { stopping: summary.stopping } : {})
   })
   const current = store.agentStatusByPaneKey?.[paneKey]
   // Same continuity rule as the host ingest, on the main agent's own clock.
@@ -275,6 +315,21 @@ function StructuredAgentSessionOwnedStatusProjection({
   useEffect(() => {
     projectStatus(tab, summary, observation, launchFailedAt)
   }, [summary, observation, tab, launchFailedAt])
+  const launchDirectory = summary?.launchDirectory
+  useEffect(() => {
+    // Why local only: a remote host's path is in its syntax, and floating chats only run locally.
+    useAppStore
+      .getState()
+      .setStructuredSessionLaunchDirectory(
+        tab.id,
+        tab.entityId,
+        target.kind === 'local' ? launchDirectory : undefined
+      )
+  }, [launchDirectory, target.kind, tab.id, tab.entityId])
+  useEffect(
+    () => () => useAppStore.getState().clearStructuredSessionLaunchDirectory(tab.id, tab.entityId),
+    [tab.entityId, tab.id]
+  )
   useEffect(
     () => () =>
       useAppStore.getState().removeAgentStatus(structuredAgentSessionPaneKey(tab.id, tab.entityId)),

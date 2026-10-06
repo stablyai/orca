@@ -11,11 +11,14 @@ import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
 import { getFolderWorkspaceRevealGroupKeys } from '../navigation/folder-reveal'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import { getHostPinnedGroupKey } from '../../host-pinned-sections'
 import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
 
 // While the agent send picker targets a workspace, force open every section that hides it.
 export function useEffectiveCollapsedGroups(args: {
+  hostScopedPinnedGroups?: boolean
   collapsedGroups: Set<string>
   agentSendTargetWorktreeId: string | null
   groupBy: WorktreeGroupBy
@@ -34,6 +37,7 @@ export function useEffectiveCollapsedGroups(args: {
 }): Set<string> {
   const {
     collapsedGroups,
+    hostScopedPinnedGroups = false,
     agentSendTargetWorktreeId,
     groupBy,
     pinnedDisplayPolicy,
@@ -77,7 +81,17 @@ export function useEffectiveCollapsedGroups(args: {
       pinnedDisplayPolicy === 'single-location' &&
       isPinnedSectionWorktree(targetWorktree, visibleWorktrees, worktreeLineageById, worktreeMap)
     ) {
-      next.delete(PINNED_GROUP_KEY)
+      next.delete(
+        hostScopedPinnedGroups
+          ? getHostPinnedGroupKey(
+              getWorktreeExecutionHostId(
+                targetWorktree,
+                repoMap.get(targetWorktree.repoId),
+                defaultHostId
+              )
+            )
+          : PINNED_GROUP_KEY
+      )
     } else {
       for (const groupKey of getGroupKeysForWorktree(
         groupBy,
@@ -104,6 +118,7 @@ export function useEffectiveCollapsedGroups(args: {
   }, [
     agentSendTargetWorktreeId,
     collapsedGroups,
+    hostScopedPinnedGroups,
     groupBy,
     pinnedDisplayPolicy,
     visibleWorktrees,

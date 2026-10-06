@@ -4,6 +4,7 @@
 // Antigravity keeps stdin open and instead tests its owned bounded Node reader separately.
 // Generated under a mocked win32 platform, not executed, so the POSIX CI legs guard it too.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,8 +17,11 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
-vi.mock('../codex/codex-hook-trust-grant', () => ({
-  grantManagedCodexHookTrust: async () => ({ lane: 'fallback', reason: 'unsupported' })
+// Why: stands in for asking a real Codex for its hook hashes, as the grant stub once did.
+vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+  ...(await importOriginal<typeof CodexHookHashLookup>()),
+  resolveCodexHookAnswerForLaunch: async () =>
+    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({
@@ -59,9 +63,8 @@ const BATCH_SCRIPT_INSTALLERS = [
   { agent: 'grok', install: () => new GrokHookService().install() }
 ] as const
 
-// Why: the Codex installer awaits an app-server trust-grant session, so the
-// override has to stay pinned across the await instead of being restored by a
-// synchronous `finally` while the install is still running.
+// Why: the Codex installer is async, so the override has to stay pinned across
+// the await instead of being restored by a synchronous `finally` while it runs.
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })

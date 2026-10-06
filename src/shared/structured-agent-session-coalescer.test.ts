@@ -125,4 +125,58 @@ describe('structured agent session event coalescer', () => {
     coalescer.flush()
     expect(events[1]).toMatchObject({ queuePause: { reason: 'stopped' } })
   })
+
+  it('keeps the latest turn a coalesced frame carried, and a null one as an answer', () => {
+    const events: AgentSessionSubscribeEvent[] = []
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
+    const running = {
+      itemId: 'turn-1',
+      observedAt: 1,
+      turn: { turnId: 'turn-1', state: 'running' as const }
+    }
+
+    coalescer.push({ ...batch(1), latestTurn: running })
+    coalescer.push(batch(2))
+    coalescer.flush()
+    coalescer.push({ ...batch(3), latestTurn: running })
+    coalescer.push({ ...batch(4), latestTurn: null })
+    coalescer.flush()
+
+    expect(events.map((event) => (event.type === 'batch' ? event.latestTurn : 'other'))).toEqual([
+      running,
+      null
+    ])
+  })
+  it('drops it when a later frame carries rows without it, as applying both would', () => {
+    const events: AgentSessionSubscribeEvent[] = []
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
+    const token = (sequence: number) => ({
+      ...batch(sequence),
+      batch: {
+        ...batch(sequence).batch,
+        items: [
+          {
+            itemId: `token-${sequence}`,
+            revision: 1,
+            sequence,
+            observedAt: sequence,
+            body: { kind: 'message' as const, role: 'assistant' as const, blocks: [] }
+          }
+        ]
+      }
+    })
+    const running = {
+      itemId: 'turn-1',
+      observedAt: 1,
+      turn: { turnId: 'turn-1', state: 'running' as const }
+    }
+
+    // The second frame is an older host's: rows, and no answer to keep the first one alive.
+    coalescer.push({ ...token(1), latestTurn: running })
+    coalescer.push(token(2))
+    coalescer.flush()
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).not.toHaveProperty('latestTurn')
+  })
 })

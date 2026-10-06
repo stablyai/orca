@@ -77,6 +77,8 @@ export function useStructuredAgentSessionOutbox(args: {
    *  its entry here under the draft's own id; once the host visibly holds the draft, the
    *  entry retires so the same text can never come back twice. */
   queuedMessageIds?: readonly string[]
+  /** The chat reads Stopping: a send made now is marked as made while stopping. */
+  stopping?: boolean
 }) {
   const {
     composerScopeKey,
@@ -85,6 +87,7 @@ export function useStructuredAgentSessionOutbox(args: {
     queueDelivery = NO_QUEUE_DELIVERY,
     queuedMessageIds,
     sessionId,
+    stopping: sentWhileStopping = false,
     submissions,
     target
   } = args
@@ -271,14 +274,22 @@ export function useStructuredAgentSessionOutbox(args: {
         return false
       }
       // Whether it asks to be queued is decided when it first goes out.
-      if (!appendStructuredAgentSessionOutboxMessage(sessionId, text, attachments)) {
+      if (
+        !appendStructuredAgentSessionOutboxMessage(
+          sessionId,
+          text,
+          attachments,
+          undefined,
+          sentWhileStopping
+        )
+      ) {
         setError(agentSessionWriteNoticeText(STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED))
         return false
       }
       setError(null)
       return true
     },
-    [sessionId]
+    [sentWhileStopping, sessionId]
   )
 
   const { withdrawUnsent } = useStructuredAgentSessionOutboxOwnership({

@@ -119,8 +119,9 @@ async function finalizeClaudePublishedSession(
     rootExitVerdict = cleanupError
   }
   // Queues the session's ending for the host's child records; the adapter delivers it after close.
-  // A close that proved the whole tree gone stopped what still ran. One that saw a descendant
-  // survive, like an exit of the session's own, leaves how it ended unknown.
+  // A proven close stopped what still ran: on POSIX the whole tree was seen gone; on Windows Claude
+  // left after its stdin ended, or taskkill reported its tree terminated. Any other end, like an
+  // exit of the session's own, leaves how it ended unknown.
   if (connectionClosed === true) {
     session.childWork.stopLive()
   }

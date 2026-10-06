@@ -30,6 +30,7 @@ import {
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 let root: string
@@ -57,6 +58,27 @@ beforeEach(() => {
 })
 
 describe('attach', () => {
+  it('founds a client-location floating chat with the host folder and keeps it on replay', async () => {
+    const resolveWorkspacePath = vi.fn(async () => '/host/original-folder')
+    host.deps.resolveWorkspacePath = resolveWorkspacePath
+    const params = attachParams({
+      location: {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+        workspaceKind: 'folder'
+      }
+    })
+
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
+    expect(store.getRecord(SESSION)?.launchDirectory).toBe('/host/original-folder')
+    resolveWorkspacePath.mockResolvedValue('/host/changed-folder')
+
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+    expect(store.getRecord(SESSION)?.launchDirectory).toBe('/host/original-folder')
+    expect(resolveWorkspacePath).toHaveBeenCalledTimes(1)
+  })
+
   it('reserves the lease, spawns through the adapter, and opens the journal', async () => {
     const result = await host.attach(CALLER, attachParams())
     expect(result).toMatchObject({ ok: true, replayed: false })
@@ -670,11 +692,11 @@ describe('restart', () => {
     expect(status).toMatchObject({ owner: 'native' })
   })
 
-  it('vouches for no owner of a chat this host cannot run', async () => {
+  it('reads stored ownership even when this host cannot start the provider', async () => {
     await attach()
 
     await reboot(async () => ({ outcome: 'pid-absent' }), { supportsCreate: () => false })
-    expect(() => host.handoffStatus(SESSION)).toThrow('structured_agent_session_unsupported')
+    expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
   })
 
   it('releases a session whose owner can never be probed, signalling nothing, and starts over', async () => {

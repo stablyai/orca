@@ -55,13 +55,19 @@ export async function acquireOwner(
     const options =
       providerChildPhase === 'starting'
         ? undefined
-        : await withAgentSessionCreatePhase('restore_options', input.recordPhase, () =>
-            readNativeSessionOptions({
-              adapter: input.adapter,
-              sessionId: record.sessionId,
-              fence,
-              ...(record.options ? { priorOptions: record.options } : {})
-            })
+        : await withAgentSessionCreatePhase('restore_options', input.recordPhase, async () =>
+            input.adapter.readAcquisitionOptions
+              ? input.adapter.readAcquisitionOptions({
+                  sessionId: record.sessionId,
+                  fence,
+                  ...(record.options ? { priorOptions: record.options } : {})
+                })
+              : readNativeSessionOptions({
+                  adapter: input.adapter,
+                  sessionId: record.sessionId,
+                  fence,
+                  ...(record.options ? { priorOptions: record.options } : {})
+                })
           )
     if (record.lease.ownerProcess === null) {
       await input.store.commitProcessIdentity({

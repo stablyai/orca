@@ -130,25 +130,3 @@ export function readCodexTrustGrantLedgerHomeMatchingStamp(
   const home = readCodexTrustGrantLedgerHome(runtimeHomePath)
   return home && binaryStampsMatch(home.binary, currentStamp) ? home : null
 }
-
-/** Native-only: the WSL stamp needs a subprocess, and status reads must stay
- *  synchronous for the hook-status readers that never target a distro. */
-export function readCurrentNativeCodexTrustGrantLedgerHome(
-  runtimeHomePath: string
-): CodexTrustGrantLedgerHome | null {
-  try {
-    const home = readCodexTrustGrantLedgerHome(runtimeHomePath)
-    if (!home) {
-      // Why: fallback-only installs have no ledger. Avoid a synchronous PATH
-      // and version-manager scan when there is no recorded stamp to validate.
-      return null
-    }
-    return binaryStampsMatch(home.binary, resolveNativeCodexTrustGrantHost().binaryStamp)
-      ? home
-      : null
-  } catch {
-    // Why: status is diagnostic and best-effort; unreadable ledger/binary
-    // paths must trigger conservative self-hash handling, not throw.
-    return null
-  }
-}

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AcpJsonRpcPeer } from './acp-json-rpc-peer'
 import { AcpSessionRuntime, type AcpSessionRuntimeOptions } from './acp-session-runtime'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
-import { AcpConnectionClosedError, AcpRequestTimeoutError } from './acp-errors'
+import { AcpConnectionClosedError, AcpRpcError } from './acp-errors'
 import type { RequestPermissionResponse } from './generated/acp-protocol.generated'
 
 const opened: { close: () => void }[] = []
@@ -219,21 +219,6 @@ describe('ACP caller-owned waits', () => {
     await rejected
   })
 
-  it('clamps cancellation confirmation waits to the safe timer range', async () => {
-    vi.useFakeTimers()
-    const { agent, runtime } = fixture({ cancelTimeoutMs: 3_000_000_000 })
-    agent.on('session/prompt', () => {})
-    await runtime.start(startOptions)
-    const rejected = expect(runtime.prompt([...prompt])).rejects.toBeInstanceOf(
-      AcpRequestTimeoutError
-    )
-    const cancelled = expect(runtime.cancel()).rejects.toBeInstanceOf(AcpRequestTimeoutError)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(agent.frames.at(-1)?.method).toBe('session/cancel')
-    await vi.advanceTimersByTimeAsync(2_147_483_646)
-    await Promise.all([rejected, cancelled])
-  })
-
   it('lets initialize and explicit authentication wait for slow first-run startup and login', async () => {
     vi.useFakeTimers()
     const { agent, runtime } = fixture({ peer: { requestTimeoutMs: 20 } })
@@ -248,16 +233,17 @@ describe('ACP caller-owned waits', () => {
     await expect(authenticated).resolves.toEqual({})
   })
 
-  it('lets cancel abort vendor hooks so each sends its own answer, or request-cancelled if it throws', async () => {
+  it('lets request owners withdraw vendor hooks after cancel', async () => {
+    const withdrawal = new AbortController()
     const { agent, runtime } = fixture({
-      onRequest: (method, _params, context) =>
+      onRequest: (method) =>
         new Promise((resolve, reject) => {
           // '_vendor/silent' ignores the abort: the runtime never answers for it.
           if (method !== '_vendor/silent') {
-            context.signal.addEventListener('abort', () =>
+            withdrawal.signal.addEventListener('abort', () =>
               method === '_vendor/plan'
                 ? resolve({ outcome: 'abandoned' })
-                : reject(new Error('stop'))
+                : reject(new AcpRpcError(-32800, 'stop'))
             )
           }
         })
@@ -272,6 +258,7 @@ describe('ACP caller-owned waits', () => {
     void agent.request('silent', '_vendor/silent', {})
     await tick()
     await runtime.cancel()
+    withdrawal.abort()
     expect(await question).toMatchObject({ error: { code: -32800 } })
     expect(await plan).toMatchObject({ result: { outcome: 'abandoned' } })
     await pending
@@ -280,18 +267,19 @@ describe('ACP caller-owned waits', () => {
     expect(agent.frames.some((frame) => frame.id === 'silent')).toBe(false)
   })
 
-  it('keeps a handler answer that finishes saving after the cancel', async () => {
+  it('keeps a handler answer that finishes saving after its owner withdraws requests', async () => {
+    const withdrawal = new AbortController()
     // A real I/O hop, the shape of a journal write the handler commits before replying.
     const save = (): Promise<void> => readFile(import.meta.filename).then(() => undefined)
     const userAnswer = deferred<void>()
     const { agent, runtime } = fixture({
-      onRequest: (method, _params, context) =>
+      onRequest: (method) =>
         new Promise((resolve) => {
           if (method === '_vendor/plan') {
             // The user already approved; the save started before the stop and replies after it.
             void userAnswer.promise.then(save).then(() => resolve({ outcome: 'approved' }))
           } else {
-            context.signal.addEventListener(
+            withdrawal.signal.addEventListener(
               'abort',
               () => void save().then(() => resolve({ outcome: 'abandoned' }))
             )
@@ -308,6 +296,7 @@ describe('ACP caller-owned waits', () => {
     await tick()
     userAnswer.resolve()
     await runtime.cancel()
+    withdrawal.abort()
     expect(await plan).toMatchObject({ result: { outcome: 'approved' } })
     expect(await question).toMatchObject({ result: { outcome: 'abandoned' } })
     await pending
@@ -316,7 +305,7 @@ describe('ACP caller-owned waits', () => {
     expect(agent.frames.filter((frame) => frame.id === 'question')).toHaveLength(1)
   })
 
-  it('settles requests when the process owner closes on exit even if stdout stays open', async () => {
+  it('settles stream-level requests on close even if stdout stays open', async () => {
     const { agent, runtime } = fixture()
     agent.on('session/prompt', () => {})
     await runtime.start(startOptions)
@@ -326,7 +315,7 @@ describe('ACP caller-owned waits', () => {
     await rejected
     expect(agent.stdout.readableEnded).toBe(false)
   })
-  it.each(['answer', 'cancel'] as const)(
+  it.each(['answer', 'close'] as const)(
     'keeps a permission pending after prompt completion until caller %s',
     async (action) => {
       const decision = deferred<RequestPermissionResponse>()
@@ -354,13 +343,13 @@ describe('ACP caller-owned waits', () => {
           result: { outcome: { outcome: 'selected', optionId: 'allow' } }
         })
       } else {
-        await runtime.cancel()
-        expect(await response).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
+        runtime.close()
+        expect(signal.aborted).toBe(true)
       }
     }
   )
 
-  it('confirms cancellation when the agent settles the prompt with an error', async () => {
+  it('writes cancel independently of the agent settling the prompt with an error', async () => {
     const { agent, runtime } = fixture()
     agent.on('session/prompt', (frame) => {
       agent.on('session/cancel', () => agent.fail(frame, -32800, 'Request cancelled'))

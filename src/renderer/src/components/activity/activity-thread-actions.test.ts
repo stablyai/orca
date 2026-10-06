@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   activateTabAndFocusPane: vi.fn(),
   activateStructuredAgentSessionTab: vi.fn(),
   activateAndRevealWorkspace: vi.fn(),
-  isFloatingWorkspacePanelVisible: vi.fn(),
   dispatchEvent: vi.fn()
 }))
 
@@ -22,9 +21,6 @@ vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
 }))
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
-}))
-vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
-  isFloatingWorkspacePanelVisible: mocks.isFloatingWorkspacePanelVisible
 }))
 
 import { createActivityThreadActions, hasActivityThreadWorkspace } from './activity-thread-actions'
@@ -70,7 +66,6 @@ describe('activity thread host routing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('window', { dispatchEvent: mocks.dispatchEvent })
-    mocks.isFloatingWorkspacePanelVisible.mockReturnValue(false)
     mocks.activateStructuredAgentSessionTab.mockReturnValue(false)
     mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
     getKnownWorktreeById.mockReturnValue(thread.worktree)
@@ -119,7 +114,7 @@ describe('activity thread host routing', () => {
       state.settings = { floatingTerminalEnabled: true }
       state.tabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingThread.tab] }
       mocks.activateAndRevealWorkspace.mockReturnValue(false)
-      mocks.isFloatingWorkspacePanelVisible.mockReturnValue(open)
+      state.floatingWorkspacePanelOpen = open
 
       makeActions().selectThread(floatingThread)
 

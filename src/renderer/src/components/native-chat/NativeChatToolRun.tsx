@@ -45,13 +45,13 @@ import type {
   NativeChatSubagentRosterState
 } from './native-chat-subagent-sections'
 import { NativeChatToolRunIcon } from './NativeChatToolIcon'
+import { NativeChatToolRunCallCounts } from './NativeChatToolRunCallCounts'
 
 /** Stable empty default: a fresh array literal per render breaks memoization. */
 const NO_SUBAGENT_GROUPS: NativeChatSubagentGroupBlock[] = []
 const NO_BACKGROUND_TASKS: NativeChatBackgroundTaskBlock[] = []
 
-/** A run of a message's tool calls/results, collapsed to a one-line summary that
- *  expands to the individual inline tool lines. */
+/** A run of tool calls/results with a summary that expands to the individual tool lines. */
 export function NativeChatToolRun({
   blocks,
   previousTodoWrite,
@@ -164,9 +164,11 @@ export function NativeChatToolRun({
   // not, so a call that finished in a frame still leaves its name until the next.
   const latestCall = live ? headerBlocks.findLast(isToolCallBlock) : undefined
   const latestCallLabel = latestCall ? describeLatestToolCall(latestCall) : null
-  const { succeeded: runSucceeded, failedCallCount } = nativeChatToolRunOutcome(headerBlocks, {
-    activeTurnIsWorking
-  })
+  const {
+    succeeded: runSucceeded,
+    failedCallCount,
+    interruptedCallCount
+  } = nativeChatToolRunOutcome(headerBlocks, { activeTurnIsWorking })
   // An externally opened run keeps child tools collapsed; normal callers leave
   // the run's own disclosure independent from the turn status bar.
   const expandToolLines = expandOverride === undefined ? open : false
@@ -251,27 +253,28 @@ export function NativeChatToolRun({
         // One element for the run's whole life. Live and settled are states of
         // this button, not two buttons: a header that remounted as a call started
         // and again as it ended lost its hover, its mark, and its count each time.
+        // It carries the summary's type so each `h-[1lh]` slot is one summary line
+        // tall: marks sit on line 1 and a wrapped line 2 starts under the text.
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="group/tool-run flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+          className="group/tool-run flex min-h-6 w-full items-start gap-1.5 rounded-md py-0.5 text-left text-sm native-chat-message-text leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
           aria-expanded={open}
           aria-live="polite"
           data-native-chat-tool-run-state={live ? 'live' : 'settled'}
         >
           {settledHeaderIcon ? (
-            <NativeChatToolRunIcon
-              iconName={settledHeaderIcon}
-              className="text-chat-foreground-faint"
-            />
+            <span className="flex h-[1lh] shrink-0 items-center">
+              <NativeChatToolRunIcon
+                iconName={settledHeaderIcon}
+                className="text-chat-foreground-faint"
+              />
+            </span>
           ) : null}
-          {/* The run in words, in the transcript's own type. Present tense while
-              live, past once settled; the text changes in place and nothing
-              around it moves. While live it keeps its width and the preview
-              beside it is what gives way. */}
+          {/* Keep the collapsed header bounded; the tool detail carries the full command. */}
           <span
             className={cn(
-              'truncate text-sm native-chat-message-text leading-relaxed transition-colors',
+              'min-w-0 line-clamp-2 whitespace-normal break-words text-sm native-chat-message-text leading-relaxed transition-colors',
               live
                 ? 'max-w-[72%] shrink-0 animate-pulse text-chat-foreground motion-reduce:animate-none'
                 : 'min-w-0 text-chat-foreground-faint group-hover/tool-run:text-chat-foreground'
@@ -279,54 +282,42 @@ export function NativeChatToolRun({
           >
             {runSentence ?? fallbackLabel}
           </span>
-          {failedCallCount > 0 ? (
-            /* Outside the truncating member list, so the one thing the reader
-               cannot afford to miss survives a pane too narrow to print it.
-               Quiet text in the header's own type, not a destructive tint or a
-               swapped glyph: a tool error is routine work, and the failing
-               line's own detail is one click away. */
-            <span
-              aria-label={translate(
-                'components.native-chat.tool.failedCallsLabel',
-                NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCallsLabel,
-                { value0: failedCallCount }
-              )}
-              className="shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint transition-colors group-hover/tool-run:text-chat-foreground"
-            >
-              <span aria-hidden> · </span>
-              {translate(
-                'components.native-chat.tool.failedCount',
-                NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCount,
-                { value0: failedCallCount }
-              )}
-            </span>
-          ) : null}
+          <NativeChatToolRunCallCounts
+            failed={failedCallCount}
+            interrupted={interruptedCallCount}
+          />
           {/* Only a stated success is marked done — see nativeChatToolRunOutcome —
               and never while live: between two calls nothing is running, and a
               mark that appeared then would flash on every call. */}
           {!live && runSucceeded ? (
-            <Check aria-hidden className="size-3 shrink-0 text-chat-foreground-faint" />
+            <span className="flex h-[1lh] shrink-0 items-center">
+              <Check aria-hidden className="size-3 shrink-0 text-chat-foreground-faint" />
+            </span>
           ) : null}
           {latestCallLabel ? (
-            <span
-              className={cn(
-                'min-w-0 truncate font-sans text-xs text-chat-foreground-faint',
-                latestCall &&
-                  nativeChatToolLineLabel(latestCall).command &&
-                  'rounded-md border border-chat-inline-code-border bg-chat-inline-code-surface px-1.5 font-mono text-chat-foreground'
-              )}
-            >
-              {latestCallLabel}
+            <span className="flex h-[1lh] min-w-0 items-center">
+              <span
+                className={cn(
+                  'min-w-0 truncate font-sans text-xs text-chat-foreground-faint',
+                  latestCall &&
+                    nativeChatToolLineLabel(latestCall).command &&
+                    'rounded-md border border-chat-inline-code-border bg-chat-inline-code-surface px-1.5 font-mono text-chat-foreground'
+                )}
+              >
+                {latestCallLabel}
+              </span>
             </span>
           ) : null}
           {/* Revealed on hover of this header alone — see NativeChatToolLine on
               why the group is named — and points down when open. */}
-          <ChevronRight
-            className={cn(
-              'size-3.5 shrink-0 text-chat-foreground-faint transition-all',
-              open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover/tool-run:opacity-100'
-            )}
-          />
+          <span className="flex h-[1lh] shrink-0 items-center">
+            <ChevronRight
+              className={cn(
+                'size-3.5 shrink-0 text-chat-foreground-faint transition-all',
+                open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover/tool-run:opacity-100'
+              )}
+            />
+          </span>
         </button>
       )}
       {open && showsHeader ? (

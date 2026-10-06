@@ -78,7 +78,13 @@ export type PtyApi = {
     shellReadyArmed?: boolean
   }>
   write: (id: string, data: string, inputKind: TerminalInputKind) => void
-  writeAccepted: (id: string, data: string, inputKind: TerminalInputKind) => Promise<boolean>
+  /** `requireWriteSettlement` waits for the provider's acknowledgment on any provider. */
+  writeAccepted: (
+    id: string,
+    data: string,
+    inputKind: TerminalInputKind,
+    options?: { requireWriteSettlement?: true }
+  ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void

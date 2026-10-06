@@ -265,7 +265,7 @@ describe('ExperimentalPane', () => {
     expect(container.textContent).toContain('Chats that already exist stay as they are.')
     // Paired Orca servers run structured chats too; only WSL and SSH stay on terminal chat.
     expect(container.textContent).toContain(
-      'Runs on this machine and on paired Orca servers running a version that supports it; older servers keep terminal chat. WSL and SSH hosts continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
+      'Runs on this machine and on paired Orca servers running a version that supports it; older servers keep terminal chat. WSL and SSH hosts continue to use terminal chat.'
     )
     expect(container.textContent).toContain('Default view')
     root.unmount()

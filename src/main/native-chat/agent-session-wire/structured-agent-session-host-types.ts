@@ -22,8 +22,8 @@ import type { AgentSessionAttachParams } from './structured-agent-session-attach
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
 import type { AgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 
 export type StructuredAgentSessionCaller = { callerKey: string }
 
@@ -34,7 +34,7 @@ export type StructuredAgentSessionCaller = { callerKey: string }
 export type StructuredAgentSessionReveal = {
   sessionId: string
   workspaceId: string
-  agent: AgentSessionHandleProvider
+  agent: StructuredAgentId
   readable: boolean
   /** Why the journal did not open, as a read would be refused. Host-side only: never published. */
   openRefusal?: AgentSessionWireRefusal
@@ -133,6 +133,8 @@ export type StructuredAgentSessionHostDeps = {
   resolveLaunchEnv?: (
     provider: AgentSessionRecord['provider']
   ) => Promise<Record<string, string> | undefined> | Record<string, string> | undefined
+  /** Execution-host path for a newly founded floating session. */
+  resolveWorkspacePath?: (workspaceId: string) => Promise<string>
   now?: () => number
   /** The idle sweep's period and window. Tests drive these; production takes the defaults. */
   idleSweep?: { intervalMs?: number; idleMs?: number }

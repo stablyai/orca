@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { expandNode } from './tab-bar-dropdown-menu-item-probe'
-import { stubHeadlessReact, stubShallowSelector } from './tab-bar-windows-shell-launch-render-stubs'
+import {
+  stubHeadlessReact,
+  stubShallowSelector,
+  stubTooltip
+} from './tab-bar-windows-shell-launch-render-stubs'
 
 const appStoreSnapshot: {
   activeTabId: string | null
@@ -181,11 +185,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }
 }))
 
-vi.mock('@/components/ui/tooltip', () => ({
-  Tooltip: 'Tooltip',
-  TooltipContent: 'TooltipContent',
-  TooltipTrigger: 'TooltipTrigger'
-}))
+vi.mock('@/components/ui/tooltip', () => stubTooltip())
 
 type ReactElementLike = {
   type: unknown

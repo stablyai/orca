@@ -75,8 +75,9 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
     const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen
-    // This field reports current Windows process-identity proof. Structured RPC
-    // support itself stays advertised; agentSession.createSupport owns current eligibility.
+    // TEMPORARY: nothing on this host reads it any more. Clients older than this build keep
+    // re-probing their WSL capabilities until it is true, so it is published for one
+    // compatibility window and then removed.
     const windowsProcessStartTimeAvailable =
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
     const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(

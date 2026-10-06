@@ -127,7 +127,7 @@ describe('CodexHookService', () => {
   })
 
   it.skipIf(process.platform !== 'win32')(
-    'treats legacy forward-slash runtime trust keys as installed before canonicalizing on reinstall',
+    'reports legacy forward-slash runtime trust keys as not approved, and canonicalizes them on reinstall',
     async () => {
       const service = new CodexHookService()
       expect((await service.install()).state).toBe('installed')
@@ -152,7 +152,8 @@ describe('CodexHookService', () => {
 
       const legacyToml = readFileSync(runtimeTomlPath, 'utf-8')
       expect(legacyToml).toContain(legacyPermissionHeader)
-      expect(service.getStatus().state).toBe('installed')
+      // Why partial: Codex on Windows reads only the backslash key, so it would ask to review this hook.
+      expect(service.getStatus().state).toBe('partial')
 
       expect((await service.install()).state).toBe('installed')
 
@@ -207,13 +208,12 @@ describe('CodexHookService', () => {
     )
     expect(readFileSync(runtimeTomlPath, 'utf-8').split(permissionRequestHeader)).toHaveLength(3)
 
-    // Why: preserving `enabled = false` is the repair contract; status can be
-    // partial because the user-disabled managed hook remains disabled.
-    expect(['installed', 'partial']).toContain((await service.install()).state)
+    // Why enabled: Orca's own entry is re-enabled, since its setting is the only off switch.
+    expect((await service.install()).state).toBe('installed')
 
     const repairedToml = readFileSync(runtimeTomlPath, 'utf-8')
     expect(repairedToml.split(permissionRequestHeader)).toHaveLength(2)
-    expect(repairedToml).toContain('enabled = false')
+    expect(repairedToml).not.toContain('enabled = false')
     expect(repairedToml).not.toContain('STALE_DISABLED')
     expect(repairedToml).not.toContain('STALE_ENABLED')
     expect(repairedToml).toContain('model = "system-model"')

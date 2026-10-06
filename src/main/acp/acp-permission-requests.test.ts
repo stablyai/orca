@@ -99,11 +99,19 @@ describe('ACP permission requests', () => {
     expect(diagnostics).toEqual([`Answered ACP permission request cancelled: ${problem}`])
   })
 
-  it('answers cancelled when the cancel lands before the permission handler starts', async () => {
-    const asked = vi.fn((_request: RequestPermissionRequest) => new Promise<never>(() => {}))
+  it('lets the owner decline a permission after cancel, before the handler starts', async () => {
+    let stopping = false
+    const asked = vi.fn((_request: RequestPermissionRequest) => ({
+      outcome: stopping
+        ? { outcome: 'cancelled' as const }
+        : { outcome: 'selected' as const, optionId: 'allow' }
+    }))
     const { agent, runtime } = fixture({ onPermission: asked })
     await runtime.start(startOptions)
-    runtime.subscribe(() => void runtime.cancel())
+    runtime.subscribe(() => {
+      stopping = true
+      void runtime.cancel()
+    })
     const answer = new Promise<unknown>((resolve) => {
       agent.stdin.on('data', (chunk: string) => {
         if (chunk.includes('"id":5')) {
@@ -133,15 +141,17 @@ describe('ACP permission requests', () => {
         .join('')
     )
     expect(await answer).toMatchObject({ id: 5, result: { outcome: { outcome: 'cancelled' } } })
-    expect(asked).not.toHaveBeenCalled()
+    expect(stopping).toBe(true)
+    expect(asked).toHaveBeenCalledOnce()
   })
 
-  it('lets a turn the agent began itself ask for permission and cancels it with session/cancel', async () => {
+  it('keeps an autonomous permission with its owner after session/cancel', async () => {
+    const decision = deferred<{ outcome: { outcome: 'cancelled' } }>()
     const asked = deferred<AbortSignal>()
     const { agent, runtime } = fixture({
       onPermission: (_request, context) => {
         asked.resolve(context.signal)
-        return new Promise(() => {})
+        return decision.promise
       }
     })
     await runtime.start(startOptions)
@@ -152,7 +162,8 @@ describe('ACP permission requests', () => {
     })
     const signal = await asked.promise
     await runtime.cancel()
-    expect(signal.aborted).toBe(true)
+    expect(signal.aborted).toBe(false)
+    decision.resolve({ outcome: { outcome: 'cancelled' } })
     expect(await answer).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
     await tick()
     expect(agent.frames.filter((frame) => frame.method === 'session/cancel')).toHaveLength(1)

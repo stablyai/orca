@@ -63,8 +63,12 @@ export function spawnManagedProviderProcess(
   options: ManagedProviderProcessOptions
 ): ManagedProviderProcess {
   const platform = options.platform ?? process.platform
-  const spec = createProviderSpawnSpec(launch, options.inheritedEnv ?? process.env, platform)
-  const policy = (options.policy ?? rootOnlyProviderClosePolicy)(spec.supervised)
+  const closePolicy = options.policy ?? rootOnlyProviderClosePolicy
+  const spec = createProviderSpawnSpec(launch, options.inheritedEnv ?? process.env, platform, {
+    // A gone owner gets the close this provider's own close would make under the supervisor.
+    closeRequest: closePolicy(true).signalSupervisorOnClose ? 'stdin-end-and-sigterm' : 'stdin-end'
+  })
+  const policy = closePolicy(spec.supervised)
   if (spec.supervised && !(policy.gracefulExitMs >= PROVIDER_SUPERVISOR_MAX_STOP_MS)) {
     throw new RangeError(
       `Supervised provider graceful exit must wait at least ${PROVIDER_SUPERVISOR_MAX_STOP_MS} ms; received ${policy.gracefulExitMs} ms`

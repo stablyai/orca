@@ -65,6 +65,18 @@ export type StructuredAgentSessionResumeFailure = StructuredAgentSessionResumeCa
   retryable: boolean
 }
 
+/** The agents whose offers a caller may see and act on; absent, every agent this host runs. A
+ *  client too old to show an agent's chat never lists, resumes, or dismisses that agent's offers. */
+export type StructuredAgentSessionRestartAudience = (agent: string) => boolean
+
+/** The rows `audience` may see; all of them without one. */
+export function restartRowsFor<T extends { agent: string }>(
+  rows: T[],
+  audience: StructuredAgentSessionRestartAudience | undefined
+): T[] {
+  return audience ? rows.filter((row) => audience(row.agent)) : rows
+}
+
 export type StructuredAgentSessionResumableSet = {
   candidates: StructuredAgentSessionResumeCandidate[]
   /** Markers the chat has provably moved past, or whose conversation forked. Every ending deletes:

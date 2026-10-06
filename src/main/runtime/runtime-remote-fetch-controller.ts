@@ -228,6 +228,9 @@ export class RuntimeRemoteFetchController {
     gitOptions: GitOptions = {}
   ): Promise<RemoteTrackingBase | null> {
     const remoteRefPrefix = 'refs/remotes/'
+    if (baseBranch.startsWith('refs/') && !baseBranch.startsWith(remoteRefPrefix)) {
+      return null
+    }
     const shortBaseBranch = baseBranch.startsWith(remoteRefPrefix)
       ? baseBranch.slice(remoteRefPrefix.length)
       : baseBranch

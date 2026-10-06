@@ -125,6 +125,7 @@ async function attach(
 ) {
   store ??= await openTestAgentSessionRecordStore(root!)
   return performAttach({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: sessionAdapter,

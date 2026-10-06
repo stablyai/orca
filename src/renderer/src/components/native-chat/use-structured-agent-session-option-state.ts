@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionRewindSupport } from '../../../../shared/agent-session-rewind'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   getAgentSessionOptionCatalog,
@@ -49,6 +50,9 @@ export function useStructuredAgentSessionOptionState(args: {
     commands: readonly AgentSessionConversationCommand[]
     threadGoal: AgentSessionOptionsResult['threadGoal']
     contextUsage: AgentSessionOptionsResult['contextUsage']
+    rewind: AgentSessionRewindSupport
+    /** The fence the read answered for; rewind support is only that runtime's. */
+    fence: number | null
   } | null>(null)
   // A revision the loaded window dropped can move the host's whole-journal context facts.
   const contextRefresh = conversationSupport?.contextUsage ? (args.unloadedTurnRevisions ?? 0) : 0
@@ -110,7 +114,10 @@ export function useStructuredAgentSessionOptionState(args: {
           sessionId,
           commands: result.conversationCommands ?? [],
           threadGoal: result.threadGoal,
-          contextUsage: result.contextUsage
+          contextUsage: result.contextUsage,
+          // A host that predates rewind does not name it.
+          rewind: result.rewind ?? { supported: false, reason: 'unsupported' },
+          fence
         })
         updateOptionState((current) =>
           current.record === activeOptionRecordRef.current

@@ -533,9 +533,8 @@ export function isWindowsProcessTableAvailable(): boolean {
  * `build/Release/` path, so a host can hold a patched `lib/index.js` — enum and
  * all — over a binary that ignores flag 4. CI produced exactly that: the enum
  * said available, and every row came back without `creationTimeMs`. Answering
- * true there is worse than answering false: the descendant snapshot then
- * returns null forever and the exit proof latches `unverifiable`, while
- * structured chat believes it has a reaper.
+ * true there is worse than answering false: the owner probe would scan the
+ * whole table for nulls, and the published status would claim start times.
  */
 export function isWindowsProcessStartTimeAvailable(): boolean {
   const native = moduleLoader()

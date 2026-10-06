@@ -6,6 +6,7 @@ import type {
   AgentSessionExecutionLocation
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
 import type {
   StructuredAgentRegistration,
   StructuredAgentRegistry
@@ -124,6 +125,10 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
+  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean =>
+    this.liveOwnerOrNull(sessionId)?.holdsLiveProviderProcess?.(sessionId, acquisitionGeneration) ??
+    false
+
   stopEndsSession = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.stopEndsSession?.(sessionId) ?? false
 
@@ -161,12 +166,26 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   awaitStarted = (sessionId: string): Promise<void | SubmissionRejectionFact> =>
     this.liveOwnerOrNull(sessionId)?.awaitStarted?.(sessionId) ?? Promise.resolve()
 
+  prepareReadOptions = (input: { sessionId: string; fence: number }) =>
+    this.liveOwnerOrNull(input.sessionId)?.prepareReadOptions?.(input)
+
   readOptions = (input: { sessionId: string; fence: number }) => {
     const reader = this.owner(input.sessionId).readOptions
     if (!reader) {
       throw new Error(`structured session ${input.sessionId} does not report options`)
     }
     return reader(input)
+  }
+
+  readAcquisitionOptions = (input: {
+    sessionId: string
+    fence: number
+    priorOptions?: Readonly<Record<string, string>>
+  }) => {
+    const adapter = this.owner(input.sessionId)
+    return adapter.readAcquisitionOptions
+      ? adapter.readAcquisitionOptions(input)
+      : readNativeSessionOptions({ adapter, ...input })
   }
 
   readOptionRestoreFailures = (sessionId: string): readonly string[] =>

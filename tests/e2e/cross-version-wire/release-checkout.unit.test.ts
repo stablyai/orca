@@ -300,9 +300,9 @@ describe('release checkout materialization', () => {
     expect(relative(cacheRoot, checkout.root)).not.toMatch(/^\.\./)
   }, 180_000)
 
-  // v1.4.221 imports @streamparser/json, which the current tree no longer installs.
+  // v1.4.221 still needs the pinned test-only parser for its dense match path.
   // Default cache root: package resolution must walk up into the repo's node_modules.
-  it('loads release source that imports a package the current tree dropped', async () => {
+  it('runs the released dense parser with its retained test dependency', async () => {
     const checkout = await materializeReleaseCheckout('v1.4.221')
     const ripgrep = await importReleaseCheckoutModule(
       checkout,
@@ -320,9 +320,27 @@ describe('release checkout materialization', () => {
     expect(callExport('parseRipgrepMatchJson', '{"type":"match"}', 1, limits)).toEqual({
       type: 'match'
     })
-    expect(() => callExport('parseDenseRipgrepMatchJson', '{"type":"match"}', 1, 8)).toThrow(
-      /imports '@streamparser\/json'.*does not install/
-    )
+    expect(callExport('parseDenseRipgrepMatchJson', '{"type":"match"}', 1, 8)).toEqual({
+      type: 'match',
+      data: { submatches: [] }
+    })
+    const match = {
+      type: 'match',
+      data: {
+        path: { text: 'src/example.ts' },
+        lines: { text: 'hit hit\n' },
+        line_number: 7,
+        submatches: [
+          { start: 0, end: 3 },
+          { start: 4, end: 7 }
+        ]
+      }
+    }
+    expect(callExport('parseDenseRipgrepMatchJson', JSON.stringify(match), 1, 8)).toEqual({
+      ...match,
+      data: { ...match.data, submatches: [{ start: 0, end: 3 }] }
+    })
+    expect(() => callExport('parseDenseRipgrepMatchJson', '{"type":', 1, 8)).toThrow()
   }, 180_000)
 
   it('keeps an import live while another colliding release label materializes', async () => {

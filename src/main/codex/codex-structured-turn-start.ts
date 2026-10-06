@@ -22,6 +22,8 @@ import {
   codexTurnEndRejection
 } from './codex-structured-turn-end-settlement'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
+import { codexKnownFastModeTier } from './codex-structured-catalog-entry'
+import type { CodexSessionCatalogAccess } from './codex-structured-session-state'
 
 // Writing a Codex turn and learning which message landed where, which are not
 // the same event. The answer proves admission and nothing about identity, which
@@ -55,9 +57,12 @@ export type CodexTurnHost = {
   threadId: string
   options: Map<string, string>
   reportedOptions?: { model?: string }
-  fastModeTierByModel: ReadonlyMap<string, string>
+  /** The account's catalog, read at send so any writer's newer tier applies. */
+  catalogAccess?: CodexSessionCatalogAccess
   dispatchEchoes: CodexDispatchEchoes
   activeTurnIds?: ReadonlySet<string>
+  /** Running turns whose interrupt Codex already answered: aborted, so never steered. */
+  abortedTurnIds?: ReadonlySet<string>
   turnOpenWaits: Pick<CodexTurnOpenWaits, 'wait'>
 }
 
@@ -81,7 +86,7 @@ function codexTurnOptions(host: CodexTurnHost): Record<string, string> {
   )
   const encodedFastMode = host.options.get('fastMode')
   if (encodedFastMode === undefined) {
-    return options
+    return host.options.has('serviceTier') ? { ...options, serviceTier: 'default' } : options
   }
   const fastMode = decodeStructuredAgentSessionOptionValue('fastMode', encodedFastMode)
   if (typeof fastMode !== 'boolean') {
@@ -91,7 +96,7 @@ function codexTurnOptions(host: CodexTurnHost): Record<string, string> {
     return { ...options, serviceTier: 'default' }
   }
   const model = host.options.get('model') ?? host.reportedOptions?.model
-  const tierId = model ? host.fastModeTierByModel.get(model) : undefined
+  const tierId = model ? codexKnownFastModeTier(host.catalogAccess, model) : undefined
   // Fast is on but nothing has named the tier for this model yet, so there is no
   // value to route to. Deliberately Standard rather than an omission: the tier
   // persists on the thread, so omitting would silently keep routing a paid tier we
@@ -151,11 +156,15 @@ export async function startCodexTurn(
   if (!host.dispatchEchoes.arm(input.clientMessageId, input.requestedAt)) {
     return false
   }
+  // A turn whose interrupt Codex answered has aborted, though its end may still be on the wire:
+  // the send opens its own turn.
+  const steerable = (turnId: string | null | undefined): turnId is string =>
+    typeof turnId === 'string' && turnId !== '' && !host.abortedTurnIds?.has(turnId)
   const runningTurnId = await codexRunningOrOpeningTurn(host)
-  let steered = runningTurnId ? await steerCodexTurn(host, runningTurnId, input) : null
+  let steered = steerable(runningTurnId) ? await steerCodexTurn(host, runningTurnId, input) : null
   // Refused because a turn Orca heard of meanwhile is running: steer that one, once.
   const runningSince = steered ? undefined : [...(host.activeTurnIds ?? [])].at(-1)
-  if (runningSince && runningSince !== runningTurnId) {
+  if (steerable(runningSince) && runningSince !== runningTurnId) {
     steered = await steerCodexTurn(host, runningSince, input)
   }
   if (steered) {

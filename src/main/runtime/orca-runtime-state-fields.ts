@@ -46,6 +46,10 @@ import { RuntimeMachineName } from './runtime-machine-name'
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
 
+  protected readonly getAgentStatusSnapshotForPaneFn:
+    | ((paneKey: string) => AgentStatusIpcPayload[])
+    | null
+
   protected readonly machineName = new RuntimeMachineName(
     () => this.store?.getSettings?.().machineName
   )
@@ -64,6 +68,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       // terminal output. worktree.ps reads this at query time so mobile shows the
       // same inline agent rows the desktop sidebar does — same source, 1:1.
       getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+      getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
       /** Where structured (native chat) sessions publish into that same store, so the snapshot
        *  above lists them like every other agent. */
       structuredAgentStatusSink?: StructuredAgentSessionStatusSink
@@ -220,6 +225,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       this.stats = stats
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
+    this.getAgentStatusSnapshotForPaneFn = deps?.getAgentStatusSnapshotForPane ?? null
     this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
     this.readObservedAgentStatusPaneIdentityFn =
       deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))

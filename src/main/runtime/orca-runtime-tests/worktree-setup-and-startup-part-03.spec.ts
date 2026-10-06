@@ -6,6 +6,7 @@ import {
   createSetupRunnerScript,
   detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgentsMock,
+  electronMocks,
   ensurePathWithinWorkspaceMock,
   getDefaultTabsLaunch,
   getEffectiveHooks,
@@ -135,6 +136,8 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
 
+    runtime.markGraphReady(1)
+    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-active-split-setup')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-active-split-setup')
     vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: 'pnpm install' } })

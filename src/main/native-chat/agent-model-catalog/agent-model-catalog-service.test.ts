@@ -55,6 +55,7 @@ describe('agent model catalog service', () => {
     const service = createAgentModelCatalogService({
       store,
       getRecord: () => record('/homes/a'),
+      drivesRecord: () => true,
       resolveAccountHome: async () => CODEX_HOME('/homes/selected'),
       probes: { codex: probe }
     })
@@ -73,6 +74,26 @@ describe('agent model catalog service', () => {
     })
   })
 
+  it('probes as for no record when this build cannot start the record as it is pinned', async () => {
+    const store = new AgentModelCatalogStore()
+    const probe = vi.fn(async (_home: string) => listing('gpt-a'))
+    // A Codex record pinning Claude's variable: its path is not a Codex home to probe under.
+    const pinned = { ...record('/x'), accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/x' } }
+    const drivesRecord = vi.fn(() => false)
+    const service = createAgentModelCatalogService({
+      store,
+      getRecord: () => pinned,
+      drivesRecord,
+      resolveAccountHome: async () => CODEX_HOME('/homes/selected'),
+      probes: { codex: probe }
+    })
+
+    await service.read({ agent: 'codex', sessionId: 'session-1' })
+
+    expect(drivesRecord).toHaveBeenCalledWith(pinned)
+    expect(probe).toHaveBeenCalledExactlyOnceWith('/homes/selected')
+  })
+
   it('an account switch with no record reads and prewarms the NEW account, never the old entry', async () => {
     const store = new AgentModelCatalogStore()
     // The old account listed under its own fingerprint before the switch.
@@ -82,6 +103,7 @@ describe('agent model catalog service', () => {
     const service = createAgentModelCatalogService({
       store,
       getRecord: () => undefined,
+      drivesRecord: () => true,
       resolveAccountHome: async () => CODEX_HOME('/homes/new'),
       probes: { codex: probe }
     })
@@ -107,6 +129,7 @@ describe('agent model catalog service', () => {
     const service = createAgentModelCatalogService({
       store,
       getRecord: () => undefined,
+      drivesRecord: () => true,
       resolveAccountHome: async () => CODEX_HOME('/homes/selected')
     })
     const result = await service.read({ agent: 'codex' })
@@ -129,6 +152,7 @@ describe('agent model catalog service', () => {
     const service = createAgentModelCatalogService({
       store,
       getRecord: () => sessionRecord,
+      drivesRecord: () => true,
       resolveAccountHome: async () => CODEX_HOME('/homes/selected')
     })
     const result = await service.read({ agent: 'codex', sessionId: 'session-1' })
@@ -143,6 +167,7 @@ describe('agent model catalog service', () => {
     const service = createAgentModelCatalogService({
       store,
       getRecord: () => record('/homes/a'),
+      drivesRecord: () => true,
       resolveAccountHome: async () => CODEX_HOME('/homes/a'),
       probes: { codex: probe }
     })
@@ -164,6 +189,7 @@ describe('agent model catalog service', () => {
     const service = createAgentModelCatalogService({
       store,
       getRecord: () => undefined,
+      drivesRecord: () => true,
       resolveAccountHome: async () => {
         throw new Error('no store yet')
       },
@@ -189,6 +215,7 @@ describe('agent model catalog service', () => {
       const service = createAgentModelCatalogService({
         store,
         getRecord: () => undefined,
+        drivesRecord: () => true,
         resolveAccountHome: async () => CODEX_HOME('/homes/selected'),
         probes: { codex: probe }
       })
@@ -385,6 +412,7 @@ describe('agent model catalog service', () => {
       const service = createAgentModelCatalogService({
         store,
         getRecord: () => undefined,
+        drivesRecord: () => true,
         resolveAccountHome: async () => CODEX_HOME('/homes/selected')
       })
       expect(await service.read({ agent: 'codex', waitForListing: true })).toEqual({
@@ -401,6 +429,7 @@ describe('agent model catalog service', () => {
       const service = createAgentModelCatalogService({
         store,
         getRecord: () => undefined,
+        drivesRecord: () => true,
         resolveAccountHome: async () => CODEX_HOME('/homes/selected'),
         probes: { codex: probe }
       })
@@ -418,6 +447,7 @@ describe('agent model catalog service', () => {
       const service = createAgentModelCatalogService({
         store,
         getRecord: () => undefined,
+        drivesRecord: () => true,
         resolveAccountHome: async () => CODEX_HOME('/homes/selected'),
         workspaceMayOverrideDefaultModel
       })

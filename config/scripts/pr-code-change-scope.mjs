@@ -57,8 +57,26 @@ const GIT_COMPAT_PREFIXES = [
 
 // Why narrow: the contract pins Codex's read-repair, so it runs when the heal that
 // depends on it, its app-server transport, or the contract itself changes. The same
-// job pins --no-daemon for Orca's codex shell wrapper and the project-trust key.
+// job pins --no-daemon for Orca's codex shell wrapper, the project-trust key, and the
+// approval Orca writes for its hook entry in managed Codex homes.
 const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
+  'src/main/codex/codex-hook-file-entry-binary-contract',
+  'src/main/codex/codex-hook-trust-',
+  'src/main/codex/codex-hook-approval-first-write',
+  'src/main/codex/codex-hook-hash-lookup',
+  'src/main/codex/codex-hook-orca-approvals',
+  'src/main/codex/codex-hook-local-install',
+  'src/main/codex/codex-hook-user-mirroring',
+  'src/main/codex/codex-hook-definition',
+  'src/main/codex/codex-hook-command-form',
+  'src/main/codex/codex-hook-identity',
+  'src/main/codex/codex-app-server-client',
+  'src/main/codex/codex-trust-identity',
+  'src/main/codex/config-toml-hook-trust-',
+  'src/main/codex/config-toml-key-path',
+  'src/main/agent-hooks/posix-hook-command',
+  'src/main/agent-hooks/hook-post-command',
+  'src/main/codex-cli/codex-read-only-app-server-args',
   'src/main/agent-trust-presets',
   'src/main/codex/config-toml-trust',
   'src/main/pty/codex-no-daemon-binary-contract',
@@ -173,6 +191,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/structured-agent-session-send-mutation.ts',
   'src/shared/structured-agent-session-outbox.ts',
   'src/shared/agent-session-record',
+  'src/shared/agent-session-provider-handle',
   'src/shared/agent-session-journal-',
   'src/main/ai-vault/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',

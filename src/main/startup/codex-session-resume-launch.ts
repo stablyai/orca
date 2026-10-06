@@ -93,7 +93,9 @@ export async function prepareCodexSessionResumeForLaunch(args: {
       const isSystemHome =
         normalizeRuntimePathForComparison(resumeHome) ===
         normalizeRuntimePathForComparison(systemHomePath)
-      const hooksEnabled = isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
+      const isHooksEnabled = (): boolean =>
+        isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
+      const hooksEnabled = isHooksEnabled()
       try {
         if (isSystemHome) {
           await ensureRealHomeCodexHookState({
@@ -105,7 +107,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
           // and only the grant's own settle cannot race Codex's approval write.
           await awaitRealHomeCodexHookTrust()
         } else if (hooksEnabled) {
-          await codexHookService.installForLaunchPrep(resumeHome)
+          await codexHookService.installForLaunchPrep(resumeHome, true, isHooksEnabled)
         } else {
           await codexHookService.refreshRuntimeUserHooksForLaunchPrep(resumeHome)
         }

@@ -10,6 +10,7 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RenderRow } from '../listing/render-row'
+import { getHostPinnedGroupKey } from '../../host-pinned-sections'
 import { getWorktreeLineageGroupKey } from '../grouping/group-keys'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
@@ -87,7 +88,8 @@ export function expandGroupsForWorktreeReveal(
     return
   }
   const targetRepo = args.repoMap.get(targetWorktree.repoId)
-  const hostGroupKey = `host:${getWorktreeExecutionHostId(targetWorktree, targetRepo, args.defaultHostId)}`
+  const targetHostId = getWorktreeExecutionHostId(targetWorktree, targetRepo, args.defaultHostId)
+  const hostGroupKey = `host:${targetHostId}`
   if (args.collapsedGroups.has(hostGroupKey)) {
     args.toggleGroup(hostGroupKey)
   }
@@ -118,6 +120,12 @@ export function expandGroupsForWorktreeReveal(
     )
       ? getPinnedWorktreeRevealCollapsedGroupKeys({
           worktree: targetWorktree,
+          groupKey: args.renderRows.some(
+            (row) =>
+              row.type === 'host-header' || (row.type === 'header' && row.collapseKey !== undefined)
+          )
+            ? getHostPinnedGroupKey(targetHostId)
+            : undefined,
           collapsedGroups: args.collapsedGroups,
           inPinnedSection: true
         })

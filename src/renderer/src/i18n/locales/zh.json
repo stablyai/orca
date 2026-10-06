@@ -11,6 +11,9 @@
     "retrying": "正在重试..."
   },
   "settings": {
+    "chat": {
+      "description": "选择聊天的外观。"
+    },
     "terminal": {
       "optionLayoutAlt": "ABC 或 U.S. — Option 键发送 Alt/Esc 序列",
       "optionLayoutCompose": "此布局使用 Option 键输入 @、€、[、] 等字符",
@@ -68,7 +71,14 @@
         "full": "全宽",
         "pixels": "px",
         "reset": "重置",
-        "summary": "{{fontSize}}px · {{width}}宽度"
+        "matchTerminalInterface": "匹配终端外观",
+        "matchTerminalInterfaceDescription": "整个聊天使用与终端相同的字体和配色。更改终端主题后，聊天会自动同步。",
+        "contrast": "对比度",
+        "contrastDescription": "调整聊天文字相对于背景的亮度。滑到最右端可恢复以前更明亮的外观。",
+        "softer": "更柔和",
+        "sharper": "更清晰",
+        "terminalControlledHint": "由终端界面设置。",
+        "terminalControlledTooltip": "正在匹配终端外观。要更改此项，请关闭“匹配终端外观”。"
       }
     },
     "browser": {
@@ -7155,7 +7165,7 @@
             "shellEnvToggleLabel": "切换使用 shell 环境",
             "structuredTitle": "使用更新的结构化本机聊天",
             "structuredCopy": "将新的 Codex 和 Claude 智能体作为结构化聊天打开。关闭时会在基于终端的聊天中打开。已有的聊天保持不变。",
-            "structuredScope": "在本机和运行支持该功能版本的已配对 Orca 服务器上运行；较旧的服务器保留终端聊天。WSL 和 SSH 主机继续使用终端聊天，Windows 会回退到它，除非 Orca 可以读取进程启动时间。",
+            "structuredScope": "在本机和运行支持该功能版本的已配对 Orca 服务器上运行；较旧的服务器保留终端聊天。WSL 和 SSH 主机继续使用终端聊天。",
             "structuredToggleLabel": "切换更新的结构化本机聊天",
             "resumeTitle": "重启后自动恢复工作聊天",
             "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",
@@ -14347,18 +14357,11 @@
             "88ffb502e5": "打开 Markdown 笔记",
             "629528690b": "新的 Markdown 笔记",
             "3215fc73e9": "新终端",
-            "da508bd7f5": "保存",
-            "918c2139f3": "不保存",
-            "e7bf09d4d4": "取消",
-            "690b6fb98a": "未保存的更改",
             "bbc177f98f": "启用",
             "adc281394d": "关闭",
             "8cf80db43b": "设置 Orca CLI 和智能体技能，以便智能体可以通过 Orca 进行协调。",
             "2a3c5ddf5e": "启用编排",
-            "d6b563ae24": "正在加载编辑器...",
             "8b14ba6c17": "新浏览器选项卡",
-            "b085fb58b5": "该文件有未保存的更改。",
-            "5ddc688c52": "“{{value0}}”有未保存的更改。您想在关闭前保存吗？",
             "25d7817f79": "终端"
           },
           "FloatingTerminalToggleButton": {
@@ -17531,6 +17534,7 @@
   },
   "components": {
     "native-chat": {
+      "reasoning": "推理",
       "contextMenu": {
         "copyOrcaSessionId": "复制 Orca 会话 ID",
         "orcaSessionIdCopied": "已复制 Orca 会话 ID",
@@ -17553,6 +17557,7 @@
         "managedAccountEnvOverride": "此次 Claude 启动设置了自己的 Anthropic 登录变量。请移除这些变量以使用受管理的 Claude 账户。",
         "accountSwitchInProgress": "正在切换 Claude 账户。请在切换完成后重试。",
         "managedAccountUnsupported": "当 WSL 中添加了 Claude 账户时，Claude 聊天需要 Windows Claude 账户。",
+        "launchFolderMissing": "此聊天运行所在的文件夹已不存在。请恢复该文件夹以继续此聊天。",
         "chooseClaudeAccount": "请在 Claude 账户设置中选择或添加一个。",
         "chooseClaudeAccountThenRunCommand": "请在 Claude 账户设置中选择或添加一个，然后重新运行 /{{command}}。",
         "chooseClaudeAccountThenSend": "请在 Claude 账户设置中选择或添加一个，然后重新发送您的消息。",
@@ -17627,6 +17632,7 @@
         "updateOrcaToOpenChat": "请更新 Orca 以打开它。",
         "unsupported": "运行此聊天的计算机需要更新版本的 Orca。请在该计算机上更新 Orca 后重试。",
         "notAvailable": "此聊天中无法使用此功能。",
+        "cannotRunHere": "Orca 无法在此处以聊天方式运行此智能体。",
         "unreachable": "Orca 无法连接到智能体。",
         "recordFailed": "Orca 无法将此内容保存到聊天历史记录中。",
         "conversationCleared": "此对话已被清除。",
@@ -17710,7 +17716,7 @@
         "commands": "命令",
         "skills": "技能",
         "loadingSkills": "正在加载技能…",
-        "skillsUnavailableHost": "SSH 聊天中无法使用技能",
+        "skillsUnavailableHost": "SSH 聊天中无法列出技能",
         "skillsLoadFailed": "无法加载技能",
         "retrySkills": "重试",
         "skillCommandCollision": "也是技能名称 — 由智能体决定",
@@ -17728,7 +17734,8 @@
         "imagePreviewUnavailable": "预览不可用",
         "workspaceAttachmentMismatch": "文件只能附加到其源工作区。",
         "attachmentOwnerChanged": "此工作区在附加时更改了主机 - 再次删除文件。",
-        "attachmentUnreadable": "无法读取删除的文件。"
+        "attachmentUnreadable": "无法读取删除的文件。",
+        "tooManyAttachments": "每次最多附加 {{value0}} 个文件。"
       },
       "tool": {
         "running": "正在运行…",
@@ -17740,6 +17747,8 @@
         "moreCalls": "+{{value0}} 更多",
         "failedCount": "{{value0}} 失败",
         "failedCallsLabel": "失败的工具调用：{{value0}}",
+        "interruptedCount": "{{value0}} 已中断",
+        "interruptedCallsLabel": "已中断的工具调用：{{value0}}",
         "runningPreview": "正在运行 {{preview}}",
         "runningCommand": "运行命令",
         "runningNamedPreview": "运行 {{toolName}} {{preview}}",
@@ -17825,6 +17834,9 @@
       "status": {
         "responding": "智能体正在回复",
         "working": "处理中…",
+        "stopping": "正在停止…",
+        "queueAfterStop": "将消息加入队列，在停止后运行",
+        "sendAfterStop": "发送消息，在停止后运行",
         "thinking": "思维",
         "workingFor": "已工作 {{value0}}",
         "workedFor": "工作了 {{value0}}",
@@ -17867,6 +17879,10 @@
       "loadingEarlier": "正在加载…",
       "loadEarlier": "加载更早的消息",
       "loadingEarlierMessages": "正在加载更早的消息…",
+      "prompt": {
+        "collapse": "收起",
+        "expand": "展开"
+      },
       "question": {
         "step": "步骤 {{value0}}",
         "other": "其他…",
@@ -17955,13 +17971,19 @@
         "countTasksMany": "{{value0}} 任务",
         "headerTotal": "{{value0}} 后台任务",
         "stateWorking": "处理中",
+        "stateWorkingCount": "{{value0}} 处理中",
         "stateMonitoring": "监控",
+        "stateMonitoringCount": "{{value0}} 监控",
         "stateWaiting": "等待",
+        "stateWaitingCount": "{{value0}} 等待",
         "stateBlocked": "被阻止",
+        "stateBlockedCount": "{{value0}} 被阻止",
         "stateDone": "完毕",
+        "stateDoneCount": "{{value0}} 完毕",
         "stateIdle": "停止了",
-        "stateUnverifiable": "暂无近期更新",
-        "stateUnverifiableCount": "{{value0}} 暂无近期更新",
+        "stateIdleCount": "{{value0}} 停止了",
+        "stateUnverifiable": "状态不可用",
+        "stateUnverifiableCount": "{{value0}} 状态不可用",
         "reasonWaiting": "需要批准",
         "reasonBlocked": "失败的",
         "groupAgents": "智能体",
@@ -17986,12 +18008,12 @@
           "idle": "idle",
           "failed": "失败的",
           "stopped": "停止了",
-          "unverifiable": "暂无近期更新",
+          "unverifiable": "状态不可用",
           "workingCount": "{{value0}} 工作",
           "idleCount": "{{value0}} 空闲",
           "failedCount": "{{value0}} 失败",
           "stoppedCount": "{{value0}} 已停止",
-          "unverifiableCount": "{{value0}} 暂无近期更新"
+          "unverifiableCount": "{{value0}} 状态不可用"
         },
         "startedOne": "踢掉 1 个子智能体",
         "startedN": "启动 {{value0}} 子智能体",
@@ -18060,6 +18082,7 @@
         "turnOffQueueing": "关闭排队",
         "withdrawnHold": "在发送前已停止",
         "pausedSendFailed": "无法发送。点按发送以重试。",
+        "pausedKept": "尚未发送。点按发送即可发送。",
         "paused": "已暂停",
         "queuePausedStopped": "因你中断了操作，队列已暂停",
         "queuePausedRestarted": "因 Orca 重新启动，队列已暂停",
@@ -18067,6 +18090,8 @@
         "queuePaused": "队列已暂停",
         "resume": "继续"
       },
+      "thought": "已思考",
+      "thoughtForDuration": "思考了 {{duration}}",
       "structuredSessionHostDeclined": "已在终端中打开 {{value0}}",
       "structuredSessionHostDeclinedDescription": "此服务器无法在此工作区中运行 {{value0}} 聊天。",
       "structuredSessionHostUnreachable": "无法连接到 {{value0}}",

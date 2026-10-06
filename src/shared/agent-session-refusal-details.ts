@@ -51,6 +51,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'accountSwitchInProgress',
     /** A Claude account is added in WSL and no Windows one is selected, which a chat can't run under. */
     'managedAccountUnsupported',
+    /** A floating chat resumes only in the folder it ran in, and that folder is gone. */
+    'launchFolderMissing',
     /** The agent started, then Orca could not open the chat's conversation for it. */
     'attachFailed'
   ],

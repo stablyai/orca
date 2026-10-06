@@ -14,7 +14,7 @@ import { createJournalOpenReadRefusals } from '../agent-session-journal/journal-
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import { releaseLeaseOfEndedStructuredAgentSessionChild } from './structured-agent-session-child-close'
 import {
-  abandonQueuedStructuredAgentSessionMessages,
+  holdClosedStructuredAgentSessionSends,
   closeStructuredAgentSessionConversationUnderSerialize,
   stopStructuredAgentSessionAgentUnderSerialize,
   type StructuredAgentSessionCloseCause,
@@ -24,7 +24,6 @@ import {
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
-import { adapterSupportsRecord } from './structured-agent-session-provider-support'
 import { deferredStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type StructuredAgentSessionConversationLifetime = ReturnType<
@@ -132,11 +131,6 @@ export function createStructuredAgentSessionConversationLifetime(host: {
           reason: 'recordMissing'
         })
       }
-      if (!adapterSupportsRecord(deps().adapter, record)) {
-        throw agentSessionRefusalError('structured_agent_session_unsupported', {
-          reason: 'hostUnsupported'
-        })
-      }
       return serialize(sessionId, async () => {
         // Read at the open itself: a read queued before quit began runs after it.
         if (disposed) {
@@ -159,14 +153,14 @@ export function createStructuredAgentSessionConversationLifetime(host: {
       })
     },
     /** Ends a chat's resources, not the chat: its record and journal stay on disk, and what is
-     *  still queued will not be sent. */
+     *  still queued will not be sent; a person's message stays as a held card. */
     close: (sessionId: string, cause: StructuredAgentSessionCloseCause): Promise<void> =>
       serialize(sessionId, async () => {
         readRefusals.forget(sessionId)
         const session = sessions.get(sessionId)
         if (session) {
-          // Abandoned before the stop, so no start delivers it.
-          await abandonQueuedStructuredAgentSessionMessages(deps(), sessionId, session.journal)
+          // Settled before the stop, so no start delivers it.
+          await holdClosedStructuredAgentSessionSends(deps(), sessionId, session.journal)
         }
         await stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, { cause })
         await closeConversation(sessionId)

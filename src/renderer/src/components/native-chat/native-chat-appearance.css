@@ -7,3 +7,15 @@
 .native-chat-message-text {
   font-size: var(--chat-font-size, 14px);
 }
+
+.native-chat-appearance {
+  font-family: var(--chat-font-family, var(--font-sans));
+}
+
+.native-chat-appearance :is(.font-sans, textarea, [contenteditable='true']) {
+  font-family: inherit;
+}
+
+.native-chat-appearance :is(.font-mono, code, pre) {
+  font-family: var(--chat-code-font-family, var(--font-mono));
+}

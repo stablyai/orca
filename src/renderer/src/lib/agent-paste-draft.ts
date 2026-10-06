@@ -73,8 +73,7 @@ export function getSettingsForAgentTabRuntimeOwner(
  *   1. `\x1b[?2004h` (DECSET 2004 — bracketed-paste-enable) on the PTY
  *      output. This is the protocol-level "I accept bracketed paste"
  *      handshake.
- *   2. Either ≥`BRACKETED_PASTE_QUIET_MS` of silence after the last byte of
- *      the post-handshake render burst, or Codex's composer prompt glyph.
+ *   2. The agent's composer-ready signal, or its configured quiet window.
  */
 export async function pasteDraftWhenAgentReady(args: {
   tabId: string
@@ -121,9 +120,11 @@ export async function pasteDraftWhenAgentReady(args: {
     // this sidecar subscription attaches. If process/title inspection says the
     // launched agent owns the PTY, fall back to a best-effort paste instead of
     // silently dropping generated prompts.
-    const fallbackReady = agentConfig
-      ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
-      : { ready: false }
+    // A running Codex can still own a startup dialog or discard provisional input.
+    const fallbackReady =
+      agentConfig && agent !== 'codex'
+        ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
+        : { ready: false }
     if (!fallbackReady.ready) {
       onTimeout?.()
       return false
@@ -178,9 +179,10 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   const budget = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
   const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal, settings)
   if (!ready) {
-    const fallbackReady = agentConfig
-      ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000, settings)
-      : false
+    const fallbackReady =
+      agentConfig && agent !== 'codex'
+        ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000, settings)
+        : false
     if (!fallbackReady) {
       onTimeout?.()
       return false

@@ -1,10 +1,12 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import { nativeChatAttachmentOwnerUnchanged } from './native-chat-resolved-path-ownership'
 import {
   nativeChatAttachmentOwnerChangedNotice,
   nativeChatAttachmentUnreadableNotice,
   nativeChatLocalAttachmentUnsupportedNotice,
+  nativeChatTooManyAttachmentsNotice,
   nativeChatWorktreeNotReadyNotice,
   resolveNativeChatAttachmentOwner,
   resolveNativeChatAttachmentOwnerForWorktree,
@@ -82,6 +84,11 @@ export function useNativeChatExternalAttachments({
       }
       if (owner.kind === 'runtime') {
         setNotice(nativeChatLocalAttachmentUnsupportedNotice())
+        return
+      }
+      // The picker has no native cap, so it gets the same all-or-nothing limit as a drop.
+      if (paths.length > NATIVE_FILE_DROP_MAX_PATHS) {
+        setNotice(nativeChatTooManyAttachmentsNotice())
         return
       }
       // Why every exit reports: a drop that reaches here and produces nothing is

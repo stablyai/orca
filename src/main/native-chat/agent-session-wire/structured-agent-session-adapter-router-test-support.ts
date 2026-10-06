@@ -5,11 +5,37 @@ import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-
 import type { StructuredAgentDefinition } from './structured-agent-definition'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 
-/** A runtime that drives no agent: what a host over a bare adapter double declares. */
-export const NO_STRUCTURED_AGENTS = new StructuredAgentRegistry([])
-
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registry reads only the optional methods a declaration needs; this double has none, so its agents declare none.
 const NO_METHODS = {} as StructuredAgentSessionAdapter
+
+/** This build's agent as a host over a bare adapter double registers it: who it is (so its chats
+ *  start), and nothing it can do. */
+function declaringNothing(definition: StructuredAgentDefinition): StructuredAgentDefinition {
+  return {
+    ...definition,
+    capabilities: {
+      rewind: false,
+      compact: false,
+      threadGoal: false,
+      contextUsage: false,
+      imagePrompts: false,
+      steering: definition.capabilities.steering,
+      approvalEnforcement: definition.capabilities.approvalEnforcement
+    },
+    restingOptions: {
+      acceptsKey: () => false,
+      fallbackModels: () => null,
+      effortDefaultsToModel: false
+    }
+  }
+}
+
+/** Claude and Codex declaring no capability and no resting options: what a host over a bare
+ *  adapter double declares. */
+export const NO_STRUCTURED_AGENTS = new StructuredAgentRegistry([
+  { definition: declaringNothing(CLAUDE_STRUCTURED_AGENT), adapter: NO_METHODS },
+  { definition: declaringNothing(CODEX_STRUCTURED_AGENT), adapter: NO_METHODS }
+])
 
 /** This build's two agents over doubles. Each declares only what its double implements, so a
  *  double need not carry every method its real adapter has. */

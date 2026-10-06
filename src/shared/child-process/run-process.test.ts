@@ -16,6 +16,24 @@ describe('resolveSpawn', () => {
     }
   })
 
+  it('preserves IPC serialization while hiding the worker on every platform', () => {
+    for (const platform of ['win32', 'darwin', 'linux'] as const) {
+      for (const serialization of ['json', 'advanced'] as const) {
+        const resolved = resolveSpawn(
+          { program: process.execPath, stdio: ['pipe', 'pipe', 'pipe', 'ipc'], serialization },
+          platform
+        )
+        expect(resolved.options.serialization).toBe(serialization)
+        expect(resolved.options.stdio).toEqual(['pipe', 'pipe', 'pipe', 'ipc'])
+        expect(resolved.options.windowsHide).toBe(true)
+        expect(resolved.options.shell).toBe(false)
+      }
+    }
+    expect(
+      resolveSpawn({ program: process.execPath }, 'linux').options.serialization
+    ).toBeUndefined()
+  })
+
   it('spawns a non-cmd program directly, letting Node do the argv quoting', () => {
     // Node's own Windows quoting is already CommandLineToArgvW-correct for real
     // executables; re-implementing it here would add risk for no gain.

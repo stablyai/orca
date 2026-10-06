@@ -205,6 +205,7 @@ const FAILURE_SENTENCES = {
     joinSentences([say('historyTooLarge'), say('startNewChat')]),
   managedAccountEnvOverride: (_context, _fact, _surface, say) => say('managedAccountEnvOverride'),
   accountSwitchInProgress: (_context, _fact, _surface, say) => say('accountSwitchInProgress'),
+  launchFolderMissing: (_context, _fact, _surface, say) => say('launchFolderMissing'),
   managedAccountUnsupported: (context, _fact, _surface, say) =>
     joinSentences([
       say('managedAccountUnsupported'),

@@ -19,10 +19,9 @@ import type {
 } from '../../../shared/agent-session-resume-marker'
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
 import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { adapterSupportsRecord } from './structured-agent-session-provider-support'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
 import type {
+  StructuredAgentSessionRestartAudience,
   StructuredAgentSessionResumeCandidate,
   StructuredAgentSessionResumeFailure
 } from './structured-agent-session-restart-resume-set'
@@ -58,11 +57,13 @@ export type StructuredAgentSessionRestartFailureLedger = {
       failureReason: (sessionId: string) => string
     }
   ) => Promise<void>
-  /** Named sessions forget their offer or failure; unnamed, every record this host
-   *  lists goes (a newer Orca's stay). */
+  /** Named sessions forget their offer or failure; unnamed, every record this host lists goes (a
+   *  newer Orca's stay). With an audience, only records of agents it sees go, and an unnamed
+   *  dismissal is no fence. */
   dismiss: (
     sessionIds: readonly string[] | undefined,
-    beforeClearAll: () => void | Promise<void>
+    beforeClearAll: (audience?: StructuredAgentSessionRestartAudience) => void | Promise<void>,
+    audience?: StructuredAgentSessionRestartAudience
   ) => Promise<number>
 }
 
@@ -76,7 +77,6 @@ export function continuationFailureOutcome(
 export function createStructuredAgentSessionRestartFailureLedger(deps: {
   capsule?: FailureCapsule
   getRecord: (sessionId: string) => AgentSessionRecord | null
-  adapter: StructuredAgentSessionAdapter
   /** The predicate a retry applies to the failure's marker. */
   retryable: (marker: AgentSessionResumeMarker) => boolean
   /** Whether a newer Orca saved the chat: its failure is kept for that Orca but not shown here,
@@ -105,11 +105,7 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     failure: AgentSessionResumeFailureRecord
   ): StructuredAgentSessionResumeFailure[] => {
     const record = deps.getRecord(failure.marker.sessionId)
-    if (
-      !record ||
-      !adapterSupportsRecord(deps.adapter, record) ||
-      deps.savedByNewerOrca(failure.marker.sessionId)
-    ) {
+    if (!record || deps.savedByNewerOrca(failure.marker.sessionId)) {
       return []
     }
     const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)
@@ -228,8 +224,27 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     read,
     list,
     settle,
-    dismiss: (sessionIds, beforeClearAll) =>
+    dismiss: (sessionIds, beforeClearAll, audience) =>
       deps.enqueue(async () => {
+        if (audience) {
+          // Decided under the capsule lock. A record whose chat this host cannot read names no
+          // agent the audience was shown, so it stays.
+          // An unnamed dismissal keeps a newer Orca's records too: they were never listed here.
+          const hidden = (marker: AgentSessionResumeMarker) => {
+            const record = deps.getRecord(marker.sessionId)
+            return (
+              record === null ||
+              !audience(record.provider) ||
+              (sessionIds === undefined && deps.savedByNewerOrca(marker.sessionId))
+            )
+          }
+          if (sessionIds === undefined) {
+            await beforeClearAll(audience)
+          }
+          // No fence: no client reaches this today (the local desktop gets no audience), and a
+          // late write from this process is serialized behind the dismissal.
+          return (await deps.capsule?.dismiss(sessionIds ?? 'all', deps.now(), hidden)) ?? 0
+        }
         if (sessionIds !== undefined) {
           return (await deps.capsule?.dismiss(sessionIds, deps.now())) ?? 0
         }

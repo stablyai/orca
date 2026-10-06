@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { activeStructuredAgentSessionTurnId } from '../../../../shared/structured-agent-session-projection'
+import { runningStructuredAgentSessionTurnId } from '../../../../shared/structured-agent-session-live-turn'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../../shared/structured-agent-session-main-agent-working'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
@@ -19,7 +19,9 @@ export function useStructuredAgentSessionTransportState(
   const submissions = enabled ? state.submissions : NO_SUBMISSIONS
   const subagentRoster = (enabled ? state.subagentRoster : undefined) ?? NO_SUBAGENT_ROSTER
   const fence = enabled ? state.fence : null
-  const turnId = activeStructuredAgentSessionTurnId(journalItems)
+  const latestTurn = enabled ? state.latestTurn : undefined
+  // The host's whole-journal turn, never the loaded rows': a long turn's record is off the page.
+  const turnId = runningStructuredAgentSessionTurnId({ items: journalItems, latestTurn })
   // The rule the host projects every session list's Working from, so this chat cannot disagree.
   const isWorking = isStructuredAgentSessionMainAgentWorking(turnId, submissions, fence)
   const turnActivity = useMemo(
@@ -30,12 +32,14 @@ export function useStructuredAgentSessionTransportState(
     {
       items: journalItems,
       submissions,
+      latestTurn,
       ...(enabled ? { hostClock: state.hostClock } : {})
     },
     turnId
   )
   return {
     journalItems,
+    latestTurn,
     subagentRoster,
     submissions,
     fence,

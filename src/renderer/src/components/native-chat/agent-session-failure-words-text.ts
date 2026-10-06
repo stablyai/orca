@@ -78,6 +78,11 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.managedAccountUnsupported',
         COPY.managedAccountUnsupported
       ),
+    launchFolderMissing: () =>
+      translate(
+        'components.native-chat.failureWords.launchFolderMissing',
+        COPY.launchFolderMissing
+      ),
     chooseClaudeAccount: () =>
       translate(
         'components.native-chat.failureWords.chooseClaudeAccount',

@@ -59,13 +59,16 @@ export async function prepareCodexRuntimeHomeForLaunch(
     target?.runtime === 'wsl'
       ? { runtime: 'wsl' as const, wslDistro: target.wslDistro?.trim() || getDefaultWslDistro() }
       : target
-  const hooksEnabled = isAgentStatusHooksEnabledForAgent(state.store?.getSettings(), 'codex')
+  const isHooksEnabled = (): boolean =>
+    isAgentStatusHooksEnabledForAgent(state.store?.getSettings(), 'codex')
+  const hooksEnabled = isHooksEnabled()
   try {
     // Why: honor the persisted off switch so post-startup launches can't reinstall removed hooks.
     const status = await codexHookService.prepareRuntimeHomeForLaunch(
       runtimeHomePath,
       hookTarget,
-      hooksEnabled
+      isHooksEnabled,
+      launchContext?.launchesCodex === true
     )
     if (status.state === 'error') {
       console.warn(

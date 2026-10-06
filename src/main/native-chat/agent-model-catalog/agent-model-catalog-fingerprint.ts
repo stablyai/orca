@@ -4,8 +4,7 @@ import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
 } from './agent-model-catalog-store'
-import { agentConfigDirectoryVariable } from '../../../shared/agent-session-account-home'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { AgentSessionStoredAgent } from '../../../shared/agent-session-stored-agent'
 
 /**
  * Everything that changes which models a listing can answer with: the agent,
@@ -14,7 +13,7 @@ import type { AgentSessionHandleProvider } from '../../../shared/agent-session-p
  * key is corrected by the next refresh, never by the fingerprint.
  */
 export type AgentModelCatalogIdentity = {
-  agent: 'claude' | 'codex'
+  agent: string
   accountHomeVariable: string
   accountHomePath: string
   /** Null on the native host; WSL distros each carry their own CLI. */
@@ -57,7 +56,7 @@ export function agentModelCatalogFingerprintForRecord(
  *  Native only: both structured adapters refuse non-native locations at launch. */
 export function agentModelCatalogSessionAccess(
   store: AgentModelCatalogStore | undefined,
-  agent: AgentSessionHandleProvider,
+  agent: Pick<AgentSessionStoredAgent, 'agent' | 'accountHomeVariable'>,
   accountHomePath: string | null
 ): AgentModelCatalogSessionAccess | undefined {
   if (!store || !accountHomePath) {
@@ -66,8 +65,8 @@ export function agentModelCatalogSessionAccess(
   return {
     store,
     fingerprint: agentModelCatalogFingerprint({
-      agent,
-      accountHomeVariable: agentConfigDirectoryVariable(agent),
+      agent: agent.agent,
+      accountHomeVariable: agent.accountHomeVariable,
       accountHomePath,
       wslDistro: null
     }),

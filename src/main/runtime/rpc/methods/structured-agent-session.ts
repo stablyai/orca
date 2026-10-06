@@ -71,8 +71,8 @@ import { sendStructuredAgentSessionForClient } from './structured-agent-session-
 /**
  * The attach-shaped entries take the location from the client instead of resolving it from a
  * worktree, so they never reach the worktree-resolving create-support check. Ask the executing
- * host the same question directly: the answer includes host-measured facts the client cannot see
- * or forge, such as whether this machine can read a provider child's process start time.
+ * host the same question directly: only it knows which agents and locations it runs, and a client
+ * cannot forge that answer.
  */
 async function resolveClientSuppliedAttach(params: z.infer<typeof AttachParams>, ctx: RpcContext) {
   await ensureHostInstalled(ctx)
@@ -175,7 +175,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
             },
             envelope: params.envelope,
             worktree: params.worktree,
-            agent: params.agent as 'claude' | 'codex',
+            agent: params.agent,
             caller: callerFor(ctx),
             ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
             ...(params.tabId ? { tabId: params.tabId } : {})

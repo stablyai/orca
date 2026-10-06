@@ -1,6 +1,5 @@
 import type { Readable, Writable } from 'node:stream'
 import type { z } from 'zod'
-import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import {
   AcpAgentError,
   AcpAuthRequiredError,
@@ -14,12 +13,6 @@ import {
   type AcpPermissionHandler
 } from './acp-permission-requests'
 import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
-import {
-  cancelAcpPromptForStop,
-  requestAcpSteerCancel,
-  type AcpCancelChannel,
-  type ActivePrompt
-} from './acp-prompt-cancel'
 import {
   setupAcpSession,
   type AcpSessionStarted,
@@ -55,7 +48,6 @@ const withMeta = (meta: Meta): { _meta?: Meta } => (meta ? { _meta: meta } : {})
 export type AcpSessionRuntimeOptions = {
   clientInfo?: InitializeRequest['clientInfo']
   peer?: AcpPeerOptions
-  cancelTimeoutMs?: number
   onPermission?: AcpPermissionHandler
   /** Agent requests other than permissions. The handler owns its request: once `context.signal`
    *  aborts, send the agent's own cancelled reply, finish an answer already in progress, or throw
@@ -68,13 +60,14 @@ export type AcpSessionRuntimeOptions = {
   onClose?: (error: Error) => void
 }
 
+/** Stream-level protocol seam; production agents use createAcpAgentConnection. */
 export class AcpSessionRuntime {
   private readonly peer: AcpJsonRpcPeer
   private readonly listeners = new Set<(event: AcpSessionEvent) => void>()
   private initialized?: Promise<InitializeResponse>
   private starting?: Promise<AcpSessionStarted>
   private started?: AcpSessionStarted
-  private activePrompt?: ActivePrompt
+  private activePrompt?: Promise<PromptResponse>
   private reportedUpdateAnomaly = false
 
   constructor(
@@ -82,10 +75,6 @@ export class AcpSessionRuntime {
     output: Writable,
     private readonly options: AcpSessionRuntimeOptions = {}
   ) {
-    const timeout = options.cancelTimeoutMs
-    if (timeout !== undefined && (!Number.isSafeInteger(timeout) || timeout <= 0)) {
-      throw new Error('ACP timeouts must be positive finite timer durations')
-    }
     this.peer = new AcpJsonRpcPeer(
       input,
       output,
@@ -97,6 +86,10 @@ export class AcpSessionRuntime {
       },
       options.peer
     )
+  }
+
+  get closed(): boolean {
+    return this.peer.closed
   }
 
   subscribe(listener: (event: AcpSessionEvent) => void): () => void {
@@ -165,32 +158,27 @@ export class AcpSessionRuntime {
       throw new Error('ACP prompt already in progress')
     }
     const params: PromptRequest = { sessionId: this.sessionId(), prompt, ...withMeta(meta) }
-    const active: ActivePrompt = {
-      cancelling: false,
-      response: this.call('session/prompt', params, PromptResponseSchema)
-    }
-    this.activePrompt = active
-    active.response = active.response.finally(() => {
-      if (this.activePrompt === active) {
+    const response = this.call('session/prompt', params, PromptResponseSchema)
+    this.activePrompt = response
+    try {
+      return await response
+    } finally {
+      if (this.activePrompt === response) {
         this.activePrompt = undefined
       }
-    })
-    return active.response
+    }
   }
 
-  /** A Stop's cancel (`cancelAcpPromptForStop`): bounded, and past the bound it closes. A prompt
-   *  that settles in time leaves the agent running; the Stop's owner ends its process. */
+  /** Stop and steering share this notification; the adapter owns their completion policy. */
   cancel(options: { meta?: CancelNotification['_meta'] } = {}): Promise<void> {
-    const channel = this.cancelChannel(options.meta)
-    return channel
-      ? cancelAcpPromptForStop(this.activePrompt, channel)
-      : Promise.reject(new Error('ACP session has not started'))
-  }
-
-  /** A steer's cancel (`requestAcpSteerCancel`): never bounded and never closes. */
-  requestSteerCancel(options: { meta?: CancelNotification['_meta'] } = {}): Promise<void> {
-    const channel = this.cancelChannel(options.meta)
-    return channel ? requestAcpSteerCancel(this.activePrompt, channel) : Promise.resolve()
+    if (!this.started) {
+      return Promise.reject(new Error('ACP session has not started'))
+    }
+    const params: CancelNotification = {
+      sessionId: this.started.sessionId,
+      ...withMeta(options.meta)
+    }
+    return this.peer.notify('session/cancel', params)
   }
 
   async setMode(modeId: string, meta?: Meta): Promise<SetSessionModeResponse> {
@@ -229,24 +217,9 @@ export class AcpSessionRuntime {
     return this.call('session/set_config_option', request, SetSessionConfigOptionResponseSchema)
   }
 
-  // The process owner must call close on child exit, even if descendants keep stdio open.
   close(error?: Error): void {
     this.peer.close(error)
     this.listeners.clear()
-  }
-
-  private cancelChannel(meta: CancelNotification['_meta']): AcpCancelChannel | null {
-    if (!this.started) {
-      return null
-    }
-    const params: CancelNotification = { sessionId: this.started.sessionId, ...withMeta(meta) }
-    return {
-      send: () => this.peer.notify('session/cancel', params),
-      cancelIncomingRequests: () => this.peer.cancelIncomingRequests(),
-      close: (error) => this.peer.close(error),
-      closed: () => this.peer.closed,
-      timeoutMs: Math.min(this.options.cancelTimeoutMs ?? 10_000, MAX_TIMER_DELAY_MS)
-    }
   }
 
   private sessionId(): string {
@@ -287,7 +260,7 @@ export class AcpSessionRuntime {
       throw new AcpRpcError(-32602, 'Invalid ACP permission request')
     }
     // Whether a turn the agent began itself may ask is the caller's call; the runtime cannot see it.
-    if (this.activePrompt?.cancelling || request.sessionId !== this.started?.sessionId) {
+    if (request.sessionId !== this.started?.sessionId) {
       return { outcome: { outcome: 'cancelled' } }
     }
     return answerAcpPermission(request, context, this.options.onPermission, diagnose)

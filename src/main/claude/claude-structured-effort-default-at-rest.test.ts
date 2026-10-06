@@ -144,6 +144,7 @@ function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
   const modelCatalog = createAgentModelCatalogService({
     store,
     getRecord: () => record,
+    drivesRecord: () => true,
     resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: ACCOUNT_HOME })
   })
   const resting = {

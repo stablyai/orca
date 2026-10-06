@@ -60,7 +60,6 @@ src/session/session-reply-schema.test.ts
 src/session/use-mobile-diff-review-send-actions.test.ts
 src/session/use-mobile-file-tap-handlers.test.ts
 src/session/use-mobile-native-chat-image-attachments.test.ts
-src/session/use-mobile-native-chat-turn-disclosure.test.tsx
 src/session/use-mobile-pr-branch-context.test.ts
 src/session/use-mobile-pr-sidebar-controller.test.ts
 src/session/use-mobile-session-terminal-create-actions.test.ts

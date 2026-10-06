@@ -11,7 +11,12 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-vi.mock('lucide-react-native', () => ({ ShieldQuestion: 'ShieldQuestion', X: 'X' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'ChevronDown',
+  ChevronUp: 'ChevronUp',
+  ShieldQuestion: 'ShieldQuestion',
+  X: 'X'
+}))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
 describe('MobileNativeChatPermission', () => {

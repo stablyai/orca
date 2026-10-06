@@ -146,6 +146,19 @@ function mkdtempLike(prefix: string): string {
 }
 
 describe('Linear client workspace storage', () => {
+  it('requests temporary file URLs using only the selected workspace credential', async () => {
+    const linear = await loadClientModule()
+    await linear.connect('token-alpha')
+    await linear.connect('token-beta')
+    const entry = linear.getClients('org-alpha')[0]
+    linear.getPublicFileUrlClient(entry)
+    expect(linearClientMock).toHaveBeenLastCalledWith({
+      apiKey: 'token-alpha',
+      headers: {
+        'public-file-urls-expire-in': String(linear.LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
+      }
+    })
+  })
   it('stores multiple workspaces and remembers the selected workspace', async () => {
     const linear = await loadClientModule()
 

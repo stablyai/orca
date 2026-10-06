@@ -11,7 +11,8 @@ import {
   AcpRequestTimeoutError
 } from './acp-errors'
 import { AcpIncomingRequests } from './acp-incoming-requests'
-import { bounded, requestTimeout } from './acp-peer-limits'
+import { requestTimeout, resolveAcpPeerOptions, type AcpPeerOptions } from './acp-peer-limits'
+export type { AcpPeerOptions } from './acp-peer-limits'
 import { settleOversizedAcpLine } from './acp-oversized-lines'
 import { AcpWriteQueue } from './acp-write-queue'
 import { detachAcpStreamErrorHandler } from './acp-stdio-error-boundary'
@@ -40,14 +41,6 @@ export type AcpPeerHandlers = {
   onDiagnostic?: (message: string) => void
   onClose?: (error: Error) => void
 }
-export type AcpPeerOptions = {
-  maxLineBytes?: number
-  maxQueuedWriteBytes?: number
-  maxPendingRequests?: number
-  maxIncomingRequests?: number
-  // Caller-selected outgoing deadlines only; omitted or null means unlimited.
-  requestTimeoutMs?: number | null
-}
 type Pending = {
   method: string
   resolve: (value: unknown) => void
@@ -66,6 +59,7 @@ export class AcpJsonRpcPeer {
   private readonly maxPending: number
   private readonly maxIncoming: number
   private readonly timeoutMs: number | null
+  private readonly closeOnInputEnd: boolean
 
   constructor(
     private readonly input: Readable,
@@ -73,14 +67,14 @@ export class AcpJsonRpcPeer {
     private readonly handlers: AcpPeerHandlers = {},
     options: AcpPeerOptions = {}
   ) {
-    this.maxLineBytes = bounded(options.maxLineBytes, 16 * 1024 * 1024)
-    this.maxPending = bounded(options.maxPendingRequests, 128)
-    this.maxIncoming = bounded(options.maxIncomingRequests, 128)
-    this.timeoutMs = requestTimeout(options.requestTimeoutMs)
-    this.writer = new AcpWriteQueue(
-      output,
-      bounded(options.maxQueuedWriteBytes, 32 * 1024 * 1024),
-      (error) => this.close(error)
+    const limits = resolveAcpPeerOptions(options)
+    this.maxLineBytes = limits.maxLineBytes
+    this.maxPending = limits.maxPendingRequests
+    this.maxIncoming = limits.maxIncomingRequests
+    this.timeoutMs = limits.requestTimeoutMs
+    this.closeOnInputEnd = limits.closeOnInputEnd
+    this.writer = new AcpWriteQueue(output, limits.maxQueuedWriteBytes, (error) =>
+      this.close(error)
     )
     this.incoming = new AcpIncomingRequests(
       handlers.onRequest,
@@ -104,13 +98,17 @@ export class AcpJsonRpcPeer {
     )
     input.setEncoding('utf8')
     input.on('data', this.onData)
-    input.on('end', this.onEnd)
-    input.on('close', this.onEnd)
+    input.on('end', this.onInputEnd)
+    input.on('close', this.onInputEnd)
     input.on('error', this.onError)
     output.on('close', this.onEnd)
     output.on('finish', this.onEnd)
     output.on('error', this.onError)
-    if (input.destroyed || input.readableEnded || output.destroyed || !output.writable) {
+    if (
+      (this.closeOnInputEnd && (input.destroyed || input.readableEnded)) ||
+      output.destroyed ||
+      !output.writable
+    ) {
       this.onEnd()
     }
   }
@@ -178,8 +176,8 @@ export class AcpJsonRpcPeer {
     }
     this.terminalError = error
     this.input.removeListener('data', this.onData)
-    this.input.removeListener('end', this.onEnd)
-    this.input.removeListener('close', this.onEnd)
+    this.input.removeListener('end', this.onInputEnd)
+    this.input.removeListener('close', this.onInputEnd)
     detachAcpStreamErrorHandler(this.input, this.onError)
     this.output.removeListener('close', this.onEnd)
     this.output.removeListener('finish', this.onEnd)
@@ -207,6 +205,11 @@ export class AcpJsonRpcPeer {
     }
   }
   private readonly onEnd = (): void => this.close()
+  private readonly onInputEnd = (): void => {
+    if (this.closeOnInputEnd) {
+      this.close()
+    }
+  }
   private readonly onError = (error: Error): void => this.close(error)
   private diagnose(message: string): void {
     try {
