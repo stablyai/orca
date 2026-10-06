@@ -28,6 +28,9 @@ import {
   type WslCanonicalPathSettlement
 } from './codex-wsl-hook-install-plan'
 import type { CodexTrustEntry } from './config-toml-trust'
+import { withdrawWslGuestCodexHooksForOptOut } from './codex-wsl-guest-hook-opt-out'
+
+export type CodexRuntimeHomeOwner = 'profile' | 'shared'
 
 /** Lane-scoped so the hooks-on install never joins the hooks-off refresh. */
 function launchPrepKey(lane: 'install' | 'refresh', runtimeHomePath: string): string {
@@ -42,6 +45,13 @@ export class CodexHookService {
   private readonly wslReconciliationGeneration = new Map<string, number>()
   private readonly wslInstallsInFlight = new Map<string, Promise<AgentHookInstallStatus | null>>()
   private readonly launchPrepInFlight = new Map<string, Promise<AgentHookInstallStatus>>()
+  private wslGuestOptOut: Promise<void> | null = null
+
+  private supersedeAllWslReconciliations(): void {
+    for (const [key, generation] of this.wslReconciliationGeneration) {
+      this.wslReconciliationGeneration.set(key, generation + 1)
+    }
+  }
 
   private supersedeWslReconciliation(runtimeHomePath: string | null | undefined): number {
     if (!runtimeHomePath) {
@@ -153,11 +163,17 @@ export class CodexHookService {
     )
   }
 
+  /**
+   * `homeOwner` is 'shared' for a home other Orcas and Codex outside Orca also
+   * read (a WSL guest's own ~/.codex); with hooks off that home keeps their
+   * entry, and only the explicit opt-out (`remove`) withdraws it.
+   */
   async prepareRuntimeHomeForLaunch(
     runtimeHomePath: string | null | undefined,
     target: CodexWslRuntimeHookTarget | undefined,
-    hooksEnabled: boolean
-  ): Promise<AgentHookInstallStatus> {
+    hooksEnabled: boolean,
+    homeOwner: CodexRuntimeHomeOwner
+  ): Promise<AgentHookInstallStatus | null> {
     if (hooksEnabled) {
       // Why: a managed account's launch home is its self-contained CODEX_HOME,
       // so hooks/trust must install there rather than the shared mirror.
@@ -165,6 +181,11 @@ export class CodexHookService {
         (await this.installForRuntimeHomeSerialized(runtimeHomePath, target)) ??
         (await this.installForLaunchPrep(runtimeHomePath ?? undefined))
       )
+    }
+    if (homeOwner === 'shared') {
+      // Why: a pending hooks-on reconciliation must not reinstall after this profile turned hooks off.
+      this.supersedeWslReconciliation(runtimeHomePath)
+      return null
     }
     return (
       this.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, target) ??
@@ -261,10 +282,35 @@ export class CodexHookService {
     )
   }
 
-  remove(): Promise<AgentHookInstallStatus> {
-    return runExclusivelyForRuntimeAndSystemTrustConfig(getOrcaManagedCodexHomePath(), () =>
-      this.removeExclusively()
+  async remove(): Promise<AgentHookInstallStatus> {
+    // Why: a canonical-path settle still pending from a hooks-on launch would reinstall after the withdrawal.
+    this.supersedeAllWslReconciliations()
+    const status = await runExclusivelyForRuntimeAndSystemTrustConfig(
+      getOrcaManagedCodexHomePath(),
+      () => this.removeExclusively()
     )
+    // Why not awaited: a wedged WSL must not hold the Settings toggle; failures only warn.
+    this.startWslGuestOptOut()
+    return status
+  }
+
+  /** Settles once every WSL guest opt-out started so far has finished; never rejects. */
+  whenWslGuestOptOutSettled(): Promise<void> {
+    return this.wslGuestOptOut ?? Promise.resolve()
+  }
+
+  private startWslGuestOptOut(): void {
+    const run = this.whenWslGuestOptOutSettled()
+      .then(() => withdrawWslGuestCodexHooksForOptOut())
+      .catch((error: unknown) => {
+        console.warn('[codex-hook-service] failed to remove WSL Codex hooks:', error)
+      })
+      .finally(() => {
+        if (this.wslGuestOptOut === run) {
+          this.wslGuestOptOut = null
+        }
+      })
+    this.wslGuestOptOut = run
   }
 
   private removeExclusively(): Promise<AgentHookInstallStatus> {

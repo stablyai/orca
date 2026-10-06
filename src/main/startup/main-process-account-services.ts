@@ -30,6 +30,8 @@ import {
   setRealHomeCodexHooksEnabledReader
 } from '../codex/codex-real-home-hook-install'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
+import { setWslGuestCodexHookOptOutSources } from '../codex/codex-wsl-guest-hook-opt-out'
+import { getWslHomeAsync, listRunningWslDistrosAsync } from '../wsl'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
 import { mainProcessState as state } from './main-process-state'
@@ -54,6 +56,17 @@ export function initializeMainProcessAccountServices(): void {
   setRealHomeCodexHooksEnabledReader(() =>
     isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
   )
+  setWslGuestCodexHookOptOutSources({
+    listRunningGuests: async () =>
+      Promise.all(
+        // Why confirmed: a stale list could name a stopped distro, and touching its files boots it.
+        (await listRunningWslDistrosAsync({ requireConfirmed: true })).map(async (distro) => ({
+          distro,
+          guestHome: await getWslHomeAsync(distro)
+        }))
+      ),
+    isCodexHooksEnabled: () => isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
+  })
   state.codexSessionMigration = createCodexSessionMigrationScheduler({
     isEligible: () =>
       state.codexRuntimeHome?.isHostSystemDefaultSessionMigrationEligible() === true,

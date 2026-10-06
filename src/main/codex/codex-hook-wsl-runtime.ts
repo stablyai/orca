@@ -175,10 +175,15 @@ export function refreshWslRuntimeUserHooks(
     }
   }
   writeCodexHooksJson(plan.configPath, nextHooks)
+  // Why: read before the scoped removal deletes it; it is the only proof that a
+  // Codex-computed hash under another path (e.g. the canonical one) is Orca's.
+  const ledgerHome = readCodexTrustGrantLedgerHomeForReconciliation(
+    pathWin32.dirname(plan.tomlPath)
+  )
   removeWslRuntimeManagedHookTrustEntries(plan)
   try {
     // Why: the disabled path may run after the WSL mount root changed, so cleanup can't be scoped to the plan's current source path.
-    removeStaleWslRuntimeManagedHookTrustEntries(plan.tomlPath, [])
+    removeStaleWslRuntimeManagedHookTrustEntries(plan.tomlPath, [], ledgerHome ? [ledgerHome] : [])
   } catch (error) {
     console.warn('[codex-hook-service] failed to clean stale WSL trust entries', error)
   }

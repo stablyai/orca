@@ -1,5 +1,4 @@
-import { posix as pathPosix } from 'node:path'
-import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath, toLinuxPath } from '../../shared/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
 import {
@@ -8,6 +7,7 @@ import {
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
+import { resolveWslGuestCodexHomePath } from '../codex/codex-wsl-guest-home'
 import {
   getWslSelectionKey,
   normalizeCodexRuntimeSelection,
@@ -225,13 +225,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       return null
     }
     const home = getWslHome(distro)
-    if (home && /^[A-Za-z]:[\\/]/.test(home)) {
-      const linuxHome = toLinuxPath(home).trim()
-      return linuxHome.startsWith('/')
-        ? toWindowsWslUncPath(pathPosix.join(linuxHome, '.codex'), distro)
-        : null
-    }
-    return home ? this.joinWslPath(home, '.codex') : null
+    return home ? resolveWslGuestCodexHomePath(home, distro) : null
   }
 
   protected finishWslLaunchPreparation(
