@@ -69,6 +69,19 @@ export function useAddRepoCloneFlow({
     return window.api.repos.onCloneProgress(setCloneProgress)
   }, [isCloning])
 
+  // Why: mirrors isCloning into the store so a lazy-mounted host (e.g. the
+  // Add Project dialog's unmount timer) can tell a clone is still running
+  // even after this dialog has been dismissed, instead of tearing the
+  // in-flight clone's state down with the dialog.
+  useEffect(() => {
+    useAppStore.getState().setAddRepoCloneInFlight(isCloning)
+    return () => {
+      if (isCloning) {
+        useAppStore.getState().setAddRepoCloneInFlight(false)
+      }
+    }
+  }, [isCloning])
+
   const cloneDestinationAutoFill = getCloneDestinationAutoFill({
     step,
     cloneDestination,
@@ -179,6 +192,12 @@ export function useAddRepoCloneFlow({
       }
       const message = extractIpcErrorMessage(err, String(err))
       setCloneError(message)
+      // Why: the dialog may already be closed (clone kept running in the
+      // background), so the inline error text alone would never reach the user.
+      toast.error(
+        translate('auto.components.sidebar.useAddRepoCloneFlow.cloneFailed', 'Clone failed'),
+        { description: message }
+      )
     } finally {
       if (gen === cloneGenRef.current && requestHostToken === hostTokenRef.current) {
         setIsCloning(false)

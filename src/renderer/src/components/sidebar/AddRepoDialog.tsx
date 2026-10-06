@@ -208,21 +208,25 @@ export default React.memo(function AddRepoDialog({
   })
 
   const resetState = useCallback(() => {
-    // Why: kill the git clone process if one is running, so backing out
-    // or closing the dialog doesn't leave a clone running on disk.
-    void window.api.repos.cloneAbort()
+    // Why: closing/backing out of the dialog must not kill a clone that's
+    // already running — only an explicit Cancel (handleCancelClone) should.
+    // Leaving isCloning/cloneProgress untouched lets it finish in the
+    // background and lets reopening the dialog show it still in progress.
+    if (!isCloning) {
+      resetCloneFlow()
+    }
     resetLocalFolderFlow()
     setStep('add')
     setIsAdding(false)
     setAddProjectBusyLabel(null)
     resetServerPathFlow()
-    resetCloneFlow()
     resetNestedImportFlow()
     resetNestedRepoReviewState()
     resetCreateDefaultState()
     resetCreateState()
     resetRemoteState()
   }, [
+    isCloning,
     resetCloneFlow,
     resetLocalFolderFlow,
     resetNestedRepoReviewState,
@@ -238,11 +242,14 @@ export default React.memo(function AddRepoDialog({
     setAddProjectBusyLabel(null)
     resetLocalFolderFlow()
     resetServerPathFlow()
-    resetCloneFlow()
+    if (!isCloning) {
+      resetCloneFlow()
+    }
     resetCreateDefaultState()
     resetCreateState()
     resetRemoteState()
   }, [
+    isCloning,
     resetCloneFlow,
     resetCreateDefaultState,
     resetCreateState,
@@ -250,6 +257,11 @@ export default React.memo(function AddRepoDialog({
     resetLocalFolderFlow,
     resetServerPathFlow
   ])
+
+  const handleCancelClone = useCallback(() => {
+    void window.api.repos.cloneAbort()
+    resetCloneFlow()
+  }, [resetCloneFlow])
 
   useAddRepoHostChangeReset({
     isOpen,
@@ -380,6 +392,7 @@ export default React.memo(function AddRepoDialog({
         }}
         onPickCloneDestination={handlePickDestination}
         onClone={handleClone}
+        onCancelClone={handleCancelClone}
         onNestedGroupNameChange={setNestedGroupName}
         onNestedSelectedPathsChange={setNestedSelectedPaths}
         onImportNestedRepos={(mode) => void handleImportNestedRepos(mode)}

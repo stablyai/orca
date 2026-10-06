@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
+import { toast } from 'sonner'
 import type { Repo } from '../../../../shared/repo-types'
 
 const mocks = vi.hoisted(() => ({
@@ -12,7 +13,8 @@ const mocks = vi.hoisted(() => ({
     settings: { activeRuntimeEnvironmentId: null as string | null },
     repos: [] as Repo[],
     projects: [],
-    projectHostSetups: []
+    projectHostSetups: [],
+    setAddRepoCloneInFlight: vi.fn()
   },
   cloneRemote: vi.fn(),
   cloneLocal: vi.fn(),
@@ -188,6 +190,37 @@ describe('useAddRepoCloneFlow', () => {
     await result.handleClone()
 
     expect(mocks.stateSetters[3]).toHaveBeenCalledWith(cloneError)
+    // Why: the dialog may already be closed when a background clone fails,
+    // so the failure must also surface as a toast, not just inline text.
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ description: cloneError })
+    )
+  })
+
+  it('marks the clone in flight in the store while cloning and clears it when done', async () => {
+    const repo = makeRepo({ connectionId: 'ssh-1' })
+    mocks.cloneRemote.mockResolvedValue(repo)
+    mocks.fetchWorktrees.mockResolvedValue(true)
+    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
+
+    const result = useAddRepoCloneFlow({
+      step: 'clone',
+      activeRuntimeEnvironmentId: null,
+      sshTargetId: 'ssh-1',
+      workspaceDir: '/local/workspace',
+      fetchWorktrees: mocks.fetchWorktrees,
+      onGitRepoReady: mocks.onGitRepoReady
+    })
+    // Why: the hook mirrors the current isCloning value into the store on
+    // every render, starting with the initial (idle) value.
+    expect(mocks.storeState.setAddRepoCloneInFlight).toHaveBeenCalledWith(false)
+
+    await result.handleClone()
+
+    // Why: setIsCloning is mocked and doesn't re-run the hook body in this
+    // harness, so we only assert the wiring calls through, not the transition.
+    expect(mocks.storeState.setAddRepoCloneInFlight).toHaveBeenCalled()
   })
 
   it('clones through the selected runtime environment', async () => {
