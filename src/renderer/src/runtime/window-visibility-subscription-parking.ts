@@ -14,6 +14,7 @@ const WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_JITTER_MS = 250
 
 export type WindowVisibilitySubscriptionContext = {
   visibilityGeneration: number
+  requestRetry: () => void
 }
 
 export type WindowVisibilitySubscriptionSpec = {
@@ -128,7 +129,16 @@ export function installWindowVisibilitySubscriptionParking(
     let subscription: Promise<{ unsubscribe: () => void }>
     try {
       subscription = spec.subscribe(isCurrent, {
-        visibilityGeneration: entry.visibilityGeneration
+        visibilityGeneration: entry.visibilityGeneration,
+        requestRetry: () => {
+          if (!isCurrent()) {
+            return
+          }
+          // Fence callbacks before unsubscribe, which can synchronously report another close.
+          entry.generation += 1
+          unsubscribeEntry(entry, spec)
+          scheduleRetry(entry, spec)
+        }
       })
     } catch (error) {
       if (isCurrent()) {
