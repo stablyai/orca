@@ -71,25 +71,32 @@ export function AddProjectModal({
   }, [onProjectAdded])
 
   return (
-    <BottomDrawer visible={visible} onClose={onClose} onAfterClose={fireHandoff}>
-      <AddProjectModalContent
-        key={session.openEpoch}
-        client={client}
-        onAdded={(repo) => {
-          handoffRef.current = repo
-          onClose()
-        }}
-      />
-    </BottomDrawer>
+    <AddProjectModalContent
+      key={session.openEpoch}
+      visible={visible}
+      client={client}
+      onClose={onClose}
+      onAfterClose={fireHandoff}
+      onAdded={(repo) => {
+        handoffRef.current = repo
+        onClose()
+      }}
+    />
   )
 }
 
 function AddProjectModalContent({
+  visible,
   client,
-  onAdded
+  onAdded,
+  onClose,
+  onAfterClose
 }: {
+  visible: boolean
   client: RpcClient | null
   onAdded: (repo: MobileWorkspaceRepo) => void
+  onClose: () => void
+  onAfterClose: () => void
 }) {
   const [view, setView] = useState<AddProjectView>('start')
   const [cloneUrl, setCloneUrl] = useState('')
@@ -175,137 +182,150 @@ function AddProjectModalContent({
     [busy, client, onAdded]
   )
 
-  if (view === 'start') {
-    return (
-      // No onClose: picking a row switches this sheet's content in place; closing is the
-      // drawer's own drag or the area outside it.
-      <ActionSheetContent
-        title="Add project"
-        actions={[
-          {
-            label: 'Browse folder',
-            icon: FolderOpen,
-            hint: 'Existing Git repository or folder on this host',
-            onPress: () => setView('addExisting')
-          },
-          {
-            label: 'Clone from URL',
-            icon: Globe,
-            hint: 'Clone a remote Git repository',
-            onPress: () => setView('clone')
-          },
-          {
-            label: 'Create new project',
-            icon: Plus,
-            hint: 'Start from an empty folder',
-            onPress: () => setView('create')
-          }
-        ]}
-      />
-    )
-  }
-
-  if (view === 'addExisting') {
-    return (
-      <AddProjectFolderBrowser
-        client={client}
-        busy={busy}
-        error={error}
-        onBack={() => setView('start')}
-        onPick={(path) => void addFolder(path, 'git')}
-      />
-    )
-  }
-
-  if (view === 'confirmFolder') {
-    return (
-      <ConfirmContent
-        title="Add as a folder project?"
-        message={`${folderCandidate} is not a Git repository. Folder projects have no worktrees, source control, pull requests, or checks.`}
-        confirmLabel="Add folder"
-        onConfirm={() => {
-          // Why: ConfirmContent also fires onCancel on confirm; hold this sheet until the add
-          // settles so a success does not flash the browser first and a refusal still has a
-          // place to land. addFolder's own catch is what leaves this view.
-          confirmingFolderRef.current = true
-          void addFolder(folderCandidate, 'folder')
-        }}
-        onCancel={() => {
-          if (!confirmingFolderRef.current) {
-            setView('addExisting')
-          }
-          confirmingFolderRef.current = false
-        }}
-      />
-    )
-  }
-
-  const copy = {
-    clone: {
-      title: 'Clone from URL',
-      label: 'Repository URL',
-      placeholder: 'https://github.com/owner/repo',
-      hint: "Cloned into the host's default projects folder. Large repositories can take a few minutes.",
-      button: 'Clone repository'
-    },
-    create: {
-      title: 'Create new project',
-      label: 'Project name',
-      placeholder: 'my-project',
-      hint: "An empty git repository with an initial commit, created in the host's default projects folder.",
-      button: 'Create project'
+  const content = (() => {
+    if (view === 'start') {
+      return (
+        // No onClose: picking a row switches this sheet's content in place; closing is the
+        // drawer's own drag or the area outside it.
+        <ActionSheetContent
+          title="Add project"
+          actions={[
+            {
+              label: 'Browse folder',
+              icon: FolderOpen,
+              hint: 'Existing Git repository or folder on this host',
+              onPress: () => setView('addExisting')
+            },
+            {
+              label: 'Clone from URL',
+              icon: Globe,
+              hint: 'Clone a remote Git repository',
+              onPress: () => setView('clone')
+            },
+            {
+              label: 'Create new project',
+              icon: Plus,
+              hint: 'Start from an empty folder',
+              onPress: () => setView('create')
+            }
+          ]}
+        />
+      )
     }
-  }[view]
+
+    if (view === 'addExisting') {
+      return (
+        <AddProjectFolderBrowser
+          client={client}
+          busy={busy}
+          error={error}
+          onBack={() => setView('start')}
+          onPick={(path) => void addFolder(path, 'git')}
+        />
+      )
+    }
+
+    if (view === 'confirmFolder') {
+      return (
+        <ConfirmContent
+          title="Add as a folder project?"
+          message={`${folderCandidate} is not a Git repository. Folder projects have no worktrees, source control, pull requests, or checks.`}
+          confirmLabel="Add folder"
+          onConfirm={() => {
+            // Why: ConfirmContent also fires onCancel on confirm; hold this sheet until the add
+            // settles so a success does not flash the browser first and a refusal still has a
+            // place to land. addFolder's own catch is what leaves this view.
+            confirmingFolderRef.current = true
+            void addFolder(folderCandidate, 'folder')
+          }}
+          onCancel={() => {
+            if (!confirmingFolderRef.current) {
+              setView('addExisting')
+            }
+            confirmingFolderRef.current = false
+          }}
+        />
+      )
+    }
+
+    const copy = {
+      clone: {
+        title: 'Clone from URL',
+        label: 'Repository URL',
+        placeholder: 'https://github.com/owner/repo',
+        hint: "Cloned into the host's default projects folder. Large repositories can take a few minutes.",
+        button: 'Clone repository'
+      },
+      create: {
+        title: 'Create new project',
+        label: 'Project name',
+        placeholder: 'my-project',
+        hint: "An empty git repository with an initial commit, created in the host's default projects folder.",
+        button: 'Create project'
+      }
+    }[view]
+
+    return (
+      <View>
+        <View style={styles.headerRow}>
+          <Pressable
+            style={styles.backButton}
+            onPress={() => setView('start')}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Back to Add project"
+          >
+            <ChevronLeft size={18} color={colors.textSecondary} />
+          </Pressable>
+          <Text style={formStyles.title}>{copy.title}</Text>
+        </View>
+
+        <View style={formStyles.field}>
+          <Text style={formStyles.label}>{copy.label}</Text>
+          <TextInput
+            style={formStyles.input}
+            value={value}
+            onChangeText={view === 'clone' ? setCloneUrl : setProjectName}
+            placeholder={copy.placeholder}
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType={view === 'clone' ? 'url' : 'default'}
+            editable={!busy}
+            accessibilityLabel={copy.label}
+          />
+          <Text style={styles.hint}>{copy.hint}</Text>
+        </View>
+
+        {error ? <Text style={formStyles.error}>{error}</Text> : null}
+        <View style={formStyles.actions}>
+          <Pressable
+            style={[formStyles.createButton, !canSubmit && formStyles.createButtonDisabled]}
+            disabled={!canSubmit}
+            onPress={submit}
+            accessibilityRole="button"
+            accessibilityLabel={copy.button}
+          >
+            {busy ? (
+              <ActivityIndicator size="small" color={colors.bgBase} />
+            ) : (
+              <Text style={formStyles.createText}>{copy.button}</Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    )
+  })()
 
   return (
-    <View>
-      <View style={styles.headerRow}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => setView('start')}
-          disabled={busy}
-          accessibilityRole="button"
-          accessibilityLabel="Back to Add project"
-        >
-          <ChevronLeft size={18} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={formStyles.title}>{copy.title}</Text>
-      </View>
-
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>{copy.label}</Text>
-        <TextInput
-          style={formStyles.input}
-          value={value}
-          onChangeText={view === 'clone' ? setCloneUrl : setProjectName}
-          placeholder={copy.placeholder}
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType={view === 'clone' ? 'url' : 'default'}
-          editable={!busy}
-          accessibilityLabel={copy.label}
-        />
-        <Text style={styles.hint}>{copy.hint}</Text>
-      </View>
-
-      {error ? <Text style={formStyles.error}>{error}</Text> : null}
-      <View style={formStyles.actions}>
-        <Pressable
-          style={[formStyles.createButton, !canSubmit && formStyles.createButtonDisabled]}
-          disabled={!canSubmit}
-          onPress={submit}
-          accessibilityRole="button"
-          accessibilityLabel={copy.button}
-        >
-          {busy ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
-          ) : (
-            <Text style={formStyles.createText}>{copy.button}</Text>
-          )}
-        </Pressable>
-      </View>
-    </View>
+    <BottomDrawer
+      visible={visible}
+      onClose={onClose}
+      onAfterClose={onAfterClose}
+      contentScrollable={view !== 'addExisting'}
+    >
+      {content}
+    </BottomDrawer>
   )
 }
 

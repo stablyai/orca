@@ -1,4 +1,4 @@
-import { createElement, type ElementType } from 'react'
+import { createElement, type ElementType, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
@@ -25,7 +25,22 @@ vi.mock(
       }
     )
 )
-vi.mock('./BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+vi.mock('./BottomDrawer', () => ({
+  BottomDrawer: ({
+    children,
+    contentScrollable,
+    ...props
+  }: {
+    children?: ReactNode
+    contentScrollable?: boolean
+    [key: string]: unknown
+  }) =>
+    createElement(
+      contentScrollable ? 'ScrollView' : 'View',
+      { ...props, testID: 'bottom-drawer-wrapper' },
+      children
+    )
+}))
 
 import { REPO_CLONE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
 import { AddProjectFolderBrowser } from './AddProjectFolderBrowser'
@@ -75,6 +90,10 @@ function button(tree: ReactTestRenderer, label: string): ReactTestInstance {
   return found[0]!
 }
 
+function drawer(tree: ReactTestRenderer): ReactTestInstance {
+  return tree.root.findByProps({ testID: 'bottom-drawer-wrapper' })
+}
+
 function startActions(tree: ReactTestRenderer) {
   const sheet = tree.root.findByType(ActionSheetContent)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ActionSheetContent is the mock, whose actions prop is exactly the label/hint/onPress rows each test passes.
@@ -120,11 +139,59 @@ describe('AddProjectModal', () => {
 
   it('mirrors the desktop start rows minus SSH', () => {
     const tree = render(vi.fn())
+    expect(drawer(tree).type).toBe(hostType('ScrollView'))
     expect(startActions(tree).map((action) => [action.label, action.hint])).toEqual([
       ['Browse folder', 'Existing Git repository or folder on this host'],
       ['Clone from URL', 'Clone a remote Git repository'],
       ['Create new project', 'Start from an empty folder']
     ])
+  })
+
+  it('gives the folder browser the only list scroll and resets it on reopen', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(listing('/home/dev', ['projects']))
+    const tree = render(sendRequest)
+
+    act(() =>
+      startActions(tree)
+        .find((action) => action.label === 'Browse folder')!
+        .onPress()
+    )
+    await flushUpdates()
+    expect(drawer(tree).type).toBe(hostType('View'))
+
+    act(() => button(tree, 'Back to Add project').props.onPress())
+    expect(drawer(tree).type).toBe(hostType('ScrollView'))
+
+    act(() =>
+      startActions(tree)
+        .find((action) => action.label === 'Browse folder')!
+        .onPress()
+    )
+    await flushUpdates()
+    expect(drawer(tree).type).toBe(hostType('View'))
+
+    const client = tree.root.findByType(AddProjectModal).props.client
+    act(() =>
+      renderer.update(
+        createElement(AddProjectModal, {
+          visible: false,
+          client,
+          onProjectAdded,
+          onClose
+        })
+      )
+    )
+    act(() =>
+      renderer.update(
+        createElement(AddProjectModal, {
+          visible: true,
+          client,
+          onProjectAdded,
+          onClose
+        })
+      )
+    )
+    expect(drawer(tree).type).toBe(hostType('ScrollView'))
   })
 
   it('clones with the URL alone, then hands the repo off only after the sheet closed', async () => {
@@ -152,7 +219,7 @@ describe('AddProjectModal', () => {
 
     // The handoff waits for the drawer's onAfterClose: presenting the New workspace
     // modal any earlier is the iOS same-beat race the sheet exists to avoid.
-    const drawer = tree.root.findByType(hostType('BottomDrawer'))
+    const drawerNode = drawer(tree)
     act(() =>
       renderer.update(
         createElement(AddProjectModal, {
@@ -164,7 +231,7 @@ describe('AddProjectModal', () => {
         })
       )
     )
-    act(() => drawer.props.onAfterClose())
+    act(() => drawerNode.props.onAfterClose())
     expect(onProjectAdded).toHaveBeenCalledWith(repoRow)
   })
 
