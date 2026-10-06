@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './worktree-list/grouping/build-rows'
-import { repo, worktree, repoMap } from './worktree-list-groups-test-fixtures'
+import {
+  project,
+  projectHostSetups,
+  remoteRepo,
+  remoteWorktree,
+  repo,
+  worktree,
+  repoMap
+} from './worktree-list-groups-test-fixtures'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -460,5 +468,104 @@ describe('project groups', () => {
     ])
     expect(paymentsApi.displayName).toBe('api')
     expect(billingApi.displayName).toBe('api')
+  })
+
+  it('renders one header for a group that exists on two hosts', () => {
+    // Why: #22022 — projects merge across hosts, so the host copy that lost the
+    // project rows used to stay behind as an identical, unfoldable header.
+    const localGroup: ProjectGroup = {
+      id: 'local-group',
+      name: 'adaptam',
+      parentPath: '/Users/local/Adaptam',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const remoteGroup: ProjectGroup = {
+      ...localGroup,
+      id: 'remote-group',
+      parentPath: '/Users/remote/Adaptam',
+      executionHostId: 'runtime:m1'
+    }
+    const localRepo: Repo = { ...repo, projectGroupId: localGroup.id }
+    const pairedRepo: Repo = { ...remoteRepo, projectGroupId: remoteGroup.id }
+    const worktrees = [worktree, remoteWorktree]
+
+    const rows = buildRows(
+      'repo',
+      worktrees,
+      new Map([
+        [localRepo.id, localRepo],
+        [pairedRepo.id, pairedRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(worktrees.map((entry) => [entry.id, entry])),
+      false,
+      undefined,
+      [localGroup, remoteGroup],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { projects: [project], projectHostSetups }
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:local-group',
+      `project:${project.id}`
+    ])
+    expect(rows[0]).toMatchObject({ label: 'adaptam', count: 1 })
+    expect(rows.filter((row) => row.type === 'item').map((row) => row.worktree.id)).toEqual([
+      worktree.id,
+      remoteWorktree.id
+    ])
+  })
+
+  it("keeps a paired host's own group when no local group shares its name", () => {
+    const remoteOnlyGroup: ProjectGroup = {
+      id: 'remote-group',
+      name: 'fjordbyte',
+      parentPath: '/Users/remote/Fjordbyte',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1,
+      executionHostId: 'runtime:m1'
+    }
+    const pairedRepo: Repo = { ...remoteRepo, projectGroupId: remoteOnlyGroup.id }
+
+    const rows = buildRows(
+      'repo',
+      [remoteWorktree],
+      new Map([[pairedRepo.id, pairedRepo]]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[remoteWorktree.id, remoteWorktree]]),
+      false,
+      undefined,
+      [remoteOnlyGroup]
+    )
+
+    expect(rows[0]).toMatchObject({
+      type: 'header',
+      key: 'project-group:remote-group',
+      label: 'fjordbyte'
+    })
   })
 })

@@ -386,6 +386,52 @@ describe('project groups', () => {
     ).toEqual(['project-group:group-1', 'repo:repo-1'])
   })
 
+  it('reveals a paired host row through the merged group key', () => {
+    // Why: #22022 — the sidebar renders one header per merged group, so a reveal
+    // key built from the remote copy's id would never match the rendered row.
+    const localGroup: ProjectGroup = {
+      id: 'local-group',
+      name: 'adaptam',
+      parentPath: '/Users/local/Adaptam',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const remoteGroup: ProjectGroup = {
+      ...localGroup,
+      id: 'remote-group',
+      parentPath: '/Users/remote/Adaptam',
+      executionHostId: 'runtime:m1'
+    }
+    const remoteRepo: Repo = {
+      ...repo,
+      id: 'repo-remote',
+      executionHostId: 'runtime:m1',
+      projectGroupId: remoteGroup.id
+    }
+    const remoteWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-remote',
+      repoId: remoteRepo.id
+    }
+
+    expect(
+      getGroupKeysForWorktree(
+        'repo',
+        remoteWorktree,
+        new Map([[remoteRepo.id, remoteRepo]]),
+        null,
+        undefined,
+        undefined,
+        [localGroup, remoteGroup]
+      )
+    ).toEqual(['project-group:local-group', 'repo:repo-remote'])
+  })
+
   it('returns only the repo key for missing Project Group metadata reveals', () => {
     const groupedRepo: Repo = { ...repo, projectGroupId: 'missing-group' }
     const loadedGroup: ProjectGroup = {
@@ -416,5 +462,78 @@ describe('project groups', () => {
 
   it('returns only the repo key for ungrouped repo reveals', () => {
     expect(getGroupKeysForWorktree('repo', worktree, repoMap, null)).toEqual(['repo:repo-1'])
+  })
+
+  it('gives each host its own header and bucket when two hosts reuse one group id', () => {
+    const localGroup: ProjectGroup = {
+      id: 'shared-id',
+      name: 'Adaptam',
+      parentPath: '/Users/local/Adaptam',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const remoteGroup: ProjectGroup = {
+      ...localGroup,
+      name: 'Fjordbyte',
+      parentPath: '/Users/remote/Fjordbyte',
+      tabOrder: 1,
+      executionHostId: 'runtime:m1'
+    }
+    const localRepo: Repo = {
+      ...repo,
+      id: 'repo-local',
+      projectGroupId: 'shared-id'
+    }
+    const remoteRepo: Repo = {
+      ...repo,
+      id: 'repo-remote',
+      executionHostId: 'runtime:m1',
+      projectGroupId: 'shared-id'
+    }
+    const localWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-local',
+      repoId: localRepo.id
+    }
+    const remoteWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-remote',
+      repoId: remoteRepo.id
+    }
+
+    const rows = buildRows(
+      'repo',
+      [localWorktree, remoteWorktree],
+      new Map([
+        [localRepo.id, localRepo],
+        [remoteRepo.id, remoteRepo]
+      ]),
+      null,
+      new Set(),
+      new Map([
+        [localRepo.id, 0],
+        [remoteRepo.id, 1]
+      ]),
+      undefined,
+      'manual',
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [localGroup, remoteGroup]
+    )
+
+    const groupHeaders = rows.flatMap((row) =>
+      row.type === 'header' && row.key.startsWith('project-group:') ? [row] : []
+    )
+    expect(groupHeaders.map((row) => row.label)).toEqual(['Adaptam', 'Fjordbyte'])
+    // Why: a shared header key would let the first header drain the only bucket.
+    expect(new Set(groupHeaders.map((row) => row.key)).size).toBe(2)
+    expect(groupHeaders.map((row) => row.count)).toEqual([1, 1])
   })
 })
