@@ -4,6 +4,10 @@ import type {
   AiVaultSessionTitlesResult
 } from '../shared/ai-vault-session-title'
 import type { SshAiVaultRelayListParams } from '../shared/ssh-ai-vault-relay'
+import type {
+  SshClaudeUsageScanParams,
+  SshClaudeUsageScanResult
+} from '../main/claude-usage/ssh-usage-relay-contract'
 import type { RemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
 
 export const RELAY_AI_VAULT_SERVICE_PROTOCOL = 1
@@ -27,6 +31,12 @@ export type RelayAiVaultServiceRequest =
       id: number
       operation: 'titles'
       requests: AiVaultSessionTitleRequest[]
+    }
+  | {
+      type: 'request'
+      id: number
+      operation: 'claudeUsage'
+      params: SshClaudeUsageScanParams
     }
 
 export type RelayAiVaultServiceLane = 'cache' | 'interactive'
@@ -58,6 +68,12 @@ export type RelayAiVaultServiceChildMessage =
       operation: 'titles'
       value: AiVaultSessionTitlesResult
     }
+  | {
+      type: 'result'
+      id: number
+      operation: 'claudeUsage'
+      value: SshClaudeUsageScanResult
+    }
   | { type: 'error'; id: number; message: string }
 
 export function isRelayAiVaultServiceRequest(value: unknown): value is RelayAiVaultServiceRequest {
@@ -68,7 +84,9 @@ export function isRelayAiVaultServiceRequest(value: unknown): value is RelayAiVa
   return (
     message.type === 'request' &&
     Number.isSafeInteger(message.id) &&
-    (message.operation === 'list' || message.operation === 'titles')
+    (message.operation === 'list' ||
+      message.operation === 'titles' ||
+      message.operation === 'claudeUsage')
   )
 }
 

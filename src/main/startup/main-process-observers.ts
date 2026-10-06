@@ -15,6 +15,7 @@ import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-c
 import { StatsCollector } from '../stats/collector'
 import { AgentSessionTransitionRecorder } from '../stats/agent-session-transition-recorder'
 import { ClaudeUsageStore } from '../claude-usage/store'
+import { listActiveSshUsageTargetIds, requestActiveSshClaudeUsageScan } from '../ipc/ssh'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
@@ -132,7 +133,12 @@ export function initializeMainProcessObservers(): void {
   const agentSessionRecorder = new AgentSessionTransitionRecorder(state.stats)
   agentHookServer.subscribeEnrichedStatus((enriched) => agentSessionRecorder.onStatus(enriched))
   agentHookServer.subscribePaneStatusClear((clear) => agentSessionRecorder.onCleared(clear))
-  state.claudeUsage = new ClaudeUsageStore(store)
+  state.claudeUsage = new ClaudeUsageStore(store, {
+    sshTransport: {
+      listConnectedTargetIds: listActiveSshUsageTargetIds,
+      requestScan: requestActiveSshClaudeUsageScan
+    }
+  })
   state.codexUsage = new CodexUsageStore(store)
   state.openCodeUsage = new OpenCodeUsageStore(store)
   state.museUsage = new MuseUsageStore(store)

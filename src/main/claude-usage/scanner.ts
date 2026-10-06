@@ -24,8 +24,10 @@ const FILE_SCAN_BATCH_SIZE = 4
 
 // Why setImmediate: setTimeout(0) is clamped to ~1ms, and this yields once per
 // 4-file batch, so a 7.5k-transcript scan spent ~2s parked on timers.
-async function yieldToEventLoop(): Promise<void> {
+async function yieldToEventLoop(signal?: AbortSignal): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve))
+  // Why here: the relay sidecar must ack a cancel within 2s or it is killed.
+  signal?.throwIfAborted()
 }
 
 async function getProcessedFileStat(
@@ -42,12 +44,14 @@ async function getProcessedFileStat(
 export async function scanClaudeUsageFiles(
   worktrees: ClaudeUsageWorktreeRef[],
   previousProcessedFiles: ClaudeUsagePersistedFile[] = [],
-  onFilesScanned?: (count: number) => void
+  onFilesScanned?: (count: number) => void,
+  signal?: AbortSignal
 ): Promise<{
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
 }> {
+  signal?.throwIfAborted()
   const files = await listClaudeTranscriptFiles()
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
   const worktreeLookup = await buildWorktreeLookup(worktrees)
@@ -97,7 +101,7 @@ export async function scanClaudeUsageFiles(
     }
     onFilesScanned?.(batch.length)
     if (index + batch.length < files.length) {
-      await yieldToEventLoop()
+      await yieldToEventLoop(signal)
     }
   }
 
@@ -151,7 +155,7 @@ export async function scanClaudeUsageFiles(
     }
     onFilesScanned?.(batch.length)
     if (index + batch.length < pathsToParse.length) {
-      await yieldToEventLoop()
+      await yieldToEventLoop(signal)
     }
   }
 

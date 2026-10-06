@@ -2,6 +2,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { scanRemoteAiVaultSessions } from '../main/ai-vault/remote-session-scanner'
 import { readAiVaultSessionTitlesFromFiles } from '../main/ai-vault/session-title-file-reader'
 import { createRelayAiVaultFilesystemProvider } from './ai-vault-service-filesystem'
+import { relayClaudeUsageCacheFile, scanRelayClaudeUsage } from './claude-usage-relay-scan'
 import {
   RELAY_AI_VAULT_SERVICE_PROTOCOL,
   isRelayAiVaultServiceRequest,
@@ -44,6 +45,15 @@ async function execute(request: RelayAiVaultServiceRequest): Promise<void> {
         signal: controller.signal
       })
       send({ type: 'result', id: request.id, operation: 'titles', value })
+      return
+    }
+    if (request.operation === 'claudeUsage') {
+      const value = await scanRelayClaudeUsage(
+        request.params,
+        relayClaudeUsageCacheFile(init.remoteHome),
+        controller.signal
+      )
+      send({ type: 'result', id: request.id, operation: 'claudeUsage', value })
       return
     }
     const value = await scanRemoteAiVaultSessions({

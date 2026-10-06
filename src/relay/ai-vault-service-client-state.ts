@@ -5,6 +5,10 @@ import type {
   AiVaultSessionTitlesResult
 } from '../shared/ai-vault-session-title'
 import type { SshAiVaultRelayListParams } from '../shared/ssh-ai-vault-relay'
+import type {
+  SshClaudeUsageScanParams,
+  SshClaudeUsageScanResult
+} from '../main/claude-usage/ssh-usage-relay-contract'
 import type { RemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
 import {
   relayAiVaultServiceLane,
@@ -15,6 +19,8 @@ import {
 export const RELAY_AI_VAULT_READY_TIMEOUT_MS = 5_000
 export const RELAY_AI_VAULT_SCAN_TIMEOUT_MS = 130_000
 export const RELAY_AI_VAULT_TITLE_TIMEOUT_MS = 15_000
+// A cold usage scan parses every transcript once; later scans reuse the per-file cache.
+export const RELAY_AI_VAULT_USAGE_SCAN_TIMEOUT_MS = 240_000
 export const RELAY_AI_VAULT_MAX_CALLS = 16
 export const RELAY_AI_VAULT_IDLE_TIMEOUT_MS = 10 * 60_000
 
@@ -35,7 +41,9 @@ export function armRelayAiVaultCallTimeout(
   const timeout =
     call.request.operation === 'list'
       ? RELAY_AI_VAULT_SCAN_TIMEOUT_MS
-      : RELAY_AI_VAULT_TITLE_TIMEOUT_MS
+      : call.request.operation === 'claudeUsage'
+        ? RELAY_AI_VAULT_USAGE_SCAN_TIMEOUT_MS
+        : RELAY_AI_VAULT_TITLE_TIMEOUT_MS
   call.timer = setTimeout(() => onExpired(timeout), timeout)
   call.timer.unref?.()
 }
@@ -88,7 +96,7 @@ export function requeueRelayAiVaultServiceStart(
 
 export function settleRelayAiVaultServiceCall(
   call: RelayAiVaultServiceCall,
-  value: Error | AiVaultListResult | AiVaultSessionTitlesResult
+  value: Error | RelayAiVaultServiceValue
 ): void {
   // A cancelled call is settled before its cancel watchdog is armed, so the
   // timer has to be cleared even when the reject/resolve is already done.
@@ -110,12 +118,17 @@ export function settleRelayAiVaultServiceCall(
   }
 }
 
+export type RelayAiVaultServiceValue =
+  | AiVaultListResult
+  | AiVaultSessionTitlesResult
+  | SshClaudeUsageScanResult
+
 export type RelayAiVaultServiceCall = {
   request: RelayAiVaultServiceRequest
   lane: RelayAiVaultServiceLane
   signal?: AbortSignal
   forceStart: boolean
-  resolve: (value: AiVaultListResult | AiVaultSessionTitlesResult) => void
+  resolve: (value: RelayAiVaultServiceValue) => void
   reject: (error: Error) => void
   timer: NodeJS.Timeout | null
   onAbort: (() => void) | null
@@ -132,6 +145,13 @@ export type RelayAiVaultServiceApi = {
     requests: AiVaultSessionTitleRequest[],
     signal?: AbortSignal
   ): Promise<AiVaultSessionTitlesResult>
+}
+
+export type RelayUsageScanServiceApi = {
+  scanClaudeUsage(
+    params: SshClaudeUsageScanParams,
+    signal?: AbortSignal
+  ): Promise<SshClaudeUsageScanResult>
 }
 
 export type RelayAiVaultServiceClientOptions = {

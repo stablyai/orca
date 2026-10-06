@@ -120,6 +120,11 @@ import {
   type SshAiVaultRelayListParams,
   type SshAiVaultRelayTitleParams
 } from '../../shared/ssh-ai-vault-relay'
+import {
+  SSH_USAGE_SCAN_CLAUDE_METHOD,
+  SSH_USAGE_SCAN_CLAUDE_TIMEOUT_MS,
+  type SshClaudeUsageScanParams
+} from '../claude-usage/ssh-usage-relay-contract'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { hasClosedTerminalTabRecord } from '../../shared/closed-terminal-tab-tombstones'
@@ -348,6 +353,7 @@ export class SshRelaySession {
   } | null = null
   private aiVaultListMethodSupported: boolean | null = null
   private aiVaultTitleMethodSupported: boolean | null = null
+  private claudeUsageScanMethodSupported: boolean | null = null
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private readonly ptyRecoveryRetention = new SshPtyRecoveryRetentionBudget()
   private activePtyProviderGeneration: number | null = null
@@ -536,6 +542,34 @@ export class SshRelaySession {
     }
   }
 
+  /** Resolves null when the host's relay predates usage scanning. */
+  async requestClaudeUsageScan(
+    params: SshClaudeUsageScanParams,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<unknown> {
+    if (this.claudeUsageScanMethodSupported === false) {
+      return null
+    }
+    const mux = this.mux
+    if (!mux || mux.isDisposed() || this._state !== 'ready') {
+      throw new Error('SSH relay is not ready')
+    }
+    try {
+      const result = await mux.request(SSH_USAGE_SCAN_CLAUDE_METHOD, params, {
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? SSH_USAGE_SCAN_CLAUDE_TIMEOUT_MS
+      })
+      this.claudeUsageScanMethodSupported = true
+      return result
+    } catch (error) {
+      if (isMethodNotFoundError(error)) {
+        this.claudeUsageScanMethodSupported = false
+        return null
+      }
+      throw error
+    }
+  }
+
   getPortScanner(): PortScanner | null {
     return this.portScanner
   }
@@ -556,6 +590,7 @@ export class SshRelaySession {
     this._state = 'deploying'
     this.aiVaultListMethodSupported = null
     this.aiVaultTitleMethodSupported = null
+    this.claudeUsageScanMethodSupported = null
     this.currentConnection = conn
     this.lastGraceTimeSeconds = graceTimeSeconds
 
@@ -717,6 +752,7 @@ export class SshRelaySession {
     this._state = 'reconnecting'
     this.aiVaultListMethodSupported = null
     this.aiVaultTitleMethodSupported = null
+    this.claudeUsageScanMethodSupported = null
     this.currentConnection = conn
     this.lastGraceTimeSeconds = graceTimeSeconds
 

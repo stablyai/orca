@@ -11,6 +11,7 @@ import type {
   SshAiVaultRelayListParams,
   SshAiVaultRelayTitleParams
 } from '../../shared/ssh-ai-vault-relay'
+import type { SshClaudeUsageScanParams } from '../claude-usage/ssh-usage-relay-contract'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
@@ -152,6 +153,30 @@ export async function requestActiveSshAiVaultSessionList(
     throw new Error('SSH relay is not ready')
   }
   return session.requestAiVaultSessionList(params, options)
+}
+
+export function listActiveSshUsageTargetIds(): string[] {
+  return [...activeSessions.entries()]
+    .filter(
+      ([targetId, session]) =>
+        !isRuntimeOwnedSshTargetId(targetId) && session.getState() === 'ready'
+    )
+    .map(([targetId]) => targetId)
+}
+
+export async function requestActiveSshClaudeUsageScan(
+  targetId: string,
+  params: SshClaudeUsageScanParams,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {}
+): Promise<unknown> {
+  if (isRuntimeOwnedSshTargetId(targetId)) {
+    return null
+  }
+  const session = activeSessions.get(targetId)
+  if (!session) {
+    throw new Error('SSH relay is not ready')
+  }
+  return session.requestClaudeUsageScan(params, options)
 }
 
 export async function requestActiveSshAiVaultSessionTitles(

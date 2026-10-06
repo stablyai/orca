@@ -58,12 +58,20 @@ export type ClaudeUsagePersistedState = {
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
+  /** Last successful scan per SSH target, already merged into sessions/dailyAggregates. */
+  sshHosts?: Record<string, ClaudeUsageSshHostSnapshot>
   scanState: {
     enabled: boolean
     lastScanStartedAt: number | null
     lastScanCompletedAt: number | null
     lastScanError: string | null
   }
+}
+
+export type ClaudeUsageSshHostSnapshot = {
+  scannedAt: number
+  sessions: ClaudeUsageSession[]
+  dailyAggregates: ClaudeUsageDailyAggregate[]
 }
 
 export type ClaudeUsagePersistedFile = ClaudeUsageProcessedFile & {
