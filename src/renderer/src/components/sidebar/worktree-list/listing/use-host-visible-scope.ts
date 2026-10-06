@@ -13,9 +13,10 @@ import {
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from './host-filtering'
+import { filterProjectGroupsForRepoFilter } from './project-filter-group-scope'
 
 // Narrows repos, project groups, and folder workspaces to the hosts (and devices) the
-// current host filter admits.
+// current host filter admits, then drops project groups the project filter leaves empty.
 export function useSidebarHostVisibleScope(args: {
   filterState: SidebarWorktreeFilters['filterState']
   defaultHostId: ExecutionHostId
@@ -25,8 +26,12 @@ export function useSidebarHostVisibleScope(args: {
   pairedDeviceIdsByEnvironment: Parameters<typeof filterFolderWorkspacesFromOtherDevices>[1]
 }) {
   const { filterState, defaultHostId, repos, projectGroups, folderWorkspaces } = args
-  const { visibleWorkspaceHostIds, workspaceHostScope, hideWorkspacesFromOtherDevices } =
-    filterState
+  const {
+    visibleWorkspaceHostIds,
+    workspaceHostScope,
+    hideWorkspacesFromOtherDevices,
+    filterRepoIds
+  } = filterState
   const visibleHostIdSet = useMemo(
     () => getVisibleSidebarHostIdSet(visibleWorkspaceHostIds, workspaceHostScope),
     [visibleWorkspaceHostIds, workspaceHostScope]
@@ -42,8 +47,13 @@ export function useSidebarHostVisibleScope(args: {
     })
   }, [defaultHostId, repos, visibleHostIdSet])
   const visibleProjectGroupsForRows = useMemo(
-    () => filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
-    [defaultHostId, projectGroups, visibleHostIdSet]
+    () =>
+      filterProjectGroupsForRepoFilter(
+        filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
+        visibleReposForRows,
+        filterRepoIds
+      ),
+    [defaultHostId, filterRepoIds, projectGroups, visibleHostIdSet, visibleReposForRows]
   )
   const visibleFolderWorkspacesForRows = useMemo(() => {
     const hostVisibleWorkspaces = filterFolderWorkspacesForVisibleHosts(

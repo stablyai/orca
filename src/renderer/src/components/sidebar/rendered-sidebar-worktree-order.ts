@@ -20,6 +20,7 @@ import {
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from './worktree-list/listing/host-filtering'
+import { filterProjectGroupsForRepoFilter } from './worktree-list/listing/project-filter-group-scope'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
 const EMPTY_IMPORTED_BY_REPO = Object.freeze(new Map()) as never
@@ -77,7 +78,13 @@ export function computeRenderedSidebarRows(
     getWorktreeMapFromState(state),
     true,
     state.settings,
-    filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
+    // Why both: the render path drops groups the project filter empties, and a dropped
+    // group takes its folder-workspace rows with it, so the order must match.
+    filterProjectGroupsForRepoFilter(
+      filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
+      state.repos,
+      state.filterRepoIds
+    ),
     // Why empty: placeholder/imported/inbox/pending inputs never emit item or folder-workspace rows, the only two the order reads.
     EMPTY_REPO_ID_SET,
     EMPTY_IMPORTED_BY_REPO,
