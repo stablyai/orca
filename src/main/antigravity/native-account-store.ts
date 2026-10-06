@@ -1,5 +1,5 @@
-import { lstat, readFile } from 'node:fs/promises'
-import { restrictWindowsPath } from '../../shared/secure-path-windows-acl'
+import { lstat } from 'node:fs/promises'
+import { readAntigravityAccountVault } from './native-account-vault-read'
 import { writeProtectedFileAtomic } from '../../shared/secure-file'
 import {
   remainingAccountOperationMs,
@@ -144,23 +144,18 @@ export function createEncryptedAntigravityAccountStore(
           context: AntigravityAccountOperation
         ): Promise<AntigravityAccountVault> => {
           remainingAccountOperationMs(context)
-          if (!existsSync(path)) {
-            return { accounts: [], selectedAccountId: null }
-          }
-          requireProtection()
           try {
-            checkVaultStat(await lstat(path))
-            if (
-              process.platform === 'win32' &&
-              !(await restrictWindowsPath(path, false, context))
-            ) {
-              throw new Error('unsafe vault ACL')
+            const before = await lstat(path).catch((error) => {
+              if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+                return null
+              }
+              throw error
+            })
+            if (!before) {
+              return { accounts: [], selectedAccountId: null }
             }
-            const bytes = await readFile(path)
-            remainingAccountOperationMs(context)
-            if (bytes.length > MAX_VAULT_BYTES) {
-              throw new Error('oversized vault')
-            }
+            requireProtection()
+            const bytes = await readAntigravityAccountVault(path, before, context)
             return parseVault(bytes, authority)
           } catch {
             throw new Error(READ_ERROR)

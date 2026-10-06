@@ -46,15 +46,17 @@ filesystem; DrvFS and symlink HOME are refused. The token and lock must be regul
 user-owned files with exactly `0600`; newly created directories use `0700`. Parent directories
 must not be group/other writable. Fixed scripts require the ordinary GNU/Linux tools `id`,
 `stat`, `base64`, `cmp`, `head`, `mktemp`, `flock`, `mv`, `sync`, `readlink`, `tr`, `date`,
-`chmod`, `mkdir`, `rm`, `dirname` and `find`, plus `/proc` descriptor metadata. Unsupported
+`chmod`, `mkdir`, `rm`, `dirname`, `find`, `timeout` and `sh`, plus `/proc` descriptor metadata. Unsupported
 filesystems or missing tools fail closed. Reads are capped at 64 KiB and verify opened-file
-metadata before and after reading. Raw credential JSON travels only over bounded stdin/stdout,
+metadata before and after reading. Read-only opens never recreate removed credentials; GNU
+`timeout` bounds a FIFO substituted during the open race. Raw credential JSON travels only over bounded stdin/stdout,
 with a nonce and strict UTF-8/base64 decoding; it never goes into argv, environment or errors.
 
 WSL snapshots stay on Windows under `userData/antigravity-accounts/wsl/<scope hash>/vault`.
 The hash includes the concrete distro, UID and canonical HOME, and encrypted contents repeat
 that scope for verification. Meaningful OS encryption and checked private Windows ACLs are
-required before guest mutation. Vault publication is asynchronous, checks cancellation before
+required before guest mutation. Vault reads bind the checked descriptor and consume at most the checked size plus one byte,
+with a 4 MiB cap and before/after metadata verification. Vault publication is asynchronous, checks cancellation before
 rename, and reports failures after publication as requiring verification. Windows 8.3 and long
 path spellings are canonicalized when protecting newly created directory chains. Host snapshots
 retain their existing format. A reinstall with the same distro name, UID and HOME cannot be
@@ -73,7 +75,8 @@ Desktop IPC, headless runtime and the local PTY provider verify a selected accou
 new WSL launch, then pin the checked distro into actual spawn arguments and process metadata.
 Preparation never writes an old credential snapshot into the guest. An unselected scope keeps
 ordinary startup, and a missing WSL vault root skips guest probes. Windows HOME is not guest
-HOME. Selected-account launches reject transported authority variables through WSLENV and
+HOME. Selected-account launches reject transported authority and shell configuration variables
+(including ZDOTDIR, ORCA_ORIG_ZDOTDIR, BASH_ENV, ENV and XDG_CONFIG_HOME) through WSLENV and
 unverifiable command wrappers (including user/HOME overrides). Interactive commands, shell
 aliases/functions and changes after verification remain outside the guard. WSL quota retrieval
 remains disabled; account management does not depend on quota access.

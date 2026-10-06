@@ -93,7 +93,13 @@ function assertWslLaunchAuthority(args: {
     'SHELL',
     'WSL_DISTRO_NAME',
     'WSL_INTEROP',
-    'WSL_USER'
+    'WSL_USER',
+    'ZDOTDIR',
+    'ORCA_ORIG_ZDOTDIR',
+    'ORCA_ZSHENV_SOURCE_DIR',
+    'BASH_ENV',
+    'ENV',
+    'XDG_CONFIG_HOME'
   ])
   const transportedAuthority = (env.WSLENV ?? '')
     .split(':')

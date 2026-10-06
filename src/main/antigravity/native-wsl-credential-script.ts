@@ -1,12 +1,27 @@
+import { quotePosixShell } from '../../shared/wsl-login-shell-command'
 import type { WslCommand } from '../wsl/wsl-runner'
 import type { ResolvedAntigravityWslTarget } from './native-wsl-account-target'
+
+const READ_SCRIPT = String.raw`
+set -eu
+token=$1; before=$2
+exec 8< "$token"
+[ "$(stat -L -c '%d:%i:%u:%a:%h:%s:%y:%z' /proc/self/fd/8)" = "$before" ] || exit 73
+[ "$(stat -L -c %F /proc/self/fd/8)" = 'regular file' ] || exit 77
+data=$(head -c 65537 <&8 | base64 -w 0)
+[ ! -L "$token" ] && [ "$(stat -c '%d:%i:%u:%a:%h:%s:%y:%z' -- "$token")" = "$before" ] || exit 73
+[ "$(stat -L -c '%d:%i:%u:%a:%h:%s:%y:%z' /proc/self/fd/8)" = "$before" ] || exit 73
+exec 8<&-
+[ "${'$'}{#data}" -le 87384 ] || exit 77
+printf %s "$data"
+`
 
 const SCRIPT = String.raw`
 set -eu
 PATH=/usr/bin:/bin; LC_ALL=C; export PATH LC_ALL
 umask 077
 fail() { exit "$1"; }
-for tool in id stat base64 cmp head mktemp flock mv sync readlink tr date chmod mkdir rm dirname find; do
+for tool in id stat base64 cmp head mktemp flock mv sync readlink tr date chmod mkdir rm dirname find timeout sh; do
   command -v "$tool" >/dev/null 2>&1 || fail 69
 done
 action=$1; distro=$2; uid=$3; home=$4; nonce=$5; deadline=$6
@@ -84,15 +99,10 @@ read_token() {
   if [ ! -e "$token" ] && [ ! -L "$token" ]; then return; fi
   check_file "$token"
   before=$(stat -c '%d:%i:%u:%a:%h:%s:%y:%z' -- "$token")
-  # O_RDWR prevents a raced FIFO open from blocking before descriptor validation.
-  exec 8<> "$token"
-  [ "$(stat -L -c '%d:%i:%u:%a:%h:%s:%y:%z' /proc/self/fd/8)" = "$before" ] || fail 73
-  [ "$(stat -L -c %F /proc/self/fd/8)" = 'regular file' ] || fail 77
-  data=$(head -c 65537 <&8 | base64 -w 0)
-  [ ! -L "$token" ] && [ "$(stat -c '%d:%i:%u:%a:%h:%s:%y:%z' -- "$token")" = "$before" ] || fail 73
-  [ "$(stat -L -c '%d:%i:%u:%a:%h:%s:%y:%z' /proc/self/fd/8)" = "$before" ] || fail 73
-  exec 8>&-
-  [ "${'$'}{#data}" -le 87384 ] || fail 77
+  # A read-only open cannot recreate a logout-deleted token; timeout bounds FIFO races.
+  remaining=$((deadline - $(date +%s)))
+  [ "$remaining" -gt 0 ] || fail 75
+  data=$(timeout --kill-after=1s "${'$'}{remaining}s" sh -c ${quotePosixShell(READ_SCRIPT)} -- "$token" "$before") || fail "$?"
   present=present
 }
 read_token

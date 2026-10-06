@@ -30,9 +30,10 @@ export async function wslScriptFixture() {
       action: 'read' | 'write',
       contents = '',
       expected: string | null = null,
-      prefix = ''
+      prefix = '',
+      deadline = Date.now() + 5000
     ) {
-      const command = buildAntigravityWslCredentialCommand(action, authority, 'abc123')
+      const command = buildAntigravityWslCredentialCommand(action, authority, 'abc123', deadline)
       if (command.script === undefined) {
         throw new Error('Expected guest script')
       }

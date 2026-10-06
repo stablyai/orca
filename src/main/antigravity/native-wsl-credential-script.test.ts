@@ -107,3 +107,37 @@ describe.skipIf(process.platform === 'win32')('isolated POSIX guest script evide
     }
   })
 })
+
+it.skipIf(process.platform === 'win32')(
+  'does not recreate a credential deleted between stat and read',
+  async () => {
+    const fixture = await wslScriptFixture()
+    try {
+      await fixture.put(credential('a'))
+      const prefix = `stat() { command stat "$@"; if [ "$1" = -c ] && [ "$2" = '%d:%i:%u:%a:%h:%s:%y:%z' ] && [ "$4" = ${quotePosixShell(fixture.path)} ]; then rm -f -- "$4"; fi; }\n`
+      expect((await fixture.run('read', '', null, prefix)).code).not.toBe(0)
+      await expect(readFile(fixture.path)).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      await fixture.clean()
+    }
+  }
+)
+
+it.skipIf(process.platform === 'win32')(
+  'bounds a FIFO replacement racing the read-only open',
+  async () => {
+    const fixture = await wslScriptFixture()
+    try {
+      await fixture.put(credential('a'))
+      const prefix = `stat() { command stat "$@"; if [ "$1" = -c ] && [ "$2" = '%d:%i:%u:%a:%h:%s:%y:%z' ] && [ "$4" = ${quotePosixShell(fixture.path)} ]; then rm -f -- "$4"; mkfifo -m 600 -- "$4"; fi; }\n`
+      const started = performance.now()
+      const result = await fixture.run('read', '', null, prefix, Date.now() + 2000)
+      expect(result.code).not.toBe(0)
+      expect(result.timedOut).toBe(false)
+      expect(result.stdout).toBe('')
+      expect(performance.now() - started).toBeLessThan(3500)
+    } finally {
+      await fixture.clean()
+    }
+  }
+)

@@ -170,3 +170,24 @@ it.each(['agy; HOME=/other agy', 'agy $(HOME=/other agy)', 'agy && sudo agy'])(
     expect(prepareForLaunch).not.toHaveBeenCalled()
   }
 )
+
+it.each([
+  'ORCA_ORIG_ZDOTDIR',
+  'ZDOTDIR',
+  'ORCA_ZSHENV_SOURCE_DIR',
+  'BASH_ENV',
+  'ENV',
+  'XDG_CONFIG_HOME'
+])('rejects transported shell configuration that can change guest HOME: %s', async (key) => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  await expect(
+    prepareAntigravityAccountForLaunch({
+      launchAgent: 'antigravity',
+      isWsl: true,
+      command: 'agy',
+      envIsComplete: true,
+      env: { WSLENV: `${key}/u`, [key]: '/other-config' }
+    })
+  ).rejects.toThrow('credential authority')
+  expect(prepareForLaunch).not.toHaveBeenCalled()
+})
