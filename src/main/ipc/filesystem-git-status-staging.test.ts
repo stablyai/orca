@@ -158,6 +158,42 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
+  it('allows status for a nested repository owned by a registered folder project', async () => {
+    const nestedRepositoryPath = path.join(REPO_PATH, 'nested-repo')
+    const folderStore = {
+      ...store,
+      getRepos: () => [{ ...store.getRepos()[0], kind: 'folder' }]
+    }
+    getStatusMock.mockResolvedValue({ entries: [] })
+    registerFilesystemHandlers(folderStore as never)
+
+    await handlers.get('git:status')!(null, {
+      worktreePath: nestedRepositoryPath,
+      authorizedParentPath: REPO_PATH
+    })
+
+    expect(getStatusMock).toHaveBeenCalledWith(nestedRepositoryPath, {
+      admissionTier: 'status',
+      includeIgnored: false
+    })
+  })
+
+  it('rejects a nested status path outside its registered folder project', async () => {
+    const folderStore = {
+      ...store,
+      getRepos: () => [{ ...store.getRepos()[0], kind: 'folder' }]
+    }
+    registerFilesystemHandlers(folderStore as never)
+
+    await expect(
+      handlers.get('git:status')!(null, {
+        worktreePath: path.resolve('/workspace/outside-repo'),
+        authorizedParentPath: REPO_PATH
+      })
+    ).rejects.toThrow('Access denied: repository is outside the registered folder')
+    expect(getStatusMock).not.toHaveBeenCalled()
+  })
+
   it('forwards includeIgnored through local and SSH git status IPC', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })

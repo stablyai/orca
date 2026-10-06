@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { FolderSourceControlPanel } from '../folder/folder-source-control-panel'
 import { SourceControlPanelReady } from './panel-ready'
 import { useSourceControlPanelModel } from './use-panel-model'
 
@@ -19,12 +20,13 @@ export function SourceControlPanel() {
   }
   if (isFolder) {
     return (
-      <div className="flex items-center justify-center h-full text-xs text-muted-foreground px-4 text-center">
-        {translate(
-          'auto.components.right.sidebar.SourceControl.e131cd7128',
-          'Source Control is only available for Git repositories'
-        )}
-      </div>
+      <FolderSourceControlPanel
+        folderPath={worktreePath}
+        connectionId={model.activeConnectionId}
+        executionHostId={activeWorktree.hostId ?? 'local'}
+        runtimeEnvironmentId={model.activeRepoRuntimeEnvironmentId}
+        runtimeSettings={model.activeRepoSettings}
+      />
     )
   }
 

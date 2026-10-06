@@ -8,6 +8,7 @@ import type { PreloadApi } from '../api-types'
 export const gitApi = {
   status: (args: {
     worktreePath: string
+    authorizedParentPath?: string
     connectionId?: string
     includeIgnored?: boolean
     bypassEffectiveUpstreamNegativeCache?: boolean

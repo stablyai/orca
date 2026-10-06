@@ -12,7 +12,7 @@ export function getVisibleRightSidebarActivityItems(
 ): ActivityBarItem[] {
   return items.filter(
     (item) =>
-      (!item.gitOnly || !isFolder) &&
+      (!item.gitOnly || !isFolder || item.id === 'source-control') &&
       (!item.folderOnly || isFolderWorkspace) &&
       (!item.sshOnly || isSshRepo)
   )

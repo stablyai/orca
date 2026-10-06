@@ -36,6 +36,9 @@ export async function getRuntimeGitStatus(
     return callLocalGitStatus(
       {
         worktreePath: resolveLocalWorktreePath(context),
+        ...(context.authorizedParentPath
+          ? { authorizedParentPath: context.authorizedParentPath }
+          : {}),
         connectionId: context.connectionId,
         ...admissionTierArgs,
         ...includeIgnoredArgs,

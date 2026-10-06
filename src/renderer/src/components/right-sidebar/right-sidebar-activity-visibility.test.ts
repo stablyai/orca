@@ -55,7 +55,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
     ).toEqual(['explorer', 'source-control', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
   })
 
-  it('shows Workspaces only for folder workspaces and hides git tabs for all folder scopes', () => {
+  it('shows folder tools and keeps nested-repository source control visible', () => {
     expect(
       getVisibleRightSidebarActivityItems(items, {
         isFolder: true,
@@ -66,6 +66,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
       'explorer',
       'workspaces',
       'pr-checks',
+      'source-control',
       'ports',
       'plugin:orca-samples.my-plugin/dashboard'
     ])
@@ -76,6 +77,6 @@ describe('getVisibleRightSidebarActivityItems', () => {
         isFolderWorkspace: false,
         isSshRepo: true
       }).map((item) => item.id)
-    ).toEqual(['explorer', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
+    ).toEqual(['explorer', 'source-control', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
   })
 })
