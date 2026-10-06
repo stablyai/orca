@@ -1,4 +1,5 @@
 import type { BrowserWindow, IpcMainEvent } from 'electron'
+import type { PluginNotificationTarget } from '../../shared/plugins/plugin-host-api'
 
 /**
  * The desktop facilities `OrcaRuntimeService` uses, which a Node host does not have.
@@ -18,7 +19,12 @@ import type { BrowserWindow, IpcMainEvent } from 'electron'
 export type RuntimeDesktopSurface = {
   /** Show a native notification. Returns false when the host cannot, so callers can say so. */
   isAwayForMobileNotifications?(): boolean | undefined
-  showNotification(input: { title: string; body: string }): boolean
+  showNotification(input: {
+    title: string
+    body: string
+    /** Worktree/pane a click should reveal. */
+    target?: PluginNotificationTarget
+  }): boolean
   /** The renderer window with this id, or null when there is no desktop. */
   findWindowById(id: number): BrowserWindow | null
   onIpc(channel: string, listener: (event: IpcMainEvent, ...args: never[]) => void): void

@@ -269,6 +269,50 @@ describe('plugin host main/relay conformance', () => {
     }
   })
 
+  it('forwards a notification click target and rejects unknown or oversized target fields', async () => {
+    const target = {
+      worktreeId: WORKTREE_ID,
+      paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+      surface: 'agent-session'
+    }
+    for (const adapterName of ['desktop-main', 'relay']) {
+      const services = createServices()
+      const resolvePolicy = vi
+        .fn()
+        .mockResolvedValue(createPolicy(['notifications:show'], services))
+      const adapter = createAdapters(resolvePolicy)[adapterName]!
+
+      await expect(
+        adapter({ method: 'notifications.show', params: { title: 'Done', target } }, false)
+      ).resolves.toMatchObject({ ok: true })
+      expect(services.dispatchPluginNotification).toHaveBeenCalledWith({
+        pluginId: PLUGIN_KEY,
+        title: 'Done',
+        body: undefined,
+        target
+      })
+      await expect(
+        adapter(
+          {
+            method: 'notifications.show',
+            params: { title: 'Done', target: { ...target, tabId: 'tab-1' } }
+          },
+          false
+        )
+      ).resolves.toMatchObject({ ok: false, code: 'invalid_params' })
+      // The push gateway caps worktreeId at 2048 chars.
+      await expect(
+        adapter(
+          {
+            method: 'notifications.show',
+            params: { title: 'Done', target: { worktreeId: 'x'.repeat(2049) } }
+          },
+          false
+        )
+      ).resolves.toMatchObject({ ok: false, code: 'invalid_params' })
+    }
+  })
+
   it('charges malformed and oversized panel traffic before schema parsing', async () => {
     for (const adapterName of ['desktop-main', 'relay']) {
       const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['notifications:show']))

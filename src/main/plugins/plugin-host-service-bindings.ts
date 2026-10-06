@@ -1,5 +1,8 @@
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
-import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/plugin-host-api'
+import {
+  PLUGIN_WORKSPACE_TERMINAL_LIMIT,
+  type PluginNotificationTarget
+} from '../../shared/plugins/plugin-host-api'
 import type { PluginHostServices } from './plugin-host-methods'
 import { PluginSecretsStore } from './plugin-secrets-store'
 import { PluginKvStore } from './plugin-storage-store'
@@ -27,6 +30,7 @@ export type PluginRuntimeDelegate = {
     pluginId: string
     title: string
     body?: string
+    target?: PluginNotificationTarget
   }): Promise<{ delivered: boolean }>
 }
 
