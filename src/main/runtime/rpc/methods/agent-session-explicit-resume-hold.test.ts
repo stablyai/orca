@@ -23,6 +23,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import { AGENT_SESSION_METHODS } from './agent-session'
 import {
   assertExplicitResumeConversationUnowned,
+  withAgentSessionConversationGate,
   type StructuredRecordHost
 } from './agent-session-explicit-resume-hold'
 
@@ -256,5 +257,44 @@ describe('terminal.ensureAgentSession hold wiring', () => {
 
     expect(response).toMatchObject({ ok: true })
     expect(runtime.ensureAgentSession).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('provider conversation gate', () => {
+  it('serializes opposite-lane work for one conversation and releases after failure', async () => {
+    let unblock!: () => void
+    const started = new Promise<void>((resolve) => {
+      unblock = resolve
+    })
+    const order: string[] = []
+    const first = withAgentSessionConversationGate('claude:conversation-1', async () => {
+      order.push('terminal-start')
+      await started
+      order.push('terminal-end')
+      throw new Error('spawn failed')
+    })
+    const second = withAgentSessionConversationGate('claude:conversation-1', async () => {
+      order.push('structured')
+      return 'admitted'
+    })
+
+    await Promise.resolve()
+    expect(order).toEqual(['terminal-start'])
+    unblock()
+    await expect(first).rejects.toThrow('spawn failed')
+    await expect(second).resolves.toBe('admitted')
+    expect(order).toEqual(['terminal-start', 'terminal-end', 'structured'])
+  })
+
+  it('does not serialize independent conversations', async () => {
+    const order: string[] = []
+    const first = withAgentSessionConversationGate('claude:conversation-a', async () => {
+      order.push('a')
+    })
+    const second = withAgentSessionConversationGate('claude:conversation-b', async () => {
+      order.push('b')
+    })
+    await Promise.all([first, second])
+    expect(order).toEqual(['a', 'b'])
   })
 })

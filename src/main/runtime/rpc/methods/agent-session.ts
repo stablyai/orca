@@ -16,10 +16,15 @@ import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
 } from '../../../../shared/rpc-contract/agent-session-params'
-import { assertExplicitResumeConversationUnowned } from './agent-session-explicit-resume-hold'
+import {
+  agentSessionConversationRoot,
+  assertExplicitResumeConversationUnowned,
+  withAgentSessionConversationGate
+} from './agent-session-explicit-resume-hold'
 export { CreateAgentSessionParams, EnsureAgentSessionParams }
 
 type AgentSessionRuntime = OrcaRuntimeService & {
+  ensureStructuredAgentSessionHost(): Promise<void>
   ensureAgentSession(
     request: RuntimeEnsureAgentSessionRequest,
     caller?: RuntimeAgentSessionRpcCaller
@@ -64,13 +69,19 @@ export const AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'terminal.ensureAgentSession',
     params: EnsureAgentSessionParams,
-    handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) => {
-      assertExplicitResumeConversationUnowned(params, getStructuredAgentSessionHost())
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher hands every method the same runtime service, which implements this interface (as below).
-      return (runtime as AgentSessionRuntime).ensureAgentSession(
-        withExecutionHostAgentPresentation(params, clientKind),
-        callerContext(pairedDeviceId ?? clientId, clientKind, signal)
-      )
+    handler: async (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) => {
+      const root = agentSessionConversationRoot(params)
+      if (root !== null && getStructuredAgentSessionHost() === null) {
+        await runtime.ensureStructuredAgentSessionHost()
+      }
+      return withAgentSessionConversationGate(root, async () => {
+        assertExplicitResumeConversationUnowned(params, getStructuredAgentSessionHost())
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher hands every method the same runtime service, which implements this interface (as below).
+        return await (runtime as AgentSessionRuntime).ensureAgentSession(
+          withExecutionHostAgentPresentation(params, clientKind),
+          callerContext(pairedDeviceId ?? clientId, clientKind, signal)
+        )
+      })
     }
   }),
   defineMethod({

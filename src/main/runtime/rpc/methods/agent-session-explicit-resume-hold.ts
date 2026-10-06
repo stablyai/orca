@@ -17,6 +17,42 @@ import {
 } from '../../../../shared/agent-session-provider-handle'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 
+// Both terminal resume and structured adoption run in the main process.  Keep
+// their effect windows serialized by provider conversation root.  The durable
+// record transaction remains the authority for structured-vs-structured races;
+// this gate only closes the cross-lane window.
+const conversationGates = new Map<string, Promise<void>>()
+
+export function agentSessionConversationRoot(
+  request: RuntimeEnsureAgentSessionRequest
+): string | null {
+  return explicitResumeConversationRoot(request)
+}
+
+export async function withAgentSessionConversationGate<T>(
+  root: string | null,
+  run: () => Promise<T>
+): Promise<T> {
+  if (root === null) {
+    return await run()
+  }
+  const previous = conversationGates.get(root) ?? Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  conversationGates.set(root, current)
+  await previous
+  try {
+    return await run()
+  } finally {
+    release()
+    if (conversationGates.get(root) === current) {
+      conversationGates.delete(root)
+    }
+  }
+}
+
 /** The store read this guard needs; the host's own record store satisfies it. */
 export type StructuredRecordReader = {
   listRecords(): readonly AgentSessionRecord[]
