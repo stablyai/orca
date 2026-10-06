@@ -43,6 +43,15 @@ vi.mock('./keychain', () => ({
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the doubles below implement every member the add-account login path reaches; this case drives the service only through addAccount.
 const asServiceDouble = <T>(double: unknown): T => double as T
 
+// Why: the login path now waits for a PowerShell host to be resolved, and that
+// resolution spawns real processes. Pin it so these tests keep testing the login.
+vi.mock('../../shared/windows-powershell-host', () => ({
+  warmWindowsPowerShellHostCache: () =>
+    Promise.resolve('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'),
+  getWindowsPowerShellHost: () => 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  setWindowsPowerShellHostResolutionObserver: () => {}
+}))
+
 describe('ClaudeAccountService credential capture', () => {
   beforeEach(() => {
     setPlatform('darwin')
@@ -605,7 +614,8 @@ describe('ClaudeAccountService credential capture', () => {
       waitForTerminationPid: () =>
         new Promise<number>((resolve) => {
           publishTerminationPid = resolve
-        })
+        }),
+      hasRelayedPid: () => true
     }))
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
     vi.doMock('../../shared/windows-interactive-login-spawn', () => ({

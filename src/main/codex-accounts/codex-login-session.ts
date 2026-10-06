@@ -1,13 +1,13 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { join } from 'node:path'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
-import { buildWindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
-import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { warmWindowsPowerShellHostCache } from '../../shared/windows-powershell-host'
+import { recordLoginConsoleStartIfMissed } from '../crash-reporting/login-console-start-breadcrumb'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { resolveCodexCommand } from '../codex-cli/command'
-import { getSpawnArgsForWindows } from '../win32-utils'
 import { runWslProcess } from '../wsl/wsl-runner'
 import { parseCodexLoginAuthUrl } from './codex-login-auth-url'
+import { createCodexHostLoginSpawn } from './codex-host-login-spawn'
 import { loginAuthChanged, readLoginAuthSnapshot } from './codex-login-auth-snapshot'
 import {
   buildWslCodexAvailabilityScript,
@@ -62,6 +62,7 @@ type CodexLoginSessionDependencies = {
 }
 
 type LoginCancellation = {
+  signal: AbortSignal
   isCancelled: () => boolean
   setSpawnedCancel: (cancel: () => boolean) => void
 }
@@ -72,6 +73,7 @@ export async function runCodexLoginSession(
 ): Promise<void> {
   let cancelSpawnedLogin: (() => boolean) | null = null
   let cancelled = false
+  const cancellationController = new AbortController()
   dependencies.setCancel(() => {
     // Why: only an accepted cancel latches. A spawned login that refuses —
     // because it already authenticated — must stay cancellable, or the Cancel
@@ -82,9 +84,11 @@ export async function runCodexLoginSession(
     // A cancel before the spawn has no tree to kill; the pre-spawn probe reads
     // this flag instead of opening a browser nobody is waiting for.
     cancelled = true
+    cancellationController.abort(new Error(CODEX_LOGIN_CANCELLED_MESSAGE))
     return true
   })
   await runCodexLoginProcess(managedHomePath, dependencies, {
+    signal: cancellationController.signal,
     isCancelled: () => cancelled,
     setSpawnedCancel: (cancel) => {
       cancelSpawnedLogin = cancel
@@ -113,6 +117,12 @@ async function runCodexLoginProcess(
   if (cancellation.isCancelled()) {
     throw new Error(CODEX_LOGIN_CANCELLED_MESSAGE)
   }
+  if (!wslInfo && process.platform === 'win32') {
+    await waitForPromiseWithSignal(warmWindowsPowerShellHostCache(), cancellation.signal)
+  }
+  if (cancellation.isCancelled()) {
+    throw new Error(CODEX_LOGIN_CANCELLED_MESSAGE)
+  }
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const spawnConfig = wslInfo
@@ -123,7 +133,7 @@ async function runCodexLoginProcess(
           codexCommand: 'codex',
           interactiveLogin: null
         }
-      : createHostLoginSpawn(managedHomePath)
+      : createCodexHostLoginSpawn(managedHomePath)
     const child = dependencies.spawn({
       command: spawnConfig.command,
       args: spawnConfig.args,
@@ -238,7 +248,7 @@ async function runCodexLoginProcess(
 
     const onError = (error: Error): void => {
       settle(() => {
-        const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
+        const isEnoent = 'code' in error && error.code === 'ENOENT'
         // Why: ENOENT is ambiguous — missing codex binary or missing node in PATH; a resolved full path implies node is missing.
         const isBareCommand = spawnConfig.codexCommand === 'codex'
         const message = isEnoent
@@ -263,6 +273,17 @@ async function runCodexLoginProcess(
           code === 0 ||
           (loginTreeKilledAfterAuth && readLoginAuthSnapshot(authJsonPath) !== null)
         ) {
+          if (
+            !loginTreeKilledAfterAuth &&
+            recordLoginConsoleStartIfMissed(spawnConfig.interactiveLogin, 'codex')
+          ) {
+            rejectPromise(
+              new Error(
+                'PowerShell could not start the Codex sign-in console. Check that PowerShell 7 is available and try again.'
+              )
+            )
+            return
+          }
           resolvePromise()
           return
         }
@@ -283,32 +304,6 @@ async function runCodexLoginProcess(
     child.on('error', onError)
     child.on('close', onClose)
   })
-}
-
-function createHostLoginSpawn(managedHomePath: string): {
-  command: string
-  args: string[]
-  env: NodeJS.ProcessEnv
-  codexCommand: string
-  interactiveLogin: WindowsHostInteractiveLoginSpawn | null
-} {
-  const codexCommand = resolveCodexCommand()
-  // Why: Windows host login needs a real console; otherwise inherit/hide
-  // leaves the child unable to read a paste-code / device-auth prompt.
-  const interactiveLogin =
-    process.platform === 'win32'
-      ? buildWindowsHostInteractiveLoginSpawn(codexCommand, ['login'])
-      : null
-  const { spawnCmd, spawnArgs } = interactiveLogin
-    ? { spawnCmd: interactiveLogin.command, spawnArgs: interactiveLogin.args }
-    : getSpawnArgsForWindows(codexCommand, ['login'])
-  return {
-    command: spawnCmd,
-    args: spawnArgs,
-    env: withCliRuntimeOnPath(codexCommand, { ...process.env, CODEX_HOME: managedHomePath }),
-    codexCommand,
-    interactiveLogin
-  }
 }
 
 async function assertWslCodexCliAvailable(wslInfo: {

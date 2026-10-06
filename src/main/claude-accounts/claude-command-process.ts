@@ -1,14 +1,18 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { spawnProcess } from '../../shared/child-process/run-process'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import {
   buildWindowsHostInteractiveLoginSpawn,
   type WindowsHostInteractiveLoginSpawn
 } from '../../shared/windows-interactive-login-spawn'
+import { warmWindowsPowerShellHostCache } from '../../shared/windows-powershell-host'
+import { recordLoginConsoleStartIfMissed } from '../crash-reporting/login-console-start-breadcrumb'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import { terminateClaudeProcess } from './claude-login-process-termination'
 
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
+const CLAUDE_SIGN_IN_CANCELLED = 'Claude sign-in was cancelled.'
 const CLAUDE_AUTH_DENIED_PATTERN =
   /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
 
@@ -28,19 +32,29 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
-export function runClaudeCommandProcess(
+export async function runClaudeCommandProcess(
   args: string[],
   configDir: ClaudeCommandConfig,
   timeoutMs: number,
   options?: ClaudeCommandOptions
 ): Promise<string> {
+  const isWindowsHostInteractiveLogin =
+    process.platform === 'win32' &&
+    configDir.linuxPath === null &&
+    configDir.wslDistro === null &&
+    args[0] === 'auth' &&
+    args[1] === 'login'
+  if (isWindowsHostInteractiveLogin) {
+    // Cancelling this caller must not stop the shared startup probe.
+    await waitForPromiseWithSignal(warmWindowsPowerShellHostCache(), options?.signal).catch(
+      // Translate an abort into this caller's cancellation error below.
+      () => {}
+    )
+    if (options?.signal?.aborted) {
+      throw new Error(CLAUDE_SIGN_IN_CANCELLED)
+    }
+  }
   return new Promise((resolvePromise, rejectPromise) => {
-    const isWindowsHostInteractiveLogin =
-      process.platform === 'win32' &&
-      configDir.linuxPath === null &&
-      configDir.wslDistro === null &&
-      args[0] === 'auth' &&
-      args[1] === 'login'
     // Why lazy: the WSL branch runs `claude` inside the distro, so resolving a
     // host binary there would be wasted filesystem probing for a path never used.
     let cachedHostClaudeCommand: string | null = null
@@ -137,7 +151,7 @@ export function runClaudeCommandProcess(
       }
     }
     const onAbort = (): void => {
-      killChild(() => settle(() => rejectPromise(new Error('Claude sign-in was cancelled.'))))
+      killChild(() => settle(() => rejectPromise(new Error(CLAUDE_SIGN_IN_CANCELLED))))
     }
     const onError = (error: Error): void => {
       if (!terminationPending) {
@@ -150,6 +164,14 @@ export function runClaudeCommandProcess(
       }
       settle(() => {
         if (code === 0 || options?.allowFailure) {
+          if (recordLoginConsoleStartIfMissed(interactiveLogin, 'claude')) {
+            rejectPromise(
+              new Error(
+                'PowerShell could not start the Claude sign-in console. Check that PowerShell 7 is available and try again.'
+              )
+            )
+            return
+          }
           resolvePromise(output)
           return
         }

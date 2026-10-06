@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, win32 } from 'node:path'
+import { join } from 'node:path'
 import { getSpawnArgsForWindows, wrapWindowsStartWait } from './windows-batch-spawn'
+import { getWindowsPowerShellHost } from './windows-powershell-host'
 
 export type WindowsHostInteractiveLoginSpawn = {
   command: string
@@ -12,6 +13,8 @@ export type WindowsHostInteractiveLoginSpawn = {
   cleanup: () => void
   getTerminationPid: () => number | null
   waitForTerminationPid: () => Promise<number | null>
+  /** PID proof is necessary because start /wait does not relay the payload exit code. */
+  hasRelayedPid: () => boolean
 }
 
 const PID_RELAY_WAIT_TIMEOUT_MS = 2_000
@@ -66,35 +69,40 @@ function waitForPidFile(pidFilePath: string): Promise<number | null> {
 
 export function buildWindowsHostInteractiveLoginSpawn(
   command: string,
-  args: string[]
+  args: string[],
+  powerShellHost: string = getWindowsPowerShellHost()
 ): WindowsHostInteractiveLoginSpawn {
   const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, args)
   const pidFilePath = join(tmpdir(), `orca-interactive-login-${randomUUID()}.pid`)
-  const powershell = win32.join(
-    process.env.SystemRoot ?? 'C:\\Windows',
-    'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe'
-  )
   const script = buildPidRelayScript(spawnCmd, spawnArgs, pidFilePath)
-  // Why: `-EncodedCommand` is not execution-policy gated (only `-File` is), so `-ExecutionPolicy
-  // Bypass` was a no-op — and it is one of the most heavily EDR-flagged PowerShell tokens. The
-  // base64 stays: `wrapWindowsStartWait` sends this through `cmd.exe /c start`, whose
-  // `assertWindowsCmdSafeTokens` guard rejects the `&` and `"` the raw relay script contains.
-  const wrapped = wrapWindowsStartWait(powershell, [
+  // Encoded payloads need no policy bypass; encoding protects the cmd.exe reparsing boundary.
+  const wrapped = wrapWindowsStartWait(powerShellHost, [
     '-NoLogo',
     '-NoProfile',
     '-EncodedCommand',
     Buffer.from(script, 'utf16le').toString('base64')
   ])
+  // Preserve startup proof after cleanup removes the relay file.
+  let relayedPid: number | null = null
+  const capturePid = (): number | null => (relayedPid ??= readPidFile(pidFilePath))
   return {
     command: wrapped.spawnCmd,
     args: wrapped.spawnArgs,
     stdio: 'ignore',
     windowsHide: true,
-    cleanup: () => rmSync(pidFilePath, { force: true }),
-    getTerminationPid: () => readPidFile(pidFilePath),
-    waitForTerminationPid: () => waitForPidFile(pidFilePath)
+    cleanup: () => {
+      capturePid()
+      rmSync(pidFilePath, { force: true })
+    },
+    getTerminationPid: () => capturePid(),
+    waitForTerminationPid: async () => {
+      // Cleanup may already have deleted the file whose PID we captured.
+      if (relayedPid !== null) {
+        return relayedPid
+      }
+      relayedPid = await waitForPidFile(pidFilePath)
+      return relayedPid
+    },
+    hasRelayedPid: () => capturePid() !== null
   }
 }
