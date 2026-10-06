@@ -3,6 +3,7 @@ import { Text } from 'react-native'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -29,6 +30,10 @@ function listing(
   entries: { name: string; isDirectory: boolean; isSymlink: boolean }[]
 ) {
   return { ok: true, result: { resolvedPath, entries }, _meta: { runtimeId: 'r' } }
+}
+
+function clientWith(sendRequest: RpcClient['sendRequest']): RpcClient {
+  return { ...createFakeRpcClient(), sendRequest }
 }
 
 function button(tree: ReactTestRenderer, label: string): ReactTestInstance {
@@ -63,7 +68,7 @@ describe('AddProjectFolderBrowser', () => {
     act(() => {
       renderer = create(
         createElement(AddProjectFolderBrowser, {
-          client: { sendRequest } as unknown as RpcClient,
+          client: clientWith(sendRequest),
           busy: false,
           error: '',
           onBack: vi.fn(),
@@ -100,7 +105,7 @@ describe('AddProjectFolderBrowser', () => {
     act(() => {
       renderer = create(
         createElement(AddProjectFolderBrowser, {
-          client: { sendRequest } as unknown as RpcClient,
+          client: clientWith(sendRequest),
           busy: false,
           error: '',
           onBack: vi.fn(),
@@ -121,7 +126,7 @@ describe('AddProjectFolderBrowser', () => {
     act(() =>
       renderer!.update(
         createElement(AddProjectFolderBrowser, {
-          client: { sendRequest } as unknown as RpcClient,
+          client: clientWith(sendRequest),
           busy: true,
           error: '',
           onBack: vi.fn(),
