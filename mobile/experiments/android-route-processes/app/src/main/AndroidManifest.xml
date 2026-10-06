@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="true" android:label="Orca route experiment">
+        <activity android:name=".RouteA" android:process=":route_a" android:exported="true" android:launchMode="singleTask" android:taskAffinity="dev.orca.routeproof.a" />
+        <activity android:name=".RouteB" android:process=":route_b" android:exported="true" android:launchMode="singleTask" android:taskAffinity="dev.orca.routeproof.b" />
+    </application>
+</manifest>

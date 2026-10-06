@@ -1,0 +1,642 @@
+{
+  "base": "c281f5b76219b28d5c04a4556a8b51d22793d997",
+  "regression": [
+    {
+      "mode": "before",
+      "watchEvents": [
+        {
+          "event": "change",
+          "path": "/private/var/folders/gj/yj8_pry96fv45phyj7_r4_w40000gn/T/orca-route-regression-beforeasYacZ/index.html"
+        },
+        {
+          "event": "change",
+          "path": "/private/var/folders/gj/yj8_pry96fv45phyj7_r4_w40000gn/T/orca-route-regression-beforeasYacZ/revision.js"
+        }
+      ],
+      "hotMessages": [
+        {
+          "type": "full-reload",
+          "path": "/index.html"
+        },
+        {
+          "type": "update",
+          "updates": [
+            {
+              "type": "js-update",
+              "timestamp": 1790329727286,
+              "path": "/main.js",
+              "acceptedPath": "/revision.js",
+              "explicitImportRequired": false,
+              "isWithinCircularImport": false
+            }
+          ]
+        }
+      ],
+      "socketMessages": [
+        {
+          "type": "connected"
+        },
+        {
+          "type": "full-reload",
+          "path": "/index.html"
+        },
+        {
+          "type": "custom",
+          "event": "proof:barrier"
+        },
+        {
+          "type": "update",
+          "updates": [
+            {
+              "type": "js-update",
+              "timestamp": 1790329727286,
+              "path": "/main.js",
+              "acceptedPath": "/revision.js",
+              "explicitImportRequired": false,
+              "isWithinCircularImport": false
+            }
+          ]
+        }
+      ],
+      "clientsBeforeWrite": 0,
+      "writeObserved": true,
+      "htmlWatched": true,
+      "revisionUpdate": {
+        "type": "update",
+        "updates": [
+          {
+            "type": "js-update",
+            "timestamp": 1790329727286,
+            "path": "/main.js",
+            "acceptedPath": "/revision.js",
+            "explicitImportRequired": false,
+            "isWithinCircularImport": false
+          }
+        ]
+      },
+      "passed": true
+    },
+    {
+      "mode": "after",
+      "watchEvents": [
+        {
+          "event": "change",
+          "path": "/private/var/folders/gj/yj8_pry96fv45phyj7_r4_w40000gn/T/orca-route-regression-afterHXfPRW/revision.js"
+        }
+      ],
+      "hotMessages": [
+        {
+          "type": "update",
+          "updates": [
+            {
+              "type": "js-update",
+              "timestamp": 1790329727545,
+              "path": "/main.js",
+              "acceptedPath": "/revision.js",
+              "explicitImportRequired": false,
+              "isWithinCircularImport": false
+            }
+          ]
+        }
+      ],
+      "socketMessages": [
+        {
+          "type": "connected"
+        },
+        {
+          "type": "custom",
+          "event": "proof:barrier"
+        },
+        {
+          "type": "update",
+          "updates": [
+            {
+              "type": "js-update",
+              "timestamp": 1790329727545,
+              "path": "/main.js",
+              "acceptedPath": "/revision.js",
+              "explicitImportRequired": false,
+              "isWithinCircularImport": false
+            }
+          ]
+        }
+      ],
+      "clientsBeforeWrite": 0,
+      "writeObserved": true,
+      "htmlWatched": false,
+      "revisionUpdate": {
+        "type": "update",
+        "updates": [
+          {
+            "type": "js-update",
+            "timestamp": 1790329727545,
+            "path": "/main.js",
+            "acceptedPath": "/revision.js",
+            "explicitImportRequired": false,
+            "isWithinCircularImport": false
+          }
+        ]
+      },
+      "passed": true
+    }
+  ],
+  "native": [
+    {
+      "scenario": "normal",
+      "failure": null,
+      "events": [
+        {
+          "event": "a resumed",
+          "time": 1790329764523
+        },
+        {
+          "event": "a loaded",
+          "time": 1790329765276
+        },
+        {
+          "event": "b resumed; a stopped",
+          "time": 1790329768055
+        },
+        {
+          "event": "b loaded",
+          "time": 1790329768306
+        },
+        {
+          "event": "distinct processes",
+          "time": 1790329768377,
+          "detail": "4002,4443"
+        },
+        {
+          "event": "both HMR while b foreground",
+          "time": 1790329769781
+        },
+        {
+          "event": "both fetching concurrently",
+          "time": 1790329772539
+        },
+        {
+          "event": "a resumed; b stopped",
+          "time": 1790329773681
+        },
+        {
+          "event": "retained documents after switching to a",
+          "time": 1790329774434
+        },
+        {
+          "event": "both HMR after switching to a",
+          "time": 1790329774686
+        },
+        {
+          "event": "b resumed; a stopped",
+          "time": 1790329775541
+        },
+        {
+          "event": "retained documents after switching to b",
+          "time": 1790329776293
+        },
+        {
+          "event": "a process exited",
+          "time": 1790329776367
+        },
+        {
+          "event": "b survives a death",
+          "time": 1790329776618
+        },
+        {
+          "event": "a resumed",
+          "time": 1790329777845
+        },
+        {
+          "event": "a recovered",
+          "time": 1790329778346
+        },
+        {
+          "event": "recovered pid",
+          "time": 1790329778415,
+          "detail": "4939"
+        },
+        {
+          "event": "recovered a HMR",
+          "time": 1790329778666
+        },
+        {
+          "event": "storage isolation and recovery passed",
+          "time": 1790329778667
+        }
+      ],
+      "cleanup": [
+        {
+          "action": "uninstall test APK"
+        },
+        {
+          "action": "remove reverse 56088"
+        },
+        {
+          "action": "remove reverse 56094"
+        },
+        {
+          "action": "close route a"
+        },
+        {
+          "action": "close route b"
+        }
+      ],
+      "routes": [
+        {
+          "route": "a",
+          "loads": [
+            {
+              "time": 1790329765043,
+              "route": "a",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "a",
+              "cookie": "route=a",
+              "revision": 1,
+              "kind": "load",
+              "page": "a35b32b2-8a51-42c2-9c4e-ae467e4dd314",
+              "url": "http://localhost:5173/"
+            },
+            {
+              "time": 1790329778159,
+              "route": "a",
+              "previous": "a",
+              "previousCookie": "route=a",
+              "stored": "a",
+              "cookie": "route=a",
+              "revision": 3,
+              "kind": "load",
+              "page": "cb326620-13b4-4061-8331-b79307efbe11",
+              "url": "http://localhost:5173/"
+            }
+          ],
+          "hmr": [
+            {
+              "time": 1790329769712,
+              "route": "a",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "a",
+              "cookie": "route=a",
+              "revision": 2,
+              "kind": "hmr",
+              "page": "a35b32b2-8a51-42c2-9c4e-ae467e4dd314",
+              "url": "http://localhost:5173/"
+            },
+            {
+              "time": 1790329774464,
+              "route": "a",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "a",
+              "cookie": "route=a",
+              "revision": 3,
+              "kind": "hmr",
+              "page": "a35b32b2-8a51-42c2-9c4e-ae467e4dd314",
+              "url": "http://localhost:5173/"
+            },
+            {
+              "time": 1790329778543,
+              "route": "a",
+              "previous": "a",
+              "previousCookie": "route=a",
+              "stored": "a",
+              "cookie": "route=a",
+              "revision": 4,
+              "kind": "hmr",
+              "page": "cb326620-13b4-4061-8331-b79307efbe11",
+              "url": "http://localhost:5173/"
+            }
+          ]
+        },
+        {
+          "route": "b",
+          "loads": [
+            {
+              "time": 1790329768150,
+              "route": "b",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "b",
+              "cookie": "route=b",
+              "revision": 1,
+              "kind": "load",
+              "page": "e1d73a5d-88d9-460a-bfbc-6f3b36a75c13",
+              "url": "http://localhost:5173/"
+            }
+          ],
+          "hmr": [
+            {
+              "time": 1790329769708,
+              "route": "b",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "b",
+              "cookie": "route=b",
+              "revision": 2,
+              "kind": "hmr",
+              "page": "e1d73a5d-88d9-460a-bfbc-6f3b36a75c13",
+              "url": "http://localhost:5173/"
+            },
+            {
+              "time": 1790329774469,
+              "route": "b",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "b",
+              "cookie": "route=b",
+              "revision": 3,
+              "kind": "hmr",
+              "page": "e1d73a5d-88d9-460a-bfbc-6f3b36a75c13",
+              "url": "http://localhost:5173/"
+            },
+            {
+              "time": 1790329776387,
+              "route": "b",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "b",
+              "cookie": "route=b",
+              "revision": 4,
+              "kind": "hmr",
+              "page": "e1d73a5d-88d9-460a-bfbc-6f3b36a75c13",
+              "url": "http://localhost:5173/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": "no-switch",
+      "failure": "Error: Timed out: a resumed; b stopped",
+      "events": [
+        {
+          "event": "a resumed",
+          "time": 1790329793109
+        },
+        {
+          "event": "a loaded",
+          "time": 1790329793109
+        },
+        {
+          "event": "b resumed; a stopped",
+          "time": 1790329794161
+        },
+        {
+          "event": "b loaded",
+          "time": 1790329794161
+        },
+        {
+          "event": "distinct processes",
+          "time": 1790329794270,
+          "detail": "5156,5253"
+        },
+        {
+          "event": "both HMR while b foreground",
+          "time": 1790329794815
+        },
+        {
+          "event": "both fetching concurrently",
+          "time": 1790329797336
+        }
+      ],
+      "cleanup": [
+        {
+          "action": "uninstall test APK"
+        },
+        {
+          "action": "remove reverse 56792"
+        },
+        {
+          "action": "remove reverse 56796"
+        },
+        {
+          "action": "close route a"
+        },
+        {
+          "action": "close route b"
+        }
+      ],
+      "routes": [
+        {
+          "route": "a",
+          "loads": [
+            {
+              "time": 1790329793016,
+              "route": "a",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "a",
+              "cookie": "route=a",
+              "revision": 1,
+              "kind": "load",
+              "page": "2a7487ac-08f8-4a70-8140-405574ff060a",
+              "url": "http://localhost:5173/"
+            }
+          ],
+          "hmr": [
+            {
+              "time": 1790329794685,
+              "route": "a",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "a",
+              "cookie": "route=a",
+              "revision": 2,
+              "kind": "hmr",
+              "page": "2a7487ac-08f8-4a70-8140-405574ff060a",
+              "url": "http://localhost:5173/"
+            }
+          ]
+        },
+        {
+          "route": "b",
+          "loads": [
+            {
+              "time": 1790329793629,
+              "route": "b",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "b",
+              "cookie": "route=b",
+              "revision": 1,
+              "kind": "load",
+              "page": "ffb22242-a634-417e-aa9c-19468d886f7a",
+              "url": "http://localhost:5173/"
+            }
+          ],
+          "hmr": [
+            {
+              "time": 1790329794684,
+              "route": "b",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "b",
+              "cookie": "route=b",
+              "revision": 2,
+              "kind": "hmr",
+              "page": "ffb22242-a634-417e-aa9c-19468d886f7a",
+              "url": "http://localhost:5173/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": "no-switch-b",
+      "failure": "Error: Timed out: b resumed; a stopped",
+      "events": [
+        {
+          "event": "a resumed",
+          "time": 1790329831762
+        },
+        {
+          "event": "a loaded",
+          "time": 1790329831762
+        },
+        {
+          "event": "b resumed; a stopped",
+          "time": 1790329833575
+        },
+        {
+          "event": "b loaded",
+          "time": 1790329833827
+        },
+        {
+          "event": "distinct processes",
+          "time": 1790329833966,
+          "detail": "6172,6447"
+        },
+        {
+          "event": "both HMR while b foreground",
+          "time": 1790329834602
+        },
+        {
+          "event": "both fetching concurrently",
+          "time": 1790329837365
+        },
+        {
+          "event": "a resumed; b stopped",
+          "time": 1790329838642
+        },
+        {
+          "event": "retained documents after switching to a",
+          "time": 1790329839651
+        },
+        {
+          "event": "both HMR after switching to a",
+          "time": 1790329839904
+        }
+      ],
+      "cleanup": [
+        {
+          "action": "uninstall test APK"
+        },
+        {
+          "action": "remove reverse 57474"
+        },
+        {
+          "action": "remove reverse 57478"
+        },
+        {
+          "action": "close route a"
+        },
+        {
+          "action": "close route b"
+        }
+      ],
+      "routes": [
+        {
+          "route": "a",
+          "loads": [
+            {
+              "time": 1790329831723,
+              "route": "a",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "a",
+              "cookie": "route=a",
+              "revision": 1,
+              "kind": "load",
+              "page": "60fb8b80-056c-4dea-b6f7-d33bce4277dd",
+              "url": "http://localhost:5173/"
+            }
+          ],
+          "hmr": [
+            {
+              "time": 1790329834398,
+              "route": "a",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "a",
+              "cookie": "route=a",
+              "revision": 2,
+              "kind": "hmr",
+              "page": "60fb8b80-056c-4dea-b6f7-d33bce4277dd",
+              "url": "http://localhost:5173/"
+            },
+            {
+              "time": 1790329839677,
+              "route": "a",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "a",
+              "cookie": "route=a",
+              "revision": 3,
+              "kind": "hmr",
+              "page": "60fb8b80-056c-4dea-b6f7-d33bce4277dd",
+              "url": "http://localhost:5173/"
+            }
+          ]
+        },
+        {
+          "route": "b",
+          "loads": [
+            {
+              "time": 1790329833643,
+              "route": "b",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "b",
+              "cookie": "route=b",
+              "revision": 1,
+              "kind": "load",
+              "page": "8fa115b9-7e87-4bdd-8fbd-be3d11f931d1",
+              "url": "http://localhost:5173/"
+            }
+          ],
+          "hmr": [
+            {
+              "time": 1790329834409,
+              "route": "b",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "b",
+              "cookie": "route=b",
+              "revision": 2,
+              "kind": "hmr",
+              "page": "8fa115b9-7e87-4bdd-8fbd-be3d11f931d1",
+              "url": "http://localhost:5173/"
+            },
+            {
+              "time": 1790329839677,
+              "route": "b",
+              "previous": null,
+              "previousCookie": "",
+              "stored": "b",
+              "cookie": "route=b",
+              "revision": 3,
+              "kind": "hmr",
+              "page": "8fa115b9-7e87-4bdd-8fbd-be3d11f931d1",
+              "url": "http://localhost:5173/"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "preboot": {
+    "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n'' !== '1'\n",
+    "note": "Boot guard rejected before installation or route creation; not a fixture acceptance run."
+  }
+}

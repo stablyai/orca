@@ -5,6 +5,8 @@
   "extends": "./tsconfig.json",
   "exclude": [
     "node_modules",
+    // This config replaces the app exclusions; retain the separately checked Node harness.
+    "experiments/android-route-processes",
     // These four are Node-side, not React Native: they import the desktop main process or
     // src/shared/child-process, whose modules are written against @types/node. This program's libs
     // are React Native's, where `setTimeout` answers a number rather than a NodeJS.Timeout, so

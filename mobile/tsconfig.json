@@ -14,5 +14,6 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["**/*.test.ts", "**/*.test.tsx"]
+  // The Node harness has its own CI typecheck; React Native declares numeric timers.
+  "exclude": ["**/*.test.ts", "**/*.test.tsx", "experiments/android-route-processes"]
 }

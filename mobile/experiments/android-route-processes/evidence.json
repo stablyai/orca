@@ -1,0 +1,198 @@
+{
+  "serial": "emulator-5640",
+  "events": [
+    {
+      "event": "a loaded",
+      "time": 1790327688107
+    },
+    {
+      "event": "b loaded",
+      "time": 1790327688910
+    },
+    {
+      "event": "distinct processes",
+      "time": 1790327688970,
+      "detail": "5740,5854"
+    },
+    {
+      "event": "both HMR while b foreground",
+      "time": 1790327689537
+    },
+    {
+      "event": "both fetching concurrently",
+      "time": 1790327692045
+    },
+    {
+      "event": "both HMR after switching to a",
+      "time": 1790327692328
+    },
+    {
+      "event": "a process exited",
+      "time": 1790327692425
+    },
+    {
+      "event": "b survives a death",
+      "time": 1790327692677
+    },
+    {
+      "event": "a recovered",
+      "time": 1790327693215
+    },
+    {
+      "event": "recovered pid",
+      "time": 1790327693272,
+      "detail": "6046"
+    },
+    {
+      "event": "recovered a HMR",
+      "time": 1790327693523
+    },
+    {
+      "event": "storage isolation and recovery passed",
+      "time": 1790327693524
+    }
+  ],
+  "logs": "09-25 05:14:46.925  5740  5740 I RouteProof: create route=a pid=5740 provider=133.0.6943.137\n09-25 05:14:47.227  5740  5740 I RouteProof: resume route=a pid=5740\n09-25 05:14:47.578  5740  5740 I RouteProof: a [vite] connecting...\n09-25 05:14:47.590  5740  5740 I RouteProof: a PROOF {\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":1,\"kind\":\"load\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:47.607  5740  5740 I RouteProof: a [vite] connected.\n09-25 05:14:47.892  5854  5854 I RouteProof: create route=b pid=5854 provider=133.0.6943.137\n09-25 05:14:48.095  5854  5854 I RouteProof: resume route=b pid=5854\n09-25 05:14:48.305  5740  5740 I RouteProof: stop route=a pid=5740\n09-25 05:14:48.335  5854  5854 I RouteProof: b [vite] connecting...\n09-25 05:14:48.343  5854  5854 I RouteProof: b PROOF {\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":1,\"kind\":\"load\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:48.353  5854  5854 I RouteProof: b [vite] connected.\n09-25 05:14:48.861  5740  5740 I RouteProof: a PROOF {\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"hmr\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:48.861  5854  5854 I RouteProof: b PROOF {\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"hmr\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:48.862  5740  5740 I RouteProof: a [vite] hot updated: /revision.js via /main.js\n09-25 05:14:48.862  5854  5854 I RouteProof: b [vite] hot updated: /revision.js via /main.js\n09-25 05:14:49.345  5854  5854 I RouteProof: b PROOF {\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:49.455  5740  5740 I RouteProof: a PROOF {\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:50.345  5854  5854 I RouteProof: b PROOF {\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:50.455  5740  5740 I RouteProof: a PROOF {\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:51.347  5854  5854 I RouteProof: b PROOF {\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:51.461  5740  5740 I RouteProof: a PROOF {\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:51.642  5740  5740 I RouteProof: resume route=a pid=5740\n09-25 05:14:51.655  5740  5740 I RouteProof: a PROOF {\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:51.658  5854  5854 I RouteProof: b PROOF {\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":3,\"kind\":\"hmr\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:51.658  5854  5854 I RouteProof: b [vite] hot updated: /revision.js via /main.js\n09-25 05:14:51.660  5740  5740 I RouteProof: a PROOF {\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":3,\"kind\":\"hmr\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:51.661  5740  5740 I RouteProof: a [vite] hot updated: /revision.js via /main.js\n09-25 05:14:51.923  5854  5854 I RouteProof: resume route=b pid=5854\n09-25 05:14:52.003  5854  5854 I RouteProof: b PROOF {\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":4,\"kind\":\"hmr\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:52.004  5854  5854 I RouteProof: b [vite] hot updated: /revision.js via /main.js\n09-25 05:14:52.345  5854  5854 I RouteProof: b PROOF {\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":4,\"kind\":\"fetch\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:52.374  6046  6046 I RouteProof: create route=a pid=6046 provider=133.0.6943.137\n09-25 05:14:52.547  6046  6046 I RouteProof: resume route=a pid=6046\n09-25 05:14:52.699  6046  6046 I RouteProof: a [vite] connecting...\n09-25 05:14:52.706  6046  6046 I RouteProof: a PROOF {\"route\":\"a\",\"previous\":\"a\",\"previousCookie\":\"route=a\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":3,\"kind\":\"load\",\"page\":\"cd875ab6-f04f-4f6d-9170-74c565d768da\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:52.715  6046  6046 I RouteProof: a [vite] connected.\n09-25 05:14:52.838  5854  5854 I RouteProof: stop route=b pid=5854\n09-25 05:14:52.848  6046  6046 I RouteProof: a PROOF {\"route\":\"a\",\"previous\":\"a\",\"previousCookie\":\"route=a\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":4,\"kind\":\"hmr\",\"page\":\"cd875ab6-f04f-4f6d-9170-74c565d768da\",\"url\":\"http://localhost:5173/\"}\n09-25 05:14:52.849  6046  6046 I RouteProof: a [vite] hot updated: /revision.js via /main.js",
+  "measurements": {
+    "routeA": "Applications Memory Usage (in Kilobytes):\nUptime: 282121 Realtime: 282121\n\n** MEMINFO in pid 5740 [dev.orca.routeproof:route_a] **\n                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap\n                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free\n                ------   ------   ------   ------   ------   ------   ------   ------\n  Native Heap    19039    19028        0       31    20076    32512    25941     1978\n  Dalvik Heap     2813     2784        0       98     3840     3335     2502      833\n Dalvik Other     5827     1244        0        5    10796                           \n        Stack     1496     1496        0        0     1500                           \n       Ashmem      323      176        0        0     1072                           \n    Other dev       24        0       16        0      332                           \n     .so mmap     4250      424       64        6    35252                           \n    .jar mmap     3551        0        8        0    45140                           \n    .apk mmap    13731      500      248        0    59192                           \n    .dex mmap       23        0        0        0     1032                           \n    .oat mmap       22        0        0        0     1764                           \n    .art mmap    10095     8704       12       83    25360                           \n   Other mmap     2952      248       84        0     7248                           \n      Unknown     5570     5536       24        1     6048                           \n        TOTAL    69940    40140      456      224   218652    35847    28443     2811\n \n App Summary\n                       Pss(KB)                        Rss(KB)\n                        ------                         ------\n           Java Heap:    11500                          29200\n         Native Heap:    19028                          20076\n                Code:     1320                         151620\n               Stack:     1496                           1500\n            Graphics:        0                              0\n       Private Other:     7252\n              System:    29344\n             Unknown:                                   16256\n \n           TOTAL PSS:    69940            TOTAL RSS:   218652       TOTAL SWAP PSS:      224\n \n Objects\n               Views:        5         ViewRootImpl:        1\n         AppContexts:        8           Activities:        1\n              Assets:       24        AssetManagers:        0\n       Local Binders:       47        Proxy Binders:       69\n       Parcel memory:       42         Parcel count:       74\n    Death Recipients:        5             WebViews:        1\n \n Native Allocations\n                         Count                       Total(kB)\n                        ------                         ------\n    Other (malloced):      330                             30\n Other (nonmalloced):      122                             83\n \n SQL\n         MEMORY_USED:        0\n  PAGECACHE_OVERFLOW:        0          MALLOC_SIZE:        0",
+    "routeB": "Applications Memory Usage (in Kilobytes):\nUptime: 282296 Realtime: 282296\n\n** MEMINFO in pid 5854 [dev.orca.routeproof:route_b] **\n                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap\n                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free\n                ------   ------   ------   ------   ------   ------   ------   ------\n  Native Heap    19002    18980        0       37    20032    32512    25988     1931\n  Dalvik Heap     2731     2696        0      132     3752     5082     2541     2541\n Dalvik Other    12737     8264        0       21    17596                           \n        Stack     1392     1392        0        0     1396                           \n       Ashmem      333      180        0        0     1088                           \n    Other dev       20        0       12        0      328                           \n     .so mmap     4202      424        8        6    35204                           \n    .jar mmap     3518        0        4        0    45084                           \n    .apk mmap    13260      500        4        0    58260                           \n    .dex mmap       23        0        0        0     1032                           \n    .oat mmap       22        0        0        0     1764                           \n    .art mmap    10054     8676        0       83    25340                           \n   Other mmap     2893      240      124        0     7104                           \n      Unknown     5441     5400       32        2     5916                           \n        TOTAL    75909    46752      184      281   223896    37594    28529     4472\n \n App Summary\n                       Pss(KB)                        Rss(KB)\n                        ------                         ------\n           Java Heap:    11372                          29092\n         Native Heap:    18980                          20032\n                Code:     1032                         150380\n               Stack:     1392                           1396\n            Graphics:        0                              0\n       Private Other:    14160\n              System:    28973\n             Unknown:                                   22996\n \n           TOTAL PSS:    75909            TOTAL RSS:   223896       TOTAL SWAP PSS:      281\n \n Objects\n               Views:        5         ViewRootImpl:        1\n         AppContexts:        8           Activities:        1\n              Assets:       24        AssetManagers:        0\n       Local Binders:       52        Proxy Binders:       75\n       Parcel memory:       37         Parcel count:       70\n    Death Recipients:        5             WebViews:        1\n \n Native Allocations\n                         Count                       Total(kB)\n                        ------                         ------\n    Other (malloced):      336                             30\n Other (nonmalloced):      128                             87\n \n SQL\n         MEMORY_USED:        0\n  PAGECACHE_OVERFLOW:        0          MALLOC_SIZE:        0"
+  },
+  "cleanup": [
+    {
+      "action": "uninstall test APK"
+    },
+    {
+      "action": "remove reverse 50147"
+    },
+    {
+      "action": "remove reverse 50151"
+    },
+    {
+      "action": "close route a"
+    },
+    {
+      "action": "close route b"
+    }
+  ],
+  "routes": [
+    {
+      "route": "a",
+      "reports": [
+        {
+          "time": 1790327688047,
+          "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":1,\"kind\":\"load\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327689301,
+          "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"hmr\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327689895,
+          "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327690895,
+          "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327691902,
+          "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327692095,
+          "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327692104,
+          "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":3,\"kind\":\"hmr\",\"page\":\"7abe8e5d-7b8d-45bd-a21f-e66401de8b59\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327693154,
+          "body": "{\"route\":\"a\",\"previous\":\"a\",\"previousCookie\":\"route=a\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":3,\"kind\":\"load\",\"page\":\"cd875ab6-f04f-4f6d-9170-74c565d768da\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327693289,
+          "body": "{\"route\":\"a\",\"previous\":\"a\",\"previousCookie\":\"route=a\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":4,\"kind\":\"hmr\",\"page\":\"cd875ab6-f04f-4f6d-9170-74c565d768da\",\"url\":\"http://localhost:5173/\"}"
+        }
+      ],
+      "targets": [
+        {
+          "host": "localhost",
+          "port": 5173
+        },
+        {
+          "host": "localhost",
+          "port": 5173
+        },
+        {
+          "host": "localhost",
+          "port": 5173
+        },
+        {
+          "host": "localhost",
+          "port": 5173
+        },
+        {
+          "host": "localhost",
+          "port": 5173
+        },
+        {
+          "host": "localhost",
+          "port": 5173
+        }
+      ]
+    },
+    {
+      "route": "b",
+      "reports": [
+        {
+          "time": 1790327688792,
+          "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":1,\"kind\":\"load\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327689302,
+          "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"hmr\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327689786,
+          "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327690785,
+          "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327691787,
+          "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327692097,
+          "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":3,\"kind\":\"hmr\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327692444,
+          "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":4,\"kind\":\"hmr\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}"
+        },
+        {
+          "time": 1790327692792,
+          "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":4,\"kind\":\"fetch\",\"page\":\"e2f9a2a6-2159-4b2a-8864-db831072c93f\",\"url\":\"http://localhost:5173/\"}"
+        }
+      ],
+      "targets": [
+        {
+          "host": "localhost",
+          "port": 5173
+        },
+        {
+          "host": "localhost",
+          "port": 5173
+        },
+        {
+          "host": "localhost",
+          "port": 5173
+        }
+      ]
+    }
+  ],
+  "evidenceNote": "2026-09-25 API 36 arm64 dedicated headless emulator; earlier-run logcat lines and unrelated emulator process listing omitted; all current-run route logs, reports, targets and app-process memory readings retained."
+}
