@@ -5,6 +5,7 @@ import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
 import { resolveCliStatusCaller } from '../runtime/status-caller'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
+import { resolveOrcadBindHost } from '../../main/orcad/orcad-bind-address'
 
 function envRecord(): Record<string, string> {
   // Why: the `orca` launcher runs Orca's Electron binary as Node, so this CLI
@@ -67,7 +68,14 @@ function getOptionalServeBind(flags: Map<string, string | boolean>): string | nu
   if (typeof rawBind !== 'string' || rawBind.length === 0) {
     throw new RuntimeClientError('invalid_argument', 'Missing value for --bind.')
   }
-  return rawBind
+  try {
+    return resolveOrcadBindHost(rawBind)
+  } catch (error) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      error instanceof Error ? error.message : 'Invalid --bind value.'
+    )
+  }
 }
 
 export const CORE_HANDLERS: Record<string, CommandHandler> = {
