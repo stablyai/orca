@@ -1,3 +1,4 @@
+import type { TerminalProfileService } from './host-env/agent-profile-launch'
 import type { BrowserWindow, WebContents } from 'electron'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence'
@@ -48,6 +49,7 @@ export type SerializeResult = {
 } | null
 
 export type PtyIpcSessionOptions = {
+  agentProfiles?: TerminalProfileService
   prepareCodexSessionResume?: PrepareCodexSessionResume
   awaitLocalPtyStartup?: () => Promise<void>
   awaitLocalPtyProviderStartup?: () => Promise<void>

@@ -9,6 +9,7 @@ import {
   markClaudePtyExited,
   markClaudePtySpawned,
   onLiveClaudePtysDrained,
+  reserveClaudeCredentialOwner,
   seedLiveClaudePtysFromPersistence
 } from './live-pty-gate'
 
@@ -139,4 +140,28 @@ describe('Claude live PTY gate', () => {
     markClaudePtyExited('live-claude-pty')
     expect(removeClaudeLivePtySessionId).toHaveBeenCalledWith('live-claude-pty')
   })
+})
+
+it('notifies only when pending and committed credential owners have all drained', () => {
+  const releaseFirst = reserveClaudeCredentialOwner(false)
+  const releaseSecond = reserveClaudeCredentialOwner(true)
+  const drained = vi.fn()
+  const unsubscribe = onLiveClaudePtysDrained(drained)
+  try {
+    markClaudePtySpawned('pending-transfer')
+    releaseFirst()
+    expect(drained).not.toHaveBeenCalled()
+    markClaudePtyExited('pending-transfer')
+    expect(drained).not.toHaveBeenCalled()
+    releaseSecond()
+    expect(drained).toHaveBeenCalledOnce()
+    releaseSecond()
+    markClaudePtyExited('pending-transfer')
+    expect(drained).toHaveBeenCalledOnce()
+  } finally {
+    unsubscribe()
+    markClaudePtyExited('pending-transfer')
+    releaseFirst()
+    releaseSecond()
+  }
 })

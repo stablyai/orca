@@ -11,6 +11,8 @@ import {
 } from '../runtime-selection'
 import { ClaudeRuntimeAuthSnapshotRestore } from './runtime-auth-snapshot-restore'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth-types'
+import { hasIsolatedClaudeAccountAuth } from '../isolated-account-auth'
+import { hasClaudeCredentialOwners } from '../live-pty-gate'
 
 export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapshotRestore {
   protected getPreparation(target?: ClaudeAccountSelectionTarget): ClaudeRuntimeAuthPreparation {
@@ -21,6 +23,25 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
     )
     const activeAccountId = getSelectedClaudeAccountIdForTarget(settings, normalizedTarget)
     const activeAccount = this.getActiveAccount(settings.claudeManagedAccounts, activeAccountId)
+    if (
+      normalizeClaudeAccountSelectionTarget(normalizedTarget).runtime === 'host' &&
+      activeAccount?.managedAuthRuntime !== 'wsl' &&
+      activeAccount &&
+      hasIsolatedClaudeAccountAuth(activeAccount.managedAuthPath)
+    ) {
+      return {
+        configDir: activeAccount.managedAuthPath,
+        runtime: 'host',
+        wslDistro: null,
+        wslLinuxConfigDir: null,
+        envPatch: { CLAUDE_CONFIG_DIR: activeAccount.managedAuthPath },
+        stripAuthEnv: true,
+        isolatedCredentials: true,
+        accountId: activeAccount.id,
+        managedRefreshDeferredByLivePty: hasClaudeCredentialOwners(),
+        provenance: `managed:${activeAccount.id}`
+      }
+    }
     if (
       normalizeClaudeAccountSelectionTarget(normalizedTarget).runtime === 'wsl' &&
       activeAccount?.managedAuthRuntime === 'wsl' &&

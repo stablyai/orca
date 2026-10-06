@@ -28,6 +28,7 @@ export function restorePersistedStructuredLaunchState(
       worktreeId,
       executionHostId: record.executionHostId,
       sessionId: record.sessionId,
+      ...(record.agentProfile ? { agentProfile: record.agentProfile } : {}),
       agent: record.agent,
       clientOperationId: record.clientOperationId,
       payloadFingerprint: record.payloadFingerprint,
@@ -45,7 +46,12 @@ export function restorePersistedStructuredLaunchState(
   // Only a Retry or re-check restarts a restored launch.
   const callers: StructuredLaunchCallerGroup = createStructuredLaunchCallerGroup({ kind: 'retry' })
   const state: StructuredLaunchState = {
-    identity: structuredLaunchIdentity(worktreeId, record.agent, record.resumeFrom),
+    identity: structuredLaunchIdentity(
+      worktreeId,
+      record.agent,
+      record.resumeFrom,
+      record.agentProfile
+    ),
     intent,
     promptDelivery: 'draft',
     promise: Promise.resolve({ sessionId: record.sessionId, fence: 0 }),

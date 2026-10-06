@@ -3,7 +3,11 @@ import {
   agentSessionProviderHandleKey,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import {
+  codexProviderHandle,
+  CODEX_STRUCTURED_HANDLE_NAMESPACE,
+  isAgentSessionProviderHandleInNamespace
+} from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import { readProcessStartTimeMs } from '../runtime/agent-session-process-identity-probe'
 
@@ -104,4 +108,13 @@ export function codexProviderHandleLink(
         }
       : {})
   }
+}
+
+export function codexAcquisitionThreadId(
+  handle: AgentSessionJournalIdentity['providerHandle']
+): string | null {
+  return handle &&
+    isAgentSessionProviderHandleInNamespace(handle, CODEX_STRUCTURED_HANDLE_NAMESPACE)
+    ? handle.nativeId
+    : null
 }

@@ -97,6 +97,10 @@ export function createAgentModelCatalogService(
       const record = params.sessionId ? deps.getRecord(params.sessionId) : undefined
       const scoped =
         record && record.provider === params.agent && deps.drivesRecord(record) ? record : undefined
+      // An unsupported captured binding never grants a probe authority over the selected account.
+      if (record?.accountHome.agentProfile && !scoped) {
+        return { origin: 'unknown' }
+      }
       let fingerprint: string
       let accountHomePath: string | null
       if (scoped) {
@@ -119,7 +123,8 @@ export function createAgentModelCatalogService(
         accountHomePath = resolved.path
       }
       let entry = deps.store.get(fingerprint)
-      const probe = deps.probes?.[params.agent]
+      // A bound session's live child populates its catalog; a generic probe has no profile authority.
+      const probe = scoped?.accountHome.agentProfile ? undefined : deps.probes?.[params.agent]
       const home = accountHomePath
       // Without an entry, answer from any running listing instead of starting a second one.
       let listing = !entry && home ? deps.store.pendingListing(fingerprint) : null

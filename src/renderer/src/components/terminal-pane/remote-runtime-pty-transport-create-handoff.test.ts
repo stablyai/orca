@@ -67,6 +67,20 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   )
 
+  it('refuses profile-bound startup before either remote create protocol can discard it', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      launchAgent: 'codex',
+      agentProfileId: 'profile-a'
+    })
+    await expect(transport.connect({ url: '', callbacks: {} })).rejects.toThrow(
+      /only in local terminals/
+    )
+    expect(runtimeCall).not.toHaveBeenCalled()
+    transport.destroy?.()
+  })
+
   beforeEach(async () => {
     resetRemoteRuntimeTransport()
     // Charge the cold module transform to setup, not the launch deadline.

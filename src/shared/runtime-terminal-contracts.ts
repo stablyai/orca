@@ -1,7 +1,4 @@
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
-} from './agent-session-resume'
+import type * as AgentResume from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
@@ -253,8 +250,9 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
-  launchConfig?: SleepingAgentLaunchConfig
-  resumeProviderSession?: AgentProviderSessionMetadata
+  agentProfileId?: string
+  launchConfig?: AgentResume.SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentResume.AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'

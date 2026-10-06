@@ -46,7 +46,8 @@ export type HostCreateSupport =
 export async function askHostCreateSupport(
   target: RuntimeClientTarget,
   worktree: string,
-  agent: AgentSessionHandleProvider
+  agent: AgentSessionHandleProvider,
+  agentProfileId?: string
 ): Promise<HostCreateSupport> {
   for (let attempt = 0; ; attempt += 1) {
     try {
@@ -54,7 +55,11 @@ export async function askHostCreateSupport(
         supported: boolean
         reason?: string
         seedOptions?: unknown
-      }>(target, 'agentSession.createSupport', { worktree, agent })
+      }>(target, 'agentSession.createSupport', {
+        worktree,
+        agent,
+        ...(agentProfileId !== undefined ? { agentProfileId } : {})
+      })
       if (support.supported !== true) {
         return { kind: 'declined' }
       }

@@ -70,3 +70,33 @@ describe('runCodexAppServerSession environment', () => {
     expect(result).toEqual({ largeBytes: 1024 * 1024 + 1, followup: { alive: true } })
   })
 })
+
+describe('bounded profile observations', () => {
+  it('reaps an unresponsive synthetic child at the session deadline', async () => {
+    await expect(
+      runCodexAppServerSession(
+        {
+          command: process.execPath,
+          cliPath: null,
+          args: ['-e', 'setInterval(() => {}, 1000)'],
+          timeoutMs: 100
+        },
+        async () => {}
+      )
+    ).rejects.toThrow(/exceeded 100ms/i)
+  })
+  it('bounds stdout and stderr even before initialize responds', async () => {
+    await expect(
+      runCodexAppServerSession(
+        {
+          command: process.execPath,
+          cliPath: null,
+          args: ['-e', "process.stdout.write('x'.repeat(4096));setInterval(() => {}, 1000)"],
+          timeoutMs: 2000,
+          maxOutputBytes: 1024
+        },
+        async () => {}
+      )
+    ).rejects.toThrow(/output/i)
+  })
+})

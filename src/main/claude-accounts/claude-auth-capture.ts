@@ -125,7 +125,7 @@ function readClaudeOauthAccount(configDir: string): unknown {
   return null
 }
 
-function resolveClaudeIdentity(
+export function resolveClaudeIdentity(
   statusOutput: string,
   oauthAccount: unknown,
   credentialsJson: string

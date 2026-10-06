@@ -1,6 +1,19 @@
+import {
+  MAX_ID_LENGTH,
+  SessionId,
+  Identifier,
+  JournalCursor,
+  MutationEnvelope
+} from './structured-agent-session-envelope-params'
+export {
+  MAX_ID_LENGTH,
+  SessionId,
+  Identifier,
+  JournalCursor,
+  MutationEnvelope
+} from './structured-agent-session-envelope-params'
 import { z } from 'zod'
 import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
-import { isAgentSessionId } from '../agent-session-record'
 import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
 import {
@@ -8,13 +21,10 @@ import {
   AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
 } from '../agent-session-question-answer'
 import {
-  AGENT_SESSION_ID_MAX_LENGTH,
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH
 } from '../agent-session-wire'
-
-export const MAX_ID_LENGTH = AGENT_SESSION_ID_MAX_LENGTH
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
@@ -31,37 +41,6 @@ export const MAX_OPTION_LABEL = 512
 
 /** One relaunch cannot offer more chats than a profile plausibly holds. */
 export const MAX_RESTART_RESUME_SESSIONS = 512
-
-export const SessionId = z
-  .string()
-  .max(MAX_ID_LENGTH)
-  .refine(isAgentSessionId, 'Invalid agent session id')
-
-export const Identifier = (message: string, maxLength = MAX_ID_LENGTH) =>
-  z
-    .string()
-    .min(1, message)
-    .max(maxLength, message)
-    .refine((value) => value === value.trim(), message)
-
-export const JournalCursor = z
-  .object({
-    epoch: Identifier('Invalid journal epoch'),
-    sequence: z.number().int().nonnegative()
-  })
-  .strict()
-
-export const MutationEnvelope = z
-  .object({
-    sessionId: SessionId,
-    clientOperationId: Identifier('Invalid client operation id'),
-    /** Null is the "must not exist yet" case; every other call fences. */
-    expectedRuntimeFence: z.number().int().positive().nullable(),
-    payloadFingerprint: z
-      .string()
-      .regex(/^[0-9a-f]{64}$/, 'Payload fingerprint must be a sha256 hex digest')
-  })
-  .strict()
 
 export const ProviderHandle = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('codex'), threadId: Identifier('Invalid thread id') }).strict(),
@@ -127,6 +106,7 @@ export const ResumeSource = z
 
 export const CreateIntentParams = z
   .object({
+    agentProfileId: Identifier('Invalid agent profile id').optional(),
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent,
@@ -147,6 +127,10 @@ export const CreateParams = z.union([AttachParams, CreateIntentParams])
 
 export const CreateSupportParams = z
   .object({
+    agentProfileId: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,128}$/)
+      .optional(),
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent
   })

@@ -28,6 +28,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         command,
         cwd,
         env,
+        agentProfileId,
         launchConfig,
         resumeProviderSession,
         launchToken,
@@ -205,6 +206,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             store.queueTabStartupCommand(tab.id, {
               command,
               ...(env ? { env } : {}),
+              ...(agentProfileId !== undefined ? { agentProfileId } : {}),
               ...(launchConfig ? { launchConfig } : {}),
               ...(resumeProviderSession ? { resumeProviderSession } : {}),
               ...(launchToken ? { launchToken } : {}),

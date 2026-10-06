@@ -1,3 +1,4 @@
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -41,6 +42,7 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
   let sourceDir: string | null = null
 
   beforeEach(() => {
+    installFakeAppEnvironment({ getPath: () => CLAUDE_SERVICE_TEST_ROOT })
     setPlatform('linux')
     rmSync(managedRoot, { recursive: true, force: true })
     sourceDir = null

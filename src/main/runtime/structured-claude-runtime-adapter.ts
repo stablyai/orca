@@ -1,5 +1,6 @@
+import type { AgentProfileConnectionService } from '../agent-profiles/connection-service'
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord, AgentSessionAccountHome } from '../../shared/agent-session-record'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
@@ -20,6 +21,7 @@ import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { ClaudeAtRestCommandCatalog } from '../claude/claude-at-rest-commands'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
+  agentProfiles?: AgentProfileConnectionService
   store: AgentSessionRecordStore
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveClaudeCommand?: () => string
@@ -28,7 +30,9 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   resolveClaudeInheritedEnv?: () => Promise<Record<string, string>>
   /** Managed-account auth state for a Claude launch, mirroring the terminal preflight.
    *  Required: an absent policy is what silently under-strips. */
-  resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
+  resolveClaudeAuthPolicy: (
+    home?: AgentSessionAccountHome
+  ) => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   /** The user's Agent Permissions setting for Claude; absent means prompting. */
   resolveClaudePermissionMode?: () => Promise<PermissionMode> | PermissionMode
   readClaudeManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
@@ -77,11 +81,13 @@ export function createStructuredClaudeRuntimeAdapter(
 ): ClaudeStructuredSessionAdapter {
   const { store } = deps
   return new ClaudeStructuredSessionAdapter({
+    hasProfileBinding: (sessionId) => Boolean(store.getRecord(sessionId)?.accountHome.agentProfile),
     atRestCommands: new ClaudeAtRestCommandCatalog({
       resolveWorkspacePath: deps.resolveWorkspacePath
     }),
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
+      agentProfiles: deps.agentProfiles,
       resolveWorkspacePath: deps.resolveWorkspacePath,
       resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),

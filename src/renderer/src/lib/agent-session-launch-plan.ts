@@ -1,4 +1,6 @@
+import { profileRequiresFreshTerminal } from '../../../shared/agent-profile-capabilities'
 import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { AgentLaunchProfile } from '../../../shared/agent-launch-profile'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -27,6 +29,7 @@ import type { StructuredAgentLaunchOptions } from '@/lib/structured-agent-sessio
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
+  agentProfile?: AgentLaunchProfile
   /** The user action this launch serves, minted where that action is handled. */
   requestId: AgentLaunchRequestId
   resumeFrom?: StructuredAgentSessionResumeSource
@@ -39,6 +42,7 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
  * (or a retry within the same session) re-enters here without re-resolving.
  */
 export type AgentSessionLaunchVerdict = {
+  agentProfile?: AgentLaunchProfile
   route: AgentLaunchRoute
   /** The user action this launch serves; a re-entry with this verdict is that same action. */
   requestId: AgentLaunchRequestId
@@ -84,6 +88,7 @@ export type AgentSessionLaunchPlan = Readonly<AgentSessionLaunchVerdict> & {
 
 function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): StructuredAgentLaunchOptions {
   return {
+    ...(verdict.agentProfile ? { agentProfile: verdict.agentProfile } : {}),
     requestId: verdict.requestId,
     ...(verdict.prompt !== undefined ? { prompt: verdict.prompt } : {}),
     ...(verdict.promptDelivery ? { promptDelivery: verdict.promptDelivery } : {}),
@@ -178,7 +183,11 @@ export function planAgentSessionLaunch(
   const executionHostId =
     route === 'structured-native-chat' ? parseExecutionHostId(input.executionHostId)?.id : undefined
   return adoptAgentSessionLaunchVerdict({
-    route,
+    ...(request.agentProfile ? { agentProfile: request.agentProfile } : {}),
+    route:
+      request.agentProfile && profileRequiresFreshTerminal(request.agentProfile.binding)
+        ? 'terminal-tui'
+        : route,
     requestId: request.requestId,
     agent: request.agent,
     ...(executionHostId ? { executionHostId } : {}),

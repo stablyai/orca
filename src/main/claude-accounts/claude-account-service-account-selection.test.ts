@@ -1,3 +1,4 @@
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -38,6 +39,7 @@ describe('ClaudeAccountService credential capture', () => {
   let tempDir: string | null = null
 
   beforeEach(() => {
+    installFakeAppEnvironment({ getPath: () => CLAUDE_SERVICE_TEST_ROOT })
     setPlatform('darwin')
     tempDir = null
     resetClaudeKeychainMocks()

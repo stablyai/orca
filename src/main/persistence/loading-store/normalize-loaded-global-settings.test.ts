@@ -67,6 +67,28 @@ describe('structured chat shell environment settings', () => {
   })
 })
 
+describe('agent launch profile settings', () => {
+  it('normalizes profile bindings on load and preserves older settings without profiles', () => {
+    const profile = {
+      id: 'work',
+      name: 'Work',
+      agent: 'codex',
+      hostId: 'local',
+      executable: '/opt/bin/codex',
+      binding: { kind: 'external', home: '/profiles/work' }
+    }
+    expect(
+      normalizeLegacyProfile({
+        agentLaunchProfiles: [
+          profile,
+          { ...profile, id: 'bad', binding: { kind: 'external', home: 'relative' } }
+        ]
+      }).agentLaunchProfiles
+    ).toEqual([profile])
+    expect(normalizeLegacyProfile({}).agentLaunchProfiles).toEqual([])
+  })
+})
+
 describe('machine name setting', () => {
   it('trims persisted names and defaults missing legacy values to automatic detection', () => {
     expect(normalizeLegacyProfile({ machineName: '  Build server  ' }).machineName).toBe(

@@ -10,7 +10,8 @@ export const UNIT_INCLUDE = [
   'config/scripts/**/*.test.ts',
   'config/scripts/**/*.test.mjs',
   'tests/tools/**/*.test.mjs',
-  'tests/e2e/**/*.unit.test.ts'
+  'tests/e2e/**/*.unit.test.ts',
+  'tests/e2e/**/*.unit.test.tsx'
 ]
 
 export const UNIT_EXCLUDE = [

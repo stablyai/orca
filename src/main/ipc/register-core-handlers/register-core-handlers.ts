@@ -1,3 +1,5 @@
+import { registerAgentProfileHandlers } from '../agent-profiles'
+import type { AgentProfileConnectionService } from '../../agent-profiles/connection-service'
 import { app } from 'electron'
 import { registerAppHandlers } from '../app'
 import { registerCliHandlers } from '../cli'
@@ -101,6 +103,7 @@ import type { PluginMarketplaceHandlerServices } from '../plugin-marketplaces'
 let registered = false
 
 type CoreHandlerLifecycleOptions = {
+  agentProfiles?: AgentProfileConnectionService
   onBeforeRelaunch?: () => void | Promise<void>
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
@@ -152,6 +155,9 @@ export function registerCoreHandlers(
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerClaudeAccountHandlers(claudeAccounts)
+  if (lifecycleOptions.agentProfiles) {
+    registerAgentProfileHandlers(lifecycleOptions.agentProfiles)
+  }
   registerOpenCodeGoCredentialsHandlers(rateLimits)
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerZcodePlanCredentialsHandlers(rateLimits)

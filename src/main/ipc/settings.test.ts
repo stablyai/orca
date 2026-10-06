@@ -467,7 +467,7 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
-  it('does not accept plugin authority grants from generic renderer settings IPC', async () => {
+  it('does not accept plugin or profile authority grants from generic renderer settings IPC', async () => {
     store.getSettings.mockReturnValue({ pluginConsents: {}, disabledPlugins: [] })
     store.updateSettings.mockReturnValue({ pluginConsents: {}, disabledPlugins: [] })
     registerSettingsHandlers(store as never)
@@ -479,7 +479,8 @@ describe('registerSettingsHandlers', () => {
 
     await handler(settingsInvokeEvent, {
       pluginConsents: { 'orca-samples.demo': 'sha256-forged' },
-      disabledPlugins: ['orca-samples.demo']
+      disabledPlugins: ['orca-samples.demo'],
+      agentLaunchProfiles: [{ id: 'forged', executable: '/untrusted/program' }]
     })
 
     expect(store.updateSettings).toHaveBeenCalledWith(

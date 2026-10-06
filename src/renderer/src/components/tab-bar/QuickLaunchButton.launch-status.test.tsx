@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type { AgentLaunchProfile } from '../../../../shared/agent-launch-profile'
 import type { ReactNode } from 'react'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -52,10 +53,12 @@ vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchMoc
 
 type DivProps = { disabled?: boolean; title?: string; onSelect?: () => void }
 
+import { AgentProfileMenuItem } from './AgentProfileMenuItem'
 import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
 import {
   resetStructuredAgentLaunchRegistryForTests,
-  setStructuredLaunchState
+  setStructuredLaunchState,
+  structuredLaunchIdentity
 } from '@/lib/structured-agent-session-launch-registry'
 
 const WORKTREE_ID = 'worktree-1'
@@ -68,11 +71,12 @@ function registerLaunch(
     requestId: `${agent}-pick`,
     blank: true,
     stagedEntry: null
-  }
+  },
+  profile?: AgentLaunchProfile
 ): void {
   const sessionId = `${agent}-session`
   setStructuredLaunchState({
-    identity: `${agent}:${WORKTREE_ID}`,
+    identity: structuredLaunchIdentity(WORKTREE_ID, agent, undefined, profile),
     intent: {
       worktreeId: WORKTREE_ID,
       sessionId,
@@ -117,6 +121,38 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     resetStructuredAgentLaunchRegistryForTests()
   })
   afterEach(cleanup)
+
+  it('renders pending profile rows independently of other profiles and the generic agent', () => {
+    const a: AgentLaunchProfile = {
+      id: 'a',
+      name: 'Profile A',
+      agent: 'codex',
+      hostId: 'local',
+      executable: '/bin/codex',
+      binding: { kind: 'managed', accountId: 'account-a' }
+    }
+    const b: AgentLaunchProfile = { ...a, id: 'b', name: 'Profile B' }
+    registerLaunch('codex', 'pending', undefined, a)
+    const props = { worktreeId: WORKTREE_ID, disabled: false, onSelect: vi.fn() }
+    const rendered = render(
+      <>
+        <AgentProfileMenuItem {...props} profile={a} />
+        <AgentProfileMenuItem {...props} profile={b} />
+        <QuickLaunchAgentMenuItems
+          worktreeId={WORKTREE_ID}
+          groupId="group-1"
+          onFocusTerminal={vi.fn()}
+        />
+      </>
+    )
+    expect(rendered.getByText('Profile A').parentElement?.getAttribute('aria-disabled')).toBe(
+      'true'
+    )
+    expect(rendered.getByText('Profile B').parentElement?.getAttribute('aria-disabled')).toBe(
+      'false'
+    )
+    expect(agentRowDisabled('Codex')).toBe('false')
+  })
 
   // Each pick is its own request, so a chat starting, failing or retrying never blocks one.
   it('keeps every agent launchable while chats start, fail or retry', () => {

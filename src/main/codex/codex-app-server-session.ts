@@ -16,6 +16,8 @@ import { createProviderRecordReader } from '../provider-process/provider-record-
 // RPC consumer (trust grant, session index heal) shares one hardened lifecycle.
 
 export type CodexAppServerInvocation = {
+  cwd?: string
+  maxOutputBytes?: number
   command: string
   args: string[]
   /**
@@ -107,7 +109,9 @@ export async function runCodexAppServerSession<T>(
   const pairedEnv = invocation.cliPath
     ? withCliRuntimeOnPath(invocation.cliPath, childEnv)
     : childEnv
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the spawn contract honors the explicit pipe tuple for all three streams.
   const child = spawnImpl(invocation.command, invocation.args, {
+    cwd: invocation.cwd,
     env: pairedEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
@@ -152,6 +156,20 @@ export async function runCodexAppServerSession<T>(
     failPending(error)
   })
 
+  let outputBytes = 0
+  const countOutput = (chunk: string | Buffer): void => {
+    outputBytes += Buffer.byteLength(chunk)
+    if (invocation.maxOutputBytes !== undefined && outputBytes > invocation.maxOutputBytes) {
+      const error = new Error('Codex inspection output exceeded its limit')
+      spawnError = error
+      killCodexAppServerProcessTree(child)
+      failPending(error)
+    }
+  }
+  if (invocation.maxOutputBytes !== undefined) {
+    child.stdout.on('data', countOutput)
+    child.stderr.on('data', countOutput)
+  }
   createProviderRecordReader({
     stdout: child.stdout,
     onRecord: (parsed) => {

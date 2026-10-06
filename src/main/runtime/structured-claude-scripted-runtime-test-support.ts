@@ -17,6 +17,7 @@ import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire
 import { hostTestAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import {
+  type StructuredAgentSessionRuntimeDeps,
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
@@ -65,7 +66,10 @@ export type ScriptedClaudeChild = {
   answerInit: () => void
 }
 
-export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
+export function createScriptedClaudeRuntime(
+  sessionIds: readonly string[],
+  profileDeps: Pick<StructuredAgentSessionRuntimeDeps, 'agentProfiles'> = {}
+) {
   const children: ScriptedClaudeChild[] = []
   const behaviors = new Map<string, ScriptedClaudeBehavior>()
   let releaseStalls = (): void => {}
@@ -224,6 +228,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
       await mkdir(join(root, 'claude-home'), { recursive: true })
       const directory = root
       return ensureStructuredAgentSessionHost({
+        ...profileDeps,
         logger: createStructuredAgentSessionLogger(),
         stateDirectory: directory,
         hostId: 'local',

@@ -1,3 +1,8 @@
+import {
+  assertAccountHasNoAgentProfiles,
+  assertAccountHasNoStructuredProfileOwners
+} from '../agent-profiles/account-removal'
+import { hasRecordedProfileBoundCodexAccount } from '../codex/codex-pane-account-registry'
 import type {
   CodexManagedAccount,
   CodexRateLimitAccountsState,
@@ -64,6 +69,11 @@ export class CodexAccountSelection {
   async remove(accountId: string): Promise<CodexRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
     const settings = this.dependencies.store.getSettings()
+    assertAccountHasNoAgentProfiles(settings, 'codex', accountId)
+    await assertAccountHasNoStructuredProfileOwners('codex', accountId)
+    if (hasRecordedProfileBoundCodexAccount(accountId)) {
+      throw new Error('Close terminals using this Codex profile before removing its account.')
+    }
     const nextAccounts = settings.codexManagedAccounts.filter((entry) => entry.id !== accountId)
     const nextSelection = removeCodexAccountIdFromSelection(
       normalizeCodexRuntimeSelection(settings),

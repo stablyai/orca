@@ -84,6 +84,7 @@ export function attachMainWindowCoreServices(
           runtimeHome: codexRuntimeHome,
           systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings())
         }),
+      agentProfiles: state.agentProfiles ?? undefined,
       onBeforeRelaunch: async () => {
         state.isQuitting = true
         state.desktopRelayService?.fenceAndCloseNow()
@@ -111,8 +112,12 @@ export function attachMainWindowCoreServices(
     store,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
-    (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),
+    (target, profile) =>
+      profile
+        ? claudeRuntimeAuth.prepareForClaudeProfileLaunch(profile.accountId, target)
+        : claudeRuntimeAuth.prepareForClaudeLaunch(target),
     {
+      agentProfiles: state.agentProfiles ?? undefined,
       prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
       awaitLocalPtyStartup: () => state.localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => state.localPtyProviderStartupReady,

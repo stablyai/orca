@@ -56,6 +56,7 @@ export function AgentAvailabilityControl({
 }
 
 export type AgentCatalogRowProps = {
+  children?: React.ReactNode
   agentId: TuiAgent
   label: string
   homepageUrl: string
@@ -77,6 +78,7 @@ export type AgentCatalogRowProps = {
 }
 
 export function AgentCatalogRow({
+  children,
   agentId,
   label,
   homepageUrl,
@@ -200,6 +202,7 @@ export function AgentCatalogRow({
         </div>
       </div>
 
+      {children}
       {isDetected && cmdOpen && (
         <div className="mt-3 pl-10">
           <AgentCommandOverrideInput

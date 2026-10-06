@@ -201,7 +201,10 @@ export function createLocalPtyLaunchPlan(
   const defaultCwd = getDefaultCwd()
   const cwd = args.cwd || defaultCwd
   // Why: gate on the effective cwd, not raw args.cwd — an omitted cwd becomes a safe default and must not be rejected as root-like.
-  if (args.command && startupAgentRecognition) {
+  if (
+    args.command &&
+    (startupAgentRecognition || args.launchAgent === 'claude' || args.launchAgent === 'codex')
+  ) {
     assertSafeAgentStartupCwd(cwd, args.command)
   }
   const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null

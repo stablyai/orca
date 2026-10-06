@@ -1,3 +1,4 @@
+import { hasTerminalProfileBinding } from '../host-env/agent-profile-launch'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
@@ -125,8 +126,8 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
       typeof ctx.launchCommand === 'string' ? ctx.launchCommand : null
     )
   }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markClaudePtySpawned(ctx.result.id)
+  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner && !ctx.agentProfile) {
+    markClaudePtySpawned(ctx.result.id, ctx.claudeAuth?.isolatedCredentials)
   }
   // Why: record the paneKey mapping so clearProviderPtyState can clear the agent-hooks server's per-paneKey caches on exit.
   // Why: args.env is untrusted IPC JSON (type unenforced); bound the paneKey so malformed/oversized values can't pollute ptyPaneKey or clearPaneState.
@@ -210,7 +211,7 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
   }
   // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.
   ctx.deps.sendPtySpawnedToRenderer(ctx.result.id)
-  if (!args.connectionId) {
+  if (!args.connectionId && !hasTerminalProfileBinding(args)) {
     ctx.deps.options?.onCodexHomePtySpawned?.({
       id: ctx.result.id,
       codexHomePath: ctx.selectedCodexHomePath,

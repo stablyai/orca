@@ -11,6 +11,7 @@ const SHARED_SERVER_ARGS: ReadonlySet<string> = new Set(CODEX_SHARED_SERVER_ARGS
 const HELP_PROBE_TIMEOUT_MS = 5_000
 
 export type LocalCodexLaunch = {
+  trustedExecutable?: string
   command: string | undefined
   /** False for SSH and WSL spawns: their shell's codex function probes on that host. */
   executesOnThisHost: boolean
@@ -50,7 +51,8 @@ export function planCodexNoDaemonLaunch(launch: LocalCodexLaunch): Promise<strin
   }
   const [executable, ...args] = parsed.tokens
   if (
-    !CODEX_EXECUTABLE.test(pathWin32.basename(executable)) ||
+    (executable !== launch.trustedExecutable &&
+      !CODEX_EXECUTABLE.test(pathWin32.basename(executable))) ||
     (shell !== 'cmd' && !isAbsolute(executable))
   ) {
     return null

@@ -10,9 +10,10 @@ import {
 } from '../managed-auth-path'
 import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from '../oauth-refresh'
 import {
-  readManagedClaudeKeychainCredentials,
-  writeManagedClaudeKeychainCredentials
-} from '../keychain'
+  readClaudeAccountCredentials,
+  writeClaudeAccountCredentials,
+  hasIsolatedClaudeAccountAuth
+} from '../isolated-account-auth'
 import { ClaudeRuntimeAuthCredentialIdentity } from './runtime-auth-credential-identity'
 import { stripSharedClaudeCredentialFields } from '../shared-credential-fields'
 
@@ -29,11 +30,18 @@ export class ClaudeRuntimeAuthManagedCredentials extends ClaudeRuntimeAuthCreden
       return null
     }
     if (process.platform === 'darwin') {
-      const credentials = await readManagedClaudeKeychainCredentials(account.id)
-      return credentials === null ? null : stripSharedClaudeCredentialFields(credentials)
+      const credentials = await readClaudeAccountCredentials({
+        accountId: account.id,
+        managedAuthPath
+      })
+      return credentials === null || hasIsolatedClaudeAccountAuth(managedAuthPath)
+        ? credentials
+        : stripSharedClaudeCredentialFields(credentials)
     }
     const credentials = readClaudeManagedAuthFile(managedAuthPath, '.credentials.json')
-    return credentials === null || account.managedAuthRuntime === 'wsl'
+    return credentials === null ||
+      account.managedAuthRuntime === 'wsl' ||
+      hasIsolatedClaudeAccountAuth(managedAuthPath)
       ? credentials
       : stripSharedClaudeCredentialFields(credentials)
   }
@@ -46,11 +54,14 @@ export class ClaudeRuntimeAuthManagedCredentials extends ClaudeRuntimeAuthCreden
     if (!managedAuthPath) {
       throw new Error('Managed Claude auth storage is not owned by Orca.')
     }
-    if (account.managedAuthRuntime !== 'wsl') {
+    if (account.managedAuthRuntime !== 'wsl' && !hasIsolatedClaudeAccountAuth(managedAuthPath)) {
       credentialsJson = stripSharedClaudeCredentialFields(credentialsJson)
     }
     if (process.platform === 'darwin') {
-      await writeManagedClaudeKeychainCredentials(account.id, credentialsJson)
+      await writeClaudeAccountCredentials(
+        { accountId: account.id, managedAuthPath },
+        credentialsJson
+      )
       return
     }
     writeClaudeManagedAuthFile(managedAuthPath, '.credentials.json', credentialsJson)

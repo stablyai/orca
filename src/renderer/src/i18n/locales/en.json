@@ -19146,6 +19146,37 @@
       "cancel": "Cancel"
     }
   },
+  "agentProfiles": {
+    "edit": "Edit",
+    "add": "Add profile",
+    "unlinked": "Profile unlinked. Existing sessions, accounts and folders are preserved.",
+    "unlinkError": "Could not unlink this profile.",
+    "section": "Agent profiles",
+    "manageAccounts": "Manage accounts",
+    "unverified": "Unverified configuration",
+    "unavailable": "Account unavailable — edit to reconnect",
+    "unlink": "Unlink",
+    "failed": "Could not complete this action.",
+    "name": "Profile name",
+    "source": "Profile source",
+    "create": "Create new",
+    "connect": "Connect existing",
+    "account": "Account",
+    "chooseAccount": "Choose an account",
+    "signIn": "Sign in to another account",
+    "signingIn": "Waiting for sign-in in your browser…",
+    "folder": "Configuration folder",
+    "command": "Command or alias",
+    "chooseFolder": "Choose folder",
+    "useCommand": "Use command",
+    "preview": "Check connection",
+    "verified": "Verified account",
+    "terminalOnly": "Starts a new terminal. Existing conversations require verified ownership. Another terminal can change this folder’s sign-in.",
+    "futureOnly": "Changes apply to future launches. Existing sessions keep their original binding. Accounts and folders remain when a profile is unlinked.",
+    "cancel": "Cancel",
+    "save": "Save profile",
+    "launchError": "Could not launch this profile."
+  },
   "fileSearch": {
     "failed": "Search failed. Try again."
   },

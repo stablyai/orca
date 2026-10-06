@@ -98,6 +98,7 @@ export function publishPtyIpcSpawnCommit(ctx: PtyIpcSpawnState, committedSize: P
     reattach: ctx.result.isReattach ?? false
   })
   recordCodexPaneAccountForSpawn({
+    agentProfile: ctx.agentProfile?.snapshot,
     ptyId: ctx.result.id,
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
     isReattach: ctx.result.isReattach === true,

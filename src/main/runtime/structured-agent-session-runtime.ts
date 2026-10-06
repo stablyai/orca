@@ -1,3 +1,4 @@
+import type { AgentProfileConnectionService } from '../agent-profiles/connection-service'
 // Where the structured agent-session wire becomes a live host on this runtime.
 //
 // Built on the first `agentSession.*` call rather than at startup: the record
@@ -12,7 +13,7 @@
 
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { existsSync } from 'node:fs'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord, AgentSessionAccountHome } from '../../shared/agent-session-record'
 import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
 import {
   structuredAgentSessionTeardownTrigger,
@@ -83,6 +84,7 @@ export function hasPersistedStructuredAgentSessionStore(
 }
 
 export type StructuredAgentSessionRuntimeDeps = {
+  agentProfiles?: AgentProfileConnectionService
   /** Host state root. The record store and the journal database both hang off it. */
   stateDirectory: string
   /** Execution host this runtime *is*. A record pinned elsewhere is not ours to
@@ -103,7 +105,9 @@ export type StructuredAgentSessionRuntimeDeps = {
   resolveLaunchEnvOverlay?: () => Promise<Record<string, string>> | Record<string, string>
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
   /** Required, and asserted at install time — an absent policy must not degrade to a guess. */
-  resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
+  resolveClaudeAuthPolicy: (
+    home?: AgentSessionAccountHome
+  ) => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   /** The user's Agent Permissions setting for Claude; absent means prompting. */
   resolveClaudePermissionMode?: () => Promise<PermissionMode> | PermissionMode
   /** The same setting for Codex, as app-server thread policy. */

@@ -83,6 +83,8 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
   return new CodexStructuredSessionAdapter({
     resolveLaunch: createCodexStructuredLaunchResolver({
       store,
+      agentProfiles: deps.agentProfiles,
+      resolveExplicitEnvironment: deps.resolveLaunchEnvOverlay,
       resolveWorkspacePath: deps.resolveWorkspacePath,
       resolveEnvironment: context.environment.resolveCodexEnvironment,
       ...(deps.resolveCodexPermissionPolicy
@@ -113,6 +115,7 @@ function createClaudeAdapter(
   const { deps, store, followUps, host } = context
   return createStructuredClaudeRuntimeAdapter({
     store,
+    agentProfiles: deps.agentProfiles,
     resolveWorkspacePath: deps.resolveWorkspacePath,
     ...(deps.resolveClaudeCommand ? { resolveClaudeCommand: deps.resolveClaudeCommand } : {}),
     ...(deps.resolveClaudeLaunchEnv ? { resolveClaudeLaunchEnv: deps.resolveClaudeLaunchEnv } : {}),

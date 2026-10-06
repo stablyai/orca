@@ -1,3 +1,4 @@
+import { isAgentProfileSnapshot, type AgentProfileSnapshot } from '../agent-launch-profile'
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { isTuiAgent } from '../tui-agent-config'
@@ -161,8 +162,18 @@ export const TerminalCreateParams = z.object({
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   env: z.record(z.string(), z.string()).optional(),
   envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
+  agentProfileId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,128}$/)
+    .optional(),
   launchConfig: z
     .object({
+      agentProfile: z.custom<AgentProfileSnapshot>(isAgentProfileSnapshot).optional(),
+      claudeAccountId: z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{1,128}$/)
+        .nullable()
+        .optional(),
       agentCommand: z.string().optional(),
       agentArgs: z.string(),
       agentEnv: z.record(z.string(), z.string()),

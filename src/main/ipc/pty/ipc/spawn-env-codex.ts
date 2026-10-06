@@ -32,19 +32,22 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     ctx.cwd,
     ctx.expectedWslDistro
   )
-  const codexResumePreparation = ctx.preAdoptedStablePane
-    ? null
-    : ctx.deps.prepareCodexResumeHome({
-        connectionId: args.connectionId,
-        launchAgent: args.launchAgent,
-        providerSession: args.resumeProviderSession,
-        target: ctx.codexSelectionTarget,
-        launchEnv: ctx.baseEnv,
-        ...(args.replacesPtyId ? { useSelectedAccount: true } : {})
-      })
+  const codexResumePreparation =
+    ctx.preAdoptedStablePane || ctx.profileAttachOnly || ctx.agentProfile
+      ? null
+      : ctx.deps.prepareCodexResumeHome({
+          connectionId: args.connectionId,
+          launchAgent: args.launchAgent,
+          providerSession: args.resumeProviderSession,
+          target: ctx.codexSelectionTarget,
+          launchEnv: ctx.baseEnv,
+          ...(args.replacesPtyId ? { useSelectedAccount: true } : {})
+        })
   ctx.codexResumeLaunch = codexResumePreparation
     ? await ctx.deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
-    : ctx.deps.noCodexResumeLaunch(ctx.preAdoptedStablePane ? undefined : args.command)
+    : ctx.deps.noCodexResumeLaunch(
+        ctx.preAdoptedStablePane || ctx.profileAttachOnly ? undefined : args.command
+      )
   // Why: these three phases have unrelated costs (session provenance + hook
   // repair, account/auth resolution, then the synchronous env build). One
   // `host_env` label hid all of them behind the name of the cheapest.
@@ -57,8 +60,11 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
   ctx.env = ctx.baseEnv
   const selectLaunchCodexHome = async (): Promise<string | null> =>
     (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv)) ?? null
-  ctx.selectedCodexHomePath =
-    !ctx.preAdoptedStablePane && !args.connectionId
+  ctx.selectedCodexHomePath = ctx.agentProfile
+    ? ctx.agentProfile.snapshot.agent === 'codex'
+      ? ctx.agentProfile.snapshot.resolvedHome
+      : null
+    : !ctx.preAdoptedStablePane && !ctx.profileAttachOnly && !args.connectionId
       ? getCompatibleSelectedCodexHomePath(
           ctx.codexSelectionTarget,
           codexResumeHome
@@ -71,7 +77,13 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
             : await selectLaunchCodexHome()
         )
       : null
-  if (!ctx.preAdoptedStablePane && args.launchAgent === 'codex' && args.sessionId === undefined) {
+  if (
+    !ctx.agentProfile &&
+    !ctx.profileAttachOnly &&
+    !ctx.preAdoptedStablePane &&
+    args.launchAgent === 'codex' &&
+    args.sessionId === undefined
+  ) {
     const resolution = resolveCodexHomeAfterManagedAuthReadiness({
       selectedCodexHomePath: ctx.selectedCodexHomePath,
       getSettings: () => ctx.deps.getSettings?.(),
@@ -92,7 +104,12 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     })
     ctx.selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
   }
-  if (args.launchAgent === 'codex' && ctx.selectedCodexHomePath) {
+  if (
+    !ctx.agentProfile &&
+    !ctx.profileAttachOnly &&
+    args.launchAgent === 'codex' &&
+    ctx.selectedCodexHomePath
+  ) {
     await ensureCodexStateDbBackfillRecoveryStarted(ctx.selectedCodexHomePath)
   }
   ctx.spawnTiming.mark('codex_home')

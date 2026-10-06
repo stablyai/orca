@@ -2,6 +2,8 @@ import type { ProviderRateLimits, UsageRateLimitFailureKind } from '../../shared
 import type { NetworkProxySettings } from '../../shared/network-proxy'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { fetchViaPty } from './claude-pty'
+import { withClaudeAccountCredentialMutation } from '../claude-accounts/account-credential-mutation'
+import { hasClaudeCredentialOwners } from '../claude-accounts/live-pty-gate'
 import type { ClaudeOAuthCredentialReadResult } from './claude-oauth-credentials'
 import type { ClaudeRateLimitFetchOptions } from './claude-usage-fetch-options'
 import {
@@ -39,11 +41,21 @@ export async function fetchClaudeUsageViaCli(input: {
   signal?: AbortSignal
 }): Promise<ProviderRateLimits> {
   recordClaudeUsageAttempt(input.attempts, 'cli')
-  const limits = await fetchViaPty({
-    authPreparation: input.authPreparation,
-    networkProxySettings: input.networkProxySettings,
-    signal: input.signal
-  })
+  const fetch = () =>
+    fetchViaPty({
+      authPreparation: input.authPreparation,
+      networkProxySettings: input.networkProxySettings,
+      signal: input.signal
+    })
+  const accountId = input.authPreparation?.isolatedCredentials && input.authPreparation.accountId
+  const limits = accountId
+    ? await withClaudeAccountCredentialMutation(accountId, () => {
+        if (hasClaudeCredentialOwners()) {
+          throw new Error('Waiting for the Claude session before refreshing account usage.')
+        }
+        return fetch()
+      })
+    : await fetch()
   return withClaudeUsageMetadata(
     limits,
     metadataForClaudeUsageAttempt({

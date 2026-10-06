@@ -30,6 +30,8 @@ import type {
 export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess
 
 export type CodexStructuredLaunch = {
+  release?: () => void
+  envToDelete?: readonly string[]
   command: string
   args: string[]
   cwd: string

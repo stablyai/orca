@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { withClaudeAccountCredentialMutation } from './account-credential-mutation'
+import { hasIsolatedClaudeAccountAuth } from './isolated-account-auth'
+import { hasClaudeCredentialOwners } from './live-pty-gate'
 import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
@@ -89,7 +92,25 @@ export class ClaudeAccountRegistration {
   }
 
   async reauthenticate(accountId: string): Promise<ClaudeRateLimitAccountsState> {
+    const result = await withClaudeAccountCredentialMutation(accountId, () =>
+      this.reauthenticateWithCredentialAuthority(accountId)
+    )
     const account = this.dependencies.selection.requireAccount(accountId)
+    await this.dependencies.rateLimits.refreshForClaudeAccountChange(
+      undefined,
+      getClaudeSelectionTargetForAccount(account)
+    )
+    return result
+  }
+
+  private async reauthenticateWithCredentialAuthority(
+    accountId: string
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const account = this.dependencies.selection.requireAccount(accountId)
+    const isolated = hasIsolatedClaudeAccountAuth(account.managedAuthPath)
+    if (isolated && hasClaudeCredentialOwners()) {
+      throw new Error('Close Claude sessions before reconnecting an account used by profiles.')
+    }
     const managedAuthPath = await this.dependencies.assertManagedAuth(
       account.managedAuthPath,
       accountId
@@ -104,6 +125,26 @@ export class ClaudeAccountRegistration {
     })
     if (!captured.identity.email) {
       throw new Error('Claude login completed, but Orca could not resolve the account email.')
+    }
+    const bound =
+      isolated ||
+      this.dependencies.store
+        .getSettings()
+        .agentLaunchProfiles?.some(
+          (profile) =>
+            profile.agent === 'claude' &&
+            profile.binding.kind === 'managed' &&
+            profile.binding.accountId === accountId
+        )
+    if (
+      bound &&
+      (captured.identity.email.toLowerCase() !== account.email.toLowerCase() ||
+        (account.organizationUuid &&
+          captured.identity.organizationUuid !== account.organizationUuid))
+    ) {
+      throw new Error(
+        'Sign in to the same Claude account. To use another account, add it in Accounts and edit the profile.'
+      )
     }
 
     const settings = this.dependencies.store.getSettings()
@@ -130,7 +171,6 @@ export class ClaudeAccountRegistration {
       this.dependencies.rateLimits.evictInactiveClaudeCache(accountId)
       const target = getClaudeSelectionTargetForAccount(account)
       await this.dependencies.selection.syncRuntimeAuth(target)
-      await this.dependencies.rateLimits.refreshForClaudeAccountChange(undefined, target)
       return this.dependencies.selection.snapshot()
     } catch (error) {
       await this.rollbackReauthentication(

@@ -155,6 +155,7 @@ export type UiCommandEventApi = {
       command?: string
       cwd?: string
       env?: Record<string, string>
+      agentProfileId?: string
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string

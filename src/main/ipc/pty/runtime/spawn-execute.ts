@@ -1,3 +1,4 @@
+import { commitAgentProfilePtyOwnership } from '../host-env/agent-profile-ownership'
 import type { PtySpawnResult } from '../../../providers/types'
 import { ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
@@ -164,6 +165,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       ctx.rejectedRegistrationCandidate = ctx.result
       assertSpawnReplyWasLive(ctx.result)
     }
+    commitAgentProfilePtyOwnership(ctx.agentProfile, ctx.result)
     ctx.rejectedRegistrationCandidate ??= ctx.result
     if (ctx.pendingRegistrationPtyId !== ctx.result.id) {
       if (ctx.pendingRegistrationPtyId) {

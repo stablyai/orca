@@ -1,3 +1,4 @@
+import type { AgentProfileConnectionService } from '../agent-profiles/connection-service'
 import type { BrowserWindow, Tray } from 'electron'
 import { app } from 'electron'
 import type { Store } from '../persistence'
@@ -64,6 +65,10 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
 }
 
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
+const profileConnectionState: { agentProfiles: AgentProfileConnectionService | null } = {
+  agentProfiles: null
+}
+
 export const mainProcessState = {
   mainWindow: null as BrowserWindow | null,
   /** Whether a manual app.quit() (Cmd+Q) is in progress; lets the close handler skip the running-process confirmation and go straight to close. */
@@ -81,6 +86,7 @@ export const mainProcessState = {
   codexRuntimeHome: null as CodexRuntimeHomeService | null,
   codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,
   claudeAccounts: null as ClaudeAccountService | null,
+  ...profileConnectionState,
   claudeRuntimeAuth: null as ClaudeRuntimeAuthService | null,
   runtime: null as OrcaRuntimeService | null,
   rateLimits: null as RateLimitService | null,

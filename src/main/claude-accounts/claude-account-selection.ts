@@ -1,11 +1,21 @@
+import {
+  assertAccountHasNoAgentProfiles,
+  assertAccountHasNoStructuredProfileOwners
+} from '../agent-profiles/account-removal'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
   ClaudeRateLimitAccountsState
 } from '../../shared/managed-account-types'
 import type { Store } from '../persistence'
+import { withClaudeAccountCredentialMutation } from './account-credential-mutation'
+import { hasIsolatedClaudeAccountAuth } from './isolated-account-auth'
 import type { RateLimitService } from '../rate-limits/service'
-import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
+import {
+  beginClaudeAuthSwitch,
+  endClaudeAuthSwitch,
+  hasClaudeCredentialOwners
+} from './live-pty-gate'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
   getClaudeSelectionTargetForAccount,
@@ -32,8 +42,24 @@ export class ClaudeAccountSelection {
   }
 
   async remove(accountId: string): Promise<ClaudeRateLimitAccountsState> {
+    const target = getClaudeSelectionTargetForAccount(this.requireAccount(accountId))
+    const result = await withClaudeAccountCredentialMutation(accountId, () =>
+      this.removeWithCredentialAuthority(accountId)
+    )
+    await this.rateLimits.refreshForClaudeAccountChange(accountId, target)
+    return result
+  }
+
+  private async removeWithCredentialAuthority(
+    accountId: string
+  ): Promise<ClaudeRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
+    if (hasIsolatedClaudeAccountAuth(account.managedAuthPath) && hasClaudeCredentialOwners()) {
+      throw new Error('Close Claude sessions before removing an account used by profiles.')
+    }
     const settings = this.store.getSettings()
+    assertAccountHasNoAgentProfiles(settings, 'claude', accountId)
+    await assertAccountHasNoStructuredProfileOwners('claude', accountId)
     const nextAccounts = settings.claudeManagedAccounts.filter((entry) => entry.id !== accountId)
     const nextSelection = removeClaudeAccountIdFromSelection(
       normalizeClaudeRuntimeSelection(settings),
@@ -61,10 +87,6 @@ export class ClaudeAccountSelection {
       }
       await this.removeManagedAuth(accountId, account.managedAuthPath)
       this.rateLimits.evictInactiveClaudeCache(accountId)
-      await this.rateLimits.refreshForClaudeAccountChange(
-        wasSelected ? accountId : undefined,
-        target
-      )
       return this.snapshot()
     } catch (error) {
       this.restoreSettings(settings)

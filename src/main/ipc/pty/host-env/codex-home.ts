@@ -1,3 +1,4 @@
+import type { AgentProfileSnapshot } from '../../../../shared/agent-launch-profile'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
@@ -207,6 +208,7 @@ export function codexHomePathsEqual(left: string | null, right: string): boolean
 // so re-recording it under the current selection would erase the very evidence
 // that the pane is stale.
 export function recordCodexPaneAccountForSpawn(args: {
+  agentProfile?: AgentProfileSnapshot
   ptyId: string | undefined
   isDaemonHostSpawn: boolean
   isReattach: boolean
@@ -215,6 +217,19 @@ export function recordCodexPaneAccountForSpawn(args: {
   target: CodexAccountSelectionTarget
   settings: GlobalSettings | undefined
 }): void {
+  if (args.ptyId && args.agentProfile && !args.isReattach) {
+    if (args.agentProfile.agent === 'codex') {
+      recordCodexPaneAccount(args.ptyId, {
+        selectionKey: 'host',
+        accountId:
+          args.agentProfile.binding.kind === 'managed' ? args.agentProfile.binding.accountId : null,
+        homeRoute:
+          args.agentProfile.binding.kind === 'managed' ? 'account-home' : 'external-profile-home',
+        profileBound: true
+      })
+    }
+    return
+  }
   if (!args.ptyId || !args.isDaemonHostSpawn || args.isReattach) {
     return
   }

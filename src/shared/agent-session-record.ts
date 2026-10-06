@@ -1,3 +1,8 @@
+import {
+  isAgentSessionAccountHome,
+  type AgentSessionAccountHome
+} from './agent-session-account-home'
+export type { AgentSessionAccountHome } from './agent-session-account-home'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
@@ -28,9 +33,6 @@ import {
   isAgentSessionProviderHandleInNamespace,
   isStructuredAgentId
 } from './agent-session-provider-handle-encoding'
-import type { AgentSessionAccountHome } from './agent-session-account-home'
-
-export type { AgentSessionAccountHome } from './agent-session-account-home'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
@@ -159,7 +161,6 @@ export type AgentSessionOptionsReplacement = {
 const MAX_ID_LENGTH = 512
 /** A death evidence's `detail` past this fails a load, so whoever writes one cuts it here. */
 export const MAX_AGENT_SESSION_DEATH_DETAIL_CHARS = MAX_ID_LENGTH
-const MAX_PATH_LENGTH = 4096
 const MAX_LAUNCH_ENV_ENTRIES = 256
 const MAX_LAUNCH_ENV_VALUE_LENGTH = 65_536
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
@@ -225,22 +226,6 @@ export function isAgentSessionProcessIdentity(
       (Number.isSafeInteger(identity.processStartTimeMs) &&
         (identity.processStartTimeMs as number) >= 0)) &&
     isBoundedString(identity.spawnToken, MAX_ID_LENGTH)
-  )
-}
-
-const ENVIRONMENT_VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/
-
-/** Shape only: whether the variable is the one the record's agent pins is a launch-time question
- *  (`agentDrivesSession`), so an agent that renames its variable never hides its chats. */
-function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccountHome {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const home = value as Partial<AgentSessionAccountHome>
-  return (
-    typeof home.variable === 'string' &&
-    ENVIRONMENT_VARIABLE_NAME.test(home.variable) &&
-    isBoundedString(home.path, MAX_PATH_LENGTH)
   )
 }
 
@@ -377,6 +362,10 @@ export function isPersistedAgentSessionRecord(
   const transport = chain?.[0]?.handle.transport
   const namespace = transport === undefined ? null : { transport, agent: validated.provider }
   return (
+    (!validated.accountHome.agentProfile ||
+      (validated.accountHome.agentProfile.agent === validated.provider &&
+        validated.accountHome.agentProfile.hostId === validated.location.executionHostId &&
+        validated.location.wslDistro === null)) &&
     chain !== null &&
     chain.every(
       (link) =>

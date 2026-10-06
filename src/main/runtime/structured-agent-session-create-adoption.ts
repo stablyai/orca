@@ -21,6 +21,7 @@ type AdoptionSettings = {
 
 export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
   host: StructuredAgentSessionHost | null
+  agentProfileId?: string
   envelope: { sessionId: string; clientOperationId: string }
   agent: 'claude' | 'codex'
   callerKey?: string
@@ -28,6 +29,33 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
   location: AgentSessionExecutionLocation
   options?: Readonly<Record<string, string>>
 }): AgentSessionAttachParams | null {
+  // Replaying a committed profile create uses the admitted identity even after launcher unlink.
+  if (!input.resumeFrom && input.agentProfileId !== undefined && input.host && input.callerKey) {
+    const record = input.host.deps.store.getRecord(input.envelope.sessionId)
+    const operation = input.host.deps.store
+      .listOperationRows()
+      .find(
+        (row) =>
+          row.callerKey === input.callerKey && row.operationId === input.envelope.clientOperationId
+      )
+    if (
+      record?.accountHome.agentProfile?.id === input.agentProfileId &&
+      record.provider === input.agent &&
+      agentSessionExecutionLocationsEqual(record.location, input.location) &&
+      operation?.outcome.status === 'succeeded' &&
+      operation.outcome.sessionId === record.sessionId
+    ) {
+      return {
+        envelope: { ...input.envelope, expectedRuntimeFence: null, payloadFingerprint: '' },
+        location: record.location,
+        provider: record.provider,
+        agent: record.provider,
+        accountHome: record.accountHome,
+        options: record.options,
+        runtimeKind: 'native'
+      }
+    }
+  }
   const replay =
     input.resumeFrom && input.callerKey && input.host
       ? findCommittedStructuredAgentSessionAdoptionReplay({
@@ -40,7 +68,12 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
           operations: input.host.deps.store.listOperationRows()
         })
       : null
-  if (!replay || !agentSessionExecutionLocationsEqual(replay.record.location, input.location)) {
+  if (
+    !replay ||
+    !agentSessionExecutionLocationsEqual(replay.record.location, input.location) ||
+    (input.agentProfileId !== undefined &&
+      replay.record.accountHome.agentProfile?.id !== input.agentProfileId)
+  ) {
     return null
   }
   return {

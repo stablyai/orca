@@ -1,3 +1,5 @@
+import type { SleepingAgentLaunchConfig } from './sleeping-agent-launch-config-types'
+export type { SleepingAgentLaunchConfig } from './sleeping-agent-launch-config-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusState } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
@@ -44,13 +46,6 @@ export type AgentProviderSessionMetadata = {
    *  `id` alone fails. Claude/Codex still resume by id; Pi uses its reported
    *  `session_file` as the authoritative `--session` resume locator. */
   transcriptPath?: string
-}
-
-export type SleepingAgentLaunchConfig = {
-  agentCommand?: string
-  agentArgs: string
-  agentEnv: Record<string, string>
-  ompResumeFilePath?: string
 }
 
 export type SleepingAgentSessionRecord = {

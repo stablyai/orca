@@ -1,3 +1,4 @@
+import { buildSleepingAgentLaunchConfig } from '../../shared/sleeping-agent-launch-config'
 import { createHash } from 'node:crypto'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -36,12 +37,7 @@ export function deterministicAgentSessionUuid(seed: string): string {
 export function copySleepingAgentLaunchConfig(
   config: SleepingAgentLaunchConfig
 ): SleepingAgentLaunchConfig {
-  return {
-    ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
-    agentArgs: config.agentArgs,
-    agentEnv: { ...config.agentEnv },
-    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
-  }
+  return buildSleepingAgentLaunchConfig(config)
 }
 
 export function normalizeAgentLaunchCommandForMatch(command: string): string {

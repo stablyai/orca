@@ -502,6 +502,24 @@ describe('method routing', () => {
     }
   )
 
+  it.each(['claude', 'codex'])(
+    'probes local %s profile capability without catalog resolution',
+    async (agent) => {
+      const response = await call('agentSession.createSupport', {
+        worktree: 'id:workspace-1',
+        agent,
+        agentProfileId: 'unlinked-profile'
+      })
+      expect(response).toMatchObject({ ok: true, result: { supported: true } })
+      expect(runtimeCalls.getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith(
+        'id:workspace-1',
+        agent,
+        true
+      )
+      expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).not.toHaveBeenCalled()
+    }
+  )
+
   it('routes Claude create support and create through the provider-aware runtime', async () => {
     const worktree = 'id:workspace-1'
     const support = await call(
@@ -512,7 +530,8 @@ describe('method routing', () => {
     expect(support).toMatchObject({ ok: true, result: { supported: true } })
     expect(runtimeCalls.getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith(
       worktree,
-      'claude'
+      'claude',
+      false
     )
 
     const params = {

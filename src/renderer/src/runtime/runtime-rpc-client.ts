@@ -1,3 +1,5 @@
+import type { RuntimeRpcCallOptions } from './runtime-rpc-call-options'
+import { assertTerminalProfilesStayLocal } from '../../../shared/terminal-profile-routing'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
@@ -41,16 +43,11 @@ export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  options: {
-    timeoutMs?: number
-    suppressFeatureInteraction?: boolean
-    reuseRecentCompatibilityFailure?: boolean
-    skipCompatibilityCheck?: boolean
-    signal?: AbortSignal
-    expectedEnvironmentPairingRevision?: number
-    expectedEnvironmentRuntimeId?: string
-  } = {}
+  options: RuntimeRpcCallOptions = {}
 ): Promise<TResult> {
+  if (target.kind === 'environment') {
+    assertTerminalProfilesStayLocal(params)
+  }
   if (options.signal?.aborted) {
     throw createRuntimeRpcAbortError()
   }

@@ -1,3 +1,4 @@
+import { isAgentLaunchProfile, type AgentLaunchProfile } from '../../../shared/agent-launch-profile'
 import {
   isAgentSessionHandleProvider,
   type AgentSessionHandleProvider
@@ -14,6 +15,7 @@ import {
 export type StructuredAgentLaunchPersistedLifecycle = 'pending' | 'visibility-unknown' | 'failed'
 
 export type StructuredAgentLaunchPersistedRecord = {
+  agentProfile?: AgentLaunchProfile
   sessionId: string
   /** The host the chat was created on. Records written before paired hosts could hold a chat lack
    *  it and load as local, the only host a chat could then be launched on. */
@@ -40,6 +42,7 @@ export function structuredAgentLaunchRecordFor(
   const pairedSeed = intent.target.kind === 'local' ? undefined : intent.seedOptions
   return {
     sessionId: intent.sessionId,
+    ...(intent.agentProfile ? { agentProfile: intent.agentProfile } : {}),
     executionHostId: intent.executionHostId,
     agent: intent.agent,
     lifecycle,
@@ -92,6 +95,9 @@ function validRecord(value: unknown): value is Omit<
   const executionHostId = 'executionHostId' in value ? value.executionHostId : undefined
   const failedAt = 'failedAt' in value ? value.failedAt : undefined
   return (
+    (!('agentProfile' in value) ||
+      value.agentProfile === undefined ||
+      isAgentLaunchProfile(value.agentProfile)) &&
     (executionHostId === undefined ||
       (typeof executionHostId === 'string' && parseExecutionHostId(executionHostId) !== null)) &&
     typeof sessionId === 'string' &&

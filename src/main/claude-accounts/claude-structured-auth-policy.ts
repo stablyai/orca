@@ -6,6 +6,7 @@ import { getSelectedClaudeAccountIdForTarget } from './runtime-selection'
  *  the one field a launch resolution needs from the managed-account state. */
 export type ClaudeStructuredAuthPolicy = {
   stripAuthEnv: boolean
+  isolatedCredentials?: boolean
 }
 
 /**

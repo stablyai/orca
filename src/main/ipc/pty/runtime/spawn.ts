@@ -1,3 +1,5 @@
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import { buildSleepingAgentLaunchConfig } from '../../../../shared/sleeping-agent-launch-config'
 import type { AgentSessionClaimedSpawnResult } from '../../../../shared/agent-session-host-authority'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
@@ -22,6 +24,7 @@ import {
 } from './spawn-hidden-delivery'
 
 function toRuntimeSpawnReply(result: {
+  launchConfig?: SleepingAgentLaunchConfig
   id: string
   incarnationId?: string
   wslDistro?: string | null
@@ -29,6 +32,9 @@ function toRuntimeSpawnReply(result: {
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
 }) {
   return {
+    ...(result.launchConfig
+      ? { launchConfig: buildSleepingAgentLaunchConfig(result.launchConfig) }
+      : {}),
     id: result.id,
     ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
     ...(typeof result.wslDistro === 'string' ? { wslDistro: result.wslDistro } : {}),
@@ -120,6 +126,8 @@ export async function spawnPtyFromRuntimeController(
     rejectPaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, err)
     throw err
   } finally {
+    ctx.agentProfile?.release()
+    ctx.releaseClaudeCredentialOwner?.()
     ctx.releaseWorktreeSpawn?.()
     ctx.finishTerminalInstall()
   }

@@ -491,3 +491,60 @@ describe('agent model catalog service', () => {
     })
   })
 })
+
+it.each([false, true])(
+  'serves a common-bound session without account preparation (waitForListing=%s)',
+  async (waitForListing) => {
+    const bound = record('/homes/pinned')
+    bound.accountHome.agentProfile = {
+      id: 'profile',
+      name: 'Original',
+      agent: 'codex',
+      hostId: 'local',
+      executable: '/trusted/codex',
+      binding: { kind: 'managed', accountId: 'original' },
+      resolvedHome: '/homes/pinned',
+      identity: { kind: 'verified', subject: 'original', displayName: 'Original' }
+    }
+    const store = new AgentModelCatalogStore()
+    const probe = vi.fn(async () => listing('selected-model'))
+    const selected = vi.fn(async () => CODEX_HOME('/homes/selected'))
+    const drivesRecord = vi.fn(() => true)
+    const service = createAgentModelCatalogService({
+      store,
+      getRecord: () => bound,
+      drivesRecord,
+      resolveAccountHome: selected,
+      probes: { codex: probe }
+    })
+    expect(
+      await service.read({ agent: 'codex', sessionId: bound.sessionId, waitForListing })
+    ).toEqual({
+      origin: 'unknown'
+    })
+    expect(probe).not.toHaveBeenCalled()
+    expect(selected).not.toHaveBeenCalled()
+    store.recordSuccess(
+      agentModelCatalogFingerprintForRecord(bound),
+      'codex',
+      listing('pinned-model')
+    )
+    expect(
+      await service.read({ agent: 'codex', sessionId: bound.sessionId, waitForListing })
+    ).toMatchObject({
+      models: [{ id: 'pinned-model' }]
+    })
+    expect(probe).not.toHaveBeenCalled()
+    drivesRecord.mockReturnValue(false)
+    expect(
+      await service.read({ agent: 'codex', sessionId: bound.sessionId, waitForListing })
+    ).toEqual({ origin: 'unknown' })
+    expect(
+      await service.read({ agent: 'claude', sessionId: bound.sessionId, waitForListing })
+    ).toEqual({ origin: 'unknown' })
+    expect(probe).not.toHaveBeenCalled()
+    expect(selected).not.toHaveBeenCalled()
+    await service.read({ agent: 'codex' })
+    expect(probe).toHaveBeenCalledWith('/homes/selected')
+  }
+)

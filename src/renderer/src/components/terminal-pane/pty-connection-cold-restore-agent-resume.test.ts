@@ -185,6 +185,21 @@ describe('connectPanePty', () => {
       }
     } as StoreState
 
+    const savedProfile = {
+      id: 'profile-a',
+      name: 'A',
+      agent: 'codex' as const,
+      hostId: 'local' as const,
+      executable: '/tools/codex',
+      binding: { kind: 'managed' as const, accountId: 'account-a' },
+      resolvedHome: '/accounts/a',
+      identity: { kind: 'verified' as const, subject: 'subject-a', displayName: 'A' }
+    }
+    mockStoreState.getAgentLaunchConfigForStatusEntry.mockReturnValue({
+      agentArgs: '',
+      agentEnv: {},
+      agentProfile: savedProfile
+    })
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
@@ -208,7 +223,8 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        launchConfig: expect.objectContaining({ agentProfile: savedProfile }),
+        command: "codex 'resume' 'codex-session-1'",
         resumeProviderSession: {
           key: 'session_id',
           id: 'codex-session-1',

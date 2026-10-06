@@ -1,16 +1,14 @@
+import { assertStructuredAgentProfileWorkspace } from './agent-profile-workspace-selection'
+import { useAppStore } from '@/store'
 import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import {
-  abandonStructuredAgentSessionLaunchIntent,
   createStructuredAgentSessionLaunchIntent,
   retryStructuredAgentSessionLaunchIntent,
   StructuredAgentSessionCreateRefusalError
 } from '@/lib/launch-structured-agent-session'
-import {
-  discardStructuredAgentSessionLaunchOutbox,
-  enqueueStructuredAgentSessionLaunchPrompt
-} from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { enqueueStructuredAgentSessionLaunchPrompt } from '@/components/native-chat/structured-agent-session-outbox-storage'
 import {
   launchAndReconcile,
   reconcileUnknownLaunch,
@@ -30,7 +28,6 @@ import {
   deleteStructuredLaunchStateIfCurrent,
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
-  markStructuredAgentSessionLaunchCancelled,
   notifyStructuredLaunchListeners,
   setStructuredLaunchState,
   structuredLaunchIdentity,
@@ -42,6 +39,7 @@ import {
   getJoinableStructuredLaunchState
 } from './structured-agent-session-launch-holders'
 import { applyStructuredLaunchHeldOptions } from './structured-agent-session-launch-options'
+export { cancelStructuredAgentLaunch } from './structured-agent-launch-cancel'
 import { trackLaunchSettlement } from './structured-agent-session-launch-outcome-tracking'
 import {
   repeatedStructuredLaunchAttempt,
@@ -210,7 +208,21 @@ function structuredAgentLaunchState(
   agent: AgentSessionHandleProvider,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
-  const identity = structuredLaunchIdentity(worktreeId, agent, options.resumeFrom)
+  if (options.agentProfile) {
+    assertStructuredAgentProfileWorkspace(
+      useAppStore.getState(),
+      agent,
+      worktreeId,
+      options.agentProfile,
+      options.executionHostId
+    )
+  }
+  const identity = structuredLaunchIdentity(
+    worktreeId,
+    agent,
+    options.resumeFrom,
+    options.agentProfile
+  )
   const request = structuredLaunchRequest(options)
   const existing = getJoinableStructuredLaunchState(identity, request)
   const joined = existing && joinStructuredLaunchState(existing, agent, options, request)
@@ -223,7 +235,8 @@ function structuredAgentLaunchState(
     agent,
     options.executionHostId,
     options.resumeFrom,
-    options.hostSeedOptions
+    options.hostSeedOptions,
+    options.agentProfile
   )
   const text = outboxPromptText(options)
   const stagedPrompt = text
@@ -271,19 +284,6 @@ function structuredAgentLaunchState(
     state,
     caller
   }
-}
-
-export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: string): boolean {
-  const state = getStructuredLaunchStateBySessionId(sessionId)
-  if (!state) {
-    return false
-  }
-  markStructuredAgentSessionLaunchCancelled(worktreeId, sessionId, state.intent.executionHostId)
-  discardStructuredAgentSessionLaunchOutbox(state.intent.sessionId)
-  launchDraft.clearStructuredAgentLaunchDraft(state.intent.sessionId)
-  abandonStructuredAgentSessionLaunchIntent(state.intent)
-  notifyStructuredLaunchListeners()
-  return true
 }
 
 export function startStructuredAgentLaunch(

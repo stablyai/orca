@@ -25,7 +25,8 @@ import { codexProviderHandle } from '../../shared/agent-session-provider-handle-
 describe('CodexStructuredSessionAdapter.acquire', () => {
   it('starts a new thread and reports the process and link the lease will prove', async () => {
     const codex = fakeCodex()
-    const adapter = adapterFor(codex, { codexHome: '/codex/home' })
+    const release = vi.fn()
+    const adapter = adapterFor(codex, { codexHome: '/codex/home', release })
 
     const acquisition = await adapter.acquire({
       identity: identityFor('session-1'),
@@ -33,6 +34,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       spawnToken: 'spawn-9'
     })
 
+    expect(release).toHaveBeenCalledTimes(1)
     expect(codex.connections[0].launch.env).toEqual({
       [CODEX_SPAWN_TOKEN_ENV]: 'spawn-9',
       CODEX_HOME: '/codex/home',
@@ -334,10 +336,15 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
   })
 
   it('fences an acquisition while launch resolution is still pending', async () => {
+    const release = vi.fn()
+    const entered = Promise.withResolvers<void>()
     const launch = Promise.withResolvers<CodexStructuredLaunch>()
     const codex = fakeCodex()
     const adapter = new CodexStructuredSessionAdapter({
-      resolveLaunch: () => launch.promise,
+      resolveLaunch: () => {
+        entered.resolve()
+        return launch.promise
+      },
       openConnection: codex.openConnection,
       readProcessStartTime: async () => 1_700_000_000_000
     })
@@ -347,8 +354,10 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       spawnToken: 'spawn-9'
     })
 
+    await entered.promise
     const closing = adapter.closeAll()
     launch.resolve({
+      release,
       command: 'codex',
       args: ['app-server'],
       cwd: '/work/repo',
@@ -358,6 +367,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
     await expect(acquiring).rejects.toThrow('superseded while being acquired')
     await closing
+    expect(release).toHaveBeenCalledTimes(1)
     expect(codex.connections).toHaveLength(0)
   })
 })

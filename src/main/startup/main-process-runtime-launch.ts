@@ -50,13 +50,11 @@ export type MainProcessRuntimeLaunchOptions = {
 }
 
 function settleDesktopActivation(): void {
-  const gate = state.desktopActivationGate
-  if (!gate) {
-    return
+  if (state.desktopActivationGate) {
+    settleServeDesktopActivation(state.desktopActivationGate, {
+      hasPersistentPtyProvider: !(getLocalPtyProvider() instanceof LocalPtyProvider)
+    })
   }
-  settleServeDesktopActivation(gate, {
-    hasPersistentPtyProvider: !(getLocalPtyProvider() instanceof LocalPtyProvider)
-  })
 }
 
 function installRuntimeRpc(
@@ -141,10 +139,17 @@ async function launchServeMode(
     runtime,
     prepareCodexRuntimeHomeForLaunch,
     () => state.store!.getSettings(),
-    (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+    (target, profile) =>
+      profile
+        ? state.claudeRuntimeAuth!.prepareForClaudeProfileLaunch(profile.accountId, target)
+        : state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     state.store!,
     prepareCodexSessionResumeForLaunch,
-    { onCodexHomePtySpawned: handleCodexHomePtySpawned, onPtyExit: handlePtyExit }
+    {
+      agentProfiles: state.agentProfiles ?? undefined,
+      onCodexHomePtySpawned: handleCodexHomePtySpawned,
+      onPtyExit: handlePtyExit
+    }
   )
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()

@@ -3,7 +3,10 @@ import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
-import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type {
+  SleepingAgentLaunchConfig,
+  AgentProviderSessionMetadata
+} from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
@@ -47,6 +50,8 @@ export type RuntimePtyController = {
     materialized?: true
   } | null>
   spawn?(opts: {
+    agentProfileId?: string
+    launchConfig?: SleepingAgentLaunchConfig
     cols: number
     rows: number
     cwd?: string
@@ -92,6 +97,7 @@ export type RuntimePtyController = {
       materialized?: true
     }
   }): Promise<{
+    launchConfig?: SleepingAgentLaunchConfig
     id: string
     pid?: number | null
     incarnationId?: PtyIncarnationId

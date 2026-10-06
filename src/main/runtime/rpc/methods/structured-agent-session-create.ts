@@ -12,7 +12,14 @@
  * in. Both callers run the same two halves, so orchestration gets that guarantee too.
  */
 
-import { refuse } from '../../../../shared/agent-session-wire-refusals'
+import type { z } from 'zod'
+import type { RpcContext } from '../core'
+import type { AttachParams } from './structured-agent-session-schemas'
+import {
+  ensureStructuredHostInstalled as ensureHostInstalled,
+  requireStructuredHost as requireHost
+} from './structured-agent-session-gate'
+import { agentSessionRefusalError, refuse } from '../../../../shared/agent-session-wire-refusals'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import type {
   AgentSessionAttachResult,
@@ -48,6 +55,7 @@ export type PreparedStructuredAgentSessionCreate = {
  * chat's tab holds. The canonicalizer drops `undefined`, so plain creates keep the digest they had.
  */
 export function structuredAgentSessionCreateIntentFingerprint(params: {
+  agentProfileId?: string
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: string
@@ -59,6 +67,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
     sessionId: params.envelope.sessionId,
     fields: {
       worktree: params.worktree,
+      agentProfileId: params.agentProfileId,
       agent: params.agent,
       resumeFrom: params.resumeFrom,
       tabId: params.tabId
@@ -69,6 +78,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
 /** The pre-commit half. Throws; the caller is expected to run it inside
  *  `resolveUncommittedStructuredCreate` so a failure reaches the client as a refusal. */
 export async function prepareStructuredAgentSessionCreateForWorktree(args: {
+  agentProfileId?: string
   runtime: OrcaRuntimeService
   /** Installs the host lazily; called at the same point the RPC handler always installed it. */
   ensureHost: () => Promise<StructuredAgentSessionHost>
@@ -86,11 +96,12 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   tabId?: string
 }): Promise<PreparedStructuredAgentSessionCreate> {
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
-  let host = args.resumeFrom ? await args.ensureHost() : null
+  let host = args.resumeFrom || args.agentProfileId !== undefined ? await args.ensureHost() : null
   const resolved = await args.runtime.resolveStructuredAgentSessionCreateIntent({
     envelope: args.envelope,
     worktree: args.worktree,
     agent: args.agent,
+    ...(args.agentProfileId !== undefined ? { agentProfileId: args.agentProfileId } : {}),
     callerKey: args.caller.callerKey,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
   })
@@ -186,4 +197,25 @@ export async function createStructuredAgentSessionForWorktree(args: {
     prepared,
     activate: args.activate
   })
+}
+
+/**
+ * The attach-shaped entries take the location from the client instead of resolving it from a
+ * worktree, so they never reach the worktree-resolving create-support check. Ask the executing
+ * host the same question directly: the answer includes host-measured facts the client cannot see
+ * or forge, such as whether this machine can read a provider child's process start time.
+ */
+export async function resolveClientSuppliedAttach(
+  params: z.infer<typeof AttachParams>,
+  ctx: RpcContext
+) {
+  await ensureHostInstalled(ctx)
+  const host = requireHost(ctx)
+  if (!host.supportsCreate(params.location, params.agent)) {
+    throw agentSessionRefusalError('structured_agent_session_unsupported', {
+      reason: 'hostUnsupported'
+    })
+  }
+  const attachParams: AgentSessionAttachParams = { ...params }
+  return { host, attachParams }
 }

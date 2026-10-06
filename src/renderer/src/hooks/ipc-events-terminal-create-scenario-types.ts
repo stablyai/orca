@@ -1,3 +1,4 @@
+import type { TerminalSlice } from '../store/terminals/terminal-state'
 import type { Mock } from 'vitest'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -13,6 +14,7 @@ export type TerminalCreateListenerPayload = {
   requestId?: string
   worktreeId: string
   command?: string
+  agentProfileId?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'
@@ -35,6 +37,7 @@ export type RequestTerminalCreateListenerPayload = {
   targetGroupId?: string
   command?: string
   cwd?: string
+  agentProfileId?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'
@@ -73,7 +76,7 @@ export type TerminalCreateSurfacingStore = {
   setActiveTab: SpyMock
   revealWorktreeInSidebar: SpyMock
   setTabCustomTitle: SpyMock
-  queueTabStartupCommand: SpyMock
+  queueTabStartupCommand: Mock<TerminalSlice['queueTabStartupCommand']>
   registerAgentLaunchConfig: SpyMock
   clearAgentLaunchConfig: SpyMock
   updateTabPtyId: Mock<(tabId: string, ptyId: string) => void>
@@ -103,6 +106,8 @@ export type TerminalCreateSurfacingStore = {
   editorFontZoomLevel: number
   setEditorFontZoomLevel: SpyMock
   setRateLimitsFromPush: SpyMock
+  setRemovedSshTargetLabels: SpyMock
+  setSshTargetsMetadata: SpyMock
   setSshConnectionState: SpyMock
   setSshTargetLabels: SpyMock
   setPortForwards: SpyMock

@@ -1,3 +1,4 @@
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -152,6 +153,7 @@ export function resetRuntimeAuthTestState(): void {
   testState.throwScopedKeychainWrite = false
   testState.runtimeWriteConfigDir = null
   testState.managedKeychainCredentials.clear()
+  installFakeAppEnvironment({ getPath: () => testState.userDataDir })
   testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-claude-runtime-'))
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-claude-home-'))
   mkdirSync(join(testState.fakeHomeDir, '.claude'), { recursive: true })

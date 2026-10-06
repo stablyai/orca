@@ -111,3 +111,12 @@ export function structuredCallerFor(ctx: RpcContext): StructuredAgentSessionCall
     callerKey: ctx.clientId?.trim() || `trusted-local:${ctx.clientKind ?? 'runtime'}`
   }
 }
+
+/** Profiles are local-host capabilities; negotiated structured support does not grant them. */
+export function requireStructuredProfileCaller(ctx: RpcContext, profileId?: string): void {
+  if (profileId !== undefined && ctx.clientKind !== undefined) {
+    throw agentSessionRefusalError('structured_agent_session_unsupported', {
+      reason: 'hostUnsupported'
+    })
+  }
+}

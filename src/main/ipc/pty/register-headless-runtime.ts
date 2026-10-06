@@ -1,3 +1,4 @@
+import type { TerminalProfileService } from './host-env/agent-profile-launch'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -18,6 +19,7 @@ export function registerHeadlessPtyRuntime(
   store?: Store,
   prepareCodexSessionResume?: PrepareCodexSessionResume,
   lifecycle?: {
+    agentProfiles?: TerminalProfileService
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
     onPtyExit?: (id: string, exitSequence: number) => void
   }

@@ -49,7 +49,7 @@ export class CodexAccountRegistration {
     try {
       this.prepareManagedHomeForLogin(managedHomePath, accountId)
       await this.dependencies.login(managedHomePath)
-      return await this.persistCapturedAccount(accountId, managedHome)
+      return await this.persistCapturedAccount(accountId, managedHome, target?.activate !== false)
     } catch (error) {
       this.dependencies.managedHomes.removeUnlessUnproven(error, managedHomePath, accountId)
       throw error
@@ -66,7 +66,7 @@ export class CodexAccountRegistration {
     try {
       this.prepareManagedHomeForLogin(managedHomePath, accountId)
       this.dependencies.managedHomes.importAuthFromHome(sourceHome, managedHomePath, accountId)
-      return await this.persistCapturedAccount(accountId, managedHome)
+      return await this.persistCapturedAccount(accountId, managedHome, target?.activate !== false)
     } catch (error) {
       this.dependencies.managedHomes.removeUnlessUnproven(error, managedHomePath, accountId)
       throw error
@@ -145,7 +145,8 @@ export class CodexAccountRegistration {
 
   private async persistCapturedAccount(
     accountId: string,
-    managedHome: ManagedCodexHomeLocation
+    managedHome: ManagedCodexHomeLocation,
+    activate: boolean
   ): Promise<CodexRateLimitAccountsState> {
     const identity = this.dependencies.readIdentityFromHome(managedHome.managedHomePath, accountId)
     if (!identity.email) {
@@ -168,6 +169,12 @@ export class CodexAccountRegistration {
     }
 
     const settings = this.dependencies.store.getSettings()
+    if (!activate) {
+      this.dependencies.store.updateSettings({
+        codexManagedAccounts: [...settings.codexManagedAccounts, account]
+      })
+      return this.dependencies.selection.snapshot()
+    }
     const selection = normalizeCodexRuntimeSelection(settings)
     const targetSelection = getCodexSelectionTargetForAccount(account)
     this.dependencies.store.updateSettings({

@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionWriteRefusal } from '../../../shared/agent-session-write-failure'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+export { structuredLaunchIdentity } from './structured-agent-launch-identity'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
@@ -64,18 +63,6 @@ export function notifyStructuredLaunchListeners(): void {
 export function subscribeStructuredAgentLaunchStatus(listener: () => void): () => void {
   structuredLaunchListeners.add(listener)
   return () => structuredLaunchListeners.delete(listener)
-}
-
-// Why keyed by agent: one worktree can hold a Claude and a Codex launch at once.
-// Why keyed by conversation: a resume must not coalesce onto an unrelated blank launch.
-export function structuredLaunchIdentity(
-  worktreeId: string,
-  agent: AgentSessionHandleProvider,
-  resumeFrom?: StructuredAgentSessionResumeSource
-): string {
-  return resumeFrom
-    ? `${agent}:${worktreeId}:resume:${resumeFrom.providerSessionId}`
-    : `${agent}:${worktreeId}`
 }
 
 export function getStructuredLaunchStateBySessionId(

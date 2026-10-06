@@ -93,6 +93,8 @@ export async function setupTerminalCreateSurfacing(
     editorFontZoomLevel: 0,
     setEditorFontZoomLevel: vi.fn(),
     setRateLimitsFromPush: vi.fn(),
+    setRemovedSshTargetLabels: vi.fn(),
+    setSshTargetsMetadata: vi.fn(),
     setSshConnectionState: vi.fn(),
     setSshTargetLabels: vi.fn(),
     setPortForwards: vi.fn(),

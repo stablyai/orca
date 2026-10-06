@@ -1,3 +1,4 @@
+import { assertStructuredAgentProfileWorkspace } from './agent-profile-workspace-selection'
 import type { Tab } from '../../../shared/tab-types'
 import { defaultAgentChatLabel } from '../../../shared/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
@@ -41,6 +42,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   executionHostId: ExecutionHostId
   sessionId: string
   agent: AgentSessionHandleProvider
+  profileName?: string
   targetGroupId?: string
   activate?: boolean
 }): Tab {
@@ -65,7 +67,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
     entityId: args.sessionId,
     executionHostId: args.executionHostId,
     agentSessionAgent: args.agent,
-    label: defaultAgentChatLabel(args.agent),
+    label: args.profileName ?? defaultAgentChatLabel(args.agent),
     ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
     activate: args.activate !== false
   })
@@ -115,6 +117,15 @@ export function beginStructuredAgentSessionProvisionalLaunch(
 ): StructuredAgentSessionProvisionalLaunch | null {
   const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
   const agent = args.plan.agent
+  if (worktreeId && args.plan.agentProfile) {
+    assertStructuredAgentProfileWorkspace(
+      useAppStore.getState(),
+      agent,
+      worktreeId,
+      args.plan.agentProfile,
+      args.target?.executionHostId ?? args.plan.executionHostId
+    )
+  }
   const paired =
     worktreeId && isAgentSessionHandleProvider(agent)
       ? structuredLaunchPairedOwner(args.plan, worktreeId, args.target)
@@ -177,6 +188,7 @@ function beginLocalProvisionalLaunch(args: ProvisionalLaunchArgs): LocalProvisio
       executionHostId: handle.executionHostId,
       sessionId: handle.sessionId,
       agent: args.plan.agent,
+      ...(args.plan.agentProfile ? { profileName: args.plan.agentProfile.name } : {}),
       ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
       ...(args.activate !== undefined ? { activate: args.activate } : {})
     })

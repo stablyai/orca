@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import type { AgentProfileConnectionService } from '../agent-profiles/connection-service'
 import { OrcaRuntimeWithLinearCommands } from './orca-runtime-linear-commands'
 import type { ExecutionHostScope } from '../../shared/execution-host'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -44,6 +45,7 @@ import { registerTerminalViewAttributesApplier } from './terminal-view-attribute
 import { RuntimeMachineName } from './runtime-machine-name'
 
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
+  protected readonly agentProfiles?: AgentProfileConnectionService
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
 
   protected readonly getAgentStatusSnapshotForPaneFn:
@@ -60,6 +62,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     deps?: {
       getLocalProvider?: () => IPtyProvider
       getSshProvider?: (connectionId: string) => IPtyProvider | undefined
+      agentProfiles?: AgentProfileConnectionService
       prepareClaudeAuth?: PrepareClaudeAuth
       onPtyStopped?: (ptyId: string) => void
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
@@ -128,6 +131,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     super()
     this.store = store
     this.machineName.start()
+    this.agentProfiles = deps?.agentProfiles
     this.prepareClaudeAuth = deps?.prepareClaudeAuth
     const runtime = this as RuntimeCommandSurfaceHost<this>
     installRuntimeFileCommandSurface(runtime, this.fileCommands)

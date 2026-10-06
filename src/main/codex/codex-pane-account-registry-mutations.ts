@@ -137,7 +137,8 @@ function recordsEqual(
   return (
     left?.selectionKey === right.selectionKey &&
     left.accountId === right.accountId &&
-    left.homeRoute === right.homeRoute
+    left.homeRoute === right.homeRoute &&
+    left.profileBound === right.profileBound
   )
 }
 

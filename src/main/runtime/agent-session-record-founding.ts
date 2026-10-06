@@ -1,3 +1,4 @@
+import { copyAgentProfileSnapshot } from '../../shared/agent-launch-profile'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
@@ -18,7 +19,12 @@ export function agentSessionRecordIdentityFields(
     sessionId: identity.sessionId,
     location: identity.location,
     provider: identity.provider,
-    accountHome: identity.accountHome,
+    accountHome: {
+      ...identity.accountHome,
+      ...(identity.accountHome.agentProfile
+        ? { agentProfile: copyAgentProfileSnapshot(identity.accountHome.agentProfile) }
+        : {})
+    },
     ...(identity.options ? { options: { ...identity.options } } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
     createdAt: now,

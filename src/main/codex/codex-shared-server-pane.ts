@@ -80,6 +80,7 @@ export function resolveCodexPaneHome(ptyId: string): string | null {
     // gets none either, as macOS and Linux already did: it is a fallback lane
     // (custom CODEX_HOME, hook approval) or a pre-upgrade home refreshed from ~/.codex.
     case 'shared-home':
+    case 'external-profile-home':
     case 'account-home':
     case 'wsl-home':
     case undefined:

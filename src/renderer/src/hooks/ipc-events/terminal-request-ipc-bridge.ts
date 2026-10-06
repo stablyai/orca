@@ -107,6 +107,7 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
             command: data.command,
             ...(data.env ? { env: data.env } : {}),
             ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
+            ...(data.agentProfileId !== undefined ? { agentProfileId: data.agentProfileId } : {}),
             ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
             ...(data.resumeProviderSession
               ? { resumeProviderSession: data.resumeProviderSession }

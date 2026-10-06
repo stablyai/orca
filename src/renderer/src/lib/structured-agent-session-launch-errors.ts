@@ -1,3 +1,5 @@
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import type { AgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
 
 export class StructuredAgentSessionCreateError extends Error {
@@ -45,4 +47,25 @@ export class StructuredAgentSessionOwnerUnresolvedError extends Error {
     super(`No single runtime owns workspace ${worktreeId}`)
     this.name = 'StructuredAgentSessionOwnerUnresolvedError'
   }
+}
+
+const DEFINITIVE_CREATE_FAILURE_CODES = [
+  'structured_agent_session_unsupported',
+  'method_not_found'
+] as const
+
+export function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string | null {
+  if (error instanceof StructuredAgentSessionCreateError) {
+    // Our own classes already carry the verdict; message sniffing below could only invert it.
+    return error instanceof StructuredAgentSessionCreateRefusalError &&
+      isDefinitiveAgentSessionCreateRefusal(error.code)
+      ? error.code
+      : null
+  }
+  for (const code of DEFINITIVE_CREATE_FAILURE_CODES) {
+    if (hasRuntimeRpcErrorCode(error, code)) {
+      return code
+    }
+  }
+  return null
 }

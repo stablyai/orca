@@ -3,11 +3,14 @@
 // Launch coalescing when a launch adopts a conversation. Drives the real intent builder, because
 // the identity under test is derived there — mocking it out would assert only the mock's shape.
 
+import type { AgentLaunchProfile } from '../../../shared/agent-launch-profile'
+import { createStructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
+  seedDraft: vi.fn(),
   refresh: vi.fn()
 }))
 
@@ -34,7 +37,18 @@ vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => ({ unifiedTabsByWorktree: {} }),
+    getState: () => ({
+      unifiedTabsByWorktree: {},
+      seedNativeChatLaunchDraft: mocks.seedDraft,
+      repos: [{ id: 'repo', connectionId: null }],
+      worktreesByRepo: {
+        repo: ['claude', 'codex'].map((agent) => ({
+          id: `wt-profile-${agent}`,
+          repoId: 'repo',
+          hostId: 'local'
+        }))
+      }
+    }),
     subscribe: () => () => {}
   }
 }))
@@ -75,6 +89,104 @@ describe('a launch that adopts a conversation is its own identity', () => {
       return { ok: true, value: { submission: { dispatchState: 'accepted' } } }
     })
   })
+
+  it.each(['claude', 'codex'] as const)(
+    'keeps %s profile A/B pending independently through the actual intent builder',
+    async (agent) => {
+      vi.stubGlobal('navigator', { userAgent: 'Linux' })
+      const worktreeId = `wt-profile-${agent}`
+      const a: AgentLaunchProfile = {
+        id: 'a',
+        name: 'Original A',
+        agent,
+        hostId: 'local',
+        executable: `/bin/${agent}`,
+        binding: { kind: 'managed', accountId: 'a' }
+      }
+      const b: AgentLaunchProfile = {
+        ...a,
+        id: 'b',
+        name: 'Original B',
+        binding: { kind: 'managed', accountId: 'b' }
+      }
+      const first = startStructuredAgentLaunch(worktreeId, agent, {
+        requestId: 'profile-click-a',
+        agentProfile: a,
+        prompt: 'first draft',
+        promptDelivery: 'draft'
+      })
+      expect(getStructuredAgentLaunchStatus(worktreeId, agent, a)).toBe('pending')
+      expect(() =>
+        startStructuredAgentLaunch(worktreeId, agent, {
+          requestId: 'profile-paired-refusal',
+          agentProfile: a,
+          executionHostId: 'runtime:server-1'
+        })
+      ).toThrow(/local terminal/)
+      expect(getStructuredAgentLaunchStatus(worktreeId, agent, b)).toBe('idle')
+      const second = startStructuredAgentLaunch(worktreeId, agent, {
+        requestId: 'profile-click-a',
+        agentProfile: b
+      })
+      const joined = startStructuredAgentLaunch(worktreeId, agent, {
+        requestId: 'profile-click-a',
+        agentProfile: { ...a, name: 'Renamed' }
+      })
+      await flushLaunchDispatch()
+      expect(first.sessionId).not.toBe(second.sessionId)
+      expect(joined.sessionId).toBe(first.sessionId)
+      expect(createParams().map((params) => params.agentProfileId)).toEqual(['a', 'b'])
+      expect(mocks.call).toHaveBeenCalledWith(
+        { kind: 'local' },
+        'agentSession.createSupport',
+        expect.objectContaining({ agentProfileId: 'a' })
+      )
+      expect(getStructuredAgentLaunchStatus(worktreeId, agent)).toBe('idle')
+      const nextAction = startStructuredAgentLaunch(worktreeId, agent, {
+        requestId: 'new-profile-action',
+        agentProfile: a,
+        prompt: 'next draft',
+        promptDelivery: 'draft'
+      })
+      expect(nextAction.sessionId).not.toBe(first.sessionId)
+      await flushLaunchDispatch()
+      expect(createParams().map((params) => params.agentProfileId)).toEqual(['a', 'b', 'a'])
+      expect(mocks.seedDraft).toHaveBeenCalledTimes(2)
+      a.name = 'Changed after click'
+      expect(localStorage.getItem('orca:structuredAgentLaunches:v1')).toContain('Original A')
+      expect(localStorage.getItem('orca:structuredAgentLaunches:v1')).not.toContain('Renamed')
+      vi.unstubAllGlobals()
+    }
+  )
+
+  it.each(['claude', 'codex'] as const)(
+    'refuses an explicit paired target for a local %s profile before host admission',
+    (agent) => {
+      vi.stubGlobal('navigator', { userAgent: 'Linux' })
+      try {
+        expect(() =>
+          createStructuredAgentSessionLaunchIntent(
+            `wt-profile-${agent}`,
+            agent,
+            'runtime:server-1',
+            undefined,
+            undefined,
+            {
+              id: 'paired-refusal',
+              name: 'Profile',
+              agent,
+              hostId: 'local',
+              executable: `/bin/${agent}`,
+              binding: { kind: 'managed', accountId: 'a' }
+            }
+          )
+        ).toThrow(/local terminal/)
+        expect(mocks.call).not.toHaveBeenCalled()
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    }
+  )
 
   it('does not hand a resume the blank launch already pending for the same worktree', async () => {
     // A joining caller is handed the EXISTING intent and contributes only its prompt, so joining

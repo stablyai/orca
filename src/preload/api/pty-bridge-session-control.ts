@@ -27,6 +27,7 @@ export const ptySessionControlApi = {
     envToDelete?: string[]
     command?: string
     commandDelivery?: 'renderer' | 'provider'
+    agentProfileId?: string
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
@@ -52,6 +53,7 @@ export const ptySessionControlApi = {
     id: string
     /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
     incarnationId?: string
+    agentProfileId?: string
     launchConfig?: SleepingAgentLaunchConfig
     snapshot?: string
     snapshotCols?: number

@@ -1,3 +1,4 @@
+import { agentProfilesApi } from './api/agent-profiles-bridge'
 import { contextBridge, ipcRenderer } from 'electron'
 import type { PreloadApi } from './api-types'
 import {
@@ -101,6 +102,7 @@ const telemetryGetConsentStateApi: PreloadApi['telemetryGetConsentState'] = () =
   ipcRenderer.invoke('telemetry:getConsentState')
 
 const api = {
+  agentProfiles: agentProfilesApi,
   app: appApi,
   orcaProfiles: orcaProfilesApi,
   platform: platformApi,

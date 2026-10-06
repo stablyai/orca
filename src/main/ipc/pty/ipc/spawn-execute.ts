@@ -1,3 +1,4 @@
+import { commitAgentProfilePtyOwnership } from '../host-env/agent-profile-ownership'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import {
   SSH_SESSION_EXPIRED_ERROR,
@@ -66,6 +67,7 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
           resolveOwner
         })
     ctx.result = stablePaneSpawn.result
+    commitAgentProfilePtyOwnership(ctx.agentProfile, ctx.result)
     ctx.stablePaneOwner = stablePaneSpawn.owner
     if (
       ctx.stablePaneOwner &&

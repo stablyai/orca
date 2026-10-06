@@ -61,3 +61,17 @@ describe('Claude child process environment', () => {
     ).toEqual({ SAFE_VALUE: 'preserved' })
   })
 })
+
+it('deletes profile forbidden keys from inherited and configured child environments', () => {
+  expect(
+    buildClaudeChildProcessEnv(
+      { PROFILE_SECRET: 'configured', KEEP: 'kept' },
+      {
+        inheritedEnv: { PROFILE_SECRET: 'inherited', profile_secret: 'case variant' },
+        envToDelete: ['PROFILE_SECRET'],
+        isolatedCredentials: true,
+        scrubConfiguredChildSessionStamps: true
+      }
+    )
+  ).toEqual({ KEEP: 'kept' })
+})

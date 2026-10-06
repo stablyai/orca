@@ -1,3 +1,4 @@
+import { hasTerminalProfileBinding } from '../host-env/agent-profile-launch'
 import type { PtySpawnResult } from '../../../providers/types'
 import { getAppPtyId } from '../provider/registry'
 import { allocatePtyLifecycleSequence } from '../host-env/types'
@@ -57,7 +58,7 @@ export function adoptMaterializedRuntimePtySpawn(
     { isReattach: true, wslDistro: ctx.preAdoptedStablePane.result.wslDistro },
     args.connectionId
   )
-  if (!args.connectionId) {
+  if (!args.connectionId && !hasTerminalProfileBinding(args)) {
     ctx.deps.options?.onCodexHomePtySpawned?.({
       id: ctx.result.id,
       codexHomePath: null,

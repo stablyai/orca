@@ -1,5 +1,6 @@
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { normalizeAgentLaunchProfiles } from '../../../shared/agent-launch-profile'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
 import {
@@ -58,6 +59,9 @@ export function updateSettings(
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
   const sanitizedUpdates = stripRetiredGlobalSettings(updates)
+  if ('agentLaunchProfiles' in updates) {
+    sanitizedUpdates.agentLaunchProfiles = normalizeAgentLaunchProfiles(updates.agentLaunchProfiles)
+  }
   if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
   }

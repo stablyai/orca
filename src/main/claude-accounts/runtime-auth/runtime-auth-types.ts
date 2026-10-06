@@ -8,6 +8,8 @@ export type ClaudeRuntimeAuthPreparation = {
   wslLinuxConfigDir?: string | null
   envPatch: ClaudeEnvPatch
   stripAuthEnv: boolean
+  isolatedCredentials?: boolean
+  accountId?: string
   managedRefreshDeferredByLivePty?: boolean
   provenance: string
 }

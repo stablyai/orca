@@ -16,6 +16,11 @@ import {
   filterEnabledTuiAgents
 } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
+import { AgentProfileMenuItem } from './AgentProfileMenuItem'
+import { profileAccounts } from '../settings/agent-profile-accounts'
+import { isProfileAgent } from '../../../../shared/agent-profile-capabilities'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isLocalAgentProfileHost } from '@/lib/agent-profile-workspace-selection'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 
 export type QuickLaunchAgentMenuItemsProps = {
@@ -118,6 +123,8 @@ function QuickLaunchAgentMenuItemsInner({
   const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
   const { detectedIds } = useDetectedAgents(agentDetectionTarget)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+  const settings = useAppStore((s) => s.settings)
+  const profiles = settings?.agentLaunchProfiles
   const disabledAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
@@ -131,13 +138,14 @@ function QuickLaunchAgentMenuItemsInner({
   }, [openSettingsPage, openSettingsTarget])
 
   const runLaunch = useCallback(
-    (agent: TuiAgent) => {
+    (agent: TuiAgent, agentProfileId?: string) => {
       if (disabled) {
         return
       }
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
+        ...(agentProfileId ? { agentProfileId } : {}),
         requestId: newAgentLaunchRequestId(),
         agent,
         worktreeId,
@@ -231,23 +239,62 @@ function QuickLaunchAgentMenuItemsInner({
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
         return (
-          <DropdownMenuItem
-            key={agent}
-            disabled={disabled}
-            onSelect={() => runLaunch(agent)}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            title={translate(
-              'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
-              'Launch {{value0}} in a new terminal',
-              { value0: label }
-            )}
-          >
-            <AgentIcon agent={agent} size={14} />
-            <span className="flex-1">{label}</span>
-            {showsDefaultAgentShortcut ? (
-              <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
-            ) : null}
-          </DropdownMenuItem>
+          <React.Fragment key={agent}>
+            <DropdownMenuItem
+              disabled={disabled}
+              onSelect={() => runLaunch(agent)}
+              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+              title={translate(
+                'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
+                'Launch {{value0}} in a new terminal',
+                { value0: label }
+              )}
+            >
+              <AgentIcon agent={agent} size={14} />
+              <span className="flex-1">{label}</span>
+              {showsDefaultAgentShortcut ? (
+                <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
+              ) : null}
+            </DropdownMenuItem>
+            {agentDetectionTarget?.kind === 'local' &&
+              !isPairedWebClientWindow() &&
+              isLocalAgentProfileHost() &&
+              isProfileAgent(agent) &&
+              profiles
+                ?.filter((profile) => profile.agent === agent && profile.hostId === 'local')
+                .map((profile) => {
+                  const binding = profile.binding
+                  const account =
+                    binding.kind === 'managed' && settings
+                      ? profileAccounts(settings, profile.agent).find(
+                          (entry) => entry.id === binding.accountId
+                        )
+                      : undefined
+                  return (
+                    <AgentProfileMenuItem
+                      key={profile.id}
+                      profile={profile}
+                      worktreeId={worktreeId}
+                      label={account?.email}
+                      disabled={disabled || (binding.kind === 'managed' && !account)}
+                      onSelect={() => {
+                        try {
+                          runLaunch(profile.agent, profile.id)
+                        } catch (error) {
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : translate(
+                                  'agentProfiles.launchError',
+                                  'Could not launch this profile.'
+                                )
+                          )
+                        }
+                      }}
+                    />
+                  )
+                })}
+          </React.Fragment>
         )
       })}
       <DropdownMenuItem

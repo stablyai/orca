@@ -1,4 +1,5 @@
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
+import type { AgentLaunchProfile } from '../../../shared/agent-launch-profile'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
@@ -8,6 +9,7 @@ import type { StructuredLaunchAttempt } from './structured-agent-session-launch-
 import type { AgentLaunchRequestId } from './agent-launch-request-id'
 
 export type StructuredAgentLaunchOptions = {
+  agentProfile?: AgentLaunchProfile
   /** The user action this start serves; only a re-delivery of it joins its chat. */
   requestId: AgentLaunchRequestId
   prompt?: string

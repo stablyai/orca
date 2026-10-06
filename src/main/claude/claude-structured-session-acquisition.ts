@@ -1,10 +1,7 @@
-import {
-  AgentSessionPreSpawnError,
-  type AgentSessionAcquisition,
-  type StructuredAgentSessionAcquireInput
+import type {
+  AgentSessionAcquisition,
+  StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../claude-accounts/environment'
-import { isClaudeAuthSwitchInProgress } from '../claude-accounts/live-pty-gate'
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
@@ -15,8 +12,7 @@ import {
   readClaudeFrameString,
   readClaudeInit
 } from './claude-structured-init-proof'
-import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
-import { CLAUDE_SPAWN_TOKEN_ENV, claudeProcessIdentity } from './claude-structured-owner-identity'
+import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { restoredClaudeStructuredSessionOptions } from './claude-structured-options'
 import { createClaudeSessionJournalTranslator } from './claude-structured-journal-translation'
@@ -40,7 +36,12 @@ import { withObservedProviderExit } from '../native-chat/agent-session-wire/stru
 import { readClaudeTranscriptEntryUuid } from './claude-transcript-entry-uuid'
 import { persistClaudeTurnResumePoint } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
-import { resolveClaudeAcquisitionLaunch } from './claude-structured-acquisition-launch'
+import {
+  resolveClaudeAcquisitionLaunch,
+  buildClaudeAcquisitionChildLaunch,
+  reserveClaudeAcquisitionPreparation,
+  assertClaudeAcquisitionAuthReady
+} from './claude-structured-acquisition-launch'
 import { claudeAcquireCatalogAccess } from './claude-structured-acquire-catalog'
 import {
   bindClaudeConnectionJournalControls,
@@ -64,11 +65,7 @@ export async function acquireClaudeSession({
 }): Promise<AgentSessionAcquisition> {
   // A managed-account switch is mid-swap of the pinned credential home; refuse here,
   // before this acquisition cancels the previous attempt and closes the live session.
-  if (isClaudeAuthSwitchInProgress()) {
-    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE), {
-      reason: 'accountSwitchInProgress'
-    })
-  }
+  assertClaudeAcquisitionAuthReady()
   const sessionId = input.identity.sessionId
   const prompts = new ClaudePromptRegistry()
   const { previous, attempt } = acquisitions.start(sessionId, prompts)
@@ -157,6 +154,7 @@ export async function acquireClaudeSession({
     callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
   const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({ sessionId, prompts, emit })
 
+  const preparation = reserveClaudeAcquisitionPreparation(deps, sessionId)
   try {
     const launch = await resolveClaudeAcquisitionLaunch({
       input,
@@ -168,49 +166,31 @@ export async function acquireClaudeSession({
       previous,
       attempt
     })
+    preparation.capture(launch)
     expectedProviderSessionId = launch.providerSessionId
     observedLeafUuid = launch.resumeLeafUuid
     const open = deps.openConnection ?? openClaudeStreamJsonConnection
     const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
-      open(
-        {
-          pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
-          options: launch.options,
-          cwd: launch.cwd,
-          env: {
-            ...launch.env,
-            [CLAUDE_SPAWN_TOKEN_ENV]: input.spawnToken,
-            // Compared against what the child would otherwise inherit, so the record's
-            // account home still wins over a diverging overlay without a needless pin.
-            // (`process` is shadowed by a local later in this function, so it is not named here.)
-            ...claudeConfigDirEnvPatch(
-              launch.claudeConfigDir,
-              launch.env ? { env: launch.env } : {}
-            )
-          }
+      open(buildClaudeAcquisitionChildLaunch(launch, input.spawnToken), {
+        onMessage,
+        canUseTool,
+        onUserDialog,
+        onFault: (error) => {
+          childEnded ??= error
+          initProof.reject(error)
         },
-        {
-          onMessage,
-          canUseTool,
-          onUserDialog,
-          onFault: (error) => {
-            childEnded ??= error
-            initProof.reject(error)
-          },
-          onExit: (error, exit) => {
-            if (exit?.expected) {
-              // The end of a close Orca began; that close settles it, or finishes it now.
-              callbacks.finishClose(sessionId, attempt)
-              return
-            }
-            // The child exited on its own; marked in place, as the fault report may hold this error.
-            withObservedProviderExit(error)
-            childEnded ??= error
-            initProof.reject(error)
-            callbacks.handleExit(sessionId, attempt, error)
+        onExit: (error, exit) => {
+          if (exit?.expected) {
+            callbacks.finishClose(sessionId, attempt)
+            return
           }
+          // The child exited on its own; marked in place, as the fault report may hold this error.
+          withObservedProviderExit(error)
+          childEnded ??= error
+          initProof.reject(error)
+          callbacks.handleExit(sessionId, attempt, error)
         }
-      )
+      })
     )
     attempt.connection = connection
     unbindReadingControl = bindClaudeConnectionJournalControls(
@@ -297,15 +277,13 @@ export async function acquireClaudeSession({
           })
       })
     ])
-    // A child whose exit already reached `handleExit` is not handed over as live: the create
-    // fails with the CLI's own diagnostic, as one that died before publish does.
+    // An exit delivered before publication must keep its diagnostic and cannot publish as live.
     if (sessions.get(sessionId) !== session) {
       throw (
         exits.get(sessionId)?.error ?? new Error('claude session ended before acquisition returned')
       )
     }
-    // The start applies its facts and restores saved options only after publish, so the child
-    // is `starting` until `started` says otherwise.
+    // Publication precedes saved-option restoration; only `started` proves readiness.
     return { ...publication.acquisition, providerChildPhase: 'starting' }
   } catch (error) {
     unbindReadingControl?.()
@@ -320,6 +298,7 @@ export async function acquireClaudeSession({
     acquisitions.deleteIfCurrent(sessionId, attempt)
     throw acquisitionError
   } finally {
+    preparation.release()
     attempt.finish()
   }
 }

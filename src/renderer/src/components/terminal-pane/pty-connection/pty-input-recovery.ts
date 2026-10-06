@@ -1,10 +1,10 @@
+import { installPtyViewportClaims } from './pty-viewport-claims'
 import { useAppStore } from '@/store'
 import { createIpcPtyTransport } from '../pty-transport'
 import { createRemoteRuntimePtyTransport } from '../remote-runtime-pty-transport'
 import { toAgentLaunchPreferences } from '../../../../../shared/agent-launch-preferences'
 import { createUnresolvedOwnerPtyTransport } from '../unresolved-owner-pty-transport'
 import { recordTerminalTabParkedOnUnresolvedHost } from '@/lib/parked-terminal-host-hydration'
-import { getFitOverrideForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying } from '../replay-guard'
 import { registerUndeliverableWriteHandler } from '@/lib/pane-manager/terminal-write-pipeline-health'
@@ -87,6 +87,9 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     ...(session.projectRuntime ? { projectRuntime: session.projectRuntime } : {}),
     ...(session.terminalColorQueryReplies
       ? { terminalColorQueryReplies: session.terminalColorQueryReplies }
+      : {}),
+    ...(session.paneStartup?.agentProfileId !== undefined
+      ? { agentProfileId: session.paneStartup.agentProfileId }
       : {}),
     ...(session.paneStartup?.launchConfig
       ? { launchConfig: session.paneStartup.launchConfig }
@@ -223,74 +226,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     session.sendDesktopQueryReplyImmediate
   )
 
-  session.claimViewportForUserActivity = (): void => {
-    const currentPtyId = session.transport.getPtyId()
-    if (!currentPtyId || getFitOverrideForPty(currentPtyId)?.mode !== 'remote-desktop-fit') {
-      return
-    }
-    let proposed: { cols: number; rows: number } | undefined
-    try {
-      proposed = session.pane.fitAddon.proposeDimensions()
-    } catch {
-      proposed = undefined
-    }
-    const cols = proposed?.cols ?? session.pane.terminal.cols
-    const rows = proposed?.rows ?? session.pane.terminal.rows
-    if (cols > 0 && rows > 0) {
-      // Why: queuing a claim is not convergence. Keep the pane parked until the
-      // runtime confirms desktop-fit so a transient resize failure retries.
-      session.transport.claimViewport?.(cols, rows)
-    }
-  }
-  session.claimPendingVisibleRemoteViewport = (): void => {
-    if (
-      !session.pendingVisibleRemoteViewportClaim ||
-      !session.deps.isVisibleRef.current ||
-      typeof document === 'undefined' ||
-      document.visibilityState === 'hidden' ||
-      typeof document.hasFocus !== 'function' ||
-      !document.hasFocus()
-    ) {
-      return
-    }
-    session.claimViewportForUserActivity()
-  }
-  session.armVisibleRemoteViewportClaim = (): void => {
-    const ptyId = session.transport.getPtyId()
-    if (!ptyId || !isRemoteRuntimePtyId(ptyId)) {
-      session.visibleRemoteViewportClaimPtyId = null
-      session.pendingVisibleRemoteViewportClaim = false
-      return
-    }
-    if (
-      session.visibleRemoteViewportClaimPtyId !== ptyId ||
-      session.pendingVisibleRemoteViewportClaim ||
-      getFitOverrideForPty(ptyId)?.mode === 'remote-desktop-fit'
-    ) {
-      session.visibleRemoteViewportClaimPtyId = ptyId
-      session.pendingVisibleRemoteViewportClaim = true
-    }
-  }
-  session.unsubscribeRemoteDesktopActivationClaim = onOverrideChange((event) => {
-    if (event.ptyId !== session.transport.getPtyId() || !isRemoteRuntimePtyId(event.ptyId)) {
-      return
-    }
-    if (event.mode === 'desktop-fit') {
-      session.visibleRemoteViewportClaimPtyId = event.ptyId
-      session.pendingVisibleRemoteViewportClaim = false
-      return
-    }
-    if (event.mode === 'remote-desktop-fit') {
-      if (
-        session.deps.isVisibleRef.current &&
-        session.visibleRemoteViewportClaimPtyId !== event.ptyId
-      ) {
-        session.visibleRemoteViewportClaimPtyId = event.ptyId
-        session.pendingVisibleRemoteViewportClaim = true
-      }
-      session.claimPendingVisibleRemoteViewport()
-    }
-  })
+  installPtyViewportClaims(session)
 
   // Why: an unbound transport (detached during a remount/move and never
   // rebound) silently rejects every keystroke while the PTY stays alive and

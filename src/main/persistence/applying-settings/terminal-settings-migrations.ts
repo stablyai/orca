@@ -57,6 +57,7 @@ export function readLegacyTerminalScrollbackSettings(
 }
 
 type RetiredGlobalSettings = {
+  claudeLaunchProfiles?: unknown
   terminalScrollbackBytes?: unknown
   enableGitHubAttribution?: unknown
   showAgentsSidebar?: unknown
@@ -68,12 +69,14 @@ export function stripRetiredGlobalSettings(
   settings: Partial<GlobalSettings> | undefined
 ): Partial<GlobalSettings> {
   const {
+    claudeLaunchProfiles: _prototypeProfiles,
     terminalScrollbackBytes: _legacyScrollbackBytes,
     enableGitHubAttribution: _legacyGitHubAttribution,
     showAgentsSidebar: _legacyShowAgentsSidebar,
     opencodeGoApiKey: _legacyOpenCodeGoApiKey,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
+  void _prototypeProfiles
   void _legacyScrollbackBytes
   void _legacyGitHubAttribution
   void _legacyShowAgentsSidebar

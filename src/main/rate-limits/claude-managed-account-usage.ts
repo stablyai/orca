@@ -1,4 +1,7 @@
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
+import { withClaudeAccountCredentialMutation } from '../claude-accounts/account-credential-mutation'
+import { hasIsolatedClaudeAccountAuth } from '../claude-accounts/isolated-account-auth'
+import { hasClaudeCredentialOwners } from '../claude-accounts/live-pty-gate'
 import {
   isOauthTokenExpiring,
   refreshClaudeOauthCredentials
@@ -35,6 +38,13 @@ export async function fetchInactiveClaudeAccountUsage(
   account: InactiveClaudeAccount,
   options: ClaudeManagedAccountUsageOptions = {}
 ): Promise<ProviderRateLimits> {
+  return withClaudeAccountCredentialMutation(account.id, () => fetchAccountUsage(account, options))
+}
+
+async function fetchAccountUsage(
+  account: InactiveClaudeAccount,
+  options: ClaudeManagedAccountUsageOptions = {}
+): Promise<ProviderRateLimits> {
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
@@ -48,7 +58,11 @@ export async function fetchInactiveClaudeAccountUsage(
   }
 
   let token = parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file').token
-  if (isOauthTokenExpiring(credentialsJson)) {
+  // Profile CLIs own refresh in the canonical home; polling must not rotate their token.
+  if (
+    !hasIsolatedClaudeAccountAuth(location.managedAuthPath) &&
+    isOauthTokenExpiring(credentialsJson)
+  ) {
     const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
     if (options.signal?.aborted) {
       return abortedClaudeRateLimitResult()
@@ -72,6 +86,7 @@ export async function fetchInactiveClaudeAccountUsage(
     return abortedClaudeRateLimitResult()
   }
   if (
+    (hasIsolatedClaudeAccountAuth(location.managedAuthPath) && hasClaudeCredentialOwners()) ||
     !canSupplementClaudeOAuthUsage({
       oauthLimits,
       authPreparation: undefined,

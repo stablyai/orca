@@ -225,6 +225,20 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
+    it('preserves the root guard for explicitly identified wrapped Claude launches', async () => {
+      spawnMock.mockClear()
+      await expect(
+        provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/',
+          launchAgent: 'claude',
+          command: '/usr/bin/env -u ANTHROPIC_API_KEY CLAUDE_CONFIG_DIR=/account /opt/claude'
+        })
+      ).rejects.toThrow(/requires a non-root workspace/)
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
     it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       const originalUserProfile = process.env.USERPROFILE

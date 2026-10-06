@@ -1,3 +1,4 @@
+import { structuredAgentSessionCreateIntentFingerprint } from './structured-agent-session-create'
 // The host's own structured-chat setting is its user's launch preference, not admission control:
 // a paired client that can read structured sessions reaches every method whatever that setting says.
 
@@ -224,4 +225,46 @@ describe("createSupport's launch seed", () => {
     expect(response).not.toMatchObject({ result: { seedOptions: expect.anything() } })
     expect(seedOptions).not.toHaveBeenCalled()
   })
+})
+
+describe('profile admission belongs to the server caller', () => {
+  it.each(['claude', 'codex'] as const)(
+    'refuses negotiated paired %s profile intents before host resolution',
+    async (agent) => {
+      const params = {
+        envelope: envelope({ expectedRuntimeFence: null }),
+        worktree: 'workspace-1',
+        agent,
+        agentProfileId: 'profile-a'
+      }
+      params.envelope.payloadFingerprint = structuredAgentSessionCreateIntentFingerprint(params)
+      const response = await call('agentSession.create', params, MODE_CHOOSING_CLIENT, SETTING_ON)
+      expect(response).toMatchObject({
+        ok: true,
+        result: {
+          ok: false,
+          refusal: {
+            code: 'structured_agent_session_unsupported',
+            details: { reason: 'hostUnsupported' }
+          }
+        }
+      })
+      expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).not.toHaveBeenCalled()
+      expect(hostCalls.attach).not.toHaveBeenCalled()
+      expect(
+        await call(
+          'agentSession.createSupport',
+          { worktree: params.worktree, agent, agentProfileId: params.agentProfileId },
+          MODE_CHOOSING_CLIENT,
+          SETTING_ON
+        )
+      ).toMatchObject({ ok: false, error: UNSUPPORTED })
+      expect(runtimeCalls.getStructuredAgentSessionCreateSupport).not.toHaveBeenCalled()
+      expect(await call('agentSession.create', params, undefined, SETTING_ON)).toMatchObject({
+        ok: true,
+        result: { ok: true }
+      })
+      expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalled()
+    }
+  )
 })

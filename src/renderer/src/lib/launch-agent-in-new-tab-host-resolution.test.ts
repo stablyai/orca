@@ -1,3 +1,4 @@
+import type { AgentLaunchProfile } from '../../../shared/agent-launch-profile'
 // Execution-host coverage for launchAgentInNewTab, split from launch-agent-in-new-tab.test.ts to
 // keep both files within the lines budget.
 
@@ -22,15 +23,28 @@ type StoreWorktree = {
   displayName: string
 }
 
+type LaunchTestSettings = {
+  agentCmdOverrides: Record<string, string>
+  agentDefaultArgs: Record<string, string>
+  agentDefaultEnv: Record<string, Record<string, string>>
+  activeRuntimeEnvironmentId: string | null
+  agentLaunchProfiles?: AgentLaunchProfile[]
+  experimentalNativeChat?: boolean
+  experimentalStructuredNativeChat?: boolean
+  openAgentTabsInChatByDefault?: boolean
+}
+
+const initialSettings: LaunchTestSettings = {
+  agentCmdOverrides: {},
+  agentDefaultArgs: {},
+  agentDefaultEnv: {},
+  activeRuntimeEnvironmentId: null
+}
+
 const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
-  settings: {
-    agentCmdOverrides: {} as Record<string, string>,
-    agentDefaultArgs: {} as Record<string, string>,
-    agentDefaultEnv: {} as Record<string, Record<string, string>>,
-    activeRuntimeEnvironmentId: null as string | null
-  },
+  settings: initialSettings,
   projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
   repos: [] as StoreRepo[],
   folderWorkspaces: [] as unknown[],
@@ -114,12 +128,95 @@ describe('launchAgentInNewTab execution host resolution', () => {
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null
     }
+    store.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
+    store.worktreesByRepo = { 'repo-1': [worktreeOn('local', '/repo/worktree')] }
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
+    store.folderWorkspaces = []
     store.openFiles = []
     store.browserTabsByWorktree = {}
     store.tabBarOrderByWorktree = {}
     store.terminalLayoutsByTabId = {}
     store.ptyIdsByTabId = {}
+  })
+
+  it.each([
+    ['claude', 'wt-1'],
+    ['codex', 'wt-1'],
+    ['claude', 'folder:local-folder'],
+    ['codex', 'folder:local-folder']
+  ] as const)(
+    'launches external %s profiles in %s only in a fresh terminal with a captured label',
+    async (agent, worktreeId) => {
+      vi.stubGlobal('navigator', { userAgent: 'Linux' })
+      const profile: AgentLaunchProfile = {
+        id: 'work',
+        name: 'Original',
+        agent,
+        hostId: 'local',
+        executable: `/bin/${agent}`,
+        binding: { kind: 'external', home: '/profiles/work' }
+      }
+      store.folderWorkspaces = [
+        {
+          id: 'local-folder',
+          executionHostId: 'local',
+          folderPath: '/folder',
+          projectGroupId: 'group'
+        }
+      ]
+      store.settings.agentLaunchProfiles = [profile]
+      store.settings.experimentalNativeChat = true
+      store.settings.experimentalStructuredNativeChat = true
+      store.settings.openAgentTabsInChatByDefault = true
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      const result = launchAgentInNewTab({
+        requestId: 'profile-terminal',
+        agent,
+        worktreeId,
+        agentProfileId: 'work'
+      })
+      expect(result?.surface.kind).toBe('local-terminal')
+      expect(mockCreateTab).toHaveBeenCalledWith(worktreeId, undefined, undefined, {
+        launchAgent: agent,
+        quickCommandLabel: 'Original',
+        viewMode: 'terminal'
+      })
+      expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+        'tab-1',
+        expect.objectContaining({ agentProfileId: 'work', launchAgent: agent })
+      )
+      profile.name = 'Renamed'
+      store.settings.agentLaunchProfiles = []
+      expect(mockCreateTab.mock.calls[0][3].quickCommandLabel).toBe('Original')
+      vi.unstubAllGlobals()
+    }
+  )
+
+  it('refuses an unsupported profile target before publishing a tab or contacting a remote', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    store.settings.agentLaunchProfiles = [
+      {
+        id: 'work',
+        name: 'Work',
+        agent: 'claude',
+        hostId: 'local',
+        executable: '/bin/claude',
+        binding: { kind: 'managed', accountId: 'a' }
+      }
+    ]
+    store.repos[0].connectionId = 'ssh-a'
+    store.worktreesByRepo = { 'repo-1': [worktreeOn('ssh:ssh-a', '/srv/repo')] }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    expect(() =>
+      launchAgentInNewTab({
+        requestId: 'profile-refused',
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        agentProfileId: 'work'
+      })
+    ).toThrow(/local/)
+    expect(mockCreateTab).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
   })
 
   it('shapes the launch from the worktree host, not a rival repo row on another SSH host', async () => {

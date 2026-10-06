@@ -51,6 +51,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export type ClaudeStreamJsonLaunch = {
+  isolatedCredentials?: boolean
+  envToDelete?: readonly string[]
   /** Orca's resolved user CLI; the SDK falls back to a bundled binary that is not installed. */
   pathToClaudeCodeExecutable: string
   options: ClaudeStructuredSdkOptions
@@ -140,6 +142,8 @@ export async function openClaudeStreamJsonConnection(
       // Orca's own CLAUDE_CONFIG_DIR is dropped for the same reason the launch drops the
       // shell's: the record's pin in `launch.env` must be the only home the child sees.
       env: buildClaudeChildProcessEnv(launch.env, {
+        isolatedCredentials: launch.isolatedCredentials,
+        envToDelete: launch.envToDelete,
         inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
         scrubConfiguredChildSessionStamps: true
       }),
@@ -280,7 +284,7 @@ export async function openClaudeStreamJsonConnection(
   // 'close' are attached makes that unreachable — any later throw still leaves a
   // listener that releases. Nothing between spawn and here can yield, so the child
   // cannot end before the gate is entered.
-  markClaudeStructuredChildSpawned(authGateKey)
+  markClaudeStructuredChildSpawned(authGateKey, launch.isolatedCredentials)
 
   const send: ClaudeStreamJsonConnection['send'] = (message, beforeDispatch) => {
     if (

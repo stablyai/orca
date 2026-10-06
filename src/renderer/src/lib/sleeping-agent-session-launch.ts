@@ -71,6 +71,8 @@ export function launchSleepingAgentSession(
   const resumeTarget = getResumeLaunchTarget(record.worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
+    agentProfile: launchConfig?.agentProfile,
+    claudeAccountId: launchConfig?.claudeAccountId,
     providerSession: record.providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     agentArgs:

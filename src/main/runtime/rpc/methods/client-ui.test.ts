@@ -63,23 +63,24 @@ describe('client UI RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { settings } })
   })
 
-  it('rejects paired attempts to mutate the host-owned structured chat setting', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      updateClientSettings: vi.fn()
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+  it.each([{ experimentalStructuredNativeChat: true }, { agentLaunchProfiles: [] }])(
+    'rejects paired attempts to mutate host-owned settings: %j',
+    async (patch) => {
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        updateClientSettings: vi.fn()
+      } as unknown as OrcaRuntimeService
+      const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
-    const response = await dispatcher.dispatch(
-      makeRequest('settings.update', { experimentalStructuredNativeChat: true })
-    )
+      const response = await dispatcher.dispatch(makeRequest('settings.update', patch))
 
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'invalid_argument' }
-    })
-    expect(runtime.updateClientSettings).not.toHaveBeenCalled()
-  })
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument' }
+      })
+      expect(runtime.updateClientSettings).not.toHaveBeenCalled()
+    }
+  )
 
   it('persists the runtime host task source settings for mobile Tasks', async () => {
     const settings = {

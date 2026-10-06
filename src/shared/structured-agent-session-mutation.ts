@@ -43,6 +43,7 @@ export function structuredAgentSessionDomainFingerprint(input: {
 }
 
 export function structuredAgentSessionCreateFingerprint(input: {
+  agentProfileId?: string
   sessionId: string
   worktree: string
   agent: AgentSessionHandleProvider
@@ -54,6 +55,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
     sessionId: input.sessionId,
     fields: {
       worktree: input.worktree,
+      agentProfileId: input.agentProfileId,
       agent: input.agent,
       // `canonicalize` drops undefined, so a plain create keeps the digest it has always had.
       // Adopting a conversation is a different intent and must not replay as a blank create.

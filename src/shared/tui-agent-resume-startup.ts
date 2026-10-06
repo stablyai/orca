@@ -1,6 +1,7 @@
 import {
   getAgentResumeArgv,
   type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig,
   type ResumableTuiAgent
 } from './agent-session-resume'
 import type { SessionOptionValue } from './native-chat-session-options'
@@ -13,6 +14,8 @@ import type { TuiAgent } from './tui-agent'
 import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
 
 export function buildAgentResumeStartupPlan(args: {
+  agentProfile?: SleepingAgentLaunchConfig['agentProfile']
+  claudeAccountId?: string | null
   agent: ResumableTuiAgent
   providerSession: AgentProviderSessionMetadata
   cmdOverrides: Partial<Record<TuiAgent, string>>

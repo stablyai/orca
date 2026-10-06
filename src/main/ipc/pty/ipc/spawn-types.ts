@@ -1,3 +1,4 @@
+import type { TerminalProfileService } from '../host-env/agent-profile-launch'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
@@ -31,6 +32,7 @@ export type PtySpawnIpcArgs = {
   envToDelete?: string[]
   command?: string
   commandDelivery?: 'renderer' | 'provider'
+  agentProfileId?: string
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: unknown
@@ -84,6 +86,7 @@ export type PtySpawnIpcDeps = {
   store?: Store
   getSettings?: () => GlobalSettings
   getSelectedCodexHomePath?: GetSelectedCodexHomePath
+  agentProfiles?: TerminalProfileService
   prepareClaudeAuth?: PrepareClaudeAuth
   options?: {
     prepareCodexSessionResume?: PrepareCodexSessionResume

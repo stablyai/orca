@@ -1,3 +1,4 @@
+import { assertTerminalProfilesStayLocal } from '../../../../../shared/terminal-profile-routing'
 import { defineMethod } from '../../core'
 import {
   navigationTargetsHost,
@@ -39,6 +40,9 @@ export const TERMINAL_LIFECYCLE_METHODS = [
       // authority boundary here so a remote caller cannot activate the host
       // renderer. This legacy RPC remains a background create for paired viewers;
       // caller-local selection belongs to the session-tab RPC flow.
+      if (pairedDeviceId !== undefined || clientKind !== undefined) {
+        assertTerminalProfilesStayLocal(params)
+      }
       const pairedViewer = clientKind !== undefined
       const focus = pairedViewer ? false : params.focus === true
       const activate = pairedViewer ? false : params.activate === true
@@ -57,6 +61,9 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               startupCommandDelivery: params.startupCommandDelivery,
               env: params.env,
               envToDelete: params.envToDelete,
+              ...(params.agentProfileId !== undefined
+                ? { agentProfileId: params.agentProfileId }
+                : {}),
               ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
               ...(params.resumeProviderSession
                 ? { resumeProviderSession: params.resumeProviderSession }

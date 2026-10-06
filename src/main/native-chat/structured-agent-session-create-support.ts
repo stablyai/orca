@@ -1,3 +1,4 @@
+import { supportsAgentProfileHost } from '../../shared/agent-profile-capabilities'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -21,9 +22,21 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
   agent: StructuredAgentId
   location: AgentSessionExecutionLocation
   adapterSupportsCreate: boolean
+  profileBound?: boolean
+  platform?: NodeJS.Platform
   getSettings: () => ClaudeManagedAccountGateSettings
 }): StructuredAgentSessionCreateSupport {
-  if (!input.adapterSupportsCreate) {
+  if (
+    !input.adapterSupportsCreate ||
+    (input.profileBound &&
+      !supportsAgentProfileHost({
+        platform: input.platform ?? process.platform,
+        hostId: input.location.executionHostId,
+        isWsl: Boolean(
+          input.location.wslDistro || process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP
+        )
+      }))
+  ) {
     return {
       supported: false,
       reason:
@@ -39,6 +52,7 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
   // workspace — and no client reads the field, so it stays as-is.
   if (
     input.agent === 'claude' &&
+    !input.profileBound &&
     !structuredClaudeMatchesActiveManagedAccount(
       readClaudeManagedAccountGateSettings(input.getSettings)
     )

@@ -55,6 +55,8 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   void _legacyScrollbackBytes
   // Plugin consent and enablement are main-owned authority state. Renderer
   // writes must pass the dedicated reviewed-fingerprint handlers.
+  // Profile bindings are validated by the singleton profile management service.
+  delete sanitizedArgs.agentLaunchProfiles
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
   return sanitizedArgs

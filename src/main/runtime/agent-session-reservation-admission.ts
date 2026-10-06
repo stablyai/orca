@@ -185,7 +185,9 @@ export function applyAgentSessionReservation(
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||
     existing.accountHome.variable !== request.accountHome.variable ||
-    existing.accountHome.path !== request.accountHome.path
+    existing.accountHome.path !== request.accountHome.path ||
+    JSON.stringify(existing.accountHome.agentProfile) !==
+      JSON.stringify(request.accountHome.agentProfile)
   ) {
     // Why: location, provider, and account are the session identity; changing one is a fork.
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'identityMismatch' })

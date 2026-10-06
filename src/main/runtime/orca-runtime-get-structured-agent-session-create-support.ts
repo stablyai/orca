@@ -1,4 +1,9 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import {
+  resolveStructuredProfileSnapshot,
+  structuredAgentProfileAccountHome,
+  type StructuredAgentSessionCreateIntentInput
+} from './structured-agent-profile'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { OrcaRuntimeWithGetWorktreePs } from './orca-runtime-get-worktree-ps'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -31,10 +36,12 @@ import { agentSessionWireProviderHandle } from '../../shared/agent-session-provi
 export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithGetWorktreePs {
   async getStructuredAgentSessionCreateSupport(
     worktreeSelector: string,
-    agent: StructuredAgentId
+    agent: StructuredAgentId,
+    profileBound = false
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
     return resolveStructuredAgentSessionCreateSupport({
+      profileBound,
       agent,
       location,
       adapterSupportsCreate: await this.structuredAgentSupportsLocation(agent, location),
@@ -140,13 +147,9 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     return (await this.resolveRuntimeFileTarget(worktreeSelector)).worktree.path
   }
 
-  async resolveStructuredAgentSessionCreateIntent(input: {
-    envelope: { sessionId: string; clientOperationId: string }
-    worktree: string
-    agent: StructuredAgentId
-    callerKey?: string
-    resumeFrom?: { providerSessionId: string }
-  }): Promise<AgentSessionAttachParams> {
+  async resolveStructuredAgentSessionCreateIntent(
+    input: StructuredAgentSessionCreateIntentInput
+  ): Promise<AgentSessionAttachParams> {
     const resolveAccountHomePath = this.structuredAgentAccountHomePathResolver(
       input.agent,
       input.worktree,
@@ -183,13 +186,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   }
 
   protected async resolveStructuredAgentSessionIntent(
-    input: {
-      envelope: { sessionId: string; clientOperationId: string }
-      worktree: string
-      agent: StructuredAgentId
-      callerKey?: string
-      resumeFrom?: { providerSessionId: string }
-    },
+    input: StructuredAgentSessionCreateIntentInput,
     resolveAccountHomePath: (context: {
       launchEnv: NodeJS.ProcessEnv
       location: {
@@ -200,9 +197,11 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
       }
     }) => string | Promise<string>
   ): Promise<AgentSessionAttachParams> {
-    const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
-    // Adopting a conversation reads the agent's own transcript, which only Claude and Codex have
-    // importers for.
+    const support = await this.getStructuredAgentSessionCreateSupport(
+      input.worktree,
+      input.agent,
+      input.agentProfileId !== undefined
+    )
     if (!support.supported || (input.resumeFrom && !isAgentSessionHandleProvider(input.agent))) {
       throw agentSessionRefusalError('structured_agent_session_unsupported', {
         reason: 'hostUnsupported'
@@ -223,7 +222,17 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     if (committedReplay) {
       return committedReplay
     }
-    const selectedAccountHomePath = await resolveAccountHomePath({ launchEnv, location })
+    const agentProfile =
+      input.agentProfileId !== undefined
+        ? await resolveStructuredProfileSnapshot(
+            this.agentProfiles,
+            input.agentProfileId,
+            input.agent,
+            location
+          )
+        : undefined
+    const selectedAccountHomePath =
+      agentProfile?.resolvedHome ?? (await resolveAccountHomePath({ launchEnv, location }))
     // Adopting pins the account home to wherever the conversation actually lives, which is not
     // necessarily the one a fresh create would pick: Codex resolves its rollout under
     // `accountHome.path`, and Claude reads its transcript under `<home>/projects`. Resuming under
@@ -238,6 +247,11 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
           selectedAccountHomePath
         })
       : null
+    if (agentProfile && adoption && adoption.accountHomePath !== selectedAccountHomePath) {
+      throw new Error(
+        'This conversation belongs to another account. Resume it with its original profile.'
+      )
+    }
     return {
       envelope: {
         sessionId: input.envelope.sessionId,
@@ -248,10 +262,13 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
       location,
       provider: input.agent,
       agent: input.agent,
-      accountHome: agentSessionAccountHome(
-        definition,
-        adoption ? adoption.accountHomePath : selectedAccountHomePath
-      ),
+      accountHome: structuredAgentProfileAccountHome({
+        agent: definition,
+        agentProfile,
+        managedAccounts: settings.claudeManagedAccounts,
+        selectedPath: selectedAccountHomePath,
+        path: adoption?.accountHomePath ?? selectedAccountHomePath
+      }),
       ...(options ? { options } : {}),
       ...(input.resumeFrom && adoption
         ? {

@@ -2,6 +2,11 @@ import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
+  hasIsolatedClaudeAccountAuth,
+  readClaudeAccountCredentials,
+  writeClaudeAccountCredentials
+} from '../claude-accounts/isolated-account-auth'
+import {
   deleteActiveClaudeKeychainCredentialsStrict,
   readActiveClaudeKeychainCredentialsStrict,
   readManagedClaudeKeychainCredentials,
@@ -49,7 +54,9 @@ export async function readClaudeManagedCredentialsJson(
 ): Promise<string | null> {
   try {
     return location.kind === 'keychain'
-      ? await readManagedClaudeKeychainCredentials(location.accountId)
+      ? await (hasIsolatedClaudeAccountAuth(location.managedAuthPath)
+          ? readClaudeAccountCredentials(location)
+          : readManagedClaudeKeychainCredentials(location.accountId))
       : readClaudeManagedAuthFile(location.managedAuthPath, '.credentials.json')
   } catch {
     return null
@@ -61,7 +68,9 @@ export async function writeClaudeManagedCredentialsJson(
   credentialsJson: string
 ): Promise<void> {
   if (location.kind === 'keychain') {
-    await writeManagedClaudeKeychainCredentials(location.accountId, credentialsJson)
+    await (hasIsolatedClaudeAccountAuth(location.managedAuthPath)
+      ? writeClaudeAccountCredentials(location, credentialsJson)
+      : writeManagedClaudeKeychainCredentials(location.accountId, credentialsJson))
   } else {
     writeClaudeManagedAuthFile(location.managedAuthPath, '.credentials.json', credentialsJson)
   }
@@ -102,7 +111,7 @@ export async function withClaudeManagedPreviewKeychainCredentials<T>(
   credentialsJson: string,
   operation: () => Promise<T>
 ): Promise<T> {
-  if (location.kind !== 'keychain') {
+  if (location.kind !== 'keychain' || hasIsolatedClaudeAccountAuth(location.managedAuthPath)) {
     return operation()
   }
   await writeActiveClaudeKeychainCredentials(credentialsJson, location.managedAuthPath)
@@ -116,7 +125,7 @@ export async function withClaudeManagedPreviewKeychainCredentials<T>(
 export async function readStagedClaudeManagedPreviewCredentials(
   location: ClaudeManagedCredentialsLocation
 ): Promise<string | null> {
-  if (location.kind !== 'keychain') {
+  if (location.kind !== 'keychain' || hasIsolatedClaudeAccountAuth(location.managedAuthPath)) {
     return null
   }
   try {

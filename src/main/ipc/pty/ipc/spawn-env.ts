@@ -30,7 +30,7 @@ import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
-  if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
+  if (ctx.isClaudeLaunch && !ctx.agentProfile && isClaudeAuthSwitchInProgress()) {
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
   if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {
@@ -40,9 +40,11 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
   // Safety: skip entirely for SSH — every injection is a loopback secret or a local path that leaks or misleads on the remote host.
   // Why: forward pane env to SSH only when the relay hook path is enabled, or a newer relay could emit statuses this build can't route.
   const sshSourceEnv = stripRemotePaneEnvWhenHooksDisabled(args.connectionId, args.env)
-  const baseEnvWithAuth = ctx.claudeAuth
-    ? { ...sshSourceEnv, ...ctx.claudeAuth.envPatch }
-    : sshSourceEnv
+  const baseEnvWithAuth = ctx.agentProfile
+    ? { ...sshSourceEnv, ...ctx.agentProfile.envPatch }
+    : ctx.claudeAuth
+      ? { ...sshSourceEnv, ...ctx.claudeAuth.envPatch }
+      : sshSourceEnv
   const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
   const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)
   const verifiedPaneKey =
@@ -88,6 +90,15 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       launchConfig: args.launchConfig
     })
   ctx.effectiveLaunchConfig = args.launchConfig
+  if (ctx.isClaudeLaunch && !ctx.agentProfile && !ctx.preAdoptedStablePane) {
+    ctx.effectiveLaunchConfig = {
+      agentArgs: '',
+      agentEnv: {},
+      ...args.launchConfig,
+      claudeAccountId:
+        ctx.claudeAuth?.accountId ?? (ctx.claudeAuth?.provenance === 'system' ? null : undefined)
+    }
+  }
   const shouldPreAllocateTerminalHandle =
     ctx.deps.runtime !== undefined &&
     ((!(ctx.provider instanceof LocalPtyProvider) &&
@@ -110,11 +121,11 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       ...ctx.baseEnv,
       ...prepared.env
     }
-    if (args.launchConfig) {
+    if (ctx.effectiveLaunchConfig) {
       ctx.effectiveLaunchConfig = {
-        ...args.launchConfig,
+        ...ctx.effectiveLaunchConfig,
         agentEnv: {
-          ...args.launchConfig.agentEnv,
+          ...ctx.effectiveLaunchConfig.agentEnv,
           ...prepared.env
         }
       }

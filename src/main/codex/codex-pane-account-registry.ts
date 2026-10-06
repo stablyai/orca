@@ -1,3 +1,4 @@
+import { createCodexProfileAccountOwners } from './codex-profile-account-owners'
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { dirname, join } from 'node:path'
@@ -9,10 +10,7 @@ import type {
   CodexPaneHomeRoute
 } from './codex-pane-account-registry-types'
 
-export type {
-  CodexPaneAccountRecord,
-  CodexPaneHomeRoute
-} from './codex-pane-account-registry-types'
+export type * from './codex-pane-account-registry-types'
 
 /**
  * Remembers which Codex account each live PTY was launched under.
@@ -27,9 +25,7 @@ export type {
 let cachedRegistry: CodexPaneAccountRegistryFile | null = null
 let cachedRegistryIsAuthoritative = true
 
-function getRegistryPath(): string {
-  return join(getOrcaUserDataPath(), 'codex-pane-accounts.json')
-}
+const getRegistryPath = (): string => join(getOrcaUserDataPath(), 'codex-pane-accounts.json')
 
 /**
  * `null` means the registry could not be READ. That is not the same as "no
@@ -125,10 +121,11 @@ function parseRegistry(parsed: unknown): CodexPaneAccountRegistryFile {
   }
   for (const [ptyId, record] of Object.entries(panes)) {
     if (isPaneAccountRecord(record)) {
-      const homeRoute = readPaneHomeRoute(record.homeRoute)
+      const homeRoute = readPaneHomeRoute(record.homeRoute, record.profileBound === true)
       empty.panes[ptyId] = {
         selectionKey: record.selectionKey,
         accountId: record.accountId,
+        ...(record.profileBound === true ? { profileBound: true } : {}),
         ...(homeRoute ? { homeRoute } : {})
       }
     }
@@ -144,14 +141,19 @@ function isPaneAccountRecord(value: unknown): value is CodexPaneAccountRecord {
   return (
     (record.selectionKey === 'host' ||
       (typeof record.selectionKey === 'string' && /^wsl:.+/.test(record.selectionKey))) &&
-    (record.accountId === null || typeof record.accountId === 'string')
+    (record.accountId === null || typeof record.accountId === 'string') &&
+    (record.profileBound === undefined || record.profileBound === true)
   )
 }
 
-// Why: older builds wrote 'custom-home' for a shared-home pane with a pane-local CODEX_HOME.
-function readPaneHomeRoute(value: unknown): CodexPaneHomeRoute | undefined {
+// Legacy custom-home meant shared-home; only captured profiles used it for an external home.
+function readPaneHomeRoute(value: unknown, profileBound = false): CodexPaneHomeRoute | undefined {
   if (value === 'custom-home') {
-    return 'shared-home'
+    return profileBound ? 'external-profile-home' : 'shared-home'
+  }
+  // External profile homes stay user-owned even when their path is the retired shared home.
+  if (value === 'external-profile-home' && profileBound) {
+    return 'external-profile-home'
   }
   return value === 'real-home' ||
     value === 'shared-home' ||
@@ -344,3 +346,7 @@ export const _internals = {
     mutations.reset()
   }
 }
+
+const profileOwners = createCodexProfileAccountOwners(readRegistryOrThrow)
+export const reserveCodexProfileAccountOwner = profileOwners.reserve
+export const hasRecordedProfileBoundCodexAccount = profileOwners.has

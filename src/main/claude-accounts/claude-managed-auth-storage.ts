@@ -11,27 +11,28 @@ import {
   writeClaudeManagedAuthFile
 } from './managed-auth-path'
 import {
+  deleteActiveClaudeKeychainCredentialsStrict,
   deleteManagedClaudeKeychainCredentials,
   readManagedClaudeKeychainCredentials,
   writeManagedClaudeKeychainCredentials
 } from './keychain'
+import {
+  hasIsolatedClaudeAccountAuth,
+  readClaudeAccountCredentials,
+  writeClaudeAccountCredentials,
+  writeIsolatedClaudeAccountMetadata
+} from './isolated-account-auth'
 
-export type ClaudeManagedAuthLocation = {
-  managedAuthPath: string
-  managedAuthRuntime: 'host' | 'wsl'
-  wslDistro: string | null
-  wslLinuxAuthPath: string | null
-}
-
-export type ClaudeManagedAuthSnapshot = {
-  credentialsJson: string | null
-  oauthAccountJson: string | null
-}
-
-export type ClaudeManagedAuthTarget = {
-  runtime?: 'host' | 'wsl'
-  wslDistro?: string | null
-}
+import type {
+  ClaudeManagedAuthLocation,
+  ClaudeManagedAuthSnapshot,
+  ClaudeManagedAuthTarget
+} from './claude-managed-auth-storage-types'
+export type {
+  ClaudeManagedAuthLocation,
+  ClaudeManagedAuthSnapshot,
+  ClaudeManagedAuthTarget
+} from './claude-managed-auth-storage-types'
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
@@ -76,10 +77,14 @@ export class ClaudeManagedAuthStorage {
   ): Promise<void> {
     const trustedPath = await this.assertOwned(managedAuthPath, accountId)
     if (!parseWslUncPath(trustedPath)) {
-      credentialsJson = stripSharedClaudeCredentialFields(credentialsJson)
-    }
-    if (process.platform === 'darwin') {
-      await writeManagedClaudeKeychainCredentials(accountId, credentialsJson)
+      // Legacy snapshots exclude shared grants; an enrolled home owns its live connector state.
+      if (!hasIsolatedClaudeAccountAuth(trustedPath)) {
+        credentialsJson = stripSharedClaudeCredentialFields(credentialsJson)
+      }
+      await writeClaudeAccountCredentials(
+        { accountId, managedAuthPath: trustedPath },
+        credentialsJson
+      )
     } else {
       writeClaudeManagedAuthFile(trustedPath, '.credentials.json', credentialsJson)
     }
@@ -96,6 +101,9 @@ export class ClaudeManagedAuthStorage {
       'oauth-account.json',
       `${JSON.stringify(oauthAccount, null, 2)}\n`
     )
+    if (hasIsolatedClaudeAccountAuth(trustedPath)) {
+      writeIsolatedClaudeAccountMetadata(trustedPath, oauthAccount)
+    }
   }
 
   async readSnapshot(
@@ -104,8 +112,9 @@ export class ClaudeManagedAuthStorage {
   ): Promise<ClaudeManagedAuthSnapshot> {
     const trustedPath = await this.assertOwned(managedAuthPath, accountId)
     return {
-      credentialsJson:
-        process.platform === 'darwin'
+      credentialsJson: hasIsolatedClaudeAccountAuth(trustedPath)
+        ? await readClaudeAccountCredentials({ accountId, managedAuthPath: trustedPath })
+        : process.platform === 'darwin'
           ? await readManagedClaudeKeychainCredentials(accountId)
           : readClaudeManagedAuthFile(trustedPath, '.credentials.json'),
       oauthAccountJson: readClaudeManagedAuthFile(trustedPath, 'oauth-account.json')
@@ -118,6 +127,19 @@ export class ClaudeManagedAuthStorage {
     snapshot: ClaudeManagedAuthSnapshot
   ): Promise<void> {
     const trustedPath = await this.assertOwned(managedAuthPath, accountId)
+    if (hasIsolatedClaudeAccountAuth(trustedPath)) {
+      if (snapshot.credentialsJson !== null) {
+        await writeClaudeAccountCredentials(
+          { accountId, managedAuthPath: trustedPath },
+          snapshot.credentialsJson
+        )
+      } else if (process.platform === 'darwin') {
+        await deleteActiveClaudeKeychainCredentialsStrict(trustedPath)
+      } else {
+        rmSync(join(trustedPath, '.credentials.json'), { force: true })
+      }
+      return
+    }
     if (process.platform === 'darwin') {
       await (snapshot.credentialsJson !== null
         ? writeManagedClaudeKeychainCredentials(accountId, snapshot.credentialsJson)
@@ -140,11 +162,20 @@ export class ClaudeManagedAuthStorage {
     } else {
       rmSync(join(trustedPath, 'oauth-account.json'), { force: true })
     }
+    if (hasIsolatedClaudeAccountAuth(trustedPath)) {
+      writeIsolatedClaudeAccountMetadata(
+        trustedPath,
+        snapshot.oauthAccountJson === null ? undefined : JSON.parse(snapshot.oauthAccountJson)
+      )
+    }
   }
 
   async remove(accountId: string, candidatePath: string): Promise<void> {
     try {
       const managedAuthPath = await this.assertOwned(candidatePath, accountId)
+      if (process.platform === 'darwin' && hasIsolatedClaudeAccountAuth(managedAuthPath)) {
+        await deleteActiveClaudeKeychainCredentialsStrict(managedAuthPath)
+      }
       rmSync(resolve(managedAuthPath, '..'), { recursive: true, force: true })
     } catch (error) {
       console.warn('[claude-accounts] Refusing to remove untrusted managed auth:', error)

@@ -6,6 +6,7 @@ export type ClaudeManagedAccountGateSettings = Pick<
   | 'claudeManagedAccounts'
   | 'activeClaudeManagedAccountId'
   | 'activeClaudeManagedAccountIdsByRuntime'
+  | 'claudeProfileMigrationAt'
 >
 
 /**

@@ -64,6 +64,9 @@ export async function createDesktopTerminal(
       command: launchOpts.command,
       cwd,
       ...(launchOpts.env ? { env: launchOpts.env } : {}),
+      ...(launchOpts.agentProfileId !== undefined
+        ? { agentProfileId: launchOpts.agentProfileId }
+        : {}),
       ...(launchOpts.launchConfig ? { launchConfig: launchOpts.launchConfig } : {}),
       ...(launchOpts.resumeProviderSession
         ? { resumeProviderSession: launchOpts.resumeProviderSession }

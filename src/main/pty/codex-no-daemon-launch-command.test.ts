@@ -42,6 +42,14 @@ describe.skipIf(hostPlatform === 'win32')('planCodexNoDaemonLaunch', () => {
     })
   }
 
+  it('probes the trusted canonical profile executable even with a different filename', async () => {
+    const canonical = writeCodex('provider-native', HELP_WITH_FLAG)
+    await expect(plan(canonical, { trustedExecutable: canonical })).resolves.toBe(
+      `${canonical} --no-daemon`
+    )
+    expect(plan(canonical)).toBeNull()
+  })
+
   it('adds --no-daemon once, right after a path-named codex', async () => {
     await expect(plan(`${codex} --yolo 'fix the bug'`)).resolves.toBe(
       `${codex} --no-daemon --yolo 'fix the bug'`

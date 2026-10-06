@@ -92,6 +92,7 @@ export type ClaudeLateDispatchOutcome =
   | { clientMessageId: string; state: 'unknown'; reason: string }
 
 export type ClaudeStructuredSessionAdapterDeps = {
+  hasProfileBinding?: (sessionId: string) => boolean
   /** The `/` surface of a chat whose Claude is not running. */
   atRestCommands?: ClaudeAtRestCommandCatalog
   resolveLaunch: (input: {

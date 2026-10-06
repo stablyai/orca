@@ -1,3 +1,5 @@
+import { commitAgentProfilePtyOwnership } from '../ipc/pty/host-env/agent-profile-ownership'
+import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -53,6 +55,7 @@ describe('codex pane account registry', () => {
     ['account-home', true],
     ['wsl-home', true],
     ['shared-home', false],
+    ['external-profile-home', false],
     [undefined, false]
   ] as const)('classifies whether %s proves a pane avoided the shared home', (route, expected) => {
     expect(isCodexPaneHomeRouteProvenAwayFromSharedHome(route)).toBe(expected)
@@ -103,6 +106,65 @@ describe('codex pane account registry', () => {
       accountId: null,
       homeRoute: 'shared-home'
     })
+  })
+
+  it.each([false, true])(
+    'retains external profile authority across reload (shared home: %s)',
+    (shared) => {
+      const home = shared ? getOrcaManagedCodexHomePath() : join(userDataPath, 'external')
+      commitAgentProfilePtyOwnership(
+        {
+          snapshot: {
+            id: 'external',
+            name: 'External',
+            agent: 'codex',
+            hostId: 'local',
+            executable: '/synthetic/codex',
+            binding: { kind: 'external', home },
+            resolvedHome: home,
+            identity: { kind: 'verified', subject: 'external', displayName: 'External' }
+          },
+          envPatch: { CODEX_HOME: home },
+          envToDelete: [],
+          release: () => {}
+        },
+        { id: 'pty-external' }
+      )
+      _internals.resetCache()
+      expect(getCodexPaneAccount('pty-external')).toEqual({
+        selectionKey: 'host',
+        accountId: null,
+        homeRoute: 'external-profile-home',
+        profileBound: true
+      })
+      expect(hasRecordedLegacySharedCodexPane()).toBe(false)
+      expect(hasRecordedManagedHostCodexPane()).toBe(false)
+      // The binding may target the shared directory; cleanup still needs directory evidence.
+      expect(isCodexPaneHomeRouteProvenAwayFromSharedHome('external-profile-home')).toBe(false)
+    }
+  )
+
+  it('migrates old profile-bound custom homes without treating them as legacy shared panes', () => {
+    writeFileSync(
+      join(userDataPath, 'codex-pane-accounts.json'),
+      JSON.stringify({
+        version: 2,
+        panes: {
+          external: {
+            selectionKey: 'host',
+            accountId: null,
+            homeRoute: 'custom-home',
+            profileBound: true
+          }
+        }
+      })
+    )
+    _internals.resetCache()
+    expect(getCodexPaneAccount('external')).toMatchObject({
+      homeRoute: 'external-profile-home',
+      profileBound: true
+    })
+    expect(hasRecordedLegacySharedCodexPane()).toBe(false)
   })
 
   it('runs legacy reconciliation only for host panes that may use the shared home', () => {

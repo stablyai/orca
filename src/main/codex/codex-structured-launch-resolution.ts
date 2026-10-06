@@ -1,3 +1,7 @@
+import type { AgentProfileConnectionService } from '../agent-profiles/connection-service'
+import type { PreparedAgentProfile } from '../agent-profiles/connection-contracts'
+import { structuredProfileEnvironment } from '../runtime/structured-agent-profile'
+import { CODEX_PROFILE_FILE_AUTH_ARGS } from '../codex-accounts/profile-config-authority'
 // How a durable session record becomes a Codex process launch.
 //
 // Every input is read back from the record the store already made durable, not
@@ -18,7 +22,9 @@ import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-t
 import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
 
 export type CodexStructuredLaunchResolverDeps = {
-  store: AgentSessionRecordStore
+  agentProfiles?: AgentProfileConnectionService
+  resolveExplicitEnvironment?: () => Promise<Record<string, string>> | Record<string, string>
+  store: Pick<AgentSessionRecordStore, 'getRecord'>
   /** Absolute path of a workspace on this host. Rejects when the workspace no
    *  longer resolves, which is the case a stale mobile client hits. */
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
@@ -90,37 +96,69 @@ export function createCodexStructuredLaunchResolver(
     if (accountHome.variable !== pinned) {
       throw new Error(`codex sessions pin ${pinned}, not ${accountHome.variable}`)
     }
-    const { command, environment } = await resolveCodexStructuredInvocation(deps)
-    // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
-    // concern, and the permission posture they used to smuggle in is derived per acquisition.
-    const permissionPolicy = deps.resolvePermissionPolicy?.()
-    const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    // A Codex record's chain holds only Codex handles; the attach admission refuses anything else.
-    const resumeThreadId = head?.handle.nativeId ?? null
-    // The same saved options every turn sends, so the thread and its turns name one model.
-    const model = record.options?.model
-    return {
-      command,
-      args: ['app-server'],
-      cwd: await deps.resolveWorkspacePath(location.workspaceId),
-      codexHome: accountHome.path,
-      ...(environment ? { env: { ...environment } as Record<string, string> } : {}),
-      // An empty chain is a session that has never proved a thread, so it
-      // starts one; anything else resumes the last link this session proved.
-      resumeThreadId,
-      // Only a thread this session created may still be one Codex never saved: a resumed,
-      // forked or adopted head names a conversation Codex held.
-      ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
-      ...(permissionPolicy ? { permissionPolicy } : {}),
-      ...(model ? { model } : {}),
-      ...(resumeThreadId
+    let prepared: PreparedAgentProfile | undefined
+    try {
+      if (accountHome.agentProfile) {
+        if (!deps.agentProfiles) {
+          throw new Error('Profile runtime is unavailable.')
+        }
+        prepared = await deps.agentProfiles.prepare(accountHome.agentProfile, {
+          mode: 'structured',
+          resume: record.providerHandleChain.length > 0
+        })
+      }
+      const invocation = prepared
         ? {
-            resumePath: await (deps.resolveRollout ?? resolvePinnedCodexRolloutProof)(
-              accountHome.path,
-              resumeThreadId
+            command: prepared.snapshot.executable,
+            environment: structuredProfileEnvironment(
+              prepared,
+              { ...process.env, ...(await deps.resolveEnvironment?.()) },
+              await deps.resolveExplicitEnvironment?.()
             )
           }
-        : {})
+        : await resolveCodexStructuredInvocation(deps)
+      const { command, environment } = invocation
+      const cwd = await deps.resolveWorkspacePath(location.workspaceId)
+      if (prepared) {
+        await deps.agentProfiles!.validateLaunch(prepared, { cwd, env: environment ?? {} })
+      }
+      // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
+      // concern, and the permission posture they used to smuggle in is derived per acquisition.
+      const permissionPolicy = deps.resolvePermissionPolicy?.()
+      const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+      const resumeThreadId = head?.handle.nativeId ?? null
+      // The same saved options every turn sends, so the thread and its turns name one model.
+      const model = record.options?.model
+      return {
+        command,
+        ...(prepared ? { release: prepared.release, envToDelete: prepared.envToDelete } : {}),
+        args: [
+          ...(prepared?.snapshot.binding.kind === 'managed' ? CODEX_PROFILE_FILE_AUTH_ARGS : []),
+          'app-server'
+        ],
+        cwd,
+        codexHome: accountHome.path,
+        ...(environment ? { env: { ...environment } as Record<string, string> } : {}),
+        // An empty chain is a session that has never proved a thread, so it
+        // starts one; anything else resumes the last link this session proved.
+        resumeThreadId,
+        // Only a thread this session created may still be one Codex never saved: a resumed,
+        // forked or adopted head names a conversation Codex held.
+        ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
+        ...(permissionPolicy ? { permissionPolicy } : {}),
+        ...(model ? { model } : {}),
+        ...(resumeThreadId
+          ? {
+              resumePath: await (deps.resolveRollout ?? resolvePinnedCodexRolloutProof)(
+                accountHome.path,
+                resumeThreadId
+              )
+            }
+          : {})
+      }
+    } catch (error) {
+      prepared?.release()
+      throw error
     }
   }
 }

@@ -6,10 +6,11 @@ import {
   setSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
 } from '../runtime-selection'
-import { hasLiveClaudePtys } from '../live-pty-gate'
+import { shouldDeferClaudeRuntimeRefresh, hasLiveClaudePtys } from '../live-pty-gate'
 import { isOauthTokenExpiring } from '../oauth-refresh'
 import { writeActiveClaudeKeychainCredentialsForRuntime } from '../keychain'
 import { ClaudeRuntimeAuthPreparationService } from './runtime-auth-preparation'
+import { hasIsolatedClaudeAccountAuth } from '../isolated-account-auth'
 
 export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
   protected async doSyncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
@@ -64,6 +65,28 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
           }
         }
       }
+    }
+    if (
+      activeAccount?.managedAuthRuntime !== 'wsl' &&
+      activeAccount &&
+      hasIsolatedClaudeAccountAuth(activeAccount.managedAuthPath)
+    ) {
+      const credentials = await this.readManagedCredentials(activeAccount)
+      if (!credentials || !this.isValidCredentialsJsonObject(credentials)) {
+        throw new Error(
+          'This Claude account has no valid isolated credential. Reconnect it in Accounts.'
+        )
+      }
+      if (this.lastSyncedAccountId !== null) {
+        this.store.updateSettings({ claudeProfileMigrationAt: Date.now() })
+        await this.restoreSystemDefaultSnapshot(
+          previousManagedCredentialsJson,
+          previousManagedOauthAccount
+        )
+      }
+      this.lastSyncedAccountId = null
+      this.clearLastWrittenRuntimeState()
+      return
     }
     if (!activeAccount) {
       if (activeAccountId) {
@@ -241,12 +264,12 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
       this.skipNextReadBackForAccountId = null
     }
 
-    // Why: rotate+persist the single-use token to managed storage before materializing (else runtime gets a stale token that fails invalid_grant); skip while a live PTY owns the creds since refreshing would double-rotate it (invalidating one copy) — read-back preserves its refresh instead.
-    const liveClaudePtys = hasLiveClaudePtys()
-    if (liveClaudePtys && isOauthTokenExpiring(credentialsJson)) {
+    // Refresh before materializing, unless a live child or bound external launch owns the single-use token.
+    const deferRefresh = shouldDeferClaudeRuntimeRefresh()
+    if (deferRefresh && isOauthTokenExpiring(credentialsJson)) {
       this.managedRefreshDeferredByLivePtyAccountId = activeAccount.id
     }
-    if (!liveClaudePtys) {
+    if (!deferRefresh) {
       const refreshed = await this.refreshManagedAccountTokenIfNeeded(
         activeAccount,
         credentialsJson

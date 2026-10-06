@@ -51,6 +51,9 @@ import {
 import { AgentAvailabilityControl, type AgentCatalogRowProps } from './AgentCatalogRow'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
 import { AgentDetectionCatalog } from './AgentDetectionCatalog'
+import { AgentLaunchProfiles } from './AgentLaunchProfiles'
+import { isProfileAgent } from '../../../../shared/agent-profile-capabilities'
+import { isLocalAgentProfileHost } from '@/lib/agent-profile-workspace-selection'
 
 export {
   buildAgentAvailabilitySettingsUpdate,
@@ -206,6 +209,14 @@ export function AgentsPane({
     isDetected: boolean
   ): AgentCatalogRowProps => ({
     agentId: agent.id,
+    children:
+      isProfileAgent(agent.id) &&
+      isTuiAgentEnabled(agent.id, disabledAgents) &&
+      !activeServerEnvironmentId &&
+      !isPairedWebClientWindow() &&
+      isLocalAgentProfileHost() ? (
+        <AgentLaunchProfiles agent={agent.id} settings={settings} />
+      ) : undefined,
     label: agent.label,
     homepageUrl: agent.homepageUrl,
     defaultCmd: agent.cmd,

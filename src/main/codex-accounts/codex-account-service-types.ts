@@ -7,6 +7,8 @@ import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-cre
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
 
 export type CodexAccountAddTarget = {
+  /** Profile enrollment keeps the current account selection when false. */
+  activate?: boolean
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null
 }

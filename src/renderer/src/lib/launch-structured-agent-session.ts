@@ -1,4 +1,9 @@
+import {
+  assertAgentProfileWorkspace,
+  assertStructuredAgentProfileWorkspace
+} from './agent-profile-workspace-selection'
 import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { AgentLaunchProfile } from '../../../shared/agent-launch-profile'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
@@ -10,7 +15,6 @@ import {
   type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
 import { resolveStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
-import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { readAgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
@@ -32,7 +36,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { askHostCreateSupport } from '@/lib/structured-agent-session-host-admission'
 import {
-  StructuredAgentSessionCreateError,
+  definitiveStructuredAgentSessionCreateErrorCode,
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError,
   StructuredAgentSessionOwnerUnresolvedError
@@ -45,6 +49,7 @@ export {
 }
 
 export type StructuredAgentSessionLaunchIntent = {
+  agentProfile?: AgentLaunchProfile
   sessionId: string
   worktreeId: string
   /** The host that owns the chat, fixed when the launch begins and persisted with it: worktree ids
@@ -86,27 +91,6 @@ function structuredAgentSessionOwnerTarget(
   return { executionHostId, target }
 }
 
-const DEFINITIVE_CREATE_FAILURE_CODES = [
-  'structured_agent_session_unsupported',
-  'method_not_found'
-] as const
-
-function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string | null {
-  if (error instanceof StructuredAgentSessionCreateError) {
-    // Our own classes already carry the verdict; message sniffing below could only invert it.
-    return error instanceof StructuredAgentSessionCreateRefusalError &&
-      isDefinitiveAgentSessionCreateRefusal(error.code)
-      ? error.code
-      : null
-  }
-  for (const code of DEFINITIVE_CREATE_FAILURE_CODES) {
-    if (hasRuntimeRpcErrorCode(error, code)) {
-      return code
-    }
-  }
-  return null
-}
-
 /** `executionHostId` is the host the launch was routed to; absent, the catalog must name exactly
  *  one, or the launch is refused rather than sent to whichever host a fallback picks. */
 export function createStructuredAgentSessionLaunchIntent(
@@ -114,7 +98,8 @@ export function createStructuredAgentSessionLaunchIntent(
   agent: AgentSessionHandleProvider,
   executionHostId?: ExecutionHostId,
   resumeFrom?: StructuredAgentSessionResumeSource,
-  hostSeedOptions?: LaunchSeed
+  hostSeedOptions?: LaunchSeed,
+  agentProfile?: AgentLaunchProfile
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
@@ -127,7 +112,8 @@ export function createStructuredAgentSessionLaunchIntent(
     agent,
     sessionId,
     resumeFrom,
-    hostSeedOptions
+    hostSeedOptions,
+    agentProfile
   )
 }
 
@@ -137,9 +123,17 @@ function buildStructuredAgentSessionLaunchIntent(
   agent: AgentSessionHandleProvider,
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
-  hostSeedOptions: LaunchSeed
+  hostSeedOptions: LaunchSeed,
+  agentProfile?: AgentLaunchProfile
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
+  assertStructuredAgentProfileWorkspace(
+    state,
+    agent,
+    worktreeId,
+    agentProfile,
+    owner.executionHostId
+  )
   recordWebSessionFocusIntent(
     structuredAgentSessionFocusOwner(owner.target),
     worktreeId,
@@ -158,8 +152,12 @@ function buildStructuredAgentSessionLaunchIntent(
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
+      ...(agentProfile ? { agentProfileId: agentProfile.id } : {}),
       randomUuid: createBrowserUuid
     }),
+    ...(agentProfile
+      ? { agentProfile: { ...agentProfile, binding: { ...agentProfile.binding } } }
+      : {}),
     ...launchSeedOptions(state, owner, agent, hostSeedOptions)
   }
 }
@@ -174,12 +172,14 @@ export function retryStructuredAgentSessionLaunchIntent(
     intent.agent,
     intent.sessionId,
     intent.params.resumeFrom,
-    intent.seedOptions
+    intent.seedOptions,
+    intent.agentProfile
   )
 }
 
 /** Rebuild a reload-surviving intent with the caller's current worktree selector. */
 export function restoreStructuredAgentSessionLaunchIntent(args: {
+  agentProfile?: AgentLaunchProfile
   worktreeId: string
   executionHostId: ExecutionHostId
   sessionId: string
@@ -192,6 +192,13 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   seedOptions?: Readonly<Record<string, string>>
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
+  assertStructuredAgentProfileWorkspace(
+    state,
+    args.agent,
+    args.worktreeId,
+    args.agentProfile,
+    args.executionHostId
+  )
   const { target } = structuredAgentSessionOwnerTarget(args.worktreeId, args.executionHostId)
   recordWebSessionFocusIntent(
     structuredAgentSessionFocusOwner(target),
@@ -215,8 +222,10 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       },
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
-      ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+      ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+      ...(args.agentProfile ? { agentProfileId: args.agentProfile.id } : {})
     },
+    ...(args.agentProfile ? { agentProfile: args.agentProfile } : {}),
     ...launchSeedOptions(state, { target }, args.agent, args.seedOptions)
   }
 }
@@ -241,7 +250,12 @@ export function abandonStructuredAgentSessionLaunchIntent(
 async function requireHostCreateSupport(
   intent: StructuredAgentSessionLaunchIntent
 ): Promise<LaunchSeed> {
-  const support = await askHostCreateSupport(intent.target, intent.params.worktree, intent.agent)
+  const support = await askHostCreateSupport(
+    intent.target,
+    intent.params.worktree,
+    intent.agent,
+    intent.params.agentProfileId
+  )
   if (support.kind === 'unreachable') {
     throw new StructuredAgentSessionCreateUnknownOutcomeError(
       support.message,
@@ -267,6 +281,12 @@ export async function launchStructuredAgentSession(
   intent: StructuredAgentSessionLaunchIntent,
   onHostSeed?: StructuredLaunchHostSeedListener
 ): Promise<Pick<AgentSessionAttachResult, 'sessionId' | 'fence'>> {
+  if (intent.params.agentProfileId !== undefined) {
+    assertAgentProfileWorkspace(useAppStore.getState(), intent.agent, intent.worktreeId)
+    if (intent.executionHostId !== 'local' || intent.target.kind !== 'local') {
+      throw new Error('Profiles require a local execution host.')
+    }
+  }
   const hostSeed = await requireHostCreateSupport(intent)
   if (intent.target.kind !== 'local') {
     onHostSeed?.(hostSeed)

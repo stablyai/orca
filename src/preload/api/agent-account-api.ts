@@ -10,6 +10,7 @@ import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
 export type CodexAccountsApi = {
   list: () => Promise<CodexRateLimitAccountsState>
   add: (args?: {
+    activate?: boolean
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<CodexRateLimitAccountsState>

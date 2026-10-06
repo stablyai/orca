@@ -30,6 +30,7 @@ export type PtyApi = {
     envToDelete?: string[]
     command?: string
     commandDelivery?: 'renderer' | 'provider'
+    agentProfileId?: string
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
@@ -57,6 +58,7 @@ export type PtyApi = {
     /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
     incarnationId?: string
     launchAgent?: TuiAgent
+    agentProfileId?: string
     launchConfig?: SleepingAgentLaunchConfig
     snapshot?: string
     snapshotCols?: number

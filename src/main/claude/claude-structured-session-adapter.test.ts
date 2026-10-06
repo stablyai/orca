@@ -30,7 +30,8 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
   it('pins the account and proves init without treating the system-frame uuid as a chain leaf', async () => {
     const claude = fakeClaude()
     const events: ClaudeStructuredSessionEvent[] = []
-    const adapter = adapterFor(claude, {}, events)
+    const release = vi.fn()
+    const adapter = adapterFor(claude, { release }, events)
 
     const acquisition = await adapter.acquire({
       identity: identityFor(),
@@ -38,6 +39,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       spawnToken: 'spawn-9'
     })
 
+    expect(release).toHaveBeenCalledTimes(1)
     expect(claude.connections[0].launch).toMatchObject({
       cwd: '/work/repo',
       env: {

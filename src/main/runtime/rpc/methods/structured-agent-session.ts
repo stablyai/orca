@@ -1,5 +1,4 @@
 // `agentSession.*` — the structured session RPC surface.
-//
 // Every method here is gated on the client advertising
 // `agent-session.structured.v1`. A client that does not is told the surface does
 // not exist rather than receiving the journal or mutation surface. Session-tab
@@ -21,13 +20,14 @@ import {
   ensureStructuredHostInstalled as ensureHostInstalled,
   requireInstalledStructuredHost as requireInstalledHost,
   requireStructuredCapability,
+  requireStructuredProfileCaller,
   requireStructuredCleanupHost,
   requireStructuredCreateSupportAdmission,
   requireStructuredHost as requireHost,
   structuredCallerFor as callerFor
 } from './structured-agent-session-gate'
-import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import {
+  resolveClientSuppliedAttach,
   commitStructuredAgentSessionCreate,
   prepareStructuredAgentSessionCreateForWorktree,
   structuredAgentSessionCreateIntentFingerprint
@@ -67,29 +67,6 @@ import {
   UnsubscribeParams
 } from './structured-agent-session-schemas'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
-
-/**
- * The attach-shaped entries take the location from the client instead of resolving it from a
- * worktree, so they never reach the worktree-resolving create-support check. Ask the executing
- * host the same question directly: the answer includes host-measured facts the client cannot see
- * or forge, such as whether this machine can read a provider child's process start time.
- */
-async function resolveClientSuppliedAttach(params: z.infer<typeof AttachParams>, ctx: RpcContext) {
-  await ensureHostInstalled(ctx)
-  const host = requireHost(ctx)
-  if (!host.supportsCreate(params.location, params.agent)) {
-    throw agentSessionRefusalError('structured_agent_session_unsupported', {
-      reason: 'hostUnsupported'
-    })
-  }
-  const { agent: _attachAgent, provider: _attachProvider, ...attachWithoutAgent } = params
-  const attachParams = {
-    ...attachWithoutAgent,
-    provider: params.provider as 'claude' | 'codex',
-    agent: params.agent as 'claude' | 'codex'
-  } as AgentSessionAttachParams
-  return { host, attachParams }
-}
 
 async function attachClientSuppliedLocation(
   params: z.infer<typeof AttachParams>,
@@ -135,9 +112,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: CreateSupportParams,
     handler: async (params, ctx) => {
       requireStructuredCreateSupportAdmission(ctx)
+      requireStructuredProfileCaller(ctx, params.agentProfileId)
       const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
         params.worktree,
-        params.agent
+        params.agent,
+        params.agentProfileId !== undefined
       )
       // Optional: older clients ignore it, and a client seeds its picker with what create will use.
       const seedOptions = support.supported
@@ -160,6 +139,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       // a client can tell "nothing was created" from "the outcome is unknown".
       const prepared = await resolveUncommittedStructuredCreate(async () => {
         if ('worktree' in params) {
+          requireStructuredProfileCaller(ctx, params.agentProfileId)
           const conflict = agentSessionFingerprintConflict(
             params.envelope,
             structuredAgentSessionCreateIntentFingerprint(params)
@@ -177,7 +157,8 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
             worktree: params.worktree,
             agent: params.agent,
             caller: callerFor(ctx),
-            ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
+            resumeFrom: params.resumeFrom,
+            agentProfileId: params.agentProfileId,
             ...(params.tabId ? { tabId: params.tabId } : {})
           })
         }

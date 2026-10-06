@@ -4,7 +4,7 @@ import type { PreloadApi } from '../api-types'
 
 export const codexAccountsApi = {
   list: () => ipcRenderer.invoke('codexAccounts:list'),
-  add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }) =>
+  add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null; activate?: boolean }) =>
     ipcRenderer.invoke('codexAccounts:add', args),
   cancelPendingLogin: (): Promise<boolean> =>
     ipcRenderer.invoke('codexAccounts:cancelPendingLogin'),

@@ -1,3 +1,4 @@
+import { assertTerminalProfilesStayLocal } from '../../shared/terminal-profile-routing'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment, markEnvironmentUsed } from '../../shared/runtime-environment-store'
@@ -73,6 +74,7 @@ export async function callRuntimeEnvironment(
   envelope?: RuntimeOrchestrationEnvelope,
   options?: { signal?: AbortSignal; expectedEnvironmentRuntimeId?: string }
 ): Promise<RuntimeRpcResponse<unknown>> {
+  assertTerminalProfilesStayLocal(params)
   if (method === 'status.get') {
     const environment = resolveEnvironment(userDataPath, selector)
     const failure = runtimeEnvironmentRevisionFailure(

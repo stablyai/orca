@@ -1,3 +1,4 @@
+import type { PreparedTerminalAgentProfile } from '../host-env/agent-profile-ownership'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
@@ -8,7 +9,10 @@ import type { AdoptStablePaneResult } from '../ipc/spawn-types'
 import type { PtyBindingSourceExpectation } from '../../../persistence'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type {
   AgentSessionExecutionClaim,
@@ -17,6 +21,9 @@ import type {
 import { localProvider } from '../provider/registry'
 
 export type RuntimePtySpawnState = {
+  profileAttachOnly?: boolean
+  agentProfile?: PreparedTerminalAgentProfile
+  releaseClaudeCredentialOwner?: () => void
   deps: PtyRuntimeControllerDeps
   args: RuntimePtySpawnArgs
   codexHomeLaunchStartedAt: Date | undefined
@@ -82,6 +89,8 @@ export type RuntimePtySpawnState = {
 }
 
 export type RuntimePtySpawnArgs = {
+  agentProfileId?: string
+  launchConfig?: SleepingAgentLaunchConfig
   cols: number
   rows: number
   cwd?: string

@@ -177,7 +177,9 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
-      title: defaultAgentChatLabel(input.agent),
+      title:
+        getStructuredAgentSessionHost()?.deps.store.getRecord(input.sessionId)?.accountHome
+          .agentProfile?.name ?? defaultAgentChatLabel(input.agent),
       sessionId: input.sessionId,
       ...(input.replacesSessionId ? { replacesSessionId: input.replacesSessionId } : {}),
       agent: input.agent,

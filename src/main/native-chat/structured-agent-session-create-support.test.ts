@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type { ClaudeManagedAccountGateSettings } from './claude-structured-managed-account-support'
 import { resolveStructuredAgentSessionCreateSupport } from './structured-agent-session-create-support'
@@ -54,6 +54,40 @@ describe('resolveStructuredAgentSessionCreateSupport', () => {
 
   it('refuses Claude under a WSL-only managed account', () => {
     expect(support({ getSettings: () => WSL_ONLY })).toEqual({ supported: false, reason: 'wsl' })
+  })
+
+  it('supports an explicit profile independently of the global account lane', () => {
+    expect(support({ getSettings: () => WSL_ONLY, profileBound: true })).toEqual({
+      supported: true
+    })
+    expect(support({ getSettings: () => WSL_ONLY })).toEqual({ supported: false, reason: 'wsl' })
+  })
+
+  it.each(['claude', 'codex'] as const)(
+    'refuses %s profile targets even if an adapter supports them',
+    (agent) => {
+      for (const location of [
+        { ...LOCAL, executionHostId: 'ssh:host-a' as const },
+        { ...LOCAL, wslDistro: 'Ubuntu' }
+      ]) {
+        expect(support({ agent, location, profileBound: true }).supported).toBe(false)
+      }
+      expect(support({ agent, platform: 'win32', profileBound: true })).toEqual({
+        supported: false,
+        reason: 'agent'
+      })
+      expect(support({ agent, platform: 'win32' })).toEqual({ supported: true })
+    }
+  )
+
+  it('refuses profile capability inside a WSL execution host', () => {
+    vi.stubEnv('WSL_INTEROP', '/run/WSL/test_interop')
+    try {
+      expect(support({ profileBound: true }).supported).toBe(false)
+      expect(support().supported).toBe(true)
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('fails closed for Claude when the settings throw', () => {

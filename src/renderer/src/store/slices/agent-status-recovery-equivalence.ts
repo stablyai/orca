@@ -1,9 +1,36 @@
+import type { AgentProfileSnapshot } from '../../../../shared/agent-launch-profile'
 import type {
   SleepingAgentSessionRecord,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
 import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
+
+// Compare durable authority as well as launch arguments before reusing a checkpoint.
+function agentProfilesEqual(
+  a: AgentProfileSnapshot | undefined,
+  b: AgentProfileSnapshot | undefined
+): boolean {
+  if (!a || !b) {
+    return a === b
+  }
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.agent === b.agent &&
+    a.hostId === b.hostId &&
+    a.executable === b.executable &&
+    a.resolvedHome === b.resolvedHome &&
+    (a.binding.kind === 'managed'
+      ? b.binding.kind === 'managed' && a.binding.accountId === b.binding.accountId
+      : b.binding.kind === 'external' && a.binding.home === b.binding.home) &&
+    (a.identity.kind === 'verified'
+      ? b.identity.kind === 'verified' &&
+        a.identity.subject === b.identity.subject &&
+        a.identity.displayName === b.identity.displayName
+      : b.identity.kind === 'unverified' && a.identity.reason === b.identity.reason)
+  )
+}
 
 export function launchConfigsEqual(
   a: SleepingAgentLaunchConfig | undefined,
@@ -13,8 +40,10 @@ export function launchConfigsEqual(
     return a === b
   }
   if (
+    !agentProfilesEqual(a.agentProfile, b.agentProfile) ||
     a.agentCommand !== b.agentCommand ||
     a.agentArgs !== b.agentArgs ||
+    a.claudeAccountId !== b.claudeAccountId ||
     a.ompResumeFilePath !== b.ompResumeFilePath
   ) {
     return false

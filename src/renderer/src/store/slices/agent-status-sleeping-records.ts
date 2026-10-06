@@ -1,3 +1,4 @@
+import { buildSleepingAgentLaunchConfig } from '../../../../shared/sleeping-agent-launch-config'
 import type { AppState } from '../types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
@@ -14,12 +15,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
 
 export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
-  return {
-    ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
-    agentArgs: config.agentArgs,
-    agentEnv: { ...config.agentEnv },
-    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
-  }
+  return buildSleepingAgentLaunchConfig(config)
 }
 
 export function sleepingRecordFromEntry(args: {

@@ -16,6 +16,7 @@ export type WorktreeSetupLaunch = {
 export type WorktreeStartupLaunch = {
   command: string
   env?: Record<string, string>
+  agentProfileId?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
   launchAgent?: TuiAgent

@@ -1,3 +1,4 @@
+import { assertTerminalProfilesStayLocal } from '../../../../shared/terminal-profile-routing'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
 import { withRemoteReattachInputBuffer } from './remote-reattach-input-buffer'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
@@ -2195,6 +2196,10 @@ export function createRemoteRuntimePtyTransport(
   let connectForRecovery: PtyTransport['connect'] = (options) => transport.connect(options)
   const transport: PtyTransport = {
     async connect(options) {
+      assertTerminalProfilesStayLocal({
+        agentProfileId: options.agentProfileId ?? opts.agentProfileId,
+        launchConfig: options.launchConfig ?? launchConfig
+      })
       cancelTerminalCreateRetryWait()
       const connectLifecycleEpoch = ++lifecycleEpoch
       const createEnvironmentId = currentRuntimeEnvironmentId

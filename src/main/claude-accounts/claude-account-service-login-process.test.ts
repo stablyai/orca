@@ -1,3 +1,4 @@
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { writeFileSync } from 'node:fs'
@@ -45,6 +46,7 @@ const asServiceDouble = <T>(double: unknown): T => double as T
 
 describe('ClaudeAccountService credential capture', () => {
   beforeEach(() => {
+    installFakeAppEnvironment({ getPath: () => CLAUDE_SERVICE_TEST_ROOT })
     setPlatform('darwin')
     resetClaudeKeychainMocks()
   })

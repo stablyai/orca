@@ -1,4 +1,5 @@
 import { CLAUDE_AUTH_ENV_VARS, applyClaudeEnvPatch } from '../claude-accounts/environment'
+import { stripClaudeProfileProviderEnvironment } from '../claude-accounts/claude-profile-environment'
 
 const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
   'CLAUDE_CODE_CHILD_SESSION',
@@ -6,7 +7,7 @@ const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
   'CLAUDE_CODE_BRIDGE_SESSION_ID'
 ] as const
 
-function cloneProcessEnv(source: NodeJS.ProcessEnv): Record<string, string> {
+export function cloneClaudeProcessEnvironment(source: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(source)) {
     if (value !== undefined) {
@@ -36,12 +37,14 @@ export function buildClaudeChildProcessEnv(
     inheritedEnv?: NodeJS.ProcessEnv
     platform?: NodeJS.Platform
     scrubConfiguredChildSessionStamps?: boolean
+    isolatedCredentials?: boolean
+    envToDelete?: readonly string[]
   } = {}
 ): Record<string, string> {
   const inheritedEnv = options.inheritedEnv ?? process.env
   const platform = options.platform ?? process.platform
   const env = applyClaudeEnvPatch(
-    cloneProcessEnv(inheritedEnv),
+    cloneClaudeProcessEnvironment(inheritedEnv),
     {},
     {
       stripAuthEnv: true,
@@ -61,9 +64,21 @@ export function buildClaudeChildProcessEnv(
       }
     }
   }
-  if (options.scrubConfiguredChildSessionStamps) {
-    return stripClaudeChildSessionStamps({ ...env, ...configuredEnv }, platform)
+  if (!options.scrubConfiguredChildSessionStamps) {
+    stripClaudeChildSessionStamps(env, platform)
   }
-  stripClaudeChildSessionStamps(env, platform)
-  return { ...env, ...configuredEnv }
+  const merged = { ...env, ...configuredEnv }
+  const deleted = new Set(options.envToDelete?.map((key) => key.toUpperCase()))
+  for (const key of Object.keys(merged)) {
+    if (deleted.has(key.toUpperCase())) {
+      delete merged[key]
+    }
+  }
+  if (options.scrubConfiguredChildSessionStamps) {
+    if (options.isolatedCredentials) {
+      stripClaudeProfileProviderEnvironment(merged)
+    }
+    return stripClaudeChildSessionStamps(merged, platform)
+  }
+  return merged
 }

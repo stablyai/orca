@@ -1,3 +1,4 @@
+import type { TerminalProfileService } from '../host-env/agent-profile-launch'
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence'
@@ -74,6 +75,7 @@ export type PtyRuntimeControllerDeps = {
   finishPtyShutdown: typeof finishPtyShutdown
   getSettings?: () => GlobalSettings | undefined
   getSelectedCodexHomePath?: GetSelectedCodexHomePath
+  agentProfiles?: TerminalProfileService
   prepareClaudeAuth?: PrepareClaudeAuth
   options?: {
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void

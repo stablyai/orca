@@ -1,8 +1,4 @@
 import {
-  CODEX_STRUCTURED_HANDLE_NAMESPACE,
-  isAgentSessionProviderHandleInNamespace
-} from '../../shared/agent-session-provider-handle-encoding'
-import {
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   type AgentSessionAcquisition,
@@ -18,6 +14,7 @@ import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import {
+  codexAcquisitionThreadId,
   codexProviderHandleLink,
   codexSpawnedProcessIdentity
 } from './codex-structured-owner-identity'
@@ -75,12 +72,7 @@ export async function acquireCodexStructuredSession(input: {
   const { previousAttempt, attempt } = acquisitions.start(sessionId)
   const acquisition = attempt.window
   let unbindReadingControl: (() => void) | undefined
-  const provenHandle = acquireInput.identity.providerHandle
-  let primaryThreadId =
-    provenHandle &&
-    isAgentSessionProviderHandleInNamespace(provenHandle, CODEX_STRUCTURED_HANDLE_NAMESPACE)
-      ? provenHandle.nativeId
-      : null
+  let primaryThreadId = codexAcquisitionThreadId(acquireInput.identity.providerHandle)
   const subagentExecutions = new CodexSubagentExecutions()
   const dispatchEchoes = createCodexDispatchEchoes()
   // Minted before the translator, which names this connection's frame rows with it.
@@ -108,6 +100,7 @@ export async function acquireCodexStructuredSession(input: {
       })
     : null
   const open = deps.openConnection ?? openCodexAppServerConnection
+  let releaseProfile: (() => void) | undefined
   const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
   try {
     await stopSupersededCodexAcquisition({
@@ -133,11 +126,13 @@ export async function acquireCodexStructuredSession(input: {
       .catch((error: unknown) => {
         throw new AgentSessionPreSpawnError(error)
       })
+    releaseProfile = launch.release
     acquisitions.assertCurrent(sessionId, attempt)
     const connection = await open(
       {
         command: launch.command,
         args: launch.args,
+        envToDelete: launch.envToDelete,
         cwd: launch.cwd,
         env: buildCodexStructuredChildEnvironment(launch, acquireInput.spawnToken, sessionId)
       },
@@ -286,7 +281,7 @@ export async function acquireCodexStructuredSession(input: {
     return acquired
   } catch (error) {
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {
-      return closeFailedCodexAcquisition({
+      return await closeFailedCodexAcquisition({
         sessionId,
         registry: acquisitions,
         attempt,
@@ -300,6 +295,7 @@ export async function acquireCodexStructuredSession(input: {
     acquisitions.deleteIfCurrent(sessionId, attempt)
     throw error
   } finally {
+    releaseProfile?.()
     attempt.finish()
   }
 }

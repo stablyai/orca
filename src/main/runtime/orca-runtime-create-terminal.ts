@@ -1,7 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './orca-runtime-terminal-create-deduplication'
 import * as dependencies from './orca-runtime-create-terminal-dependencies'
-import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
+import { createDesktopTerminal as createDesktop } from './orca-runtime-create-terminal-desktop'
 import { buildRuntimeAgentTeamsLaunchPlan } from './orca-runtime-agent-teams-launch-plan'
 import { createPtySpawnCommitReporter } from './orca-runtime-report-pty-spawn-commit'
 import { recordPtySurface, spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
@@ -130,6 +130,8 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             command: sequencedStartupCommand
               ? launchOpts.command
               : (agentTeamsPlan?.command ?? launchOpts.command),
+            agentProfileId: launchOpts.agentProfileId,
+            launchConfig: effectiveLaunchConfig,
             launchAgent: launchOpts.launchAgent,
             commandDelivery: 'provider',
             startupCommandDelivery: launchOpts.startupCommandDelivery,
@@ -176,6 +178,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         } finally {
           releaseStablePaneCreate?.()
         }
+        effectiveLaunchConfig = result.launchConfig ?? effectiveLaunchConfig
         if (!result.stablePaneOwner) {
           reportPtySpawnCommitted()
         }
@@ -293,13 +296,6 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
     }
     // The renderer owns this spawn, so this process cannot see when it is requested.
     opts.onPtySpawnDispatched?.()
-    return createDesktopTerminal(
-      this,
-      worktreeSelector,
-      opts,
-      presentation,
-      rendererWindow,
-      created
-    )
+    return createDesktop(this, worktreeSelector, opts, presentation, rendererWindow, created)
   }
 }

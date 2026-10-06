@@ -1,4 +1,6 @@
+import { profileRequiresFreshTerminal } from '../../../shared/agent-profile-capabilities'
 import { useAppStore } from '@/store'
+import { resolveAgentProfileForWorkspace } from './agent-profile-workspace-selection'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
@@ -44,6 +46,7 @@ type LaunchAgentInNewTabRequest =
     }
 
 export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
+  agentProfileId?: string
   agent: TuiAgent
   worktreeId: string
   /** Tab group the user launched from; keeps split-group launches in that pane instead of the active group. */
@@ -128,6 +131,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     beforeSurfaceOpen
   } = args
   const store = useAppStore.getState()
+  const agentProfile = resolveAgentProfileForWorkspace(store, args)
   const { worktreeSshConnectionId, resolvedLaunchPlatform, isRemote, queuedShell } =
     resolveAgentLaunchExecutionContext(store, {
       worktreeId,
@@ -153,8 +157,12 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     nativeChatTranscriptIsLocalReadable:
       isNativeChatTranscriptLocalReadable(worktreeSshConnectionId)
   }
-  const initialViewModeProps = initialAgentTabViewModeProps(store.settings, initialViewModeOptions)
+  const initialViewModeProps =
+    agentProfile && profileRequiresFreshTerminal(agentProfile.binding)
+      ? { viewMode: 'terminal' as const }
+      : initialAgentTabViewModeProps(store.settings, initialViewModeOptions)
   const startupPlanBase = {
+    ...(agentProfile ? { agentProfileId: agentProfile.id } : {}),
     agent,
     cmdOverrides,
     platform: resolvedLaunchPlatform,
@@ -179,10 +187,11 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   // Why first: a structured chat is created on whichever runtime owns the workspace, a paired
   // server included, so only a non-structured route falls through to the host-published terminal.
   const plan =
-    args.requestId === undefined
+    args.requestId === undefined && !agentProfile
       ? args.agentSessionLaunchPlan
       : planAgentSessionLaunch(store, {
-          requestId: args.requestId,
+          requestId: args.requestId ?? args.agentSessionLaunchPlan.requestId,
+          ...(agentProfile ? { agentProfile } : {}),
           agent,
           workspace: { kind: workspaceKind, worktreeId },
           prompt: trimmedPrompt,
@@ -248,7 +257,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   // Why: followup path pastes an unsubmitted draft, so gate the initial chat view like a draft launch, not auto-submit.
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
-    quickCommandLabel,
+    quickCommandLabel: agentProfile?.name ?? quickCommandLabel,
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
     ...initialViewModeProps
   })
@@ -259,6 +268,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   }
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
+    ...(agentProfile ? { agentProfileId: agentProfile.id } : {}),
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
     launchAgent: agent,

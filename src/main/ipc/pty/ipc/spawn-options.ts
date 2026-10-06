@@ -1,7 +1,10 @@
+import { bindAgentProfileTerminalEnvironment } from '../../../agent-profiles/terminal-command'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
+import { CLAUDE_PROFILE_PROVIDER_ENV_VARS } from '../../../claude-accounts/claude-profile-environment'
+import { bindClaudeProfileTerminalEnvironment } from '../../../claude-accounts/claude-profile-cli'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../../pty/pi-process-owner-env'
 import { CODEX_HOME_ENV_KEYS } from '../host-env/codex-home'
@@ -44,6 +47,8 @@ export async function buildPtyIpcSpawnOptions(
     : undefined
   ctx.combinedEnvToDelete = mergePtyEnvDeletions(
     envToDelete,
+    ctx.claudeAuth?.isolatedCredentials ? CLAUDE_PROFILE_PROVIDER_ENV_VARS : [],
+    ctx.agentProfile?.envToDelete ?? [],
     args.envToDelete ?? [],
     // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
     PI_PROCESS_OWNER_ENV_KEYS,
@@ -97,7 +102,17 @@ export async function buildPtyIpcSpawnOptions(
   if (ctx.combinedEnvToDelete) {
     ctx.spawnOptions.envToDelete = ctx.combinedEnvToDelete
   }
+  if (ctx.agentProfile) {
+    await ctx.deps.agentProfiles!.validateLaunch(ctx.agentProfile, {
+      cwd: ctx.cwd ?? process.cwd(),
+      env: { ...process.env, ...ctx.spawnEnv }
+    })
+  }
   const noDaemonLaunch = planCodexNoDaemonLaunch({
+    trustedExecutable:
+      ctx.agentProfile?.snapshot.agent === 'codex'
+        ? ctx.agentProfile.snapshot.executable
+        : undefined,
     command: ctx.launchCommand,
     executesOnThisHost: !args.connectionId && ctx.codexSelectionTarget.runtime !== 'wsl',
     shellOverride: ctx.effectiveShellOverride,
@@ -107,16 +122,27 @@ export async function buildPtyIpcSpawnOptions(
   })
   const launchCommand = noDaemonLaunch ? await noDaemonLaunch : ctx.launchCommand
   if (launchCommand !== undefined) {
-    ctx.spawnOptions.command = launchCommand
+    ctx.spawnOptions.command = ctx.agentProfile
+      ? bindAgentProfileTerminalEnvironment(ctx.agentProfile, launchCommand)
+      : bindClaudeProfileTerminalEnvironment(launchCommand, ctx.claudeAuth)
   }
   if (args.commandDelivery !== undefined) {
     ctx.spawnOptions.commandDelivery = args.commandDelivery
+  }
+  if (ctx.profileAttachOnly) {
+    ctx.spawnOptions.attachOnly = true
+  }
+  if (ctx.agentProfile) {
+    ctx.spawnOptions.commandDelivery = 'provider'
   }
   if (args.startupCommandDelivery !== undefined) {
     ctx.spawnOptions.startupCommandDelivery = args.startupCommandDelivery
   }
   if (isTuiAgent(args.launchAgent)) {
     ctx.spawnOptions.launchAgent = args.launchAgent
+  }
+  if (ctx.claudeAuth?.isolatedCredentials) {
+    ctx.spawnOptions.launchAgent = 'claude'
   }
   if (args.worktreeId !== undefined) {
     ctx.spawnOptions.worktreeId = args.worktreeId
@@ -126,7 +152,10 @@ export async function buildPtyIpcSpawnOptions(
     worktreeId: args.worktreeId,
     cwd: ctx.cwd,
     store: ctx.deps.store,
-    isFreshLaunch: !ctx.preAdoptedStablePane && ctx.launchCommand !== undefined,
+    isFreshLaunch:
+      !ctx.preAdoptedStablePane &&
+      ctx.launchCommand !== undefined &&
+      ctx.agentProfile?.snapshot.binding.kind !== 'external',
     settings: ctx.deps.getSettings?.(),
     env: ctx.spawnEnv,
     claudeAuth: ctx.claudeAuth,

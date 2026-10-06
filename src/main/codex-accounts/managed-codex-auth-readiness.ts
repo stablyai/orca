@@ -129,6 +129,30 @@ export function hasStoredCodexCredential(authPath: string): boolean {
   return readStoredCodexCredentialState(authPath) === 'present'
 }
 
+// OAuth identity is authoritative only when the active credential mode uses these tokens.
+export function hasCodexOAuthCredential(contents: string): boolean {
+  let auth: unknown
+  try {
+    auth = JSON.parse(contents)
+  } catch {
+    return false
+  }
+  if (!isRecord(auth) || !hasChatGptCredential(auth.tokens)) {
+    return false
+  }
+  if (
+    auth.auth_mode != null &&
+    auth.auth_mode !== 'chatgpt' &&
+    auth.auth_mode !== 'chatgptAuthTokens'
+  ) {
+    return false
+  }
+  // Mixed credential files do not prove which provider identity the CLI will actually use.
+  return !KNOWN_CREDENTIAL_KEYS.some(
+    (key) => key !== 'tokens' && auth[key] != null && auth[key] !== ''
+  )
+}
+
 function hasCredentialForDeclaredMode(auth: StoredCodexAuth): boolean {
   if (!isNonEmptyString(auth.auth_mode)) {
     return false

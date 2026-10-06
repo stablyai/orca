@@ -26,6 +26,7 @@ export type AgentStartupPlan = {
   launchCommand: string
   expectedProcess: string
   followupPrompt: string | null
+  agentProfileId?: string
   launchConfig: SleepingAgentLaunchConfig
   launchToken?: string
   draftPrompt?: string | null
@@ -37,6 +38,8 @@ export type AgentStartupPlan = {
 }
 
 export function buildAgentStartupPlan(args: {
+  agentProfileId?: string
+  claudeAccountId?: string | null
   agent: TuiAgent
   prompt: string
   cmdOverrides: Partial<Record<TuiAgent, string>>
@@ -88,6 +91,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
+      ...(args.agentProfileId !== undefined ? { agentProfileId: args.agentProfileId } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
@@ -106,6 +110,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
+      ...(args.agentProfileId !== undefined ? { agentProfileId: args.agentProfileId } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
@@ -113,16 +118,19 @@ export function buildAgentStartupPlan(args: {
   }
 
   if (config.promptInjectionMode === 'flag-prompt') {
-    return buildFlagPromptStartupPlan({
-      agent,
-      launchCommand,
-      quotedPrompt,
-      prompt: trimmedPrompt,
-      shell,
-      launchConfig,
-      sessionOptions: baseCommand.appliedSessionOptions,
-      agentEnv: args.agentEnv
-    })
+    return {
+      ...buildFlagPromptStartupPlan({
+        agent,
+        launchCommand,
+        quotedPrompt,
+        prompt: trimmedPrompt,
+        shell,
+        launchConfig,
+        sessionOptions: baseCommand.appliedSessionOptions,
+        agentEnv: args.agentEnv
+      }),
+      ...(args.agentProfileId !== undefined ? { agentProfileId: args.agentProfileId } : {})
+    }
   }
 
   if (config.promptInjectionMode === 'hermes-query') {
@@ -146,6 +154,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
+      ...(args.agentProfileId !== undefined ? { agentProfileId: args.agentProfileId } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(queryPlan.env ? { env: queryPlan.env } : {})
     }
@@ -158,6 +167,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
+      ...(args.agentProfileId !== undefined ? { agentProfileId: args.agentProfileId } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
@@ -170,6 +180,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
+      ...(args.agentProfileId !== undefined ? { agentProfileId: args.agentProfileId } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
@@ -181,6 +192,7 @@ export function buildAgentStartupPlan(args: {
     expectedProcess: config.expectedProcess,
     followupPrompt: trimmedPrompt,
     launchConfig,
+    ...(args.agentProfileId !== undefined ? { agentProfileId: args.agentProfileId } : {}),
     ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
@@ -206,6 +218,7 @@ export type AgentDraftLaunchPlan = {
   agent: TuiAgent
   launchCommand: string
   expectedProcess: string
+  agentProfileId?: string
   launchConfig: SleepingAgentLaunchConfig
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
@@ -213,6 +226,7 @@ export type AgentDraftLaunchPlan = {
 }
 
 export function buildAgentDraftLaunchPlan(args: {
+  agentProfileId?: string
   agent: TuiAgent
   draft: string
   cmdOverrides: Partial<Record<TuiAgent, string>>
@@ -260,6 +274,7 @@ export function buildAgentDraftLaunchPlan(args: {
       launchCommand: `${launchCommand} ${config.draftPromptFlag} ${quoted}`,
       expectedProcess: config.expectedProcess,
       launchConfig,
+      ...(args.agentProfileId !== undefined ? { agentProfileId: args.agentProfileId } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       // Why: native draft flags carry user text on argv and must survive rc-file startup.
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
@@ -275,6 +290,7 @@ export function buildAgentDraftLaunchPlan(args: {
           : `${launchCommand}${commandSeparator(shell)}${clearVar}`,
       expectedProcess: config.expectedProcess,
       launchConfig,
+      ...(args.agentProfileId !== undefined ? { agentProfileId: args.agentProfileId } : {}),
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
     }

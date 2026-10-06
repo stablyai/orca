@@ -291,13 +291,14 @@ describe('connectPanePty', () => {
 
     const pane = createPane(2)
     const manager = createManager(2)
-    const deps = createDeps()
+    const deps = createDeps({ startup: { command: 'codex', agentProfileId: 'profile-a' } })
 
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
     expect(createIpcPtyTransport).toHaveBeenCalled()
     expect(createdTransportOptions[0]?.cwdFallback).toBe('worktree')
+    expect(createdTransportOptions[0]?.agentProfileId).toBe('profile-a')
     expect(transport.connect).toHaveBeenCalled()
   })
 

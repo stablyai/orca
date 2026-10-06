@@ -1,6 +1,12 @@
-export type CodexPaneHomeRoute = 'real-home' | 'shared-home' | 'account-home' | 'wsl-home'
+export type CodexPaneHomeRoute =
+  | 'real-home'
+  | 'shared-home'
+  | 'account-home'
+  | 'wsl-home'
+  | 'external-profile-home'
 
 export type CodexPaneAccountRecord = {
+  profileBound?: true
   /** 'host' or 'wsl:<distro>' — the selection lane this pane launched from. */
   selectionKey: string
   /** Managed account id, or null for the system-default account. */
