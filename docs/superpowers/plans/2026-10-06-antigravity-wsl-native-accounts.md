@@ -192,20 +192,20 @@ home 为 canonicalHome；Host 旧格式不要求 scope。
 Backend 的 read/write 末尾增加可选 operation；Service 五个公开操作在末尾接受相同可选
 operation。无参数调用用 task 2 工具创建自己的 budget，RPC 稍后传入共享 budget。
 
-- [ ] **Step 1: 写失败测试。** async store read/write 受 Promise gate 控制，验证 service
+- [x] **Step 1: 写失败测试。** async store read/write 受 Promise gate 控制，验证 service
   等待保存成功才返回；写失败不发布成功状态。scope 不匹配或损坏密文拒绝并保留文件；
   4 MiB 超限拒绝；Host 旧格式可读。队列等待耗尽 15 秒时 backend.write 不调用。
-- [ ] **Step 2: 验证失败。** `pnpm test src/main/antigravity/native-account-store.test.ts
+- [x] **Step 2: 验证失败。** `pnpm test src/main/antigravity/native-account-store.test.ts
   src/main/antigravity/native-account-service.test.ts src/main/antigravity/native-account-launch.test.ts`。
   预期 Promise 被当作 vault 或未等待写入的新断言失败。
-- [ ] **Step 3: 实现等待与保护。** 复用已有 vault 解析/加密，不新增一套 serializer。
+- [x] **Step 3: 实现等待与保护。** 复用已有 vault 解析/加密，不新增一套 serializer。
   每个 store/backend 调用显式 await 并传 operation，reconcile 保持原生读取后重读 vault。
   WSL 路径使用严格 async publisher；Host store 保持原路径和既有格式。
   更新当前 launch 的 selectedAccountId 读取为 await，保持本任务阶段 WSL 仍未开启。
   过期队列项在实际运行前拒绝，不用 Promise.race 让修改任务继续后台执行。
-- [ ] **Step 4: 验证通过。** `pnpm test src/main/antigravity` 与 `pnpm tc:node`；原 Host
+- [x] **Step 4: 验证通过。** `pnpm test src/main/antigravity` 与 `pnpm tc:node`；原 Host
   身份稳定、同身份刷新、当前/选定账号不可删除和写后回读全部继续通过。
-- [ ] **Step 5: 提交。** 提交 `refactor(antigravity): await protected account storage`。
+- [x] **Step 5: 提交。** 提交 `refactor(antigravity): await protected account storage`。
 
 ## Task 5: 实现 WSL 凭据协议与安全 guest 读写
 

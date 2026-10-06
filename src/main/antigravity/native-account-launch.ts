@@ -26,7 +26,7 @@ export async function prepareAntigravityAccountForLaunch(args: {
   if (!existsSync(path)) {
     return
   }
-  if (!createEncryptedAntigravityAccountStore(path).read().selectedAccountId) {
+  if (!(await createEncryptedAntigravityAccountStore(path).read()).selectedAccountId) {
     return
   }
   const env = args.envIsComplete ? { ...args.env } : { ...process.env, ...args.env }
