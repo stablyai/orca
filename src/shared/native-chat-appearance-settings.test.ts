@@ -71,4 +71,20 @@ describe('native chat appearance normalization', () => {
       expect(normalizeNativeChatAppearanceSettings(value)).toBeUndefined()
     }
   })
+  it('keeps typed text colors and applies only valid hex per theme', () => {
+    expect(
+      normalizeNativeChatAppearanceSettings({ textColorLight: ' #12', textColorDark: '' })
+    ).toEqual({ textColorLight: '#12' })
+    expect(
+      resolveNativeChatAppearanceSettings({ textColorLight: '#12', textColorDark: 'a0b1c2' })
+    ).toMatchObject({ textColorLight: undefined, textColorDark: '#a0b1c2' })
+    expect(
+      resolveNativeChatAppearanceSettings({
+        userBubbleColorDark: '#334455',
+        userBubbleColorLight: 'x'
+      })
+    ).toMatchObject({ userBubbleColorDark: '#334455', userBubbleColorLight: undefined })
+    const fromNewerVersion = { textColorLight: '#fff', userBubbleColorDark: '#000', contrast: 120 }
+    expect(resetNativeChatAppearanceSettings(fromNewerVersion)).toEqual({ contrast: 120 })
+  })
 })

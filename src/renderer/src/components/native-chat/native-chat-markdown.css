@@ -15,6 +15,11 @@
   font-size: 1.0714285714em;
 }
 
+/* Why revert-layer: without a custom chat text color the shared renderer's muted quote color stays. */
+.native-chat-markdown blockquote {
+  color: var(--chat-quote-foreground, revert-layer);
+}
+
 .native-chat-markdown a {
   word-break: normal;
   overflow-wrap: anywhere;

@@ -1,5 +1,7 @@
 import {
+  NATIVE_CHAT_COLOR_KEYS,
   normalizeNativeChatAppearanceSettings,
+  type NativeChatColorKey,
   resetNativeChatAppearanceSettings,
   resolveNativeChatAppearanceSettings,
   type NativeChatAppearanceSettings
@@ -9,10 +11,23 @@ import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
-import { NumberField, SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
+import {
+  ColorField,
+  NumberField,
+  SettingsRow,
+  SettingsSegmentedControl
+} from './SettingsFormControls'
 import { getChatAppearanceEntriesByKey, getChatWidthOptions } from './chat-appearance-search'
 import { writeNativeChatAppearance } from '../native-chat/native-chat-appearance-write'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+
+// Why: approximate the themes' chat colors so a picker opens near the current color.
+const CHAT_COLOR_PICKER_START: Record<NativeChatColorKey, string> = {
+  textColorLight: '#363636',
+  textColorDark: '#c8c8c8',
+  userBubbleColorLight: '#f5f5f5',
+  userBubbleColorDark: '#262626'
+}
 
 export type AppearanceChatSectionProps = {
   settings: GlobalSettings
@@ -90,6 +105,22 @@ export function AppearanceChatSection({
           }
         />
       </SearchableSetting>
+      {NATIVE_CHAT_COLOR_KEYS.map((key) => (
+        <SearchableSetting
+          key={key}
+          id={entries[key].targetSectionId}
+          {...entries[key]}
+          forceVisible={forceVisiblePrimary}
+        >
+          <ColorField
+            label={entries[key].title}
+            description={entries[key].description}
+            value={settings.nativeChatAppearance?.[key] ?? ''}
+            fallback={CHAT_COLOR_PICKER_START[key]}
+            onChange={(color) => update({ [key]: color })}
+          />
+        </SearchableSetting>
+      ))}
       <SearchableSetting
         id={entries.reset.targetSectionId}
         {...entries.reset}

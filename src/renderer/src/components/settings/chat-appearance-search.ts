@@ -32,6 +32,60 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
           ...getChatWidthOptions().map((option) => option.label)
         ]
       },
+      textColorLight: {
+        targetSectionId: 'chat-text-color-light',
+        title: translate('settings.appearance.chat.textColorLight', 'Text color (light theme)'),
+        description: translate(
+          'settings.appearance.chat.textColorLightDescription',
+          'Messages, their markdown and code, and the message box in the light theme. Leave empty for the theme color.'
+        ),
+        keywords: [
+          translate('settings.appearance.chat.title', 'Chat'),
+          translate('settings.appearance.chat.fontColorKeyword', 'font color')
+        ]
+      },
+      textColorDark: {
+        targetSectionId: 'chat-text-color-dark',
+        title: translate('settings.appearance.chat.textColorDark', 'Text color (dark theme)'),
+        description: translate(
+          'settings.appearance.chat.textColorDarkDescription',
+          'Messages, their markdown and code, and the message box in the dark theme. Leave empty for the theme color.'
+        ),
+        keywords: [
+          translate('settings.appearance.chat.title', 'Chat'),
+          translate('settings.appearance.chat.fontColorKeyword', 'font color')
+        ]
+      },
+      userBubbleColorLight: {
+        targetSectionId: 'chat-user-bubble-color-light',
+        title: translate(
+          'settings.appearance.chat.userBubbleColorLight',
+          'Your message bubble (light theme)'
+        ),
+        description: translate(
+          'settings.appearance.chat.userBubbleColorLightDescription',
+          'Background of your messages in the light theme. Leave empty for the theme color.'
+        ),
+        keywords: [
+          translate('settings.appearance.chat.title', 'Chat'),
+          translate('settings.appearance.chat.bubbleKeyword', 'bubble')
+        ]
+      },
+      userBubbleColorDark: {
+        targetSectionId: 'chat-user-bubble-color-dark',
+        title: translate(
+          'settings.appearance.chat.userBubbleColorDark',
+          'Your message bubble (dark theme)'
+        ),
+        description: translate(
+          'settings.appearance.chat.userBubbleColorDarkDescription',
+          'Background of your messages in the dark theme. Leave empty for the theme color.'
+        ),
+        keywords: [
+          translate('settings.appearance.chat.title', 'Chat'),
+          translate('settings.appearance.chat.bubbleKeyword', 'bubble')
+        ]
+      },
       reset: {
         targetSectionId: 'chat-reset',
         title: translate('settings.appearance.chat.resetAppearance', 'Reset chat appearance'),

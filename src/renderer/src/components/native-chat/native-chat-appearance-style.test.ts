@@ -46,4 +46,17 @@ describe('chat root appearance style', () => {
       ]
     ).toBe('none')
   })
+  it('publishes a custom text color only for the themes that set a valid one', () => {
+    const style = nativeChatAppearanceStyle({
+      nativeChatAppearance: { textColorDark: '#e0d0c0', textColorLight: '#zz' }
+    })
+    expect(style['--chat-text-color-dark']).toBe('#e0d0c0')
+    expect(style).not.toHaveProperty('--chat-text-color-light')
+    expect(nativeChatAppearanceStyle(undefined)).not.toHaveProperty('--chat-text-color-dark')
+    expect(
+      nativeChatAppearanceStyle({ nativeChatAppearance: { userBubbleColorLight: 'abc' } })[
+        '--chat-user-bubble-light'
+      ]
+    ).toBe('#abc')
+  })
 })

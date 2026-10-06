@@ -7,3 +7,29 @@
 .native-chat-message-text {
   font-size: var(--chat-font-size, 14px);
 }
+
+/* Why: children, not the root, pick the custom color so the root can keep the theme value as the fallback
+   (a property can't fall back to its own inherited value). Only one theme's color applies at a time. */
+.native-chat-appearance {
+  --chat-theme-foreground: var(--chat-foreground);
+  --chat-theme-foreground-strong: var(--chat-foreground-strong);
+  --chat-theme-code-foreground: var(--chat-code-foreground);
+  --chat-theme-user-surface: var(--chat-user-surface);
+}
+
+:root:not(.dark) .native-chat-appearance > * {
+  --chat-foreground: var(--chat-text-color-light, var(--chat-theme-foreground));
+  --chat-foreground-strong: var(--chat-text-color-light, var(--chat-theme-foreground-strong));
+  --chat-code-foreground: var(--chat-text-color-light, var(--chat-theme-code-foreground));
+  /* Invalid (so unset) without a custom color, which keeps the markdown quote's own color. */
+  --chat-quote-foreground: color-mix(in srgb, var(--chat-text-color-light) 70%, transparent);
+  --chat-user-surface: var(--chat-user-bubble-light, var(--chat-theme-user-surface));
+}
+
+.dark .native-chat-appearance > * {
+  --chat-foreground: var(--chat-text-color-dark, var(--chat-theme-foreground));
+  --chat-foreground-strong: var(--chat-text-color-dark, var(--chat-theme-foreground-strong));
+  --chat-code-foreground: var(--chat-text-color-dark, var(--chat-theme-code-foreground));
+  --chat-quote-foreground: color-mix(in srgb, var(--chat-text-color-dark) 70%, transparent);
+  --chat-user-surface: var(--chat-user-bubble-dark, var(--chat-theme-user-surface));
+}
