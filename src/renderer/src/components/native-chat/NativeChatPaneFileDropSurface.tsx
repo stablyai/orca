@@ -99,7 +99,7 @@ function NativeChatPaneFileDropOverlay(): React.JSX.Element {
   return (
     <div
       data-native-chat-drop-overlay="true"
-      className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-background/80"
+      className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-chat-canvas/80"
     >
       <div className="flex flex-col items-center gap-1 rounded-xl border border-dashed border-foreground/30 bg-card px-8 py-5 text-center shadow-floating">
         <span className="mb-1 flex size-9 items-center justify-center rounded-full bg-foreground/10">

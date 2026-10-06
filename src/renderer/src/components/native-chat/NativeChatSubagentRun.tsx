@@ -105,7 +105,7 @@ const STATE_DOT_CLASS: Record<NativeChatSubagentState, string> = {
  */
 function SubagentGlyph(): React.JSX.Element {
   return (
-    <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+    <span className="flex size-4 shrink-0 items-center justify-center text-chat-foreground-faint">
       <Bot aria-hidden="true" className="size-3.5" />
     </span>
   )
@@ -168,15 +168,15 @@ export function NativeChatSubagentEntries({
         const entry = (
           <>
             <StatusDot state={state} pulsing={state === 'working'} />
-            <code
+            <span
               className={cn(
-                'min-w-0 truncate font-mono text-[11px]',
-                state === 'idle' ? 'text-muted-foreground/70' : 'text-foreground/80'
+                'min-w-0 truncate font-sans text-[13px]',
+                state === 'idle' ? 'text-chat-foreground-faint' : 'text-chat-foreground'
               )}
             >
               {agent.label}
-            </code>
-            <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+            </span>
+            <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
               {subagentStateLabel(state, 1, 1)}
               {typeof agent.tokens === 'number' ? ` · ${formatSubagentTokens(agent.tokens)}` : null}
             </span>
@@ -197,7 +197,7 @@ export function NativeChatSubagentEntries({
                 <ChevronRight
                   aria-hidden
                   className={cn(
-                    'size-3.5 shrink-0 text-muted-foreground transition-all',
+                    'size-3.5 shrink-0 text-chat-foreground-faint transition-all',
                     sectionOpen
                       ? 'rotate-90 opacity-100'
                       : 'opacity-0 group-hover/subagent-entry:opacity-100'
@@ -290,14 +290,16 @@ export function NativeChatSubagentRun({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="group/subagent-run flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed text-muted-foreground hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+        className="group/subagent-run flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left font-sans text-[13px] native-chat-message-text leading-relaxed text-chat-foreground-faint hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         aria-expanded={open}
         aria-live="polite"
       >
         <SubagentGlyph />
         <StatusDot state={alertState ?? verdictState} pulsing={working} />
-        <span className={cn('min-w-0 truncate', working && 'text-foreground/85')}>{headline}</span>
-        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+        <span className={cn('min-w-0 truncate', working && 'text-chat-foreground')}>
+          {headline}
+        </span>
+        <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
           {verdict}
           {alert === null ? null : ` +${alert}`}
           {clockStartedAt !== null ? (
@@ -321,7 +323,7 @@ export function NativeChatSubagentRun({
         </span>
         <ChevronRight
           className={cn(
-            'size-3.5 shrink-0 text-muted-foreground transition-all',
+            'size-3.5 shrink-0 text-chat-foreground-faint transition-all',
             open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover/subagent-run:opacity-100'
           )}
         />

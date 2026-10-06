@@ -199,7 +199,8 @@ const DIRECTOR_DRAIN_FIELDS = [
   'placementRejectionsByReasonDelta',
   'drainReturnDeferralsDelta',
   'drainReturnAssignmentsDelta',
-  'drainReturnRetryAfterSecondsMax'
+  'drainReturnRetryAfterSecondsMax',
+  'assign503sByCauseDelta'
 ]
 
 // Five instances at one sample per 30 s is ~100 per 10-min sub-window; this many is truncation.

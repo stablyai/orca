@@ -44,7 +44,7 @@ function Transcript({ items }: { items: AgentJournalRenderItem[] }) {
     loadEarlier,
     readPhase: 'ready'
   }
-  return <NativeChatMessageList session={session} isWorking expandSignal fontScale={1} />
+  return <NativeChatMessageList session={session} isWorking expandSignal />
 }
 
 function row(index: number, body: AgentJournalRenderItem['body']): AgentJournalRenderItem {

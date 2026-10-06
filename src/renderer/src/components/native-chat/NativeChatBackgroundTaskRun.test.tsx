@@ -36,6 +36,7 @@ describe('NativeChatBackgroundTaskRun', () => {
         })}
       />
     )
+    expect(screen.queryByText('Background command')).toBeNull()
     expect(screen.getByText('Wait for the verification verdict')).toBeInTheDocument()
     // The outcome is a state word plus its reason — the same vocabulary the
     // strip above the composer uses — not a red row of prose.
@@ -54,6 +55,11 @@ describe('NativeChatBackgroundTaskRun', () => {
   it('falls through to the kind when the provider named nothing usable', () => {
     render(<NativeChatBackgroundTaskRun block={task({ label: 'task', kind: 'workflow' })} />)
     expect(screen.getByText('Background workflow')).toBeInTheDocument()
+  })
+
+  it('shows an unnamed task once instead of repeating its kind', () => {
+    render(<NativeChatBackgroundTaskRun block={task({ label: 'task', kind: 'unknown' })} />)
+    expect(screen.getAllByText('Background task')).toHaveLength(1)
   })
 
   it('reads a state this build has no word for as no recent update, never as live', () => {

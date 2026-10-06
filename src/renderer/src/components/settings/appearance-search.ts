@@ -1,3 +1,4 @@
+import { getChatAppearanceSearchEntries } from './chat-appearance-search'
 import type { SettingsSearchEntry } from './settings-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { getLeftSidebarAppearanceEntry, getSidebarEntries } from './appearance-sidebar-search'
@@ -117,6 +118,29 @@ export const getTypographyEntries = createLocalizedCatalog((): SettingsSearchEnt
   }
 ])
 
+export const getFollowSymlinkedDirectoriesEntry = (): SettingsSearchEntry => ({
+  title: translate('settings.followSymlinkedDirectories', 'Follow symlinked directories'),
+  description: translate(
+    'settings.followSymlinkedDirectoriesDescription',
+    'Search linked folders in Quick Open and expand local linked folders in File Explorer.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('settings.followSymlinkedDirectoriesKeywords.symlink', 'symlink'),
+    ...translateSearchKeyword(
+      'settings.followSymlinkedDirectoriesKeywords.linkedFolder',
+      'linked folder'
+    ),
+    ...translateSearchKeyword(
+      'settings.followSymlinkedDirectoriesKeywords.quickOpen',
+      'quick open'
+    ),
+    ...translateSearchKeyword(
+      'settings.followSymlinkedDirectoriesKeywords.fileExplorer',
+      'file explorer'
+    )
+  ]
+})
+
 export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate(
@@ -141,7 +165,8 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
       ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
       ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide')
     ]
-  }
+  },
+  getFollowSymlinkedDirectoriesEntry()
 ])
 
 export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
@@ -233,6 +258,8 @@ export function getAppearancePaneSearchEntries(
 ): SettingsSearchEntry[] {
   return [
     ...getAppearanceSectionEntries(),
+    { title: translate('settings.appearance.chat.title', 'Chat') },
+    ...getChatAppearanceSearchEntries(),
     ...getThemeEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTypographyEntries(),

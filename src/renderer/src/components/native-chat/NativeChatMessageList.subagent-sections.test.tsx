@@ -92,7 +92,6 @@ function listOf(state: NativeChatSubagentState, waiting = false): React.JSX.Elem
       journalItems={items}
       isWorking={waiting}
       expandSignal={false}
-      fontScale={1}
     />
   )
 }
@@ -187,7 +186,6 @@ describe("a subagent's rows in the transcript", () => {
         journalItems={items}
         isWorking={false}
         expandSignal={false}
-        fontScale={1}
       />
     )
     fireEvent.click(screen.getByRole('button', { name: /Ran 3 subagents/ }))
@@ -209,12 +207,12 @@ describe("a subagent's rows in the transcript", () => {
   it("still counts the subagent's edit in the turn, and reveals it inside its section", () => {
     vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(() => {})
     renderList()
-    expect(screen.queryByText('Edited file')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
 
-    expect(screen.getByText('Edited file')).toBeInTheDocument()
+    expect(screen.getByText('Edited')).toBeInTheDocument()
     expect(screen.getByText('The PR is CLEAN.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /explore the lane/, expanded: true })).toBeVisible()
   })
@@ -263,7 +261,6 @@ describe("a subagent's rows in the transcript", () => {
         journalItems={items}
         isWorking={false}
         expandSignal={false}
-        fontScale={1}
       />
     )
     const rollups = screen.getAllByRole('button', { name: /changed file/ })
@@ -292,7 +289,7 @@ describe("a subagent's rows in the transcript", () => {
     fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
 
-    expect(screen.getByText('Edited file')).toBeInTheDocument()
+    expect(screen.getByText('Edited')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Ran 1 subagent/, expanded: true })).toBeVisible()
   })
 
@@ -306,7 +303,6 @@ describe("a subagent's rows in the transcript", () => {
           journalItems={shown}
           isWorking={false}
           expandSignal={false}
-          fontScale={1}
         />
       )
     }
@@ -361,7 +357,6 @@ describe("a subagent's rows in the transcript", () => {
         )}
         isWorking={false}
         expandSignal={false}
-        fontScale={1}
       />
     )
     expect(screen.getByRole('button', { name: /explore the lane/, expanded: false })).toBeVisible()

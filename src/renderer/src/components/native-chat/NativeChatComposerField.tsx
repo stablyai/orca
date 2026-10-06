@@ -179,10 +179,10 @@ export function NativeChatComposerField({
   }
 
   return (
-    <div className="shrink-0 bg-background">
+    <div className="shrink-0 bg-chat-canvas">
       {/* Extra bottom padding keeps the input box off the window rim. */}
       <div className="px-3 pt-2 pb-4 sm:px-4">
-        <div className="relative mx-auto w-full max-w-4xl">
+        <div className="relative mx-auto w-full max-w-(--chat-content-max-width)">
           {autocomplete.mode === 'slash' ? (
             <NativeChatPickerMenu
               autocomplete={autocomplete}
@@ -208,8 +208,8 @@ export function NativeChatComposerField({
               // Why: always-on hairline (token-level border, not focus ring) —
               // no focus/click border flash. The box is a container, not a
               // focus target.
-              'rounded-lg border border-border p-1.5 shadow-xs',
-              'bg-muted/50 dark:bg-input/40',
+              'rounded-xl border border-chat-composer-border p-1.5 shadow-xs',
+              'bg-chat-composer-surface',
               // Why (#10481): the native caret blink invalidates paint up to the
               // nearest containment boundary; without this the whole transcript
               // re-rasterizes twice a second. Pickers are siblings and every menu
@@ -285,9 +285,9 @@ export function NativeChatComposerField({
               // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
               // so re-wrap on window/pane resize is handled without a measure pass.
               className={cn(
-                'min-h-12 w-full bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                'min-h-12 w-full bg-transparent px-2 py-1 text-sm native-chat-message-text text-chat-foreground-strong outline-none pointer-coarse:min-h-14',
                 'max-h-[calc(8lh+0.5rem)] overflow-y-auto scrollbar-sleek',
-                'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
+                'placeholder:text-chat-foreground-faint disabled:cursor-not-allowed disabled:opacity-50'
               )}
             />
             <div className="flex flex-wrap items-center gap-2 pt-0.5">

@@ -33,8 +33,11 @@ export type NativeChatRowChromeMetrics = {
   inSubagentSection?: boolean
 }
 
-const LINE_HEIGHT_PX = 22
-const CHARS_PER_LINE = 96
+export type NativeChatRowTypography = {
+  lineHeightPx: number
+  charsPerLine: number
+}
+const DEFAULT_ROW_TYPOGRAPHY: NativeChatRowTypography = { lineHeightPx: 22, charsPerLine: 96 }
 const PROSE_MIN_LINES = 1
 const USER_BUBBLE_CHROME_PX = 32
 const IMAGE_STRIP_PX = 88
@@ -59,7 +62,10 @@ export const NATIVE_CHAT_ROW_GAP_PX = 20
 const ROW_MAX_PX = 1600
 
 /** Wrapped line count for a markdown body, counting hard breaks and soft wraps. */
-export function estimateNativeChatTextLines(markdown: string): number {
+export function estimateNativeChatTextLines(
+  markdown: string,
+  charsPerLine = DEFAULT_ROW_TYPOGRAPHY.charsPerLine
+): number {
   if (markdown.length === 0) {
     return 0
   }
@@ -68,39 +74,44 @@ export function estimateNativeChatTextLines(markdown: string): number {
   for (let index = 0; index <= markdown.length; index += 1) {
     if (index === markdown.length || markdown[index] === '\n') {
       const length = index - lineStart
-      lines += Math.max(PROSE_MIN_LINES, Math.ceil(length / CHARS_PER_LINE))
+      lines += Math.max(PROSE_MIN_LINES, Math.ceil(length / charsPerLine))
       lineStart = index + 1
     }
   }
   return lines
 }
 
-const metricsCache = new WeakMap<NativeChatMessage, NativeChatRowContentMetrics>()
+const metricsCache = new WeakMap<
+  NativeChatMessage,
+  { charsPerLine: number; metrics: NativeChatRowContentMetrics }
+>()
 
 /** Cached on the message, so its role remains part of the identity and a streaming turn
  *  re-deriving on every frame pays for the changed row only. */
 export function nativeChatRowContentMetrics(
-  message: NativeChatMessage
+  message: NativeChatMessage,
+  typography = DEFAULT_ROW_TYPOGRAPHY
 ): NativeChatRowContentMetrics {
   const cached = metricsCache.get(message)
-  if (cached) {
-    return cached
+  if (cached?.charsPerLine === typography.charsPerLine) {
+    return cached.metrics
   }
   const content = deriveNativeChatRowContent(message.blocks)
   const metrics: NativeChatRowContentMetrics = {
     role: message.role,
-    textLines: estimateNativeChatTextLines(content.markdown),
+    textLines: estimateNativeChatTextLines(content.markdown, typography.charsPerLine),
     imageCount: content.prose.filter((block) => block.type === 'image-ref').length,
     toolCount: content.tools.length,
     subagentGroupCount: content.subagentGroups.length
   }
-  metricsCache.set(message, metrics)
+  metricsCache.set(message, { charsPerLine: typography.charsPerLine, metrics })
   return metrics
 }
 
 export function estimateNativeChatRowHeight(
   content: NativeChatRowContentMetrics,
-  chrome: NativeChatRowChromeMetrics
+  chrome: NativeChatRowChromeMetrics,
+  typography = DEFAULT_ROW_TYPOGRAPHY
 ): number {
   let partCount = 0
   let height = 0
@@ -111,7 +122,7 @@ export function estimateNativeChatRowHeight(
     height = content.subagentGroupCount * SUBAGENT_ROW_PX
     partCount = height > 0 ? 1 : 0
   } else {
-    height = content.textLines * LINE_HEIGHT_PX
+    height = content.textLines * typography.lineHeightPx
     if (content.role === 'user' && content.textLines > 0) {
       height += USER_BUBBLE_CHROME_PX
     }

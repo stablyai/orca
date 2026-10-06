@@ -497,12 +497,29 @@ describe('caller-supplied launch inputs', () => {
     // A structured session runs in its workspace, so honouring the cwd and honouring the
     // preference are mutually exclusive; the receipt has to say which one lost.
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
-    expect(result.receipt).toMatchObject({
+    expect(result.receipt).toEqual({
       mode: 'terminal',
       preferred: 'structured',
-      reason: 'tui_launch_command'
+      reason: 'tui_launch_command',
+      detail:
+        'Your default is a structured chat session, but it asks to start in a folder other than its workspace; started a terminal agent instead.'
     })
     expect(h.createStructuredSession).not.toHaveBeenCalled()
+  })
+
+  // A custom launch command applies to terminal launches only; native chat ignores it.
+  it.each([
+    ['claude', 'claude-wrapper'],
+    ['codex', 'codex-nightly']
+  ] as const)('opens a structured %s session despite launch command %s', async (agent, command) => {
+    const h = harness({
+      settings: { ...STRUCTURED_PREFERENCE, agentCmdOverrides: { [agent]: command } }
+    })
+    const result = await h.run({ agent, target: EXISTING })
+
+    expect(result.outcome.kind).toBe('structured')
+    expect(result.receipt).toMatchObject({ mode: 'structured', reason: 'user_default' })
+    expect(h.createTerminalAgent).not.toHaveBeenCalled()
   })
 
   it('still opens a structured session when the cwd names the workspace root', async () => {

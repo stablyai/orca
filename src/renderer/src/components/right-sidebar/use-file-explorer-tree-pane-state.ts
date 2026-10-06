@@ -186,6 +186,7 @@ export function useFileExplorerTreePaneState({
       rootError ?? (displayRootPath ? tree.dirCache[displayRootPath]?.error : null) ?? null,
     isDirStale,
     loadDir,
+    refreshTree,
     resetAndLoad,
     resetSelection,
     setNameFilterQuery

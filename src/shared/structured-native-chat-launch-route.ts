@@ -29,10 +29,9 @@ export type StructuredNativeChatBlocker =
   | 'reused-terminal'
   | 'agent-without-structured-session'
   | 'floating-workspace'
-  /** The agent's launch command is overridden, or the launch names its own working directory:
-   *  a process shape only a PTY can produce. The configured *arguments* are not read here —
-   *  they are a terminal concern the structured transports do not share a vocabulary with. */
-  | 'tui-launch-command'
+  /** The launch names a start directory outside its workspace, which only a PTY can apply. The
+   *  configured launch command and arguments are not read: they apply to terminal launches only. */
+  | 'custom-start-directory'
   | 'remote-execution-host'
   | 'project-runtime'
   | 'runtime-capability'
@@ -57,7 +56,7 @@ export type StructuredNativeChatSupportInput = {
   /** Host-derived. Absent means the kind was never established, which is not evidence of any kind. */
   workspaceKind?: WorkspaceLaunchKind
   projectRuntime?: ProjectExecutionRuntimeResolution | null
-  requiresTuiLaunchCommand?: boolean
+  startsOutsideWorkspaceRoot?: boolean
   /** An existing PTY agent keeps its execution transport. */
   reusesTerminal?: boolean
 }
@@ -105,8 +104,8 @@ export function resolveStructuredNativeChatSupport(
   if (input.workspaceKind === 'floating') {
     return { supported: false, blocker: 'floating-workspace' }
   }
-  if (input.requiresTuiLaunchCommand === true) {
-    return { supported: false, blocker: 'tui-launch-command' }
+  if (input.startsOutsideWorkspaceRoot === true) {
+    return { supported: false, blocker: 'custom-start-directory' }
   }
   const projectRuntime = input.projectRuntime
   if (projectRuntime?.status === 'repair-required' || projectRuntime?.runtime.kind === 'wsl') {

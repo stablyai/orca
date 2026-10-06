@@ -64,6 +64,34 @@ describe('WebRuntimeClient', () => {
     vi.unstubAllGlobals()
   })
 
+  it('closes a connecting child search socket immediately on abort and never starts after pre-abort', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const controller = new AbortController()
+    const pending = client.subscribe(
+      'files.search',
+      {},
+      { onResponse: vi.fn() },
+      { signal: controller.signal, timeoutMs: 15_000 }
+    )
+    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    const child = fakeSockets.at(-1)
+    expect(child?.readyState).toBe(FakeWebSocket.CONNECTING)
+    controller.abort()
+    await rejection
+    expect(child?.close).toHaveBeenCalledOnce()
+    const count = fakeSockets.length
+    await expect(
+      client.subscribe('files.search', {}, { onResponse: vi.fn() }, { signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fakeSockets).toHaveLength(count)
+    client.close()
+  })
+
   it('advertises explicit close intent support in encrypted authentication', async () => {
     const client = new WebRuntimeClient({
       v: 2,

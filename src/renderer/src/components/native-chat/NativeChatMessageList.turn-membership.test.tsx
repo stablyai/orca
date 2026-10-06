@@ -106,7 +106,6 @@ function journalList(
       isWorking={isWorking}
       workingStartedAt={workingStartedAt}
       expandSignal={false}
-      fontScale={1}
     />
   )
 }

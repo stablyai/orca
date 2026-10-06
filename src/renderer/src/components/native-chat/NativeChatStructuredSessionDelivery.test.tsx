@@ -129,8 +129,8 @@ vi.mock('./use-structured-agent-session', async () => {
   }
 })
 
-vi.mock('./use-native-chat-font-scale', () => ({
-  useNativeChatFontScale: () => ({ scale: 1 })
+vi.mock('./use-native-chat-font-size', () => ({
+  useNativeChatFontSize: () => undefined
 }))
 
 vi.mock('./use-native-chat-file-link-context', () => ({

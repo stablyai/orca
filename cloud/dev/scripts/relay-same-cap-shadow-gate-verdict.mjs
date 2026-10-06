@@ -178,6 +178,17 @@ function ownRetries(sample) {
   )
 }
 
+// A drained host whose redial beats its own release meets its own row. That host was admitted to
+// the drain-return lane first (the admission is counted before the assign that is refused), so
+// row-busy refusals up to that minute's drain-return admissions are scheduled. Anything beyond is
+// row contention the drain does not explain, and stays in the budget. The margin absorbs rounding
+// from splitting each 30 s sample across clock minutes.
+const ROW_BUSY_MARGIN_PER_MINUTE = 2
+
+function rowBusy(sample) {
+  return sample.assign503sByCauseDelta?.relay_assignment_row_busy ?? 0
+}
+
 /**
  * The director's scheduled 503s per clock minute, from its runtime-metrics samples: drain-return
  * deferrals and answers to a host's own early retry, plus the re-placements. Each sample's count is
@@ -187,6 +198,7 @@ function ownRetries(sample) {
 export function drainReturnByMinute(reads, limit) {
   const deferrals = new Map()
   const retries = new Map()
+  const busy = new Map()
   const assignments = new Map()
   let retryAfterSecondsMax = 0
   let truncated = false
@@ -209,6 +221,7 @@ export function drainReturnByMinute(reads, limit) {
       const endedAt = Date.parse(sample.timestamp)
       charge(deferrals, endedAt, sample.drainReturnDeferralsDelta ?? 0)
       charge(retries, endedAt, ownRetries(sample))
+      charge(busy, endedAt, rowBusy(sample))
       charge(assignments, endedAt, sample.drainReturnAssignmentsDelta ?? 0)
       retryAfterSecondsMax = Math.max(
         retryAfterSecondsMax,
@@ -217,6 +230,12 @@ export function drainReturnByMinute(reads, limit) {
     }
   }
   const sum = (map) => Math.round([...map.values()].reduce((total, count) => total + count, 0))
+  let rowBusyBeyondDrain = 0
+  for (const [minute, count] of busy) {
+    const scheduled = Math.min(count, (assignments.get(minute) ?? 0) + ROW_BUSY_MARGIN_PER_MINUTE)
+    rowBusyBeyondDrain += count - scheduled
+    retries.set(minute, (retries.get(minute) ?? 0) + scheduled)
+  }
   return {
     deferralsPerMinute: Object.fromEntries(deferrals),
     ownRetriesPerMinute: Object.fromEntries(retries),
@@ -224,6 +243,7 @@ export function drainReturnByMinute(reads, limit) {
     deferralsPeakPerMinute: Math.round(Math.max(0, ...deferrals.values())),
     assignmentsTotal: sum(assignments),
     assignmentsPeakPerMinute: Math.round(Math.max(0, ...assignments.values())),
+    rowBusyBeyondDrainTotal: Math.round(rowBusyBeyondDrain),
     retryAfterSecondsMax,
     truncated
   }

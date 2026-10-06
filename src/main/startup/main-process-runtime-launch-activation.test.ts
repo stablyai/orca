@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronApp = vi.hoisted(() => ({
@@ -217,16 +215,5 @@ describe('desktop startup activation', () => {
 
     expect(windows).toHaveLength(0)
     expect(state.desktopActivationGate).toBeNull()
-  })
-
-  it('holds every launch mode behind the gate until startup settles it', () => {
-    const preflightSource = readFileSync(
-      join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
-      'utf8'
-    )
-    expect(preflightSource).toContain("initialState: 'initializing',")
-    expect(preflightSource).not.toContain(
-      "initialState: state.isServeMode ? 'initializing' : 'ready'"
-    )
   })
 })

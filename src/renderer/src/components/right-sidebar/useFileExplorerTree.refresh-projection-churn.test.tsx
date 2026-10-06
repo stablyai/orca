@@ -170,6 +170,7 @@ describe('file explorer directory refresh churn', () => {
       rootError: null,
       isDirStale: () => false,
       loadDir,
+      refreshTree: vi.fn().mockResolvedValue('refreshed'),
       resetAndLoad: vi.fn(),
       resetSelection: vi.fn(),
       setNameFilterQuery: vi.fn()

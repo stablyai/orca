@@ -99,7 +99,9 @@ describe('NativeChatSupportedAgents', () => {
   it('renders the translated label in Spanish', async () => {
     await i18n.changeLanguage('es')
     expect(i18n.language).toBe('es')
-    expect(i18n.getResource('es', 'translation', SUPPORTED_AGENTS_LABEL_KEY)).toBe('Agentes apoyados:')
+    expect(i18n.getResource('es', 'translation', SUPPORTED_AGENTS_LABEL_KEY)).toBe(
+      'Agentes apoyados:'
+    )
 
     const markup = renderToStaticMarkup(<NativeChatSupportedAgents />)
 

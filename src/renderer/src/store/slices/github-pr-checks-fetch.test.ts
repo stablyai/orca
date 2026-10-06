@@ -571,7 +571,10 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
     )
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      subscriptionId: expect.any(String),
       selector: 'env-1',
+      expectedEnvironmentPairingRevision: undefined,
+      expectedEnvironmentRuntimeId: undefined,
       method: 'github.prCheckDetails',
       params: {
         repo: repoId,
@@ -582,6 +585,9 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
         prRepo: { owner: 'Acme', repo: 'Widgets' }
       },
       timeoutMs: 30_000
+    })
+    expect(mockApi.runtimeEnvironments.cancelSubscription).toHaveBeenCalledWith({
+      subscriptionId: expect.any(String)
     })
     expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
   })
@@ -665,7 +671,10 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
 
       await vi.advanceTimersByTimeAsync(20_000)
       expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        subscriptionId: expect.any(String),
         selector: 'env-1',
+        expectedEnvironmentPairingRevision: undefined,
+        expectedEnvironmentRuntimeId: undefined,
         method: 'github.prCheckDetails',
         params: {
           repo: repoId,

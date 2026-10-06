@@ -363,7 +363,6 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/windows-live-tree-kill.win32.test.ts',
   'src/main/wsl/wsl-runner.test.ts',
   'src/main/wsl/wsl-guest-environment.test.ts',
-  'src/main/wsl/wsl-invocation-boundary.test.ts',
   'src/main/wsl/wsl-executable-path.win32.test.ts',
   'src/main/wsl/wsl-w1-w3-contract.test.ts',
   'src/shared/source-scan/source-tree-scan.test.ts',

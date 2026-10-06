@@ -8,10 +8,7 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../shared/terminal-startup-cwd'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { workspaceKindForWorktreeId } from '../../../shared/workspace-launch-kind'
-import {
-  hasExplicitTuiLaunchCommand,
-  type AgentLaunchRoutingInput
-} from '@/lib/agent-launch-routing'
+import type { AgentLaunchRoutingInput } from '@/lib/agent-launch-routing'
 // Why: the `connection-context` facade imports the store root; the resolver's own module keeps
 // this input builder importable from anywhere in the launch graph without a cycle.
 import {
@@ -157,19 +154,15 @@ export function buildAgentLaunchRouteInput(
     ),
     // A cwd decides the route only when it names somewhere other than the workspace root; the
     // host applies the same rule (`agent-launch-mode.ts`), so the two never disagree on it.
-    requiresTuiLaunchCommand:
-      requestsCwdOutsideWorkspaceRootForWorkspace({
-        workspaceId: workspace.worktreeId,
-        requestedCwd: tuiCustomization?.cwd,
-        workspacePath: workspace.worktreeId
-          ? findWorktreeById(store.worktreesByRepo ?? {}, workspace.worktreeId)?.path
-          : undefined,
-        resolveFolderWorkspacePath: (folderWorkspaceId) =>
-          store.folderWorkspaces?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
-      }) ||
-      // A launch command override is this machine's; a paired host's createSupport reads its own.
-      (executionHostId === LOCAL_EXECUTION_HOST_ID &&
-        hasExplicitTuiLaunchCommand(store.settings, agent)),
+    startsOutsideWorkspaceRoot: requestsCwdOutsideWorkspaceRootForWorkspace({
+      workspaceId: workspace.worktreeId,
+      requestedCwd: tuiCustomization?.cwd,
+      workspacePath: workspace.worktreeId
+        ? findWorktreeById(store.worktreesByRepo ?? {}, workspace.worktreeId)?.path
+        : undefined,
+      resolveFolderWorkspacePath: (folderWorkspaceId) =>
+        store.folderWorkspaces?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
+    }),
     initialSessionOptions: args.initialSessionOptions
   }
 }
