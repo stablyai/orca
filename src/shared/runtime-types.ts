@@ -110,6 +110,7 @@ export type {
 } from './runtime-capability-degradation'
 export type {
   CliRuntimeState,
+  CliClientVersionInfo,
   CliStatusResult,
   DeviceScope,
   RuntimeBrowserDriverState,

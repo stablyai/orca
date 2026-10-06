@@ -47,6 +47,7 @@ jobs:
       orcad_browser: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.orcad_browser }}
       cross-version-wire: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.cross-version-wire }}
       managed_hook_node18: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node18 }}
+      standalone_cli: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.standalone_cli }}
       package: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package }}
       package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
@@ -972,6 +973,97 @@ jobs:
       - name: Smoke managed-hook companions
         run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
 
+  # Why: the standalone CLI installs onto whatever Node the user has, so the one packed tarball
+  # is installed offline and run on every supported major, on macOS, and on musl (x64 and arm64).
+  standalone_cli_package:
+    name: standalone CLI tarball
+    needs: [code_paths]
+    if: needs.code_paths.outputs.standalone_cli == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Build and package the standalone CLI
+        run: pnpm run package:cli-standalone
+
+      - name: Upload the standalone CLI tarball
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-cli-tarball
+          path: out/cli-standalone/orca-cli.tgz
+          retention-days: 3
+          if-no-files-found: error
+
+  # Why verify gates only this job: a failed package run skips it, which verify reports.
+  standalone_cli:
+    name: standalone CLI install ${{ matrix.label }}
+    needs: [code_paths, standalone_cli_package]
+    if: needs.code_paths.outputs.standalone_cli == 'true'
+    runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: node 22
+            node: '22'
+          - label: node 24
+            node: '24'
+          - label: node 26
+            node: '26'
+          - label: node 22 macos
+            node: '22'
+            runner: macos-latest
+          - label: node 22 alpine musl
+            image: node:22-alpine
+          - label: node 22 alpine musl arm64
+            image: node:22-alpine
+            runner: ubuntu-24.04-arm
+
+    steps:
+      # Only the dependency-free smoke script is needed; the tarball is the build under test.
+      - name: Checkout smoke script
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /config/scripts/smoke-standalone-cli-tarball.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Download the standalone CLI tarball
+        uses: actions/download-artifact@v8
+        with:
+          name: orca-cli-tarball
+          path: standalone-cli
+
+      - name: Setup Node ${{ matrix.node }}
+        if: matrix.node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install and run the tarball offline
+        if: matrix.node
+        run: node config/scripts/smoke-standalone-cli-tarball.mjs standalone-cli/orca-cli.tgz
+
+      # Why --network none: the container proves the install and the commands need no network.
+      - name: Install and run the tarball offline in ${{ matrix.image }}
+        if: matrix.image
+        run: >-
+          docker run --rm --network none
+          -v "$GITHUB_WORKSPACE:/work:ro" -w /work
+          "$IMAGE"
+          node config/scripts/smoke-standalone-cli-tarball.mjs standalone-cli/orca-cli.tgz
+        env:
+          IMAGE: ${{ matrix.image }}
+
   package:
     name: package
     needs: [code_paths, preflight]
@@ -1234,6 +1326,7 @@ jobs:
           src/main/startup/windows-install-dir-acl-repair.win32.test.ts
           src/main/startup/windows-app-data-path.test.ts
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
+          src/cli/runtime/client-standalone-compat-gate.test.ts
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts
           src/shared/secure-path-windows-acl.win32.test.ts
@@ -1360,6 +1453,7 @@ jobs:
       - mobile_web_app
       - cross-version-wire
       - managed_hook_node18
+      - standalone_cli
       - package
       - package_windows
     # Evaluating job results only needs the lightweight container runner.
@@ -1399,6 +1493,8 @@ jobs:
           CROSS_VERSION_WIRE_SHOULD_RUN: ${{ needs.code_paths.outputs.cross-version-wire }}
           MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
           MANAGED_HOOK_NODE18_SHOULD_RUN: ${{ needs.code_paths.outputs.managed_hook_node18 }}
+          STANDALONE_CLI: ${{ needs.standalone_cli.result }}
+          STANDALONE_CLI_SHOULD_RUN: ${{ needs.code_paths.outputs.standalone_cli }}
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_SHOULD_RUN: ${{ needs.code_paths.outputs.package }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
@@ -1436,6 +1532,7 @@ jobs:
           check_job mobile_web_app "$MOBILE_WEB_APP" "$MOBILE_WEB_APP_SHOULD_RUN"
           check_job cross-version-wire "$CROSS_VERSION_WIRE" "$CROSS_VERSION_WIRE_SHOULD_RUN"
           check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
+          check_job standalone_cli "$STANDALONE_CLI" "$STANDALONE_CLI_SHOULD_RUN"
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
           check_job package_windows "$PACKAGE_WINDOWS" "$PACKAGE_WINDOWS_SHOULD_RUN"
           exit "$failed"

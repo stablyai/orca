@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable
@@ -14,6 +14,18 @@ describe('orchestration recovery command identity', () => {
     ['local Windows', {}, 'win32', 'orca']
   ] as const)('resolves the %s CLI identity', (_name, env, platform, expected) => {
     expect(resolveOrchestrationCliExecutable(env, platform)).toBe(expected)
+  })
+
+  it('names the standalone package bin on Linux', () => {
+    vi.stubEnv('ORCA_CLI_STANDALONE', '1')
+    try {
+      expect(resolveOrchestrationCliExecutable({}, 'linux')).toBe('orca')
+      expect(resolveOrchestrationCliExecutable({ ORCA_CLI_COMMAND: 'orca-dev' }, 'linux')).toBe(
+        'orca-dev'
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('reconstructs the keyed worker-start command from its RPC params', () => {

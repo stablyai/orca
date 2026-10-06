@@ -11,7 +11,7 @@ import {
 import type { PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
-import { getCliStatus, projectRemoteAppStatus } from './status'
+import { getCliStatus, projectRemoteAppStatus, runtimeProtocolWindow } from './status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 import {
@@ -27,6 +27,7 @@ import {
   ORCHESTRATION_CONTRACT_VERSION
 } from '../../shared/protocol-version'
 import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
+import { isStandaloneCli } from '../standalone-cli-mode'
 import { createOrchestrationCompatibilityEnvelope } from './orchestration-compatibility-envelope'
 import { getTimeoutMsParam, isWaitingCheck } from './runtime-request-timeout'
 import {
@@ -162,6 +163,12 @@ export class RuntimeClient {
       return response
     }
     const metadata = readMetadata(this.userDataPath)
+    // Why: nothing was sent yet, so a preflight failure needs no mutation recovery.
+    if (isStandaloneCli() && method !== 'status.get') {
+      await this.remoteCompat.verifyLocal(() =>
+        sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, effectiveTimeoutMs)
+      )
+    }
     let response
     try {
       response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs, envelope)
@@ -227,6 +234,7 @@ export class RuntimeClient {
             }),
             runtimeId: response.result.runtimeId,
             ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
+            ...runtimeProtocolWindow(response.result),
             ...(response.result.remoteUpdateSupport
               ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
               : {}),
@@ -240,7 +248,10 @@ export class RuntimeClient {
         _meta: response._meta
       }
     }
-    return getCliStatus(this.userDataPath)
+    return getCliStatus(
+      this.userDataPath,
+      isStandaloneCli() ? (status) => this.remoteCompat.noteVerifiedStatus(status) : undefined
+    )
   }
 
   private async ensureOrchestrationContractCompatible(timeoutMs: number): Promise<void> {
@@ -258,7 +269,7 @@ export class RuntimeClient {
 
   private async checkOrchestrationContractCompatibility(timeoutMs: number): Promise<void> {
     const response = await this.call<RuntimeStatus>('status.get', undefined, { timeoutMs })
-    if (this.remotePairing) {
+    if (this.remotePairing || isStandaloneCli()) {
       this.remoteCompat.noteVerifiedStatus(response.result)
     }
     if (!response.result.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {

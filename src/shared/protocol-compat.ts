@@ -53,12 +53,16 @@ export function evaluateRuntimeCompat(input: {
   }
 }
 
-export function describeRuntimeCompatBlock(verdict: RuntimeCompatVerdict): string {
+export function describeRuntimeCompatBlock(
+  verdict: RuntimeCompatVerdict,
+  // Why: a client installed apart from the app (the standalone CLI) is updated separately.
+  clientUpdateAdvice = 'Update Orca on this machine.'
+): string {
   if (verdict.kind === 'ok') {
     return 'Runtime client and server are compatible.'
   }
   if (verdict.reason === 'client-too-old') {
-    return `This Orca client is too old for the selected server. Update Orca on this machine. Client protocol ${verdict.clientProtocolVersion}, server requires client protocol ${verdict.requiredClientProtocolVersion}.`
+    return `This Orca client is too old for the selected server. ${clientUpdateAdvice} Client protocol ${verdict.clientProtocolVersion}, server requires client protocol ${verdict.requiredClientProtocolVersion}.`
   }
   return `The selected Orca server is too old for this client. Update Orca on the server. Server protocol ${verdict.serverProtocolVersion}, client requires server protocol ${verdict.requiredServerProtocolVersion}.`
 }

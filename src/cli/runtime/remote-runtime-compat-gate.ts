@@ -7,6 +7,7 @@ import {
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { markEnvironmentUsed } from './environments'
+import { isStandaloneCli, STANDALONE_CLI_UPDATE_ADVICE } from '../standalone-cli-mode'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcResponse } from './types'
 import type {
   sendWebSocketRequest,
@@ -63,6 +64,19 @@ export class RemoteRuntimeCompatGate {
     )
   }
 
+  // Why: a standalone CLI can sit beside a runtime from another release, so its
+  // local socket needs the same protocol-window check the paired path gets.
+  async verifyLocal(sendStatus: () => Promise<RuntimeRpcResponse<RuntimeStatus>>): Promise<void> {
+    if (this.checked) {
+      return
+    }
+    const response = await sendStatus()
+    if (response.ok === false) {
+      throw new RuntimeRpcFailureError(response)
+    }
+    this.noteVerifiedStatus(response.result)
+  }
+
   noteVerifiedStatus(status: RuntimeStatus): void {
     const verdict = evaluateRuntimeCompat({
       clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
@@ -72,7 +86,13 @@ export class RemoteRuntimeCompatGate {
         status.minCompatibleRuntimeClientVersion ?? status.minCompatibleMobileVersion
     })
     if (verdict.kind === 'blocked') {
-      throw new RuntimeClientError('incompatible_runtime', describeRuntimeCompatBlock(verdict))
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        describeRuntimeCompatBlock(
+          verdict,
+          isStandaloneCli() ? STANDALONE_CLI_UPDATE_ADVICE : undefined
+        )
+      )
     }
     this.checked = true
   }

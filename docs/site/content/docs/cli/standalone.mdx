@@ -1,0 +1,56 @@
+---
+title: Standalone Orca CLI
+description: Install the orca command on a machine without the Orca desktop app, from the release tarball, and drive a paired Orca server with it.
+keywords:
+  - orca cli
+  - standalone orca cli
+  - orca-cli.tgz
+  - npm install orca cli
+  - orca pairing code
+---
+
+import { Callout } from '@/components/docs/prose'
+
+The standalone Orca CLI is the same `orca` command the desktop app ships, packaged as one JavaScript file that runs on your own Node.js. Install it on a laptop, container, or CI runner that has no Orca desktop app, then point it at an Orca server you have paired with.
+
+## Install
+
+You need Node.js 22 or newer. Older versions print a warning and are not supported.
+
+```bash
+npm i -g https://github.com/stablyai/orca/releases/latest/download/orca-cli.tgz
+orca --version
+```
+
+Each release also carries a version-matched tarball, `orca-cli-<version>.tgz`, if you want to pin the CLI to the version of your server:
+
+```bash
+npm i -g https://github.com/stablyai/orca/releases/download/v<version>/orca-cli-<version>.tgz
+```
+
+On every platform, Linux included, the standalone package installs the command as `orca`. The desktop app's Linux command stays `orca-ide`.
+
+## Connect to a server
+
+Save a paired Orca server once, then target it with `--environment`, or set `ORCA_ENVIRONMENT` for the whole shell. See [Remote Orca servers](/docs/remote-servers) for creating the pairing link.
+
+```bash
+orca environment add --name build-box --pairing-code '<pairing-url>'
+orca status --environment build-box
+orca worktree ps --environment build-box --json
+```
+
+`orca status` and `orca --version --json` report the CLI's own version and protocol next to the server's, so you can tell which side to update.
+
+<Callout title="Update the CLI, not the app">
+  The CLI and the server update independently. When the server needs a newer client, the CLI says so
+  and tells you to reinstall the tarball above. Updating the Orca app does not update this CLI.
+</Callout>
+
+## What works where
+
+**Works with no server:** `--version`, `help`, `agent-context`, `skills list`, `skills get`, `skills installed`, `skills install`, `skills update`, `environment add|list|show|rm`, `host list`, and `vm recipe doctor`.
+
+**Works through a paired server:** `status`, `repo`, `worktree`, `terminal`, `project`, `file`, `automations`, `orchestration`, the browser and `tab` commands, `computer`, `emulator`, `linear`, `search`, `diagnostics`, and `skills share`. They reach the server named by `--environment`, `--pairing-code`, `--host runtime:<id>`, `ORCA_ENVIRONMENT`, or `ORCA_PAIRING_CODE`, or an Orca runtime running on the same machine.
+
+**Needs the desktop app or headless server package:** `open`, `serve`, `claude-teams`, `account`, `artifacts`, `agent hooks`, and `profile state`. These manage the local app, its profile, or this machine's agent configuration, so the standalone CLI refuses them with a message naming the package to use.

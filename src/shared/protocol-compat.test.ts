@@ -172,6 +172,10 @@ describe('evaluateRuntimeCompat', () => {
       requiredClientProtocolVersion: RUNTIME_PROTOCOL_VERSION + 1
     })
     expect(describeRuntimeCompatBlock(verdict)).toContain('client is too old')
+    expect(describeRuntimeCompatBlock(verdict)).toContain('Update Orca on this machine.')
+    expect(describeRuntimeCompatBlock(verdict, 'Update the CLI.')).toContain(
+      'too old for the selected server. Update the CLI. Client protocol'
+    )
   })
 
   it('blocks when the server protocol is below the client minimum', () => {

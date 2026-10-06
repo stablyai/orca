@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { scanSourceTree, stripComments } from '../../src/shared/source-scan/source-tree-scan'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
+import { workflowMatrixRunnerLabels } from './workflow-matrix-runner-labels.mjs'
 
 /**
  * Every Windows-gated test file must be registered in BOTH Windows-lane lists.
@@ -271,9 +272,10 @@ export function requiresEnvOptIn(source) {
  *
  * Not an equality test against `windows-2022`: `windows-latest` resolves to the
  * same image today, a label array or `{ group, labels }` object is valid YAML
- * here, and a `${{ matrix.os }}` expression cannot be resolved from the file at
- * all. An unresolvable expression counts as "could be Windows" so it fails
- * closed -- someone has to look rather than have a second lane appear silently.
+ * here, and only a `${{ matrix.<key> }}` read from the job's own literal matrix
+ * resolves (workflowMatrixRunnerLabels). Any other expression counts as "could
+ * be Windows" so it fails closed -- someone has to look rather than have a
+ * second lane appear silently.
  */
 export function couldRunOnWindows(runsOn) {
   const labels =
@@ -289,7 +291,7 @@ export function couldRunOnWindows(runsOn) {
 function readWindowsWorkflow() {
   const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
   const jobs = Object.entries(workflow.jobs ?? {})
-  const windowsJobs = jobs.filter(([, job]) => couldRunOnWindows(job?.['runs-on']))
+  const windowsJobs = jobs.filter(([, job]) => couldRunOnWindows(workflowMatrixRunnerLabels(job)))
   const steps = workflow.jobs?.[WINDOWS_LANE_JOB]?.steps ?? []
   const runs = WINDOWS_LANE_STEPS.map((name) => {
     const step = steps.find((candidate) => candidate?.name === name)

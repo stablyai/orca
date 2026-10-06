@@ -9,6 +9,7 @@ import {
   validateCommandAndFlags
 } from './args'
 import { readOrcaCliVersion } from './cli-version'
+import { isVersionRequest } from './cli-version-arguments'
 import { dispatch } from './dispatch'
 import {
   assertEnvironmentSelectorResolvable,
@@ -21,6 +22,7 @@ import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
 import { resolveOrchestrationCliExecutable } from './runtime/orchestration-recovery-command'
 import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
+import { refuseDesktopOnlyCommandInStandalone } from './standalone-cli-mode'
 
 export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
@@ -67,7 +69,12 @@ export async function main(
   cwd = resolveInvocationCwd()
 ): Promise<void> {
   // Why: version audits use the bundled launcher; Electron intercepts direct binary version flags.
-  if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
+  const versionRequest = isVersionRequest(argv)
+  if (versionRequest?.json) {
+    await printCliVersionReport()
+    return
+  }
+  if (versionRequest) {
     const version = readOrcaCliVersion()
     if (!version) {
       process.stderr.write('Could not determine the Orca version for this build.\n')
@@ -116,6 +123,7 @@ export async function main(
       findCommandSpec(COMMAND_SPECS, parsed.commandPath),
       parsed.flags
     )
+    refuseDesktopOnlyCommandInStandalone(parsed.commandPath)
     const RuntimeClientClass = await loadRuntimeClientClass()
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
@@ -194,10 +202,28 @@ export async function main(
   }
 }
 
+async function printCliVersionReport(): Promise<void> {
+  const [{ buildCliVersionReport }, RuntimeClientClass] = await Promise.all([
+    import('./cli-version-report.js'),
+    loadRuntimeClientClass()
+  ])
+  // Why: undefined keeps the ORCA_PAIRING_CODE / ORCA_ENVIRONMENT fallback, so the server half
+  // describes the runtime a plain command would reach. Constructed inside the probe so a stale
+  // selector reports as an unreachable server instead of losing the client half.
+  const report = await buildCliVersionReport(
+    async () => (await new RuntimeClientClass(undefined, 2_000).getCliStatus()).result
+  )
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
+  if (report.client.version === null) {
+    process.exitCode = 1
+  }
+}
+
 async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
   try {
     // Why: everything after `orca claude-teams` belongs to Claude Code, not
     // Orca's own flag parser, so new Claude flags work without Orca changes.
+    refuseDesktopOnlyCommandInStandalone(['claude-teams'])
     const client = new (await loadRuntimeClientClass())(undefined, undefined, null, null)
     await dispatch(['claude-teams'], {
       flags: new Map(),

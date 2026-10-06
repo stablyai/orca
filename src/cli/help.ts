@@ -5,8 +5,16 @@ import { formatCommandScopedFlagHelp } from './command-scoped-flag-help'
 import { FLAG_HELP_TEXT } from './flag-help-text'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
 import { ROOT_HELP_TEXT_SECONDARY } from './root-help-text-secondary'
+import { isDesktopOnlyCommand, isStandaloneCli } from './standalone-cli-mode'
 
 const ROOT_HELP_TEXT = [ROOT_HELP_TEXT_PRIMARY, ROOT_HELP_TEXT_SECONDARY].join('\n')
+const STANDALONE_HELP_FOOTER = [
+  '',
+  'Standalone CLI:',
+  '  open, serve, claude-teams, account, artifacts, agent hooks, and profile state need the',
+  '  Orca desktop app or headless server CLI. Other commands reach a running Orca runtime,',
+  '  locally or through --environment / --pairing-code.'
+].join('\n')
 
 export function printHelp(specs: CommandSpec[], commandPath: string[] = []): void {
   const exactSpec = findCommandSpec(specs, commandPath)
@@ -27,6 +35,9 @@ export function printHelp(specs: CommandSpec[], commandPath: string[] = []): voi
   }
 
   console.log(ROOT_HELP_TEXT)
+  if (isStandaloneCli()) {
+    console.log(STANDALONE_HELP_FOOTER)
+  }
 }
 
 export function formatCommandHelp(spec: CommandSpec): string {
@@ -45,9 +56,15 @@ export function formatCommandHelp(spec: CommandSpec): string {
     }
   }
 
-  if (spec.notes && spec.notes.length > 0) {
+  const notes = [
+    ...(spec.notes ?? []),
+    ...(isStandaloneCli() && isDesktopOnlyCommand(spec.path)
+      ? ['Not available in the standalone CLI; use the Orca desktop app or headless server CLI.']
+      : [])
+  ]
+  if (notes.length > 0) {
     lines.push('', 'Notes:')
-    for (const note of spec.notes) {
+    for (const note of notes) {
       lines.push(`  ${note}`)
     }
   }

@@ -127,6 +127,13 @@ function formatHostConnection(host: HostListEntry): string {
 
 export function formatCliStatus(status: CliStatusResult): string {
   return [
+    ...(status.client
+      ? [
+          `cliVersion: ${status.client.version ?? 'unknown'}`,
+          `cliStandalone: ${status.client.standalone}`,
+          `cliRuntimeProtocolVersion: ${status.client.runtimeProtocolVersion}`
+        ]
+      : []),
     ...(status.target && status.target.kind === 'environment'
       ? [`target: environment ${status.target.environment}`]
       : []),
@@ -137,6 +144,12 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeReachable: ${status.runtime.reachable}`,
     `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
+    ...(status.client
+      ? [
+          `runtimeAppVersion: ${status.runtime.appVersion ?? 'unknown'}`,
+          `runtimeProtocolVersion: ${status.runtime.runtimeProtocolVersion ?? 'unknown'}`
+        ]
+      : []),
     `graphState: ${status.graph.state}`,
     ...(status.caller === undefined ? [] : [`orcaSessionId: ${formatStatusCaller(status.caller)}`])
   ].join('\n')

@@ -7,6 +7,7 @@ import { automationOwnerConflictRecovery } from './automation-owner-conflict-rec
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
 import type { RuntimeRpcFailure } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
+import { isStandaloneCli, STANDALONE_RUNTIME_UNAVAILABLE_HINT } from './standalone-cli-mode'
 
 export type CliErrorContext = {
   commandPath?: readonly string[]
@@ -47,7 +48,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     if (hasOrchestrationRequestId(error.data)) {
       return message
     }
-    return `${message}\nOrca is not running. Run 'orca open' first.`
+    return `${message}\n${runtimeUnavailableHint()}`
   }
   // Why: error-specific recovery must win over the generic computer fallback.
   // Classified from the whole error, not just `.code`: a hop that flattens the class leaves only the token.
@@ -71,12 +72,19 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     error instanceof RuntimeRpcFailureError &&
     error.response.error.code === 'runtime_unavailable'
   ) {
-    return `${message}\nOrca is not running. Run 'orca open' first.`
+    return `${message}\n${runtimeUnavailableHint()}`
   }
   if (error instanceof RuntimeRpcFailureError) {
     return formatMessageWithNextSteps(message, nextStepsFromData(error.response.error.data))
   }
   return message
+}
+
+// Why: the standalone CLI refuses `orca open`, so it must not recommend it.
+function runtimeUnavailableHint(): string {
+  return isStandaloneCli()
+    ? STANDALONE_RUNTIME_UNAVAILABLE_HINT
+    : "Orca is not running. Run 'orca open' first."
 }
 
 function hasOrchestrationRequestId(data: unknown): boolean {

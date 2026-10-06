@@ -4,6 +4,7 @@
   "pages": [
     "overview",
     "reference",
+    "standalone",
     "orchestration",
     "automations",
     "computer-use",

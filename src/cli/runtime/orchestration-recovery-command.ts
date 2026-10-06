@@ -1,3 +1,5 @@
+import { isStandaloneCli } from '../standalone-cli-mode'
+
 export function resolveOrchestrationCliExecutable(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
@@ -8,6 +10,10 @@ export function resolveOrchestrationCliExecutable(
   }
   if (env.ORCA_DEV_REPO_ROOT) {
     return 'orca-dev'
+  }
+  // Why: the standalone package installs `orca` on every platform; orca-ide is the Linux desktop name.
+  if (isStandaloneCli()) {
+    return 'orca'
   }
   return platform === 'linux' ? 'orca-ide' : 'orca'
 }

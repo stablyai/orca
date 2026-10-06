@@ -2367,11 +2367,83 @@ jobs:
           RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
           RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
 
+  # Why its own runner: electron-builder packs anything left in the workspace root into
+  # app.asar, so the CLI tarball never shares a checkout with the desktop build. Tag code
+  # runs read-only here; standalone-cli-publish uploads the artifact without executing it.
+  standalone-cli:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Build and package the standalone CLI
+        env:
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! node -e 'process.exit(require("./package.json").scripts?.["package:cli-standalone"] ? 0 : 1)'; then
+            echo "::error::Tag $TAG predates the standalone CLI packager; cut from a ref that has it."
+            exit 1
+          fi
+          pnpm run package:cli-standalone
+          # Why: the version-matched name must be the one verify-release-required-assets expects.
+          test -s "out/cli-standalone/orca-cli-${TAG#v}.tgz"
+
+      - name: Smoke the standalone CLI tarball offline
+        run: node config/scripts/smoke-standalone-cli-tarball.mjs out/cli-standalone/orca-cli.tgz
+
+      - name: Keep the standalone CLI tarballs for publishing
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-cli-release-tarballs
+          path: out/cli-standalone/*.tgz
+          retention-days: 7
+          if-no-files-found: error
+
+  standalone-cli-publish:
+    needs:
+      - cut
+      - create-release
+      - standalone-cli
+    if: needs.cut.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download the standalone CLI tarballs
+        uses: actions/download-artifact@v8
+        with:
+          name: orca-cli-release-tarballs
+          path: orca-cli
+
+      - name: Publish standalone CLI tarballs
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          shell: bash
+          command: gh release upload "$TAG" "orca-cli/orca-cli-${TAG#v}.tgz" orca-cli/orca-cli.tgz --clobber --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+
   publish-release:
     needs:
       - cut
       - build
       - build-mac
+      - standalone-cli-publish
       - skill-sharing-linux-floor-release-gate
       - skill-sharing-release-gate
       - terminal-rendering-golden
