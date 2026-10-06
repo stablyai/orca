@@ -331,3 +331,102 @@ describe('shared tab navigation routing', () => {
     expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
   })
 })
+
+describe('tab.openMarkdown in the main workspace', () => {
+  const openMarkdownFileInWorkspace = vi.fn()
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.floatingFocused = false
+    mocks.targetInsideFloatingPanel = false
+    mocks.state = {
+      activeWorktreeId: controller.activeWorktreeId,
+      activeWorkspaceExecutionHostId: 'local',
+      activeGroupIdByWorktree: { [controller.activeWorktreeId!]: 'right-group' },
+      groupsByWorktree: {},
+      openMarkdownFileInWorkspace
+    }
+  })
+
+  function open(platform: NodeJS.Platform = 'darwin', repeat = false, terminalFocus = false) {
+    const target = document.createElement('textarea')
+    if (terminalFocus) {
+      target.classList.add('xterm-helper-textarea')
+    }
+    const event = new KeyboardEvent('keydown', {
+      key: 'o',
+      shiftKey: true,
+      metaKey: platform === 'darwin',
+      ctrlKey: platform !== 'darwin',
+      cancelable: true,
+      repeat
+    })
+    Object.defineProperty(event, 'target', { value: target })
+    handleTerminalWorkspaceKeyDown(event, controller, platform)
+    return event
+  }
+
+  it.each(['darwin', 'linux', 'win32'] as const)('opens the focused group on %s', (platform) => {
+    expect(open(platform).defaultPrevented).toBe(true)
+    expect(openMarkdownFileInWorkspace).toHaveBeenCalledExactlyOnceWith(
+      controller.activeWorktreeId,
+      'right-group'
+    )
+  })
+
+  it.each(['ssh:remote', 'runtime:paired'])(
+    'does not consume a local chooser shortcut for %s',
+    (host) => {
+      mocks.state.activeWorkspaceExecutionHostId = host
+      expect(open().defaultPrevented).toBe(false)
+      expect(openMarkdownFileInWorkspace).not.toHaveBeenCalled()
+    }
+  )
+
+  it('leaves the floating panel handler in charge of its picker', () => {
+    mocks.floatingFocused = true
+    expect(open().defaultPrevented).toBe(false)
+    expect(openMarkdownFileInWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('does not consume an event whose target is inside the floating panel', () => {
+    mocks.targetInsideFloatingPanel = true
+    expect(open().defaultPrevented).toBe(false)
+    expect(openMarkdownFileInWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('does not reopen the chooser on key repeat', () => {
+    expect(open('darwin', true).defaultPrevented).toBe(false)
+    expect(openMarkdownFileInWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('respects terminal-first key ownership', () => {
+    handleTerminalWorkspaceKeyDown(
+      new KeyboardEvent('keydown', {
+        key: 'o',
+        metaKey: true,
+        shiftKey: true,
+        cancelable: true
+      }),
+      { ...controller, terminalShortcutPolicy: 'terminal-first' },
+      'darwin'
+    )
+    expect(openMarkdownFileInWorkspace).toHaveBeenCalledTimes(1)
+    openMarkdownFileInWorkspace.mockClear()
+    const target = document.createElement('textarea')
+    target.classList.add('xterm-helper-textarea')
+    const event = new KeyboardEvent('keydown', {
+      key: 'o',
+      metaKey: true,
+      shiftKey: true,
+      cancelable: true
+    })
+    Object.defineProperty(event, 'target', { value: target })
+    handleTerminalWorkspaceKeyDown(
+      event,
+      { ...controller, terminalShortcutPolicy: 'terminal-first' },
+      'darwin'
+    )
+    expect(event.defaultPrevented).toBe(false)
+    expect(openMarkdownFileInWorkspace).not.toHaveBeenCalled()
+  })
+})

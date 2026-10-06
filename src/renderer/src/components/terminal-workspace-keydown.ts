@@ -23,6 +23,7 @@ import { getKeybindingContext } from './terminal-workspace-model'
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+import { canPickWorkspaceMarkdownDocument } from '@/lib/workspace-markdown-picker'
 
 export function handleTerminalWorkspaceKeyDown(
   event: KeyboardEvent,
@@ -162,6 +163,23 @@ export function handleTerminalWorkspaceKeyDown(
     }
     void handleNewFile()
     return
+  }
+  if (
+    !event.repeat &&
+    !floatingWorkspaceFocused &&
+    !isEventTargetInsideFloatingWorkspacePanel(event.target) &&
+    matchShortcut('tab.openMarkdown')
+  ) {
+    const state = useAppStore.getState()
+    const groupId =
+      state.activeGroupIdByWorktree[activeWorktreeId] ??
+      state.groupsByWorktree[activeWorktreeId]?.[0]?.id
+    if (groupId && canPickWorkspaceMarkdownDocument(state, activeWorktreeId)) {
+      event.preventDefault()
+      notifyTerminalCapture('tab.openMarkdown')
+      void state.openMarkdownFileInWorkspace(activeWorktreeId, groupId)
+      return
+    }
   }
   if (handleEmptyFloatingWorkspacePanelCloseShortcut(event, shortcutPlatform, keybindings)) {
     return

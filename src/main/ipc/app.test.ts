@@ -12,7 +12,8 @@ const {
   showOpenDialogMock,
   trustFloatingWorkspaceDirectoryMock,
   registerRendererShutdownCheckpointHandlerMock,
-  registerMacKeyboardLayoutChangeNotificationsMock
+  registerMacKeyboardLayoutChangeNotificationsMock,
+  ensureDefaultFloatingWorkspacePathMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
@@ -24,7 +25,8 @@ const {
   showOpenDialogMock: vi.fn(),
   trustFloatingWorkspaceDirectoryMock: vi.fn(),
   registerRendererShutdownCheckpointHandlerMock: vi.fn(),
-  registerMacKeyboardLayoutChangeNotificationsMock: vi.fn()
+  registerMacKeyboardLayoutChangeNotificationsMock: vi.fn(),
+  ensureDefaultFloatingWorkspacePathMock: vi.fn(() => Promise.resolve('/floating-notes'))
 }))
 
 vi.mock('node:child_process', () => ({
@@ -102,7 +104,7 @@ vi.mock('../app-relaunch', () => ({
 }))
 
 vi.mock('./floating-workspace-directory', () => ({
-  ensureDefaultFloatingWorkspacePath: vi.fn(),
+  ensureDefaultFloatingWorkspacePath: ensureDefaultFloatingWorkspacePathMock,
   trustFloatingWorkspaceDirectory: trustFloatingWorkspaceDirectoryMock,
   resolveFloatingTerminalCwd: vi.fn()
 }))
@@ -434,5 +436,65 @@ describe('registerAppHandlers', () => {
     expect(windowsProbes.isWslAvailable).not.toHaveBeenCalled()
     expect(windowsProbes.listWslDistros).not.toHaveBeenCalled()
     expect(windowsProbes.isPwshAvailable).not.toHaveBeenCalled()
+  })
+})
+
+describe('Markdown native picker routes', () => {
+  beforeEach(() => {
+    handlers.clear()
+    showOpenDialogMock.mockReset()
+    ensureDefaultFloatingWorkspacePathMock.mockClear()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Picker handlers never read this persistence stub.
+    registerAppHandlers({} as never)
+  })
+
+  it('roots the main workspace picker at the requested directory', async () => {
+    showOpenDialogMock.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/workspace/docs/notes.md']
+    })
+    await expect(
+      handlers.get('app:pickMarkdownDocument')?.({ sender: {} }, '/workspace')
+    ).resolves.toEqual({
+      filePath: '/workspace/docs/notes.md',
+      relativePath: 'docs/notes.md',
+      basename: 'notes.md',
+      name: 'notes'
+    })
+    expect(showOpenDialogMock).toHaveBeenCalledWith({
+      defaultPath: '/workspace',
+      properties: ['openFile'],
+      filters: [{ name: 'Markdown', extensions: ['md', 'mdx', 'markdown'] }]
+    })
+    expect(ensureDefaultFloatingWorkspacePathMock).not.toHaveBeenCalled()
+  })
+
+  it('retains the floating picker directory and outside-root basename', async () => {
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/elsewhere/notes.mdx'] })
+    await expect(
+      handlers.get('app:pickFloatingMarkdownDocument')?.({ sender: {} })
+    ).resolves.toEqual({
+      filePath: '/elsewhere/notes.mdx',
+      relativePath: 'notes.mdx',
+      basename: 'notes.mdx',
+      name: 'notes'
+    })
+    expect(showOpenDialogMock).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultPath: '/floating-notes' })
+    )
+  })
+
+  it('returns no document when canceled', async () => {
+    showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
+    await expect(
+      handlers.get('app:pickMarkdownDocument')?.({ sender: {} }, '/workspace')
+    ).resolves.toBeNull()
+  })
+
+  it('rejects a selection whose extension is not Markdown', async () => {
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/workspace/notes.txt'] })
+    await expect(
+      handlers.get('app:pickMarkdownDocument')?.({ sender: {} }, '/workspace')
+    ).rejects.toThrow('Selected file is not a markdown document.')
   })
 })

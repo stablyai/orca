@@ -39,10 +39,11 @@ type RegisterAppHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
 }
 
-async function pickFloatingMarkdownDocument(
-  event: IpcMainInvokeEvent
+async function pickMarkdownDocument(
+  event: IpcMainInvokeEvent,
+  rootPath?: string
 ): Promise<MarkdownDocument | null> {
-  const cwd = await ensureDefaultFloatingWorkspacePath()
+  const cwd = rootPath?.trim() || (await ensureDefaultFloatingWorkspacePath())
   const options = {
     defaultPath: cwd,
     properties: ['openFile'],
@@ -328,7 +329,8 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
 
   ipcMain.handle('app:getFloatingMarkdownDirectory', () => ensureDefaultFloatingWorkspacePath())
 
-  ipcMain.handle('app:pickFloatingMarkdownDocument', (event) => pickFloatingMarkdownDocument(event))
+  ipcMain.handle('app:pickMarkdownDocument', pickMarkdownDocument)
+  ipcMain.handle('app:pickFloatingMarkdownDocument', (event) => pickMarkdownDocument(event))
 
   ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
     pickFloatingWorkspaceDirectory(event, store)

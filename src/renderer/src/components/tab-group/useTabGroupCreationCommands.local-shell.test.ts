@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   createEmptySplitGroup: vi.fn(),
   openNewBrowserTabInActiveWorkspace: vi.fn(),
   openNewMarkdownInActiveWorkspace: vi.fn(),
+  openMarkdownFileInWorkspace: vi.fn(),
   openNewTerminalTabInActiveWorkspace: vi.fn(),
   getRuntimeEnvironmentIdForWorktree: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
@@ -48,6 +49,7 @@ const storeState = {
   createEmptySplitGroup: mocks.createEmptySplitGroup,
   openNewBrowserTabInActiveWorkspace: mocks.openNewBrowserTabInActiveWorkspace,
   openNewMarkdownInActiveWorkspace: mocks.openNewMarkdownInActiveWorkspace,
+  openMarkdownFileInWorkspace: mocks.openMarkdownFileInWorkspace,
   openNewTerminalTabInActiveWorkspace: mocks.openNewTerminalTabInActiveWorkspace
 }
 
@@ -112,5 +114,59 @@ describe('tab group "+" menu shell launch on a locally-owned workspace', () => {
     // Latching the workspace onto the focused runtime is what silently broke the next Ctrl+T.
     expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
     expect(storeState.activeWorkspaceExecutionHostId).toBe('local')
+  })
+})
+
+const EMPTY_WORKTREE_STATE = {
+  groups: [],
+  unifiedTabs: [],
+  terminalTabs: [],
+  openFiles: [],
+  browserTabs: [],
+  expandedPaneByTabId: {},
+  terminalLayoutsByTabId: {},
+  generatedTabTitlesEnabled: false,
+  mobileEmulatorEnabled: false
+}
+
+describe('tab group Open Markdown menu', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    storeState.activeWorkspaceExecutionHostId = 'local'
+    vi.stubGlobal('window', { api: {} })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('passes the owning workspace and group to the existing store action', async () => {
+    const { useTabGroupCreationCommands } = await import('./useTabGroupCreationCommands')
+    const commands = useTabGroupCreationCommands({
+      groupId: GROUP_ID,
+      worktreeId: WORKTREE_ID,
+      worktreeState: EMPTY_WORKTREE_STATE
+    })
+    await commands.openFileTab?.()
+    expect(mocks.openMarkdownFileInWorkspace).toHaveBeenCalledExactlyOnceWith(WORKTREE_ID, GROUP_ID)
+  })
+
+  it.each(['ssh:remote', 'runtime:paired'])('omits the native picker menu for %s', async (host) => {
+    storeState.activeWorkspaceExecutionHostId = host
+    const { useTabGroupCreationCommands } = await import('./useTabGroupCreationCommands')
+    const commands = useTabGroupCreationCommands({
+      groupId: GROUP_ID,
+      worktreeId: WORKTREE_ID,
+      worktreeState: EMPTY_WORKTREE_STATE
+    })
+    expect(commands.openFileTab).toBeUndefined()
+  })
+
+  it('omits the native picker menu in the paired web client', async () => {
+    vi.stubGlobal('window', { __ORCA_WEB_CLIENT__: true })
+    const { useTabGroupCreationCommands } = await import('./useTabGroupCreationCommands')
+    const commands = useTabGroupCreationCommands({
+      groupId: GROUP_ID,
+      worktreeId: WORKTREE_ID,
+      worktreeState: EMPTY_WORKTREE_STATE
+    })
+    expect(commands.openFileTab).toBeUndefined()
   })
 })

@@ -16,6 +16,7 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
+import { canPickWorkspaceMarkdownDocument } from '@/lib/workspace-markdown-picker'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
   if (!createdTerminal) {
@@ -44,6 +45,10 @@ export function useTabGroupCreationCommands({
   )
   const openNewMarkdownInActiveWorkspace = useAppStore(
     (state) => state.openNewMarkdownInActiveWorkspace
+  )
+  const openMarkdownFileInWorkspace = useAppStore((state) => state.openMarkdownFileInWorkspace)
+  const canOpenMarkdownFile = useAppStore((state) =>
+    canPickWorkspaceMarkdownDocument(state, worktreeId)
   )
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (state) => state.openNewTerminalTabInActiveWorkspace
@@ -145,6 +150,9 @@ export function useTabGroupCreationCommands({
     newFileTab: async () => {
       await openNewMarkdownInActiveWorkspace(groupId)
     },
+    openFileTab: canOpenMarkdownFile
+      ? () => openMarkdownFileInWorkspace(worktreeId, groupId)
+      : undefined,
     newTerminalTab: () => {
       void openNewTerminalTabInActiveWorkspace(groupId)
     },

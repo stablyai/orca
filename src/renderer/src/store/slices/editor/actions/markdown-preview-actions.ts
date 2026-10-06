@@ -12,6 +12,8 @@ import type { OpenFile } from '../types/open-file'
 import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'
 import { buildEditorActiveResult } from '../tabs/editor-open-target-group'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
+import { canPickWorkspaceMarkdownDocument } from '@/lib/workspace-markdown-picker'
+import { detectLanguage } from '@/lib/language-detect'
 
 export function createMarkdownPreviewActions(
   set: EditorSet,
@@ -19,11 +21,62 @@ export function createMarkdownPreviewActions(
 ): Pick<
   EditorSlice,
   | 'openNewMarkdownInActiveWorkspace'
+  | 'openMarkdownFileInWorkspace'
   | 'openMarkdownPreview'
   | 'makePreviewFilePermanent'
   | 'pinFile'
 > {
   return {
+    openMarkdownFileInWorkspace: async (worktreeId, groupId) => {
+      const state = get()
+      if (
+        state.activeWorktreeId !== worktreeId ||
+        !canPickWorkspaceMarkdownDocument(state, worktreeId)
+      ) {
+        return
+      }
+      const worktree = state.getKnownWorktreeById(worktreeId)
+      if (!worktree) {
+        return
+      }
+      try {
+        const provenance = captureEditorFileOperationProvenance(state, worktreeId, null, true)
+        const document = await window.api.app.pickMarkdownDocument(worktree.path)
+        if (!document) {
+          return
+        }
+        const current = get()
+        assertEditorFileOperationCurrent(current, worktreeId, provenance)
+        // The chooser may outlive its workspace or split group.
+        if (
+          current.activeWorktreeId !== worktreeId ||
+          !canPickWorkspaceMarkdownDocument(current, worktreeId) ||
+          current.getKnownWorktreeById(worktreeId)?.path !== worktree.path ||
+          !current.groupsByWorktree[worktreeId]?.some((group) => group.id === groupId)
+        ) {
+          return
+        }
+        current.openFile(
+          {
+            filePath: document.filePath,
+            relativePath: document.relativePath,
+            worktreeId,
+            language: detectLanguage(document.relativePath),
+            mode: 'edit',
+            runtimeEnvironmentId: null
+          },
+          {
+            preview: false,
+            targetGroupId: groupId,
+            focusEditor: true,
+            suppressActiveRuntimeFallback: true
+          }
+        )
+      } catch (error) {
+        toast.error(extractIpcErrorMessage(error, 'Failed to open markdown file.'))
+      }
+    },
+
     openNewMarkdownInActiveWorkspace: async (groupId) => {
       const state = get()
       const worktreeId = state.activeWorktreeId
