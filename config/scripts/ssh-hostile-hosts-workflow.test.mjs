@@ -84,7 +84,7 @@ describe('SSH hostile-host workflow', () => {
     const steps = workflow.jobs.hosts.steps
     const matrix = steps.find((step) => step.name === 'Run the hostile-host matrix')
     expect(matrix.env.ORCA_RUN_SSH_HOSTILE_HOSTS).toBe('1')
-    expect(matrix.run).toBe('pnpm test src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts')
+    expect(matrix.run).toBe('pnpm test:node src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts')
     expect(steps.map((step) => step.run ?? '').join('\n')).toContain(
       '--targets linux-x64-glibc,linux-x64-musl'
     )
@@ -115,6 +115,6 @@ describe('SSH hostile-host workflow', () => {
       ORCA_RUN_SSH_HOSTILE_HOSTS: '1',
       ORCA_SSH_HOSTILE_HOST_CELLS: '${{ matrix.cell }}'
     })
-    expect(cellStep.run).toBe('pnpm test src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts')
+    expect(cellStep.run).toBe('pnpm test:node src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts')
   })
 })

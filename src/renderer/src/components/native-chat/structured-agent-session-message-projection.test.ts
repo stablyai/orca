@@ -7,8 +7,6 @@ import { agentJournalSubmissionKey } from '../../../../shared/agent-session-jour
 import { createStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
-const NO_CARDS: readonly string[] = []
-
 function submission(index: number): AgentJournalSubmission {
   return {
     clientMessageId: `client-${index}`,
@@ -44,9 +42,7 @@ describe('structured agent session message projection', () => {
       attachments: [],
       queuedAt: 1
     })
-    expect(
-      projectStructuredAgentSessionMessages([refusedItem], [draft], [rejected], NO_CARDS)
-    ).toEqual([
+    expect(projectStructuredAgentSessionMessages([refusedItem], [draft], [rejected])).toEqual([
       expect.objectContaining({
         id: refusedItem.itemId,
         blocks: [{ type: 'text', text: 'send 0' }],
@@ -68,8 +64,7 @@ describe('structured agent session message projection', () => {
     const messages = projectStructuredAgentSessionMessages(
       Array.from({ length: sendCount }, (_, index) => item(index)),
       outbox,
-      Array.from({ length: sendCount }, (_, index) => submission(sendCount - index - 1)),
-      NO_CARDS
+      Array.from({ length: sendCount }, (_, index) => submission(sendCount - index - 1))
     )
 
     expect(messages.filter((message) => message.role === 'user')).toHaveLength(sendCount)
@@ -104,8 +99,8 @@ describe('structured agent session message projection', () => {
       resolvedAt: null
     }
 
-    const messages = projectStructuredAgentSessionMessages([walItem], outbox, [pending], NO_CARDS)
-    const optimistic = projectStructuredAgentSessionMessages([], outbox, [], NO_CARDS)
+    const messages = projectStructuredAgentSessionMessages([walItem], outbox, [pending])
+    const optimistic = projectStructuredAgentSessionMessages([], outbox, [])
 
     expect(messages.filter((message) => message.role === 'user')).toHaveLength(1)
     expect(messages.map((message) => message.id)).toEqual([walItem.itemId])
@@ -123,7 +118,7 @@ describe('structured agent session message projection', () => {
       })
     ]
 
-    expect(projectStructuredAgentSessionMessages([], outbox, [], NO_CARDS)).toMatchObject([
+    expect(projectStructuredAgentSessionMessages([], outbox, [])).toMatchObject([
       { id: agentJournalSubmissionKey('client-pending'), role: 'user' }
     ])
   })

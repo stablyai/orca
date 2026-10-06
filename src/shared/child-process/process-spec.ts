@@ -50,6 +50,8 @@ export type ProcessSpec = {
   windowsVerbatimArguments?: boolean
   /** Streaming callers may suppress child output for auxiliary processes. */
   stdio?: NodeSpawnOptions['stdio']
+  /** Bun and Node require JSON for an IPC channel shared between the two runtimes. */
+  serialization?: NodeSpawnOptions['serialization']
   /** Kill the whole process tree and do not settle until termination is verified. */
   terminationBarrier?: boolean | ProcessTerminationBarrier
   /** Called once when the child exits or tree termination is verified. */

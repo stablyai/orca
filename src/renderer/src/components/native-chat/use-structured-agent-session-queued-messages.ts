@@ -26,6 +26,9 @@ import type { StructuredAgentSessionMutate } from './use-structured-agent-sessio
 
 export type StructuredAgentSessionQueuedMessagesController = {
   cards: QueuedMessageCard[]
+  /** The host queues sends. Without it a card can still show — a message the host kept unsent —
+   *  but queueing settings and the steer chord would do nothing. */
+  queueCapable: boolean
   /** Why the whole queue sends nothing on its own; null when it drains. Shown only with cards.
    *  A string reason: a newer host may name one this build does not know. */
   pause: { reason: string } | null
@@ -183,5 +186,15 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     return true
   }, [enabled, steer])
 
-  return { cards, pause, resume, resuming, steer, remove, edit, steerNewest }
+  return {
+    cards,
+    queueCapable: enabled,
+    pause,
+    resume,
+    resuming,
+    steer,
+    remove,
+    edit,
+    steerNewest
+  }
 }

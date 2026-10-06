@@ -7,7 +7,7 @@ import { listQueuedMessages } from './queued-message-table'
 
 /** What the loaded journal says about a dispatched draft's consumed submission. */
 export type QueuedMessageSubmissionVerdict =
-  /** Still owed an answer — a crash leftover the delivery loop will reject; keep the row. */
+  /** Still owed an answer — a crash leftover the next open settles; keep the row. */
   | 'pending'
   /** `accepted` or `unknown`: terminal and not refused. */
   | 'terminal-not-refused'

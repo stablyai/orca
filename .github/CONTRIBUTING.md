@@ -16,6 +16,11 @@ Thanks for contributing to Orca.
 
 ## Local Setup
 
+Install Node 24, pnpm, and the Bun version in [`config/bun-version`](../config/bun-version).
+`pnpm test` runs Vitest on Bun, with Node workers for runtime contracts such as SQLite,
+native PTYs, socket liveness, and V8 memory behavior. `pnpm test:node` runs the same suites
+entirely on Node. Builds and dependency installation still use Node and pnpm.
+
 ```bash
 pnpm install
 pnpm dev
