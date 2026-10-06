@@ -98,18 +98,21 @@ export const createWorkItemAggregateActions = (
           // neither the error-row nor the unresolved-source render branch and
           // vanishing from the list while still counted in failedCount
           // (#16473). Write a minimal error entry so the banner count and the
-          // rendered rows can't diverge.
-          set((s) => {
-            const previousEntry = s.workItemsCache[key]
-            return {
-              workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
-                data: previousEntry?.data ?? null,
-                fetchedAt: Date.now(),
-                ...(previousEntry?.sources ? { sources: previousEntry.sources } : {}),
-                error: classifyWorkItemsFetchFailure(err)
-              })
-            }
-          })
+          // rendered rows can't diverge. Skip when cached data exists so a
+          // no-stale-fallback refresh can't pin an error banner over good data.
+          if (!cached) {
+            set((s) => {
+              const previousEntry = s.workItemsCache[key]
+              return {
+                workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
+                  data: previousEntry?.data ?? null,
+                  fetchedAt: Date.now(),
+                  ...(previousEntry?.sources ? { sources: previousEntry.sources } : {}),
+                  error: classifyWorkItemsFetchFailure(err)
+                })
+              }
+            })
+          }
           return [] as GitHubWorkItem[]
         }
       })

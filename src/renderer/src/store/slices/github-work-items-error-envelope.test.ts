@@ -403,6 +403,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       })
       expect(completeOnly.items).toEqual([])
       expect(completeOnly.failedCount).toBe(1)
+      // Cached data exists, so the failure must not pin an error row over it.
+      expect(store.getState().getWorkItemsSourcesAndError('github-repo', 24, '').error).toBeNull()
       expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3)
     } finally {
       consoleWarn.mockRestore()
