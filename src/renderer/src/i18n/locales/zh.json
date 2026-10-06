@@ -18449,12 +18449,25 @@
             "whitespace": "空白",
             "spaces": "空间"
           }
+        },
+        "search": {
+          "header": "标题栏",
+          "buttons": "按钮",
+          "hover": "悬停",
+          "hide": "隐藏"
         }
       },
       "nativeChat": {
         "queueFollowUpsTitle": "将后续消息加入队列",
         "queueFollowUpsCopy": "Agent 工作时发送的消息会以卡片形式等待，你可以立即发送、编辑或删除。带图片的消息会立即发送。",
         "queueFollowUpsToggleLabel": "切换后续消息队列"
+      },
+      "TerminalPaneAppearance": {
+        "headerButtons": "窗格标题栏按钮",
+        "headerButtonsDescription": "让活动窗格的聊天、拆分和关闭按钮在窗格处于活动状态时显示，或仅在指针悬停或获得键盘焦点时显示。",
+        "headerButtonsHelper": "将指针悬停在窗格右上角即可显示隐藏的按钮。",
+        "headerButtonsAlways": "活动或悬停时",
+        "headerButtonsOnHover": "悬停或键盘聚焦时"
       }
     },
     "agentChildRow": {

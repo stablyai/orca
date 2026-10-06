@@ -18449,12 +18449,25 @@
             "whitespace": "空白",
             "spaces": "スペース"
           }
+        },
+        "search": {
+          "header": "ヘッダー",
+          "buttons": "ボタン",
+          "hover": "ホバー",
+          "hide": "非表示"
         }
       },
       "nativeChat": {
         "queueFollowUpsTitle": "フォローアップをキューに入れる",
         "queueFollowUpsCopy": "Agent の作業中に送信したメッセージは、今すぐ送信・編集・削除できるカードとして待機します。画像付きのメッセージはすぐに送信されます。",
         "queueFollowUpsToggleLabel": "フォローアップのキューを切り替え"
+      },
+      "TerminalPaneAppearance": {
+        "headerButtons": "ペインヘッダーのボタン",
+        "headerButtonsDescription": "アクティブなペインのチャット、分割、閉じるボタンを、ペインがアクティブな間は表示するか、ポインターを重ねている間またはキーボードでフォーカスしている間だけ表示するかを選びます。",
+        "headerButtonsHelper": "ペインの右上隅にポインターを重ねると、隠れているボタンが表示されます。",
+        "headerButtonsAlways": "アクティブ時またはホバー時",
+        "headerButtonsOnHover": "ホバー時またはキーボードフォーカス時"
       }
     },
     "agentChildRow": {

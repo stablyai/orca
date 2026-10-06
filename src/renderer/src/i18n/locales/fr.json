@@ -18548,12 +18548,25 @@
             "whitespace": "espace",
             "spaces": "espaces"
           }
+        },
+        "search": {
+          "header": "en-tête",
+          "buttons": "boutons",
+          "hover": "survol",
+          "hide": "masquer"
         }
       },
       "nativeChat": {
         "queueFollowUpsTitle": "Mettre les messages en file d’attente",
         "queueFollowUpsCopy": "Les messages envoyés pendant que l'agent travaille attendent sous forme de cartes que vous pouvez envoyer maintenant, modifier ou supprimer. Les messages avec des images sont envoyés immédiatement.",
         "queueFollowUpsToggleLabel": "Activer ou désactiver la file d'attente"
+      },
+      "TerminalPaneAppearance": {
+        "headerButtons": "Boutons de l'en-tête du volet",
+        "headerButtonsDescription": "Affiche les boutons de discussion, de division et de fermeture du volet actif tant que le volet est actif, ou seulement au survol ou quand l'un d'eux a le focus clavier.",
+        "headerButtonsHelper": "Survolez le coin supérieur droit d'un volet pour faire apparaître les boutons masqués.",
+        "headerButtonsAlways": "Volet actif ou survolé",
+        "headerButtonsOnHover": "Au survol ou au focus clavier"
       }
     },
     "agentChildRow": {

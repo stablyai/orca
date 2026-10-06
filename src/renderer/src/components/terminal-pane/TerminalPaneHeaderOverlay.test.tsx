@@ -43,6 +43,7 @@ function renderOverlay({
   paneTitles,
   paneCount = 2,
   showAlwaysOnHeaders = true,
+  headerButtonsOnHover = false,
   showSplitButton = true,
   isTabPinned = false,
   onClosePane = vi.fn(),
@@ -56,6 +57,7 @@ function renderOverlay({
   paneTitles: Record<number, string>
   paneCount?: number
   showAlwaysOnHeaders?: boolean
+  headerButtonsOnHover?: boolean
   showSplitButton?: boolean
   isTabPinned?: boolean
   onClosePane?: ReturnType<typeof vi.fn>
@@ -82,6 +84,7 @@ function renderOverlay({
         worktreeId="wt-1"
         cwd={path.join(path.sep, 'tmp')}
         showAlwaysOnHeaders={showAlwaysOnHeaders}
+        headerButtonsOnHover={headerButtonsOnHover}
         showSplitButton={showSplitButton}
         isTabPinned={isTabPinned}
         paneCount={paneCount}
@@ -232,6 +235,20 @@ describe('TerminalPaneHeaderOverlay', () => {
 
     expect(container.querySelector('button[aria-label="Split Terminal Right"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Close tab"]')).toBeNull()
+  })
+
+  it('marks header buttons hover-only when the setting asks for it', () => {
+    const always = renderOverlay({ paneTitles: { 1: '', 2: '' } })
+    const onHover = renderOverlay({ paneTitles: { 1: '', 2: '' }, headerButtonsOnHover: true })
+
+    const layer = (root: HTMLElement): Element | null =>
+      root.querySelector('.pane-title-overlay-layer')
+    expect(layer(always.container)?.getAttribute('data-header-buttons')).toBe('always')
+    expect(layer(onHover.container)?.getAttribute('data-header-buttons')).toBe('hover')
+    // Hover-only hides the buttons visually; they stay mounted and reachable by keyboard.
+    expect(
+      onHover.container.querySelector('button[aria-label="Split Terminal Right"]')
+    ).not.toBeNull()
   })
 
   it('ignores IME composition Enter before submitting a pane title rename', () => {

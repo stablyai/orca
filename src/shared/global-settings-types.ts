@@ -108,6 +108,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   terminalTuiScrollSensitivity: number
   /** One-shot migration guard for moving inherited TUI wheel reports from 3 to 1. */
   terminalTuiScrollSensitivityDefaultedToOne?: boolean
+  /** Active-pane header buttons (chat, split, close): always shown, or only while hovered or focused. */
+  terminalPaneHeaderButtons: 'always' | 'hover'
   /** Terminal renderer policy.
    *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.
