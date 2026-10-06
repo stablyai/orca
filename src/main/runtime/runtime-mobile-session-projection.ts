@@ -13,11 +13,17 @@ import type {
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import {
+  providerSessionMatchesAgent,
+  readMobileConversationIdentityCarrier,
+  withMobileConversationIdentityCarrier
+} from './mobile-conversation-identity-carrier'
+import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
 import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
+import { createRuntimeMobileSessionStatusRowLookup } from './runtime-mobile-session-status-row-lookup'
 import {
   getLatestAgentCandidateTitle,
   getLeafDisplayRecord,
@@ -50,42 +56,7 @@ export function projectRuntimeMobileSessionTabs(
     hookRowsForPane.set(paneKey, rows)
     return rows
   }
-  let statusRowsByPaneKey: Map<string, AgentStatusIpcPayload[]> | null = null
-  let statusRowsByTerminalHandle: Map<string, AgentStatusIpcPayload[]> | null = null
-  const getStatusRows = (
-    paneKey: string,
-    terminalHandle: string | null
-  ): AgentStatusIpcPayload[] => {
-    if (!statusRowsByPaneKey || !statusRowsByTerminalHandle) {
-      statusRowsByPaneKey = new Map()
-      statusRowsByTerminalHandle = new Map()
-      for (const row of host.getStatusSnapshot()) {
-        const paneRows = statusRowsByPaneKey.get(row.paneKey)
-        if (paneRows) {
-          paneRows.push(row)
-        } else {
-          statusRowsByPaneKey.set(row.paneKey, [row])
-        }
-        if (row.terminalHandle) {
-          const handleRows = statusRowsByTerminalHandle.get(row.terminalHandle)
-          if (handleRows) {
-            handleRows.push(row)
-          } else {
-            statusRowsByTerminalHandle.set(row.terminalHandle, [row])
-          }
-        }
-      }
-    }
-    const paneRows = statusRowsByPaneKey.get(paneKey) ?? []
-    if (!terminalHandle) {
-      return paneRows
-    }
-    const handleRows = statusRowsByTerminalHandle.get(terminalHandle) ?? []
-    if (paneRows.length === 0) {
-      return handleRows
-    }
-    return [...paneRows, ...handleRows.filter((row) => !paneRows.includes(row))]
-  }
+  const getStatusRows = createRuntimeMobileSessionStatusRowLookup(() => host.getStatusSnapshot())
   // Why: a live PTY backs one surface; claim each once so two leaves resolving to it can't emit duplicate React keys and crash the client.
   const claimedLivePtyIds = new Set<string>()
   for (const tab of snapshot.tabs) {
@@ -190,13 +161,12 @@ export function projectRuntimeMobileSessionTabs(
       resolveCompatibleAgentTypeForOwner(tab.agentStatus?.agentType, ownerAgent, ownerOptions) ??
       ownerAgent ??
       undefined
-    const hookSessionAgent = resolveCompatibleAgentTypeForOwner(
-      hookAgentStatus?.providerSessionAgentType,
+    const hookSessionMatchesRenderer = providerSessionMatchesAgent({
+      sessionAgent: hookAgentStatus?.providerSessionAgentType,
+      agent: rendererStatusAgent,
       ownerAgent,
       ownerOptions
-    )
-    const hookSessionMatchesRenderer =
-      !rendererStatusAgent || !hookSessionAgent || rendererStatusAgent === hookSessionAgent
+    })
     const hookProviderSession =
       hookAgentStatus?.providerSession &&
       hookSessionMatchesRenderer &&
@@ -292,7 +262,8 @@ export function projectRuntimeMobileSessionTabs(
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
       ? { agentStatus: clientStatusFields as AgentStatusEntry }
       : {}
-    tabs.push({
+    const conversationIdentityCarrier = readMobileConversationIdentityCarrier(projectedAgentStatus)
+    const clientTab: RuntimeMobileSessionClientTab = {
       type: 'terminal',
       id: tab.id,
       parentTabId: tab.parentTabId,
@@ -316,7 +287,13 @@ export function projectRuntimeMobileSessionTabs(
       ...(terminalHandle
         ? { status: 'ready' as const, terminal: terminalHandle }
         : { status: 'pending-handle' as const, terminal: null })
-    })
+    }
+    // Why: the client tab is rebuilt field by field, so the builder's carrier must be handed on explicitly.
+    tabs.push(
+      conversationIdentityCarrier
+        ? withMobileConversationIdentityCarrier(clientTab, conversationIdentityCarrier)
+        : clientTab
+    )
   }
   return finalizeRuntimeMobileSessionTabsResult({ snapshot, tabs }, host)
 }

@@ -10,6 +10,10 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import {
+  readMobileConversationIdentityCarrier,
+  stripMobileConversationIdentityCarrier
+} from '../../mobile-conversation-identity-carrier'
 import { supportsStructuredAgentSessions } from './structured-agent-session-policy'
 
 type SessionTabsPayload = RuntimeMobileSessionTabsResult | RuntimeMobileSessionTabsSnapshot
@@ -54,17 +58,18 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: readonly RuntimeCapability[] | undefined
 ): TPayload {
+  const resolved = resolveConversationIdentityCarriers(payload, clientKind === 'mobile')
   const structuredVisible = supportsStructuredAgentSessions({ clientKind, clientCapabilities })
   let projected: TPayload
   if (clientKind === 'mobile') {
     // Why: deleting the row left the user hunting for a chat the desktop says exists; the row
     // survives with a title naming the fix. Nothing is removed, so no group/layout repair applies.
-    projected = projectUnsupportedAgentSessionTabTitles(payload, {
+    projected = projectUnsupportedAgentSessionTabTitles(resolved, {
       clientKind,
       clientCapabilities
     })
   } else {
-    projected = structuredVisible ? payload : projectAgentSessionTabsOut(payload, () => true)
+    projected = structuredVisible ? resolved : projectAgentSessionTabsOut(resolved, () => true)
     // Why: a paired client renders only codex structured tabs unless it says otherwise
     // (mobile's resolveMobileNativeChat returns null for every other agent), so an
     // ungated row would list and select into a pane that shows neither chat nor terminal.
@@ -94,6 +99,30 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
     return legacyTab
   })
   return changed ? ({ ...projected, tabs } as TPayload) : projected
+}
+
+/**
+ * Every audience loses the private carrier on a new tab; only a phone with no genuine status gets
+ * it as `agentStatus`, because paired desktops replace their own completion rows with what they receive.
+ */
+function resolveConversationIdentityCarriers<TPayload extends SessionTabsPayload>(
+  payload: TPayload,
+  foldForMobile: boolean
+): TPayload {
+  if (!payload.tabs.some((tab) => readMobileConversationIdentityCarrier(tab))) {
+    return payload
+  }
+  const tabs = payload.tabs.map((tab) => {
+    const carrier = readMobileConversationIdentityCarrier(tab)
+    if (!carrier) {
+      return tab
+    }
+    const stripped = stripMobileConversationIdentityCarrier(tab)
+    return foldForMobile && stripped.type === 'terminal' && !stripped.agentStatus
+      ? { ...stripped, agentStatus: carrier }
+      : stripped
+  })
+  return { ...payload, tabs }
 }
 
 function projectUnsupportedAgentSessionTabTitles<TPayload extends SessionTabsPayload>(

@@ -108,6 +108,9 @@ export type RuntimeHookAgentRowLookup = {
   providerSession: AgentProviderSessionMetadata | null
   providerSessionAgentType: string | null
   providerSessionReceivedAt: number | null
+  /** The model reported on the same row as `providerSession`. */
+  providerSessionModel: string | null
+  providerSessionModelSwitchCommand: 'orca-model' | null
   agentType: string | null
   agentIsLive: boolean
   live: HookLiveAgentRow | null
@@ -148,6 +151,8 @@ export function selectRuntimeHookAgentRowForPane(
     providerSession: session?.providerSession ?? null,
     providerSessionAgentType: session?.agentType ?? null,
     providerSessionReceivedAt: session?.receivedAt ?? null,
+    providerSessionModel: session?.model ?? null,
+    providerSessionModelSwitchCommand: session?.modelSwitchCommand ?? null,
     agentType: agent?.agentType ?? null,
     agentIsLive: agent != null && agent.state !== 'done',
     live: live

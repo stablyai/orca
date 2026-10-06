@@ -19,6 +19,29 @@ function status(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
 }
 
 describe('resolveMobileNativeChat', () => {
+  it('addresses the conversation an idle Codex pane relays as a session boundary', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        launchAgent: 'codex',
+        agentStatus: status({
+          state: 'done',
+          sessionBoundary: true,
+          agentType: 'codex',
+          providerSession: {
+            key: 'session_id',
+            id: 'codex-session',
+            transcriptPath: '/tmp/codex-rollout.jsonl'
+          }
+        })
+      })
+    ).toEqual({
+      agent: 'codex',
+      sessionId: 'codex-session',
+      transcriptPath: '/tmp/codex-rollout.jsonl'
+    })
+  })
+
   it('prefers the authoritative supported live agent over a stale launch hint', () => {
     expect(
       resolveMobileNativeChat({

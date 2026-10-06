@@ -4,12 +4,18 @@ import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
 import {
   CLAUDE_STRUCTURED_CHAT_DESKTOP_ONLY_TAB_TITLE,
   STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE,
   projectSessionTabAgentStatus
 } from './session-tab-agent-status-projection'
+import {
+  buildMobileConversationIdentityCarrier,
+  readMobileConversationIdentityCarrier,
+  withMobileConversationIdentityCarrier
+} from '../../mobile-conversation-identity-carrier'
 
 function makeSnapshot(sessionBoundary: boolean): RuntimeMobileSessionTabsSnapshot {
   return {
@@ -286,5 +292,111 @@ describe('projectSessionTabAgentStatus', () => {
     expect(projectSessionTabAgentStatus(localBoundary, undefined, undefined)).toBe(localBoundary)
     expect(projectSessionTabAgentStatus(mobileBoundary, 'mobile', [])).toBe(mobileBoundary)
     expect(projectSessionTabAgentStatus(runtimeCompletion, 'runtime', [])).toBe(runtimeCompletion)
+  })
+})
+
+describe('projectSessionTabAgentStatus conversation identity carrier', () => {
+  function requireCarrier(): AgentStatusEntry {
+    const built = buildMobileConversationIdentityCarrier({
+      candidate: {
+        providerSession: { key: 'session_id', id: 'codex-session', transcriptPath: '/r.jsonl' },
+        sessionAgent: 'codex',
+        observedAt: 1234
+      },
+      ownerAgent: 'codex',
+      ownerOptions: { ownerIsLaunch: true },
+      paneKey: 'tab-1:leaf-1',
+      tabId: 'tab-1',
+      terminalTitle: 'Say hi | my-repo',
+      terminalHandle: 'term-1',
+      worktreeId: 'wt-1'
+    })
+    if (!built) {
+      throw new Error('expected a carrier')
+    }
+    return built
+  }
+  const carrier = requireCarrier()
+
+  function statuslessSnapshot(): RuntimeMobileSessionTabsSnapshot {
+    return {
+      ...makeSnapshot(false),
+      tabs: [
+        {
+          type: 'terminal',
+          id: 'tab-1::leaf-1',
+          title: 'Claude',
+          parentTabId: 'tab-1',
+          leafId: 'leaf-1',
+          isActive: true
+        }
+      ]
+    }
+  }
+
+  function carrierSnapshot(): RuntimeMobileSessionTabsSnapshot {
+    const snapshot = statuslessSnapshot()
+    return {
+      ...snapshot,
+      tabs: snapshot.tabs.map((tab) => withMobileConversationIdentityCarrier(tab, carrier))
+    }
+  }
+
+  it.each([undefined, [AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY]])(
+    'gives a phone the carrier as agentStatus (capabilities %j)',
+    (capabilities) => {
+      const projected = projectSessionTabAgentStatus(carrierSnapshot(), 'mobile', capabilities)
+      expect(projected.tabs[0]).toMatchObject({ agentStatus: carrier })
+      expect(Object.getOwnPropertySymbols(projected.tabs[0])).toEqual([])
+    }
+  )
+
+  it.each([
+    ['runtime', undefined],
+    ['runtime', [AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY]],
+    [undefined, undefined]
+  ] as const)('gives a %s client exactly the statusless bytes (capabilities %j)', (kind, caps) => {
+    const projected = projectSessionTabAgentStatus(carrierSnapshot(), kind, caps)
+    const baseline = projectSessionTabAgentStatus(statuslessSnapshot(), kind, caps)
+    expect(JSON.stringify(projected)).toBe(JSON.stringify(baseline))
+    expect(projected).toEqual(baseline)
+    expect(Object.getOwnPropertySymbols(projected.tabs[0])).toEqual([])
+  })
+
+  it.each(['mobile', 'runtime', undefined] as const)(
+    'leaves a genuine status untouched for a %s client',
+    (kind) => {
+      const genuine = makeSnapshot(false)
+      const withCarrier = {
+        ...genuine,
+        tabs: genuine.tabs.map((tab) => withMobileConversationIdentityCarrier(tab, carrier))
+      }
+      const projected = projectSessionTabAgentStatus(withCarrier, kind, undefined)
+      expect(projected).toEqual(projectSessionTabAgentStatus(genuine, kind, undefined))
+      expect(Object.getOwnPropertySymbols(projected.tabs[0])).toEqual([])
+    }
+  )
+
+  it('returns a frame with no carrier as is, allocating nothing', () => {
+    const snapshot = statuslessSnapshot()
+    expect(projectSessionTabAgentStatus(snapshot, 'mobile', undefined)).toBe(snapshot)
+  })
+
+  it('projects one shared payload for every audience without mutating it', () => {
+    const shared = carrierSnapshot()
+    const before = { ...shared, tabs: shared.tabs.map((tab) => ({ ...tab })) }
+    const outputs = (['runtime', 'mobile', 'mobile', 'runtime'] as const).map((kind) =>
+      projectSessionTabAgentStatus(shared, kind, undefined)
+    )
+
+    expect(shared).toEqual(before)
+    expect(readMobileConversationIdentityCarrier(shared.tabs[0])).toBe(carrier)
+    expect(
+      outputs.map((output) => output.tabs[0]?.type === 'terminal' && output.tabs[0].agentStatus)
+    ).toEqual([undefined, carrier, carrier, undefined])
+    for (const output of outputs) {
+      expect(output).not.toBe(shared)
+      expect(Object.getOwnPropertySymbols(output.tabs[0])).toEqual([])
+    }
   })
 })

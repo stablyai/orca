@@ -6,6 +6,10 @@ import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
 import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
 import {
+  buildMobileConversationIdentityCarrier,
+  withMobileConversationIdentityCarrier
+} from './mobile-conversation-identity-carrier'
+import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   resolveRuntimeHookLiveAgentRow,
   selectRuntimeHookAgentRowForPane
@@ -15,7 +19,8 @@ import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import {
   classifyAgentTitle,
   getLatestAgentCandidateTitle,
-  getLatestPtyTitle
+  getLatestPtyTitle,
+  terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
 
 type RuntimeMobileAgentStatusHost = {
@@ -65,24 +70,6 @@ export function buildRuntimeMobileAgentStatus(
       : null
   const ptyTitleClassification = classifyAgentTitle(ptyTitle)
   const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
-  if (nonAgentTitle) {
-    // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
-    const hasLiveHookSignal =
-      retained?.payload.interactivePrompt != null ||
-      retained?.payload.toolName != null ||
-      // Why: a pending question is never inherited across hook events (unlike
-      // `toolName`), so it proves the agent is parked on a selector right now.
-      hookRow.live?.payload.interactivePrompt != null ||
-      // Why: headless serve has no renderer to retain an OSC row, so a fresh hook
-      // agentType is the only live signal a hook-only pane can offer — and an agent
-      // that reports over HTTP need never set a title this gate would recognize.
-      // Scoped to panes with no PTY status at all, so it cannot revive a spinner:
-      // this branch publishes `done`. It only keeps the transcript addressable.
-      (!pty?.lastAgentStatus && (hookRow.agentType != null || hookRow.providerSession != null))
-    if (!hasLiveHookSignal) {
-      return {}
-    }
-  }
   // Why: a retained OMP hook stays stable while wrapper foreground reads can report Pi.
   const ownerRecord = resolvePaneAgentOwnerRecord({
     launchAgent: tab.launchAgent ?? pty?.launchAgent ?? null,
@@ -95,6 +82,60 @@ export function buildRuntimeMobileAgentStatus(
     ownerAgent,
     ownerOptions
   )
+  if (nonAgentTitle) {
+    // Why: a non-agent title shows no live state (#1437) unless a live hook signal survives.
+    const hasLiveHookSignal =
+      retained?.payload.interactivePrompt != null ||
+      retained?.payload.toolName != null ||
+      // Why: a pending question is never inherited across hook events (unlike
+      // `toolName`), so it proves the agent is parked on a selector right now.
+      hookRow.live?.payload.interactivePrompt != null ||
+      // Why: headless serve has no renderer to retain an OSC row, so a fresh hook
+      // agentType is the only live signal a hook-only pane can offer — and an agent
+      // that reports over HTTP need never set a title this gate would recognize.
+      // Scoped to panes with no PTY status at all, so it cannot revive a spinner:
+      // this branch publishes `done`. It only keeps the transcript addressable.
+      (!pty?.lastAgentStatus && (hookRow.agentType != null || hookRow.providerSession != null))
+    // Why: a neutral title still relays the pane's conversation identity as a session boundary.
+    if (!hasLiveHookSignal) {
+      const carrier = terminalTitleBlocksExplicitAgentStatus(ptyTitle)
+        ? null
+        : buildMobileConversationIdentityCarrier({
+            candidate:
+              hookRow.providerSession && hookRow.providerSessionReceivedAt !== null
+                ? {
+                    providerSession: hookRow.providerSession,
+                    sessionAgent: hookRow.providerSessionAgentType,
+                    observedAt: hookRow.providerSessionReceivedAt,
+                    ...(hookRow.providerSessionModel
+                      ? { model: hookRow.providerSessionModel }
+                      : {}),
+                    ...(hookRow.providerSessionModelSwitchCommand
+                      ? { modelSwitchCommand: hookRow.providerSessionModelSwitchCommand }
+                      : {})
+                  }
+                : retained?.providerSession
+                  ? {
+                      providerSession: retained.providerSession,
+                      sessionAgent: retained.payload.agentType ?? null,
+                      observedAt: retained.updatedAt,
+                      ...(retained.payload.model ? { model: retained.payload.model } : {}),
+                      ...(retained.payload.modelSwitchCommand
+                        ? { modelSwitchCommand: retained.payload.modelSwitchCommand }
+                        : {})
+                    }
+                  : null,
+            ownerAgent,
+            ownerOptions,
+            paneKey,
+            tabId: tab.parentTabId,
+            terminalTitle,
+            terminalHandle,
+            worktreeId: pty?.worktreeId ?? retained?.worktreeId ?? null
+          })
+      return carrier ? withMobileConversationIdentityCarrier({}, carrier) : {}
+    }
+  }
   // Why: OSC 9999 hook payload carries real state/prompt/agent; without preferring it, hook-only transitions never surfaced (#7970).
   const liveRow = retained ?? resolveRuntimeHookLiveAgentRow(hookRow.live, pty, nonAgentTitle)
   if (liveRow) {
