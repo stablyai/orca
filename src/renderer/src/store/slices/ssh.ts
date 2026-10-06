@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { updateRuntimeOwnedSshConnectionGeneration } from './runtime-owned-ssh-authority-state'
 import type {
   SshConnectionState,
   PortForwardEntry,
@@ -39,6 +40,8 @@ export type SshCredentialRequest = {
 
 export type SshSlice = {
   sshConnectionStates: Map<string, SshConnectionState>
+  runtimeOwnedSshConnectionGenerations: Map<string, number>
+  setRuntimeOwnedSshConnectionGeneration: (targetId: string, generation: number | null) => void
   /** Maps target IDs to their user-facing labels. Populated during hydration
    * so components can look up labels without per-component IPC calls. */
   sshTargetLabels: Map<string, string>
@@ -117,6 +120,9 @@ function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
   sshConnectionStates: new Map(),
+  runtimeOwnedSshConnectionGenerations: new Map(),
+  setRuntimeOwnedSshConnectionGeneration: (targetId, generation) =>
+    set((state) => updateRuntimeOwnedSshConnectionGeneration(state, targetId, generation)),
   sshTargetLabels: new Map(),
   sshTargetGenerations: new Map(),
   removedSshTargetLabels: new Map(),

@@ -16,6 +16,10 @@ import { getSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { getSshPlainSshMode } from '../ssh/ssh-plain-ssh-mode'
 import { activeSessions } from './ssh-active-relay-sessions'
 import {
+  getRuntimeOwnedSshAuthority,
+  publishRuntimeOwnedSshAuthority
+} from './ssh-runtime-owned-authority'
+import {
   connectionManager,
   currentRuntime,
   getCurrentMainWindow,
@@ -30,8 +34,10 @@ export function broadcastSshState(
   targetId: string,
   state: SshConnectionState
 ): void {
-  // Why: runtime-owned (ephemeral-VM) targets are hidden from the renderer, so broadcasting their state only triggers wasted listTargets() lookups.
+  // Runtime-owned file authority stays separate from user hosts and their reconnect scheduler.
   if (isRuntimeOwnedSshTargetId(targetId)) {
+    const authority = getRuntimeOwnedSshAuthority(targetId, state)
+    publishRuntimeOwnedSshAuthority(getMainWindow, targetId, authority.connectionGeneration)
     currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
     return
   }

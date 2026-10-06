@@ -1,17 +1,44 @@
 import type { SshConnection } from '../ssh/ssh-connection'
 import type { SshRelaySession } from '../ssh/ssh-relay-session'
+import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import { activeSessions } from './ssh-active-relay-sessions'
 import { invalidateConnectAttempt } from './ssh-connect-attempt-registry'
-import { connectionManager, persistedStore, portForwardManager } from './ssh-ipc-context'
+import {
+  connectionManager,
+  getCurrentMainWindow,
+  persistedStore,
+  portForwardManager
+} from './ssh-ipc-context'
 import { clearRelayLostBackoff } from './ssh-relay-lost-backoff'
-import { clearRelayStateOverride } from './ssh-renderer-broadcast'
+import { clearRelayStateOverride, relayStateOverrides } from './ssh-renderer-broadcast'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
+import {
+  getRuntimeOwnedSshAuthority,
+  publishRuntimeOwnedSshAuthority,
+  revokeRuntimeOwnedSshAuthority
+} from './ssh-runtime-owned-authority'
+
+export function publishCurrentRuntimeOwnedSshAuthority(targetId: string): void {
+  if (!isRuntimeOwnedSshTargetId(targetId)) {
+    return
+  }
+  publishRuntimeOwnedSshAuthority(
+    getCurrentMainWindow,
+    targetId,
+    getRuntimeOwnedSshAuthority(
+      targetId,
+      relayStateOverrides.get(targetId) ?? connectionManager?.getState(targetId)
+    ).connectionGeneration
+  )
+}
 
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
   invalidateConnectAttempt(targetId)
-  await runTargetLifecycle(targetId, () =>
-    teardownSshTargetTransport(targetId, (session) => session.detachAndPersist())
+  await runTargetLifecycle(
+    targetId,
+    () => teardownSshTargetTransport(targetId, (session) => session.detachAndPersist()),
+    () => publishCurrentRuntimeOwnedSshAuthority(targetId)
   )
 }
 
@@ -21,39 +48,43 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
     return
   }
   invalidateConnectAttempt(targetId)
-  await runTargetLifecycle(targetId, async () => {
-    try {
-      // Why: removal is destructive; dispose so remote PTYs cannot reattach to a deleted target.
-      await teardownSshTargetTransport(targetId, (session) => session.disposeAndPersist())
-    } catch (err) {
-      // Why: a failed disconnect must not block metadata removal, else the target lingers in the store with uncleaned leases.
-      console.warn(
-        `[ssh] Failed to disconnect removed target ${targetId}: ${err instanceof Error ? err.message : String(err)}`
-      )
-    }
-    persistedStore?.removeSshRemotePtyLeases(targetId)
-    store.removeTarget(targetId)
-    // Why: removal is the storage boundary — the target's browser cookie jars
-    // must not outlive the record that scoped them.
-    try {
-      const [partitions, storage] = await Promise.all([
-        import('../browser/local-ssh-browser-partitions'),
-        import('../browser/browser-route-partition-storage-runtime')
-      ])
-      await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
-      await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
-      // Why (review P2-2): a prepare racing the removal can re-register between
-      // release and clear; one delayed second pass reclaims what slipped
-      // through (mirrors the environment-removal retry).
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
-      await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
-    } catch (error) {
-      console.warn(
-        `[ssh] Failed to clear browser partitions for removed target ${targetId}: ${error instanceof Error ? error.message : String(error)}`
-      )
-    }
-  })
+  await runTargetLifecycle(
+    targetId,
+    async () => {
+      try {
+        // Why: removal is destructive; dispose so remote PTYs cannot reattach to a deleted target.
+        await teardownSshTargetTransport(targetId, (session) => session.disposeAndPersist())
+      } catch (err) {
+        // Why: a failed disconnect must not block metadata removal, else the target lingers in the store with uncleaned leases.
+        console.warn(
+          `[ssh] Failed to disconnect removed target ${targetId}: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+      persistedStore?.removeSshRemotePtyLeases(targetId)
+      store.removeTarget(targetId)
+      // Why: removal is the storage boundary — the target's browser cookie jars
+      // must not outlive the record that scoped them.
+      try {
+        const [partitions, storage] = await Promise.all([
+          import('../browser/local-ssh-browser-partitions'),
+          import('../browser/browser-route-partition-storage-runtime')
+        ])
+        await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
+        await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
+        // Why (review P2-2): a prepare racing the removal can re-register between
+        // release and clear; one delayed second pass reclaims what slipped
+        // through (mirrors the environment-removal retry).
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
+        await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
+      } catch (error) {
+        console.warn(
+          `[ssh] Failed to clear browser partitions for removed target ${targetId}: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    },
+    () => publishCurrentRuntimeOwnedSshAuthority(targetId)
+  )
 }
 
 export async function teardownSshTargetTransport(
@@ -89,6 +120,7 @@ export async function teardownActiveSshSession(
   targetId: string,
   teardown: (session: SshRelaySession) => void | Promise<void>
 ): Promise<void> {
+  revokeRuntimeOwnedSshAuthority(targetId)
   const session = activeSessions.get(targetId)
   if (!session) {
     return
@@ -125,6 +157,9 @@ export async function abandonFailedSshSession(
   targetId: string,
   session: SshRelaySession
 ): Promise<void> {
+  if (activeSessions.get(targetId) === session) {
+    revokeRuntimeOwnedSshAuthority(targetId)
+  }
   // Why: detachAndPersist transitions recovery ownership synchronously; only durability is awaited.
   try {
     await session.detachAndPersist()

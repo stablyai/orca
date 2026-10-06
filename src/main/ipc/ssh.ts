@@ -92,6 +92,7 @@ const SSH_IPC_CHANNELS = [
   'ssh:terminateSessions',
   'ssh:resetRelay',
   'ssh:getState',
+  'ssh:listRuntimeOwnedAuthorities',
   'ssh:needsPassphrasePrompt',
   'ssh:testConnection',
   'ssh:addPortForward',

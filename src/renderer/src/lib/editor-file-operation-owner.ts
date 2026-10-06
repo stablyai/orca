@@ -2,6 +2,7 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
+import { getExpectedSshConnectionGeneration } from './ssh-mutation-expectation'
 import {
   assertWorktreeOperationGenerationSnapshotCurrent,
   captureWorktreeOperationGenerationSnapshot,
@@ -34,7 +35,8 @@ type EditorOwnerState = Pick<
   | 'removedRuntimeEnvironmentIds'
   | 'sshConnectionStates'
   | 'sshStateByEnvironment'
->
+> &
+  Partial<Pick<AppState, 'runtimeOwnedSshConnectionGenerations'>>
 
 const OWNER_CHANGED_MESSAGE =
   "Couldn't verify which host owns this file. Reopen the file after the connection settles."
@@ -198,19 +200,4 @@ export function getEditorFileOperationContext(
       ? {}
       : { expectedSshConnectionGeneration: provenance.expectedSshConnectionGeneration })
   }
-}
-
-function getExpectedSshConnectionGeneration(
-  state: Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>,
-  route: WorktreeOperationRoute
-): number | undefined {
-  const host = parseExecutionHostId(route.executionHostId)
-  if (host?.kind !== 'ssh') {
-    return undefined
-  }
-  return route.runtimeEnvironmentId
-    ? state.sshStateByEnvironment
-        .get(route.runtimeEnvironmentId)
-        ?.connectionStates.get(host.targetId)?.connectionGeneration
-    : state.sshConnectionStates.get(host.targetId)?.connectionGeneration
 }

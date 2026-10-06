@@ -3,7 +3,8 @@ export const targetLifecycleInFlight = new Map<string, Promise<void>>()
 
 export function runTargetLifecycle(
   targetId: string,
-  operation: () => Promise<void>
+  operation: () => Promise<void>,
+  onSettled?: () => void
 ): Promise<void> {
   const prior = targetLifecycleInFlight.get(targetId)
   const operationPromise = (async () => {
@@ -16,6 +17,7 @@ export function runTargetLifecycle(
   trackedPromise = operationPromise.finally(() => {
     if (targetLifecycleInFlight.get(targetId) === trackedPromise) {
       targetLifecycleInFlight.delete(targetId)
+      onSettled?.()
     }
   })
   targetLifecycleInFlight.set(targetId, trackedPromise)

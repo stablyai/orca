@@ -13,6 +13,7 @@ import type {
   SshTerminateSessionsResult
 } from '../../shared/ssh-types'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
+import type { RuntimeOwnedSshAuthority } from '../../shared/runtime-owned-ssh-authority'
 
 export type SshApi = {
   listTargets: () => Promise<SshTarget[]>
@@ -29,6 +30,10 @@ export type SshApi = {
   terminateSessions: (args: { targetId: string }) => Promise<SshTerminateSessionsResult>
   resetRelay: (args: { targetId: string }) => Promise<void>
   getState: (args: { targetId: string }) => Promise<SshConnectionState | null>
+  listRuntimeOwnedAuthorities?: () => Promise<RuntimeOwnedSshAuthority[]>
+  onRuntimeOwnedAuthorityChanged?: (
+    callback: (authority: RuntimeOwnedSshAuthority) => void
+  ) => () => void
   needsPassphrasePrompt: (args: { targetId: string }) => Promise<boolean>
   testConnection: (args: {
     targetId: string

@@ -37,6 +37,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
   'ssh.onCredentialResolved',
   'ssh.onDetectedPortsChanged',
   'ssh.onPortForwardsChanged',
+  'ssh.onRuntimeOwnedAuthorityChanged',
   'ssh.onStateChanged',
   'ui.onActivateWorktree',
   'ui.onCloseActiveTab',
@@ -193,6 +194,7 @@ const EXPECTED_CALLBACK_REGISTRATION_SEQUENCE = [
   'ssh.onDetectedPortsChanged',
   'ssh.onStateChanged',
   'ui.onSystemResumed',
+  'ssh.onRuntimeOwnedAuthorityChanged',
   'remoteWorkspace.onChanged',
   'ui.onTerminalZoom',
   'agentStatus.onSet',
@@ -254,7 +256,8 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
         setUpdateStatus,
         workspaceSessionReady: true,
         runtimeEnvironments: [{ id: 'runtime-1' }],
-        runtimeStatusByEnvironmentId: new Map([['runtime-1', { status: 'connected' }]])
+        runtimeStatusByEnvironmentId: new Map([['runtime-1', { status: 'connected' }]]),
+        runtimeOwnedSshConnectionGenerations: new Map()
       }),
       {
         get: (target, property: string) =>

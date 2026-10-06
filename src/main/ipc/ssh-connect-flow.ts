@@ -39,8 +39,13 @@ import {
   getPublicSshState,
   relayStateOverrides
 } from './ssh-renderer-broadcast'
-import { abandonCancelledConnectAttempt, abandonFailedSshSession } from './ssh-session-teardown'
+import {
+  abandonCancelledConnectAttempt,
+  abandonFailedSshSession,
+  publishCurrentRuntimeOwnedSshAuthority
+} from './ssh-session-teardown'
 import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { revokeRuntimeOwnedSshAuthority } from './ssh-runtime-owned-authority'
 
 export async function connectTarget(targetId: string): Promise<SshConnectionState> {
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
@@ -90,6 +95,9 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
   } finally {
     if (connectInFlight.get(targetId) === attempt) {
       connectInFlight.delete(targetId)
+      if (isCurrentSshProviderAuthority(attempt.authority)) {
+        publishCurrentRuntimeOwnedSshAuthority(targetId)
+      }
     }
   }
 }
@@ -134,6 +142,7 @@ async function doConnect(
   let conn
   // Why: tear down any existing session first to avoid leaking its multiplexer, providers, and timers (double-connect / reconnect-after-error).
   if (existingSession) {
+    revokeRuntimeOwnedSshAuthority(targetId)
     // Why: await port teardown before disposing, else the new session's restorePortForwards can hit EADDRINUSE on not-yet-released ports.
     await portForwardManager!.removeAllForwards(targetId)
     if (!isCurrentConnectAttempt(targetId, authority)) {

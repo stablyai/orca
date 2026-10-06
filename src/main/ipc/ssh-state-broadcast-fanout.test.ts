@@ -26,13 +26,17 @@ import { registerSshHandlers } from './ssh'
 import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
 import type { SshPtyDataCallback } from '../providers/ssh-pty-provider-contract'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
+import { getSshConnectionGeneration } from '../ssh/ssh-connection-generation'
+import { activeSessions } from './ssh-active-relay-sessions'
+import { abandonFailedSshSession } from './ssh-session-teardown'
 
 const {
   mockSshStore,
   mockConnectionManager,
   mockAcceptSshPtyOutputData,
   mockAcceptSshPtyOutputExit,
-  mockPtyProvider
+  mockPtyProvider,
+  mockPortForwardManager
 } = mocks
 
 describe('SSH IPC handlers', () => {
@@ -173,6 +177,34 @@ describe('SSH IPC handlers', () => {
     )
     expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
     expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
+    const authority = {
+      targetId: 'runtime-ssh-1',
+      connectionGeneration: getSshConnectionGeneration('runtime-ssh-1')
+    }
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith(
+      'ssh:runtime-owned-authority-changed',
+      authority
+    )
+    expect(
+      mockWindow.webContents.send.mock.calls.findLast(
+        ([channel]) => channel === 'ssh:runtime-owned-authority-changed'
+      )
+    ).toEqual(['ssh:runtime-owned-authority-changed', authority])
+    expect(handlers.get('ssh:listRuntimeOwnedAuthorities')!(null, {})).toEqual([authority])
+    await handlers.get('ssh:disconnect')!(null, { targetId: 'runtime-ssh-1' })
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith(
+      'ssh:runtime-owned-authority-changed',
+      { targetId: 'runtime-ssh-1', connectionGeneration: null }
+    )
+    expect(handlers.get('ssh:listRuntimeOwnedAuthorities')!(null, {})).toEqual([])
+    expect(
+      mockWindow.webContents.send.mock.calls.findLast(
+        ([channel]) => channel === 'ssh:runtime-owned-authority-changed'
+      )
+    ).toEqual([
+      'ssh:runtime-owned-authority-changed',
+      { targetId: 'runtime-ssh-1', connectionGeneration: null }
+    ])
   })
 
   it('invalidates runtime scans from hidden SSH state broadcasts', () => {
@@ -198,6 +230,115 @@ describe('SSH IPC handlers', () => {
     expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
     expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
       'ssh:state-changed',
+      expect.anything()
+    )
+  })
+
+  it('excludes a revoking session from a fresh renderer snapshot while port teardown waits', async () => {
+    const targetId = 'runtime-ssh-revoking'
+    mockSshStore.getTarget.mockReturnValue({
+      id: targetId,
+      label: 'Runtime host',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    } satisfies SshTarget)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId,
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    await handlers.get('ssh:connect')!(null, { targetId })
+    expect(handlers.get('ssh:listRuntimeOwnedAuthorities')!(null, {})).toHaveLength(1)
+
+    let finishPortTeardown = () => {}
+    const portTeardown = new Promise<void>((resolve) => {
+      finishPortTeardown = resolve
+    })
+    mockPortForwardManager.removeAllForwards.mockImplementationOnce(() => portTeardown)
+    const disconnect = handlers.get('ssh:disconnect')!(null, { targetId })
+    try {
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith(
+        'ssh:runtime-owned-authority-changed',
+        { targetId, connectionGeneration: null }
+      )
+      expect(handlers.get('ssh:listRuntimeOwnedAuthorities')!(null, {})).toEqual([])
+    } finally {
+      finishPortTeardown()
+      await disconnect
+    }
+  })
+
+  it('revokes an abandoned current session even without a later transport broadcast', async () => {
+    const targetId = 'runtime-ssh-abandoned'
+    mockSshStore.getTarget.mockReturnValue({
+      id: targetId,
+      label: 'Runtime host',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    } satisfies SshTarget)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId,
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    await handlers.get('ssh:connect')!(null, { targetId })
+    const session = activeSessions.get(targetId)
+    if (!session) {
+      throw new Error('Missing connected session')
+    }
+    mockWindow.webContents.send.mockClear()
+    await abandonFailedSshSession(targetId, session)
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith(
+      'ssh:runtime-owned-authority-changed',
+      { targetId, connectionGeneration: null }
+    )
+    expect(handlers.get('ssh:listRuntimeOwnedAuthorities')!(null, {})).toEqual([])
+  })
+
+  it('does not revoke a successor when a previously abandoned session finishes late', async () => {
+    const targetId = 'runtime-ssh-successor'
+    mockSshStore.getTarget.mockReturnValue({
+      id: targetId,
+      label: 'Runtime host',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    } satisfies SshTarget)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId,
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    await handlers.get('ssh:connect')!(null, { targetId })
+    const abandoned = activeSessions.get(targetId)
+    if (!abandoned) {
+      throw new Error('Missing previous session')
+    }
+    await handlers.get('ssh:disconnect')!(null, { targetId })
+    await handlers.get('ssh:connect')!(null, { targetId })
+    const successor = activeSessions.get(targetId)
+    expect(successor).not.toBe(abandoned)
+    const before = handlers.get('ssh:listRuntimeOwnedAuthorities')!(null, {})
+    expect(before).toHaveLength(1)
+    mockWindow.webContents.send.mockClear()
+    const detach = Promise.withResolvers<void>()
+    vi.spyOn(abandoned, 'detachAndPersist').mockReturnValueOnce(detach.promise)
+    const completion = abandonFailedSshSession(targetId, abandoned)
+    expect(handlers.get('ssh:listRuntimeOwnedAuthorities')!(null, {})).toEqual(before)
+    detach.resolve()
+    await completion
+    expect(activeSessions.get(targetId)).toBe(successor)
+    expect(handlers.get('ssh:listRuntimeOwnedAuthorities')!(null, {})).toEqual(before)
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
+      'ssh:runtime-owned-authority-changed',
       expect.anything()
     )
   })

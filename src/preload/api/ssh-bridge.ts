@@ -19,6 +19,10 @@ import {
 } from '../../shared/ssh-retained-payload-admission'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import type { PreloadApi } from '../api-types'
+import {
+  admitRuntimeOwnedSshAuthority,
+  type RuntimeOwnedSshAuthority
+} from '../../shared/runtime-owned-ssh-authority'
 
 export const sshApi = {
   listTargets: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:listTargets'),
@@ -61,6 +65,27 @@ export const sshApi = {
   getState: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:getState', args)
     return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
+  },
+
+  listRuntimeOwnedAuthorities: async (): Promise<RuntimeOwnedSshAuthority[]> => {
+    const result: unknown = await ipcRenderer.invoke('ssh:listRuntimeOwnedAuthorities')
+    if (!Array.isArray(result) || result.length > 4096) {
+      throw new Error('Invalid runtime-owned SSH authority snapshot')
+    }
+    return result.map(admitRuntimeOwnedSshAuthority).filter((entry) => entry !== null)
+  },
+
+  onRuntimeOwnedAuthorityChanged: (
+    callback: (authority: RuntimeOwnedSshAuthority) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: unknown): void => {
+      const authority = admitRuntimeOwnedSshAuthority(data)
+      if (authority) {
+        callback(authority)
+      }
+    }
+    ipcRenderer.on('ssh:runtime-owned-authority-changed', listener)
+    return () => ipcRenderer.removeListener('ssh:runtime-owned-authority-changed', listener)
   },
 
   needsPassphrasePrompt: (args: { targetId: string }): Promise<boolean> =>
