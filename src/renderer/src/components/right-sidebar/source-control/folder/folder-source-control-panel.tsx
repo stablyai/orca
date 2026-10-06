@@ -1,180 +1,36 @@
-import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, GitBranch, Loader2, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
-import { basename, dirname } from '@/lib/path'
+import { detectLanguage } from '@/lib/language-detect'
+import { joinPath } from '@/lib/path'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
-import type { GitStatusEntry, GitStatusResult } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { NestedRepoCandidate } from '../../../../../../shared/project-group-types'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
-import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
 import {
+  resolveFolderSourceControlDiffWorktreeId,
   resolveFolderSourceControlRepositories,
   type FolderSourceControlRepository
 } from './folder-repository-resolution'
+import { FolderRepositorySection, type FolderRepositoryStatus } from './folder-repository-section'
 
 const STATUS_REFRESH_INTERVAL_MS = 60_000
 const STATUS_REFRESH_CONCURRENCY = 4
 
-type RepositoryStatus =
-  | { state: 'loading' }
-  | { state: 'ready'; status: GitStatusResult }
-  | { state: 'unavailable'; message: string }
-  | { state: 'error'; message: string }
-
-const AREA_LABELS: Record<GitStatusEntry['area'], { key: string; fallback: string }> = {
-  staged: {
-    key: 'auto.components.right.sidebar.SourceControl.48a003c1b1',
-    fallback: 'Staged Changes'
-  },
-  unstaged: {
-    key: 'auto.components.right.sidebar.SourceControl.d4ef4bafc5',
-    fallback: 'Changes'
-  },
-  untracked: {
-    key: 'auto.components.right.sidebar.SourceControl.522f44dce5',
-    fallback: 'Untracked Files'
-  }
-}
-
-function ChangedFileRow({ entry }: { entry: GitStatusEntry }): React.JSX.Element {
-  const FileIcon = getFileTypeIcon(entry.path)
-  const parent = dirname(entry.path)
-  return (
-    <div
-      className="flex min-h-6 items-center gap-1 px-5 py-1 text-xs hover:bg-accent/40"
-      title={entry.path}
-    >
-      {createElement(FileIcon, {
-        className: 'size-3.5 shrink-0',
-        style: { color: STATUS_COLORS[entry.status] }
-      })}
-      <span className="min-w-0 flex-1 truncate text-foreground">
-        {basename(entry.path)}
-        {parent !== '.' && (
-          <span className="ml-1.5 text-[11px] text-muted-foreground">{parent}</span>
-        )}
-      </span>
-      <span
-        className="w-4 shrink-0 text-center text-[10px] font-bold"
-        style={{ color: STATUS_COLORS[entry.status] }}
-      >
-        {STATUS_LABELS[entry.status]}
-      </span>
-    </div>
-  )
-}
-
-function RepositoryChanges({ status }: { status: GitStatusResult }): React.JSX.Element {
-  if (status.entries.length === 0) {
-    return (
-      <div className="px-5 py-2 text-xs text-muted-foreground">
-        {translate(
-          'auto.components.right.sidebar.folderSourceControl.clean',
-          'No uncommitted changes'
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <>
-      {(['staged', 'unstaged', 'untracked'] as const).map((area) => {
-        const entries = status.entries.filter((entry) => entry.area === area)
-        if (entries.length === 0) {
-          return null
-        }
-        return (
-          <div key={area}>
-            <div className="px-5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-foreground/70">
-              {translate(AREA_LABELS[area].key, AREA_LABELS[area].fallback)}{' '}
-              <span className="tabular-nums">{entries.length}</span>
-            </div>
-            {entries.map((entry) => (
-              <ChangedFileRow key={`${entry.area}:${entry.path}`} entry={entry} />
-            ))}
-          </div>
-        )
-      })}
-    </>
-  )
-}
-
-function RepositorySection({
-  repository,
-  result
-}: {
-  repository: FolderSourceControlRepository
-  result: RepositoryStatus | undefined
-}): React.JSX.Element {
-  const [collapsed, setCollapsed] = useState(false)
-  const status = result?.state === 'ready' ? result.status : null
-  const count = status?.entries.length
-  const branch = status?.branch ?? repository.worktree?.branch
-
-  return (
-    <section className="border-b border-border last:border-b-0">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="h-auto w-full justify-start text-left"
-        onClick={() => setCollapsed((value) => !value)}
-        aria-expanded={!collapsed}
-      >
-        <ChevronDown
-          className={cn('size-3.5 shrink-0 transition-transform', collapsed && '-rotate-90')}
-        />
-        <span className="min-w-0 flex-1 truncate text-xs font-semibold">
-          {repository.candidate.displayName}
-        </span>
-        {branch && (
-          <span className="flex min-w-0 items-center gap-1 text-[11px] font-normal text-muted-foreground">
-            <GitBranch className="size-3 shrink-0" />
-            <span className="max-w-28 truncate">{branch}</span>
-          </span>
-        )}
-        {count !== undefined && (
-          <span className="text-[11px] font-normal tabular-nums text-muted-foreground">
-            {count}
-          </span>
-        )}
-      </Button>
-
-      {!collapsed && (
-        <div className="pb-1">
-          {!result || result.state === 'loading' ? (
-            <div className="flex items-center gap-2 px-5 py-2 text-xs text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" />
-              {translate(
-                'auto.components.right.sidebar.folderSourceControl.loadingStatus',
-                'Loading changes…'
-              )}
-            </div>
-          ) : result.state === 'ready' ? (
-            <RepositoryChanges status={result.status} />
-          ) : (
-            <div className="px-5 py-2 text-xs text-muted-foreground">{result.message}</div>
-          )}
-        </div>
-      )}
-    </section>
-  )
-}
-
 export function FolderSourceControlPanel({
   folderPath,
+  folderWorktreeId,
   connectionId,
   executionHostId,
   runtimeEnvironmentId,
   runtimeSettings
 }: {
   folderPath: string
+  folderWorktreeId: string
   connectionId: string | null
   executionHostId: string
   runtimeEnvironmentId: string | null
@@ -183,9 +39,10 @@ export function FolderSourceControlPanel({
   const repos = useAppStore((state) => state.repos)
   const worktreesByRepo = useAppStore((state) => state.worktreesByRepo)
   const scanNestedRepos = useAppStore((state) => state.scanNestedRepos)
+  const openDiff = useAppStore((state) => state.openDiff)
   const [candidates, setCandidates] = useState<NestedRepoCandidate[]>([])
   const [scanState, setScanState] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [statuses, setStatuses] = useState<Record<string, RepositoryStatus>>({})
+  const [statuses, setStatuses] = useState<Record<string, FolderRepositoryStatus>>({})
   const scanGeneration = useRef(0)
 
   const repositories = useMemo(
@@ -199,12 +56,46 @@ export function FolderSourceControlPanel({
     [candidates, executionHostId, repos, worktreesByRepo]
   )
 
+  const openRepositoryDiff = useCallback(
+    (
+      repository: FolderSourceControlRepository,
+      entry: GitStatusEntry,
+      openAsPermanent: boolean
+    ) => {
+      const targetWorktreeId = resolveFolderSourceControlDiffWorktreeId({
+        folderWorktreeId,
+        repository,
+        runtimeEnvironmentId
+      })
+      if (!targetWorktreeId) {
+        return
+      }
+      openDiff(
+        targetWorktreeId,
+        joinPath(repository.candidate.path, entry.path),
+        entry.path,
+        detectLanguage(entry.path),
+        entry.area === 'staged',
+        {
+          preview: !openAsPermanent,
+          runtimeEnvironmentId: runtimeEnvironmentId ?? undefined
+        }
+      )
+    },
+    [folderWorktreeId, openDiff, runtimeEnvironmentId]
+  )
+
   const scan = useCallback(async () => {
     const generation = ++scanGeneration.current
     setScanState('loading')
-    const result = await scanNestedRepos(folderPath, connectionId ?? undefined, {
-      runtimeEnvironmentId
-    })
+    let result: Awaited<ReturnType<typeof scanNestedRepos>> | null = null
+    try {
+      result = await scanNestedRepos(folderPath, connectionId ?? undefined, {
+        runtimeEnvironmentId
+      })
+    } catch {
+      result = null
+    }
     if (generation !== scanGeneration.current) {
       return
     }
@@ -225,7 +116,7 @@ export function FolderSourceControlPanel({
         setStatuses((current) => {
           const next = { ...current }
           for (const { candidate } of repositories) {
-            next[candidate.path] = { state: 'loading' }
+            next[candidate.path] ??= { state: 'loading' }
           }
           return next
         })
@@ -314,13 +205,20 @@ export function FolderSourceControlPanel({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex h-9 shrink-0 items-center border-b border-border px-3">
-        <span className="min-w-0 flex-1 truncate text-xs font-medium">
-          {translate(
-            'auto.components.right.sidebar.folderSourceControl.repositories',
-            'Repositories'
+      <div className="flex h-10 shrink-0 items-center border-b border-border px-3">
+        <div className="min-w-0 flex-1">
+          <span className="block truncate text-xs font-semibold">
+            {translate(
+              'auto.components.right.sidebar.folderSourceControl.repositories',
+              'Repositories'
+            )}
+          </span>
+          {scanState === 'ready' && (
+            <span className="block text-[10px] tabular-nums text-muted-foreground">
+              {repositories.length}
+            </span>
           )}
-        </span>
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -367,10 +265,13 @@ export function FolderSourceControlPanel({
           </div>
         ) : (
           repositories.map((repository) => (
-            <RepositorySection
+            <FolderRepositorySection
               key={repository.candidate.path}
               repository={repository}
               result={statuses[repository.candidate.path]}
+              onOpen={(entry, openAsPermanent) =>
+                openRepositoryDiff(repository, entry, openAsPermanent)
+              }
             />
           ))
         )}

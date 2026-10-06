@@ -11,6 +11,15 @@ export type FolderSourceControlRepository = {
   worktree: Worktree | null
 }
 
+/** Keeps local and SSH nested diffs in the folder workspace; runtime diffs need a registered worktree selector. */
+export function resolveFolderSourceControlDiffWorktreeId(args: {
+  folderWorktreeId: string
+  repository: FolderSourceControlRepository
+  runtimeEnvironmentId: string | null
+}): string | null {
+  return args.runtimeEnvironmentId ? (args.repository.worktree?.id ?? null) : args.folderWorktreeId
+}
+
 function pickPrimaryWorktree(repo: Repo, worktrees: readonly Worktree[]): Worktree | null {
   const repoPath = normalizeRuntimePathForComparison(repo.path)
   const repoHostId = getRepoExecutionHostId(repo)

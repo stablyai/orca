@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { NestedRepoCandidate } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { resolveFolderSourceControlRepositories } from './folder-repository-resolution'
+import {
+  resolveFolderSourceControlDiffWorktreeId,
+  resolveFolderSourceControlRepositories
+} from './folder-repository-resolution'
 
 const candidates: NestedRepoCandidate[] = [
   { path: '/workspace/zamp/frontend', displayName: 'frontend', depth: 1 },
@@ -97,5 +100,45 @@ describe('resolveFolderSourceControlRepositories', () => {
     })
 
     expect(result?.repo?.id).toBe('frontend')
+  })
+})
+
+describe('resolveFolderSourceControlDiffWorktreeId', () => {
+  const candidate = candidates[0]!
+
+  it('keeps local and SSH diffs in the active folder workspace', () => {
+    expect(
+      resolveFolderSourceControlDiffWorktreeId({
+        folderWorktreeId: 'folder:workspace-1',
+        repository: { candidate, repo: null, worktree: null },
+        runtimeEnvironmentId: null
+      })
+    ).toBe('folder:workspace-1')
+  })
+
+  it('uses a registered nested worktree for runtime diffs', () => {
+    const nestedWorktree = worktree({
+      id: 'frontend::/workspace/zamp/frontend',
+      repoId: 'frontend',
+      path: candidate.path
+    })
+
+    expect(
+      resolveFolderSourceControlDiffWorktreeId({
+        folderWorktreeId: 'folder:workspace-1',
+        repository: { candidate, repo: null, worktree: nestedWorktree },
+        runtimeEnvironmentId: 'runtime-1'
+      })
+    ).toBe(nestedWorktree.id)
+  })
+
+  it('does not open an unregistered repository through a runtime', () => {
+    expect(
+      resolveFolderSourceControlDiffWorktreeId({
+        folderWorktreeId: 'folder:workspace-1',
+        repository: { candidate, repo: null, worktree: null },
+        runtimeEnvironmentId: 'runtime-1'
+      })
+    ).toBeNull()
   })
 })

@@ -22,6 +22,7 @@ export function SourceControlPanel() {
     return (
       <FolderSourceControlPanel
         folderPath={worktreePath}
+        folderWorktreeId={activeWorktree.id}
         connectionId={model.activeConnectionId}
         executionHostId={activeWorktree.hostId ?? 'local'}
         runtimeEnvironmentId={model.activeRepoRuntimeEnvironmentId}
