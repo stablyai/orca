@@ -1,4 +1,6 @@
 import { translate } from '@/i18n/i18n'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { FolderSourceControlPanel } from '../folder/folder-source-control-panel'
 import { SourceControlPanelReady } from './panel-ready'
 import { useSourceControlPanelModel } from './use-panel-model'
 
@@ -18,6 +20,18 @@ export function SourceControlPanel() {
     )
   }
   if (isFolder) {
+    const scope = parseWorkspaceKey(activeWorktree.id)
+    if (scope?.type === 'folder') {
+      return (
+        <FolderSourceControlPanel
+          folderPath={worktreePath}
+          connectionId={model.activeConnectionId}
+          executionHostId={activeWorktree.hostId ?? 'local'}
+          runtimeEnvironmentId={model.activeRepoRuntimeEnvironmentId}
+          runtimeSettings={model.activeRepoSettings}
+        />
+      )
+    }
     return (
       <div className="flex items-center justify-center h-full text-xs text-muted-foreground px-4 text-center">
         {translate(

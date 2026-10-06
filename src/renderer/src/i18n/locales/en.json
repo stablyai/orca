@@ -13993,6 +13993,16 @@
             "sourceMissing": "Transcript is no longer available",
             "metadataMatch": "Match in session metadata",
             "sourceActionsUnavailable": "The transcript source is unavailable."
+          },
+          "folderSourceControl": {
+            "clean": "No uncommitted changes",
+            "loadingStatus": "Loading changes…",
+            "addRepository": "Add this repository to Orca to load its changes",
+            "statusError": "Failed to load changes",
+            "repositories": "Repositories",
+            "refresh": "Refresh repositories",
+            "scanError": "Failed to scan this folder for repositories",
+            "empty": "No Git repositories found in this folder"
           }
         }
       },
