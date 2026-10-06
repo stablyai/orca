@@ -41,6 +41,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const CALLER = { callerKey: 'client-1' }
 const CHAT_CLOSED = agentSessionFailureWords(agentSessionFailureFact('chatClosed'), {
@@ -67,7 +68,7 @@ const spawnChild: StructuredAgentSessionAdapter['acquire'] = async ({ fence, spa
   acquisitionGeneration: generation(),
   link: {
     linkId: `link-${fence}`,
-    handle: { provider: 'codex' as const, threadId: THREAD },
+    handle: codexProviderHandle(THREAD),
     origin: store.getRecord(SESSION)?.providerHandleChain.length
       ? ('resumed' as const)
       : ('created' as const),
@@ -337,7 +338,7 @@ describe('settling an earlier child before the next one takes its message', () =
         workspaceId: HOST_TEST_LOCATION.workspaceId,
         hostId: HOST_TEST_LOCATION.executionHostId,
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: THREAD }
+        providerHandle: codexProviderHandle(THREAD)
       },
       database: openTestJournalHostDatabase(root)
     })

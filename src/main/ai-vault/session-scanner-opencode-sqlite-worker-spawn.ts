@@ -16,6 +16,7 @@ import {
   openCodeWslPath
 } from './session-scanner-opencode-wsl-client'
 import { findForeignSqliteReaderEntry } from '../foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
+import { runOpenCodeSqliteScanRequest } from './session-scanner-opencode-sqlite-scan-scope'
 
 // Why: resolve the built worker entry + own the process-wide shared client so
 // the client class stays free of Electron (require'd lazily here) and the
@@ -179,8 +180,14 @@ async function listForHost(
       const first = paths.values().next().value!
       const issues: AiVaultScanIssue[] = []
       try {
-        const client = await openCodeWslClient(distro, first, args.signal)
-        const result = await client.list({ ...args, dbPaths: [...paths.keys()], issues })
+        const result = await runOpenCodeSqliteScanRequest(
+          args.signal,
+          async (signal) => {
+            const client = await openCodeWslClient(distro, first, signal)
+            return client.list({ ...args, signal, dbPaths: [...paths.keys()], issues })
+          },
+          args.agent
+        )
         return result.flatMap((candidate) => {
           const parsed = splitOpenCodeSqliteCandidate(candidate.file.path, args.agent)
           const original = parsed && paths.get(parsed.dbPath)
@@ -223,8 +230,14 @@ async function parseForHost(
   if (!wsl) {
     return getSharedClient().parse(args)
   }
-  const client = await openCodeWslClient(wsl.distro, args.dbPath, args.signal)
-  const session = await client.parse({ ...args, dbPath: wsl.linuxPath, platform: 'linux' })
+  const session = await runOpenCodeSqliteScanRequest(
+    args.signal,
+    async (signal) => {
+      const client = await openCodeWslClient(wsl.distro, args.dbPath, signal)
+      return client.parse({ ...args, signal, dbPath: wsl.linuxPath, platform: 'linux' })
+    },
+    args.agent
+  )
   return mapOpenCodeWslSession(session, args.dbPath)
 }
 
@@ -235,8 +248,14 @@ async function captureForHost(
   if (!wsl) {
     return getSharedClient().capture(args)
   }
-  const client = await openCodeWslClient(wsl.distro, args.dbPath, args.signal)
-  const capture = await client.capture({ ...args, dbPath: wsl.linuxPath, platform: 'linux' })
+  const capture = await runOpenCodeSqliteScanRequest(
+    args.signal,
+    async (signal) => {
+      const client = await openCodeWslClient(wsl.distro, args.dbPath, signal)
+      return client.capture({ ...args, signal, dbPath: wsl.linuxPath, platform: 'linux' })
+    },
+    args.agent
+  )
   return { ...capture, session: mapOpenCodeWslSession(capture.session, args.dbPath) }
 }
 

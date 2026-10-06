@@ -6,6 +6,24 @@ import {
 } from './tui-agent-detection-commands'
 
 describe('tui agent detection commands', () => {
+  it.each(['darwin', 'linux', 'win32', 'wsl'] as const)(
+    'detects modern and legacy Qoder once on %s',
+    (runtime) => {
+      const commands = KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter(
+        (command) => command.id === 'qoder'
+      )
+      for (const found of [
+        new Set(['qoder']),
+        new Set(['qodercli']),
+        new Set(['qoder', 'qodercli'])
+      ]) {
+        expect(resolveDetectedTuiAgentIds(commands, found, runtime)).toEqual(['qoder'])
+      }
+      expect(resolveDetectedTuiAgentIds(commands, new Set(['qoder-unrelated']), runtime)).toEqual(
+        []
+      )
+    }
+  )
   it('requires Claude before reporting Claude Agent Teams', () => {
     const commands = KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter(
       (command) => command.id === 'claude-agent-teams'

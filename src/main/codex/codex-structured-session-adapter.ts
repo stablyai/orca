@@ -1,8 +1,5 @@
 import * as codexRewind from './codex-structured-rewind'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type {
@@ -76,6 +73,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       ...(deps.onEvent ? { onEvent: deps.onEvent } : {}),
+      ...(deps.logger ? { logger: deps.logger } : {}),
       forgetNotificationRetries: (sessionId) => this.notificationRetries.clear(sessionId, null)
     })
   }
@@ -132,7 +130,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     }
     if (event.type === 'notification') {
       // Only an admitted turn end settles; a refused one settles on the retry that lands.
-      settleCodexSendsInEndedTurn(session, event.method, event.params, (settlement) =>
+      settleCodexSendsInEndedTurn(session, event, (settlement) =>
         this.deps.onDispatchSettledLate?.({ sessionId: event.sessionId, ...settlement })
       )
       // After the admission check, so a refused frame is observed by the child records
@@ -283,10 +281,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   readOptions = (input: { sessionId: string; fence: number }) =>
     readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
-
-  historyFilePath = async (input: {
-    identity: AgentSessionJournalIdentity
-  }): Promise<string | null> => this.sessions.get(input.identity.sessionId)?.historyPath ?? null
 
   closeSession = (sessionId: string): Promise<boolean> => this.teardown.close(sessionId)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)

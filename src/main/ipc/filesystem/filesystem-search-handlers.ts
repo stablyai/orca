@@ -26,7 +26,7 @@ import {
   getSshFilesystemProvider,
   requireSshFilesystemProvider
 } from '../../providers/ssh-filesystem-dispatch'
-import { resolveAuthorizedPath } from '../filesystem-auth'
+import { resolveDesktopAuthorizedPath } from '../local-file-access-resolution'
 import { listQuickOpenFiles } from '../filesystem-list-files'
 import {
   isFileNameFilterQueryTooLarge,
@@ -52,7 +52,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.search(args)
       }
-      const rootPath = await resolveAuthorizedPath(args.rootPath, store)
+      const rootPath = await resolveDesktopAuthorizedPath(args.rootPath, store)
       const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.rootPath,

@@ -39,7 +39,8 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         launchAgent: args.launchAgent,
         providerSession: args.resumeProviderSession,
         target: ctx.codexSelectionTarget,
-        launchEnv: ctx.baseEnv
+        launchEnv: ctx.baseEnv,
+        ...(args.replacesPtyId ? { useSelectedAccount: true } : {})
       })
   ctx.codexResumeLaunch = codexResumePreparation
     ? await ctx.deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
@@ -138,6 +139,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         stripInheritedOrcaCodexHome: ctx.stripInheritedOrcaCodexHome,
         launchCommand: ctx.launchCommand,
         launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+        shellPath: ctx.effectiveShellOverride,
         isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.effectiveShellOverride, ctx.cwd),
         wslDistro: ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),

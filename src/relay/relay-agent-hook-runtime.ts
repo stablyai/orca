@@ -25,6 +25,7 @@ import { selectOpenCodeHookAgent } from '../shared/opencode-launch-command'
 import { relayLogLine } from './relay-diagnostic-log'
 import { restoreOrStripOverlayEnv } from '../shared/agent-overlay-env'
 import { registerManagedHookInstaller } from './managed-hook-installer'
+import { readSessionShellStartupEnvVar } from '../main/pty/shell-startup-env'
 
 export class RelayAgentHookRuntime {
   private readonly hookServer: RelayAgentHookServer
@@ -122,7 +123,12 @@ export class RelayAgentHookRuntime {
           env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = sourceDir
         }
       } else {
-        this.pluginOverlay.installOpenCodePlugin(opencodeAgent, context.env)
+        this.pluginOverlay.installOpenCodePlugin(opencodeAgent, {
+          ...context.env,
+          XDG_CONFIG_HOME:
+            readSessionShellStartupEnvVar('XDG_CONFIG_HOME', context.env, context.shell) ??
+            context.env.XDG_CONFIG_HOME
+        })
       }
     }
     const explicitKind = isPiCompatibleAgentType(context.launchAgent)

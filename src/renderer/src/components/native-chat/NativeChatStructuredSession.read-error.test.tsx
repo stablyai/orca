@@ -70,6 +70,8 @@ it('says a damaged history cannot load in one line, without claiming Orca keeps 
   expect(screen.queryByText('Could not load conversation')).toBeNull()
   expect(screen.queryByText(/keeps trying/)).toBeNull()
   expect(screen.queryByText(/agent_session_/)).toBeNull()
+  // Nothing to send into: a send would only be refused and say it again.
+  expect(mocks.composerProps).toBeNull()
 })
 
 it("names a history that couldn't open right now once, in its one line", () => {
@@ -83,6 +85,8 @@ it("names a history that couldn't open right now once, in its one line", () => {
   expect(screen.queryByText('Could not load conversation')).toBeNull()
   expect(screen.queryByText(/keeps trying/)).toBeNull()
   expect(screen.queryByText(/Try again/)).toBeNull()
+  // It can clear, so the composer stays and a send waits for the read.
+  expect(mocks.composerProps).not.toBeNull()
 })
 
 it("says a code's own words that the history didn't load, and nothing under them", () => {
@@ -114,15 +118,19 @@ it('says only that the history did not load for a chat its host cannot run', () 
   expect(screen.queryByText(/isn't available|newer Orca/)).toBeNull()
 })
 
-it("says a newer Orca's words alone", () => {
+it('says once that a newer Orca saved the chat and only an update opens it, with no composer', () => {
   mocks.status = 'error'
   mocks.readRefusal = journalRefusal('journalWrittenByNewerOrca')
   mocks.messages = []
 
   renderPane()
 
-  expect(screen.getByText(/^Chats were saved by a newer Orca\./)).toBeTruthy()
+  expect(
+    screen.getAllByText('This chat was saved by a newer Orca. Update Orca to open it.')
+  ).toHaveLength(1)
+  expect(screen.queryByText('Could not load conversation')).toBeNull()
   expect(screen.queryByText(/keeps trying/)).toBeNull()
+  expect(mocks.composerProps).toBeNull()
 })
 
 it('says only that it is reconnecting, not as an error, when a failure names nothing', () => {

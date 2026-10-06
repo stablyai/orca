@@ -30,6 +30,8 @@ import { TerminalRenderingSection } from './TerminalRenderingSection'
 import { TerminalSetupScriptSection } from './TerminalSetupScriptSection'
 import { TerminalWindowsShellSection } from './TerminalWindowsShellSection'
 import { SettingsSegmentedControl, SettingsSubsectionHeader } from './SettingsFormControls'
+import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 
 type TerminalPaneProps = {
   settings: GlobalSettings
@@ -87,37 +89,56 @@ export function TerminalPane({
       return
     }
     const exists = await window.api.shell.pathExists(shell)
-    setShellValidationError(exists ? null : `Shell not found: ${shell}`)
+    setShellValidationError(
+      exists
+        ? null
+        : translate(
+            'auto.components.settings.TerminalPane.5a5eac2f44',
+            'Shell not found: {{value0}}',
+            {
+              value0: shell
+            }
+          )
+    )
   }
 
   const defaultShellSection =
     !showWindowsHostSettings &&
     matchesSettingsSearch(searchQuery, {
-      title: 'Default shell',
-      description: 'Shell used for new terminal panes',
+      title: translate('auto.components.settings.TerminalPane.9589abc009', 'Default shell'),
+      description: translate(
+        'auto.components.settings.TerminalPane.1c29734248',
+        'Shell used for new terminal panes'
+      ),
       keywords: [
-        'shell',
-        'terminal',
-        'fish',
-        'zsh',
-        'bash',
-        'nushell',
-        'default',
-        'arguments',
-        'args',
-        'login',
-        'wrapper',
-        'rcfile'
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.a909136b3f', 'shell'),
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.81694f1584', 'terminal'),
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.0cbe5ad727', 'fish'),
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.c9bc93d343', 'zsh'),
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.17ad899ba4', 'bash'),
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.d469840b75', 'nushell'),
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.ddc72a4860', 'default'),
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.af893aa433', 'arguments'),
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.44f8a56f66', 'args'),
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.4faf688f78', 'login'),
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.73c211e979', 'wrapper'),
+        ...translateSearchKeyword('auto.components.settings.TerminalPane.c2ddb189e7', 'rcfile')
       ]
     }) ? (
       <section key="default-shell" className="space-y-3">
         <SettingsSubsectionHeader
-          title="Terminal shell"
-          description="Choose what Orca opens for new local terminal panes."
+          title={translate('auto.components.settings.TerminalPane.fd05fb109c', 'Terminal shell')}
+          description={translate(
+            'auto.components.settings.TerminalPane.69724e8f0c',
+            'Choose what Orca opens for new local terminal panes.'
+          )}
         />
         <div className="space-y-3">
           <SettingsSegmentedControl
-            ariaLabel="Terminal shell"
+            ariaLabel={translate(
+              'auto.components.settings.TerminalPane.fd05fb109c',
+              'Terminal shell'
+            )}
             value={shellMode}
             onChange={(value) => {
               setShellValidationError(null)
@@ -131,32 +152,54 @@ export function TerminalPane({
               )
             }}
             options={[
-              { value: 'system', label: `System shell (${systemShell})` },
-              { value: 'custom', label: 'Custom shell' }
+              {
+                value: 'system',
+                label: translate(
+                  'auto.components.settings.TerminalPane.dd3f4c35da',
+                  'System shell ({{value0}})',
+                  { value0: systemShell }
+                )
+              },
+              {
+                value: 'custom',
+                label: translate('auto.components.settings.TerminalPane.f51cc79784', 'Custom shell')
+              }
             ]}
           />
           {shellMode === 'custom' ? (
             <div className="space-y-1.5">
               <Input
                 value={settings.terminalDefaultShell ?? ''}
-                placeholder="fish, nu, or /bin/zsh"
+                placeholder={translate(
+                  'auto.components.settings.TerminalPane.c2bf02ce2f',
+                  'fish, nu, or /bin/zsh'
+                )}
                 onChange={(event) => {
                   setShellValidationError(null)
                   updateSettings({ terminalDefaultShell: event.target.value.trimStart() })
                 }}
                 onBlur={() => void validateShell()}
                 className="w-full"
-                aria-label="Custom shell executable"
+                aria-label={translate(
+                  'auto.components.settings.TerminalPane.5e06e87730',
+                  'Custom shell executable'
+                )}
                 aria-invalid={shellValidationError != null}
                 aria-describedby={shellValidationError ? 'default-shell-error' : undefined}
               />
               <p id="default-shell-help" className="text-xs text-muted-foreground">
-                Enter a shell name on PATH or an executable path. Orca starts it as a login shell.
+                {translate(
+                  'auto.components.settings.TerminalPane.59573d0b33',
+                  'Enter a shell name on PATH or an executable path. Orca starts it as a login shell.'
+                )}
               </p>
               {shellValidationError ? (
                 <p id="default-shell-error" role="alert" className="text-xs text-destructive">
-                  {shellValidationError}. Switch to System shell or choose an executable on this
-                  host.
+                  {shellValidationError}
+                  {translate(
+                    'auto.components.settings.TerminalPane.e3ae5aed18',
+                    '. Switch to System shell or choose an executable on this host.'
+                  )}
                 </p>
               ) : null}
               <Collapsible open={shellArgsOpen} onOpenChange={setShellArgsOpen}>
@@ -166,7 +209,7 @@ export function TerminalPane({
                     className="inline-flex h-7 items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                     aria-controls="default-shell-args-content"
                   >
-                    Advanced
+                    {translate('auto.components.settings.TerminalPane.5e5f06c82c', 'Advanced')}
                     <ChevronDown
                       className={cn('size-3.5 transition-transform', shellArgsOpen && 'rotate-180')}
                     />
@@ -176,16 +219,28 @@ export function TerminalPane({
                   <div className="mt-1.5 space-y-2 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
                     <div className="space-y-1">
                       <label htmlFor="default-shell-args" className="text-xs font-medium">
-                        Shell arguments
+                        {translate(
+                          'auto.components.settings.TerminalPane.01c600daff',
+                          'Shell arguments'
+                        )}
                       </label>
                       <p className="text-xs text-muted-foreground">
                         {shellArgsMode === 'default'
-                          ? 'Starts the shell as a login shell with -l.'
-                          : 'Enter one argument per line. Leave it empty to pass no arguments.'}
+                          ? translate(
+                              'auto.components.settings.TerminalPane.884a006065',
+                              'Starts the shell as a login shell with -l.'
+                            )
+                          : translate(
+                              'auto.components.settings.TerminalPane.578ec79449',
+                              'Enter one argument per line. Leave it empty to pass no arguments.'
+                            )}
                       </p>
                     </div>
                     <SettingsSegmentedControl
-                      ariaLabel="Shell argument mode"
+                      ariaLabel={translate(
+                        'auto.components.settings.TerminalPane.5ffc4777b6',
+                        'Shell argument mode'
+                      )}
                       value={shellArgsMode}
                       onChange={(value) => {
                         setShellArgsMode(value)
@@ -195,8 +250,20 @@ export function TerminalPane({
                         })
                       }}
                       options={[
-                        { value: 'default', label: '-l (default)' },
-                        { value: 'custom', label: 'Custom args' }
+                        {
+                          value: 'default',
+                          label: translate(
+                            'auto.components.settings.TerminalPane.7bd83fc1d0',
+                            '-l (default)'
+                          )
+                        },
+                        {
+                          value: 'custom',
+                          label: translate(
+                            'auto.components.settings.TerminalPane.48b91a3ed2',
+                            'Custom args'
+                          )
+                        }
                       ]}
                     />
                     {shellArgsMode === 'custom' ? (
@@ -210,10 +277,16 @@ export function TerminalPane({
                           setCustomShellArgs(nextArgs)
                           updateSettings({ terminalDefaultShellArgs: nextArgs })
                         }}
-                        placeholder={'--rcfile\n/path/to/rcfile'}
+                        placeholder={translate(
+                          'auto.components.settings.TerminalPane.f58cb71f53',
+                          '--rcfile\n/path/to/rcfile'
+                        )}
                         className="min-h-20"
                         spellCheck={false}
-                        aria-label="Shell arguments, one per line"
+                        aria-label={translate(
+                          'auto.components.settings.TerminalPane.8dbe0bc942',
+                          'Shell arguments, one per line'
+                        )}
                       />
                     ) : null}
                   </div>

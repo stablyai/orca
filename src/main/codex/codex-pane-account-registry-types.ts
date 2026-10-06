@@ -1,14 +1,4 @@
-import type {
-  CodexEnvironmentHomeOverride,
-  CodexShellStartupHomeOverride
-} from './codex-real-home-path'
-
-export type CodexPaneHomeRoute =
-  | 'real-home'
-  | 'shared-home'
-  | 'account-home'
-  | 'custom-home'
-  | 'wsl-home'
+export type CodexPaneHomeRoute = 'real-home' | 'shared-home' | 'account-home' | 'wsl-home'
 
 export type CodexPaneAccountRecord = {
   /** 'host' or 'wsl:<distro>' — the selection lane this pane launched from. */
@@ -17,10 +7,6 @@ export type CodexPaneAccountRecord = {
   accountId: string | null
   /** Absent only on records written before route provenance was introduced. */
   homeRoute?: CodexPaneHomeRoute
-  /** Rechecked when CODEX_HOME came from process-global shell startup. */
-  shellStartupHomeOverride?: CodexShellStartupHomeOverride
-  /** Rechecked after restart when CODEX_HOME came from the process environment. */
-  environmentHomeOverride?: CodexEnvironmentHomeOverride
 }
 
 export type CodexPaneAccountRegistryFile = {

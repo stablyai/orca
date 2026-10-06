@@ -21,6 +21,7 @@ import {
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-adapter'
 import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-state'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const command = realClaudeCommand
 const suiteTitle = `Claude structured real CLI handshake${realClaudeCliGate.skipReason ? ` (skipped: ${realClaudeCliGate.skipReason})` : ''}`
@@ -66,7 +67,7 @@ function identity(providerSessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'real-cli-workspace',
     hostId: 'local',
     agent: 'claude',
-    providerHandle: { kind: 'claude', sessionId: providerSessionId, leafUuid: null }
+    providerHandle: claudeProviderHandle(providerSessionId, null)
   }
 }
 
@@ -158,13 +159,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           event.type === 'message' ? [event.message.subtype] : []
         )
 
-        expect(acquisition.link.handle).toMatchObject({
-          provider: 'claude',
-          sessionId: providerSessionId,
-          // Init/SessionStart UUIDs are protocol frames, not resumable
-          // main-transcript leaves; no cursor exists before the first user turn.
-          leafUuid: null
-        })
+        // Init/SessionStart UUIDs are protocol frames, not resumable
+        // main-transcript leaves; no cursor exists before the first user turn.
+        expect(acquisition.link.handle).toEqual(claudeProviderHandle(providerSessionId, null))
         expect(observedSubtypes).toContain('hook_started')
         expect(adapter.readCommands('real-cli-handshake')).toContainEqual(
           expect.objectContaining({

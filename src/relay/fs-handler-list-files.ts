@@ -77,10 +77,8 @@ export function listFilesWithRg(
       }
       // Why: correctness backstop. The rg globs prune most blocklisted dirs,
       // but a glob edge case could still surface e.g. a .git/ or .npm/ hit.
-      if (!shouldIncludeQuickOpenPath(relPath)) {
-        return true
-      }
-      if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
+      const excluded = shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)
+      if (!shouldIncludeQuickOpenPath(relPath) || excluded) {
         return true
       }
       if (attemptRanker) {
@@ -96,6 +94,10 @@ export function listFilesWithRg(
 
     const runPassOnce = (args: string[]): Promise<void> =>
       new Promise((passResolve, passReject) => {
+        // A completed pass may queue its continuation before cancellation settles the request.
+        if (done || signal?.aborted) {
+          return passResolve()
+        }
         const attemptRanker =
           searchQuery === undefined ? null : new QuickOpenPathRanker(searchQuery, maxResults ?? 16)
         const filenameDecoder = new RipgrepFilenameDecoder((error) => {
@@ -121,7 +123,7 @@ export function listFilesWithRg(
           child = spawn(command, ['--no-messages', ...args], {
             cwd: rootPath,
             env,
-            stdio: ['ignore', 'pipe', 'pipe'],
+            stdio: ['ignore', 'pipe', 'ignore'],
             windowsHide: true
           })
         } catch (error) {
@@ -132,11 +134,8 @@ export function listFilesWithRg(
             : error
         }
         const cleanup = (): void => {
-          if (timer) {
-            clearTimeout(timer)
-          }
+          clearTimeout(timer)
           child.stdout?.off('data', handleStdoutData)
-          child.stderr?.off('data', handleStderrData)
           child.off('error', handleError)
           child.off('close', handleClose)
           absorbPendingRipgrepSpawnError(child, {
@@ -144,14 +143,14 @@ export function listFilesWithRg(
             unavailableExitObserved
           })
         }
-        const rejectPass = (error: Error): void => {
+        const rejectPass = (error: unknown): void => {
           if (passDone) {
             return
           }
           passDone = true
           passBuf = ''
           cleanup()
-          passReject(error)
+          passReject(error instanceof Error ? error : new Error(String(error)))
         }
         const resolvePass = (): void => {
           if (passDone) {
@@ -168,8 +167,11 @@ export function listFilesWithRg(
           if (launchFailureCheck) {
             return
           }
-          launchFailureCheck = retryRipgrepOnPathAfterLaunchFailure(command, rootPath, error).then(
-            async (retryOnPath) => {
+          launchFailureCheck = retryRipgrepOnPathAfterLaunchFailure(command, rootPath, error)
+            .then(async (retryOnPath) => {
+              if (passDone || done) {
+                return
+              }
               if (retryOnPath) {
                 // Why: runPass retries a launch failure once, and the retry resolves to PATH rg.
                 rejectPass(new RipgrepLaunchFailureError('bundled rg failed to start'))
@@ -181,13 +183,14 @@ export function listFilesWithRg(
                 (await classifyRipgrepLaunchFailure(
                   rootPath,
                   [command, pathRipgrepCommand()],
-                  env
+                  env,
+                  signal
                 )) === 'cwd-unreachable'
                   ? ripgrepMissingCwdError(rootPath)
                   : new RipgrepUnavailableError()
               )
-            }
-          )
+            })
+            .catch(rejectPass)
         }
         children.push({ child, isDone: () => passDone, reject: rejectPass })
 
@@ -217,9 +220,6 @@ export function listFilesWithRg(
             idx = passBuf.indexOf('\0', start)
           }
           passBuf = start < passBuf.length ? passBuf.substring(start) : ''
-        }
-        function handleStderrData(): void {
-          /* drain to prevent backpressure stalls */
         }
         function handleError(err: NodeJS.ErrnoException): void {
           processErrorObserved = true
@@ -277,7 +277,6 @@ export function listFilesWithRg(
         }
 
         child.stdout?.on('data', handleStdoutData)
-        child.stderr?.on('data', handleStderrData)
         child.once('error', handleError)
         child.once('close', handleClose)
       })

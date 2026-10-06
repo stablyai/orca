@@ -5,8 +5,13 @@ import { editorModelRegistry } from '@/lib/editor-model-registry'
 import { disposeClosedEditorModels, type ClosedEditorTab } from './closed-editor-tab-disposal'
 import type { MonacoModelRegistry, DisposableMonacoModel } from './diff-monaco-model-disposal'
 import { toEditorModelUri } from './editor-model-uri'
+import { getEditorModelOwnerKey } from './editor-model-owner'
+import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 
-type EditorStore = Pick<StoreApi<{ openFiles: OpenFile[] }>, 'getState' | 'subscribe'>
+type EditorStore = Pick<
+  StoreApi<WorktreeOperationRouteState & { openFiles: OpenFile[] }>,
+  'getState' | 'subscribe'
+>
 type RetainedModel = {
   files: Map<string, ClosedEditorTab>
   detach: { dispose(): void }
@@ -14,7 +19,7 @@ type RetainedModel = {
 }
 
 function ownerKey(file: ClosedEditorTab): string {
-  return JSON.stringify([file.id, file.mode, file.filePath])
+  return JSON.stringify([file.id, file.mode, file.filePath, file.modelOwnerKey])
 }
 
 export function attachClosedEditorTabCleanup(
@@ -22,7 +27,8 @@ export function attachClosedEditorTabCleanup(
   bridge = editorModelRegistry
 ): () => void {
   let registry = bridge.get()
-  let previousFiles = store.getState().openFiles
+  let previousState = store.getState()
+  let previousFiles = previousState.openFiles
   const pendingFiles = new Map<string, ClosedEditorTab>()
   const candidateModels = new Set<editor.ITextModel>()
   const retainedModels = new Map<editor.ITextModel, RetainedModel>()
@@ -96,24 +102,26 @@ export function attachClosedEditorTabCleanup(
       return
     }
     const flushGeneration = generation
-    let checkedOpenFiles: OpenFile[] | null = null
+    let checkedState: ReturnType<EditorStore['getState']> | null = null
     let openIds = new Set<string>()
     let openEditUris = new Set<string>()
     const stillOwned = (file: ClosedEditorTab): boolean => {
-      const openFiles = store.getState().openFiles
-      if (openFiles !== checkedOpenFiles) {
-        checkedOpenFiles = openFiles
+      const currentState = store.getState()
+      const openFiles = currentState.openFiles
+      if (currentState !== checkedState) {
+        checkedState = currentState
         openIds = new Set(openFiles.map((openFile) => openFile.id))
         openEditUris = new Set(
           openFiles
             .filter((openFile) => openFile.mode === 'edit')
-            .map((openFile) => toEditorModelUri(openFile.filePath))
+            .map((openFile) =>
+              toEditorModelUri(openFile.filePath, getEditorModelOwnerKey(openFile, currentState))
+            )
         )
       }
-      return (
-        openIds.has(file.id) ||
-        (file.mode === 'edit' && openEditUris.has(toEditorModelUri(file.filePath)))
-      )
+      return file.mode === 'edit'
+        ? openEditUris.has(toEditorModelUri(file.filePath, file.modelOwnerKey))
+        : openIds.has(file.id)
     }
     const disposeCaptured = (
       files: ClosedEditorTab[],
@@ -181,23 +189,52 @@ export function attachClosedEditorTabCleanup(
   }
 
   const unsubscribe = store.subscribe(() => {
-    const openFiles = store.getState().openFiles
-    if (openFiles === previousFiles) {
+    const currentState = store.getState()
+    const openFiles = currentState.openFiles
+    const previous = previousFiles
+    const closedState = previousState
+    previousFiles = openFiles
+    previousState = currentState
+    if (
+      openFiles === previous &&
+      currentState.repos === closedState.repos &&
+      currentState.worktreesByRepo === closedState.worktreesByRepo &&
+      currentState.detectedWorktreesByRepo === closedState.detectedWorktreesByRepo &&
+      currentState.folderWorkspaces === closedState.folderWorkspaces &&
+      currentState.projectGroups === closedState.projectGroups &&
+      currentState.restoredRuntimeHostIdByWorkspaceSessionKey ===
+        closedState.restoredRuntimeHostIdByWorkspaceSessionKey &&
+      currentState.runtimeEnvironmentCatalogHydrated ===
+        closedState.runtimeEnvironmentCatalogHydrated &&
+      currentState.removedRuntimeEnvironmentIds === closedState.removedRuntimeEnvironmentIds &&
+      currentState.runtimeEnvironments === closedState.runtimeEnvironments &&
+      currentState.settings === closedState.settings
+    ) {
       return
     }
-    const previous = previousFiles
-    previousFiles = openFiles
-    const liveIds = new Set(openFiles.map((file) => file.id))
+    const liveFiles = new Map(openFiles.map((file) => [file.id, file]))
     let removed = false
     let removedDiff = false
     for (const file of previous) {
-      if (!liveIds.has(file.id)) {
-        const descriptor = { id: file.id, mode: file.mode, filePath: file.filePath }
+      const priorOwner = getEditorModelOwnerKey(file, closedState)
+      const liveFile = liveFiles.get(file.id)
+      if (
+        !liveFile ||
+        liveFile.mode !== file.mode ||
+        liveFile.filePath !== file.filePath ||
+        (file.mode === 'edit' && getEditorModelOwnerKey(liveFile, currentState) !== priorOwner)
+      ) {
+        const descriptor = {
+          id: file.id,
+          mode: file.mode,
+          filePath: file.filePath,
+          modelOwnerKey: priorOwner
+        }
         pendingFiles.set(ownerKey(descriptor), descriptor)
         removed = true
         if (file.mode === 'edit' && registry) {
           const model = registry.editor.getModel(
-            registry.Uri.parse(toEditorModelUri(file.filePath))
+            registry.Uri.parse(toEditorModelUri(file.filePath, descriptor.modelOwnerKey))
           )
           if (model) {
             candidateModels.add(model)

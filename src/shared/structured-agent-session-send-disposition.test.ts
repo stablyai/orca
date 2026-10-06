@@ -19,9 +19,9 @@ import {
 } from './structured-agent-session-send-disposition'
 import {
   createStructuredAgentSessionOutboxEntry,
-  reconcileStructuredAgentSessionOutbox,
   type StructuredAgentSessionOutboxEntry
 } from './structured-agent-session-outbox'
+import { reconcileStructuredAgentSessionOutbox } from './structured-agent-session-outbox-reconcile'
 import { structuredAgentSessionEntryHeldForRetry } from './structured-agent-session-outbox-admission'
 
 const entry: StructuredAgentSessionOutboxEntry = createStructuredAgentSessionOutboxEntry({
@@ -120,7 +120,9 @@ describe('what a rejection shows the user', () => {
       throw new Error('expected rejected submission fixture')
     }
 
-    expect(reconcileStructuredAgentSessionOutbox([entry], [result.value.submission])).toEqual([])
+    expect(reconcileStructuredAgentSessionOutbox([entry], [result.value.submission], [])).toEqual(
+      []
+    )
   })
 
   it('never puts the transport marker on screen', () => {
@@ -168,7 +170,9 @@ describe('what a rejection shows the user', () => {
     if (!result.ok || !('submission' in result.value)) {
       throw new Error('expected rejected submission fixture')
     }
-    expect(reconcileStructuredAgentSessionOutbox([entry], [result.value.submission])).toEqual([])
+    expect(reconcileStructuredAgentSessionOutbox([entry], [result.value.submission], [])).toEqual(
+      []
+    )
     expect(
       disposeStructuredAgentSessionSendResult({
         entries: [entry],

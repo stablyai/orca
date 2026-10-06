@@ -30,8 +30,6 @@ export type ClaudeSendEchoTurnInput = {
   requestedAt?: number
   /** Provider key of the user row this turn is anchored to. */
   userItemId: string
-  /** The submission this echo acknowledged. */
-  openedBy?: string
 }
 
 /** The turn a replayed send echo opens, or null when this frame is not one. */
@@ -48,8 +46,7 @@ export function claudeTurnOpenedBySendEcho(
         turnId: envelope.uuid,
         startedAt: input.observedAt,
         ...(input.requestedAt === undefined ? {} : { requestedAt: input.requestedAt }),
-        userItemId: input.userItemId,
-        ...(input.openedBy === undefined ? {} : { openedBy: input.openedBy })
+        userItemId: input.userItemId
       }
     : null
 }

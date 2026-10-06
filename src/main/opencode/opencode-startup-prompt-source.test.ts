@@ -42,7 +42,7 @@ class Editor extends EventEmitter {
 
 type FixtureLocation = { directory: string; workspaceID?: string }
 
-function fixture() {
+function fixture(version = '2.0.16') {
   const editor = new Editor()
   const input = new EventEmitter()
   const memory = { settled: false, expiresAt: Date.now() + 20000 }
@@ -52,7 +52,7 @@ function fixture() {
   const sync = vi.fn(async (_location: FixtureLocation) => {})
   const dispatch = vi.fn(() => editor.replace(''))
   const ctx = {
-    app: { version: '2.0.16' },
+    app: { version },
     renderer: { keyInput: input, currentFocusedEditor: editor },
     storage: { memory: () => [memory, (mutate: (draft: typeof memory) => void) => mutate(memory)] },
     keymap: { dispatch },
@@ -90,6 +90,41 @@ afterEach(() => {
 })
 
 describe('installed-version native prompt intent plugin', () => {
+  it.each(['2.0.12', '2.0.16'])(
+    'hydrates the source-reviewed %s location and delivers the same intent only once',
+    async (version) => {
+      const f = fixture(version)
+      let hydrate = () => {}
+      f.sync.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            hydrate = resolve
+          })
+      )
+      const insert = vi.spyOn(f.editor, 'insertText')
+      const dispose = await setup(f.ctx)
+      try {
+        await vi.advanceTimersByTimeAsync(500)
+        expect(f.sync).toHaveBeenCalledExactlyOnceWith(f.ctx.location)
+        expect(claim).not.toHaveBeenCalled()
+        expect(insert).not.toHaveBeenCalled()
+        hydrate()
+        await vi.advanceTimersByTimeAsync(1000)
+        await vi.waitFor(() => expect(claim).toHaveBeenCalledTimes(1))
+        expect(insert).toHaveBeenCalledExactlyOnceWith(prompt)
+        expect(f.dispatch).toHaveBeenCalledExactlyOnceWith('prompt.submit')
+        expect(f.memory.settled).toBe(true)
+        const reloadDispose = await setup(f.ctx)
+        await vi.advanceTimersByTimeAsync(500)
+        expect(claim).toHaveBeenCalledTimes(1)
+        expect(f.dispatch).toHaveBeenCalledTimes(1)
+        await reloadDispose()
+      } finally {
+        await dispose()
+      }
+    }
+  )
+
   it('waits for the current home location after the startup directory changes', async () => {
     const f = fixture()
     let location: FixtureLocation = { directory: '/private/home/private-folder' }

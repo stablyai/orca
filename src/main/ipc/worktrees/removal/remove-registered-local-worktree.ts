@@ -14,6 +14,7 @@ import { getWorktreeSharedLinkPaths } from '../../../git/worktree-shared-directo
 import { cleanupLocalOrphanedWorktreeDirectory } from '../../../local-orphaned-worktree-cleanup'
 import { recoverLocalWindowsWorktreeRemoval } from '../../../local-worktree-removal-recovery'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
+import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../../../worktree-removal-home-guard'
 import { cleanupUnusedWorktreePushTargetRemote } from '../../worktree-remote'
@@ -71,6 +72,9 @@ export async function removeRegisteredLocalWorktree(
     throw new Error(
       `Worktree registration changed during deletion: ${canonicalWorktreePath}. Retry deletion.`
     )
+  }
+  if (args.expectedCheckout) {
+    assertNestedWorktreeRemovalApproval([refreshedRegisteredWorktree], [args.expectedCheckout])
   }
   try {
     // Why: an archive hook can race another Git client that locks the row; recheck before linked-path/watcher/terminal teardown.

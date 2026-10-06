@@ -2,7 +2,6 @@ import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FileDocument } from '../../shared/filesystem-entry-types'
-import { authorizeExternalPath } from '../ipc/filesystem-auth'
 import { ensureDefaultFloatingWorkspacePath } from '../ipc/floating-workspace-directory'
 import { fileDocumentFromFilePath, isMarkdownDocumentName } from '../ipc/markdown-documents'
 
@@ -135,7 +134,7 @@ export class OsOpenedDocumentState {
 
 /**
  * Turns OS-handed paths into the same document shape the floating workspace's own
- * file picker produces, authorizing each one for the renderer's later read.
+ * file picker produces; the floating tab then reads each one as a user-named file.
  */
 export async function resolveOsOpenedDocuments(
   filePaths: readonly string[]
@@ -152,14 +151,13 @@ export async function resolveOsOpenedDocuments(
   for (const filePath of supportedPaths) {
     try {
       // Why: the shell can hand over a directory named like a document, or a path already
-      // deleted by the time we resolve. Authorize only something that is really a file.
+      // deleted by the time we resolve. Open only something that is really a file.
       if (!(await stat(filePath)).isFile()) {
         continue
       }
     } catch {
       continue
     }
-    authorizeExternalPath(filePath)
     documents.push(
       fileDocumentFromFilePath(floatingRoot, filePath, {
         outsideRootRelativePath: 'basename'

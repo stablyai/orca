@@ -3,7 +3,10 @@ import type { AgentProviderSessionMetadata } from '../../shared/agent-session-re
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { CodexSessionResumePreparation } from '../codex/codex-session-resume-home'
 import { prepareCodexSessionResume } from '../codex/codex-session-resume-preparation'
-import { prepareLegacySharedCodexSessionResume } from '../codex/codex-legacy-session-resume'
+import {
+  prepareCodexAccountRestartResume,
+  prepareLegacySharedCodexSessionResume
+} from '../codex/codex-legacy-session-resume'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 import { codexHookService } from '../codex/hook-service'
 import {
@@ -20,6 +23,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
+  useSelectedAccount?: boolean
 }): Promise<CodexSessionResumePreparation | null> {
   const runtimeHome = state.codexRuntimeHome
   const store = state.store
@@ -66,12 +70,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
           }
         )
       } catch (error) {
-        // Why: this launch path pins CODEX_HOME to the account that OWNS the
-        // rollout and deliberately refuses to repin onto whichever account is
-        // selected now (#10793), so it does not wire
-        // getSelectedHostAccountCodexHomePath and this branch cannot fire today.
-        // It stays as a contract guard: the blanket catch below must never
-        // silently swallow a typed refusal if that ever changes.
+        // A credential-read refusal must never fall back to the old account.
         if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
           throw error
         }
@@ -81,7 +80,16 @@ export async function prepareCodexSessionResumeForLaunch(args: {
           error
         )
       }
-      const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
+      const resumeHome = args.useSelectedAccount
+        ? await prepareCodexAccountRestartResume({
+            sourceHome: sessionSource.homePath,
+            transcriptPath: sessionSource.transcriptPath,
+            targetHome: selectedAccountCodexHome ?? systemHomePath,
+            systemCodexHomePath: systemHomePath
+          })
+        : migrated.useRealCodexHome
+          ? systemHomePath
+          : sessionSource.homePath
       const isSystemHome =
         normalizeRuntimePathForComparison(resumeHome) ===
         normalizeRuntimePathForComparison(systemHomePath)

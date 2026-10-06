@@ -6,7 +6,10 @@ import {
   useState,
   useSyncExternalStore
 } from 'react'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import {
   admitStructuredAgentSessionOutboxEntry,
@@ -63,6 +66,8 @@ export function useStructuredAgentSessionOutbox(args: {
   target: RuntimeClientTarget
   fence: number | null
   submissions: readonly AgentJournalSubmission[]
+  /** The loaded journal rows: a rejected message stays here until the row that draws it loads. */
+  journalItems: readonly AgentJournalRenderItem[]
   /** The composer that gets back what a Stop withdrew from this client's outbox. */
   composerScopeKey?: string
   /** The host's queued-messages capability and the user's setting; a send stamped
@@ -76,6 +81,7 @@ export function useStructuredAgentSessionOutbox(args: {
   const {
     composerScopeKey,
     fence,
+    journalItems,
     queueDelivery = NO_QUEUE_DELIVERY,
     queuedMessageIds,
     sessionId,
@@ -147,15 +153,13 @@ export function useStructuredAgentSessionOutbox(args: {
         .map((submission) => submission.clientMessageId),
       ...handedOffQueuedMessageIds(submissions)
     ])
-    const next = reconcileStructuredAgentSessionOutboxWithQueue(current, submissions)
+    const next = reconcileStructuredAgentSessionOutboxWithQueue(current, submissions, journalItems)
     const admittedInFlight = journalAnswersInFlightSend(submissions, inFlightIdRef.current)
-    if (
-      admittedInFlight ||
-      next.some((entry, index) => entry !== current[index]) ||
-      next.length !== current.length
-    ) {
+    // The reconcile returns `current` itself when no entry changed, so a batch that changes
+    // nothing writes nothing.
+    if (admittedInFlight || next !== current) {
       restoreWithdrawn.byHost(current, submissions)
-      commitStructuredAgentSessionOutbox(sessionId, next)
+      commitStructuredAgentSessionOutbox(sessionId, [...next])
     }
     // Keyed on the entry actually in flight, which is no longer always the head: the journal
     // owning it outranks a send promise that has not settled, so release single-flight and make
@@ -174,7 +178,7 @@ export function useStructuredAgentSessionOutbox(args: {
     ) {
       setError(null)
     }
-  }, [restoreWithdrawn, sessionId, submissions])
+  }, [journalItems, restoreWithdrawn, sessionId, submissions])
 
   // The one place that owns the refs, the React state and the storage write.
   const applyDisposition = useCallback(

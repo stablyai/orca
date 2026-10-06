@@ -1,21 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KeybindingFileSnapshot } from '../../shared/keybindings'
 
-const {
-  authorizeExternalPathMock,
-  getAllWindowsMock,
-  handleMock,
-  openPathMock,
-  rebuildAppMenuMock,
-  showItemInFolderMock
-} = vi.hoisted(() => ({
-  authorizeExternalPathMock: vi.fn(),
-  getAllWindowsMock: vi.fn(() => []),
-  handleMock: vi.fn(),
-  openPathMock: vi.fn(),
-  rebuildAppMenuMock: vi.fn(),
-  showItemInFolderMock: vi.fn()
-}))
+const { getAllWindowsMock, handleMock, openPathMock, rebuildAppMenuMock, showItemInFolderMock } =
+  vi.hoisted(() => ({
+    getAllWindowsMock: vi.fn(() => []),
+    handleMock: vi.fn(),
+    openPathMock: vi.fn(),
+    rebuildAppMenuMock: vi.fn(),
+    showItemInFolderMock: vi.fn()
+  }))
 
 vi.mock('electron', () => ({
   BrowserWindow: {
@@ -28,10 +21,6 @@ vi.mock('electron', () => ({
     openPath: openPathMock,
     showItemInFolder: showItemInFolderMock
   }
-}))
-
-vi.mock('./filesystem-auth', () => ({
-  authorizeExternalPath: authorizeExternalPathMock
 }))
 
 vi.mock('../menu/register-app-menu', () => ({
@@ -60,7 +49,6 @@ function getHandler(channel: string): (...args: unknown[]) => unknown {
 
 describe('registerKeybindingHandlers', () => {
   beforeEach(() => {
-    authorizeExternalPathMock.mockReset()
     getAllWindowsMock.mockReturnValue([])
     handleMock.mockReset()
     openPathMock.mockReset()
@@ -68,11 +56,10 @@ describe('registerKeybindingHandlers', () => {
     showItemInFolderMock.mockReset()
   })
 
-  it('authorizes the keybindings file for in-app editing when ensuring it exists', () => {
+  it('returns the keybindings file when ensuring it exists', () => {
     registerKeybindingHandlers({ ensureFile: vi.fn(() => snapshot) } as never)
 
     expect(getHandler('keybindings:ensureFile')()).toBe(snapshot)
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith(snapshot.path)
   })
 
   it('reconciles plugin command conflicts after a shortcut edit', () => {
@@ -92,12 +79,11 @@ describe('registerKeybindingHandlers', () => {
     expect(onChanged).toHaveBeenCalledOnce()
   })
 
-  it('authorizes the keybindings file before opening it outside Orca', async () => {
+  it('opens the keybindings file outside Orca', async () => {
     openPathMock.mockResolvedValue('')
     registerKeybindingHandlers({ ensureFile: vi.fn(() => snapshot) } as never)
 
     await expect(getHandler('keybindings:openFile')()).resolves.toBe(snapshot)
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith(snapshot.path)
     expect(openPathMock).toHaveBeenCalledWith(snapshot.path)
   })
 })

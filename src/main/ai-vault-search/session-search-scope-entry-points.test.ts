@@ -1,3 +1,4 @@
+import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AiVaultHandler } from '../../relay/ai-vault-handler'
 import type { RelayDispatcher } from '../../relay/dispatcher'

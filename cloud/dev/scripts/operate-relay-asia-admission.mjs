@@ -21,7 +21,7 @@ const SHAPES = {
     domain: 'relay.onorca.dev',
     allCells: [
       'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
-      'production-gce-c31', 'production-gce-c32', 'production-gce-c33'
+      'production-gce-c31', 'production-gce-c32', 'production-gce-c33', 'production-gce-c34'
     ],
     // The launch set was registered together; each later cell registers alone beside it.
     registrationWaves: [
@@ -29,8 +29,10 @@ const SHAPES = {
       ['production-gce-c30'],
       ['production-gce-c31'],
       ['production-gce-c32'],
-      ['production-gce-c33']
+      ['production-gce-c33'],
+      ['production-gce-c34']
     ],
+    // C34 is a migration-only spare: no promotion wave until a reviewed change adds one.
     promotionWaves: [
       ['production-gce-c27'],
       ['production-gce-c28', 'production-gce-c29'],

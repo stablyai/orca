@@ -108,6 +108,17 @@ describe('ripgrep Unicode match coordinates', () => {
     expect(result.truncated).toBe(false)
   })
 
+  it('keeps clipped emoji context intact around a real match', async () => {
+    const prefix = '😀'.repeat(300)
+    await writeFile(join(root, 'emoji.txt'), `${prefix}x${prefix}\n`)
+    const match = (await search('x')).files[0]?.matches[0]
+    expect(match?.column).toBe(601)
+    expect(match?.matchLength).toBe(1)
+    expect(match?.lineContent.isWellFormed()).toBe(true)
+    expect(match?.lineContent.length).toBeLessThanOrEqual(502)
+    expect(match?.lineContent.slice((match.displayColumn ?? 1) - 1, match.displayColumn)).toBe('x')
+  })
+
   it('ignores external rg config while retaining workspace ignore files', async () => {
     const config = join(root, 'config')
     await writeFile(config, '--invert-match\n')

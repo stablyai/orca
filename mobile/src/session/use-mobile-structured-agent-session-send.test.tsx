@@ -390,7 +390,7 @@ describe('mobile structured send retries', () => {
     expect(calls().every(([, params]) => !('retryUnknown' in (params as object)))).toBe(true)
   })
 
-  it('keeps an ambiguous id after the host replay window expires', async () => {
+  it('sends under a new id once the host has expired an ambiguous one', async () => {
     let attempts = 0
     sendRequest.mockImplementation(async (method) => {
       if (method !== 'agentSession.send') {
@@ -399,6 +399,9 @@ describe('mobile structured send retries', () => {
       attempts += 1
       if (attempts === 1) {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
+      }
+      if (attempts === 3) {
+        return sendResult('accepted')
       }
       return ok({
         ok: false,
@@ -413,11 +416,16 @@ describe('mobile structured send retries', () => {
     await act(async () => {
       expect(await hook!.sendWithOutcome('old ambiguity')).toBe('unknown')
       expect(await hook!.sendWithOutcome('old ambiguity')).toBe('rejected')
-      expect(await hook!.sendWithOutcome('old ambiguity')).toBe('rejected')
+      expect(await hook!.sendWithOutcome('old ambiguity')).toBe('accepted')
     })
 
     expect(calls()).toHaveLength(3)
-    expect(new Set(sentIds()).size).toBe(1)
+    const [first, replay, fresh] = sentIds()
+    expect(replay).toBe(first)
+    expect(fresh).not.toBe(first)
+    expect(onSendError).toHaveBeenCalledWith(
+      "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed."
+    )
   })
 
   it('does not retain an id when the action budget expires before dispatch', async () => {

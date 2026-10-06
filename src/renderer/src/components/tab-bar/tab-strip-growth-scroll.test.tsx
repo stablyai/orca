@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 
 const TAB_WIDTH = 100
@@ -80,6 +80,8 @@ function restoreStripLayout(): void {
 }
 
 const NO_HOSTED_ROWS: string[] = []
+let stripRenderCount = 0
+let subscribeToStripResize: ((listener: () => void) => () => void) | null = null
 
 /** `hostedRows` render like client-hosted browser rows: a strip slot with no `data-tab-id`. */
 function Strip({
@@ -93,12 +95,14 @@ function Strip({
   hostedRows?: string[]
   activeHostedRow?: string | null
 }): React.JSX.Element {
+  stripRenderCount++
   const navigation = useTabStripOverflowNavigation({
     activeVisibleTabId: active,
     activeDockSlotId: activeHostedRow ?? active,
     layoutKey: [...tabs, ...hostedRows].join(','),
     worktreeId: 'wt-1'
   })
+  subscribeToStripResize = navigation.subscribeToStripResize
   return (
     <div
       data-strip=""
@@ -299,5 +303,32 @@ describe('tab strip with a docked active tab', () => {
     rerender(<Strip tabs={[...TABS.slice(0, 5), 'N', ...TABS.slice(5)]} active="A" />)
     expect(tabX(strip, 'A')).toBe(0)
     expect(tabX(strip, 'N')).toBe(100)
+  })
+})
+
+describe('tab strip while scrolling', () => {
+  beforeEach(installStripLayout)
+  afterEach(() => {
+    cleanup()
+    restoreStripLayout()
+  })
+
+  it('does not re-render the strip for a scroll that stays between the edges', () => {
+    const { strip } = mountScrolled('E', 300)
+    const rendersBefore = stripRenderCount
+    act(() => {
+      strip.scrollLeft = 400
+      strip.dispatchEvent(new Event('scroll'))
+    })
+    expect(stripRenderCount).toBe(rendersBefore)
+  })
+
+  it('tells resize subscribers when tabs change the strip without a scroll', async () => {
+    const { rerender } = mountScrolled('J', 700)
+    const listener = vi.fn()
+    subscribeToStripResize!(listener)
+    rerender(<Strip tabs={[...TABS, 'N']} active="J" />)
+    await Promise.resolve()
+    expect(listener).toHaveBeenCalled()
   })
 })

@@ -85,6 +85,13 @@ export async function readStructuredAgentSessionConversationOutline(
   )
 }
 
+const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
+  ['agentSession.conversationCommand', 195_000],
+  // A waiting catalog read lasts as long as the host's listing: Claude's is 60 s, after up to 15 s
+  // for an account switch to settle and 5 s of login-shell environment.
+  ['agentSession.modelCatalog', 90_000]
+])
+
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,
   method: string,
@@ -100,9 +107,10 @@ export async function callStructuredAgentSession<TResult>(
   ) {
     throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
   }
-  return method === 'agentSession.conversationCommand'
-    ? callRuntimeRpc<TResult>(target, method, params, { timeoutMs: 195_000 })
-    : callRuntimeRpc<TResult>(target, method, params)
+  const timeoutMs = STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS.get(method)
+  return timeoutMs === undefined
+    ? callRuntimeRpc<TResult>(target, method, params)
+    : callRuntimeRpc<TResult>(target, method, params, { timeoutMs })
 }
 
 async function subscribeStructuredAgentSessionMethod<TEvent>(

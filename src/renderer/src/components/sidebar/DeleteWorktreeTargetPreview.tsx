@@ -4,7 +4,10 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
-import type { DeleteWorktreeDirtyChangePreview } from './delete-worktree-dirty-change-counts'
+import type {
+  DeleteWorktreeChangeCheckState,
+  DeleteWorktreeDirtyChangePreview
+} from './delete-worktree-dirty-change-counts'
 import type { AppState } from '@/store/types'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import { getWorktreeDeleteErrorToShow } from './worktree-delete-error-display'
@@ -46,7 +49,8 @@ export function DeleteWorktreeTargetPreview({
   hostLabelById,
   deleteStateByWorktreeId,
   dirtyChangeCountsByWorktreeId,
-  dirtyChangePreviewsByWorktreeId
+  dirtyChangePreviewsByWorktreeId,
+  changeCheckStatesByWorktreeId
 }: {
   isBatchDelete: boolean
   worktree: Worktree | null
@@ -56,6 +60,7 @@ export function DeleteWorktreeTargetPreview({
   deleteStateByWorktreeId: AppState['deleteStateByWorktreeId']
   dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
   dirtyChangePreviewsByWorktreeId: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
+  changeCheckStatesByWorktreeId?: ReadonlyMap<string, DeleteWorktreeChangeCheckState>
 }): JSX.Element | null {
   const targetIdPrefix = useId()
   const collisionIds = getCollisionIds(collisionWorktrees)
@@ -94,6 +99,9 @@ export function DeleteWorktreeTargetPreview({
                     ) : null}
                     <DeleteWorktreeDirtyChangeHint
                       key={getWorktreeHostIdentity(item)}
+                      checkState={changeCheckStatesByWorktreeId?.get(
+                        item.hostId ? getWorktreeHostIdentity(item) : item.id
+                      )}
                       changeCount={dirtyChangeCountsByWorktreeId.get(
                         item.hostId ? getWorktreeHostIdentity(item) : item.id
                       )}
@@ -147,6 +155,9 @@ export function DeleteWorktreeTargetPreview({
       ) : null}
       <DeleteWorktreeDirtyChangeHint
         key={getWorktreeHostIdentity(worktree)}
+        checkState={changeCheckStatesByWorktreeId?.get(
+          worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
+        )}
         changeCount={dirtyChangeCountsByWorktreeId.get(
           worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
         )}

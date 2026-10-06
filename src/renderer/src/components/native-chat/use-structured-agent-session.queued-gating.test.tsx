@@ -158,6 +158,46 @@ describe('against a capable host', () => {
     })
   })
 
+  // The host's queue would hold a send behind a prompt nothing here can settle.
+  it('sends immediately while every pending prompt is one this build cannot answer', () => {
+    const approval = (subject: Record<string, unknown>): AgentJournalRenderItem =>
+      JSON.parse(
+        JSON.stringify({
+          itemId: `approval-${String(subject.kind)}`,
+          revision: 1,
+          sequence: 2,
+          observedAt: 1,
+          body: {
+            kind: 'approval',
+            title: 'Review',
+            detail: null,
+            subject,
+            options: [{ id: 'allow', label: 'Approve' }],
+            resolution: {
+              state: 'pending',
+              selectedOptionId: null,
+              resolvedBy: null,
+              resolvedAt: null
+            }
+          }
+        })
+      )
+    const newer = approval({ kind: 'diff', path: 'a.ts' })
+    items = [newer]
+    render()
+    expect(mocks.outboxArgs.at(-1)?.queueDelivery).toEqual({
+      capability: 'supported',
+      enabled: false
+    })
+    mocks.outboxArgs.length = 0
+    items = [newer, approval({ kind: 'plan', text: 'do it' })]
+    render()
+    expect(mocks.outboxArgs.at(-1)?.queueDelivery).toEqual({
+      capability: 'supported',
+      enabled: true
+    })
+  })
+
   it('Stop is a plain cancel: drafts stay as cards and no text lands in the composer', async () => {
     queuedMessages = [{ ...draft('draft-1'), paused: true }]
     const { result } = render(false)

@@ -20,9 +20,13 @@ import {
   createStructuredAgentSessionOutboxEntry,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
+import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
+
+const NO_CARDS: readonly string[] = []
 
 let restoreViewport = (): void => {}
 beforeAll(() => {
@@ -135,7 +139,7 @@ function list(phase: Phase, scoped: boolean, outbox: StructuredAgentSessionOutbo
   return (
     <NativeChatMessageList
       session={{
-        messages: projectStructuredAgentSessionMessages(items, outbox, submissions),
+        messages: projectStructuredAgentSessionMessages(items, outbox, submissions, NO_CARDS),
         status: phase === 'done' ? 'ready' : 'working',
         sessionId: 'session-1',
         agent: 'claude',
@@ -213,4 +217,92 @@ describe.each([
       expect(container.textContent).toContain('Worked for 5s')
     }
   )
+})
+
+describe('a message the host rejected after a crash, with no outbox entry left', () => {
+  const LOST = agentJournalSubmissionKey('lost')
+
+  function hostList(phase: Phase) {
+    const items = journal(phase, true)
+    const newIndex = items.findIndex((item) => item.itemId === NEW)
+    // Recorded between the seed's answer and the newer prompt; the next open rejected it.
+    items.splice(newIndex, 0, {
+      itemId: LOST,
+      revision: 0,
+      sequence: items[newIndex - 1]!.sequence,
+      sequenceIndex: 1,
+      observedAt: 1002.5,
+      body: said('user', 'LOST PROMPT'),
+      turnScope: { kind: 'thread' }
+    })
+    const submissions: AgentJournalSubmission[] = [
+      submission('seed', 'accepted'),
+      {
+        ...submission('lost', 'rejected'),
+        reason: DISPATCH_REJECTED_HOST_RESTARTED,
+        rejection: { kind: 'hostRestarted' }
+      },
+      submission('new', phase === 'done' ? 'accepted' : 'pending')
+    ]
+    const settledTurns: NativeChatSettledTurns = new Map([
+      [SEED, { startedAt: 1, workedSeconds: 3 }],
+      ...(phase === 'done' ? [[NEW, { startedAt: 2, workedSeconds: 5 }] as const] : [])
+    ])
+    return (
+      <NativeChatMessageList
+        session={{
+          messages: projectStructuredAgentSessionMessages(items, [], submissions, NO_CARDS),
+          status: phase === 'done' ? 'ready' : 'working',
+          sessionId: 'session-1',
+          agent: 'claude',
+          hasMore: false,
+          loadingEarlier: false,
+          olderHistoryGeneration: 0,
+          loadEarlier: vi.fn(),
+          readPhase: 'ready'
+        }}
+        journalItems={items}
+        journalSubmissions={submissions}
+        deliveryNotices={structuredAgentSessionDeliveryNotices(
+          [],
+          'Claude',
+          vi.fn(),
+          submissions,
+          [],
+          new Set()
+        )}
+        isWorking={phase !== 'done'}
+        workingStartedAt={phase === 'done' ? null : Date.now() - 1500}
+        settledTurns={settledTurns}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+  }
+
+  it('draws it where it was sent, with its reason and no Retry, outside the newer turn', () => {
+    const { container, rerender } = render(hostList('running'))
+    expect(drawn(container)).toEqual([
+      'SEED PROMPT',
+      'WORKED',
+      'LOST PROMPT',
+      'NEW PROMPT',
+      'WORKING',
+      'ACTIVITY'
+    ])
+    expect(container.textContent).toContain('Orca restarted before this message was sent.')
+    expect(container.querySelector('button[aria-label="Retry"]')).toBeNull()
+    expect(
+      [...container.querySelectorAll('button')].map((button) => button.textContent)
+    ).not.toContain('Retry')
+    rerender(hostList('done'))
+    expect(drawn(container)).toEqual([
+      'SEED PROMPT',
+      'WORKED',
+      'LOST PROMPT',
+      'NEW PROMPT',
+      'WORKED'
+    ])
+    expect(container.textContent).toContain('Worked for 5s')
+  })
 })

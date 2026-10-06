@@ -26,13 +26,14 @@ import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener
 } from './journal-host-database-test-support'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-q',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null }
+  providerHandle: claudeProviderHandle('native-1', null)
 }
 
 let root: string
@@ -125,7 +126,7 @@ describe('draft rows', () => {
     try {
       const version = Number(db.pragma('user_version', { simple: true }))
       // An old build compares stored == supported and keeps writing; a bump
-      // would latch it read-only after downgrade.
+      // would cost it every chat after a downgrade.
       expect(version).toBe(JOURNAL_DB_SCHEMA_VERSION)
       const table = db
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
@@ -150,7 +151,6 @@ describe('draft rows', () => {
     db.exec('DROP TABLE queued_messages')
     db.close()
     const journal = await open()
-    expect(journal.isReadOnly).toBe(false)
     const row = await queueDraft(journal, 'draft-1')
     expect(row.position).toBe(1)
   })

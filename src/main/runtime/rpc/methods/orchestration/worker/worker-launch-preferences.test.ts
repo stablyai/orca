@@ -117,10 +117,48 @@ describe('orchestration worker launch preferences', () => {
     ).toThrow('does not support effort turbo')
   })
 
-  it('refuses an opencode model because the opencode 2 TUI rejects --model', () => {
+  it('refuses an opencode model until the execution host verifies legacy TUI support', () => {
     expect(() =>
       resolveWorkerLaunchPreferences({ agent: 'opencode', model: 'meta/muse-spark-1.3' })
-    ).toThrow('does not support launch-time model selection')
+    ).toThrow('cannot verify launch-time model selection')
+  })
+
+  it('explains the existing-worktree requirement even if a new-worktree host is verified', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'opencode',
+        model: 'opencode/fledge-alpha-free',
+        createsWorktree: true,
+        openCodeModelLaunchSupported: true
+      })
+    ).toThrow('requires an existing worktree')
+  })
+
+  it('supports an opaque OpenCode model on a verified legacy host', () => {
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'opencode',
+        model: 'zai-coding-plan/glm-5.3-flash',
+        openCodeModelLaunchSupported: true
+      })
+    ).toEqual({
+      preferences: { model: 'zai-coding-plan/glm-5.3-flash' },
+      receipt: {
+        requested: { agent: 'opencode', model: 'zai-coding-plan/glm-5.3-flash', effort: null },
+        effective: { agent: 'opencode', model: 'zai-coding-plan/glm-5.3-flash', effort: null }
+      }
+    })
+  })
+
+  it('refuses an unverified OpenCode effort on a legacy host', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'opencode',
+        model: 'opencode/fledge-alpha-free',
+        effort: 'high',
+        openCodeModelLaunchSupported: true
+      })
+    ).toThrow('does not support effort high')
   })
 
   it('does not invent an effort when only a model is requested', () => {
@@ -157,23 +195,28 @@ describe('orchestration worker launch preferences', () => {
     },
     {
       model: 'gpt-5.4',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['future-effort']
     },
     {
       model: 'gpt-5.4-mini',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['future-effort']
     },
     {
       model: 'gpt-5.3-codex-spark',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['future-effort']
+    },
+    {
+      model: 'gpt-6.1-sol',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['turbo', 'future-effort']
     },
     {
       model: 'future-codex-model',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['future-effort']
     }
   ])('enforces the Codex effort ceiling for $model', ({ model, accepted, rejected }) => {
     const catalog = getAgentSessionOptionCatalog('codex')!

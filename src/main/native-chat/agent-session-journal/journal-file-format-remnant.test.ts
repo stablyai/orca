@@ -21,15 +21,18 @@ import {
   openTestJournalHostDatabase,
   loadTestJournal,
   deleteTestJournalRow,
-  insertTestJournalRowJson
+  insertTestJournalRowJson,
+  liveTestJournalRows,
+  SAVED_BY_NEWER_ORCA
 } from './journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const DISCLOSURE_ITEM_ID = agentJournalItemKey(JOURNAL_FILE_FORMAT_REMNANT_DISCLOSURE_IDENTITY)
@@ -142,11 +145,8 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
     expect(disclosure(reopened)).toContain(join(legacyDir(), 'log.jsonl'))
   })
 
-  // A repair's epoch is the marker that history was deleted and never rebuilt,
-  // and any row that is not the repair's own disclosure retires it. Appending
-  // here would silently stop the session ever asking the provider for that
-  // history — with the journal still holding none.
-  it('stays out of a journal this open just repaired', async () => {
+  // A damaged journal fails its open before this branch, so nothing is appended to it.
+  it('writes nothing into a damaged journal', async () => {
     const journal = await open()
     await journal.appendItem(
       { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
@@ -154,10 +154,6 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.close()
-    // Deleting the anchor leaves every row unanchored: replay keeps nothing, so
-    // the repair publishes an empty `unreconcilable_prefix` epoch and — costing
-    // no malformed row — appends no disclosure of its own. That is the one state
-    // where this branch and a repair meet.
     const opened = openTestJournalHostDatabase(root)
     try {
       deleteTestJournalRow(opened.db, IDENTITY.sessionId, 1)
@@ -166,16 +162,22 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
     }
     await writeRemnant()
 
-    const repaired = await open()
-
-    expect(disclosure(repaired)).toBeNull()
-    // Still asking the provider for the history the repair dropped.
-    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: true })
+    await expect(open()).rejects.toMatchObject({
+      refusal: { details: { reason: 'journalCorrupt' } }
+    })
+    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({
+      damage: { sequence: 1, cause: 'no-epoch-row' }
+    })
+    const stored = openTestJournalHostDatabase(root)
+    try {
+      expect(liveTestJournalRows(stored.db, IDENTITY.sessionId).map((row) => row.seq)).toEqual([2])
+    } finally {
+      stored.close()
+    }
   })
 
-  // A journal latched by a newer row reaches the same branch — and an append into one throws,
-  // which would make the session unopenable rather than read-only.
-  it('writes nothing into a journal latched by a newer row', async () => {
+  // A newer row fails the load before the empty-epoch branch would write a notice.
+  it("writes nothing into a newer Orca's journal, whose open is refused", async () => {
     const founded = await open()
     const epoch = founded.epoch
     await founded.close()
@@ -197,10 +199,12 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
     )
     await writeRemnant()
 
-    const latched = await open()
+    const before = liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId)
 
-    expect(latched.isReadOnly).toBe(true)
-    expect(disclosure(latched)).toBeNull()
+    await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+    expect(liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId)).toEqual(
+      before
+    )
   })
 
   // A row nothing projects is a row nobody reads.

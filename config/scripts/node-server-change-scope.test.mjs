@@ -310,6 +310,10 @@ it('runs the Bun and Node cross-runtime tests on Linux against pinned inputs', (
   expect(build.if).toBeUndefined()
   expect(build['continue-on-error']).toBeUndefined()
   expect(build.run).toMatch(/^if \[ "\$RUNNER_OS" != Linux \]; then exit 0; fi\n/)
+  expect(build.run).toContain(
+    'pnpm --dir "$RUNNER_TEMP/bun-orcad-source" install --frozen-lockfile --ignore-scripts'
+  )
+  expect(build.run).not.toContain('"$GITHUB_WORKSPACE/node_modules"')
   expect(build.run).toContain('echo "slot=$RUNNER_TEMP/bun-orcad" >> "$GITHUB_OUTPUT"')
   expect(build.run).toContain('echo "executable=$(command -v bun)" >> "$GITHUB_OUTPUT"')
   expect(build.run).not.toContain('GITHUB_ENV')

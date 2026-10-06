@@ -12,6 +12,10 @@ import {
 } from '../../shared/agent-session-operation-ledger'
 import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
 import {
+  encodePersistedAgentSessionProviderHandle,
+  isAgentSessionProviderHandle
+} from '../../shared/agent-session-provider-handle-encoding'
+import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
@@ -66,6 +70,24 @@ const OPERATION: AgentSessionOperationRow = {
   outcome: { status: 'succeeded', sessionId: ALPHA }
 }
 
+/** The records file only ever held handles in their stored form. */
+function storedForm(value: Record<string, unknown>): Record<string, unknown> {
+  const chain = value.providerHandleChain
+  return Array.isArray(chain)
+    ? {
+        ...value,
+        providerHandleChain: chain.map((link: unknown) =>
+          typeof link === 'object' &&
+          link !== null &&
+          'handle' in link &&
+          isAgentSessionProviderHandle(link.handle)
+            ? { ...link, handle: encodePersistedAgentSessionProviderHandle(link.handle) }
+            : link
+        )
+      }
+    : value
+}
+
 function legacyFile(
   records: readonly (Record<string, unknown> & { sessionId: string })[],
   extra: Record<string, unknown> = {}
@@ -73,7 +95,7 @@ function legacyFile(
   return {
     schemaVersion: 2,
     hostId: 'local',
-    records: Object.fromEntries(records.map((value) => [value.sessionId, value])),
+    records: Object.fromEntries(records.map((value) => [value.sessionId, storedForm(value)])),
     operations: {},
     retiredClaimKeys: [],
     unusableRecords: {},
@@ -246,7 +268,7 @@ describe('a record the file set aside', () => {
     const stored = database.db
       .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
       .get(ALPHA)
-    expect(JSON.parse(String(stored?.record_json))).toEqual(unsupported)
+    expect(JSON.parse(String(stored?.record_json))).toEqual(storedForm(unsupported))
   })
 
   // #23589: both copies exist only when an older build recovered the readable one from its backup,
@@ -385,7 +407,7 @@ describe('the tab index from before the table', () => {
     const owed = await install()
     owed.database.db
       .prepare('INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?)')
-      .run(BETA, JSON.stringify(record(BETA)))
+      .run(BETA, JSON.stringify(storedForm(record(BETA))))
     await AgentSessionRecordStore.open({
       journalDatabase: owed.database,
       hostId: 'local'

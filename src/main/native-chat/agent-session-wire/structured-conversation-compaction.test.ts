@@ -33,6 +33,7 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import type { StructuredConversationCommandOutcome } from './structured-conversation-command-outcome'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 let state: ReturnType<typeof hostTestState>
 let compact: Mock<NonNullable<StructuredAgentSessionAdapter['compact']>>
@@ -589,7 +590,7 @@ it('writes one exit row when the child dies mid-command, and the loop writes not
     acquisitionGeneration: `generation-${fence}`,
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       // The next child resumes the thread, as a real one does.
       origin: state.store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
       mintedAtFence: fence,
@@ -639,7 +640,7 @@ it('delivers the next message after a command whose child died and whose settlem
     acquisitionGeneration: `generation-${fence}`,
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: state.store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
       mintedAtFence: fence,
       observedAt: 1

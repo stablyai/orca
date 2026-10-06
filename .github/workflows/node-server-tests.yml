@@ -164,7 +164,7 @@ jobs:
           cache-pnpm-store-lookup-only: 'true'
       # Design D7 upgrade and rollback: the last Bun orcad, built from a main commit that shipped
       # it, beside this checkout's Node slot; the live-terminal hand-over skips once PROTOCOL_VERSION
-      # moves past the Bun daemon's. Its build uses this checkout's installed dependencies.
+      # moves past the Bun daemon's. Install its pinned dependencies independently of this checkout.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         if: runner.os == 'Linux'
         with:
@@ -179,7 +179,7 @@ jobs:
           if [ "$RUNNER_OS" != Linux ]; then exit 0; fi
           git fetch --no-tags --depth=1 origin "$BUN_ORCAD_COMMIT"
           git worktree add --detach "$RUNNER_TEMP/bun-orcad-source" "$BUN_ORCAD_COMMIT"
-          ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/bun-orcad-source/node_modules"
+          pnpm --dir "$RUNNER_TEMP/bun-orcad-source" install --frozen-lockfile --ignore-scripts
           node "$RUNNER_TEMP/bun-orcad-source/config/scripts/build-orcad-bun.mjs" --out-dir "$RUNNER_TEMP/bun-orcad"
           echo "slot=$RUNNER_TEMP/bun-orcad" >> "$GITHUB_OUTPUT"
           echo "executable=$(command -v bun)" >> "$GITHUB_OUTPUT"

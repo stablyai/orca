@@ -1,6 +1,6 @@
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import { readWholeAgentSessionFailureFact } from './agent-session-failure'
-import type { AgentJournalMessageItem, AgentJournalSubmission } from './agent-session-journal-types'
+import type { AgentJournalMessageItem } from './agent-session-journal-types'
 import {
   parseAgentSessionWriteFailure,
   type AgentSessionWriteFailure,
@@ -14,11 +14,11 @@ import {
   structuredAgentSessionMessageSendMutation,
   type StructuredAgentSessionSendMutation
 } from './structured-agent-session-send-mutation'
-import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
 import { parseStructuredAgentSessionOutboxQueueFields } from './structured-agent-session-outbox-delivery'
 
-/** `rejected`: the host settled the send as not delivered. The drain never sends it again on its
- *  own and nothing queues behind it; only the user's Retry does. */
+/** `rejected`: settled as not delivered. The drain never sends it again and nothing queues behind
+ *  it. One the host refused unrecorded waits for the user's Retry. One it recorded owes no delivery
+ *  and leaves on the batch or page that loads its row (`structured-agent-session-outbox-reconcile`). */
 export type StructuredAgentSessionOutboxState =
   | 'queued'
   | 'dispatching'
@@ -176,6 +176,14 @@ export function structuredAgentSessionEntryIdExpired(
   )
 }
 
+/** The host recorded this send and then rejected it: no Retry, since sending it again is a new
+ *  message. The reconcile drops it once the client holds the rejected submission. */
+export function structuredAgentSessionEntryRejectedByHost(
+  entry: StructuredAgentSessionOutboxEntry
+): boolean {
+  return entry.state === 'rejected' && entry.lastFailure?.kind === 'rejected'
+}
+
 export function requeueStructuredAgentSessionSendRefusal(
   entry: StructuredAgentSessionOutboxEntry,
   refusal: AgentSessionWriteRefusal,
@@ -206,58 +214,6 @@ export function requeueStructuredAgentSessionSendRefusal(
     lastAttemptAt: null,
     retryAfterUnknownSubmittedAt: null
   }
-}
-
-export function reconcileStructuredAgentSessionOutbox(
-  entries: readonly StructuredAgentSessionOutboxEntry[],
-  submissions: readonly AgentJournalSubmission[]
-): StructuredAgentSessionOutboxEntry[] {
-  const settled = new Map(submissions.map((entry) => [entry.clientMessageId, entry]))
-  return entries.flatMap((entry) => {
-    const submission = settled.get(entry.clientMessageId)
-    if (submission?.dispatchState === 'accepted') {
-      return []
-    }
-    if (
-      submission?.dispatchState === 'rejected' &&
-      classifyDispatchRejection(submission).category === 'withdrawn'
-    ) {
-      return []
-    }
-    if (submission?.dispatchState === 'pending') {
-      if (entry.state === 'dispatching') {
-        return [entry]
-      }
-      // The host has it, so no failure of an earlier attempt describes it now.
-      const { lastFailure: _landed, ...landed } = entry
-      return [{ ...landed, state: 'dispatching' as const }]
-    }
-    // Accepted, then not delivered — the agent never started, or its start was refused. The text
-    // and why stay here for the user's Retry, and nothing queues behind it. `unconfirmed` is how a
-    // remount reads an entry it left dispatching; the journal has since answered it.
-    if (
-      submission?.dispatchState === 'rejected' &&
-      (entry.state === 'dispatching' || entry.state === 'unconfirmed')
-    ) {
-      return [
-        {
-          ...entry,
-          state: 'rejected' as const,
-          lastFailure: structuredAgentSessionRejectedFailure(submission)
-        }
-      ]
-    }
-    if (
-      submission?.dispatchState === 'unknown' &&
-      entry.retryAfterUnknownSubmittedAt !== -1 &&
-      entry.retryAfterUnknownSubmittedAt !== submission.submittedAt
-    ) {
-      // In doubt now, not failed: the probe's resend decides it, as for any unconfirmed send.
-      const { lastFailure: _superseded, ...inDoubt } = entry
-      return [{ ...inDoubt, state: 'unconfirmed' as const }]
-    }
-    return [entry]
-  })
 }
 
 export function parseStructuredAgentSessionOutboxEntry(

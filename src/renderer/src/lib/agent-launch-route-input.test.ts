@@ -53,7 +53,7 @@ import {
 } from './agent-session-launch-plan'
 
 const routeFor = (appStore: AgentLaunchRouteStore, args: AgentLaunchRouteArgs) =>
-  planAgentSessionLaunch(appStore, args).route
+  planAgentSessionLaunch(appStore, { ...args, requestId: 'route-check' }).route
 const structuredFeasibleFor = (appStore: AgentLaunchRouteStore, args: AgentLaunchRouteArgs) =>
   structuredAgentSessionLaunchFeasible(appStore, { ...args, settings: STRUCTURED_SETTINGS })
 

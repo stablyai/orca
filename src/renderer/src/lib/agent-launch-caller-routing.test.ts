@@ -90,7 +90,7 @@ const cases = callerProfileCases()
 
 async function launch(profile: AgentLaunchCallerProfile) {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  return launchAgentInNewTab({ ...profile.args })
+  return launchAgentInNewTab({ requestId: 'request-1', ...profile.args })
 }
 
 describe('agent launch caller routing', () => {
@@ -200,7 +200,11 @@ describe('agent launch caller routing', () => {
       cancel: vi.fn()
     })
 
-    const result = launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1' })
+    const result = launchAgentInNewTab({
+      requestId: 'request-2',
+      agent: 'claude',
+      worktreeId: 'wt-1'
+    })
 
     // The server admits the chat before any of it exists here, so the surface is the host's.
     expect(result?.surface.kind).toBe('host-published')
@@ -227,6 +231,7 @@ describe('agent launch caller routing', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-3',
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt: 'fix the flaky test',
@@ -261,7 +266,11 @@ describe('agent launch caller routing', () => {
     serverReports([])
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1' })
+    const result = launchAgentInNewTab({
+      requestId: 'request-4',
+      agent: 'claude',
+      worktreeId: 'wt-1'
+    })
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
@@ -271,7 +280,12 @@ describe('agent launch caller routing', () => {
     const beforeSurfaceOpen = vi.fn(() => false)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', beforeSurfaceOpen })
+    const result = launchAgentInNewTab({
+      requestId: 'request-5',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      beforeSurfaceOpen
+    })
 
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'local-terminal' })
@@ -284,7 +298,12 @@ describe('agent launch caller routing', () => {
     const beforeSurfaceOpen = vi.fn(() => false)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', beforeSurfaceOpen })
+    const result = launchAgentInNewTab({
+      requestId: 'request-6',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      beforeSurfaceOpen
+    })
 
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'host-published' })
@@ -296,7 +315,12 @@ describe('agent launch caller routing', () => {
     const beforeSurfaceOpen = vi.fn(() => false)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', beforeSurfaceOpen })
+    launchAgentInNewTab({
+      requestId: 'request-7',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      beforeSurfaceOpen
+    })
 
     // Why: the structured route cannot name its surface before the session id exists, so the
     // funnel wraps the caller's hook and the structured executor decides when to ask.
@@ -314,7 +338,12 @@ describe('agent launch caller routing', () => {
     const beforeSurfaceOpen = vi.fn(() => undefined)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', beforeSurfaceOpen })
+    const result = launchAgentInNewTab({
+      requestId: 'request-8',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      beforeSurfaceOpen
+    })
 
     expect(result?.surface.kind).toBe('local-terminal')
     expect(store.createTab).toHaveBeenCalledTimes(1)
@@ -326,6 +355,7 @@ describe('agent launch caller routing', () => {
     // Why: unbalanced quoting is the real shape behind every caller's "could not build the launch
     // command" toast — the arguments cannot be tokenized, so no surface should be opened at all.
     const result = launchAgentInNewTab({
+      requestId: 'request-9',
       agent: 'codex',
       worktreeId: 'wt-1',
       agentArgs: "--model 'gpt-5.5"

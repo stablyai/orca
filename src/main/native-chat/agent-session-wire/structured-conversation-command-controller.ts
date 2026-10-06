@@ -17,13 +17,15 @@ export class StructuredConversationCommandController {
     private readonly context: () => StructuredAgentSessionMutationContext,
     private readonly host: Pick<StructuredAgentSessionHost, 'waitForSendSettlement'>
   ) {}
+  /** Whether a clear is in flight is read as the send arrives; it refuses only a first run, so an
+   *  id with a recorded answer by the send's turn gets that answer, behind the clear. */
   send = (
     caller: StructuredAgentSessionCaller,
     params: Parameters<typeof sendStructuredAgentSessionTurn>[2]
   ): ReturnType<typeof sendStructuredAgentSessionTurn> =>
-    this.pending.has(params.envelope.sessionId)
-      ? Promise.resolve({ ok: false, refusal: conversationCommandInFlight() })
-      : sendStructuredAgentSessionTurn(this.context(), caller, params)
+    sendStructuredAgentSessionTurn(this.context(), caller, params, {
+      clearInFlight: this.pending.has(params.envelope.sessionId)
+    })
 
   run = (caller: StructuredAgentSessionCaller, params: ConversationCommandParams) => {
     if (params.command === 'compact') {

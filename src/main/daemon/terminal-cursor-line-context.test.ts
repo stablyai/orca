@@ -157,4 +157,79 @@ describe('readTerminalCursorLineContext', () => {
     expect(detectTerminalComposerDraft(context)?.text).toBe(draft)
     emulator.dispose()
   })
+
+  it.each([true, false])('bounds blank-row cell reads with reusable cells %s', (reusable) => {
+    const terminal = new Terminal({ cols: 12, rows: 5, allowProposedApi: true })
+    try {
+      const rig = observeCellReads(terminal)
+      const active = rig.source.buffer.active
+      const source = {
+        ...rig.source,
+        buffer: { active: { ...active, getNullCell: reusable ? active.getNullCell : undefined } }
+      }
+      const context = readTerminalCursorLineContext(source, terminal.rows)
+      expect(context?.typedRows).toEqual([''])
+      expect(context?.typedRowsBelow).toEqual(['', '', '', ''])
+      expect(context?.promptGlyphBoldRows).toEqual([false])
+      expect(context?.rowsBelowCustomForeground).toEqual([false, false, false, false])
+      // A blank glyph search must share the full row scan; the cursor suffix is separate.
+      expect(rig.targets.length).toBeLessThanOrEqual(terminal.cols * (terminal.rows + 1))
+      expect(rig.allocated).toHaveLength(reusable ? 1 : 0)
+      expect(rig.targets.every((cell) => cell === rig.allocated[0])).toBe(true)
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('keeps dimmed first-glyph styles while excluding their text', () => {
+    const terminal = new Terminal({ cols: 32, rows: 5, allowProposedApi: true })
+    try {
+      writeSync(terminal, '\x1b[2;1m›\x1b[0m typed\x1b7\r\n\x1b[2;31mfooter\x1b[0m\x1b8')
+      const context = readTerminalCursorLineContext(terminal, terminal.rows)
+      expect(context?.typedRows).toEqual([' typed'])
+      expect(context?.promptGlyphBoldRows).toEqual([true])
+      expect(context?.typedRowsBelow[0]).toBe('')
+      expect(context?.rowsBelowCustomForeground?.[0]).toBe(true)
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('uses the first visible glyph even when later glyphs have styles', () => {
+    const terminal = new Terminal({ cols: 32, rows: 5, allowProposedApi: true })
+    try {
+      writeSync(
+        terminal,
+        '\x1b[1m \u00a0\x1b[22m›\x1b[1mX\x1b[0m\x1b7\r\n' +
+          '\x1b[31m  \x1b[39mplain \x1b[32mlater\x1b[0m\x1b8'
+      )
+      const context = readTerminalCursorLineContext(terminal, terminal.rows)
+      expect(context?.promptGlyphBoldRows).toEqual([false])
+      expect(context?.rowsBelowCustomForeground?.[0]).toBe(false)
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('finds styled first glyphs after unstyled blank cells', () => {
+    const terminal = new Terminal({ cols: 32, rows: 5, allowProposedApi: true })
+    try {
+      writeSync(terminal, '  \x1b[1m›\x1b[0m typed\x1b7\r\n  \x1b[31mfooter\x1b[0m\x1b8')
+      const context = readTerminalCursorLineContext(terminal, terminal.rows)
+      expect(context?.promptGlyphBoldRows).toEqual([true])
+      expect(context?.rowsBelowCustomForeground?.[0]).toBe(true)
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('keeps an unwritten cell between typed glyphs as a space', () => {
+    const terminal = new Terminal({ cols: 12, rows: 5, allowProposedApi: true })
+    try {
+      writeSync(terminal, 'a\x1b[3Gb')
+      expect(readTerminalCursorLineContext(terminal, terminal.rows)?.typedRows).toEqual(['a b'])
+    } finally {
+      terminal.dispose()
+    }
+  })
 })

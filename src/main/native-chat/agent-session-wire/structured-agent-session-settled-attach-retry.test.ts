@@ -27,6 +27,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -98,7 +99,7 @@ beforeEach(async () => {
     },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
       mintedAtFence: fence,
       observedAt: NOW
@@ -131,15 +132,16 @@ function startAgent(): Promise<unknown> {
 
 describe('settled attach retry', () => {
   it('settles a post-acquisition journal failure and retries without a restart', async () => {
-    const historyFilePath = vi
-      .fn<NonNullable<StructuredAgentSessionAdapter['historyFilePath']>>()
-      .mockRejectedValueOnce(new Error('journal path unavailable'))
-      .mockResolvedValue(null)
+    const journalDatabase = openTestJournalHostDatabase(root)
+    // The journal's open asks where the chat's per-chat file lives before it reads anything.
+    vi.spyOn(journalDatabase, 'legacyDirectoryFor').mockImplementationOnce(() => {
+      throw new Error('journal path unavailable')
+    })
     host = new StructuredAgentSessionHost({
       logger: createStructuredAgentSessionLogger(),
       store,
-      adapter: { ...adapter(), historyFilePath },
-      journalDatabase: openTestJournalHostDatabase(root),
+      adapter: adapter(),
+      journalDatabase,
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW
@@ -185,7 +187,7 @@ describe('settled attach retry', () => {
         },
         link: {
           linkId: `link-${fence}`,
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'created',
           mintedAtFence: fence,
           observedAt: NOW
@@ -229,7 +231,7 @@ describe('settled attach retry', () => {
         },
         link: {
           linkId: `link-${fence}`,
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'created',
           mintedAtFence: fence,
           observedAt: NOW

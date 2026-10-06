@@ -1,4 +1,6 @@
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type {
+  AgentJournalAnsweredTurnIdentity,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
@@ -77,6 +79,8 @@ export type CodexStructuredSessionAdapterDeps = {
   /** Host capability seam; production uses the native Windows process table. */
   isWindowsProcessStartTimeAvailable?: () => boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
+  /** Where bookkeeping a close or exit does after the child is gone reports a failure. */
+  logger?: StructuredAgentSessionLogger
   /** What the session's child work did, delivered after the journal handled the frame. */
   onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
   /** A send admitted earlier: its identity once Codex echoes it, or its rejection when the turn
@@ -84,7 +88,10 @@ export type CodexStructuredSessionAdapterDeps = {
   onDispatchSettledLate?: (
     input: { sessionId: string; clientMessageId: string } & (
       | { providerIdentity: AgentJournalItemIdentity }
-      | ({ state: 'rejected' } & AgentJournalDispatchRejection)
+      | ({
+          state: 'rejected'
+          answeredInTurn: AgentJournalAnsweredTurnIdentity
+        } & AgentJournalDispatchRejection)
     )
   ) => void
   /** Codex reported its thread not running with no turn open: a send whose
@@ -105,11 +112,12 @@ export type CodexSession = {
   ended: boolean
   /** First observed child exit survives rejected settlement admission. */
   exitObservedAt?: number
-  requestedClose: boolean
+  /** The close Orca began for this child: asked for, or forced as a death, and why. Whatever ends
+   *  the child after it (that close, or the exit the connection reports meanwhile) keeps this. */
+  orcaClose?: { requested: boolean; reason: Error }
   fence: number
   acquisitionGeneration: string
   threadId: string
-  historyPath: string | null
   historyMode?: 'legacy' | 'paginated'
   /** Primary-thread turns Codex reported started and not yet ended, as read off the wire: what
    *  rewind waits out and what a Stop naming no turn interrupts when the journal shows none. */
@@ -146,13 +154,9 @@ export function mintCodexAcquisitionGeneration(deps: CodexStructuredSessionAdapt
 export function codexSessionLifecycle(
   fence: number,
   acquisitionGeneration: string
-): Pick<
-  CodexSession,
-  'ended' | 'requestedClose' | 'fence' | 'acquisitionGeneration' | 'turnOpenWaits'
-> {
+): Pick<CodexSession, 'ended' | 'fence' | 'acquisitionGeneration' | 'turnOpenWaits'> {
   return {
     ended: false,
-    requestedClose: false,
     fence,
     acquisitionGeneration,
     turnOpenWaits: createCodexTurnOpenWaits()

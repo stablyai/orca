@@ -524,7 +524,7 @@ it('starts a new child for the next send after a Stop, on the same Claude conver
   })
   // The wake resumes the same Claude conversation; the first test pins the leaf it resumes after.
   expect(store.getRecord(SESSION)?.providerHandleChain.at(-1)?.handle).toMatchObject({
-    sessionId: PROVIDER_SESSION_ID
+    nativeId: PROVIDER_SESSION_ID
   })
   expect(resumed.closed).toBe(false)
   expect(await dispatch(next)).toMatchObject({ state: 'pending' })

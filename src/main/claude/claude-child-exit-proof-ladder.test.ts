@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../codex/codex-app-server-posix-supervisor'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import type { ClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 import { proveClaudeChildExitWithReaper } from './claude-child-exit-proof-ladder'
 

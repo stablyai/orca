@@ -37,6 +37,7 @@ function getRenderedChips(): { agent: string; label: string; role: string }[] {
 describe('NativeChatSupportedAgents', () => {
   afterEach(async () => {
     await i18n.changeLanguage('en')
+    i18n.removeResourceBundle('test', 'translation')
   })
 
   it('keeps the advertised list and support predicate on the independent contract', () => {
@@ -85,8 +86,9 @@ describe('NativeChatSupportedAgents', () => {
   })
 
   it('renders the English fallback when the active locale lacks the label key', async () => {
-    await i18n.changeLanguage('es')
-    expect(i18n.getResource('es', 'translation', SUPPORTED_AGENTS_LABEL_KEY)).toBeUndefined()
+    i18n.addResourceBundle('test', 'translation', {})
+    await i18n.changeLanguage('test')
+    expect(i18n.getResource('test', 'translation', SUPPORTED_AGENTS_LABEL_KEY)).toBeUndefined()
 
     const markup = renderToStaticMarkup(<NativeChatSupportedAgents />)
 

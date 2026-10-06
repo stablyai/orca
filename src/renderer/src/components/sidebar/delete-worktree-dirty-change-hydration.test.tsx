@@ -11,6 +11,7 @@ import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
 import {
+  getDeleteWorktreeChangeCheckStates,
   getDeleteWorktreeDirtyChangeCounts,
   getDeleteWorktreeDirtyChangePreview,
   getDeleteWorktreeDirtyChangePreviews
@@ -92,6 +93,7 @@ function Preview({ worktree }: { worktree: Worktree }): JSX.Element {
       collisionWorktrees={targets}
       hostLabelById={new Map()}
       deleteStateByWorktreeId={input.deleteStateByWorktreeId}
+      changeCheckStatesByWorktreeId={getDeleteWorktreeChangeCheckStates(input)}
       dirtyChangeCountsByWorktreeId={getDeleteWorktreeDirtyChangeCounts(input)}
       dirtyChangePreviewsByWorktreeId={getDeleteWorktreeDirtyChangePreviews(input)}
     />
@@ -102,6 +104,28 @@ afterEach(cleanup)
 beforeEach(() => vi.clearAllMocks())
 
 describe('loaded deletion disclosure and existing hydration', () => {
+  it('shows pending and failed detail checks alongside a known dirty warning', async () => {
+    let failRead: (error: Error) => void = () => {
+      throw new Error('Status read has not started')
+    }
+    vi.mocked(getRuntimeGitStatus).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          failRead = reject
+        })
+    )
+    render(<Preview worktree={target('known-dirty')} />)
+    expect(screen.getByText('Uncommitted or untracked changes')).toBeVisible()
+    expect(screen.getByText('· Checking…')).toBeVisible()
+    await act(async () => {
+      failRead(new Error('Details unavailable'))
+    })
+    expect(screen.getByText('Uncommitted or untracked changes')).toBeVisible()
+    expect(screen.getByText('· Details unavailable')).toBeVisible()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByText(/No uncommitted|0 changes/)).not.toBeInTheDocument()
+  })
+
   it('expands and collapses a hydrated snapshot without requesting status again', async () => {
     vi.mocked(getRuntimeGitStatus).mockResolvedValue({
       entries: [
@@ -155,6 +179,7 @@ describe('loaded deletion disclosure and existing hydration', () => {
     })
     await waitFor(() => expect(getRuntimeGitStatus).toHaveBeenCalledTimes(2))
     expect(screen.getByText('Uncommitted or untracked changes')).toBeVisible()
+    expect(screen.getByText('· Details unavailable')).toBeVisible()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByText('old-host.ts')).not.toBeInTheDocument()
     expect(screen.queryByText(/No files|clean|0 changes/)).not.toBeInTheDocument()

@@ -4,16 +4,24 @@
 // own admission rules by sitting next to the call site.
 //
 // Admission is two-phase for a call that brings a `prepareSession`. The ledger's
-// answer comes first and places nothing; a call it will admit may then give the
-// session an owner, and only after that are the row placed and the lease
-// checked — against the lease as it stands once the owner is there.
+// answer comes first and places nothing. An id it refuses is answered then, with
+// nothing opened; so is a recorded id that settled refused. Any other recorded id
+// is answered after the plan's own preparation for a replay (a send's only opens
+// the conversation), from the journal, with no admit write. A call the ledger
+// admits, or a replay that proves nothing landed, may then give the session an
+// owner, and only after that are the row placed and the lease checked — against
+// the lease as it stands once the owner is there.
 
 import {
   admitAgentSessionMutation,
   agentSessionFingerprintConflict,
+  agentSessionLedgerRefusal,
   computeAgentSessionPayloadFingerprint
 } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionOperationDecision } from '../../../shared/agent-session-operation-ledger'
+import type {
+  AgentSessionOperationDecision,
+  AgentSessionOperationRow
+} from '../../../shared/agent-session-operation-ledger'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   refuse,
@@ -36,7 +44,10 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import { runSettledAgentSessionMutation } from './structured-agent-session-operation-settlement'
-import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
+import {
+  agentSessionOperationOutcomeUnknown,
+  resolveAgentSessionReplayOutcome
+} from './structured-agent-session-replay-outcome'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
@@ -103,11 +114,26 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     if (!ledger) {
       return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
     }
-    if (ledger.decision.decision !== 'refused') {
-      const prepared = await request.prepareSession(ledger.decision.decision, ledger.record)
-      if (!prepared.ok) {
-        return prepared
+    if (ledger.decision.decision === 'refused') {
+      // Nothing to read, prepare or write: a closed chat or a store that takes no write answers alike.
+      return refuseAgentSessionMutation(agentSessionLedgerRefusal(envelope, ledger.decision))
+    }
+    if (ledger.decision.decision === 'replay') {
+      const answered = await answerRecordedOperation(
+        request,
+        request.prepareSession,
+        ledger.decision.row,
+        ledger.record,
+        hostFingerprint
+      )
+      if (answered !== 'rerun') {
+        return answered
       }
+    }
+    const record = request.store.getRecord(envelope.sessionId) ?? ledger.record
+    const prepared = await request.prepareSession('admit', record)
+    if (!prepared.ok) {
+      return prepared
     }
   }
   const journal = request.journal()
@@ -151,18 +177,9 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   const fence = record.lease.runtimeFence
   const context = turnContext(request, journal, fence)
   if (admission.decision === 'replay') {
-    const replay = resolveAgentSessionReplayOutcome({
-      operationId: envelope.clientOperationId,
-      outcome: admission.row.outcome,
-      reconstruct: () => plan.replay(context, admission.row.outcome),
-      rerunWhenReplayMissing: plan.rerunWhenReplayMissing?.(context),
-      recoverUnknownFromDurableState: plan.recoverUnknownFromDurableState
-    })
-    if (replay.decision === 'refuse') {
-      return refuseAgentSessionMutation(replay.refusal)
-    }
-    if (replay.decision === 'replay') {
-      return { ok: true, replayed: true, fence, cursor: journal.cursor(), value: replay.value }
+    const replayed = replayRecordedOperation(request, context, admission.row)
+    if (replayed !== 'rerun') {
+      return replayed
     }
     // Nothing durable landed, so this id is about to run for the first time. A
     // refused call leaves its ledger row behind, and replaying past the lease
@@ -195,6 +212,85 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   return outcome.ok
     ? { ok: true, replayed: false, fence, cursor: journal.cursor(), value: outcome.value }
     : refuseAgentSessionMutation(outcome.refusal)
+}
+
+/**
+ * A resend of a recorded id, answered with no admit write: a refusal its first run recorded, with
+ * nothing opened; otherwise, after the plan's own preparation for a replay, from the conversation
+ * its run wrote to. `rerun` when nothing durable landed, so the call runs as a first run.
+ */
+async function answerRecordedOperation<TValue>(
+  request: AgentSessionMutationRequest<TValue>,
+  prepareSession: NonNullable<AgentSessionMutationRequest<TValue>['prepareSession']>,
+  row: AgentSessionOperationRow,
+  record: AgentSessionRecord,
+  hostFingerprint: string
+): Promise<AgentSessionMutationResult<TValue> | 'rerun'> {
+  const { plan, envelope } = request
+  if (row.outcome.status === 'failed') {
+    const replay = resolveAgentSessionReplayOutcome({
+      operationId: envelope.clientOperationId,
+      outcome: row.outcome,
+      reconstruct: () => null
+    })
+    if (replay.decision === 'refuse') {
+      return refuseAgentSessionMutation(replay.refusal)
+    }
+  }
+  const prepared = await prepareSession('replay', record)
+  if (!prepared.ok) {
+    return prepared
+  }
+  const journal = request.journal()
+  // Read again after the open: the row as it stands, against the record the open left.
+  const current = request.store.evaluateMutationOperation({
+    callerKey: request.callerKey,
+    envelope,
+    hostFingerprint,
+    now: request.now(),
+    ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
+  })
+  if (!journal || !current) {
+    return refuseAgentSessionMutation(
+      agentSessionOperationOutcomeUnknown(envelope.clientOperationId)
+    )
+  }
+  if (current.decision.decision === 'refused') {
+    return refuseAgentSessionMutation(agentSessionLedgerRefusal(envelope, current.decision))
+  }
+  if (current.decision.decision === 'admit') {
+    // The row is gone since: the first-run path decides it from scratch.
+    return 'rerun'
+  }
+  const context = turnContext(request, journal, current.record.lease.runtimeFence)
+  return replayRecordedOperation(request, context, current.decision.row)
+}
+
+/** The recorded answer from the journal, or `rerun` when the plan says nothing durable landed. */
+function replayRecordedOperation<TValue>(
+  { plan, envelope }: AgentSessionMutationRequest<TValue>,
+  context: AgentSessionTurnContext,
+  row: AgentSessionOperationRow
+): AgentSessionMutationResult<TValue> | 'rerun' {
+  const replay = resolveAgentSessionReplayOutcome({
+    operationId: envelope.clientOperationId,
+    outcome: row.outcome,
+    reconstruct: () => plan.replay(context, row.outcome),
+    rerunWhenReplayMissing: plan.rerunWhenReplayMissing?.(context),
+    recoverUnknownFromDurableState: plan.recoverUnknownFromDurableState
+  })
+  if (replay.decision === 'refuse') {
+    return refuseAgentSessionMutation(replay.refusal)
+  }
+  return replay.decision === 'replay'
+    ? {
+        ok: true,
+        replayed: true,
+        fence: context.fence,
+        cursor: context.journal.cursor(),
+        value: replay.value
+      }
+    : 'rerun'
 }
 
 /** The committed ledger's admission, placing nothing: a failed commit left memory as it was. */

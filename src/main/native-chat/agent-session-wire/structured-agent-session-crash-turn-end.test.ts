@@ -38,6 +38,7 @@ import {
 } from './structured-agent-session-adapter'
 import { resettleOpenStructuredAgentSessionConversation } from './structured-agent-session-conversation-open'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
 import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idle-sweep'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
@@ -47,6 +48,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const PROVIDER_SESSION = 'provider-session-alpha-1'
 /** The tool call's row: the last thing the provider wrote before the crash. */
@@ -70,7 +72,7 @@ function crashedClaudeRecord(): AgentSessionRecord {
     providerHandleChain: [
       {
         linkId,
-        handle: { provider: 'claude', sessionId: PROVIDER_SESSION, leafUuid: null },
+        handle: claudeProviderHandle(PROVIDER_SESSION, null),
         origin: 'created',
         mintedAtFence: 13,
         observedAt: TOOL_STARTED_AT - 60_000
@@ -119,7 +121,7 @@ async function seedClaudeToolTurn(): Promise<void> {
       workspaceId: LOCATION.workspaceId,
       hostId: LOCATION.executionHostId,
       agent: 'claude',
-      providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION, leafUuid: null }
+      providerHandle: claudeProviderHandle(PROVIDER_SESSION, null)
     },
     database: openTestJournalHostDatabase(root),
     now: () => now
@@ -216,6 +218,34 @@ describe('a turn a crash cut short mid-tool', () => {
     expect(completedStructuredAgentTurnSeconds(timing)).toBe(27)
   })
 
+  // The turn bar reads like a finished turn, so this row is the one place the chat says why.
+  it('explains the cut once, with one notice row and a turn bar that does not repeat it', async () => {
+    openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
+
+    await host.restoreReadableSessions()
+
+    const { items } = await host.journalSnapshot(SESSION)
+    // As a reader's transcript shows it: the stored row is the explanation, so none is derived.
+    const statusRows = withNativeChatCutTurnNotices(items, { agentName: 'Claude' }).flatMap(
+      (item) => (item.body.kind === 'status' ? [item.body] : [])
+    )
+    expect(statusRows).toEqual([
+      expect.objectContaining({
+        text: 'Claude stopped while this response was in progress. You can continue in this conversation.',
+        failure: expect.objectContaining({ kind: 'providerExited' }),
+        tone: 'error'
+      })
+    ])
+    const [timing] = selectStructuredAgentTurnTimings(items).values()
+    expect(
+      describeNativeChatTurnStatus({
+        elapsedSeconds: 0,
+        workedSeconds: completedStructuredAgentTurnSeconds(timing),
+        verdict: timing?.verdict
+      })
+    ).toEqual({ key: 'workedFor', duration: '27s' })
+  })
+
   it('ends at the pre-crash renewal when the child outlived Orca and recovery stopped it', async () => {
     // The orphan is alive at relaunch, but its output went nowhere: none of that is work shown.
     let alive = true
@@ -298,7 +328,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     unsubscribe()
   })
 
-  it('reports the revision to the status feed as an interruption, which the chat folds as failed', async () => {
+  it('reports the revision to the status feed as an interruption, which the chat folds as worked', async () => {
     const published: AgentSessionStatusSummary[] = []
     openHost({
       probeOwner: async () => ({ outcome: 'pid-absent' }),
@@ -314,7 +344,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     await host.reconcileRestartLeases()
     await drainSession()
 
-    // The sidebar's red Failed, then the folded "Failed after 27s".
+    // The sidebar's red Failed until seen; the turn folds as "Worked for 27s" beside its notice row.
     await vi.waitFor(() => expect(outcomes().at(-1)).toBe('interruption'))
     const [timing] = selectStructuredAgentTurnTimings(
       (await host.journalSnapshot(SESSION)).items
@@ -325,7 +355,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
         workedSeconds: completedStructuredAgentTurnSeconds(timing),
         verdict: timing?.verdict
       })
-    ).toEqual({ key: 'failedAfter', duration: '27s' })
+    ).toEqual({ key: 'workedFor', duration: '27s' })
   })
 
   it('revises nothing twice, whoever re-runs the settle', async () => {
@@ -406,7 +436,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
           process,
           link: {
             linkId: `claude-${fence}-link`,
-            handle: { provider: 'claude', sessionId: PROVIDER_SESSION, leafUuid: null },
+            handle: claudeProviderHandle(PROVIDER_SESSION, null),
             origin: 'resumed',
             mintedAtFence: fence,
             observedAt: RELAUNCHED_AT
@@ -484,7 +514,7 @@ async function hostWithFailingFirstStart(failure: Error) {
         process,
         link: {
           linkId: `claude-${fence}-link`,
-          handle: { provider: 'claude', sessionId: PROVIDER_SESSION, leafUuid: null },
+          handle: claudeProviderHandle(PROVIDER_SESSION, null),
           origin: 'resumed',
           mintedAtFence: fence,
           observedAt: now

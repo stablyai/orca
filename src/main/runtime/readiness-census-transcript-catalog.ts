@@ -45,12 +45,16 @@ const RUNTIME_RECORDERS: readonly (readonly [string, Recorder])[] = [
   ['hermes-', { agent: 'hermes', foregroundProcess: 'hermes' }],
   ['muse-', { agent: 'muse', foregroundProcess: 'muse' }],
   ['omp-', { agent: 'omp', foregroundProcess: 'omp' }],
+  // The plain `opencode` command running an OpenCode 2 binary, as the opencode row launches it.
+  ['opencode-cmd-', { agent: 'opencode', foregroundProcess: 'opencode' }],
   ['opencode-2-', { agent: 'opencode2', foregroundProcess: 'opencode' }],
   ['opencode-1-', { agent: 'opencode', foregroundProcess: 'opencode' }],
   ['prime-agent-', { agent: 'prime-agent', foregroundProcess: 'prime-agent' }],
   ['qoder-cn-', { agent: 'qoder-cn', foregroundProcess: 'qoderclicn' }],
   ['qoder-', { agent: 'qoder', foregroundProcess: 'qodercli' }],
-  ['zcode-', { agent: 'zcode', foregroundProcess: 'zcode' }]
+  ['zcode-', { agent: 'zcode', foregroundProcess: 'zcode' }],
+  // A bare shell's prompt, a non-agent control like the daemon's less/nano/vim.
+  ['zsh-', { agent: null, foregroundProcess: 'zsh' }]
 ]
 
 // less, nano and vim are non-agent controls for the agent-unknown pane.

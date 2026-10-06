@@ -7,13 +7,16 @@ import {
 import {
   expectedOmpStatusExtension,
   TEST_CODEX_HOME,
-  TEST_CODEX_AUTH_JSON
+  TEST_CODEX_AUTH_JSON,
+  TEST_MANAGED_ROOT
 } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
 import { join } from 'node:path'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
 import { registerPtyHandlers, resolveCodexHomeAfterManagedAuthReadiness } from './pty'
+
+const consumerConfigHome = join(TEST_MANAGED_ROOT, 'opencode-consumer-config')
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -435,11 +438,15 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
       })
       it('mirrors a user-provided OPENCODE_CONFIG_DIR into a source-scoped overlay on the daemon path', async () => {
-        const env = await daemonSpawnAndGetEnv({ OPENCODE_CONFIG_DIR: '/user/custom/opencode' })
+        const env = await daemonSpawnAndGetEnv({
+          OPENCODE_CONFIG_DIR: '/user/custom/opencode',
+          XDG_CONFIG_HOME: consumerConfigHome
+        })
         // Why: OpenCode loads config from a single dir, so the user's path is mirrored into a source-scoped overlay, not passed through.
         expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(
           expect.any(String),
-          '/user/custom/opencode'
+          '/user/custom/opencode',
+          join(consumerConfigHome, 'opencode')
         )
         expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
         expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
@@ -448,11 +455,13 @@ describe('registerPtyHandlers', () => {
       it('uses source OpenCode config env instead of remirroring a parent overlay', async () => {
         const env = await daemonSpawnAndGetEnv({
           OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay',
-          ORCA_OPENCODE_SOURCE_CONFIG_DIR: '/user/custom/opencode'
+          ORCA_OPENCODE_SOURCE_CONFIG_DIR: '/user/custom/opencode',
+          XDG_CONFIG_HOME: consumerConfigHome
         })
         expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(
           expect.any(String),
-          '/user/custom/opencode'
+          '/user/custom/opencode',
+          join(consumerConfigHome, 'opencode')
         )
         expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
         expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')

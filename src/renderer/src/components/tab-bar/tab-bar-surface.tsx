@@ -88,8 +88,13 @@ export function renderTabBarSurface({
   } = createMenu
   const { orderedItems, sortableIds, dropIndicatorByVisibleId } = itemProjection
   const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
-  const { tabStripRef, tabStripOverflowState, activeTabDockSide, scrollTabStrip } =
-    tabStripNavigation
+  const {
+    tabStripRef,
+    tabStripOverflowState,
+    activeTabDockSide,
+    scrollTabStrip,
+    subscribeToStripResize
+  } = tabStripNavigation
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const renderedItems = renderTabBarItems({
     items: orderedItems,
@@ -166,8 +171,9 @@ export function renderTabBarSurface({
             ) : null}
           </div>
           <TabStripScrollIndicator
-            metrics={tabStripOverflowState}
+            hasOverflow={tabStripOverflowState.hasOverflow}
             scrollContainerRef={tabStripRef}
+            subscribeToStripResize={subscribeToStripResize}
             disabled={tabStripDragScroll.isTabDragActive}
           />
         </div>

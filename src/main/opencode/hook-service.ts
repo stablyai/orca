@@ -121,7 +121,11 @@ export class OpenCodeHookService {
     }
   }
 
-  buildPtyEnv(ptyId: string, existingConfigDir?: string | undefined): Record<string, string> {
+  buildPtyEnv(
+    ptyId: string,
+    existingConfigDir?: string | undefined,
+    defaultConfigDir?: string
+  ): Record<string, string> {
     if (!isUsableId(ptyId)) {
       // Why: on a bad id, still preserve a user-set OPENCODE_CONFIG_DIR; only the Orca status plugin is forfeited.
       return existingConfigDir ? { OPENCODE_CONFIG_DIR: existingConfigDir } : {}
@@ -131,7 +135,7 @@ export class OpenCodeHookService {
     const managedConfigDir = this.getSharedConfigDir()
     if (!existingConfigDir || existingConfigDir === managedConfigDir) {
       try {
-        this.writePluginToConfigDir(resolveOpenCodeConfigDirectory())
+        this.writePluginToConfigDir(defaultConfigDir ?? resolveOpenCodeConfigDirectory())
         return {}
       } catch {
         return {}

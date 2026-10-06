@@ -1,4 +1,5 @@
 import { createDrainMigrationRowLookup } from './drain-migration-row-lookup.js'
+import { HeapWindowReaper } from './heap-window-reaper.js'
 import {
   selectIdleRegionalRehomes,
   type IdleRegionalRehomeCandidate,
@@ -68,6 +69,7 @@ import {
   REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS
 } from './database.js'
 import type { RelayCellConfig } from './config.js'
+import type { CellLockHoldSite } from './cell-inventory-hold-samples.js'
 import type {
   RelayDatabase,
   RelayLockOptions,
@@ -498,6 +500,19 @@ export class RelayHomeCellUnavailableError extends Error {
 // never return otherwise starves connection headroom fleet-wide and turns
 // every placement into relay_capacity_exhausted.
 const LATE_ARRIVAL_DEBT_RETENTION_MS = 10 * 60 * 1_000
+// A released reservation is read by nothing: every reader filters it out by state, and the only
+// statement that still touches it is the per-host lock, which just makes that lock set longer. A day
+// is margin for forensics, not for reads.
+export const RELEASED_CONTROL_RESERVATION_RETENTION_MS = 24 * 60 * 60 * 1_000
+// ~27 rows per page, so a statement deletes a few hundred rows at most. With ~9 director ticks a
+// minute the row cap is ~5M rows a day: the 13.7M-row backlog drains over about three days, and a
+// walk that finds nothing reads ~1 MB a tick.
+const RELEASED_CONTROL_RESERVATION_REAP_BUDGET = {
+  pagesPerStatement: 16,
+  maxPagesPerTick: 128,
+  maxRowsPerTick: 400,
+  budgetMs: 250
+}
 const CELL_FENCE_TTL_MS = 5 * 60 * 1_000
 const CELL_FENCE_ATTEMPT_TTL_MS = 60 * 60 * 1_000
 const CELL_DRAIN_SEND_PERMIT_MS = 30_000
@@ -541,6 +556,11 @@ export class RelayAssignmentStore {
   private readonly admissionSelector: RelayCellAdmissionSelector
   private readonly migrationCellRegistrar: RelayMigrationCellRegistrar
   private readonly activityQueue = new AssignmentIdentityQueue()
+  private readonly releasedReservationReaper = new HeapWindowReaper(
+    'relay_control_connection_reservations',
+    `state = 'released' AND released_at <= ?`,
+    RELEASED_CONTROL_RESERVATION_REAP_BUDGET
+  )
   private assignmentTail: Promise<void> = Promise.resolve()
 
   constructor(
@@ -2944,6 +2964,10 @@ export class RelayAssignmentStore {
   async evacuateDeadCells(limit = 100): Promise<number> {
     if (!this.requireLiveCells) return 0
     const cutoff = this.now() - this.heartbeatTtlMs
+    const cellIds = await this.deadCellEvacuationCandidates(cutoff)
+    // Why: without a candidate cell the host query below walks every assignment by primary key to
+    // return nothing (574 ms per call in production, from stale existing-only cells it can never act on).
+    if (cellIds.length === 0) return 0
     const rows = await this.database.query(
       `SELECT assignment.user_id, assignment.relay_host_id, assignment.cell_id
        FROM relay_assignments assignment
@@ -3006,8 +3030,9 @@ export class RelayAssignmentStore {
              AND fence.expires_at > ?
            )
          )
+         AND assignment.cell_id IN (${cellIds.map(() => '?').join(', ')})
        ORDER BY assignment.user_id, assignment.relay_host_id LIMIT ?`,
-      [1, cutoff, this.now(), this.now(), limit]
+      [1, cutoff, this.now(), this.now(), ...cellIds, limit]
     )
     let moved = 0
     for (const row of rows) {
@@ -3032,6 +3057,43 @@ export class RelayAssignmentStore {
       }
     }
     return moved
+  }
+
+  // The cell-level half of evacuateDeadCells' predicate, so it is a superset: every cell the host
+  // query could act on is here, and only the per-host pin checks are left out.
+  private async deadCellEvacuationCandidates(cutoff: number): Promise<string[]> {
+    const now = this.now()
+    const rows = await this.database.query(
+      `SELECT cell.cell_id
+       FROM relay_cells cell
+       LEFT JOIN relay_cell_committed_fences committed ON committed.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_fence_attempts attempt ON attempt.attempt_id = committed.attempt_id
+       LEFT JOIN relay_cell_fences fence ON fence.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+       WHERE (runtime.cell_id IS NULL OR runtime.ready != ? OR runtime.last_heartbeat_at <= ?)
+         AND (
+           (
+             cell.enabled = 1
+             AND NOT EXISTS (
+               SELECT 1 FROM relay_cell_connection_limits limits
+               WHERE limits.cell_id = cell.cell_id
+             )
+           )
+           OR (
+             cell.enabled = 0
+             AND attempt.completed_at IS NOT NULL
+             AND attempt.aborted_at IS NULL
+             AND committed.cell_incarnation = runtime.cell_incarnation
+             AND fence.cell_incarnation = committed.cell_incarnation
+             AND committed.attested_at >= runtime.last_heartbeat_at
+             AND committed.expires_at > ?
+             AND fence.expires_at > ?
+           )
+         )
+       ORDER BY cell.cell_id`,
+      [1, cutoff, now, now]
+    )
+    return rows.map((row) => text(row, 'cell_id'))
   }
 
   async configureCell(
@@ -7158,6 +7220,12 @@ export class RelayAssignmentStore {
     return aborted
   }
 
+  async pruneReleasedControlReservations(): Promise<number> {
+    return await this.releasedReservationReaper.reap(this.database, [
+      this.now() - RELEASED_CONTROL_RESERVATION_RETENTION_MS
+    ])
+  }
+
   async releaseExpiredActivityLeases(): Promise<number> {
     const now = this.now()
     await this.database.query(
@@ -7307,7 +7375,7 @@ export class RelayAssignmentStore {
     targetCellId: string
   ): Promise<void> {
     const now = this.now()
-    await this.database.transaction(async (transaction) => {
+    const drift = await this.database.transaction(async (transaction) => {
       // Reconciliation takes the same assignment→activity→cell order as live
       // mutations so correcting drift never races a credential or socket lease.
       const assignments = await transaction.queryLocked(
@@ -7359,6 +7427,18 @@ export class RelayAssignmentStore {
         [sourceCellId, targetCellId],
         'pool-default'
       )
+      // The counter is written as an absolute, so its units are read after the
+      // cell lock: a lease committed since the read above already bumped it.
+      const cellUnits = new Map(
+        (
+          await transaction.query(
+            `SELECT cell_id, SUM(request_units) AS units
+             FROM relay_assignment_activity_leases
+             WHERE cell_id IN (?, ?) GROUP BY cell_id`,
+            [sourceCellId, targetCellId]
+          )
+        ).map((row) => [text(row, 'cell_id'), integer(row, 'units')])
+      )
       const assignmentKeys = new Set(
         assignments.map((row) =>
           assignmentKey(text(row, 'user_id'), text(row, 'relay_host_id'))
@@ -7368,7 +7448,6 @@ export class RelayAssignmentStore {
         string,
         { counts: Record<AssignmentActivityKind, number>; leaseExpiresAt: number }
       >()
-      const cellUnits = new Map<string, number>()
 
       for (const lease of leases) {
         const key = assignmentKey(text(lease, 'user_id'), text(lease, 'relay_host_id'))
@@ -7384,7 +7463,6 @@ export class RelayAssignmentStore {
         current.counts[kind]++
         current.leaseExpiresAt = Math.max(current.leaseExpiresAt, integer(lease, 'expires_at'))
         assignmentCounts.set(key, current)
-        cellUnits.set(cellId, (cellUnits.get(cellId) ?? 0) + integer(lease, 'request_units'))
       }
 
       for (const row of assignments) {
@@ -7417,6 +7495,7 @@ export class RelayAssignmentStore {
         )
       }
 
+      const corrected: { cellId: string; reservedRequests: number; leaseUnits: number }[] = []
       for (const row of cells) {
         const cellId = text(row, 'cell_id')
         const expected = cellUnits.get(cellId) ?? 0
@@ -7428,8 +7507,18 @@ export class RelayAssignmentStore {
           `UPDATE relay_cells SET reserved_requests = ?, updated_at = ? WHERE cell_id = ?`,
           [expected, now, cellId]
         )
+        corrected.push({
+          cellId,
+          reservedRequests: integer(row, 'reserved_requests'),
+          leaseUnits: expected
+        })
       }
+      return corrected
     })
+    // Logged after COMMIT so a retried transaction reports each correction once.
+    for (const sample of drift) {
+      console.warn(JSON.stringify({ event: 'orca_relay_reservation_drift', ...sample }))
+    }
   }
 
   private async lockCellInventory(
@@ -7451,12 +7540,13 @@ export class RelayAssignmentStore {
   // row-lock order), keeps them off the fleet-wide lock without a cycle.
   // The wait policy follows the caller for the same reason the inventory lock's
   // does: a sweep must not fail terminally on ordinary contention. Hold time is
-  // deliberately not sampled here — the metric tracks the fleet-wide lock these
-  // rows replace, and mixing in short single-row holds would flatter it.
+  // sampled only for a caller that names its site: short single-row holds under
+  // the inventory label would flatter the fleet-wide lock they replace.
   private async lockCellRows(
     database: RelayDatabase,
     cellIds: string[],
-    mode: CellInventoryLockMode = 'request'
+    mode: CellInventoryLockMode = 'request',
+    holdSite?: CellLockHoldSite
   ): Promise<SqlRow[]> {
     const distinct = [...new Set(cellIds)]
     const { measureHoldMs: _sampled, ...wait } = cellInventoryLockOptions(mode)
@@ -7464,7 +7554,7 @@ export class RelayAssignmentStore {
       `SELECT * FROM relay_cells WHERE cell_id IN (${distinct.map(() => '?').join(', ')})
        ORDER BY cell_id ASC`,
       distinct,
-      wait
+      holdSite ? { ...wait, measureHoldMs: true, holdSite } : wait
     )
   }
 
@@ -7541,7 +7631,8 @@ export class RelayAssignmentStore {
     return await this.lockCellRows(
       database,
       candidates.map((row) => text(row, 'cell_id')),
-      mode
+      mode,
+      'isolated-replacement'
     )
   }
 

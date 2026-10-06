@@ -13,6 +13,8 @@ import {
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
+const NO_CARDS: readonly string[] = []
+
 function journalItem(
   itemId: string,
   sequence: number,
@@ -43,7 +45,7 @@ function drawn(
   submissions: AgentJournalSubmission[] = []
 ): string[] {
   return createNativeChatMessageListProjection()(
-    projectStructuredAgentSessionMessages(items, outbox, submissions)
+    projectStructuredAgentSessionMessages(items, outbox, submissions, NO_CARDS)
   ).conversation.map(({ id }) => id)
 }
 

@@ -92,9 +92,33 @@ vi.mock('../gitea/client', () => ({
 }))
 
 import { registerPreflightHandlers } from './preflight'
+import { detectAgentCommandsOnHost } from '../preflight/agent-detection'
 import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
 
 describe('preflight', () => {
+  it('resolves exact Qoder command labels on the SSH host using the existing request', async () => {
+    const request = vi.fn().mockResolvedValue({ agents: ['qoder', 'unrelated'] })
+    getActiveMultiplexerMock.mockReturnValue({ isDisposed: () => false, request })
+    await expect(
+      detectAgentCommandsOnHost(['qodercli', 'qoder'], { connectionId: 'ssh-qoder' })
+    ).resolves.toEqual(new Set(['qoder']))
+    expect(request).toHaveBeenCalledWith('preflight.detectAgents', {
+      commands: [
+        { id: 'qodercli', cmd: 'qodercli' },
+        { id: 'qoder', cmd: 'qoder' }
+      ]
+    })
+    expect(isCommandOnLocalPathMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses command selection after SSH contact loss without probing the local host', async () => {
+    getActiveMultiplexerMock.mockReturnValue(null)
+    await expect(
+      detectAgentCommandsOnHost(['qodercli', 'qoder'], { connectionId: 'ssh-qoder' })
+    ).rejects.toThrow('execution host connection')
+    expect(isCommandOnLocalPathMock).not.toHaveBeenCalled()
+  })
+
   const originalPlatform = process.platform
   const handlers: HandlerMap = {}
 

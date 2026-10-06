@@ -23,6 +23,7 @@ import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 import { DeleteWorktreeWarningPanels } from './DeleteWorktreeWarningPanels'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
 import {
+  getDeleteWorktreeChangeCheckStates,
   getDeleteWorktreeDirtyChangeCounts,
   getDeleteWorktreeDirtyChangePreviews
 } from './delete-worktree-dirty-change-counts'
@@ -117,15 +118,11 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const repoMap = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const isBatchDelete = worktreeIds.length > 1
   const isFolderWorkspaceDelete = !isBatchDelete && getIsFolderWorkspaceDelete(repoMap, worktree)
-  const folderWorkspaceDeleteCount = useMemo(
-    () => countFolderWorkspaceDeletes(repoMap, worktrees),
-    [repoMap, worktrees]
-  )
   const deleteCopy = getDeleteWorktreeDialogCopy({
     isBatchDelete,
     worktree,
     worktreeCount: worktrees.length,
-    folderWorkspaceDeleteCount,
+    folderWorkspaceDeleteCount: countFolderWorkspaceDeletes(repoMap, worktrees),
     isFolderWorkspaceDelete
   })
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
@@ -183,6 +180,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const dirtyChanges = useMemo(() => {
     const statusInput = { deleteTargets, gitStatusByWorktree, gitStatusByWorktreeIdentity, repoMap }
     return {
+      checkStates: getDeleteWorktreeChangeCheckStates(statusInput),
       counts: getDeleteWorktreeDirtyChangeCounts({ ...statusInput, deleteStateByWorktreeId }),
       previews: getDeleteWorktreeDirtyChangePreviews(statusInput)
     }
@@ -365,6 +363,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                 )}
           </DialogTitle>
           <DeleteWorktreeDialogDescription
+            showChangeLossWarning={dirtyChanges.checkStates.size > 0}
             targetClassName={deleteCopy.targetClassName}
             targetLabel={deleteCopy.targetLabel}
             canDeleteAllLineage={canDeleteAllLineage}
@@ -385,6 +384,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             collisionWorktrees={allWorktrees}
             hostLabelById={hostLabelById}
             deleteStateByWorktreeId={deleteStateByWorktreeId}
+            changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
             dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
             dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
           />
@@ -392,6 +392,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           {hasLineageChildren && (
             <DeleteWorktreeLineageNotice
               descendants={lineageDelete.descendants}
+              changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
               dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
               dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
             />

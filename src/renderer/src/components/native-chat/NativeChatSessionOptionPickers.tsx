@@ -226,6 +226,8 @@ function NativeChatSessionOptionPickersInner({
   if (!surface || !model) {
     return null
   }
+  // Still listed by the host: the pill shows its value and does not open, even on request.
+  const modelChoicesPending = model.choicesPending === true
   const requestedModelSequence = pickerRequest?.id === model.id ? pickerRequest.sequence : null
   const requestedOptionsSequence = options.some((descriptor) => descriptor.id === pickerRequest?.id)
     ? (pickerRequest?.sequence ?? null)
@@ -250,12 +252,13 @@ function NativeChatSessionOptionPickersInner({
     <div className="flex min-w-0 items-center gap-0.5">
       <DropdownMenu
         key={`model:${requestedModelSequence ?? 'idle'}`}
-        defaultOpen={requestedModelSequence !== null}
+        // Read only when a request remounts the menu: one made while pending is spent shut.
+        defaultOpen={requestedModelSequence !== null && !modelChoicesPending}
       >
         <PickerTrigger
           label={nativeChatModelPillLabel(model)}
           tooltipLabel={modelTooltip}
-          disabled={isWorking || pendingId !== null}
+          disabled={isWorking || pendingId !== null || modelChoicesPending}
           disabledReason={modelReason}
           dispatched={sessionOptionDispatchUnconfirmed(model)}
         />

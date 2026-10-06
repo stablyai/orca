@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
 import { shouldFocusMobileDriverAction } from './terminal-pane/mobile-driver-overlay-focus'
-import { buildCodexRestartNoticeKey } from './codex-restart-notice-key'
 import { awaitsCodexRestartAnswer } from './codex-restart-notice-state'
 
 function isInsideHiddenTree(element: HTMLElement): boolean {
@@ -14,7 +13,6 @@ function isInsideHiddenTree(element: HTMLElement): boolean {
 type RestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string
-  homeRouteChanged?: true
 }
 
 export default function CodexRestartChip({
@@ -53,7 +51,7 @@ export default function CodexRestartChip({
   return (
     <LoudRestartOverlay
       isVisible={isVisible}
-      noticeKey={`${ptyId}:${buildCodexRestartNoticeKey(restartNotice)}`}
+      ptyId={ptyId}
       restartNotice={restartNotice}
       shouldFocus={shouldFocus}
       onDismiss={handleDismiss}
@@ -64,14 +62,14 @@ export default function CodexRestartChip({
 
 function LoudRestartOverlay({
   isVisible,
-  noticeKey,
+  ptyId,
   restartNotice,
   shouldFocus,
   onDismiss,
   onRestart
 }: {
   isVisible: boolean
-  noticeKey: string | null
+  ptyId: string
   restartNotice: RestartNotice
   shouldFocus: boolean
   onDismiss: () => void
@@ -98,7 +96,13 @@ function LoudRestartOverlay({
     if (shouldFocusMobileDriverAction(document.activeElement, document.body, paneScope)) {
       root.focus()
     }
-  }, [isVisible, noticeKey, shouldFocus])
+  }, [
+    isVisible,
+    ptyId,
+    restartNotice.previousAccountLabel,
+    restartNotice.nextAccountLabel,
+    shouldFocus
+  ])
 
   return (
     <div
@@ -131,41 +135,27 @@ function LoudRestartOverlay({
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="text-xs font-medium uppercase tracking-wide text-foreground">
-              {restartNotice.homeRouteChanged
-                ? translate('auto.components.CodexRestartChip.8f0d5c92a1', 'Codex setup changed')
-                : translate('auto.components.CodexRestartChip.d3e8a1f4b2', 'Account switched')}
+              {translate('auto.components.CodexRestartChip.d3e8a1f4b2', 'Account switched')}
             </div>
             <div id={titleId} className="text-base font-semibold leading-tight">
-              {restartNotice.homeRouteChanged
-                ? translate(
-                    'auto.components.CodexRestartChip.3ea91b5c07',
-                    'This Codex session is using an outdated configuration'
-                  )
-                : translate(
-                    'auto.components.CodexRestartChip.a4c8e1b2f7',
-                    'Codex is still signed in as {{value0}}',
-                    { value0: restartNotice.previousAccountLabel }
-                  )}
+              {translate(
+                'auto.components.CodexRestartChip.a4c8e1b2f7',
+                'Codex is still signed in as {{value0}}',
+                { value0: restartNotice.previousAccountLabel }
+              )}
             </div>
           </div>
         </div>
         <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
-          {restartNotice.homeRouteChanged
-            ? translate(
-                'auto.components.CodexRestartChip.e6b7139d2a',
-                'Restart this session to load your current Codex configuration.'
-              )
-            : translate(
-                'auto.components.CodexRestartChip.9375620cc3',
-                'Restart this session to use {{value0}}. It stays on the previous account until you do.',
-                { value0: restartNotice.nextAccountLabel }
-              )}
+          {translate(
+            'auto.components.CodexRestartChip.9375620cc3',
+            'Restart this session to use {{value0}}. It stays on the previous account until you do.',
+            { value0: restartNotice.nextAccountLabel }
+          )}
         </div>
         <div className="mt-1 flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
-            {restartNotice.homeRouteChanged
-              ? translate('auto.components.CodexRestartChip.7b1d20f4c8', 'Keep current session')
-              : translate('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
+            {translate('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
           </Button>
           <Button type="button" variant="default" size="sm" onClick={onRestart}>
             <RefreshCw />

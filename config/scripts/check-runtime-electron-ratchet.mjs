@@ -1,14 +1,11 @@
 #!/usr/bin/env node
 /**
- * Ratchet gate for Electron imports reachable from the Orca runtime.
+ * Ratchet gate for Electron imports reachable from the Orca runtime and structured chat.
  *
- * The runtime is meant to become host-agnostic so it can also run on plain Node
- * (see docs/design/node-only-runtime-backend.html). Nothing enforces that today:
- * `orca-runtime.ts` reaches ~50 modules that import `electron`, and the number
- * silently grows whenever someone adds an import several hops away, because no
- * single reviewer sees the transitive edge.
+ * The runtime boots on plain Node, where Electron is unavailable. Keep desktop
+ * dependencies out of its graph, including structured chat not yet wired into it.
  *
- * This bundles the runtime with esbuild, reads the metafile for every module that
+ * This bundles the runtime and the structured-chat lanes with esbuild, reads the metafile for every module that
  * imports `electron`, and compares that set to a checked-in baseline. A NEW module
  * fails the build; a removed one must be dropped from the baseline. The baseline
  * may only shrink, so the migration is measurable and cannot regress.
@@ -19,10 +16,11 @@
  * Usage: node config/scripts/check-runtime-electron-ratchet.mjs [--write]
  */
 import { build } from 'esbuild'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import process from 'node:process'
+import { isTestOnlyDirectoryName, isTestOnlySourcePath } from './test-only-source-path.mjs'
 
 // Why absolute, not cwd-relative: `pnpm lint` runs from the repo root but CI steps and
 // editors do not always, and a cwd-relative miss surfaced as an unhandled ENOENT stack
@@ -40,6 +38,56 @@ const ENTRY_POINTS = [
   // two numbers drift — the gate would read zero while the shipped artifact regressed.
   path.join(ROOT, 'src', 'main', 'orcad', 'main.ts')
 ]
+
+// Code that must run in orcad whether or not a runtime entry reaches it yet. Whole directories,
+// so a new file is covered by default; src/main/runtime still holds desktop-only code (browser
+// commands, desktop relay), so only its structured-chat files are entries there.
+export const STRUCTURED_CHAT_LANES = [
+  { directory: ['src', 'main', 'native-chat'] },
+  { directory: ['src', 'main', 'claude'] },
+  { directory: ['src', 'main', 'codex'] },
+  { directory: ['src', 'shared'] },
+  { directory: ['src', 'main', 'runtime'], basename: /^(?:structured-|agent-session-)/ },
+  { directory: ['src', 'main', 'provider-process'] },
+  // Allowed absent until it lands; every other lane throws if missing, so a rename can't empty it.
+  { directory: ['src', 'main', 'acp'], mayBeAbsent: true }
+]
+
+export function collectStructuredChatEntryPoints(root = ROOT) {
+  return STRUCTURED_CHAT_LANES.flatMap((lane) => {
+    const directory = path.join(root, ...lane.directory)
+    if (!existsSync(directory)) {
+      if (lane.mayBeAbsent) {
+        return []
+      }
+      throw new Error(
+        `[runtime-electron-ratchet] ${lane.directory.join('/')} is missing. If it moved, update STRUCTURED_CHAT_LANES; otherwise the gate would silently check nothing there.`
+      )
+    }
+    return collectLaneFiles(directory, lane.basename)
+  }).sort()
+}
+
+function collectLaneFiles(directory, basename) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const file = path.join(directory, entry.name)
+    if (entry.isDirectory()) {
+      return isTestOnlyDirectoryName(entry.name) ? [] : collectLaneFiles(file, basename)
+    }
+    return entry.isFile() &&
+      /\.[cm]?[jt]sx?$/.test(entry.name) &&
+      !entry.name.endsWith('.d.ts') &&
+      !isTestOnlySourcePath(entry.name) &&
+      (!basename || basename.test(entry.name))
+      ? [file]
+      : []
+  })
+}
+
+/** What the CLI and CI check: the runtime graph plus every structured-chat lane file. */
+export function defaultEntryPoints(root = ROOT) {
+  return [...ENTRY_POINTS, ...collectStructuredChatEntryPoints(root)]
+}
 
 // Native addons and electron cannot be bundled; externalising them is what the
 // relay build already does (config/scripts/build-relay.mjs).
@@ -66,7 +114,8 @@ const externalNativeAddons = {
   }
 }
 
-export async function collectElectronImporters(entryPoints = ENTRY_POINTS) {
+// Why `plugins`: lets a test add an Electron import to a real file in memory, never on disk.
+export async function collectElectronImporters(entryPoints, { plugins = [] } = {}) {
   const result = await build({
     entryPoints,
     bundle: true,
@@ -81,7 +130,7 @@ export async function collectElectronImporters(entryPoints = ENTRY_POINTS) {
     metafile: true,
     absWorkingDir: ROOT,
     logLevel: 'silent',
-    plugins: [externalNativeAddons]
+    plugins: [externalNativeAddons, ...plugins]
   })
   const importers = new Set()
   for (const [file, info] of Object.entries(result.metafile.inputs)) {
@@ -114,24 +163,25 @@ export function diffAgainstBaseline(current, baseline) {
 
 function renderBaseline(files) {
   return [
-    '# Modules reachable from the Orca runtime that import `electron`.',
+    '# Modules reachable from the Orca runtime or structured-chat code that import `electron`.',
     '# Generated by config/scripts/check-runtime-electron-ratchet.mjs.',
-    '# This list is EMPTY and must stay that way: the runtime boots on plain Node',
-    '# (see `pnpm run build:orcad`). Any entry means the runtime got less portable;',
+    '# This list is EMPTY and must stay that way: both run in orcad, the headless runtime,',
+    '# on plain Node (see `pnpm run build:orcad`). Any entry means that code got less portable;',
     '# migrate the module behind a host port instead (src/main/host/).',
     '',
     ...files
   ].join('\n')
 }
 
-async function main() {
-  const write = process.argv.includes('--write')
-  const current = await collectElectronImporters()
+// Exported so tests run the CLI path itself; `plugins` is the same in-memory hook as above.
+export async function main(argv = process.argv, { plugins = [] } = {}) {
+  const write = argv.includes('--write')
+  const current = await collectElectronImporters(defaultEntryPoints(), { plugins })
 
   if (write) {
     writeFileSync(BASELINE_PATH, `${renderBaseline(current)}\n`)
     console.log(`[runtime-electron-ratchet] wrote ${current.length} entries to ${BASELINE_PATH}`)
-    return
+    return 0
   }
 
   const baseline = readBaseline(readFileSync(BASELINE_PATH, 'utf8'))
@@ -139,15 +189,15 @@ async function main() {
 
   if (added.length > 0) {
     console.error(
-      `[runtime-electron-ratchet] ${added.length} new module(s) reachable from the Orca runtime now import electron:
+      `[runtime-electron-ratchet] ${added.length} new module(s) reachable from the Orca runtime or structured-chat code now import electron:
 ${added.map((file) => `  + ${file}`).join('\n')}
 
-The runtime must stay bootable on plain Node. Put the Electron facility behind a port in
-src/main/host/ and depend on the port, or move the code out of the runtime's import graph.
-See docs/design/node-only-runtime-backend.html.`
+The runtime and structured chat must run in orcad, the headless runtime, where Electron is
+unavailable. That holds for structured-chat code the runtime doesn't load yet, so renaming or
+moving the file is not a fix. Put the Electron facility behind a port in src/main/host/ and
+depend on the port, or drop the import that pulls Electron in.`
     )
-    process.exitCode = 1
-    return
+    return 1
   }
 
   if (removed.length > 0) {
@@ -158,11 +208,11 @@ ${removed.map((file) => `  - ${file}`).join('\n')}
 
   node config/scripts/check-runtime-electron-ratchet.mjs --write`
     )
-    process.exitCode = 1
-    return
+    return 1
   }
 
   console.log(`[runtime-electron-ratchet] ok — ${current.length} entries, unchanged.`)
+  return 0
 }
 
 // Why pathToFileURL and not a `file://` template: on Windows process.argv[1] is a
@@ -170,5 +220,5 @@ ${removed.map((file) => `  - ${file}`).join('\n')}
 // template never matches and the gate would exit 0 without checking anything — a
 // lint gate that fails open. Same idiom as check-max-lines-ratchet.mjs:225.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await main()
+  process.exitCode = await main()
 }

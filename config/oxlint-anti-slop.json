@@ -65,6 +65,13 @@
         "anti-slop/no-module-mocking": "off"
       }
     },
+    // Test-only side effect for explicit RPC registries; real catalog tests never import it.
+    {
+      "files": ["**/src/main/runtime/rpc/unused-default-rpc-methods.test-fixture.ts"],
+      "rules": {
+        "anti-slop/no-module-mocking": "off"
+      }
+    },
     // The exemptions below are file-scoped rather than inline `oxlint-disable` comments
     // because the root lint scan does not load this plugin, so an inline directive naming
     // an anti-slop rule always reads back as an unused directive there.

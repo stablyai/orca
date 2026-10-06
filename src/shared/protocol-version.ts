@@ -1,4 +1,5 @@
 import { AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES } from './agent-session-resume-runtime-capabilities'
+import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from './qoder-terminal-create-capability'
 export {
   AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
@@ -26,6 +27,10 @@ import {
   SKILL_UPLOAD_CAPABILITY
 } from './skill-install-capability'
 export { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
+import {
+  AGENT_LAUNCH_RUNTIME_CAPABILITIES,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from './agent-launch-runtime-capability'
 
 // Why: declares the Orca runtime RPC compatibility contract. Desktop,
 // headless server, CLI, and mobile builds may drift in app version, but
@@ -196,6 +201,20 @@ export const AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY =
 // mobile client lacks the capability; mobile must first show a rejected message in place.
 export const AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY =
   'agent-session.accepted-send.v1' as const
+// Why: a host advertising this answers a resent send id from its record before anything else may
+// refuse it, so a refusal `agentSession.send` RETURNS is proof; a thrown error never is, a thrown
+// refusal included (host not installed, journal database won't open, host disabled). Reading a
+// returned `ok: false`: `agent_session_operation_unknown` with `outcomeUnknown` or `resultLost` —
+// the host cannot tell yet, resend the same id; with `rewindUnconfirmed` — settled, nothing was
+// written. `agent_session_operation_expired` — only the transcript can tell. An
+// `agent_session_operation_conflict` or `messageIdReused` — the id holds a different payload,
+// which proves nothing about this message; nor does `sessionNotAttached` (the chat's record is
+// gone or unreadable on this host). Any other — the chat holds no message under that id and none
+// is in flight, but a resend of that id may still run as a new send, so a client that hands the
+// text back must not resend the old id. An older host may refuse an id it recorded: none of this
+// holds there.
+export const AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY =
+  'agent-session.send-answers-proof.v1' as const
 // Why: `agentSession.send`'s params are strict, so an older host rejects `delivery`; and only a
 // capable client can render the `queued` result arm, the draft list, and returned cards. DARK ON
 // PURPOSE — not in RUNTIME_CAPABILITIES: advertising still requires the integrated Codex steer
@@ -294,30 +313,6 @@ export const AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
 
-/**
- * `agent.launch` exists: one host-side method that decides structured-vs-terminal and creates the
- * surface, instead of each client routing for itself.
- *
- * Negotiated rather than assumed because a client that cannot see it must keep using
- * `worktree.create` + `startupAgent`, which stays supported verbatim. The reverse skew is the
- * dangerous one: `worktree.create` returns `agentTerminalHandle` only when a startup agent was
- * requested, so a host that quietly routed that call to a structured session would hand an old
- * client a response with no handle and no error.
- *
- * Advertising it is a statement that the client understands EITHER outcome, since the host is what
- * picks: a structured session it can open, or a terminal agent. A client that renders only one of
- * the two keeps using the surface-specific methods.
- */
-// v2 makes prompt delivery an outcome union and top-level warnings the only supported shape.
-export const AGENT_LAUNCH_RUNTIME_CAPABILITY = 'agent.launch.v2' as const
-
-// Optional identity support on agent.launch; mobile replay across replacement hosts requires the new method.
-export const AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY = 'agent.launch.replay.v1' as const
-
-// agent.launchReplay requires the ledger; older replacement hosts must reject the method.
-export const AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY =
-  'agent.launch.replay-required.v1' as const
-
 // Generic native clients include the CLI and must not claim Electron-only page
 // placement support.
 export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
@@ -340,6 +335,7 @@ export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
   'agentSession.create.tab-id.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
   ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
@@ -400,6 +396,7 @@ export const RUNTIME_CAPABILITIES = [
   // The host side: it accepts a send before any agent has it, and a Stop with no writer before a
   // turn starts, so a client may gate on either.
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
@@ -435,9 +432,7 @@ export const RUNTIME_CAPABILITIES = [
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
+  ...AGENT_LAUNCH_RUNTIME_CAPABILITIES
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

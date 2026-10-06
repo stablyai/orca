@@ -121,7 +121,8 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         }
         let result: Awaited<ReturnType<NonNullable<dependencies.RuntimePtyController['spawn']>>>
         try {
-          launchOpts.onPtySpawnDispatched?.()
+          const { launchAgent } = launchOpts
+          launchOpts.onPtySpawnDispatched?.({ launchConfig: effectiveLaunchConfig, launchAgent })
           result = await this.ptyController.spawn({
             cols: 120,
             rows: 40,

@@ -63,4 +63,3 @@ patchedDependencies:
   lint-staged@16.4.0: config/patches/lint-staged@16.4.0.patch
   '@vscode/windows-process-tree@0.8.0': config/patches/@vscode__windows-process-tree@0.8.0.patch
   i18next-cli@1.74.2: config/patches/i18next-cli@1.74.2.patch
-  '@streamparser/json@0.0.26': config/patches/@streamparser__json@0.0.26.patch

@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 /**
  * The chat session a caller reserves for the structured launch `agent.launch` creates.
  *

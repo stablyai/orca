@@ -107,6 +107,13 @@ describe('profile-state recovery launch', () => {
     })
   })
 
+  it('round-trips latest JSON selection and the exported SQLite revision', async () => {
+    expect(
+      await launchProfileStateRecovery({ userDataPath: '.', selector: { kind: 'latest-json' } })
+    ).toEqual(result)
+    expect(mocks.run.mock.calls[0][0].args.at(-1)).toContain('"kind":"latest-json"')
+  })
+
   it.each([
     { code: 1 },
     { signal: 'SIGKILL' },

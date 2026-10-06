@@ -133,9 +133,9 @@ describe('the turn Codex answered a send into but has not opened', () => {
   it('is the turn the latest armed send was answered into', () => {
     const echoes = createCodexDispatchEchoes()
     echoes.arm('client-1')
-    echoes.bindTurn('client-1', 'thread-1', 'turn-1')
+    echoes.bindTurn('client-1', 'thread-1', 'turn-1', 'start')
     echoes.arm('client-2')
-    echoes.bindTurn('client-2', 'thread-1', 'turn-2')
+    echoes.bindTurn('client-2', 'thread-1', 'turn-2', 'start')
 
     expect(echoes.answeredUnopenedTurn('thread-1', NONE_OPEN)).toBe('turn-2')
   })
@@ -143,7 +143,7 @@ describe('the turn Codex answered a send into but has not opened', () => {
   it('is none once Codex opened that turn', () => {
     const echoes = createCodexDispatchEchoes()
     echoes.arm('client-1')
-    echoes.bindTurn('client-1', 'thread-1', 'turn-1')
+    echoes.bindTurn('client-1', 'thread-1', 'turn-1', 'start')
 
     expect(echoes.answeredUnopenedTurn('thread-1', new Set(['turn-1']))).toBeNull()
   })
@@ -151,7 +151,7 @@ describe('the turn Codex answered a send into but has not opened', () => {
   it('is none once that turn ended, even with its send still armed for an echo', () => {
     const echoes = createCodexDispatchEchoes()
     echoes.arm('client-1')
-    echoes.bindTurn('client-1', 'thread-1', 'turn-1')
+    echoes.bindTurn('client-1', 'thread-1', 'turn-1', 'start')
     // A completed end leaves its unechoed send armed.
     expect(echoes.endTurn('thread-1', 'turn-1', { status: 'completed' })).toEqual([])
 
@@ -161,9 +161,9 @@ describe('the turn Codex answered a send into but has not opened', () => {
   it('skips a turn a wait left unopened, and still names an earlier one', () => {
     const echoes = createCodexDispatchEchoes()
     echoes.arm('client-1')
-    echoes.bindTurn('client-1', 'thread-1', 'turn-1')
+    echoes.bindTurn('client-1', 'thread-1', 'turn-1', 'start')
     echoes.arm('client-2')
-    echoes.bindTurn('client-2', 'thread-1', 'turn-2')
+    echoes.bindTurn('client-2', 'thread-1', 'turn-2', 'start')
 
     echoes.leftUnopened('thread-1', 'turn-2')
 
@@ -174,7 +174,7 @@ describe('the turn Codex answered a send into but has not opened', () => {
     const echoes = createCodexDispatchEchoes()
     echoes.arm('client-1')
     echoes.arm('client-2')
-    echoes.bindTurn('client-2', 'thread-2', 'turn-2')
+    echoes.bindTurn('client-2', 'thread-2', 'turn-2', 'start')
 
     expect(echoes.answeredUnopenedTurn('thread-1', NONE_OPEN)).toBeNull()
   })

@@ -85,6 +85,19 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("claude 'fix Bob''s \"quoted\" branch'")
   })
 
+  // Why: a typed line break submits early, and PowerShell 5.1 without PSReadLine then hangs at `>>`.
+  it('keeps a multi-line PowerShell launch on one physical line', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: 'first line\nsecond $line',
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+
+    expect(plan?.launchCommand).not.toMatch(/[\r\n]/)
+    expect(plan?.launchCommand).toBe('claude "first line`nsecond `$line"')
+  })
+
   it('invokes fully quoted argv commands in PowerShell', () => {
     expect(buildShellCommandFromArgv(['codex', 'resume', 's1'], 'powershell')).toBe(
       "& 'codex' 'resume' 's1'"

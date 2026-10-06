@@ -70,7 +70,7 @@ function isJsonAcceptanceVersion(value: unknown): value is ProfileStateJsonAccep
 }
 
 /** Accept either side of the upcoming JSON replacement before publishing it. */
-export function stageProfileStateJsonCompatibility(
+export function stageProfileStateRecoveryJson(
   db: Database.Database,
   rawJson: string,
   expectedRevision: number,
@@ -100,7 +100,7 @@ export function stageProfileStateJsonCompatibility(
 }
 
 /** Promote the staged JSON after publication; failures leave both versions accepted. */
-export function acceptProfileStateJsonCompatibility(
+export function acceptProfileStateRecoveryJson(
   db: Database.Database,
   rawJson: string,
   expectedRevision: number

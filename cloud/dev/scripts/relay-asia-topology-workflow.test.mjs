@@ -50,7 +50,8 @@ test('accepts only the reviewed Asia topology waves', () => {
       'production:production-gce-c27,production-gce-c28,production-gce-c29',
       'production:production-gce-c30',
       'production:production-gce-c31',
-      'production:production-gce-c32,production-gce-c33'
+      'production:production-gce-c32,production-gce-c33',
+      'production:production-gce-c34'
     ]
   )
 })

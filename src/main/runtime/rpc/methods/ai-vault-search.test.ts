@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import { RpcDispatcher } from '../dispatcher'

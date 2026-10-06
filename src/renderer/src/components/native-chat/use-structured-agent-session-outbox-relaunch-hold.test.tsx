@@ -28,6 +28,10 @@ import { createStructuredAgentSessionOutboxEntry } from '../../../../shared/stru
 import { writeOutbox } from './structured-agent-session-outbox-storage'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+
+const NO_JOURNAL_ITEMS: readonly AgentJournalRenderItem[] = []
+
 const SESSION = 'session-1'
 // Stable, as the view passes it: a new object each render would re-run the owner-change requeue.
 const LOCAL_TARGET = { kind: 'local' } as const
@@ -96,6 +100,7 @@ function mount(fence = 1) {
   return renderHook(
     ({ fence: current }: { fence: number }) =>
       useStructuredAgentSessionOutbox({
+        journalItems: NO_JOURNAL_ITEMS,
         sessionId: SESSION,
         target: LOCAL_TARGET,
         fence: current,
@@ -423,6 +428,7 @@ describe('a message whose send could not be saved before it went out', () => {
     const { result, rerender } = renderHook(
       ({ fence }: { fence: number | null }) =>
         useStructuredAgentSessionOutbox({
+          journalItems: NO_JOURNAL_ITEMS,
           sessionId: SESSION,
           target: LOCAL_TARGET,
           fence,
@@ -541,6 +547,7 @@ describe('a held message whose id expired', () => {
     mocks.call.mockResolvedValue(expired())
     const { result } = renderHook(() =>
       useStructuredAgentSessionOutbox({
+        journalItems: NO_JOURNAL_ITEMS,
         sessionId: SESSION,
         target: LOCAL_TARGET,
         fence: 1,

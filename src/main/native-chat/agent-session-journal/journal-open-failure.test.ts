@@ -9,11 +9,13 @@ import {
   createJournalOpenReadRefusals,
   journalOpenReadRefusal,
   journalOpenRefusal,
-  journalOpenRefusalError
+  journalOpenRefusalError,
+  failLoadOnUnloadableJournal
 } from './journal-open-failure'
 import { AgentSessionJournalError } from './journal-write-guards'
 import { journalDatabasePath } from './journal-host-database'
 import { replayJournal } from './journal-open'
+import { createJournalReducerState } from './journal-reducer'
 import { recordingStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger-test-support'
 
 let root: string
@@ -168,6 +170,68 @@ describe('createJournalOpenReadRefusals', () => {
       'open-for-read',
       'open-for-read'
     ])
+  })
+
+  // Where it failed rides as the refusal's cause, so a chat whose reason changes is logged again
+  // and the log names the row.
+  it('logs a chat again when its load fails for another reason, naming where each failed', () => {
+    const log = recordingStructuredAgentSessionLogger()
+    const refusals = createJournalOpenReadRefusals(log.logger)
+    const state = createJournalReducerState('session-1', 'epoch-1')
+    const refusedFor = (load: Parameters<typeof failLoadOnUnloadableJournal>[1]) => {
+      try {
+        failLoadOnUnloadableJournal('session-1', load)
+      } catch (error) {
+        return error
+      }
+      throw new Error('the load was not refused')
+    }
+    const newer = refusedFor({ state, newer: { sequence: 7 }, damage: null })
+    const damaged = refusedFor({
+      state,
+      newer: null,
+      damage: { sequence: 3, cause: 'sequence-gap' }
+    })
+
+    for (const error of [newer, newer, damaged, damaged]) {
+      refusals.refusal('session-1', error)
+    }
+
+    const causes = log.entries.map((entry) => {
+      const error = entry.fields.error
+      return error instanceof Error && error.cause instanceof Error ? error.cause.message : ''
+    })
+    expect(causes).toEqual([
+      expect.stringContaining("newer Orca's row at sequence 7"),
+      expect.stringContaining('damaged at sequence 3: sequence-gap')
+    ])
+  })
+
+  // A load refused on its rows arrives already classified, and is logged once per session too.
+  it("logs a load refused as a newer Orca's chat, or as damage, once per session until it opens", () => {
+    const log = recordingStructuredAgentSessionLogger()
+    const refusals = createJournalOpenReadRefusals(log.logger)
+    const newer = journalOpenRefusalError(
+      new AgentSessionJournalError('journal_read_only', 'a newer Orca wrote session-1')
+    )
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(refusals.refusal('session-1', newer)).toBe(newer)
+    }
+    expect(log.entries.map((entry) => entry.fields.sessionId)).toEqual(['session-1'])
+    refusals.refusal('session-2', newer)
+    refusals.forget('session-1')
+    refusals.refusal('session-1', newer)
+    expect(log.entries.map((entry) => entry.fields.sessionId)).toEqual([
+      'session-1',
+      'session-2',
+      'session-1'
+    ])
+    // A refusal that is not about loading the history is not this door's to log.
+    refusals.refusal(
+      'session-3',
+      agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
+    )
+    expect(log.entries).toHaveLength(3)
   })
 })
 

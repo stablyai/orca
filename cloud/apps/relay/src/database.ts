@@ -94,6 +94,10 @@ export interface RelayDatabase {
 // Constraint swaps are matched by NAME in pg_constraint, never by body, because the CHECK list is
 // generated from REGION_LIST. Changing a constraint's definition under the same name therefore does
 // nothing on boot: an operator drops it, and the next boot adds the current definition back.
+// relay_confirmable_splices, relay_cell_drain_attempts and relay_migration_leases are no longer
+// created; nothing ever wrote them. Databases that have them keep them empty until a drop is safe:
+// an older image still creates them at boot, and a drop racing that CREATE can fail its schema step.
+// Account erasure in orca-cloud must be deployed with retired-table support (orca-cloud#493) first.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS relay_invites (
   user_id TEXT NOT NULL,
@@ -152,19 +156,6 @@ CREATE TABLE IF NOT EXISTS relay_install_results (
   result_json TEXT NOT NULL,
   committed_at BIGINT NOT NULL,
   PRIMARY KEY (user_id, relay_host_id, relay_device_id, req_id)
-);
-
-CREATE TABLE IF NOT EXISTS relay_confirmable_splices (
-  basis_conn_id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  relay_host_id TEXT NOT NULL,
-  owning_control_generation BIGINT NOT NULL,
-  relay_device_id TEXT NOT NULL,
-  accepted_credential_version BIGINT NOT NULL,
-  accepted_as TEXT NOT NULL,
-  confirm_deadline BIGINT NOT NULL,
-  active BIGINT NOT NULL,
-  created_at BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS relay_connection_bases (
@@ -507,15 +498,6 @@ CREATE TABLE IF NOT EXISTS relay_cell_fence_apply_invocations (
 CREATE INDEX IF NOT EXISTS relay_cell_fence_apply_invocations_attempt
   ON relay_cell_fence_apply_invocations(attempt_id, started_at);
 
-CREATE TABLE IF NOT EXISTS relay_cell_drain_attempts (
-  cell_id TEXT PRIMARY KEY,
-  cell_incarnation TEXT NOT NULL,
-  planned_grace_ms BIGINT NOT NULL,
-  attempted_at BIGINT NOT NULL,
-  retry_after BIGINT NOT NULL,
-  recover_forward_attempted_at BIGINT
-);
-
 CREATE TABLE IF NOT EXISTS relay_cell_drain_attempt_states (
   attempt_id TEXT PRIMARY KEY,
   cell_id TEXT NOT NULL,
@@ -604,17 +586,6 @@ CREATE TABLE IF NOT EXISTS relay_rate_windows (
 -- cannot use it and seq-scans instead.
 CREATE INDEX IF NOT EXISTS relay_rate_windows_started
   ON relay_rate_windows(window_started_at);
-
-CREATE TABLE IF NOT EXISTS relay_migration_leases (
-  user_id TEXT NOT NULL,
-  relay_host_id TEXT NOT NULL,
-  source_cell_id TEXT NOT NULL,
-  target_cell_id TEXT NOT NULL,
-  assignment_epoch BIGINT NOT NULL,
-  expires_at BIGINT NOT NULL,
-  completed_at BIGINT,
-  PRIMARY KEY (user_id, relay_host_id, assignment_epoch)
-);
 
 CREATE TABLE IF NOT EXISTS relay_assignment_migrations (
   user_id TEXT NOT NULL,
@@ -741,7 +712,6 @@ const POSTGRES_TRANSACTION_PHASES = [
   ['relay_region_rehome_', 'regional-rehome'],
   ['relay_assignment_activity_leases', 'activity-lease'],
   ['relay_assignment_migration', 'migration'],
-  ['relay_migration_leases', 'migration'],
   ['relay_post_drain_migration_pins', 'migration'],
   ['relay_cell_connection_runtime', 'cell-runtime'],
   ['relay_cell_connection_snapshots', 'cell-runtime'],
@@ -753,7 +723,6 @@ const POSTGRES_TRANSACTION_PHASES = [
   ['relay_admission_selector', 'admission'],
   ['relay_cell_admission', 'admission'],
   ['relay_control_connection_reservations', 'connection'],
-  ['relay_confirmable_splices', 'connection'],
   ['relay_connection_bases', 'connection'],
   ['relay_direct_authorizations', 'connection'],
   ['relay_confirm_results', 'connection'],

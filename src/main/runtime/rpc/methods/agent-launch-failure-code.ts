@@ -1,3 +1,4 @@
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
 import {
   WorktreeCreateCollisionError,
@@ -27,7 +28,8 @@ const LAUNCH_FAILURE_CODE_MAX_LENGTH = 128
  * the entire store.
  */
 export function agentLaunchFailureCode(error: unknown): string {
-  const code = error instanceof Error ? error.message : ''
+  const code =
+    error instanceof OrchestrationError ? error.code : error instanceof Error ? error.message : ''
   return code.length > 0 ? code.slice(0, LAUNCH_FAILURE_CODE_MAX_LENGTH) : 'agent_launch_failed'
 }
 

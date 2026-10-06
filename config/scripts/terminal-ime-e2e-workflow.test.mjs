@@ -12,8 +12,13 @@ describe('terminal IME e2e workflow', () => {
 
   it('runs only on schedule or manual dispatch', () => {
     expect(workflow.on.pull_request).toBeUndefined()
-    expect(workflow.on.workflow_dispatch).toBeNull()
+    expect(workflow.on.workflow_dispatch.inputs.diagnose_wayland_input).toMatchObject({
+      required: false,
+      type: 'boolean',
+      default: false
+    })
     expect(workflow.on.schedule).toEqual([{ cron: '30 9 * * *' }])
+    expect(workflow.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
   })
 
   it('installs native IBus Hangul and X11 input tools', () => {

@@ -1,20 +1,20 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { toWorktreeRelativePath } from '@/lib/terminal-links'
-import type { RuntimeFileOperationArgs, statRuntimePath } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import type { OpenFile } from '@/store/slices/editor'
 import {
   validateNewTabEntryAbsolutePath,
   type TabEntryLocalPlatform
 } from './tab-create-entry-path-validation'
+import type { statUserOpenedPath, UserOpenedPathStat } from '@/lib/user-opened-local-path'
 
 type AbsoluteFileOperations = {
   assertAbsolutePathAllowed: () => void
-  authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
   openFile: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
     options?: { preview?: boolean; targetGroupId?: string }
   ) => void
-  statRuntimePath: typeof statRuntimePath
+  statUserOpenedPath: typeof statUserOpenedPath
 }
 
 export async function openAbsoluteTabEntryFile(args: {
@@ -28,11 +28,9 @@ export async function openAbsoluteTabEntryFile(args: {
 }): Promise<void> {
   const filePath = validateNewTabEntryAbsolutePath(args.filePath, args.localPlatform)
   args.operations.assertAbsolutePathAllowed()
-  await args.operations.authorizeExternalPath({ targetPath: filePath })
-  args.operations.assertAbsolutePathAllowed()
-  let stat: Awaited<ReturnType<typeof statRuntimePath>>
+  let stat: UserOpenedPathStat
   try {
-    stat = await args.operations.statRuntimePath(args.context, filePath)
+    stat = await args.operations.statUserOpenedPath(args.context, filePath)
   } catch {
     throw new Error(`File not found: ${filePath}`)
   }
@@ -44,7 +42,10 @@ export async function openAbsoluteTabEntryFile(args: {
   args.operations.openFile(
     {
       filePath,
-      relativePath: toWorktreeRelativePath(filePath, args.worktreePath) || filePath,
+      // Why: a project link out of the project keeps its absolute path, so it reads as user-named.
+      relativePath: stat.escapesWorktree
+        ? filePath
+        : toWorktreeRelativePath(filePath, args.worktreePath) || filePath,
       worktreeId: args.worktreeId,
       language: detectLanguage(filePath),
       mode: 'edit'

@@ -24,6 +24,10 @@ import { StructuredAgentSessionStatusFeed } from './structured-agent-session-sta
 import { MAX_RETAINED_SESSION_ACTIVITIES } from './structured-agent-session-activity-retention'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'subscriber-session'
 
@@ -47,7 +51,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'activity-churn-journal')
     })
@@ -67,7 +71,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'checkpoint-journal')
     })
@@ -106,7 +110,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'clock-journal')
     })
@@ -125,7 +129,7 @@ describe('AgentSessionSubscribers', () => {
     )
     subscribers.publish(SESSION, journal)
     subscribers.backgroundTasks(SESSION, null, 1)
-    subscribers.reset(SESSION, journal, 'epoch_changed', 1)
+    subscribers.snapshot(SESSION, journal, 1)
 
     expect(events.map((event) => ('hostNow' in event ? event.hostNow : null))).toEqual([
       1_001, 1_002,
@@ -139,8 +143,8 @@ describe('AgentSessionSubscribers', () => {
       'batch',
       'batch',
       'batch',
-      'reset',
-      'reset'
+      'snapshot',
+      'snapshot'
     ])
   })
 
@@ -151,7 +155,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'catalog-journal')
     })
@@ -194,7 +198,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'hook-journal')
     })
@@ -207,10 +211,9 @@ describe('AgentSessionSubscribers', () => {
     })
 
     subscribers.publish(SESSION, journal)
-    subscribers.reset(SESSION, journal, 'epoch_changed', 1)
     subscribers.snapshot(SESSION, journal, 1)
 
-    expect(published).toEqual([SESSION, SESSION, SESSION])
+    expect(published).toEqual([SESSION, SESSION])
   })
 
   it('settles a session nobody is reading, from running to idle', async () => {
@@ -223,7 +226,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'unread-journal')
     })
@@ -289,7 +292,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'claude',
-        providerHandle: { kind: 'claude', sessionId: 'provider-1', leafUuid: null }
+        providerHandle: claudeProviderHandle('provider-1', null)
       },
       stateDirectory: join(root, 'background-journal')
     })
@@ -338,7 +341,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'activity-journal')
     })
@@ -390,7 +393,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: journalDir
     })
@@ -441,7 +444,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: journalDir
     })

@@ -169,7 +169,9 @@ describe('per-job path classification', () => {
     // Keep the real-binary gate live when a transport or launch dependency changes.
     for (const file of [
       'src/main/codex/codex-app-server-capability-signal.ts',
-      'src/main/codex/codex-process-exit-deadline.ts',
+      'src/main/provider-process/provider-process-exit-deadline.ts',
+      'src/main/provider-process/provider-process-launch.ts',
+      'src/main/provider-process/provider-record-reader.ts',
       'src/main/codex/codex-session-backfill.ts',
       'src/main/codex/codex-session-index-heal-state.ts',
       'src/main/codex-cli/command.ts',
@@ -626,12 +628,8 @@ describe('PR Checks skip wiring', () => {
     for (const jobName of expensiveJobs.filter(
       (jobName) => !['test', 'static_analysis', 'typecheck'].includes(jobName)
     )) {
-      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(
-        ['package', 'package_windows'].includes(jobName)
-          ? ['code_paths', 'preflight']
-          : ['code_paths']
-      )
-      expect(prWorkflow.jobs[jobName].if, jobName).toBe(
+      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths', 'preflight'])
+      expect(prWorkflow.jobs[jobName].if, jobName).toContain(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }

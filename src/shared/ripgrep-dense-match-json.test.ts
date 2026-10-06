@@ -1,22 +1,5 @@
 import { expect, it } from 'vitest'
-import { JSONParser } from '@streamparser/json'
 import { parseDenseRipgrepMatchJson } from './ripgrep-dense-match-json'
-
-it.each([0, 64 * 1024])('preserves literal and escaped BOMs with buffer size %i', (size) => {
-  const source = { '\ufeffkey': `\ufeffstart${'\n'.repeat(64 * 1024)}\ufeffend` }
-  const literal = JSON.stringify(source)
-  for (const record of [literal, literal.replaceAll('\ufeff', '\\uFEFF')]) {
-    const parser = new JSONParser({ stringBufferSize: size })
-    let parsed: unknown
-    parser.onValue = ({ value, stack }) => {
-      if (stack.length === 0) {
-        parsed = value
-      }
-    }
-    parser.write(record)
-    expect(parsed).toEqual(JSON.parse(record))
-  }
-})
 
 it.each(['', '\\', '\n', '\n'.repeat(64 * 1024), `${'x'.repeat(64 * 1024)}\n`])(
   'preserves U+FEFF in text and filenames across string-buffer boundaries (%#)',
@@ -32,7 +15,9 @@ it.each(['', '\\', '\n', '\n'.repeat(64 * 1024), `${'x'.repeat(64 * 1024)}\n`])(
       }
     }
     const record = JSON.stringify(source)
-    expect(parseDenseRipgrepMatchJson(record, 1, 16)).toEqual(JSON.parse(record))
+    for (const encoded of [record, record.replaceAll('\ufeff', '\\uFEFF')]) {
+      expect(parseDenseRipgrepMatchJson(encoded, 1, 16)).toEqual(JSON.parse(record))
+    }
   }
 )
 
@@ -76,3 +61,33 @@ it.each(['{}', '{"type":"begin","data":{}}', '{"data":null}', '{"data":[]}'])(
     expect(projected.data?.submatches).toEqual([])
   }
 )
+
+it('validates submatches after reaching the requested result cap', () => {
+  const source = JSON.stringify({
+    type: 'match',
+    data: {
+      submatches: [
+        { start: 0, end: 1 },
+        { start: null, end: 2 }
+      ]
+    }
+  })
+  expect(() => parseDenseRipgrepMatchJson(source, 1, 16)).toThrow('Invalid rg submatch')
+})
+
+it('rejects duplicate coordinate fields whose final value is not numeric', () => {
+  const source = '{"data":{"submatches":[{"start":0,"start":{},"end":1}]}}'
+  expect(() => parseDenseRipgrepMatchJson(source, 1, 16)).toThrow('Invalid rg submatch')
+})
+
+it.each([16_378, 16_379])('retains the existing per-element token budget at %i values', (count) => {
+  const source = JSON.stringify({
+    data: { submatches: [{ start: 0, end: 1, other: Array(count).fill(0) }] }
+  })
+  const parse = (): unknown => parseDenseRipgrepMatchJson(source, 1, 16)
+  if (count === 16_378) {
+    expect(parse()).toMatchObject({ data: { submatches: [{ start: 0, end: 1 }] } })
+  } else {
+    expect(parse).toThrow('rg submatch structure exceeds limit')
+  }
+})

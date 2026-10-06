@@ -70,7 +70,9 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/codex-state-db',
   'src/main/sqlite/sync-database',
   'src/main/codex/codex-app-server-capability-signal',
-  'src/main/codex/codex-process-exit-deadline',
+  'src/main/provider-process/provider-process-exit-deadline',
+  'src/main/provider-process/provider-process-launch',
+  'src/main/provider-process/provider-record-reader',
   'src/main/codex/codex-session-backfill',
   'src/main/codex/codex-session-index-heal-state',
   'src/main/codex-cli/command',
@@ -206,6 +208,12 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/structured-agent-session-agent-status',
   'src/shared/structured-agent-session-projection',
   'src/shared/workspace-session-sleeping-agents',
+  // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
+  'src/shared/structured-native-chat-launch-route.ts',
+  'src/renderer/src/lib/agent-launch-routing.ts',
+  'src/renderer/src/runtime/paired-host-client-capabilities.ts',
+  'src/shared/electron-remote-runtime-client-capabilities.ts',
+  'src/shared/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
   'src/main/runtime/orchestration/db.ts',
   'src/main/runtime/orchestration/db/',

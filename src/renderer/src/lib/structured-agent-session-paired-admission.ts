@@ -111,6 +111,7 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
     ...(args.plan.onPromptDelivered ? { onPromptDelivered: args.plan.onPromptDelivered } : {}),
     agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
       route: 'terminal-tui',
+      requestId: args.plan.requestId,
       agent: args.plan.agent,
       worktreeId: args.worktreeId
     })

@@ -13,7 +13,6 @@ import {
   agentSessionOperationKey,
   type AgentSessionOperationClaim,
   type AgentSessionOperationDecision,
-  type AgentSessionOperationOutcome,
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
@@ -22,6 +21,8 @@ import {
   evaluateAgentSessionMutationOperation,
   admitAgentSessionOperationInto,
   claimAgentSessionOperationInto,
+  admitAndClaimAgentSessionOperationInto,
+  type ClaimAfterAdmission,
   settleAgentSessionOperationInto,
   type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
@@ -68,8 +69,11 @@ import {
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
 import { setAgentSessionTabVisibility, showAgentSessionTabs } from './agent-session-tab-table'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+
+type AgentSessionOperationSettlement = Parameters<typeof settleAgentSessionOperationInto>[1]
 
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
@@ -296,13 +300,20 @@ export class AgentSessionRecordStore {
   }): Promise<AgentSessionOperationClaim> =>
     this.transact((draft) => claimAgentSessionOperationInto(draft, args))
 
-  async recordOperationOutcome(args: {
-    callerKey?: string
-    operationId: string
-    outcome: AgentSessionOperationOutcome
-  }): Promise<void> {
+  /** Admission and, when `claimAfter` allows, the claim: one durable write before the effect. */
+  admitAndClaimOperation = (
+    args: AgentSessionOperationAdmission,
+    claimAfter: ClaimAfterAdmission
+  ) => this.transact((draft) => admitAndClaimAgentSessionOperationInto(draft, args, claimAfter))
+
+  async recordOperationOutcome(args: AgentSessionOperationSettlement): Promise<void> {
     await this.transact((draft) => settleAgentSessionOperationInto(draft, args))
   }
+
+  /** The same settlement, committed by the journal write that makes it true. It changes only the
+   *  ledger, so no record listener is owed. */
+  operationOutcomeReceipt = (args: AgentSessionOperationSettlement): JournalOperationReceipt =>
+    this.transactions.receipt((draft) => settleAgentSessionOperationInto(draft, args))
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))

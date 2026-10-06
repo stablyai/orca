@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-03T22:30:39Z",
+  "platform": "darwin",
+  "command": ["opencode", "--standalone"],
+  "cols": 160,
+  "rows": 48,
+  "note": "opencode v2.0.21 (Homebrew opencode-v2) on macOS 26 arm64, 160x48, alternate screen. NOT the timed Python driver: a node-pty probe script (each read kept with its ms since spawn; it answers no terminal queries) used while investigating this bug. Recorded at natural load: other sessions on the machine had the load average at 4.39 / 30.38 / 44.19 (read 11 minutes later; this capture ran alone). The user's own login and plugins in place, OPENCODE_DISABLE_AUTOUPDATE=1, no ORCA_* vars. Orca's worker-start timing was replayed: an 82-line brief was bracketed-pasted at the box's show-cursor (3157 ms) and Enter sent 502 ms later (3659 ms, promptSentAtMs). The agent/model row only painted at 4141 ms; OpenCode dropped the Enter and the brief stayed in the composer as [Pasted ~82 lines]; OpenCode painted nothing more from 4164 ms until the probe stopped it at 40 s (its exit frames are cut). Scrubbed with same-length placeholders: checkout path and ticket id, and two earlier session titles in the tab strip. <name>.timing.json holds each PTY read as [ms since spawn, UTF-16 length] and recordedUntilMs.",
+  "exitCode": null
+}

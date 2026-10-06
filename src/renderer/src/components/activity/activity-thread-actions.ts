@@ -64,17 +64,23 @@ export function createActivityThreadActions({
 }): {
   markThreadRead: (thread: AgentPaneThread) => void
   markThreadUnread: (thread: AgentPaneThread) => void
+  markThreadsRead: (threads: readonly AgentPaneThread[]) => void
+  markThreadsUnread: (threads: readonly AgentPaneThread[]) => void
   selectThread: (thread: AgentPaneThread) => void
   jumpToWorkspace: (thread: AgentPaneThread) => void
   markAllThreadsRead: () => void
 } {
-  const markThreadRead = (thread: AgentPaneThread): void => {
-    acknowledgeAgents([thread.paneKey])
+  const markThreadsRead = (threads: readonly AgentPaneThread[]): void => {
+    acknowledgeAgents(threads.map((thread) => thread.paneKey))
   }
 
-  const markThreadUnread = (thread: AgentPaneThread): void => {
-    unacknowledgeAgents([thread.paneKey])
+  const markThreadsUnread = (threads: readonly AgentPaneThread[]): void => {
+    unacknowledgeAgents(threads.map((thread) => thread.paneKey))
   }
+
+  const markThreadRead = (thread: AgentPaneThread): void => markThreadsRead([thread])
+
+  const markThreadUnread = (thread: AgentPaneThread): void => markThreadsUnread([thread])
 
   const activateThreadTarget = (thread: AgentPaneThread): void => {
     const isFloatingTerminal = thread.worktree.id === FLOATING_TERMINAL_WORKTREE_ID
@@ -151,6 +157,8 @@ export function createActivityThreadActions({
   return {
     markThreadRead,
     markThreadUnread,
+    markThreadsRead,
+    markThreadsUnread,
     selectThread,
     jumpToWorkspace,
     markAllThreadsRead

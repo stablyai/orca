@@ -11,7 +11,7 @@ import {
   ORCA_EDITOR_FILE_SAVED_EVENT,
   type EditorFileSavedDetail
 } from './editor-autosave'
-import { flushPendingEditorChange } from './editor-pending-flush'
+import { flushPendingEditorChange, hasPendingEditorChange } from './editor-pending-flush'
 import {
   clearSelfWrite,
   recordSelfWrite,
@@ -19,6 +19,7 @@ import {
 } from './editor-self-write-registry'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
+import { editorTabFileAccess } from '@/lib/local-file-access'
 
 export type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
@@ -76,6 +77,9 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         if (!liveFile) {
           return
         }
+        if (liveFile.csvPreviewOnly === true) {
+          throw new Error('Large CSV previews are read-only.')
+        }
 
         // Why: read-only tabs (AI Vault View Log) must never write the agent-owned artifact through editor paths.
         if (liveFile.readOnly === true) {
@@ -94,7 +98,15 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           return
         }
 
-        const contentToSave = state.editorDrafts[file.id] ?? fallbackContent
+        flushPendingEditorChange(file.id, trigger === 'autosave')
+        const contentToSave = store.getState().editorDrafts[file.id] ?? fallbackContent
+        if (
+          trigger === 'autosave' &&
+          hasPendingEditorChange(file.id) &&
+          liveFile.lastKnownDiskSignature === getDiskBaselineSignature(contentToSave)
+        ) {
+          return
+        }
         const worktree = liveFile.worktreeId
           ? findWorktreeById(state.worktreesByRepo ?? {}, liveFile.worktreeId)
           : null
@@ -110,7 +122,12 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
             : undefined
         )
         try {
-          await writeRuntimeFile(fileContext, liveFile.filePath, contentToSave)
+          await writeRuntimeFile(
+            fileContext,
+            liveFile.filePath,
+            contentToSave,
+            editorTabFileAccess(state, liveFile)
+          )
         } catch (error) {
           // Why: the self-write stamp is only valid after a real write; clear on failure so it can't suppress a real update.
           clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
@@ -123,7 +140,9 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
         const nextState = store.getState()
         const currentDraft = nextState.editorDrafts[file.id]
-        const stillDirty = currentDraft !== undefined && currentDraft !== contentToSave
+        const stillDirty =
+          (currentDraft !== undefined && currentDraft !== contentToSave) ||
+          hasPendingEditorChange(file.id)
         nextState.markFileDirty(file.id, stillDirty)
         if (!stillDirty) {
           nextState.clearEditorDraft(file.id)
@@ -210,7 +229,9 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       const timerId = window.setTimeout(() => {
         autoSaveTimers.delete(file.id)
         autoSaveScheduledContent.delete(file.id)
-        void queueSave(file, draft, 'autosave')
+        void queueSave(file, draft, 'autosave').catch((error) => {
+          console.error('[editor] autosave failed', error)
+        })
       }, autoSaveDelayMs)
       autoSaveTimers.set(file.id, timerId)
     }

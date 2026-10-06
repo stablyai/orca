@@ -16,6 +16,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { translate } from '@/i18n/i18n'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 
 type ForkAgentSessionFromPaneArgs = {
   pane: ManagedPane
@@ -230,6 +231,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     return copyAgentSessionForkContext(fork)
   }
   const agentSessionLaunchPlan = planAgentSessionLaunch(useAppStore.getState(), {
+    requestId: newAgentLaunchRequestId(),
     agent: fork.agent,
     workspace: { kind: 'git-worktree', worktreeId: forkWorktreeId },
     prompt: fork.prompt,

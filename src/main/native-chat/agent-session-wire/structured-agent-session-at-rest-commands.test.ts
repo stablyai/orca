@@ -28,6 +28,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const caller = { callerKey: 'desktop' }
 const CLAUDE_SESSION = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
@@ -56,7 +57,7 @@ function adapter(catalog: ClaudeAtRestCommandCatalog): StructuredAgentSessionAda
         mintedAtFence: input.fence,
         observedAt: HOST_TEST_NOW,
         origin: 'created' as const,
-        handle: { provider: 'claude' as const, sessionId: CLAUDE_SESSION, leafUuid: null }
+        handle: claudeProviderHandle(CLAUDE_SESSION, null)
       }
     })),
     atRestCommands: catalog,

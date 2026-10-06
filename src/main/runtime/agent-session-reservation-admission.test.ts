@@ -16,6 +16,10 @@ import {
   type AgentSessionReserveRequest
 } from './agent-session-reservation-admission'
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const LEASE_TTL_MS = 60_000
@@ -34,7 +38,7 @@ function adoptedLink(
 ): AgentSessionProviderHandleLink {
   return {
     linkId: 'claude-1-provider-session-alpha-1-empty',
-    handle: { provider: 'claude', sessionId: 'provider-session-alpha-1', leafUuid: null },
+    handle: claudeProviderHandle('provider-session-alpha-1', null),
     origin: 'adopted',
     mintedAtFence: 1,
     observedAt: NOW,
@@ -118,7 +122,7 @@ describe('adopted conversation ownership', () => {
         storeState([holder]),
         reserveRequest({
           adoptedHandleLink: adoptedLink({
-            handle: { provider: 'claude', sessionId: 'provider-session-other', leafUuid: null }
+            handle: claudeProviderHandle('provider-session-other', null)
           })
         }),
         LEASE_TTL_MS
@@ -170,7 +174,7 @@ describe('adopted conversation ownership', () => {
       providerHandleChain: [
         {
           linkId: 'codex-1-thread-1',
-          handle: { provider: 'codex', threadId: 'thread-1' },
+          handle: codexProviderHandle('thread-1'),
           origin: 'created',
           mintedAtFence: 7,
           observedAt: NOW
@@ -187,7 +191,7 @@ describe('adopted conversation ownership', () => {
           accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
           adoptedHandleLink: adoptedLink({
             linkId: 'codex-1-thread-1-adopted',
-            handle: { provider: 'codex', threadId: 'thread-1' }
+            handle: codexProviderHandle('thread-1')
           })
         }),
         LEASE_TTL_MS

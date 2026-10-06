@@ -25,6 +25,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -51,7 +52,7 @@ beforeEach(async () => {
     acquisitionGeneration: `generation-${++generation}`,
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex' as const, threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: store.getRecord(SESSION)?.providerHandleChain.length
         ? ('resumed' as const)
         : ('created' as const),
@@ -274,10 +275,12 @@ describe('a send with no live owner', () => {
     expect(acquire).toHaveBeenCalledOnce()
   })
 
-  it('restarts nothing for a send the ledger holds but the journal never saw', async () => {
-    const params = sendParams('claimed, then the host died')
-    // The row was claimed and the host went down before the journal write: on replay, admission
-    // reconstructs an unknown-outcome submission and never needs an owner.
+  /** A row admitted for this send, then the host died before the journal write, left as `outcome`
+   *  says: `pending` by this build, `unknown` by a build that marked it before running. */
+  async function admittedThenHostDied(
+    params: ReturnType<typeof sendParams>,
+    outcome: 'pending' | 'unknown'
+  ) {
     await store.admitMutationOperation({
       callerKey: CALLER.callerKey,
       envelope: params.envelope,
@@ -285,11 +288,13 @@ describe('a send with no live owner', () => {
       now: NOW,
       operationIdScope: 'global'
     })
-    await store.recordOperationOutcome({
-      callerKey: CALLER.callerKey,
-      operationId: params.envelope.clientOperationId,
-      outcome: { status: 'unknown' }
-    })
+    if (outcome === 'unknown') {
+      await store.recordOperationOutcome({
+        callerKey: CALLER.callerKey,
+        operationId: params.envelope.clientOperationId,
+        outcome: { status: 'unknown' }
+      })
+    }
     await host.handleAdapterEvent({
       type: 'ended',
       sessionId: SESSION,
@@ -300,16 +305,31 @@ describe('a send with no live owner', () => {
     })
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     acquire.mockClear()
-
-    const result = await host.send(CALLER, {
+    return {
       ...params,
       envelope: {
         ...params.envelope,
         expectedRuntimeFence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0
       }
-    })
+    }
+  }
 
-    expect(result).toMatchObject({
+  it('runs a send admitted but never run for the first time, restarting the owner once', async () => {
+    const resent = await admittedThenHostDied(sendParams('admitted, then the host died'), 'pending')
+
+    await expect(host.send(CALLER, resent)).resolves.toMatchObject({
+      ok: true,
+      replayed: false,
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    await eventually(async () => expect(dispatch).toHaveBeenCalledOnce())
+    expect(acquire).toHaveBeenCalledOnce()
+  })
+
+  it("restarts nothing for an older build's unknown row the journal never saw", async () => {
+    const resent = await admittedThenHostDied(sendParams('marked unknown, then died'), 'unknown')
+
+    await expect(host.send(CALLER, resent)).resolves.toMatchObject({
       ok: true,
       replayed: true,
       value: { submission: { dispatchState: 'unknown', recovered: true } }

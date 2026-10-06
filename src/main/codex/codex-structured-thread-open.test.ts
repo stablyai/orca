@@ -95,7 +95,6 @@ describe('openCodexThread', () => {
     ).resolves.toEqual({
       threadId: 'thread-standard',
       thread: { id: 'thread-standard' },
-      historyPath: null,
       serviceTier: null
     })
   })

@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 // A worker's result reaching the structured chat that coordinates it, end to end in one process.
 //
 // Real: the structured agent-session host, its record store, journal, lease and Codex adapter; the
@@ -26,7 +27,6 @@ import { OrchestrationDb } from './orchestration/db'
 import { localOrchestrationCliCommand } from './orchestration/cli-command'
 import { formatMessagePointer } from './orchestration/formatter'
 import { currentRunCoordinatorOrcaSessionId } from './orchestration/db/runs/run-coordinator-orca-session'
-import type { RpcRequest } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
@@ -63,7 +63,7 @@ function request(
   method: string,
   params: Record<string, unknown>,
   options: { sessionId?: string } = {}
-): RpcRequest {
+): Parameters<RpcDispatcher['dispatch']>[0] {
   requests += 1
   return {
     id: `rpc-${requests}`,
@@ -105,8 +105,7 @@ function connectionFor(sessionId: string): FakeConnection {
   const head = agentSessionProviderHandleChainHead(
     host.deps.store.getRecord(sessionId)?.providerHandleChain ?? []
   )
-  const thread =
-    threadBySession.get(sessionId) ?? (head?.handle.provider === 'codex' && head.handle.threadId)
+  const thread = threadBySession.get(sessionId) ?? head?.handle.nativeId
   const connection = codex.connections.findLast((candidate) => candidate.threadId === thread)
   if (!connection) {
     throw new Error(`no app-server for ${sessionId}`)

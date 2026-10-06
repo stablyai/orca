@@ -259,6 +259,7 @@ describe('activity thread host routing', () => {
     expect(acknowledgeAgents).toHaveBeenCalledWith([thread.paneKey])
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(thread.worktree.id, {
       navigationIntent: 'user-open',
+      showWorkspaceList: true,
       executionHostId: REMOTE_HOST
     })
   })
@@ -280,5 +281,21 @@ describe('activity thread host routing', () => {
     markAllSet = [thread, readThread]
     actions.markAllThreadsRead()
     expect(acknowledgeAgents).toHaveBeenCalledWith([thread.paneKey])
+  })
+
+  it('marks a batch of threads read or unread in one store update', () => {
+    const other = { ...makeRemoteThread(), paneKey: 'tab-2:other' }
+    const unacknowledgeAgents = vi.fn()
+    const actions = createActivityThreadActions({
+      getMarkAllReadThreads: () => [],
+      acknowledgeAgents,
+      unacknowledgeAgents,
+      setSelectedPaneKey
+    })
+
+    actions.markThreadsRead([thread, other])
+    actions.markThreadsUnread([thread, other])
+    expect(acknowledgeAgents).toHaveBeenCalledExactlyOnceWith([thread.paneKey, other.paneKey])
+    expect(unacknowledgeAgents).toHaveBeenCalledExactlyOnceWith([thread.paneKey, other.paneKey])
   })
 })

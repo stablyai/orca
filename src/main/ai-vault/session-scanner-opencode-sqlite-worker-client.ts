@@ -12,6 +12,7 @@ import type {
 import { parseOpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-response'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
+import { runOpenCodeSqliteScanRequest } from './session-scanner-opencode-sqlite-scan-scope'
 
 // Why (#8864): a lazily-spawned, unref'd worker runs OpenCode SQLite reads off
 // the main-process event loop. This module owns only the OpenCode legs; the
@@ -117,7 +118,8 @@ export class OpenCodeSqliteWorkerClient {
           ...(args.agent ? { agent: args.agent } : {})
         }),
         LIST_TIMEOUT_MS,
-        args.signal
+        args.signal,
+        args.agent
       )) as OpenCodeSqliteListValue
       args.issues.push(...value.issues)
       return value.candidates
@@ -178,7 +180,8 @@ export class OpenCodeSqliteWorkerClient {
           ...(args.agent ? { agent: args.agent } : {})
         }),
         PARSE_TIMEOUT_MS,
-        args.signal
+        args.signal,
+        args.agent
       )
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the worker's parse leg returns exactly this, built by the repo's own reader on the other side of a structured clone.
       return value as AiVaultSession | null
@@ -217,7 +220,8 @@ export class OpenCodeSqliteWorkerClient {
           ...(args.agent ? { agent: args.agent } : {})
         }),
         CAPTURE_TIMEOUT_MS,
-        args.signal
+        args.signal,
+        args.agent
       )
       return parseOpenCodeSqliteCaptureValue(value)
     } catch (err) {
@@ -229,7 +233,12 @@ export class OpenCodeSqliteWorkerClient {
     args: Omit<OpenCodeNativeChatReadRequest, 'id'>,
     signal?: AbortSignal
   ): Promise<OpenCodeNativeChatReadValue> {
-    const value = await this.dispatch((id) => ({ ...args, id }), PARSE_TIMEOUT_MS, signal)
+    const value = await this.dispatch(
+      (id) => ({ ...args, id }),
+      PARSE_TIMEOUT_MS,
+      signal,
+      'native-chat'
+    )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only this build's internal worker dispatch constructs page/signal results; they are not client-supplied paths or frames.
     return value as OpenCodeNativeChatReadValue
   }
@@ -241,13 +250,20 @@ export class OpenCodeSqliteWorkerClient {
   private async dispatch(
     buildRequest: (id: number) => OpenCodeSqliteWorkerRequest,
     timeoutMs: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    agent?: 'opencode2' | 'zcode' | 'native-chat'
   ): Promise<unknown> {
     const deadline = this.requestTimeoutMs ?? timeoutMs
-    const response = await this.requests.dispatch(
-      (id) => ({ ...buildRequest(id), timeoutMs: deadline }),
-      deadline,
-      signal
+    const response = await runOpenCodeSqliteScanRequest(
+      signal,
+      (requestSignal, owner) =>
+        this.requests.dispatch(
+          (id) => ({ ...buildRequest(id), timeoutMs: deadline }),
+          deadline,
+          requestSignal,
+          owner
+        ),
+      agent
     )
     if (!response.ok) {
       throw new Error(response.error)

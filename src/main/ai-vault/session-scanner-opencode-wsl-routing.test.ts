@@ -3,6 +3,7 @@ import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { createAccumulator, finalizeSession } from './session-scanner-accumulator'
 import type { SessionFileCandidate } from './session-scanner-types'
 import type * as wslClientModule from './session-scanner-opencode-wsl-client'
+import { withOpenCodeSqliteScanScope } from './session-scanner-opencode-sqlite-scan-scope'
 
 const mocks = vi.hoisted(() => ({
   native: {
@@ -59,9 +60,53 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
 })
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('OpenCode SQLite execution-host routes', () => {
+  it('budgets WSL preparation while retaining a native source that already answered', async () => {
+    vi.useFakeTimers()
+    mocks.native.list.mockResolvedValueOnce([row(native)])
+    mocks.guest.mockImplementationOnce((_distro, _path, signal: AbortSignal | undefined) => {
+      if (!signal) {
+        throw new Error('Missing scoped preparation signal')
+      }
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      )
+    })
+    const issues: AiVaultScanIssue[] = []
+    const result = withOpenCodeSqliteScanScope(() =>
+      listOpenCodeSqliteSessionsViaWorker({
+        dbPaths: [native, ubuntu],
+        limit: 2,
+        issues
+      })
+    )
+    await vi.advanceTimersByTimeAsync(45_000)
+    expect((await result).map((entry) => entry.file.path)).toEqual([`${native}#same-session`])
+    expect(issues).toEqual([
+      expect.objectContaining({
+        path: ubuntu,
+        kind: 'scope',
+        message: expect.stringContaining('45s work budget')
+      })
+    ])
+    mocks.guest.mockResolvedValueOnce({ list: vi.fn(async () => [row(guest)]) })
+    const recoveredIssues: AiVaultScanIssue[] = []
+    const recovered = await withOpenCodeSqliteScanScope(() =>
+      listOpenCodeSqliteSessionsViaWorker({
+        dbPaths: [ubuntu],
+        limit: 2,
+        issues: recoveredIssues
+      })
+    )
+    expect(recovered).toHaveLength(1)
+    expect(recoveredIssues).toEqual([])
+  })
+
   it('separates native and distro databases and preserves equal IDs in different distros', async () => {
     const list = vi.fn(async (args) => [row(args.dbPaths[0])])
     mocks.guest.mockResolvedValue({ list })

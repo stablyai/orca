@@ -8,10 +8,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentSessionJournalIdentity,
-  AgentSessionProviderHandle
-} from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionProviderHandle } from '../../../shared/agent-session-provider-handle'
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
 import type * as TranscriptLineDecoders from '../transcript-line-decoders'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
@@ -20,6 +18,10 @@ import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import { openAgentSessionJournal } from './journal-store-factory'
 import type { AgentSessionJournal } from './journal-store'
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 
 // No shipped decoder emits a subagent roster, so the roster bounds are reached by standing one in.
 const decodedClaudeOverride = vi.hoisted((): { message: NativeChatMessage | null } => ({
@@ -50,11 +52,11 @@ type ImportAgent = 'claude' | 'codex' | 'grok' | 'omp'
 
 function providerHandle(agent: ImportAgent, sessionId: string): AgentSessionProviderHandle {
   if (agent === 'claude') {
-    return { kind: 'claude', sessionId, leafUuid: null }
+    return claudeProviderHandle(sessionId, null)
   }
   return agent === 'codex'
-    ? { kind: 'codex', threadId: sessionId }
-    : { kind: 'opaque', agent, value: sessionId }
+    ? codexProviderHandle(sessionId)
+    : { transport: 'terminal-transcript', agent, nativeId: sessionId }
 }
 
 function identity(agent: ImportAgent, sessionId: string): AgentSessionJournalIdentity {
@@ -566,8 +568,7 @@ describe('import failures', () => {
   })
 
   // A transcript with no decodable messages recovers nothing. Publishing an
-  // empty replacement would roll the epoch and drop whatever the journal held —
-  // including a repair's own anchor and disclosure.
+  // empty replacement would roll the epoch and drop whatever the journal held.
   it('leaves the epoch untouched when the transcript decodes to no messages', async () => {
     const journal = await open('codex', CODEX_SESSION)
     await journal.appendItem(

@@ -13,6 +13,7 @@ import {
   claudeProviderHistoryWindowFromJsonl,
   resolveClaudeProviderHistoryWindow
 } from './claude-structured-history-window'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const PROVIDER_SESSION = 'provider-1'
 const ORCA_SESSION = 'session-1'
@@ -82,7 +83,7 @@ describe('claudeProviderHistoryWindowFromJsonl', () => {
         workspaceId: 'workspace-1',
         hostId: 'host-1',
         agent: 'claude',
-        providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION, leafUuid: 'anchor' }
+        providerHandle: claudeProviderHandle(PROVIDER_SESSION, 'anchor')
       },
       accountHomePath: accountHome,
       hasLiveSession: false

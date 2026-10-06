@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { AppState } from '@/store'
 import { attachRestoredTabConflictScan } from './editor-restored-tab-conflict-scan'
 import { getDiskBaselineSignature } from './diff-content-signature'
@@ -32,12 +33,15 @@ function createEditorStore(): StoreApi<AppState> {
 function openRestoredDirtyTab(
   store: StoreApi<AppState>,
   filePath: string,
-  baselineContent: string
+  baselineContent: string,
+  owner: { relativePath: string; worktreeId: string } = {
+    relativePath: filePath.slice(1),
+    worktreeId: 'wt-1'
+  }
 ): void {
   store.getState().openFile({
     filePath,
-    relativePath: filePath.slice(1),
-    worktreeId: 'wt-1',
+    ...owner,
     language: 'typescript',
     mode: 'edit'
   })
@@ -245,6 +249,56 @@ describe('attachRestoredTabConflictScan', () => {
       expect(tab?.pendingDiskBaselineVerification).toBe(true)
       expect(tab?.externalMutation).toBeUndefined()
       expect(mocks.readRuntimeFileContent.mock.calls.length).toBeGreaterThan(1)
+    } finally {
+      detach()
+    }
+  })
+
+  it('verifies a restored dirty floating-workspace tab as the file the user named', async () => {
+    mocks.readRuntimeFileContent.mockRejectedValueOnce(new Error('ENOENT'))
+    mocks.readRuntimeFileContent.mockResolvedValue({
+      content: 'original baseline',
+      isBinary: false
+    })
+    mocks.pathExists.mockResolvedValue(true)
+    mocks.getConnectionIdForFile.mockReturnValue(null)
+    const store = createEditorStore()
+    openRestoredDirtyTab(store, '/Users/me/notes.txt', 'original baseline', {
+      relativePath: 'notes.txt',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    const detach = attachRestoredTabConflictScan(store)
+    try {
+      await vi.advanceTimersByTimeAsync(10)
+      expect(mocks.pathExists).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: '/Users/me/notes.txt', access: { kind: 'user-file' } })
+      )
+      await vi.advanceTimersByTimeAsync(2_100)
+      expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
+        expect.objectContaining({ filePath: '/Users/me/notes.txt', access: { kind: 'user-file' } })
+      )
+      expect(store.getState().openFiles[0]?.pendingDiskBaselineVerification).toBeUndefined()
+    } finally {
+      detach()
+    }
+  })
+
+  it('verifies a restored dirty project tab inside its root', async () => {
+    mocks.readRuntimeFileContent.mockResolvedValue({
+      content: 'original baseline',
+      isBinary: false
+    })
+    mocks.getConnectionIdForFile.mockReturnValue(null)
+    const store = createEditorStore()
+    openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
+
+    const detach = attachRestoredTabConflictScan(store)
+    try {
+      await vi.advanceTimersByTimeAsync(10)
+      expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: '/repo/file.ts', access: undefined })
+      )
     } finally {
       detach()
     }

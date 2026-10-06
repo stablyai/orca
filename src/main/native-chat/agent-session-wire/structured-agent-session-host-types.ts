@@ -2,12 +2,16 @@ import type { SubmissionRejectionFact } from '../../../shared/agent-session-fail
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionStatusSummary,
+  AgentSessionWireRefusal
+} from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session-spawn-token-process-scan'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { JournalStopSettle } from '../agent-session-journal/queued-message-pause'
 import type {
   StructuredAgentSessionAdapter,
   StructuredAgentSessionChildEndCause,
@@ -30,6 +34,8 @@ export type StructuredAgentSessionReveal = {
   workspaceId: string
   agent: 'claude' | 'codex'
   readable: boolean
+  /** Why the journal did not open, as a read would be refused. Host-side only: never published. */
+  openRefusal?: AgentSessionWireRefusal
 }
 
 /** Which provider child: the adapter acquisition and the lease fence it writes at. */
@@ -38,13 +44,18 @@ export type StructuredAgentSessionProviderChildIdentity = {
   readonly fence: number
 }
 
-/** A wind-down still owed, with the stop that owes it: a retry finishes that stop. */
-export type StructuredAgentSessionOwedWindDown = StructuredAgentSessionProviderChildIdentity & {
+/** The close a stop began for its child. It lives on the child and ends with it: once begun, the
+ *  child takes no input again, and every later stop, start or provider write joins it. */
+export type StructuredAgentSessionChildClose = {
+  /** The first stop's, which the child's end keeps however many asks join it. */
   readonly cause: StructuredAgentSessionStopCause
-  /** Where the journal stood when the stop was asked for; the child's end is ordered there. */
-  readonly requestedAt: AgentJournalCursor
-  /** Where it stood once the newest pass failed: a message accepted by then waited through a retry. */
-  readonly failedAt?: AgentJournalCursor
+  readonly reason: string | null
+  /** The Stop event that stop wrote, folded before the work it ends is settled, with the settle a
+   *  person's close that named no turn opens; a repeated ask reopens it. */
+  recorded: Promise<JournalStopSettle | null>
+  /** Where the journal stood when that stop was asked for: the child's end is ordered there, so a
+   *  message accepted while the exit was being proven came after it. A repeated ask moves it. */
+  requestedAt: AgentJournalCursor
 }
 
 /** The provider process behind a conversation. Written only in
@@ -56,6 +67,7 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   /** The queued message whose delivery started this child, fixed when the start is made; absent
    *  for any other start. In memory only: it tells a restart offer its own start from another. */
   readonly startedFor?: string
+  close?: StructuredAgentSessionChildClose
 }
 
 /** What ending a child established about its provider root. A stop's comes only from
@@ -78,8 +90,7 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     duringStartup: boolean
     startedFor?: string
     /** Where the conversation's journal stood when the child ended, to order the end against a
-     *  message's acceptance. A stop's end stands where it was asked for: a message accepted while
-     *  retries proved the exit waited on it, and came after it. */
+     *  message's acceptance. A close's end stands where its stop was asked for. */
     endedAt: AgentJournalCursor
   }
 
@@ -92,10 +103,6 @@ export type StructuredAgentSessionHostSession = {
    *  has none — so it may not be evicted to free a child, nor have its lease released as an
    *  observed exit. */
   child: StructuredAgentSessionProviderChild | null
-  /** The wind-down this host still owes for a child it started: settling that generation's work
-   *  and handing the lease back. Outlives `child`, which ends the moment the adapter proves the
-   *  exit — an eviction that aborts after that point must still finish it on the next close. */
-  owesProviderChildWindDown?: StructuredAgentSessionOwedWindDown
   lastEndedChild?: StructuredAgentSessionEndedChild
 }
 

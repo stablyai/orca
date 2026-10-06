@@ -5,7 +5,10 @@
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 import {
   hasUnsentStructuredAgentSessionOutboxEntry,
@@ -24,6 +27,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 import { readOutbox } from './structured-agent-session-outbox-storage'
+
+const NO_JOURNAL_ITEMS: readonly AgentJournalRenderItem[] = []
 
 // One object: a target rebuilt each render reads as a new owner, which re-sends what is on its way.
 const TARGET = { kind: 'local' } as const
@@ -82,6 +87,7 @@ describe('a Stop withdrawing what the host does not hold', () => {
     )
     const { result } = renderHook(() =>
       useStructuredAgentSessionOutbox({
+        journalItems: NO_JOURNAL_ITEMS,
         sessionId: 'session-1',
         target: TARGET,
         fence: 1,
@@ -147,6 +153,7 @@ describe('a Stop withdrawing what the host does not hold', () => {
     mocks.call.mockRejectedValue(new Error('the host refused the frame'))
     const { result } = renderHook(() =>
       useStructuredAgentSessionOutbox({
+        journalItems: NO_JOURNAL_ITEMS,
         sessionId: 'session-1',
         target: TARGET,
         fence: 1,

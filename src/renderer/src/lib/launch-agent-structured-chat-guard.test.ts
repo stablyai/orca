@@ -101,6 +101,7 @@ const store = {
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1']),
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
   unifiedTabsByWorktree: emptyUnifiedTabsByWorktree,
+  activeGroupIdByWorktree: {},
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
@@ -255,7 +256,11 @@ describe('structured chat adoption guard on the launch path', () => {
     const { launchAgentInNewTab, shouldQueueTerminalFocusAfterMenuClose } =
       await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    const result = launchAgentInNewTab({
+      requestId: 'request-1',
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
 
     expect(result).toMatchObject({
       surface: {
@@ -295,7 +300,11 @@ describe('structured chat adoption guard on the launch path', () => {
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    const result = launchAgentInNewTab({
+      requestId: 'request-2',
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
 
     expect(result).toMatchObject({
       surface: { kind: 'local-agent-session', sessionId: 'codex-session-1' }
@@ -313,7 +322,11 @@ describe('structured chat adoption guard on the launch path', () => {
   it('takes the structured path for Claude, naming Claude as the create provider', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1' })
+    const result = launchAgentInNewTab({
+      requestId: 'request-3',
+      agent: 'claude',
+      worktreeId: 'wt-1'
+    })
 
     expect(result).toMatchObject({
       surface: { kind: 'local-agent-session', sessionId: 'codex-session-1' }
@@ -331,7 +344,7 @@ describe('structured chat adoption guard on the launch path', () => {
   it('keeps a native-chat agent with no structured adapter on the terminal-backed path', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'openclaude', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ requestId: 'request-4', agent: 'openclaude', worktreeId: 'wt-1' })
 
     expect(mockCreateStructuredCodexSessionLaunchIntent).not.toHaveBeenCalled()
     expect(mockCreateTab).toHaveBeenCalled()
@@ -343,8 +356,8 @@ describe('structured chat adoption guard on the launch path', () => {
       hostCapabilities = capabilities
       const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-      launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1' })
-      launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+      launchAgentInNewTab({ requestId: 'request-5', agent: 'claude', worktreeId: 'wt-1' })
+      launchAgentInNewTab({ requestId: 'request-6', agent: 'codex', worktreeId: 'wt-1' })
 
       expect(mockCreateStructuredCodexSessionLaunchIntent).not.toHaveBeenCalled()
       expect(mockCreateTab).toHaveBeenCalledTimes(2)
@@ -357,7 +370,11 @@ describe('structured chat adoption guard on the launch path', () => {
     store.settings.openAgentTabsInChatByDefault = false
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    const result = launchAgentInNewTab({
+      requestId: 'request-7',
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
 
     expect(result?.surface).toEqual({ kind: 'local-terminal', tabId: 'tab-1' })
     expect(mockLaunchStructuredCodexSession).not.toHaveBeenCalled()
@@ -376,7 +393,11 @@ describe('structured chat adoption guard on the launch path', () => {
     mockLaunchStructuredCodexSession.mockRejectedValueOnce(refusal)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    const result = launchAgentInNewTab({
+      requestId: 'request-8',
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
 
     expect(result).toMatchObject({
       surface: { kind: 'local-agent-session', sessionId: 'codex-session-1' },
@@ -404,6 +425,7 @@ describe('structured chat adoption guard on the launch path', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-9',
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'start this task',
@@ -421,7 +443,7 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
   })
 
-  it('coalesces repeated structured launches for one worktree while the host is starting', async () => {
+  it('coalesces one action delivered twice for one worktree while the host is starting', async () => {
     let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
     mockLaunchStructuredCodexSession.mockImplementationOnce(
       () =>
@@ -429,8 +451,16 @@ describe('structured chat adoption guard on the launch path', () => {
     )
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const first = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
-    const second = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    const first = launchAgentInNewTab({
+      requestId: 'double-click',
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
+    const second = launchAgentInNewTab({
+      requestId: 'double-click',
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
 
     expect(first).toMatchObject({ surface: { kind: 'local-agent-session' } })
     expect(second).toMatchObject({ surface: { kind: 'local-agent-session' } })
@@ -450,10 +480,10 @@ describe('structured chat adoption guard on the launch path', () => {
     })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ requestId: 'double-click', agent: 'codex', worktreeId: 'wt-1' })
     await vi.waitFor(() => expect(mockRefreshLocalStructuredSessionTabs).toHaveBeenCalledTimes(1))
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ requestId: 'double-click', agent: 'codex', worktreeId: 'wt-1' })
 
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(1)
     store.unifiedTabsByWorktree['wt-1'] = [
@@ -471,7 +501,7 @@ describe('structured chat adoption guard on the launch path', () => {
     await vi.waitFor(() => expect(mockToastError).not.toHaveBeenCalled())
   })
 
-  it('does not create a sibling when post-create visibility proof is unknown', async () => {
+  it('re-checks a chat whose visibility proof is unknown through its own Retry, with its own intent', async () => {
     store.unifiedTabsByWorktree = {}
     const firstIntent = structuredLaunchIntent('wt-1', 'codex-session-1')
     const secondIntent = structuredLaunchIntent('wt-1', 'codex-session-2')
@@ -505,7 +535,11 @@ describe('structured chat adoption guard on the launch path', () => {
       ])
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const unknown = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    const unknown = launchAgentInNewTab({
+      requestId: 'request-14',
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
     await expect(unknown?.structuredSettlement).resolves.toEqual({
       kind: 'visibility-unknown',
       sessionId: firstIntent.sessionId
@@ -519,7 +553,9 @@ describe('structured chat adoption guard on the launch path', () => {
     )
     expect(mockToastError).not.toHaveBeenCalled()
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    // A new launch would open a new chat; the unconfirmed one is re-checked by its own Retry.
+    const { retryStructuredAgentSessionLaunch } = await import('./structured-agent-session-launch')
+    expect(retryStructuredAgentSessionLaunch('wt-1', firstIntent.sessionId)).toBe(true)
     await vi.waitFor(() => expect(mockRefreshLocalStructuredSessionTabs).toHaveBeenCalledTimes(3))
 
     expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledTimes(1)
@@ -538,7 +574,7 @@ describe('structured chat adoption guard on the launch path', () => {
         groupId: 'group-1'
       }
     ]
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ requestId: 'request-15', agent: 'codex', worktreeId: 'wt-1' })
     await vi.waitFor(() => expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(3))
     expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledTimes(2)
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(3)
@@ -549,6 +585,7 @@ describe('structured chat adoption guard on the launch path', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-16',
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'start this task'
@@ -572,6 +609,7 @@ describe('structured chat adoption guard on the launch path', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-17',
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'large generated prompt',
@@ -589,7 +627,7 @@ describe('structured chat adoption guard on the launch path', () => {
     store.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ requestId: 'request-18', agent: 'codex', worktreeId: 'wt-1' })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       launchAgent: 'codex',
@@ -602,7 +640,7 @@ describe('structured chat adoption guard on the launch path', () => {
     store.repos = [{ id: 'repo-1', connectionId: 'runtime-ssh-a', path: '/repo' }]
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ requestId: 'request-19', agent: 'codex', worktreeId: 'wt-1' })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       launchAgent: 'codex',

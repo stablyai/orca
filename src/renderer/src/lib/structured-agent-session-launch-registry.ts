@@ -43,19 +43,17 @@ export type StructuredAgentSessionLaunchLifecycle =
   | 'published'
   | 'cancelled'
 
-const pendingStructuredLaunchesByIdentity = new Map<string, StructuredLaunchState>()
 const structuredLaunchesBySessionId = new Map<string, StructuredLaunchState>()
 const structuredLaunchListeners = new Set<() => void>()
 
 export function resetStructuredAgentLaunchRegistryForTests(): void {
-  pendingStructuredLaunchesByIdentity.clear()
   structuredLaunchesBySessionId.clear()
   structuredLaunchListeners.clear()
   resetStructuredAgentLaunchCancellationForTests()
 }
 
 export function notifyStructuredLaunchListeners(): void {
-  for (const state of pendingStructuredLaunchesByIdentity.values()) {
+  for (const state of structuredLaunchesBySessionId.values()) {
     persistStructuredLaunchState(state)
   }
   for (const listener of structuredLaunchListeners) {
@@ -80,10 +78,6 @@ export function structuredLaunchIdentity(
     : `${agent}:${worktreeId}`
 }
 
-export function getStructuredLaunchState(identity: string): StructuredLaunchState | undefined {
-  return pendingStructuredLaunchesByIdentity.get(identity)
-}
-
 export function getStructuredLaunchStateBySessionId(
   sessionId: string
 ): StructuredLaunchState | undefined {
@@ -91,19 +85,15 @@ export function getStructuredLaunchStateBySessionId(
 }
 
 export function setStructuredLaunchState(state: StructuredLaunchState): void {
-  pendingStructuredLaunchesByIdentity.set(state.identity, state)
   structuredLaunchesBySessionId.set(state.intent.sessionId, state)
   persistStructuredLaunchState(state)
 }
 
 export function deleteStructuredLaunchStateIfCurrent(state: StructuredLaunchState): boolean {
-  if (pendingStructuredLaunchesByIdentity.get(state.identity) !== state) {
+  if (structuredLaunchesBySessionId.get(state.intent.sessionId) !== state) {
     return false
   }
-  pendingStructuredLaunchesByIdentity.delete(state.identity)
-  if (structuredLaunchesBySessionId.get(state.intent.sessionId) === state) {
-    structuredLaunchesBySessionId.delete(state.intent.sessionId)
-  }
+  structuredLaunchesBySessionId.delete(state.intent.sessionId)
   deleteStructuredAgentLaunchRecord(state.intent.sessionId)
   return true
 }
@@ -114,7 +104,10 @@ function persistStructuredLaunchState(state: StructuredLaunchState): void {
     deleteStructuredAgentLaunchRecord(state.intent.sessionId)
     return
   }
-  writeStructuredAgentLaunchRecord(structuredAgentLaunchRecordFor(state.intent, lifecycle))
+  writeStructuredAgentLaunchRecord({
+    ...structuredAgentLaunchRecordFor(state.intent, lifecycle),
+    ...(lifecycle === 'failed' ? { failedAt: state.callers.failedAt } : {})
+  })
 }
 
 export function getPersistedStructuredAgentLaunchRecord(
@@ -124,10 +117,12 @@ export function getPersistedStructuredAgentLaunchRecord(
 }
 
 export function structuredLaunchStates(): IterableIterator<StructuredLaunchState> {
-  return pendingStructuredLaunchesByIdentity.values()
+  return structuredLaunchesBySessionId.values()
 }
 
-function launchStateLifecycle(state: StructuredLaunchState): StructuredAgentSessionLaunchLifecycle {
+export function launchStateLifecycle(
+  state: StructuredLaunchState
+): StructuredAgentSessionLaunchLifecycle {
   if (state.cancelled || state.callers.outcome === 'cancelled') {
     return 'cancelled'
   }
@@ -313,21 +308,4 @@ export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
     notifyStructuredLaunchListeners()
   }
   return changed
-}
-
-export function getStructuredAgentLaunchStatus(
-  worktreeId: string,
-  agent: AgentSessionHandleProvider
-): StructuredAgentLaunchStatus {
-  // Any launch for this pair, including adopted conversations, means a chat is starting here.
-  const states = [
-    getStructuredLaunchState(structuredLaunchIdentity(worktreeId, agent)),
-    ...[...pendingStructuredLaunchesByIdentity.entries()]
-      .filter(([identity]) => identity.startsWith(`${agent}:${worktreeId}:resume:`))
-      .map(([, state]) => state)
-  ].filter((state): state is StructuredLaunchState => Boolean(state))
-  if (states.length === 0) {
-    return 'idle'
-  }
-  return states.some((state) => state.visibilityUnknown) ? 'unknown' : 'pending'
 }
