@@ -117,8 +117,6 @@ export type RuntimePtyTitleTrackerEntry = {
   lastTitleFactAtMs: number | null
   chunkTouchedSessionTabs: boolean
   pendingFacts: TerminalSideEffectFact[]
-  /** Run once this chunk's facts are emitted: status that readers must see after them. */
-  afterFacts: (() => void)[]
   commandCodeDetector: { observe: (data: string) => boolean } | null
 }
 

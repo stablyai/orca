@@ -142,9 +142,6 @@ export type RuntimeTerminalAgentStatusEvent = {
    *  reader can rejoin it to the terminal after the pane key moved. */
   terminalHandle?: string
   payload: ParsedAgentStatusPayload
-  /** Set by the process-lifetime producer; see AgentHookServer.ingestTerminalStatus. */
-  origin?: 'process'
-  yieldsToHookSince?: number
 }
 
 export type HookLiveAgentRow = Pick<

@@ -85,11 +85,7 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
     return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'posix'
   }
 
-  protected emitTerminalAgentStatusEvents(
-    ptyId: string,
-    chunk: Pick<ProcessedAgentStatusChunk, 'payloads'>,
-    provenance?: { origin: 'process'; yieldsToHookSince: number }
-  ): void {
+  protected emitTerminalAgentStatusEvents(ptyId: string, chunk: ProcessedAgentStatusChunk): void {
     if (chunk.payloads.length === 0) {
       return
     }
@@ -150,8 +146,7 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
           this.onTerminalAgentStatus({
             ptyId,
             ...target,
-            payload,
-            ...provenance
+            payload
           })
         } catch (err) {
           console.error('[runtime] terminal agent status listener threw', {

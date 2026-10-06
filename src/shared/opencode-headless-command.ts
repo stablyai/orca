@@ -96,7 +96,7 @@ export function findOpenCodeRunCommand(
   return null
 }
 
-// OpenCode run's process lifetime is its turn; v1 still reports through its plugin.
+// `opencode run` takes its message as a positional argument, not through the TUI's --prompt.
 export function isOpenCodeRunCommand(
   tokens: readonly string[],
   shell: AgentStartupShell = 'posix'

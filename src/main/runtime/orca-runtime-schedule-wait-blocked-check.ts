@@ -131,26 +131,12 @@ export class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntimeWithOnPt
     ptyId: string,
     entry: RuntimePtyTitleTrackerEntry
   ): void {
-    if (entry.pendingFacts.length > 0) {
-      const facts = entry.pendingFacts
-      entry.pendingFacts = []
-      this.emitTerminalSideEffectBatch(ptyId, facts)
-    }
-    const afterFacts = entry.afterFacts
-    entry.afterFacts = []
-    for (const run of afterFacts) {
-      run()
-    }
-  }
-
-  /** Runs `run` after the chunk being applied has emitted its facts, or now between chunks. */
-  protected runAfterPendingTerminalSideEffectFacts(ptyId: string, run: () => void): void {
-    const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
-    if (entry?.applyingChunk) {
-      entry.afterFacts.push(run)
+    if (entry.pendingFacts.length === 0) {
       return
     }
-    run()
+    const facts = entry.pendingFacts
+    entry.pendingFacts = []
+    this.emitTerminalSideEffectBatch(ptyId, facts)
   }
 
   /** Feed a main-fabricated OSC title/BEL frame (agent hook spinners) through

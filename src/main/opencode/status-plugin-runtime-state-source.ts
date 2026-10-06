@@ -56,12 +56,12 @@ export function getStatusPluginRuntimeStateSource(): string[] {
     'let messagePartPostInFlight = null;',
     'let deliveredMessagePartFactoryID = null;',
     'let lastAssistantPartPostAt = 0;',
-    ...getRunProcessSource()
+    ...getCommandProcessSource()
   ]
 }
 
-// Mirrors isOpenCodeRunCommand (src/shared/opencode-headless-command.ts) over this process's argv.
-function getRunProcessSource(): string[] {
+// Reads this OpenCode process's subcommand from its argv; only `--log-level` takes a separate value.
+function getCommandProcessSource(): string[] {
   return String.raw`
 function isOpenCodeCommandProcess(command) {
   // Why drop a leading path: a compiled binary reports its embedded entry script as argv[1].
@@ -73,8 +73,5 @@ function isOpenCodeCommandProcess(command) {
     if (args[index] === "--log-level") index += 1;
   }
   return false;
-}
-function isOpenCodeRunProcess() {
-  return isOpenCodeCommandProcess("run");
 }`.split('\n')
 }

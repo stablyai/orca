@@ -143,7 +143,7 @@ function windowsCandidatesContainRecognizedAgent(
     )
 }
 
-export function resolveWindowsForegroundIdentity(
+function resolveWindowsForegroundIdentity(
   candidates: readonly WindowsProcessCandidate[],
   fallbackProcess: string,
   contextPaths: readonly string[] | undefined
