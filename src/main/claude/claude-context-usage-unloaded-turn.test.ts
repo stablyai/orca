@@ -28,6 +28,7 @@ import {
 } from './claude-context-usage-test-support'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'orca-session'
 const journals = createTrackedJournalOpener()
@@ -49,7 +50,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'claude',
-      providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: null }
+      providerHandle: claudeProviderHandle('claude-session', null)
     },
     now: () => 9_000,
     stateDirectory: join(root, SESSION)

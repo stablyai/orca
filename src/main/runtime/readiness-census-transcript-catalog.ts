@@ -45,6 +45,8 @@ const RUNTIME_RECORDERS: readonly (readonly [string, Recorder])[] = [
   ['hermes-', { agent: 'hermes', foregroundProcess: 'hermes' }],
   ['muse-', { agent: 'muse', foregroundProcess: 'muse' }],
   ['omp-', { agent: 'omp', foregroundProcess: 'omp' }],
+  // The plain `opencode` command running an OpenCode 2 binary, as the opencode row launches it.
+  ['opencode-cmd-', { agent: 'opencode', foregroundProcess: 'opencode' }],
   ['opencode-2-', { agent: 'opencode2', foregroundProcess: 'opencode' }],
   ['opencode-1-', { agent: 'opencode', foregroundProcess: 'opencode' }],
   ['prime-agent-', { agent: 'prime-agent', foregroundProcess: 'prime-agent' }],

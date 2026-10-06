@@ -13,7 +13,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'workspace-1',
   hostId: 'local',
   agent: 'claude',
-  providerHandle: { kind: 'opaque', agent: 'claude', value: 'pending' }
+  providerHandle: null
 }
 
 describe('Claude structured processless acquisition', () => {

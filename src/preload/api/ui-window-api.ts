@@ -12,10 +12,16 @@ export type UiWindowApi = {
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
+    /** A native-chat composer paste, kept where its draft can bring it back. */
+    forNativeChatDraft?: boolean
   }) => Promise<string | null>
   clipboardHasImage: () => Promise<boolean | null>
   /** Paths of files a file manager copied; empty when there are none or the host cannot list them. */
   readClipboardFilePaths: () => Promise<string[]>
+  /** Which restored draft pastes are still kept: files really in Orca's paste folder. */
+  restoreNativeChatPastes: (
+    paths: string[]
+  ) => Promise<{ path: string; kept: boolean; exists: boolean }[]>
   readClipboardImageThumbnail: () => Promise<ClipboardImageThumbnail | null>
   writeClipboardText: (text: string) => Promise<void>
   writeTerminalClipboardText: (text: string) => Promise<void>

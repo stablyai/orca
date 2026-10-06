@@ -17,6 +17,7 @@ import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/ag
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { claudeSubagentGroupBody, claudeSubagentGroupIdentity } from './claude-subagent-group-row'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 // Frame orders are real sessions', scrubbed. A resumed agent's frames still name its ORIGINAL
 // spawn call while the announcement names the message call that resumed it, and a new provider
@@ -129,7 +130,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'claude',
-      providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: null }
+      providerHandle: claudeProviderHandle('claude-session', null)
     },
     now: () => 9_000,
     stateDirectory: root

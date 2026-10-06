@@ -894,7 +894,8 @@
             "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
             "invalidImage": "{{fileName}} is not a valid supported image.",
             "additionalErrors": "{{count}} additional images could not be attached.",
-            "totalTooLarge": "{{fileName}}을(를) 포함하면 첨부 파일 합계가 {{maxSize}}를 초과합니다."
+            "totalTooLarge": "{{fileName}}을(를) 포함하면 첨부 파일 합계가 {{maxSize}}를 초과합니다.",
+            "compressed": "{{fileName}}을(를) 첨부 파일 한도에 맞추기 위해 {{originalSize}}에서 {{size}}(으)로 압축했습니다."
           }
         }
       },
@@ -4010,6 +4011,15 @@
             "resumingAriaOne": "채팅 1개 재개 중. 자세히 보려면 클릭하세요.",
             "resumingAria": "채팅 {{value0}}개 재개 중. 자세히 보려면 클릭하세요.",
             "resumingTooltip": "중단된 채팅을 복원하고 계속하도록 요청하는 중…"
+          },
+          "provider": {
+            "extra": {
+              "usage": {
+                "section": {
+                  "135d51c19f": "한도 {{value0}}"
+                }
+              }
+            }
           }
         }
       },
@@ -6225,6 +6235,7 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
+          "preparing": "첨부 파일을 준비하는 중…",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}",
           "screenshotsHint": "최대 {{count}}장, 총 {{maxSize}}까지 스크린샷을 첨부하세요."
@@ -6439,8 +6450,8 @@
           "96f3649526": "Gemini CLI 자격 증명 사용(실험적)",
           "d676c41fc6": "Google 인증을 위해 로컬 Gemini CLI 설치에서 OAuth 자격 증명을 추출합니다. 이는 Orca가 아닌 Gemini CLI 앱에 발급된 자격 증명을 사용합니다. Google이 CLI를 업데이트하면 중단될 수 있습니다. 자신의 책임하에 사용하십시오.",
           "0c7f915b01": "Gemini CLI 자격 증명 사용",
-          "973741a871": "Gemini 공급자 설정을 구성합니다.",
-          "0c64dc2a64": "Gemini",
+          "973741a871": "기존 Gemini CLI 세션은 계속 사용할 수 있습니다. Gemini 자격 증명으로는 Antigravity에 로그인되지 않습니다.",
+          "0c64dc2a64": "Gemini CLI (레거시)",
           "db209ee572": "제거",
           "8a0f870153": "재인증",
           "3d245ef7d9": "Codex에서 이 로그인이 오래되었다고 보고했습니다.",
@@ -7119,8 +7130,8 @@
             "shellEnvCopy": "Codex 및 Claude 채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
             "shellEnvToggleLabel": "셸 환경 사용 전환",
             "structuredTitle": "업데이트된 구조화된 기본 채팅 사용",
-            "structuredCopy": "새 Codex 및 Claude 에이전트를 구조화된 채팅으로 엽니다. 끄면 터미널 지원 채팅으로 엽니다. 이미 있는 채팅은 그대로 유지됩니다.",
-            "structuredScope": "이 컴퓨터와 이를 지원하는 버전을 실행하는 페어링된 Orca 서버에서 실행됩니다. 이전 서버는 터미널 채팅을 유지합니다. WSL 및 SSH 호스트는 계속해서 터미널 채팅을 사용하며 Orca가 프로세스 시작 시간을 읽을 수 없으면 Windows는 이 채팅을 사용합니다.",
+            "structuredCopy": "새 Codex 및 Claude 에이전트를 구조화된 채팅으로 엽니다. 끄면 터미널 기반 채팅으로 엽니다. 이미 있는 채팅은 그대로 유지됩니다.",
+            "structuredScope": "이 컴퓨터와 이를 지원하는 버전을 실행하는 페어링된 Orca 서버에서 실행됩니다. 이전 서버는 터미널 채팅을 유지합니다. WSL 및 SSH 호스트는 계속해서 터미널 채팅을 사용하며 Orca가 프로세스 시작 시간을 읽을 수 없으면 Windows는 터미널 채팅으로 대체됩니다.",
             "structuredToggleLabel": "업데이트된 구조화된 기본 채팅 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
@@ -7164,7 +7175,7 @@
           "80c454e8a6": "이를 공급자의 캐시 TTL과 일치시킵니다."
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "모든 markdown 보기에서 markdown 메모 컨트롤을 표시하고 agent 전달 작업에 해당 메모를 포함합니다.",
+          "f80603d293": "모든 markdown 보기에서 markdown 메모 컨트롤을 표시하고 에이전트 전달 작업에 해당 메모를 포함합니다.",
           "4edc104f0f": "Markdown 리뷰 노트",
           "5f02e6fb21": "markdown 파일에서 로컬 markdown 리뷰 노트 컨트롤을 표시합니다.",
           "51161d1647": "파일을 편집할 때 미니맵 개요를 표시합니다.",
@@ -16016,6 +16027,7 @@
             "effd75e330": "주변 컨텍스트",
             "7d1480fbf1": "HTML",
             "9098b118ab": "페이지",
+            "accessibleNameOpenQuote": "\"",
             "eb98a0971a": "\"",
             "d053db279d": "역할=",
             "a759d8f866": "선택된 요소",
@@ -16699,11 +16711,17 @@
             "permission": "주의 필요"
           },
           "filtersSection": "필터",
-          "viewSection": "보기"
+          "viewSection": "보기",
+          "threadListOptionsActive": "스레드 목록 옵션 ({{value0}} 활성)",
+          "activityOptionsActive": "활동 옵션 ({{value0}})"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "모든 호스트 및 프로젝트 표시",
-          "hiddenCount": "{{value0}} 숨김"
+          "hiddenCount": "{{value0}} 숨김",
+          "hideAutomationCreated": "자동화로 생성된 워크스페이스 숨기기",
+          "hideCliCreated": "CLI로 생성된 워크스페이스 숨기기",
+          "hideOtherClientsAria": "공유 원격 서버에서 다른 Orca 클라이언트로 만든 워크스페이스의 에이전트 숨기기",
+          "hideOtherClients": "다른 클라이언트 에이전트 숨기기"
         },
         "ActivityThreadRow": {
           "clearNotification": "알림 지우기"
@@ -16728,6 +16746,25 @@
           "workspace": "워크스페이스",
           "copyPath": "경로 복사",
           "jumpToWorkspace": "워크스페이스로 이동"
+        },
+        "ActivityThreadContextMenu": {
+          "copyTitle": "제목 복사",
+          "copyPath": "경로 복사",
+          "open": "열기",
+          "markRead": "읽음으로 표시",
+          "markUnread": "읽지 않은 것으로 표시",
+          "goToWorkspace": "워크스페이스로 이동",
+          "clear": "목록에서 지우기",
+          "agentSection": "에이전트",
+          "markManyRead_one": "에이전트 {{count}}개 읽음으로 표시",
+          "markManyRead_other": "에이전트 {{count}}개 읽음으로 표시",
+          "markManyUnread_one": "에이전트 {{count}}개 읽지 않은 것으로 표시",
+          "markManyUnread_other": "에이전트 {{count}}개 읽지 않은 것으로 표시",
+          "clearMany_one": "목록에서 에이전트 {{count}}개 지우기",
+          "clearMany_other": "목록에서 에이전트 {{count}}개 지우기",
+          "markManyRead": "에이전트 {{count}}개 읽음으로 표시",
+          "markManyUnread": "에이전트 {{count}}개 읽지 않은 것으로 표시",
+          "clearMany": "목록에서 에이전트 {{count}}개 지우기"
         }
       },
       "confirmation": {
@@ -17107,6 +17144,7 @@
           "tool": {
             "arrow": "화살표",
             "ellipse": "타원",
+            "eraser": "지우개",
             "highlight": "형광펜",
             "pen": "펜",
             "rect": "사각형",
@@ -17645,6 +17683,13 @@
         "localAttachmentUnsupported": "원격 세션에는 로컬 첨부 파일을 사용할 수 없습니다.",
         "removeAttachment": "첨부파일 삭제",
         "pastedImageLabel": "붙여넣은 이미지",
+        "draftNotSaved": "이 초안을 아직 저장하지 못했습니다. Orca가 계속 다시 시도합니다.",
+        "imageNotBroughtBack": "{{name}}을(를) 이 초안과 함께 복원하지 못했습니다. 다시 첨부하거나 제거하세요.",
+        "pastedImageNotBroughtBack": "이 붙여넣은 이미지를 이 초안과 함께 복원하지 못했습니다. 제거한 후 필요하면 다시 붙여넣으세요.",
+        "removeImageToSend": "복원하지 못한 이미지가 있습니다. 보내려면 제거하세요.",
+        "removeImagesToSend": "복원하지 못한 이미지가 있습니다. 보내려면 제거하세요.",
+        "imageAttachAgainLabel": "다시 첨부",
+        "pastedImageNotKeptLabel": "보존되지 않음",
         "imagePasteFailed": "이미지 붙여넣기 실패.",
         "worktreeNotReady": "워크트리가 준비되지 않았습니다 — 잠시 후 다시 시도하세요.",
         "pasteUnavailable": "붙여넣을 수 없습니다 — 이 채팅은 지금 입력을 받을 수 없습니다.",
@@ -18274,6 +18319,16 @@
         "workspaceReadyToast": "워크스페이스 {{name}} 준비 완료",
         "goToWorktree": "작업 트리로 이동",
         "goToWorkspace": "워크스페이스로 이동"
+      },
+      "delete": {
+        "changes": {
+          "permanentLoss": "Git 워크스페이스의 커밋되지 않은 변경 사항이나 추적되지 않은 변경 사항은 영구적으로 삭제됩니다.",
+          "clean": "커밋되지 않았거나 추적되지 않은 변경 사항 없음",
+          "unavailable": "변경 사항을 확인할 수 없습니다",
+          "checking": "변경 사항 확인 중…",
+          "checkingDetails": "확인 중…",
+          "unavailableDetails": "세부 정보를 사용할 수 없음"
+        }
       }
     },
     "agentSessionContinuation": {
@@ -18356,6 +18411,11 @@
     },
     "agentChildRow": {
       "ended": "종료됨"
+    },
+    "jiraIssueAssigneeField": {
+      "label": "담당자",
+      "automatic": "자동",
+      "assignToMe": "나에게 할당 ({{name}})"
     }
   },
   "dashboardPopout": {
@@ -18963,5 +19023,54 @@
   },
   "fileSearch": {
     "failed": "검색에 실패했습니다. 다시 시도하세요."
+  },
+  "csv": {
+    "detectingDelimiter": "분리자 감지 중…",
+    "indexProgress": "CSV 인덱싱 중… {{percent}}%",
+    "loadingCell": "로드 중…",
+    "nextRows": "다음 행",
+    "previousRows": "이전 행",
+    "readOnlyPreview": "대용량 파일 미리보기 · 읽기 전용",
+    "resizeColumn": "열 {{column}} 크기 조정",
+    "rowWindow": "행 {{first}}–{{last}}",
+    "editor": "CSV 편집기",
+    "editCell": "행 {{row}}, 열 {{column}} 편집",
+    "filterRows": "행 필터",
+    "edit": "셀 편집",
+    "copy": "복사",
+    "paste": "붙여넣기",
+    "rows": "행",
+    "insertRowAbove": "위에 행 삽입",
+    "insertRowBelow": "아래에 행 삽입",
+    "deleteRows": "선택한 행 삭제",
+    "columns": "열",
+    "newColumn": "열 {{column}}",
+    "insertColumnBefore": "앞에 열 삽입",
+    "insertColumnAfter": "뒤에 열 삽입",
+    "moveColumnLeft": "열 왼쪽으로 이동",
+    "moveColumnRight": "열 오른쪽으로 이동",
+    "deleteColumns": "선택한 열 삭제",
+    "sort": "정렬",
+    "sortAscending": "선택한 열을 오름차순으로 정렬",
+    "sortDescending": "선택한 열을 내림차순으로 정렬",
+    "originalOrder": "원래 행 순서",
+    "save": "저장",
+    "inspectionOnly": "검사 전용 · 파일 행 순서 변경 없음"
+  },
+  "worktree": {
+    "nestedRemoval": {
+      "refreshFailed": "워크스페이스 목록을 새로고침하지 못했습니다",
+      "review": "중첩 워크트리와 함께 삭제…",
+      "title": "워크스페이스와 중첩 워크트리를 삭제할까요?",
+      "description": "\"{{name}}\", 아래에 나열된 모든 중첩 워크트리, 그리고 커밋되지 않은 변경 사항을 포함한 그 안의 모든 파일이 영구적으로 삭제됩니다. 해당 터미널과 에이전트는 중지됩니다.",
+      "detached": "분리된 HEAD",
+      "loading": "중첩 워크트리 확인 중…",
+      "order": "중첩 워크트리가 먼저 삭제됩니다. 하나가 실패하면 삭제가 중단되고 상위 워크트리는 유지됩니다. 브랜치는 기존 삭제 설정을 따릅니다.",
+      "cancel": "취소",
+      "retry": "다시 검토",
+      "deleting": "삭제 중…",
+      "confirm": "나열된 모든 워크트리 삭제",
+      "preservedBranches": "일부 중첩 워크트리 브랜치가 유지되었습니다"
+    }
   }
 }

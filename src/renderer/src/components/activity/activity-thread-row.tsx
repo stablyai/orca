@@ -12,6 +12,7 @@ import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls
 import { ActivityThreadHoverCard } from './activity-thread-hover-card'
 import { activityThreadRowCopy } from './activity-thread-presentation'
 import type { AgentPaneThread } from './activity-thread-types'
+import type { ActivityThreadClickEvent } from './use-activity-thread-selection'
 
 function ActivityThreadRowAction({
   label,
@@ -57,6 +58,7 @@ function ActivityThreadRowAction({
 export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   thread,
   selected,
+  multiSelected = false,
   onSelect,
   onJump,
   onMarkRead,
@@ -70,7 +72,9 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
 }: {
   thread: AgentPaneThread
   selected: boolean
-  onSelect: (thread: AgentPaneThread) => void
+  /** In the multi-selection and not the open row. */
+  multiSelected?: boolean
+  onSelect: (thread: AgentPaneThread, event: ActivityThreadClickEvent) => void
   onJump: (thread: AgentPaneThread) => void
   onMarkRead: (thread: AgentPaneThread) => void
   onMarkUnread: (thread: AgentPaneThread) => void
@@ -97,14 +101,12 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
         data-current={selected ? 'true' : undefined}
         data-worktree-card-surface="true"
         data-worktree-card-active={selected ? 'primary' : undefined}
-        onClick={() => onSelect(thread)}
+        data-worktree-card-selected={multiSelected || undefined}
+        onClick={(event) => onSelect(thread, event)}
         role="listitem"
         aria-label={taskTitle}
         aria-current={selected ? 'true' : undefined}
-        className={cn(
-          'group relative flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-transparent px-1.5 py-1.5 text-left transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none worktree-sidebar-card-hover focus-visible:ring-1 focus-visible:ring-ring',
-          selected && 'border-transparent'
-        )}
+        className="group relative flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-transparent px-1.5 py-1.5 text-left transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none worktree-sidebar-card-hover focus-visible:ring-1 focus-visible:ring-ring"
       >
         <div className="flex min-w-0 items-start gap-1.5">
           <span className="mt-0.5 inline-flex shrink-0">
@@ -118,7 +120,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
               aria-keyshortcuts="Enter Space"
               onClick={(event) => {
                 event.stopPropagation()
-                onSelect(thread)
+                onSelect(thread, event)
               }}
               className={cn(
                 'block min-w-0 w-full cursor-pointer text-left text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-ring',

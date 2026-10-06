@@ -126,7 +126,9 @@ describe('resolveAgentLaunchRoute', () => {
     expect(route({ ...server, clientCapabilities: [] })).toBe('legacy-native-chat')
     expect(route({ ...server, clientCapabilities: undefined })).toBe('legacy-native-chat')
     // A released server admits chats only with its own setting on, so it keeps the terminal.
-    expect(route({ executionHostId: 'runtime:environment-a' })).toBe('legacy-native-chat')
+    expect(
+      route({ executionHostId: 'runtime:environment-a', clientCapabilities: structured })
+    ).toBe('legacy-native-chat')
     // The server has not answered yet, or answered without structured sessions.
     expect(route({ executionHostId: 'runtime:environment-a', hostCapabilities: null })).toBe(
       'legacy-native-chat'

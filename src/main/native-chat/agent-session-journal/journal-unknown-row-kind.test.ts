@@ -22,6 +22,10 @@ import {
   SAVED_BY_NEWER_ORCA
 } from './journal-host-database-test-support'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
+import {
+  agentSessionJournalProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 
 const UNLOADABLE = {
   refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
@@ -32,7 +36,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 const SCOPE = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
 
@@ -116,7 +120,7 @@ async function journalWithOneItem(): Promise<string> {
  *  fails to compile. */
 function rowOfEveryKind(): { [Kind in JournalRow['kind']]: Extract<JournalRow, { kind: Kind }> } {
   const base = { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch: 'epoch-1', fence: 1, ts: 1 }
-  const providerHandle = IDENTITY.providerHandle
+  const providerHandle = agentSessionJournalProviderHandle(IDENTITY)
   return {
     epoch: { ...base, seq: 1, kind: 'epoch', reason: 'session_created', providerHandle },
     item: {

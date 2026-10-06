@@ -14,6 +14,7 @@ export { selectLatestStableReleaseTag }
 export const REPO_ROOT = resolve(import.meta.dirname, '..', '..', '..')
 const DEFAULT_CACHE_ROOT = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-checkouts')
 
+// Released sources still import @streamparser/json; retain its pinned test-only dependency.
 // Bump when extraction or the alias rewrite changes so cached trees are rebuilt.
 const CHECKOUT_FORMAT = 4
 

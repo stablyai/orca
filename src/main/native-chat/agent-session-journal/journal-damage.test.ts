@@ -14,6 +14,7 @@ import {
   type AgentJournalItemIdentity,
   type AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type Database from '../../sqlite/sync-database'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import {
@@ -31,7 +32,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const UNLOADABLE = {

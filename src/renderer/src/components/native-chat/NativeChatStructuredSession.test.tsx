@@ -28,6 +28,7 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 
 describe('NativeChatStructuredSession', () => {
   afterEach(() => {
@@ -35,7 +36,7 @@ describe('NativeChatStructuredSession', () => {
     resetStructuredSessionMocks()
   })
 
-  it('gives what a Stop withdrew back to the composer this pane shows', () => {
+  it("gives the composer this pane shows the conversation's own draft, and Stop returns text there", () => {
     render(
       <NativeChatStructuredSession
         isVisible
@@ -47,8 +48,14 @@ describe('NativeChatStructuredSession', () => {
       />
     )
     const paneKey = structuredAgentSessionPaneKey('structured-tab-1', 'session-1')
-    expect(mocks.composerProps).toMatchObject({ paneKey })
-    expect(mocks.controllerProps).toMatchObject({ composerScopeKey: paneKey })
+    // The pane routes drops and pickers; the draft belongs to the conversation, whatever pane shows it.
+    expect(mocks.composerProps).toMatchObject({
+      paneKey,
+      draftScopeKey: structuredAgentSessionDraftScopeKey('session-1')
+    })
+    expect(mocks.controllerProps).toMatchObject({
+      composerScopeKey: structuredAgentSessionDraftScopeKey('session-1')
+    })
   })
 
   it('routes the launch draft and app-menu paste to the structured composer', () => {

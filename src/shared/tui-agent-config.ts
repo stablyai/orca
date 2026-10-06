@@ -4,6 +4,7 @@ import type { TuiAgentConfig } from './tui-agent-config-types'
 
 export type {
   AgentPromptInjectionMode,
+  DraftPasteMarkerSignal,
   DraftPasteReadySignal,
   TuiAgentConfig,
   TuiAgentDetectionRuntime
@@ -93,6 +94,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'flag-prompt',
     // Why: opencode enables bracketed paste before its composer mounts; wait for the post-\x1b[?2004h show-cursor so paste lands.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
+    // Why: OpenCode 2 draws its input box before its agent list loads and drops an Enter sent
+    // in between; the agent/model row under the box is the first moment it can submit.
+    submitPasteReadySignal: 'opencode-agent-row',
     // Why 20s: measured on two Windows hosts (ConPTY dll backend, as pinned by
     // local-pty-utils), opencode does not enable bracketed paste until ~4.8s and its
     // composer is not ready until ~10s — so the 8s default expired first and the draft
@@ -102,19 +106,26 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     composerReadyCaptures: [
       'opencode-1-18-32-timed-boot-slow',
       'opencode-1-18-32-timed-boot-hidden-pane',
-      'opencode-1-18-32-timed-first-launch'
+      'opencode-1-18-32-timed-first-launch',
+      'opencode-cmd-2-0-21-timed-warm-server'
     ]
   },
-  // Why: opencode2 installs as a separate binary and uses the same prompt flags.
-  // Its @opentui composer keeps the same cursor-gated paste signal.
+  // Why: opencode2 installs as a separate binary and uses the same prompt flags and paste signals.
   opencode2: {
     detectCmd: 'opencode2',
     // The private server inherits this pane's hook endpoint and identity.
     launchCmd: 'opencode2 --standalone',
     promptInjectionMode: 'flag-prompt',
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
+    submitPasteReadySignal: 'opencode-agent-row',
     draftPasteReadyTimeoutMs: 20_000,
-    composerReadyCaptures: ['opencode-2-0-18-timed-boot-hidden-pane']
+    composerReadyCaptures: [
+      'opencode-2-0-18-timed-boot-hidden-pane',
+      'opencode-2-0-21-timed-cold-standalone',
+      'opencode-2-0-21-timed-cold-standalone-hidden-pane',
+      'opencode-2-0-21-timed-natural-load-enter-dropped',
+      'opencode-2-0-14-timed-cold-standalone'
+    ]
   },
   'mimo-code': {
     detectCmd: 'mimo',

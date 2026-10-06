@@ -30,7 +30,8 @@ import {
 } from './agent-session-record-store-file'
 import {
   readPersistedTestAgentSessionStore,
-  seedTestAgentSessionStoreFromNewerBuild
+  seedTestAgentSessionStoreFromNewerBuild,
+  storedTestAgentSessionRecord
 } from './agent-session-record-store-test-harness'
 import { openStructuredAgentSessionJournalDatabase } from './structured-agent-session-journal-open'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -40,6 +41,7 @@ import {
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 // `failing` fails every record write; `grants` lets that many more through, then fails.
 const writes = vi.hoisted(() => ({ failing: false, grants: Infinity, refused: 0 }))
@@ -97,7 +99,7 @@ function chatRecord(
         provider: 'codex' as const,
         providerHandleChain: record.providerHandleChain.map((link) => ({
           ...link,
-          handle: { provider: 'codex' as const, threadId: `thread-${sessionId}` }
+          handle: codexProviderHandle(`thread-${sessionId}`)
         })),
         accountHome: { variable: 'CODEX_HOME' as const, path: join(root, 'codex-home') }
       }
@@ -131,7 +133,9 @@ async function seedProfile(
     JSON.stringify({
       schemaVersion: AGENT_SESSION_STORE_SCHEMA_VERSION,
       hostId: 'local',
-      records: Object.fromEntries(records.map((record) => [record.sessionId, record])),
+      records: Object.fromEntries(
+        records.map((record) => [record.sessionId, storedTestAgentSessionRecord(record)])
+      ),
       operations: {},
       retiredClaimKeys: [],
       unusableRecords: {},
@@ -185,7 +189,7 @@ async function seedChatOpenedWhileOwed(record: AgentSessionRecord, tabId: string
   })
   database.db
     .prepare('INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?)')
-    .run(record.sessionId, JSON.stringify(record))
+    .run(record.sessionId, JSON.stringify(storedTestAgentSessionRecord(record)))
   await AgentSessionRecordStore.open({
     journalDatabase: database,
     hostId: 'local'

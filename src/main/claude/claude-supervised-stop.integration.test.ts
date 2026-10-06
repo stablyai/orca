@@ -10,7 +10,7 @@ import {
   PROVIDER_SIGTERM_GRACE_MS,
   PROVIDER_STDIN_END_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS
-} from '../codex/codex-app-server-posix-supervisor'
+} from '../provider-process/provider-process-supervisor'
 import { proveClaudeChildExit } from './claude-agent-sdk-exit-proof'
 import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
 

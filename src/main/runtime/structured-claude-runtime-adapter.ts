@@ -1,5 +1,6 @@
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { createClaudeStructuredLaunchResolver } from '../claude/claude-structured-launch-resolution'
@@ -12,7 +13,7 @@ import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-
 import type { ClaudeStructuredSessionEvent } from '../claude/claude-structured-session-state'
 import {
   recordAgentSessionProviderHandle,
-  reviseAgentSessionClaudeResumePoint
+  reviseAgentSessionProviderResumePoint
 } from './agent-session-provider-handle-transition'
 import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
@@ -115,11 +116,10 @@ export function createStructuredClaudeRuntimeAdapter(
     },
     persistResumePoint: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
       await store.transitionHandoff(sessionId, (record: AgentSessionRecord) =>
-        reviseAgentSessionClaudeResumePoint({
+        reviseAgentSessionProviderResumePoint({
           record,
           fence,
-          providerSessionId,
-          leafUuid,
+          handle: claudeProviderHandle(providerSessionId, leafUuid),
           now: Date.now()
         })
       )

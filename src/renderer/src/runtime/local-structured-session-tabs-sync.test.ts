@@ -24,6 +24,12 @@ import {
   resetWebSessionFocusIntentForTests
 } from './web-session-focus-intent'
 
+const mocks = vi.hoisted(() => ({ recheckUnconfirmedLaunches: vi.fn() }))
+
+vi.mock('../lib/structured-agent-session-launch-unconfirmed-recheck', () => ({
+  recheckUnconfirmedStructuredAgentLaunches: mocks.recheckUnconfirmedLaunches
+}))
+
 const WORKTREE_ID = 'repo-1::worktree-1'
 const TERMINAL_ID = 'terminal-1'
 const STRUCTURED_ID = 'structured-agent-session-codex-1'
@@ -239,6 +245,54 @@ describe('local structured session tab projection', () => {
       callbacks[0]?.({ ok: false, error: { code: 'runtime_unavailable', message: 'late' } })
       await vi.advanceTimersByTimeAsync(5000)
       expect(subscribe).toHaveBeenCalledTimes(2)
+    } finally {
+      Object.defineProperty(window, 'api', { configurable: true, value: priorApi })
+    }
+  })
+
+  it('re-checks unconfirmed chat starts each time the host stream reopens, not on each frame', async () => {
+    vi.useFakeTimers()
+    mocks.recheckUnconfirmedLaunches.mockClear()
+    const priorApi = window.api
+    const callbacks: ((response: unknown) => void)[] = []
+    const subscribe = vi.fn(async (_args: unknown, callback: (response: unknown) => void) => {
+      callbacks.push(callback)
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        runtime: {
+          getStatus: vi.fn().mockResolvedValue({
+            capabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+          }),
+          call: vi.fn().mockResolvedValue({ ok: true, result: { snapshots: [] } }),
+          subscribe
+        }
+      }
+    })
+    const census = { ok: true, result: { type: 'snapshots', snapshots: [], authoritative: true } }
+    try {
+      await startLocalStructuredSessionTabsSync({
+        isDisposed: () => false,
+        setUnsubscribe: () => undefined
+      })
+      // The startup inventory alone is not the stream reopening.
+      expect(mocks.recheckUnconfirmedLaunches).not.toHaveBeenCalled()
+
+      callbacks[0]?.(census)
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledOnce()
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledWith('local')
+      callbacks[0]?.({ ok: true, result: { type: 'updated', ...structuredInventory('e', 3, 'c') } })
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledOnce()
+
+      // The runtime restarted: the stream ends and the resubscribe opens with a new census.
+      callbacks[0]?.({ ok: true, result: { type: 'end' } })
+      await vi.advanceTimersByTimeAsync(250)
+      await Promise.resolve()
+      expect(subscribe).toHaveBeenCalledTimes(2)
+      callbacks[1]?.(census)
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledTimes(2)
     } finally {
       Object.defineProperty(window, 'api', { configurable: true, value: priorApi })
     }

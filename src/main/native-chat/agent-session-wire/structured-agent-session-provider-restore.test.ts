@@ -17,6 +17,7 @@ import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const CLAUDE_SESSION = 'claude-session'
 const hosts: StructuredAgentSessionHost[] = []
@@ -34,7 +35,7 @@ function claudeAdapter(): StructuredAgentSessionAdapter {
       },
       link: {
         linkId: `link-${fence}`,
-        handle: { provider: 'claude', sessionId: CLAUDE_SESSION, leafUuid: null },
+        handle: claudeProviderHandle(CLAUDE_SESSION, null),
         origin: 'created',
         mintedAtFence: fence,
         observedAt: HOST_TEST_NOW

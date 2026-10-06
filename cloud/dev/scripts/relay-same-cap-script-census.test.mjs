@@ -169,7 +169,7 @@ function cellShape(cellId) {
 }
 
 // The class block runs before checkout-independent work and decides the whole wave shape.
-function resolveCellClass(cellId) {
+function resolveCellClass(cellId, drainPaceWindowMs = '300000') {
   return spawnSync('bash', [
     '-euo',
     'pipefail',
@@ -178,7 +178,11 @@ function resolveCellClass(cellId) {
       '          CELL_CLASS="$(node dev/scripts/relay-production-same-cap-wave.mjs cell-class \\',
       '          SELECTOR_WAVE_DELTA="$(jq -er \'.selectorWaveDelta\' <<< "${CELL_CLASS}")"'
     )}\necho "\${ENTRY_ADMISSION} \${SELECTOR_WAVE_DELTA}"`
-  ], { cwd: new URL('../..', import.meta.url), env: { ...process.env, TARGET_CELL_ID: cellId }, encoding: 'utf8' })
+  ], {
+    cwd: new URL('../..', import.meta.url),
+    env: { ...process.env, TARGET_CELL_ID: cellId, DRAIN_PACE_WINDOW_MS: drainPaceWindowMs },
+    encoding: 'utf8'
+  })
 }
 
 function drainingBlock() {
@@ -357,6 +361,10 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       )
     }
     assert.equal(resolveCellClass('production-gce-c12').status, 1)
+    // The job's own block refuses a pace its cell may not run, before anything reads production.
+    assert.equal(resolveCellClass('production-gce-c7', '60000').status, 0)
+    assert.equal(resolveCellClass('production-gce-c28', '60000').status, 1)
+    assert.equal(resolveCellClass('production-gce-c7', '45000').status, 1)
   })
 
   it('offsets a later wave by this cell class\'s own selector delta', () => {

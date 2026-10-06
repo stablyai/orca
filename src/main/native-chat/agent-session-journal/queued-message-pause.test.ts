@@ -29,13 +29,14 @@ import {
 } from './queued-message-pause'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-p',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null }
+  providerHandle: claudeProviderHandle('native-1', null)
 }
 const HOST = 'proc-1'
 
@@ -62,6 +63,7 @@ function queueDraft(journal: AgentSessionJournal, messageId: string, carriedFrom
     body: message(messageId),
     fingerprint: `fp-${messageId}`,
     hostInstance: HOST,
+    source: { kind: 'user' },
     ...(carriedFrom ? { carriedFrom } : {})
   })
 }
@@ -494,7 +496,8 @@ describe("a restart's pause", () => {
       messageId: 'draft-restart',
       body: message('written before the restart'),
       fingerprint: 'fp-draft-restart',
-      hostInstance: 'proc-0'
+      hostInstance: 'proc-0',
+      source: { kind: 'user' }
     })
     expect(reason(journal)).toBe('restarted')
     await queueDraft(journal, 'draft-legacy')

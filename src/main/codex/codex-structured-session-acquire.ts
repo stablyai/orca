@@ -1,4 +1,8 @@
 import {
+  CODEX_STRUCTURED_HANDLE_NAMESPACE,
+  isAgentSessionProviderHandleInNamespace
+} from '../../shared/agent-session-provider-handle-encoding'
+import {
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   type AgentSessionAcquisition,
@@ -71,9 +75,11 @@ export async function acquireCodexStructuredSession(input: {
   const { previousAttempt, attempt } = acquisitions.start(sessionId)
   const acquisition = attempt.window
   let unbindReadingControl: (() => void) | undefined
+  const provenHandle = acquireInput.identity.providerHandle
   let primaryThreadId =
-    acquireInput.identity.providerHandle.kind === 'codex'
-      ? acquireInput.identity.providerHandle.threadId
+    provenHandle &&
+    isAgentSessionProviderHandleInNamespace(provenHandle, CODEX_STRUCTURED_HANDLE_NAMESPACE)
+      ? provenHandle.nativeId
       : null
   const subagentExecutions = new CodexSubagentExecutions()
   const dispatchEchoes = createCodexDispatchEchoes()

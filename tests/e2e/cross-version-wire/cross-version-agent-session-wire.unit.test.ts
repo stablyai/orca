@@ -64,6 +64,7 @@ import {
 } from './versioned-agent-session-wire'
 import { openTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
@@ -561,7 +562,7 @@ describe('cross-version structured agent sessions', () => {
             },
             link: {
               linkId: `link-${fence}`,
-              handle: { provider: 'codex', threadId: THREAD },
+              handle: codexProviderHandle(THREAD),
               origin: 'created',
               mintedAtFence: fence,
               observedAt: NOW
@@ -752,7 +753,7 @@ describe('cross-version structured agent sessions', () => {
             },
             link: {
               linkId: `link-${fence}`,
-              handle: { provider: 'codex', threadId: THREAD },
+              handle: codexProviderHandle(THREAD),
               // A restarted host re-proves the thread it inherited; only the first
               // owner of a session may claim to have created it.
               origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',

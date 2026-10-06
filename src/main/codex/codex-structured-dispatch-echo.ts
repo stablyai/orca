@@ -1,5 +1,8 @@
 import type { ProviderDiagnostic } from '../../shared/agent-session-failure'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalTurnJoin
+} from '../../shared/agent-session-journal-types'
 
 /** Sends awaiting their echo. One bound to a turn that ended without taking it settles from that
  *  end; any other whose echo never arrives is retired by the journal's recovery on exit. */
@@ -35,10 +38,15 @@ export type CodexDispatchEchoes = {
   /** Drops an armed send whose write never reached the provider. */
   disarm: (clientMessageId: string) => void
   /**
-   * Binds a send to the turn Codex answered it into. Returns that turn's end when the answer is
-   * read after it; a send that end settles is no longer armed.
+   * Binds a send to the turn Codex answered it into, and how it joined that turn. Returns that
+   * turn's end when the answer is read after it; a send that end settles is no longer armed.
    */
-  bindTurn: (clientMessageId: string, threadId: string, turnId: string) => CodexTurnEnd | null
+  bindTurn: (
+    clientMessageId: string,
+    threadId: string,
+    turnId: string,
+    via: AgentJournalTurnJoin
+  ) => CodexTurnEnd | null
   /** The turn the latest armed send was answered into that is neither in `openTurnIds`, ended, nor
    *  left unopened through a wait: one Codex has picked for the send but not opened. */
   answeredUnopenedTurn: (threadId: string, openTurnIds: ReadonlySet<string>) => string | null
@@ -52,7 +60,11 @@ export type CodexDispatchEchoes = {
    * completed, which echoes its pending input first, so one it never echoed waits for recovery. An
    * interrupt withdraws an un-echoed send, steered or the turn's own input: neither reached history.
    */
-  endTurn: (threadId: string, turnId: string, end: CodexTurnEnd) => string[]
+  endTurn: (
+    threadId: string,
+    turnId: string,
+    end: CodexTurnEnd
+  ) => { clientMessageId: string; via: AgentJournalTurnJoin }[]
   /** Submission origin for this exact send, retained until its echo settles it. */
   requestOrigin: (clientMessageId: string) => CodexDispatchRequestOrigin | null
   /** Highest causal sequence assigned to a dispatch in this session. */
@@ -64,7 +76,11 @@ export type CodexDispatchEchoes = {
 export function createCodexDispatchEchoes(): CodexDispatchEchoes {
   const armed = new Map<
     string,
-    { requestedAt: number | null; sequence: number; turn?: { threadId: string; turnId: string } }
+    {
+      requestedAt: number | null
+      sequence: number
+      turn?: { threadId: string; turnId: string; via: AgentJournalTurnJoin }
+    }
   >()
   const endedTurns = new Map<string, CodexTurnEnd>()
   const unopenedTurns = new Set<string>()
@@ -101,12 +117,12 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
     },
     settle: (clientMessageId) => armed.delete(clientMessageId),
     disarm: (clientMessageId) => void armed.delete(clientMessageId),
-    bindTurn: (clientMessageId, threadId, turnId) => {
+    bindTurn: (clientMessageId, threadId, turnId, via) => {
       const entry = armed.get(clientMessageId)
       if (!entry) {
         return null
       }
-      entry.turn = { threadId, turnId }
+      entry.turn = { threadId, turnId, via }
       const end = endedTurns.get(turnKey(threadId, turnId)) ?? null
       if (end && settles(end)) {
         armed.delete(clientMessageId)
@@ -141,10 +157,10 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
       }
       const settled = [...armed].flatMap(([clientMessageId, entry]) =>
         entry.turn && turnKey(entry.turn.threadId, entry.turn.turnId) === turn
-          ? [clientMessageId]
+          ? [{ clientMessageId, via: entry.turn.via }]
           : []
       )
-      for (const clientMessageId of settled) {
+      for (const { clientMessageId } of settled) {
         armed.delete(clientMessageId)
       }
       return settled

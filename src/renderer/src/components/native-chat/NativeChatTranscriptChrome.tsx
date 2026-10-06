@@ -10,8 +10,9 @@ import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat-p
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import {
   getLocalImageCacheKey,
+  getLocalImageSrcCacheKey,
   useLocalImageSrc,
-  releaseLocalImageSrc
+  releaseLocalImageSrcByKey
 } from '@/components/editor/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
@@ -75,6 +76,25 @@ function transcriptImageIdentity(
 // load on scroll with no click, so main only serves local image files by their real type.
 const TRANSCRIPT_IMAGE_ACCESS = chatImageAccess()
 
+// Why the cache key, not the context object: the owner hook rebuilds an equal context on
+// unrelated store updates, and releasing on each one revoked the URL the <img> was showing.
+function transcriptImageReleaseKey(
+  source: string | undefined,
+  filePath: string,
+  runtimeContext: RuntimeFileOperationArgs | null | undefined
+): string | null {
+  if (!runtimeContext) {
+    return null
+  }
+  return getLocalImageSrcCacheKey(
+    source,
+    filePath,
+    runtimeContext.connectionId,
+    runtimeContext,
+    TRANSCRIPT_IMAGE_ACCESS
+  )
+}
+
 function TranscriptImagePreview({
   block,
   runtimeContext
@@ -124,17 +144,16 @@ function TranscriptImagePreview({
     }
     return observeTranscriptVisibility(element, setNear)
   }, [])
+  const releaseKey = transcriptImageReleaseKey(source, filePath, runtimeContext)
   useEffect(() => {
-    const context = runtimeContext
-    if (!source || external || context === undefined || context === null) {
+    if (!releaseKey) {
       return
     }
     if (!leaseActive) {
-      releaseLocalImageSrc(source, filePath, context.connectionId, context, TRANSCRIPT_IMAGE_ACCESS)
+      releaseLocalImageSrcByKey(releaseKey)
     }
-    return () =>
-      releaseLocalImageSrc(source, filePath, context.connectionId, context, TRANSCRIPT_IMAGE_ACCESS)
-  }, [external, filePath, leaseActive, runtimeContext, source])
+    return () => releaseLocalImageSrcByKey(releaseKey)
+  }, [leaseActive, releaseKey])
 
   const showPreview =
     leaseActive &&

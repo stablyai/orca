@@ -20,19 +20,20 @@ import {
   readTestJournalRows
 } from './journal-host-database-test-support'
 import type Database from '../../sqlite/sync-database'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'local',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const OTHER: AgentSessionJournalIdentity = {
   ...IDENTITY,
   sessionId: 'session-2',
-  providerHandle: { kind: 'codex', threadId: 'thread-2' }
+  providerHandle: codexProviderHandle('thread-2')
 }
 
 const SUBMISSION = {

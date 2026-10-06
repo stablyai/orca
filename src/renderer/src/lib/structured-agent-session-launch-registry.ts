@@ -104,7 +104,10 @@ function persistStructuredLaunchState(state: StructuredLaunchState): void {
     deleteStructuredAgentLaunchRecord(state.intent.sessionId)
     return
   }
-  writeStructuredAgentLaunchRecord(structuredAgentLaunchRecordFor(state.intent, lifecycle))
+  writeStructuredAgentLaunchRecord({
+    ...structuredAgentLaunchRecordFor(state.intent, lifecycle),
+    ...(lifecycle === 'failed' ? { failedAt: state.callers.failedAt } : {})
+  })
 }
 
 export function getPersistedStructuredAgentLaunchRecord(

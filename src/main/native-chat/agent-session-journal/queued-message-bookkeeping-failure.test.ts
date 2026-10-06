@@ -20,13 +20,14 @@ import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener
 } from './journal-host-database-test-support'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-q',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null }
+  providerHandle: claudeProviderHandle('native-1', null)
 }
 const REFUSAL = agentSessionFailureWords(
   agentSessionFailureFact('providerRejected', {
@@ -64,7 +65,8 @@ async function queueAndConsume(journal: AgentSessionJournal, messageId: string):
     messageId,
     body,
     fingerprint: `fp-${messageId}`,
-    hostInstance: 'proc-1'
+    hostInstance: 'proc-1',
+    source: { kind: 'user' }
   })
   await journal.appendSubmission(
     {
@@ -171,7 +173,8 @@ describe('draft bookkeeping inside a journal append', () => {
         messageId: 'draft-1',
         body: BODY,
         fingerprint: 'fp-draft-1',
-        hostInstance: 'proc-1'
+        hostInstance: 'proc-1',
+        source: { kind: 'user' }
       })
       expect(journal.queuedMessages.list()).toMatchObject([{ state: 'waiting' }])
       const commit = failNextCommit()

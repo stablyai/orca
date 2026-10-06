@@ -6,6 +6,7 @@
 
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
@@ -30,7 +31,7 @@ export function publishNewEpoch(input: {
   const row: JournalRow = {
     kind: 'epoch',
     reason: input.reason,
-    providerHandle: input.identity.providerHandle,
+    providerHandle: agentSessionJournalProviderHandle(input.identity),
     // Carries no body: an older host must keep reading a turn-free session past row 1.
     v: journalRowSchemaVersion([]),
     epoch: input.epoch,

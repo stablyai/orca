@@ -432,6 +432,7 @@ writers:
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Command Code output seeds, parked-pane seeds, pty-exit removal    | delete; main already emits the same facts                                                                |
 | structured bridge status writes                                   | delete; main now publishes the row                                                                       |
+| structured bridge failed-start row (the host refused the create)  | keep; a refused create leaves the host no session, so the bridge writes it from the launch record        |
 | launch placeholder seeds (a user launched an agent with a prompt) | keep for now; main holds the launch config and can seed later                                            |
 | dismissal, acknowledgement, unmount                               | keep; user facts and component lifecycle                                                                 |
 | remote-runtime OSC parse (bytes never transit local main)         | keep, fenced behind the host's published row once the host is new enough; rule 3 of the wire doc applies |

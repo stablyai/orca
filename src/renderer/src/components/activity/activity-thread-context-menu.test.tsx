@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import {
   ActivityThreadContextMenu,
   getActivityThreadCopyTargets
@@ -10,11 +11,12 @@ import type * as ActivityClearCompleted from './activity-clear-completed'
 import type { AgentPaneThread } from './activity-thread-types'
 import { makeRepo, makeTab, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 
-const mocks = vi.hoisted(() => ({ clearActivityThread: vi.fn() }))
+const mocks = vi.hoisted(() => ({ clearActivityThread: vi.fn(), clearCompletedActivity: vi.fn() }))
 
 vi.mock('./activity-clear-completed', async (importOriginal) => ({
   ...(await importOriginal<typeof ActivityClearCompleted>()),
-  clearActivityThread: mocks.clearActivityThread
+  clearActivityThread: mocks.clearActivityThread,
+  clearCompletedActivity: mocks.clearCompletedActivity
 }))
 
 function makeThread(overrides: Partial<AgentPaneThread> = {}): AgentPaneThread {
@@ -36,28 +38,73 @@ function makeThread(overrides: Partial<AgentPaneThread> = {}): AgentPaneThread {
   }
 }
 
+function makeDoneThread(paneKey: string, overrides: Partial<AgentPaneThread> = {}) {
+  return makeThread({
+    paneKey,
+    currentAgentState: null,
+    paneEntry: {
+      state: 'done',
+      prompt: '',
+      updatedAt: 1000,
+      stateStartedAt: 1000,
+      agentType: 'claude',
+      paneKey,
+      stateHistory: []
+    },
+    ...overrides
+  })
+}
+
 const handlers = {
   onOpen: vi.fn(),
   onJump: vi.fn(),
   onMarkRead: vi.fn(),
-  onMarkUnread: vi.fn()
+  onMarkUnread: vi.fn(),
+  onMarkManyRead: vi.fn(),
+  onMarkManyUnread: vi.fn()
 }
 
-function openMenu(thread: AgentPaneThread, canJump = true, disableMarkUnread = false): void {
+function renderMenu(
+  thread: AgentPaneThread,
+  {
+    canJump = true,
+    canMarkUnread = () => true,
+    getTargets,
+    testId = 'row'
+  }: {
+    canJump?: boolean
+    canMarkUnread?: (thread: AgentPaneThread) => boolean
+    getTargets?: (thread: AgentPaneThread) => readonly AgentPaneThread[]
+    testId?: string
+  } = {}
+): void {
   render(
     <ActivityThreadContextMenu
       thread={thread}
       canJump={canJump}
-      disableMarkUnread={disableMarkUnread}
+      canMarkUnread={canMarkUnread}
+      getTargets={getTargets}
       {...handlers}
     >
       {(menuOpen) => (
-        <div data-testid="row" data-menu-open={menuOpen ? '' : undefined}>
+        <div data-testid={testId} data-menu-open={menuOpen ? '' : undefined}>
           row
         </div>
       )}
     </ActivityThreadContextMenu>
   )
+}
+
+function openMenu(thread: AgentPaneThread, canJump = true): void {
+  renderMenu(thread, { canJump })
+  fireEvent.contextMenu(screen.getByTestId('row'))
+}
+
+function openBulkMenu(
+  targets: readonly AgentPaneThread[],
+  canMarkUnread: (thread: AgentPaneThread) => boolean = () => true
+): void {
+  renderMenu(targets[0], { canMarkUnread, getTargets: () => targets })
   fireEvent.contextMenu(screen.getByTestId('row'))
 }
 
@@ -98,7 +145,8 @@ describe('ActivityThreadContextMenu', () => {
   })
 
   it('disables Mark Unread for the open thread', () => {
-    openMenu(makeThread({ unread: false }), true, true)
+    renderMenu(makeThread({ unread: false }), { canMarkUnread: () => false })
+    fireEvent.contextMenu(screen.getByTestId('row'))
 
     expect(menuItem('Mark Unread').hasAttribute('data-disabled')).toBe(true)
   })
@@ -146,6 +194,76 @@ describe('ActivityThreadContextMenu', () => {
 
     openMenu(makeThread())
     expect(screen.queryByRole('menuitem', { name: 'Clear from List' })).toBeNull()
+  })
+
+  it('acts on every target with counted labels and hides single-agent actions', () => {
+    const unreadA = makeThread({ paneKey: 'a', unread: true })
+    const readB = makeDoneThread('b', { unread: false })
+    const readC = makeDoneThread('c', { unread: false })
+    openBulkMenu([unreadA, readB, readC])
+
+    expect(screen.queryByRole('menuitem', { name: 'Open' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Go to Workspace' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Copy Title' })).toBeNull()
+    expect(screen.getByText('Agent')).toBeTruthy()
+
+    expect(screen.queryByRole('menuitem', { name: /Unread/ })).toBeNull()
+    fireEvent.click(menuItem('Mark 1 Agent Read'))
+    expect(handlers.onMarkManyRead).toHaveBeenCalledWith([unreadA])
+  })
+
+  it('marks unread only the read targets that may be marked unread', () => {
+    const openRow = makeThread({ paneKey: 'open', unread: false })
+    const readB = makeThread({ paneKey: 'b', unread: false })
+    openBulkMenu([openRow, readB], (thread) => thread.paneKey !== 'open')
+
+    fireEvent.click(menuItem('Mark 1 Agent Unread'))
+    expect(handlers.onMarkManyUnread).toHaveBeenCalledWith([readB])
+  })
+
+  it('clears only the clearable targets through the undoable bulk clear', () => {
+    const doneA = makeDoneThread('a')
+    const working = makeThread({ paneKey: 'w' })
+    const doneB = makeDoneThread('b')
+    openBulkMenu([doneA, working, doneB])
+
+    fireEvent.click(menuItem('Clear 2 Agents from List'))
+    expect(mocks.clearCompletedActivity).toHaveBeenCalledWith([doneA, doneB])
+    expect(mocks.clearActivityThread).not.toHaveBeenCalled()
+  })
+
+  it('disables bulk actions with nothing to act on and drops their count', () => {
+    openBulkMenu(
+      [makeThread({ paneKey: 'a', unread: false }), makeThread({ paneKey: 'b', unread: false })],
+      () => false
+    )
+
+    expect(menuItem('Mark Unread').hasAttribute('data-disabled')).toBe(true)
+    expect(menuItem('Clear from List').hasAttribute('data-disabled')).toBe(true)
+  })
+
+  it('shows the single-agent menu when the targets are just the clicked row', () => {
+    const thread = makeThread()
+    renderMenu(thread, { getTargets: () => [thread] })
+    fireEvent.contextMenu(screen.getByTestId('row'))
+
+    expect(menuItem('Open')).toBeTruthy()
+    expect(menuItem('Mark Read')).toBeTruthy()
+  })
+
+  it('announces itself to other menus on open and closes when another menu opens', () => {
+    const onCloseAll = vi.fn()
+    window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, onCloseAll)
+    openMenu(makeThread())
+    expect(onCloseAll).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('row').hasAttribute('data-menu-open')).toBe(true)
+
+    act(() => {
+      window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+    })
+    expect(screen.getByTestId('row').hasAttribute('data-menu-open')).toBe(false)
+    expect(screen.queryByRole('menu')).toBeNull()
+    window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, onCloseAll)
   })
 
   it('copies the path, then the title, of a real workspace like the workspace menu', () => {

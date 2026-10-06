@@ -10,7 +10,7 @@ import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type {
   StructuredMailboxPointerHost,
-  StructuredPointerGateFacts
+  StructuredPointerSessionFacts
 } from './structured-mailbox-pointer-delivery'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import {
@@ -36,12 +36,12 @@ export function structuredSessionPointerCallerKey(sessionId: string): string {
 }
 
 /**
- * The idle gate for a structured session, read off its FULL reduced timeline.
+ * Whether a structured session is idle, for group addressing (`@idle`), read off its FULL reduced
+ * timeline.
  *
  * Never a bounded page. A settled turn's lifecycle item is revised in place, so on any tail window
  * an idle session and a busy one whose lifecycle item scrolled off look identical — and
- * idle-with-history is the normal steady state of a working agent. Shared so the pointer lane and
- * group addressing cannot disagree about it.
+ * idle-with-history is the normal steady state of a working agent.
  */
 export async function readStructuredSessionGateFacts(
   sessionId: string
@@ -50,12 +50,12 @@ export async function readStructuredSessionGateFacts(
   return snapshot ? structuredSessionGateFacts(snapshot.items) : null
 }
 
-/** The pointer lane's gate: the shared idle facts, plus what each recorded send settled as. */
-async function readPointerGateFacts(sessionId: string): Promise<StructuredPointerGateFacts | null> {
+/** What each recorded send settled as. */
+async function readPointerSessionFacts(
+  sessionId: string
+): Promise<StructuredPointerSessionFacts | null> {
   const snapshot = await readSessionJournal(sessionId)
-  return snapshot
-    ? { ...structuredSessionGateFacts(snapshot.items), submissions: snapshot.submissions }
-    : null
+  return snapshot ? { submissions: snapshot.submissions } : null
 }
 
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
@@ -77,8 +77,8 @@ async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapsh
 
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
   return {
-    readGateFacts(sessionId) {
-      return readPointerGateFacts(sessionId)
+    readSessionFacts(sessionId) {
+      return readPointerSessionFacts(sessionId)
     },
 
     currentFence(sessionId) {
@@ -101,7 +101,9 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           : structuredSessionPointerCallerKey(input.sessionId),
         turn: {
           body: input.body,
-          delivery: 'now',
+          // As a person's message is: a busy chat queues it as a card, sent when the turn ends.
+          delivery: 'queue',
+          source: input.source,
           operationId: input.operationId,
           expectedRuntimeFence: input.expectedRuntimeFence
         }
@@ -112,9 +114,7 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             ? { kind: 'unattached' }
             : { kind: 'sent', state: 'rejected' }
         case 'queued':
-          // Never for a `now` send. A draft would hand off under a fresh id, which this lane's
-          // operation row cannot see, so reading it needs its own rule before this lane queues.
-          return { kind: 'sent', state: 'unknown' }
+          return { kind: 'queued' }
         case 'sent': {
           // `pending` is not yet an acknowledgement; only `accepted` may consume mail. A send still
           // pending after the wait parks for the next journal edge.

@@ -15,6 +15,7 @@ on:
       expected-general-cells: { required: true, type: string }
       expected-rehome-generation: { required: true, type: string }
       wave-index: { required: true, type: string }
+      drain-pace-window-ms: { required: true, type: string }
 
 permissions:
   contents: read
@@ -48,14 +49,13 @@ jobs:
       EXPECTED_GENERAL_CELLS: ${{ inputs.expected-general-cells }}
       EXPECTED_REHOME_GENERATION: ${{ inputs.expected-rehome-generation }}
       WAVE_INDEX: ${{ inputs.wave-index }}
-      # Each drained host re-dials /v1/assign and is re-placed through the director's
-      # single-slot sticky lane, which clears roughly 8 hosts/s fleet-wide. A 2,100-host
-      # cell over 2 min (~18/s) overran it on 2026-09-23 and browned out assign for every
-      # region for ~5 min. 5 min is the cell's maximum window (DRAIN_PACE_WINDOW_MAX_MS); a
-      # ~2,700-host cell still arrives at ~9/s, so expect a short tail, not zero rejects.
-      # The transition wait below is the 15-min migration lease plus this window. A cell on
-      # an older image drains at once.
-      DRAIN_PACE_WINDOW_MS: '300000'
+      # The cell spreads its drain sends over this window, so each drained host re-dials
+      # /v1/assign at hosts / window and is re-placed through the director's drain-return
+      # lane. The wave validator admits only its closed set, and anything below the 300000
+      # default only on US general cells: Asia drains are bound by their targets' accept
+      # rate. The transition wait below is the 15-min migration lease plus this window. A
+      # cell on an older image drains at once.
+      DRAIN_PACE_WINDOW_MS: ${{ inputs.drain-pace-window-ms }}
     steps:
       - name: Require exact reusable-workflow configuration
         working-directory: .
@@ -104,10 +104,11 @@ jobs:
 
       # One approved-cell table, in the wave validator the dispatch gate already uses, so
       # a cell's class and its wave's selector delta cannot drift apart between the two.
+      # Also re-checks the drain pace against this cell, before anything reads production.
       - name: Resolve this cell's admission class and wave selector delta
         run: |
           CELL_CLASS="$(node dev/scripts/relay-production-same-cap-wave.mjs cell-class \
-            --cell-id "${TARGET_CELL_ID}")"
+            --cell-id "${TARGET_CELL_ID}" --drain-pace-window-ms "${DRAIN_PACE_WINDOW_MS}")"
           ENTRY_ADMISSION="$(jq -er '.entryAdmission' <<< "${CELL_CLASS}")"
           SELECTOR_WAVE_DELTA="$(jq -er '.selectorWaveDelta' <<< "${CELL_CLASS}")"
           if test "${DEPLOY_MODE}" = verify; then
@@ -537,10 +538,14 @@ jobs:
           jq -e '.rollIsolated == true' <<< "${ISOLATE_RESULT}" >/dev/null
           ISOLATE_GENERATION="$(jq -er '.generation' <<< "${ISOLATE_RESULT}")"
           echo "SELECTOR_GENERATION_AFTER_ISOLATE=${ISOLATE_GENERATION}" >> "${GITHUB_ENV}"
-          node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+          DRAIN_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
             --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode drain \
-            --pace-window-ms "${DRAIN_PACE_WINDOW_MS}"
+            --pace-window-ms "${DRAIN_PACE_WINDOW_MS}")"
+          echo "${DRAIN_RESULT}"
+          # What the cell accepted, which is 0 when an older image fell back to an unpaced drain.
+          echo "drain-applied-pace-window-ms=$(jq -er '.paceWindowMs' <<< "${DRAIN_RESULT}")" \
+            >> "${GITHUB_OUTPUT}"
           # Restart-safe means an empty runtime for a whole pace window after the drain; leases
           # held by unplaceable hosts are reported, not waited on (c28, 2026-10-01).
           node dev/scripts/verify-relay-capacity-transition.mjs \
@@ -549,7 +554,9 @@ jobs:
             --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
             --heartbeat either --admission migration-only --draining required \
             --activity restart-safe --expected-image-digests "${PREDECESSOR_IMAGE_DIGEST}" \
-            --pace-window-ms "${DRAIN_PACE_WINDOW_MS}" --timeout-ms 1200000
+            --pace-window-ms "${DRAIN_PACE_WINDOW_MS}" \
+            --timeout-ms "$((900000 + DRAIN_PACE_WINDOW_MS))"
+          echo "drain-settled-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
 
       - id: capacity-auth
         if: ${{ inputs.mode != 'verify' }}
@@ -822,6 +829,8 @@ jobs:
         timeout-minutes: 8
         env:
           DRAIN_STARTED_AT: ${{ steps.drain.outputs.drain-started-at }}
+          DRAIN_SETTLED_AT: ${{ steps.drain.outputs.drain-settled-at }}
+          DRAIN_APPLIED_PACE_WINDOW_MS: ${{ steps.drain.outputs.drain-applied-pace-window-ms }}
           APPLY_STARTED_AT: ${{ steps.apply.outputs.apply-started-at }}
           APPLY_COMPLETED_AT: ${{ steps.apply.outputs.apply-completed-at }}
           VERIFY_ENDED_AT: ${{ steps.verify-target.outputs.verify-ended-at }}
@@ -838,6 +847,10 @@ jobs:
             --apply-started-at "${APPLY_STARTED_AT}" \
             --apply-completed-at "${APPLY_COMPLETED_AT}" \
             --verify-ended-at "${VERIFY_ENDED_AT}" \
+            --drain-pace-window-ms "${DRAIN_PACE_WINDOW_MS}" \
+            --drain-applied-pace-window-ms "${DRAIN_APPLIED_PACE_WINDOW_MS}" \
+            --drain-settled-at "${DRAIN_SETTLED_AT}" \
+            --target-hosts "${TARGET_HOSTS:-}" \
             --summary-file "${GITHUB_STEP_SUMMARY}" \
             --output-file "${SHADOW_GATE_DIRECTORY}/${SHADOW_GATE_NAME}"
 

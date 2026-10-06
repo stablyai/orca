@@ -4,10 +4,10 @@ import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { translate } from '@/i18n/i18n'
 import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
 import { isNestedWorktreeRemovalError } from '../../../../shared/worktree/nested-removal'
-import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import {
   isLockedWorktreeRemovalError,
-  type WorktreeForceDeleteReason
+  type WorktreeForceDeleteReason,
+  type WorktreeRemovalTarget
 } from '../../../../shared/worktree/removal'
 
 type DeleteWorktreeFailureToastOptions = {

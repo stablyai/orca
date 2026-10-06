@@ -4,8 +4,28 @@ import { Editor } from '@tiptap/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
-import { releaseLocalImageSrc, resetLocalImageSrcStateForTests } from './useLocalImageSrc'
+import {
+  getLocalImageSrcCacheKey,
+  releaseLocalImageSrcByKey,
+  resetLocalImageSrcStateForTests
+} from './useLocalImageSrc'
 import { setRichMarkdownImageResolverContext } from './rich-markdown-image-context'
+import { documentResourceAccess } from '@/lib/local-file-access'
+
+// The key the editor leases: rich markdown reads images as resources of their document.
+function diagramCacheKey(): string {
+  const key = getLocalImageSrcCacheKey(
+    'diagram.png',
+    '/repo/docs/readme.md',
+    undefined,
+    undefined,
+    documentResourceAccess('/repo/docs/readme.md')
+  )
+  if (!key) {
+    throw new Error('diagram.png has no local image cache key')
+  }
+  return key
+}
 
 async function flushPromises(): Promise<void> {
   for (let index = 0; index < 5; index += 1) {
@@ -81,7 +101,7 @@ describe('rich markdown local images', () => {
       setRichMarkdownImageResolverContext(editor, { filePath: '/repo/docs/readme.md' })
       await flushPromises()
 
-      releaseLocalImageSrc('diagram.png', '/repo/docs/readme.md')
+      releaseLocalImageSrcByKey(diagramCacheKey())
 
       expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:rich-local-image')
       expect(host.querySelector('img')?.src).toBe('blob:rich-local-image')

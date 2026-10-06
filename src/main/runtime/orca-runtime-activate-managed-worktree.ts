@@ -213,6 +213,8 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       {
         timeoutMs,
         requireComposerMarker,
+        // Every caller pastes and then presses Enter: a worker brief or a launch prompt.
+        submit: true,
         signal: stop.signal,
         isShellInFront: async (ownerPtyId) =>
           (await this.readLaunchedAgentForeground(ownerPtyId, agent)) === 'shell',

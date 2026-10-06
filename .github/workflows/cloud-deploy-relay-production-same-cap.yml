@@ -53,6 +53,12 @@ on:
         description: Exact durable regional-rehome control generation; it must be disabled
         required: true
         type: string
+      drain-pace-window-ms:
+        description: Window the cell spreads its drain over; below 300000 only for US general cells, named in the confirmation
+        required: true
+        default: '300000'
+        type: choice
+        options: ['300000', '60000', '30000']
       canary-run-id:
         description: Successful same-code canary in this rehome control generation; reusable across batches
         required: false
@@ -103,11 +109,13 @@ jobs:
           ROLLBACK_DIGEST: ${{ inputs.rollback-image-digest }}
           CONFIRMATION: ${{ inputs.confirmation }}
           CANARY_RUN_ID: ${{ inputs.canary-run-id }}
+          DRAIN_PACE_WINDOW_MS: ${{ inputs.drain-pace-window-ms }}
         run: |
           CELLS="$(node dev/scripts/relay-production-same-cap-wave.mjs validate \
             --mode "${MODE}" --cell-ids "${CELL_IDS}" \
             --target-digest "${TARGET_DIGEST}" --rollback-digest "${ROLLBACK_DIGEST}" \
-            --confirmation "${CONFIRMATION}" --canary-run-id "${CANARY_RUN_ID}")"
+            --confirmation "${CONFIRMATION}" --canary-run-id "${CANARY_RUN_ID}" \
+            --drain-pace-window-ms "${DRAIN_PACE_WINDOW_MS}")"
           echo "cells=${CELLS}" >> "${GITHUB_OUTPUT}"
           if [[ "${MODE}" =~ ^(canary-apply|batch-apply)$ ]]; then
             echo 'job-mode=apply' >> "${GITHUB_OUTPUT}"
@@ -133,6 +141,7 @@ jobs:
           ROLLBACK_DIGEST: ${{ inputs.rollback-image-digest }}
           SELECTOR_GENERATION: ${{ inputs.expected-selector-generation }}
           REHOME_GENERATION: ${{ inputs.expected-rehome-generation }}
+          DRAIN_PACE_WINDOW_MS: ${{ inputs.drain-pace-window-ms }}
         run: |
           node dev/scripts/relay-production-same-cap-wave.mjs verify-canary \
             --file "${RUNNER_TEMP}/relay-same-cap-canary/authority.json" \
@@ -140,6 +149,7 @@ jobs:
             --cell-ids "${CELL_IDS}" \
             --target-digest "${TARGET_DIGEST}" \
             --rollback-digest "${ROLLBACK_DIGEST}" \
+            --drain-pace-window-ms "${DRAIN_PACE_WINDOW_MS}" \
             --selector-generation "${SELECTOR_GENERATION}" \
             --rehome-generation "${REHOME_GENERATION}"
 
@@ -158,6 +168,7 @@ jobs:
       expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
       expected-general-cells: ${{ inputs.expected-general-cells }}
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      drain-pace-window-ms: ${{ inputs.drain-pace-window-ms }}
       wave-index: '0'
     secrets: inherit
 
@@ -177,6 +188,7 @@ jobs:
       expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
       expected-general-cells: ${{ inputs.expected-general-cells }}
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      drain-pace-window-ms: ${{ inputs.drain-pace-window-ms }}
       wave-index: '1'
     secrets: inherit
 
@@ -196,6 +208,7 @@ jobs:
       expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
       expected-general-cells: ${{ inputs.expected-general-cells }}
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      drain-pace-window-ms: ${{ inputs.drain-pace-window-ms }}
       wave-index: '2'
     secrets: inherit
 
@@ -215,6 +228,7 @@ jobs:
       expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
       expected-general-cells: ${{ inputs.expected-general-cells }}
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      drain-pace-window-ms: ${{ inputs.drain-pace-window-ms }}
       wave-index: '3'
     secrets: inherit
 
@@ -234,6 +248,7 @@ jobs:
       expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
       expected-general-cells: ${{ inputs.expected-general-cells }}
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      drain-pace-window-ms: ${{ inputs.drain-pace-window-ms }}
       wave-index: '4'
     secrets: inherit
 
@@ -253,6 +268,7 @@ jobs:
       expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
       expected-general-cells: ${{ inputs.expected-general-cells }}
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      drain-pace-window-ms: ${{ inputs.drain-pace-window-ms }}
       wave-index: '5'
     secrets: inherit
 
@@ -272,6 +288,7 @@ jobs:
       expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
       expected-general-cells: ${{ inputs.expected-general-cells }}
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      drain-pace-window-ms: ${{ inputs.drain-pace-window-ms }}
       wave-index: '6'
     secrets: inherit
 
@@ -291,6 +308,7 @@ jobs:
       expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
       expected-general-cells: ${{ inputs.expected-general-cells }}
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      drain-pace-window-ms: ${{ inputs.drain-pace-window-ms }}
       wave-index: '7'
     secrets: inherit
 
@@ -310,6 +328,7 @@ jobs:
       expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
       expected-general-cells: ${{ inputs.expected-general-cells }}
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      drain-pace-window-ms: ${{ inputs.drain-pace-window-ms }}
       wave-index: '8'
     secrets: inherit
 
@@ -329,6 +348,7 @@ jobs:
       expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
       expected-general-cells: ${{ inputs.expected-general-cells }}
       expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      drain-pace-window-ms: ${{ inputs.drain-pace-window-ms }}
       wave-index: '9'
     secrets: inherit
 
@@ -343,14 +363,26 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
 
+      # Its pace checks are what let a batch drain faster than the default; a missing artifact
+      # seals UNVERIFIED, which only the default accepts. Named from the gate's normalized cell,
+      # as cell_1 uploaded it, so a padded cell-ids input cannot miss it.
+      - name: Download the canary cell's shadow health verdict
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: relay-same-cap-shadow-gate-${{ fromJSON(needs.gate.outputs.cells)[0] }}-${{ github.run_id }}.json
+          path: ${{ runner.temp }}/relay-same-cap-shadow-gate
+
       - name: Seal exact successful canary authority
         run: |
           mkdir -p "${RUNNER_TEMP}/relay-same-cap-canary"
           node dev/scripts/relay-production-same-cap-wave.mjs create-canary \
-            --cell-id "${{ inputs.cell-ids }}" \
+            --cell-id "${{ fromJSON(needs.gate.outputs.cells)[0] }}" \
             --target-digest "${{ inputs.target-image-digest }}" \
             --rollback-digest "${{ inputs.rollback-image-digest }}" \
             --confirmation "${{ inputs.confirmation }}" \
+            --drain-pace-window-ms "${{ inputs.drain-pace-window-ms }}" \
+            --shadow-report "${RUNNER_TEMP}/relay-same-cap-shadow-gate/relay-same-cap-shadow-gate-${{ fromJSON(needs.gate.outputs.cells)[0] }}-${GITHUB_RUN_ID}.json" \
             --commit-sha "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}" \
             --selector-generation "${{ inputs.expected-selector-generation }}" \
             --rehome-generation "${{ inputs.expected-rehome-generation }}" \

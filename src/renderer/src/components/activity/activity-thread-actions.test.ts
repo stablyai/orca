@@ -282,4 +282,20 @@ describe('activity thread host routing', () => {
     actions.markAllThreadsRead()
     expect(acknowledgeAgents).toHaveBeenCalledWith([thread.paneKey])
   })
+
+  it('marks a batch of threads read or unread in one store update', () => {
+    const other = { ...makeRemoteThread(), paneKey: 'tab-2:other' }
+    const unacknowledgeAgents = vi.fn()
+    const actions = createActivityThreadActions({
+      getMarkAllReadThreads: () => [],
+      acknowledgeAgents,
+      unacknowledgeAgents,
+      setSelectedPaneKey
+    })
+
+    actions.markThreadsRead([thread, other])
+    actions.markThreadsUnread([thread, other])
+    expect(acknowledgeAgents).toHaveBeenCalledExactlyOnceWith([thread.paneKey, other.paneKey])
+    expect(unacknowledgeAgents).toHaveBeenCalledExactlyOnceWith([thread.paneKey, other.paneKey])
+  })
 })

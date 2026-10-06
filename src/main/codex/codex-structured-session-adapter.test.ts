@@ -20,6 +20,7 @@ import {
   fakeCodex,
   identityFor
 } from './codex-structured-session-adapter-fixture'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 describe('CodexStructuredSessionAdapter.acquire', () => {
   it('starts a new thread and reports the process and link the lease will prove', async () => {
@@ -58,7 +59,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
     expect(acquisition.link).toEqual({
       linkId: `codex-7-${THREAD_ID}`,
-      handle: { provider: 'codex', threadId: THREAD_ID },
+      handle: codexProviderHandle(THREAD_ID),
       origin: 'created',
       mintedAtFence: 7,
       observedAt: 1_700_000_000_500
@@ -102,7 +103,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       })
     })
     expect(acquisition.link.origin).toBe('resumed')
-    expect(acquisition.link.handle).toEqual({ provider: 'codex', threadId: 'thread-proven' })
+    expect(acquisition.link.handle).toEqual(codexProviderHandle('thread-proven'))
   })
 
   it('starts a thread in place of a creation Codex never saved, and says which it replaced', async () => {
@@ -132,7 +133,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     ])
     expect(acquisition.link).toEqual({
       linkId: `codex-9-${THREAD_ID}`,
-      handle: { provider: 'codex', threadId: THREAD_ID },
+      handle: codexProviderHandle(THREAD_ID),
       origin: 'created',
       supersedesKey: 'codex:"thread-unsaved"',
       mintedAtFence: 9,

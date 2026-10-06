@@ -5,15 +5,20 @@ import {
 } from '../../shared/agent-session-record.test-fixture'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { isPersistedAgentSessionRecord } from '../../shared/agent-session-record'
+import { encodeAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
 import {
   recordAgentSessionProviderHandle,
-  reviseAgentSessionClaudeResumePoint
+  reviseAgentSessionProviderResumePoint
 } from './agent-session-provider-handle-transition'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../shared/agent-session-provider-handle-encoding'
 
 function resumedLink(fence: number): AgentSessionProviderHandleLink {
   return {
     linkId: 'link-2',
-    handle: { provider: 'claude', sessionId: 'provider-session-alpha-1', leafUuid: 'leaf-2' },
+    handle: claudeProviderHandle('provider-session-alpha-1', 'leaf-2'),
     origin: 'resumed',
     mintedAtFence: fence,
     observedAt: 4_000
@@ -29,7 +34,7 @@ describe('recordAgentSessionProviderHandle', () => {
       link: resumedLink(record.lease.runtimeFence),
       now: 4_000
     })
-    expect(next.providerHandleChain.at(-1)?.handle).toMatchObject({ leafUuid: 'leaf-2' })
+    expect(next.providerHandleChain.at(-1)?.handle).toMatchObject({ resumeCursor: 'leaf-2' })
     expect(next.lease.provenHandleLinkId).toBe('link-2')
   })
 
@@ -46,18 +51,17 @@ describe('recordAgentSessionProviderHandle', () => {
       link: resumedLink(lease.runtimeFence),
       now: 4_000
     })
-    expect(next.providerHandleChain.at(-1)?.handle).toMatchObject({ leafUuid: 'leaf-2' })
+    expect(next.providerHandleChain.at(-1)?.handle).toMatchObject({ resumeCursor: 'leaf-2' })
     expect(next.lease).toMatchObject({ claimStatus: 'reserved', provenHandleLinkId: null })
   })
 })
 
-describe('reviseAgentSessionClaudeResumePoint', () => {
+describe('reviseAgentSessionProviderResumePoint', () => {
   const revise = (record = agentSessionRecordFixture(), leafUuid = 'leaf-2') =>
-    reviseAgentSessionClaudeResumePoint({
+    reviseAgentSessionProviderResumePoint({
       record,
       fence: record.lease.runtimeFence,
-      providerSessionId: 'provider-session-alpha-1',
-      leafUuid,
+      handle: claudeProviderHandle('provider-session-alpha-1', leafUuid),
       now: 5_000
     })
 
@@ -68,20 +72,19 @@ describe('reviseAgentSessionClaudeResumePoint', () => {
     expect(second.providerHandleChain.at(-1)).toMatchObject({
       linkId: 'link-1',
       origin: 'created',
-      handle: { leafUuid: 'leaf-3' }
+      handle: { resumeCursor: 'leaf-3' }
     })
     expect(second.lease.provenHandleLinkId).toBe('link-1')
-    expect(isPersistedAgentSessionRecord(second)).toBe(true)
+    expect(isPersistedAgentSessionRecord(encodeAgentSessionRecord(second))).toBe(true)
   })
 
   it('refuses a stale owner, a released lease, and a head minted by another owner', () => {
     const record = agentSessionRecordFixture()
     expect(() =>
-      reviseAgentSessionClaudeResumePoint({
+      reviseAgentSessionProviderResumePoint({
         record,
         fence: record.lease.runtimeFence - 1,
-        providerSessionId: 'provider-session-alpha-1',
-        leafUuid: 'leaf-2',
+        handle: claudeProviderHandle('provider-session-alpha-1', 'leaf-2'),
         now: 5_000
       })
     ).toThrow('agent_session_stale_fence')
@@ -96,11 +99,19 @@ describe('reviseAgentSessionClaudeResumePoint', () => {
       })
     ).toThrow('agent_session_provider_handle_invalid')
     expect(() =>
-      reviseAgentSessionClaudeResumePoint({
+      reviseAgentSessionProviderResumePoint({
         record,
         fence: record.lease.runtimeFence,
-        providerSessionId: 'another-provider-session',
-        leafUuid: 'leaf-2',
+        handle: claudeProviderHandle('another-provider-session', 'leaf-2'),
+        now: 5_000
+      })
+    ).toThrow('agent_session_provider_handle_invalid')
+    // Same id, another provider's namespace: a different conversation, never this one's leaf.
+    expect(() =>
+      reviseAgentSessionProviderResumePoint({
+        record,
+        fence: record.lease.runtimeFence,
+        handle: codexProviderHandle('provider-session-alpha-1'),
         now: 5_000
       })
     ).toThrow('agent_session_provider_handle_invalid')

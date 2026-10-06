@@ -21,6 +21,7 @@ import { performAttach } from './structured-agent-session-attach-flow'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'legacy-session'
@@ -90,7 +91,7 @@ function adapter(input: {
         },
         link: {
           linkId: `${input.origin}-link`,
-          handle: { provider: 'codex', threadId: 'legacy-thread' },
+          handle: codexProviderHandle('legacy-thread'),
           origin: input.origin,
           mintedAtFence: fence,
           observedAt: NOW
@@ -139,7 +140,7 @@ describe('structured session acquisition options', () => {
           },
           link: {
             linkId: `${origin}-link`,
-            handle: { provider: 'codex', threadId: 'legacy-thread' },
+            handle: codexProviderHandle('legacy-thread'),
             origin,
             mintedAtFence: input.fence,
             observedAt: NOW
@@ -460,7 +461,7 @@ describe('structured session acquisition options', () => {
           },
           link: {
             linkId: `link-${fence}`,
-            handle: { provider: 'codex', threadId: 'legacy-thread' },
+            handle: codexProviderHandle('legacy-thread'),
             origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
             mintedAtFence: fence,
             observedAt: NOW

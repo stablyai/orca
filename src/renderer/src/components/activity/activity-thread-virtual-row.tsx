@@ -4,35 +4,46 @@ import { clearActivityThread, isClearableActivityThread } from './activity-clear
 import { ActivityStatusGroupHeader } from './activity-thread-controls'
 import { ActivityThreadContextMenu } from './activity-thread-context-menu'
 import { ActivityThreadRow } from './activity-thread-row'
+import type { AgentPaneThread } from './activity-thread-types'
 import type { ActivityVirtualItemDescriptor } from './activity-thread-virtual-items'
+
+type ContextMenuProps = Parameters<typeof ActivityThreadContextMenu>[0]
 
 export function ActivityThreadVirtualRow({
   item,
   collapsed,
   onToggleGroup,
   selectedPaneKey,
+  multiSelectedKeys,
   onSelectThread,
+  onOpenThread,
+  getContextMenuTargets,
   onJumpToWorkspace,
   onMarkThreadRead,
   onMarkThreadUnread,
+  onMarkThreadsRead,
+  onMarkThreadsUnread,
   canJumpToWorkspace,
+  canMarkThreadUnread,
   compactMode,
-  allowMarkUnreadWhenSelected,
   showJumpAction
 }: {
   item: ActivityVirtualItemDescriptor
   collapsed: boolean
   onToggleGroup: (groupKey: string) => void
   selectedPaneKey: string | null
+  multiSelectedKeys: ReadonlySet<string>
   onSelectThread: Parameters<typeof ActivityThreadRow>[0]['onSelect']
+  onOpenThread: ContextMenuProps['onOpen']
+  getContextMenuTargets: ContextMenuProps['getTargets']
   onJumpToWorkspace: Parameters<typeof ActivityThreadRow>[0]['onJump']
   onMarkThreadRead: Parameters<typeof ActivityThreadRow>[0]['onMarkRead']
   onMarkThreadUnread: Parameters<typeof ActivityThreadRow>[0]['onMarkUnread']
-  canJumpToWorkspace: (
-    thread: Extract<ActivityVirtualItemDescriptor, { type: 'thread' }>['thread']
-  ) => boolean
+  onMarkThreadsRead: ContextMenuProps['onMarkManyRead']
+  onMarkThreadsUnread: ContextMenuProps['onMarkManyUnread']
+  canJumpToWorkspace: (thread: AgentPaneThread) => boolean
+  canMarkThreadUnread: (thread: AgentPaneThread) => boolean
   compactMode: boolean
-  allowMarkUnreadWhenSelected: boolean
   showJumpAction: boolean
 }): React.JSX.Element {
   if (item.type === 'header') {
@@ -55,16 +66,19 @@ export function ActivityThreadVirtualRow({
     )
   }
   const canJump = canJumpToWorkspace(item.thread)
-  const disableMarkUnread = item.thread.paneKey === selectedPaneKey && !allowMarkUnreadWhenSelected
+  const isOpen = item.thread.paneKey === selectedPaneKey
   return (
     <ActivityThreadContextMenu
       thread={item.thread}
       canJump={canJump}
-      disableMarkUnread={disableMarkUnread}
-      onOpen={onSelectThread}
+      canMarkUnread={canMarkThreadUnread}
+      getTargets={getContextMenuTargets}
+      onOpen={onOpenThread}
       onJump={onJumpToWorkspace}
       onMarkRead={onMarkThreadRead}
       onMarkUnread={onMarkThreadUnread}
+      onMarkManyRead={onMarkThreadsRead}
+      onMarkManyUnread={onMarkThreadsUnread}
     >
       {(menuOpen) => (
         // Why the menu wraps this wrapper, not the row: the row is already the hover-card
@@ -72,7 +86,8 @@ export function ActivityThreadVirtualRow({
         <div className="pb-0.5">
           <ActivityThreadRow
             thread={item.thread}
-            selected={item.thread.paneKey === selectedPaneKey}
+            selected={isOpen}
+            multiSelected={!isOpen && multiSelectedKeys.has(item.thread.paneKey)}
             onSelect={onSelectThread}
             onJump={onJumpToWorkspace}
             onMarkRead={onMarkThreadRead}
@@ -80,7 +95,7 @@ export function ActivityThreadVirtualRow({
             onClear={isClearableActivityThread(item.thread) ? clearActivityThread : undefined}
             canJump={canJump}
             compactMode={compactMode}
-            disableMarkUnread={disableMarkUnread}
+            disableMarkUnread={!canMarkThreadUnread(item.thread)}
             showJumpAction={showJumpAction}
             previewSuppressed={menuOpen}
           />

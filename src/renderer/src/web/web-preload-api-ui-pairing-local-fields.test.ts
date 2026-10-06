@@ -21,14 +21,13 @@ describe('web UI preload API pairing-local fields', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
-  // Census-driven, matching the host-side seam tests: a field added to PAIRING_LOCAL_UI_FIELDS
-  // without wiring the web read seam fails here rather than shipping. The host sample differs from
-  // the browser's for every field, so only the pin makes this pass.
+  // Different host samples expose any missing browser-local pin.
   const browserLocalUiSamples: Record<PairingLocalUiField, unknown> = {
     automationHostFilter: { kind: 'host', hostKey: 'browser-local-host-key' },
     hideWorkspacesFromOtherDevices: true,
     manualRepoOrder: [{ hostId: 'runtime:web-env-1', repoId: 'repo-b' }],
     workspaceHostOrder: ['runtime:web-env-1', 'local'],
+    sidebarOpen: false,
     agentsVisibleHostIds: ['runtime:web-env-1'],
     agentsFilterRepoIds: ['repo-b'],
     agentsHideWorkspacesFromOtherDevices: true,
@@ -47,6 +46,7 @@ describe('web UI preload API pairing-local fields', () => {
     hideWorkspacesFromOtherDevices: false,
     manualRepoOrder: [{ hostId: 'local', repoId: 'repo-a' }],
     workspaceHostOrder: ['local', 'ssh:box'],
+    sidebarOpen: true,
     agentsVisibleHostIds: ['local'],
     agentsFilterRepoIds: ['repo-a'],
     agentsHideWorkspacesFromOtherDevices: false,
@@ -61,9 +61,13 @@ describe('web UI preload API pairing-local fields', () => {
     manuallyUnreadTurnsByPaneKey: { 'tab-2:leaf-2': 654 }
   }
 
-  it.each(PAIRING_LOCAL_UI_FIELDS.map((field) => [field] as const))(
-    'keeps the browser-local %s and never sends it to the host',
-    async (field) => {
+  it.each(
+    PAIRING_LOCAL_UI_FIELDS.flatMap((field) =>
+      (['set', 'setWithAck'] as const).map((method) => [field, method] as const)
+    )
+  )(
+    'keeps the browser-local %s and never sends it to the host through %s',
+    async (field, method) => {
       const runtimeCalls: { method: string; params: unknown }[] = []
       vi.doMock('./web-runtime-client', () => ({
         WebRuntimeClient: class {
@@ -81,14 +85,18 @@ describe('web UI preload API pairing-local fields', () => {
         }
       }))
 
-      const browserLocal = { [field]: browserLocalUiSamples[field] } as Partial<PersistedUIState>
+      const browserLocal: Partial<PersistedUIState> = { [field]: browserLocalUiSamples[field] }
       const globals = installBrowserGlobals('Linux')
       writeStoredRuntimeEnvironment(globals.storage)
-      globals.storage.setItem('orca.web.ui.v1', JSON.stringify(browserLocal))
       const { installWebPreloadApi } = await import('./web-preload-api')
       installWebPreloadApi()
 
-      await globals.window.api.ui.set({ ...browserLocal, sidebarWidth: 280 })
+      const write = globals.window.api.ui[method]
+      expect(write).toBeTypeOf('function')
+      if (!write) {
+        throw new Error('Missing UI write method')
+      }
+      await write({ ...browserLocal, sidebarWidth: 280 })
 
       expect(runtimeCalls[0]).toEqual({ method: 'ui.set', params: { sidebarWidth: 280 } })
       await expect(globals.window.api.ui.get()).resolves.toMatchObject(browserLocal)

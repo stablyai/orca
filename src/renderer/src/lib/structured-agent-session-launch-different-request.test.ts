@@ -67,10 +67,7 @@ import {
   readNativeChatDraftCache,
   writeNativeChatDraftCache
 } from '@/components/native-chat/native-chat-draft-cache'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {
   getStructuredAgentSessionLaunchLifecycle,
@@ -520,10 +517,8 @@ describe('an empty chat still starting', () => {
 
   it('leaves a chat its user is typing into to them, and opens a new chat for the notes', async () => {
     const blank = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
-    const paneKey = structuredAgentSessionPaneKey(
-      structuredAgentSessionTabId(blank.sessionId),
-      blank.sessionId
-    )
+    // The conversation's draft, which its composer writes.
+    const paneKey = structuredAgentSessionDraftScopeKey(blank.sessionId)
     writeNativeChatDraftCache(paneKey, 'half a question')
 
     const notes = startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)

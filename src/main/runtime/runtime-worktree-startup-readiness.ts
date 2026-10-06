@@ -1,6 +1,9 @@
 import { isShellProcess } from '../../shared/agent-detection'
 import { isExpectedAgentProcess } from '../../shared/agent-process-recognition'
-import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
+import {
+  createDraftPasteReadyScanner,
+  resolvePasteReadySignal
+} from '../../shared/draft-paste-ready-scanner'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -16,6 +19,9 @@ const BRACKETED_PASTE_QUIET_MS = 1500
 // Why: an interactive shell turns bracketed paste on at its prompt and off when it runs the typed
 // command (`zsh-prompt-runs-command.txt`), so a 2004 before the last `?2004l` is the shell's.
 const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
+// Why: the deadline's last settle check is one foreground read, which over SSH could otherwise hold
+// a past-due wait for the channel's 30 s timeout.
+const DEADLINE_SETTLE_CHECK_MS = 2_000
 
 export type WorktreeStartupReadinessHost = {
   getPtyId: (handle: string) => string | null
@@ -103,6 +109,8 @@ export type StartupDraftReadinessOptions = {
    * proven in front: the launch line has not run yet, or the agent exited.
    */
   isShellInFront?: (ptyId: string) => Promise<boolean>
+  /** Enter follows the paste, so the agent's submit signal is waited for instead of its draft one. */
+  submit?: boolean
 }
 
 export function waitForWorktreeStartupDraft(
@@ -115,14 +123,18 @@ export function waitForWorktreeStartupDraft(
   if (!ptyId || options.signal?.aborted) {
     return Promise.resolve(null)
   }
-  const signal =
-    TUI_AGENT_CONFIG[agent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
+  const signal = resolvePasteReadySignal(TUI_AGENT_CONFIG[agent], options.submit === true)
   const isShellInFront = options.isShellInFront
   return new Promise((resolve) => {
     let settled = false
     let scanner = createDraftPasteReadyScanner(signal)
     let quietTimer: NodeJS.Timeout | null = null
+    // A submit signal's fallback: once its grace elapses, every read that still asks for it is a
+    // ready signal, settled like any other.
+    let graceTimer: NodeJS.Timeout | null = null
+    let graceElapsed = false
     let hardTimer: NodeJS.Timeout | null = null
+    let deadlineCheckTimer: NodeJS.Timeout | null = null
     let unsubscribe: (() => void) | null = null
     // Bumped at each shell hand-off: a check begun before one must not settle the wait after it.
     let handoffs = 0
@@ -139,21 +151,33 @@ export function waitForWorktreeStartupDraft(
       if (quietTimer) {
         clearTimeout(quietTimer)
       }
+      clearGrace()
       if (hardTimer) {
         clearTimeout(hardTimer)
+      }
+      if (deadlineCheckTimer) {
+        clearTimeout(deadlineCheckTimer)
       }
       unsubscribe?.()
       options.signal?.removeEventListener('abort', onAbort)
       resolve(value)
     }
+    const clearGrace = (): void => {
+      if (graceTimer) {
+        clearTimeout(graceTimer)
+        graceTimer = null
+      }
+      graceElapsed = false
+    }
+    /** The screen holds nothing the input must not answer and no shell is proven in front. */
+    const passesSettleChecks = async (): Promise<boolean> =>
+      (!options.accept || (await options.accept(ptyId))) &&
+      !(isShellInFront && (await isShellInFront(ptyId)))
     /** Settles a fired signal once its screen is clear and no shell is proven in front. */
     const settleSignal = async (signalHandoffs: number): Promise<void> => {
       checking = true
       try {
-        if (options.accept && !(await options.accept(ptyId))) {
-          return
-        }
-        if (isShellInFront && (await isShellInFront(ptyId))) {
+        if (!(await passesSettleChecks())) {
           return
         }
         if (signalHandoffs === handoffs) {
@@ -192,6 +216,7 @@ export function waitForWorktreeStartupDraft(
         clearTimeout(quietTimer)
         quietTimer = null
       }
+      clearGrace()
       return window.slice(handoff + DECRST_BRACKETED_PASTE.length)
     }
     const observe = (chunk: string): void => {
@@ -203,6 +228,19 @@ export function waitForWorktreeStartupDraft(
       if (result.ready) {
         return onSignal()
       }
+      if (result.readyAfterMs === null) {
+        clearGrace()
+      } else if (typeof result.readyAfterMs === 'number') {
+        if (graceElapsed) {
+          onSignal()
+        } else if (!graceTimer) {
+          graceTimer = setTimeout(() => {
+            graceTimer = null
+            graceElapsed = true
+            onSignal()
+          }, result.readyAfterMs)
+        }
+      }
       if (result.armQuietTimer && !options.requireComposerMarker) {
         if (quietTimer) {
           clearTimeout(quietTimer)
@@ -212,10 +250,19 @@ export function waitForWorktreeStartupDraft(
     }
     options.signal?.addEventListener('abort', onAbort)
     unsubscribe = host.subscribeToData(ptyId, observe)
-    hardTimer = setTimeout(
-      () => finish(null),
-      options.timeoutMs ?? resolveDraftPasteReadyTimeoutMs(agent)
-    )
+    // A deadline inside a pending grace is the box rule's verdict, so it gets one last settle check.
+    const onDeadline = (): void => {
+      if (!graceTimer && !graceElapsed) {
+        return finish(null)
+      }
+      const deadlineHandoffs = handoffs
+      deadlineCheckTimer = setTimeout(() => finish(null), DEADLINE_SETTLE_CHECK_MS)
+      void passesSettleChecks().then(
+        (passes) => finish(passes && deadlineHandoffs === handoffs ? ptyId : null),
+        () => finish(null)
+      )
+    }
+    hardTimer = setTimeout(onDeadline, options.timeoutMs ?? resolveDraftPasteReadyTimeoutMs(agent))
     const replay = host.readRecentOutput(ptyId)
     if (replay) {
       observe(replay)

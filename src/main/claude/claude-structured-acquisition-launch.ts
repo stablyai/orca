@@ -1,3 +1,4 @@
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionPreSpawnError,
@@ -72,11 +73,10 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     const launchIdentity = resumeSession
       ? {
           ...input.identity,
-          providerHandle: {
-            kind: 'claude' as const,
-            sessionId: resumeSession.providerSessionId,
-            leafUuid: resumeSession.turnEndLeafUuid
-          }
+          providerHandle: claudeProviderHandle(
+            resumeSession.providerSessionId,
+            resumeSession.turnEndLeafUuid
+          )
         }
       : input.identity
     const launch = await deps

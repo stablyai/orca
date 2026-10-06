@@ -10,6 +10,7 @@ import type {
   AgentJournalTurnScope,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
@@ -56,7 +57,7 @@ export function replaceJournalEpoch(input: {
   const epochRow: JournalRow = {
     kind: 'epoch',
     reason: input.reason,
-    providerHandle: input.identity.providerHandle,
+    providerHandle: agentSessionJournalProviderHandle(input.identity),
     ...journalRowBase(epoch, 1, input.fence, input.now())
   }
   const rows: JournalRow[] = [epochRow]

@@ -894,7 +894,8 @@
             "dimensionsTooLarge": "{{fileName}} は画像サイズが大きすぎるため、安全にプレビューできません。",
             "invalidImage": "{{fileName}} は有効な画像として読み取れません。",
             "additionalErrors": "ほかに {{count}} 件の画像を添付できませんでした。",
-            "totalTooLarge": "{{fileName}} を追加すると添付ファイルの合計が {{maxSize}} を超えます。"
+            "totalTooLarge": "{{fileName}} を追加すると添付ファイルの合計が {{maxSize}} を超えます。",
+            "compressed": "{{fileName}} を添付ファイルの上限に収めるため、{{originalSize}} から {{size}} に圧縮しました。"
           }
         }
       },
@@ -4010,6 +4011,15 @@
             "resumingAriaOne": "1 件のチャットを再開中。詳細はクリックしてください。",
             "resumingAria": "{{value0}} 件のチャットを再開中。詳細はクリックしてください。",
             "resumingTooltip": "中断されたチャットを復元し、続行を依頼しています…"
+          },
+          "provider": {
+            "extra": {
+              "usage": {
+                "section": {
+                  "135d51c19f": "上限 {{value0}}"
+                }
+              }
+            }
           }
         }
       },
@@ -6225,6 +6235,7 @@
           "parkTerminal": "ターミナルを退避"
         },
         "SidebarFeedbackImageAttachments": {
+          "preparing": "添付ファイルを準備しています…",
           "attachImages": "Attach",
           "removeImage": "{{fileName}} を削除",
           "screenshotsHint": "スクリーンショットを最大 {{count}} 件、合計 {{maxSize}} まで添付できます"
@@ -6439,8 +6450,8 @@
           "96f3649526": "Gemini CLI 認証情報を使用する (実験的機能)",
           "d676c41fc6": "ローカルの Gemini CLI インストールから OAuth 認証情報を抽出して、Google で認証します。これは、Orca ではなく、Gemini CLI アプリに発行された認証情報を使用します。 Google が CLI を更新すると壊れる可能性があります。ご自身の責任でご使用ください。",
           "0c7f915b01": "Gemini CLI 認証情報を使用する",
-          "973741a871": "Gemini プロバイダー設定を構成します。",
-          "0c64dc2a64": "Gemini",
+          "973741a871": "既存の Gemini CLI セッションを利用可能な状態に保ちます。Gemini の認証情報では Antigravity にサインインできません。",
+          "0c64dc2a64": "Gemini CLI (レガシー)",
           "db209ee572": "削除",
           "8a0f870153": "再認証",
           "3d245ef7d9": "Codex はこのサインインが古いと報告しました",
@@ -6858,7 +6869,7 @@
           "1199258ace": "コピー",
           "1188e56af4": "プロンプトの例をコピーする",
           "b84807f228": "」",
-          "59722f31b4": "」",
+          "59722f31b4": "「",
           "c5325e91f6": "これらのいずれかを、スキルがインストールされているプロジェクトの Claude Code、Codex、または別の Agent に貼り付けます。",
           "2a180694f7": "試してみてください — プロンプトの例",
           "5ec620ccc4": "コピーに失敗しました。",
@@ -7164,7 +7175,7 @@
           "80c454e8a6": "これをプロバイダーのキャッシュ TTL と一致させます。"
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "すべての markdown ビューで markdown ノートコントロールを表示し、Agent のハンドオフ 操作にそれらのノートを含めます。",
+          "f80603d293": "すべての markdown ビューで markdown ノートコントロールを表示し、Agent のハンドオフ操作にそれらのノートを含めます。",
           "4edc104f0f": "Markdown レビューノート",
           "5f02e6fb21": "markdown ファイルでローカル markdown レビューノートコントロールを表示します。",
           "51161d1647": "ファイルの編集時にミニマップの概要を表示します。",
@@ -7558,7 +7569,7 @@
           "edf13dd03b": "コピー",
           "c12b253997": "プロンプトの例をコピーする",
           "d151e25078": "」",
-          "b525ff2b12": "」",
+          "b525ff2b12": "「",
           "4daa95f25a": "これらのいずれかを、Orca CLI スキルがインストールされているプロジェクトの Claude Code、Codex、または別の Agent に貼り付けます。",
           "0820b3f84f": "試してみてください — プロンプトの例",
           "1f608e7d60": "プロンプトのコピーに失敗しました。",
@@ -13799,7 +13810,7 @@
           "69af7e9c1c": "はまだ PATH 上にありません。 Orca はこれをデフォルトとして設定し、いつでもインストールできます。",
           "1eee1c7bd8": "PATH 上に Agent が検出されませんでした。後でインストールするものを選択するか、空のターミナルを使用して続行します。",
           "hideAgents": "Agent を非表示にする",
-          "showMoreAgents": "{{value0}} 件の Agent をさらに表示→",
+          "showMoreAgents": "{{value0}} 件の Agent をさらに表示 →",
           "yoloModeLabel": "Yolo モード",
           "yoloPermissionsDescription": "Agent は確認なしでコマンドを実行しファイルを編集します。一部はサンドボックスも回避します。信頼できるプロジェクトでのみ使用してください。"
         },
@@ -13960,10 +13971,10 @@
         "workspace": {
           "SmartWorkspaceNameField": {
             "2a0d535f69": "新規ブランチを作成する",
-            "a44229ce4d": "ワークスペース名として",
+            "a44229ce4d": "を使用",
             "766083a596": "」",
-            "34ca97bce3": "」",
-            "b1a7d679ba": "使用",
+            "34ca97bce3": "「",
+            "b1a7d679ba": "ワークスペース名として",
             "e57c53727c": "プロジェクトを追加…",
             "a76fcb4fa0": "切り替え先",
             "eadf877af5": "保持",
@@ -16016,6 +16027,7 @@
             "effd75e330": "近くのコンテキスト",
             "7d1480fbf1": "HTML",
             "9098b118ab": "ページ",
+            "accessibleNameOpenQuote": "「",
             "eb98a0971a": "」",
             "d053db279d": "役割=",
             "a759d8f866": "選択した要素",
@@ -16699,11 +16711,17 @@
             "permission": "要対応"
           },
           "filtersSection": "フィルター",
-          "viewSection": "表示"
+          "viewSection": "表示",
+          "threadListOptionsActive": "スレッドリストのオプション（{{value0}} 件アクティブ）",
+          "activityOptionsActive": "アクティビティのオプション（{{value0}}）"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "すべてのホストとプロジェクトを表示",
-          "hiddenCount": "{{value0}} 非表示"
+          "hiddenCount": "{{value0}} 非表示",
+          "hideAutomationCreated": "自動化で作成されたワークスペースを非表示",
+          "hideCliCreated": "CLI が作成したものを非表示",
+          "hideOtherClientsAria": "共有リモートサーバー上の他の Orca クライアントで作成されたワークスペース内の Agent を非表示",
+          "hideOtherClients": "他のクライアントの Agent を非表示"
         },
         "ActivityThreadRow": {
           "clearNotification": "通知を消去"
@@ -16728,6 +16746,25 @@
           "workspace": "ワークスペース",
           "copyPath": "パスをコピーする",
           "jumpToWorkspace": "ワークスペースにジャンプ"
+        },
+        "ActivityThreadContextMenu": {
+          "copyTitle": "タイトルをコピー",
+          "copyPath": "パスのコピー",
+          "open": "オープン",
+          "markRead": "既読マークを付ける",
+          "markUnread": "未読としてマークする",
+          "goToWorkspace": "ワークスペースへ移動",
+          "clear": "リストから消去",
+          "agentSection": "Agent",
+          "markManyRead_one": "{{count}} 件の Agent に既読マークを付ける",
+          "markManyRead_other": "{{count}} 件の Agent に既読マークを付ける",
+          "markManyUnread_one": "{{count}} 件の Agent を未読としてマークする",
+          "markManyUnread_other": "{{count}} 件の Agent を未読としてマークする",
+          "clearMany_one": "{{count}} 件の Agent をリストから消去",
+          "clearMany_other": "{{count}} 件の Agent をリストから消去",
+          "markManyRead": "{{count}} 件の Agent に既読マークを付ける",
+          "markManyUnread": "{{count}} 件の Agent を未読としてマークする",
+          "clearMany": "{{count}} 件の Agent をリストから消去"
         }
       },
       "confirmation": {
@@ -17107,6 +17144,7 @@
           "tool": {
             "arrow": "矢印",
             "ellipse": "楕円",
+            "eraser": "消しゴム",
             "highlight": "ハイライト",
             "pen": "ペン",
             "rect": "四角形",
@@ -17645,6 +17683,13 @@
         "localAttachmentUnsupported": "ローカル添付ファイルはリモートセッションでは使用できません。",
         "removeAttachment": "添付ファイルを削除する",
         "pastedImageLabel": "貼り付けた画像",
+        "draftNotSaved": "この下書きはまだ保存できていません。Orca は保存を再試行し続けます。",
+        "imageNotBroughtBack": "{{name}} をこの下書きと一緒に復元できませんでした。もう一度添付するか、削除してください。",
+        "pastedImageNotBroughtBack": "この貼り付けた画像をこの下書きと一緒に復元できませんでした。削除して、必要であればもう一度貼り付けてください。",
+        "removeImageToSend": "復元できなかった画像があります。送信するには削除してください。",
+        "removeImagesToSend": "復元できなかった画像があります。送信するには削除してください。",
+        "imageAttachAgainLabel": "もう一度添付",
+        "pastedImageNotKeptLabel": "保持されていません",
         "imagePasteFailed": "画像の貼り付けに失敗しました。",
         "worktreeNotReady": "ワークツリーが準備できていません — しばらくしてから再試行してください。",
         "pasteUnavailable": "貼り付けできません — このチャットは現在入力を受け付けていません。",
@@ -18274,6 +18319,16 @@
         "workspaceReadyToast": "ワークスペース {{name}} の準備ができました",
         "goToWorktree": "ワークツリーに移動",
         "goToWorkspace": "ワークスペースに移動"
+      },
+      "delete": {
+        "changes": {
+          "permanentLoss": "Git ワークスペース内のコミットされていない変更または未追跡の変更は完全に削除されます。",
+          "clean": "コミットされていない変更または未追跡の変更はありません",
+          "unavailable": "変更を確認できませんでした",
+          "checking": "変更を確認中…",
+          "checkingDetails": "確認中…",
+          "unavailableDetails": "詳細を利用できません"
+        }
       }
     },
     "agentSessionContinuation": {
@@ -18356,6 +18411,11 @@
     },
     "agentChildRow": {
       "ended": "終了"
+    },
+    "jiraIssueAssigneeField": {
+      "label": "担当者",
+      "automatic": "自動",
+      "assignToMe": "自分に割り当てる（{{name}}）"
     }
   },
   "dashboardPopout": {
@@ -18963,5 +19023,54 @@
   },
   "fileSearch": {
     "failed": "検索失敗。もう一度お試しください"
+  },
+  "csv": {
+    "detectingDelimiter": "デリミタを検出中…",
+    "indexProgress": "CSV をインデックス作成中… {{percent}}%",
+    "loadingCell": "読み込み中…",
+    "nextRows": "次の行",
+    "previousRows": "前の行",
+    "readOnlyPreview": "大きなファイルのプレビュー · 読み取り専用",
+    "resizeColumn": "列 {{column}} のサイズを変更",
+    "rowWindow": "行 {{first}}–{{last}}",
+    "editor": "CSV エディター",
+    "editCell": "行 {{row}}、列 {{column}} を編集",
+    "filterRows": "行を絞り込む",
+    "edit": "セルを編集",
+    "copy": "コピー",
+    "paste": "貼り付け",
+    "rows": "行",
+    "insertRowAbove": "上に行を挿入",
+    "insertRowBelow": "下に行を挿入",
+    "deleteRows": "選択した行を削除",
+    "columns": "列",
+    "newColumn": "列 {{column}}",
+    "insertColumnBefore": "前に列を挿入",
+    "insertColumnAfter": "後に列を挿入",
+    "moveColumnLeft": "列を左に移動",
+    "moveColumnRight": "列を右に移動",
+    "deleteColumns": "選択した列を削除",
+    "sort": "並べ替え",
+    "sortAscending": "選択した列を昇順に並べ替え",
+    "sortDescending": "選択した列を降順に並べ替え",
+    "originalOrder": "元の行順",
+    "save": "保存",
+    "inspectionOnly": "検査のみ · ファイルの行順は変更されません"
+  },
+  "worktree": {
+    "nestedRemoval": {
+      "refreshFailed": "ワークスペースリストを更新できませんでした",
+      "review": "ネストされたワークツリーと共に削除…",
+      "title": "ワークスペースとネストされたワークツリーを削除しますか？",
+      "description": "これにより「{{name}}」、以下に表示されるすべてのネストされたワークツリー、およびそれら内のすべてのファイル（コミットされていない変更を含む）が完全に削除されます。それらのターミナルと Agent は停止されます。",
+      "detached": "分離 HEAD",
+      "loading": "ネストされたワークツリーを確認中…",
+      "order": "ネストされたワークツリーが先に削除されます。1つでも失敗すると削除は停止し、親は保持されます。ブランチは既存の削除設定に従います。",
+      "cancel": "キャンセル",
+      "retry": "再確認",
+      "deleting": "削除中…",
+      "confirm": "一覧表示されたすべてのワークツリーを削除",
+      "preservedBranches": "一部のネストされたワークツリーブランチは保持されました"
+    }
   }
 }

@@ -321,7 +321,7 @@ export class AgentSessionJournal {
     receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
     return this.rowWriter.append(
-      journalSubmissionRowBuilder(() => this.state, this.identity.providerHandle, input, consume),
+      journalSubmissionRowBuilder(() => this.state, this.identity, input, consume),
       consume && queuedMessageConsumeHook(this.queuedMessages, input.clientMessageId, consume),
       receipt
     )

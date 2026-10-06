@@ -16,6 +16,7 @@ import type {
   AgentSessionSendResult
 } from '../../../../shared/agent-session-wire'
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
+import { nativeChatComposerDraftWriteSettled } from './native-chat-composer-draft-store'
 import {
   newestSteerableQueuedMessageCard,
   projectQueuedMessageCards,
@@ -128,6 +129,10 @@ export function useStructuredAgentSessionQueuedMessages(args: {
           return
         }
         appendNativeChatDraftCache(composerScopeKey, card.text)
+        // The card goes only once storage holds the draft; a refused save keeps it.
+        if (!(await nativeChatComposerDraftWriteSettled(composerScopeKey))) {
+          return
+        }
         const result = await mutate<AgentSessionQueuedMessageDeleteResult>(
           'agentSession.queuedMessageDelete',
           'agentSession.queuedMessageDelete',

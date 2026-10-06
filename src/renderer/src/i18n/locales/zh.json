@@ -894,7 +894,8 @@
             "dimensionsTooLarge": "{{fileName}} 的尺寸过大，无法安全预览。",
             "invalidImage": "{{fileName}} 不是有效的受支持图片。",
             "additionalErrors": "还有 {{count}} 张图片无法附加。",
-            "totalTooLarge": "{{fileName}} 将使附件总大小超过 {{maxSize}}。"
+            "totalTooLarge": "{{fileName}} 将使附件总大小超过 {{maxSize}}。",
+            "compressed": "已将 {{fileName}} 从 {{originalSize}} 压缩到 {{size}}，以符合附件大小限制。"
           }
         }
       },
@@ -4010,6 +4011,15 @@
             "resumingAriaOne": "正在恢复 1 个聊天。点击查看详情。",
             "resumingAria": "正在恢复 {{value0}} 个聊天。点击查看详情。",
             "resumingTooltip": "正在恢复中断的聊天并请它们继续…"
+          },
+          "provider": {
+            "extra": {
+              "usage": {
+                "section": {
+                  "135d51c19f": "限额 {{value0}}"
+                }
+              }
+            }
           }
         }
       },
@@ -6225,6 +6235,7 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
+          "preparing": "正在准备附件…",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}",
           "screenshotsHint": "最多附加 {{count}} 张截图，总计 {{maxSize}}"
@@ -6439,8 +6450,8 @@
           "96f3649526": "使用 Gemini CLI 凭据（实验）",
           "d676c41fc6": "从本地 Gemini CLI 安装中提取 OAuth 凭据以通过 Google 认证。这将使用颁发给 Gemini CLI 应用的凭据，而非 Orca。若 Google 更新 CLI，可能会失效。请自行承担风险。",
           "0c7f915b01": "使用 Gemini CLI 凭据",
-          "973741a871": "配置 Gemini 提供商设置。",
-          "0c64dc2a64": "Gemini",
+          "973741a871": "保留现有的 Gemini CLI 会话可用。Gemini 凭据不会让您登录 Antigravity。",
+          "0c64dc2a64": "Gemini CLI（旧版）",
           "db209ee572": "移除",
           "8a0f870153": "重新验证",
           "3d245ef7d9": "Codex 报告此登录已过时",
@@ -6858,7 +6869,7 @@
           "1199258ace": "复制",
           "1188e56af4": "复制示例提示",
           "b84807f228": "”",
-          "59722f31b4": "”",
+          "59722f31b4": "“",
           "c5325e91f6": "将其中任何内容粘贴到 Claude Code、Codex 或安装该技能的项目中的其他智能体中。",
           "2a180694f7": "尝试一下 - 示例提示",
           "5ec620ccc4": "复制失败。",
@@ -7119,7 +7130,7 @@
             "shellEnvCopy": "Codex 和 Claude 聊天启动时会带上登录 shell 导出的所有变量，与终端一致。关闭后可选择传递哪些变量。",
             "shellEnvToggleLabel": "切换使用 shell 环境",
             "structuredTitle": "使用更新的结构化本机聊天",
-            "structuredCopy": "将新的 Codex 和 Claude 代理作为结构化聊天打开。关闭时会在终端支持的聊天中打开。已有的聊天保持不变。",
+            "structuredCopy": "将新的 Codex 和 Claude 代理作为结构化聊天打开。关闭时会在基于终端的聊天中打开。已有的聊天保持不变。",
             "structuredScope": "在本机和运行支持该功能版本的已配对 Orca 服务器上运行；较旧的服务器保留终端聊天。WSL 和 SSH 主机继续使用终端聊天，Windows 会回退到它，除非 Orca 可以读取进程启动时间。",
             "structuredToggleLabel": "切换更新的结构化本机聊天",
             "resumeTitle": "重启后自动恢复工作聊天",
@@ -7164,7 +7175,7 @@
           "80c454e8a6": "将此与您的提供商的缓存 TTL 相匹配。"
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "在所有 Markdown 视图中显示 Markdown 注释控件，并在智能体切换操作中包含这些注释。",
+          "f80603d293": "在所有 Markdown 视图中显示 Markdown 笔记控件，并在代理交接操作中包含这些笔记。",
           "4edc104f0f": "Markdown 评审笔记",
           "5f02e6fb21": "在 Markdown 文件中显示本地 Markdown 评审笔记控件。",
           "51161d1647": "编辑文件时显示小地图概述。",
@@ -7521,7 +7532,7 @@
           "edf13dd03b": "复制",
           "c12b253997": "复制示例提示",
           "d151e25078": "”",
-          "b525ff2b12": "”",
+          "b525ff2b12": "“",
           "4daa95f25a": "将其中任何内容粘贴到安装了 Orca CLI 技能的项目中的 Claude Code、Codex 或其他智能体中。",
           "0820b3f84f": "尝试一下 - 示例提示",
           "1f608e7d60": "复制提示失败。",
@@ -13799,7 +13810,7 @@
           "69af7e9c1c": "尚未加入 PATH。Orca 会将其设为默认，你可随时安装。",
           "1eee1c7bd8": "PATH 中未检测到智能体。可选择一个稍后安装，或使用空白终端继续。",
           "hideAgents": "隐藏智能体",
-          "showMoreAgents": "显示另外 {{value0}} 个智能体→",
+          "showMoreAgents": "显示另外 {{value0}} 个代理 →",
           "yoloModeLabel": "Yolo 模式",
           "yoloPermissionsDescription": "智能体会在不询问的情况下运行命令和编辑文件，部分智能体还会绕过沙箱。仅在你信任的项目中使用。"
         },
@@ -13962,7 +13973,7 @@
             "2a0d535f69": "创建新分支",
             "a44229ce4d": "作为工作区名称",
             "766083a596": "”",
-            "34ca97bce3": "”",
+            "34ca97bce3": "“",
             "b1a7d679ba": "使用",
             "e57c53727c": "添加项目...",
             "a76fcb4fa0": "切换到",
@@ -16016,6 +16027,7 @@
             "effd75e330": "附近的环境",
             "7d1480fbf1": "超文本标记语言",
             "9098b118ab": "页",
+            "accessibleNameOpenQuote": "“",
             "eb98a0971a": "”",
             "d053db279d": "角色=",
             "a759d8f866": "选定的元素",
@@ -16699,11 +16711,17 @@
             "permission": "需注意"
           },
           "filtersSection": "筛选",
-          "viewSection": "视图"
+          "viewSection": "视图",
+          "threadListOptionsActive": "线程列表选项（{{value0}} 个生效）",
+          "activityOptionsActive": "活动选项（{{value0}}）"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "显示所有主机和项目",
-          "hiddenCount": "{{value0}} 隐藏"
+          "hiddenCount": "{{value0}} 隐藏",
+          "hideAutomationCreated": "隐藏自动化创建的工作区",
+          "hideCliCreated": "隐藏 CLI 创建的工作区",
+          "hideOtherClientsAria": "隐藏共享远程服务器上由其他 Orca 客户端创建的工作区中的代理",
+          "hideOtherClients": "隐藏其他客户端的代理"
         },
         "ActivityThreadRow": {
           "clearNotification": "清除通知"
@@ -16728,6 +16746,25 @@
           "workspace": "工作区",
           "copyPath": "复制路径",
           "jumpToWorkspace": "跳转到工作区"
+        },
+        "ActivityThreadContextMenu": {
+          "copyTitle": "复制标题",
+          "copyPath": "复制路径",
+          "open": "打开",
+          "markRead": "标记为已读",
+          "markUnread": "标记为未读",
+          "goToWorkspace": "转到工作区",
+          "clear": "从列表中清除",
+          "agentSection": "代理",
+          "markManyRead_one": "将 {{count}} 个代理标记为已读",
+          "markManyRead_other": "将 {{count}} 个代理标记为已读",
+          "markManyUnread_one": "将 {{count}} 个代理标记为未读",
+          "markManyUnread_other": "将 {{count}} 个代理标记为未读",
+          "clearMany_one": "从列表中清除 {{count}} 个代理",
+          "clearMany_other": "从列表中清除 {{count}} 个代理",
+          "markManyRead": "将 {{count}} 个代理标记为已读",
+          "markManyUnread": "将 {{count}} 个代理标记为未读",
+          "clearMany": "从列表中清除 {{count}} 个代理"
         }
       },
       "confirmation": {
@@ -17107,6 +17144,7 @@
           "tool": {
             "arrow": "箭头",
             "ellipse": "椭圆",
+            "eraser": "橡皮擦",
             "highlight": "高亮",
             "pen": "画笔",
             "rect": "矩形",
@@ -17610,6 +17648,13 @@
         "localAttachmentUnsupported": "远程会话不支持本地附件。",
         "removeAttachment": "移除附件",
         "pastedImageLabel": "粘贴的图片",
+        "draftNotSaved": "此草稿尚未保存成功。Orca 会继续尝试。",
+        "imageNotBroughtBack": "无法随此草稿恢复 {{name}}。请重新附加或将其移除。",
+        "pastedImageNotBroughtBack": "无法随此草稿恢复这张粘贴的图片。请将其移除，如仍需要请重新粘贴。",
+        "removeImageToSend": "有一张图片无法恢复。请将其移除后再发送。",
+        "removeImagesToSend": "有些图片无法恢复。请将其移除后再发送。",
+        "imageAttachAgainLabel": "重新附加",
+        "pastedImageNotKeptLabel": "未保留",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "工作树未就绪 — 请稍后重试。",
         "pasteUnavailable": "无法粘贴 — 此聊天当前不接受输入。",
@@ -18239,6 +18284,16 @@
         "workspaceReadyToast": "工作区 {{name}} 已就绪",
         "goToWorktree": "转到工作树",
         "goToWorkspace": "转到工作区"
+      },
+      "delete": {
+        "changes": {
+          "permanentLoss": "Git 工作区中任何未提交或未跟踪的更改都将被永久删除。",
+          "clean": "没有未提交或未跟踪的更改",
+          "unavailable": "无法检查更改",
+          "checking": "正在检查更改…",
+          "checkingDetails": "检查…",
+          "unavailableDetails": "详细信息不可用"
+        }
       }
     },
     "agentSessionContinuation": {
@@ -18356,6 +18411,11 @@
     },
     "agentChildRow": {
       "ended": "已结束"
+    },
+    "jiraIssueAssigneeField": {
+      "label": "负责人",
+      "automatic": "自动",
+      "assignToMe": "分配给我（{{name}}）"
     }
   },
   "dashboardPopout": {
@@ -18963,5 +19023,54 @@
   },
   "fileSearch": {
     "failed": "搜索失败。再试一次。"
+  },
+  "csv": {
+    "detectingDelimiter": "正在检测分隔符…",
+    "indexProgress": "正在为 CSV 建立索引… {{percent}}%",
+    "loadingCell": "加载中…",
+    "nextRows": "下一批行",
+    "previousRows": "上一批行",
+    "readOnlyPreview": "大文件预览 · 只读",
+    "resizeColumn": "调整列 {{column}} 的大小",
+    "rowWindow": "行 {{first}}–{{last}}",
+    "editor": "CSV 编辑器",
+    "editCell": "编辑第 {{row}} 行，第 {{column}} 列",
+    "filterRows": "筛选行",
+    "edit": "编辑单元格",
+    "copy": "复制",
+    "paste": "粘贴",
+    "rows": "行",
+    "insertRowAbove": "在上方插入行",
+    "insertRowBelow": "在下方插入行",
+    "deleteRows": "删除选中的行",
+    "columns": "列",
+    "newColumn": "第 {{column}} 列",
+    "insertColumnBefore": "在左侧插入列",
+    "insertColumnAfter": "在右侧插入列",
+    "moveColumnLeft": "向左移动列",
+    "moveColumnRight": "向右移动列",
+    "deleteColumns": "删除选中的列",
+    "sort": "排序",
+    "sortAscending": "对选中的列升序排序",
+    "sortDescending": "对选中的列降序排序",
+    "originalOrder": "原始行顺序",
+    "save": "保存",
+    "inspectionOnly": "仅查看 · 文件行顺序不变"
+  },
+  "worktree": {
+    "nestedRemoval": {
+      "refreshFailed": "无法刷新工作区列表",
+      "review": "连同嵌套工作树一起删除…",
+      "title": "删除工作区和嵌套工作树？",
+      "description": "这将永久删除“{{name}}”、下面列出的每个嵌套工作树及其中的所有文件（包括未提交的更改）。它们的终端和代理将被停止。",
+      "detached": "分离 HEAD",
+      "loading": "正在检查嵌套工作树…",
+      "order": "嵌套工作树会先被删除。如果其中一个失败，删除将停止并保留父工作树。分支遵循您现有的删除设置。",
+      "cancel": "取消",
+      "retry": "重新检查",
+      "deleting": "正在删除…",
+      "confirm": "删除所有列出的工作树",
+      "preservedBranches": "部分嵌套工作树分支已保留"
+    }
   }
 }

@@ -216,6 +216,7 @@
     "@sanity/diff-match-patch": "^3.2.1",
     "@shadcn/lint": "~0.1.5",
     "@stablyai/playwright-test": "^2.1.16",
+    "@streamparser/json": "0.0.26",
     "@tailwindcss/vite": "^4.2.4",
     "@tanstack/react-virtual": "^3.14.13",
     "@testing-library/jest-dom": "^6.9.1",

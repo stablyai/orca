@@ -80,6 +80,8 @@ export default function SidebarAgentsList({
   const {
     markThreadRead,
     markThreadUnread,
+    markThreadsRead,
+    markThreadsUnread,
     selectThread,
     jumpToWorkspace,
     markAllThreadsRead,
@@ -158,6 +160,8 @@ export default function SidebarAgentsList({
         onJumpToWorkspace={jumpToWorkspace}
         onMarkThreadRead={markThreadRead}
         onMarkThreadUnread={markThreadUnread}
+        onMarkThreadsRead={markThreadsRead}
+        onMarkThreadsUnread={markThreadsUnread}
         canJumpToWorkspace={canJumpToWorkspace}
         allowMarkUnreadWhenSelected
         showJumpAction={false}

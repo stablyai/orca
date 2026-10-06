@@ -1296,6 +1296,14 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
+/* Why: one multi-selected look for every list on the card surface (workspaces and
+   agents); after the hover rules so it wins, and never on the active/open row. */
+[data-worktree-card-surface][data-worktree-card-selected]:not([data-worktree-card-active]) {
+  border-color: color-mix(in oklab, var(--worktree-sidebar-ring) 35%, transparent);
+  background-color: color-mix(in oklab, var(--worktree-sidebar-accent) 70%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--worktree-sidebar-ring) 30%, transparent);
+}
+
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {

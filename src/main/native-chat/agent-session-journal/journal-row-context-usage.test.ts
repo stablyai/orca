@@ -19,13 +19,14 @@ import {
   liveTestJournalRows,
   updateTestJournalRowJson
 } from './journal-host-database-test-support'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: null }
+  providerHandle: claudeProviderHandle('claude-session', null)
 }
 
 const USAGE = {

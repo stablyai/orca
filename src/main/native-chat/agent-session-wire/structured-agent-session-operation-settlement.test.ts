@@ -18,6 +18,7 @@ import {
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { sendPlan } from './structured-agent-session-mutation-plans'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 async function context(): Promise<AgentSessionTurnContext> {
   return {
@@ -29,7 +30,7 @@ async function context(): Promise<AgentSessionTurnContext> {
         workspaceId: 'workspace',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: THREAD }
+        providerHandle: codexProviderHandle(THREAD)
       },
       stateDirectory: join(hostTestState().root, 'settlement')
     }),

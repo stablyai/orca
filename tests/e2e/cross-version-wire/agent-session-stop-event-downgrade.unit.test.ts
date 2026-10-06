@@ -6,8 +6,10 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalItemIdentity,
-  type AgentSessionJournalIdentity
+  type AgentSessionJournalIdentity,
+  type AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session-journal-types'
+import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import Database from '../../../src/main/sqlite/sync-database'
 import { journalDatabasePath } from '../../../src/main/native-chat/agent-session-journal/journal-host-database'
 import {
@@ -34,6 +36,16 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
+  providerHandle: codexProviderHandle('thread-1')
+}
+
+/** The identity as builds before the neutral provider handle took it. */
+type OlderJournalIdentity = Omit<AgentSessionJournalIdentity, 'providerHandle'> & {
+  providerHandle: AgentSessionJournalProviderHandle
+}
+
+const OLDER_IDENTITY: OlderJournalIdentity = {
+  ...IDENTITY,
   providerHandle: { kind: 'codex', threadId: 'thread-1' }
 }
 
@@ -164,7 +176,7 @@ type OlderJournal = {
 
 type OlderOpener = {
   open: (options: {
-    identity: AgentSessionJournalIdentity
+    identity: OlderJournalIdentity
     stateDirectory: string
   }) => Promise<OlderJournal>
   closeAll: () => Promise<void>
@@ -204,7 +216,7 @@ test("an older build opens this build's journal writable and appends to it; the 
     )
     const older = releaseExport<() => OlderOpener>(support, 'createTrackedJournalOpener')()
     try {
-      const downgraded = await older.open({ identity: IDENTITY, stateDirectory: directory })
+      const downgraded = await older.open({ identity: OLDER_IDENTITY, stateDirectory: directory })
       expect(downgraded.isReadOnly).toBe(false)
       expect(downgraded.cursor()).toEqual(wrote.cursor)
       expect(itemIds(downgraded)).toEqual(wrote.items)
@@ -277,7 +289,7 @@ test("this build keeps a newer build's row kind and refuses the load; a build be
     )
     const older = releaseExport<() => OlderOpener>(support, 'createTrackedJournalOpener')()
     try {
-      await older.open({ identity: IDENTITY, stateDirectory: directory })
+      await older.open({ identity: OLDER_IDENTITY, stateDirectory: directory })
     } finally {
       await older.closeAll()
     }

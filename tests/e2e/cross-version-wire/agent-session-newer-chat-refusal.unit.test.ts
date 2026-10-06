@@ -5,8 +5,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-  type AgentSessionJournalIdentity
+  type AgentSessionJournalIdentity,
+  type AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session-journal-types'
+import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session-wire-refusals'
 import {
   closeTestJournalHostDatabase,
@@ -43,6 +45,16 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
+  providerHandle: codexProviderHandle('thread-1')
+}
+
+/** The identity as builds before the neutral provider handle took it. */
+type OlderJournalIdentity = Omit<AgentSessionJournalIdentity, 'providerHandle'> & {
+  providerHandle: AgentSessionJournalProviderHandle
+}
+
+const OLDER_IDENTITY: OlderJournalIdentity = {
+  ...IDENTITY,
   providerHandle: { kind: 'codex', threadId: 'thread-1' }
 }
 
@@ -218,14 +230,14 @@ describe('a chat a newer Orca saved, across versions', () => {
       const older = releaseExport<
         () => {
           open: (options: {
-            identity: AgentSessionJournalIdentity
+            identity: OlderJournalIdentity
             stateDirectory: string
           }) => Promise<unknown>
           closeAll: () => Promise<void>
         }
       >(support, 'createTrackedJournalOpener')()
       try {
-        await older.open({ identity: IDENTITY, stateDirectory: directory })
+        await older.open({ identity: OLDER_IDENTITY, stateDirectory: directory })
       } finally {
         await older.closeAll()
       }

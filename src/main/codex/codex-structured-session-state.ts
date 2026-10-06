@@ -1,5 +1,6 @@
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type {
+  AgentJournalAnsweredTurnIdentity,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
@@ -87,7 +88,10 @@ export type CodexStructuredSessionAdapterDeps = {
   onDispatchSettledLate?: (
     input: { sessionId: string; clientMessageId: string } & (
       | { providerIdentity: AgentJournalItemIdentity }
-      | ({ state: 'rejected' } & AgentJournalDispatchRejection)
+      | ({
+          state: 'rejected'
+          answeredInTurn: AgentJournalAnsweredTurnIdentity
+        } & AgentJournalDispatchRejection)
     )
   ) => void
   /** Codex reported its thread not running with no turn open: a send whose

@@ -1,4 +1,5 @@
-import type { DraftPasteReadySignal } from './tui-agent-config'
+import type { DraftPasteReadySignal, TuiAgentConfig } from './tui-agent-config'
+import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
 
 // Why: agents enable bracketed paste (DECSET 2004) before their composer is
 // actually mounted/focused. These markers let the scanner detect the real
@@ -40,7 +41,18 @@ type DraftPasteReadySignalSpec = {
   quietAnchor: string | null
 }
 
-const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySignalSpec> = {
+// Signals that read the screen's structure, not one marker; a Record so none lacks its scanner.
+type StructuralSignal = 'opencode-agent-row'
+const STRUCTURAL_SCANNERS: Record<
+  StructuralSignal,
+  () => { observe: (data: string) => { ready: boolean; readyAfterMs: number | null } }
+> = {
+  'opencode-agent-row': createOpenCodeAgentRowScanner
+}
+
+type SingleSignal = Exclude<DraftPasteReadySignal, StructuralSignal>
+
+const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec> = {
   'codex-composer-prompt': {
     markerAnchor: DECSET_BRACKETED_PASTE,
     markerAnchorEnd: null,
@@ -111,6 +123,22 @@ export type DraftPasteReadyScanResult = {
   ready: boolean
   /** Caller should (re)arm the quiet-window fallback timer for this chunk. */
   armQuietTimer: boolean
+  /** Ready after this many ms unless the signal fires first; null withdraws an armed one. */
+  readyAfterMs?: number | null
+}
+
+export type DraftPasteReadyScanner = { observe: (data: string) => DraftPasteReadyScanResult }
+
+/** The signal to wait for before a paste; one that Enter follows waits for the submit signal. */
+export function resolvePasteReadySignal(
+  agentConfig: Pick<TuiAgentConfig, 'draftPasteReadySignal' | 'submitPasteReadySignal'> | null,
+  submit: boolean
+): DraftPasteReadySignal {
+  return (
+    (submit ? agentConfig?.submitPasteReadySignal : undefined) ??
+    agentConfig?.draftPasteReadySignal ??
+    'render-quiet-after-bracketed-paste'
+  )
 }
 
 /**
@@ -156,13 +184,34 @@ export type DraftPasteReadyScanResult = {
  *     mounted — so the quiet window alone never settles and a launch draft would wait out
  *     the whole hard timeout, exactly as grok did. Same alt-screen anchoring and
  *     revocation as grok, because a powerline shell prompt can draw `╭` too.
+ *   - `opencode-agent-row`: OpenCode's submit signal (see opencode-agent-row-scanner.ts): the
+ *     box's show-cursor as above plus the agent/model row painted directly above the box's
+ *     bottom corner. OpenCode 2 draws the box before its agent list loads and drops an Enter
+ *     sent in between. No quiet window; while the box shows without the row it asks for a
+ *     grace timer (`readyAfterMs`) instead.
  *   - `render-quiet-after-bracketed-paste` (default): no signal marker; arms the
  *     quiet window once DECSET 2004 is seen.
  *
  * A 512-byte ring (`recent` / `postAnchorRecent`) covers escape sequences
  * split across chunk boundaries without retaining terminal scrollback.
  */
-export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal): {
+export function createDraftPasteReadyScanner(
+  readySignal: DraftPasteReadySignal
+): DraftPasteReadyScanner {
+  if (isSingleSignal(readySignal)) {
+    return createSingleSignalScanner(readySignal)
+  }
+  const scanner = STRUCTURAL_SCANNERS[readySignal]()
+  return {
+    observe: (data) => ({ ...scanner.observe(data), armQuietTimer: false })
+  }
+}
+
+function isSingleSignal(signal: DraftPasteReadySignal): signal is SingleSignal {
+  return !(signal in STRUCTURAL_SCANNERS)
+}
+
+function createSingleSignalScanner(readySignal: SingleSignal): {
   observe: (data: string) => DraftPasteReadyScanResult
 } {
   let recent = ''
@@ -298,7 +347,7 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
       }
       // Why: the Codex glyph and opencode show-cursor signals must NOT arm the
       // quiet window (they carry no quiet anchor). opencode goes silent for
-      // Up to ~3.9s between enabling bracketed paste and mounting its composer, so a
+      // up to ~3.9s between enabling bracketed paste and mounting its composer, so a
       // quiet window would fire during that gap — before the composer exists —
       // and pre-empt the marker. Those signals wait for their marker, bounded
       // only by the caller's hard timeout (and its best-effort
