@@ -12,7 +12,18 @@
   },
   "settings": {
     "chat": {
-      "description": "채팅 모양을 선택하세요."
+      "description": "채팅 모양과 이름 지정 방식을 선택하세요.",
+      "names": {
+        "title": "채팅 이름",
+        "description": "에이전트가 첫 메시지를 바탕으로 새 채팅의 이름을 생성합니다. 이름이 생성되지 않으면 Claude Chat 또는 Codex Chat으로 유지됩니다.",
+        "enable": "채팅 이름 자동 지정",
+        "recipe": "채팅 이름",
+        "recipeDescription": "새 채팅의 첫 메시지에서 짧은 이름을 생성합니다.",
+        "customCommandDescription": "사용자 지정 명령을 선택한 레시피가 공유하는 명령줄입니다. {prompt}를 사용하면 입력을 인수로 전달하고, 그렇지 않으면 표준 입력으로 전달합니다.",
+        "saveFailed": "채팅 이름 설정을 저장하지 못했습니다.",
+        "searchAgent": "에이전트",
+        "searchTemplate": "명령 템플릿"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC 또는 U.S. — Option 키가 Alt/Esc 시퀀스를 전송합니다",
@@ -8292,8 +8303,8 @@
           "3c88ec55d6": "\"에 대한 설정을 찾을 수 없습니다.",
           "c7ad095d96": "설정 로드 중...",
           "acc7bbdefd": "설정을 종료하려면 ESC를 다시 누르세요.",
-          "43b68e10f0": "저장되지 않은 Git AI Author 변경사항이 있습니다. 떠나면 폐기됩니다.",
-          "17bdee4ff1": "저장되지 않은 Git AI Author 변경사항을 삭제하시겠습니까?",
+          "43b68e10f0": "저장하지 않은 AI 설정이 있습니다. 나가면 변경 사항이 버려집니다.",
+          "17bdee4ff1": "저장하지 않은 AI 설정을 버리시겠습니까?",
           "084d8fac5b": "개인 정보 보호 및 보안",
           "23931df7e8": "원격 호스트",
           "mobile_group": "모바일",
@@ -17972,7 +17983,8 @@
         "details": "세부",
         "plan": "계획",
         "historyRepaired": "이 채팅 기록의 일부를 불러올 수 없습니다.",
-        "historyItemTooLarge": "채팅의 이 부분은 너무 커서 표시할 수 없습니다."
+        "historyItemTooLarge": "채팅의 이 부분은 너무 커서 표시할 수 없습니다.",
+        "stoppedBeforeStart": "에이전트가 시작되기 전에 중지됨"
       },
       "providerFrame": {
         "byteLength": "{{value0}}바이트"

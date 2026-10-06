@@ -96,7 +96,7 @@ describe('tool run sentences', () => {
       await i18n.changeLanguage('es')
     })
 
-    expect(header).toHaveTextContent('Se ejecutó 1 comando y se ejecutó 1 agente · 1 fallidas')
+    expect(header).toHaveTextContent('Ejecutó 1 comando y ejecutó 1 agente · 1 fallidas')
     expect(header).toHaveAccessibleName(/Llamadas a herramientas fallidas: 1/)
     expect(screen.getByText('Subagente')).toBeInTheDocument()
     expect(screen.getByText('Flujo de trabajo en segundo plano')).toBeInTheDocument()

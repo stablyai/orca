@@ -12,7 +12,18 @@
   },
   "settings": {
     "chat": {
-      "description": "选择聊天的外观。"
+      "description": "选择聊天的外观和命名方式。",
+      "names": {
+        "title": "聊天名称",
+        "description": "使用智能体根据首条消息为新聊天生成名称。未生成名称时，聊天仍显示为 Claude Chat 或 Codex Chat。",
+        "enable": "自动为聊天命名",
+        "recipe": "聊天名称",
+        "recipeDescription": "根据新聊天的首条消息生成简短名称。",
+        "customCommandDescription": "选择自定义命令的配置共用此命令行。使用 {prompt} 将输入作为参数传递，否则通过标准输入传递。",
+        "saveFailed": "无法保存聊天命名设置。",
+        "searchAgent": "智能体",
+        "searchTemplate": "命令模板"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC 或 U.S. — Option 键发送 Alt/Esc 序列",
@@ -8292,8 +8303,8 @@
           "3c88ec55d6": "找不到“的设置",
           "c7ad095d96": "正在加载设置...",
           "acc7bbdefd": "再按一次 ESC 退出设置",
-          "43b68e10f0": "您有未保存的 Git AI Author 更改。离开将丢弃它们。",
-          "17bdee4ff1": "放弃未保存的 Git AI Author 更改？",
+          "43b68e10f0": "你有未保存的 AI 设置。离开后这些更改将被放弃。",
+          "17bdee4ff1": "放弃未保存的 AI 设置？",
           "084d8fac5b": "隐私与安全",
           "23931df7e8": "远程主机",
           "mobile_group": "移动端",
@@ -17937,7 +17948,8 @@
         "details": "细节",
         "plan": "计划",
         "historyRepaired": "此聊天的部分历史记录无法加载。",
-        "historyItemTooLarge": "聊天的这一部分过大，无法显示。"
+        "historyItemTooLarge": "聊天的这一部分过大，无法显示。",
+        "stoppedBeforeStart": "在智能体开始前已停止"
       },
       "providerFrame": {
         "byteLength": "{{value0}} 字节"

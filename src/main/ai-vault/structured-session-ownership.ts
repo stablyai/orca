@@ -1,4 +1,6 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
+import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -17,7 +19,8 @@ export function projectStructuredAiVaultSessions(
     return result
   }
   const sessions = result.sessions.flatMap((session) => {
-    const ownership = findSessionOwnership(session)
+    const ownership =
+      session.executionHostId === LOCAL_EXECUTION_HOST_ID ? findSessionOwnership(session) : null
     if (!ownership) {
       return [session]
     }
@@ -27,6 +30,7 @@ export function projectStructuredAiVaultSessions(
     return [
       {
         ...session,
+        title: ownership.conversationName ?? defaultAgentChatLabel(ownership.provider),
         structuredSession: {
           sessionId: ownership.sessionId,
           workspaceId: ownership.workspaceId

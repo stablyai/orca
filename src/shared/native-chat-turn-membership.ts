@@ -26,6 +26,8 @@ import {
 } from './native-chat-turn-grouping'
 import type { NativeChatRole } from './native-chat-types'
 import { isStructuredAgentSessionCommandTurn } from './structured-agent-session-command-entry'
+import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
+import { inSendOrder } from './native-chat-send-order'
 import {
   liveStructuredAgentSessionTurnScope,
   runningStructuredAgentSessionTurnScope
@@ -52,7 +54,8 @@ export type NativeChatTurnJournal = {
  * entry, directly or through a submission's adopted provider item; a record that names no entry
  * falls back to the nearest user entry before it, which only older hosts write. A key nothing
  * resolves yet is the send still in flight ahead of the record — Codex reports a turn open before
- * it echoes the send — and with none, the turn anchors on its own record.
+ * it echoes the send — or one a Stop took back before that echo, which the host names as answered
+ * into the turn; with none, the turn anchors on its own record.
  */
 export function structuredAgentTurnAnchors(
   items: readonly AgentJournalRenderItem[],
@@ -78,6 +81,29 @@ export function structuredAgentTurnAnchors(
       .filter((submission) => submission.dispatchState === 'pending' && !submission.providerItemId)
       .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
   )
+  // A send a Stop took back after its turn opened but before the provider echoed it: the record
+  // still names the provider's key, and the host names the turn the send was answered into, or
+  // none (null). A rejection written before that field is placed by journal order instead.
+  const takenBack = submissions.filter(
+    (submission) =>
+      !submission.providerItemId &&
+      submission.queuedMessageId === undefined &&
+      submission.resolvedAt !== null &&
+      dispatchWasWithdrawn(submission)
+  )
+  const itemsById =
+    takenBack.length > 0 ? new Map(items.map((item) => [item.itemId, item])) : undefined
+  const openedBy = stoppedTurnOpeners(takenBack)
+  const unstated = inSendOrder(
+    takenBack
+      .filter((submission) => submission.answeredInTurn === undefined)
+      .flatMap((submission) => {
+        const sent = itemsById?.get(agentJournalSubmissionKey(submission.clientMessageId))
+        return sent ? [{ sent, submission }] : []
+      }),
+    ({ submission }) => submission
+  )
+  const claimed = new Set<string>()
   const anchors = new Map<string, string>()
   let precedingUserItemId: string | null = null
   let inFlightSinceLastTurn: string | null = null
@@ -93,10 +119,34 @@ export function structuredAgentTurnAnchors(
     if (!turn || !isRootAgentJournalItem(item)) {
       continue
     }
-    anchors.set(
+    let anchor = anchorOf(
       item.itemId,
-      anchorOf(item.itemId, turn, userItemIds, aliases, precedingUserItemId, inFlightSinceLastTurn)
+      turn,
+      userItemIds,
+      aliases,
+      precedingUserItemId,
+      inFlightSinceLastTurn
     )
+    const key = turn.userItemId
+    const unresolved =
+      key !== undefined && !userItemIds.has(key) && !userItemIds.has(aliases.get(key) ?? '')
+    // A record naming itself is a turn the provider resumed on its own: no send opened it.
+    if (unresolved && key !== item.itemId) {
+      const named = openedBy.get(item.itemId)
+      if (named !== undefined && itemsById?.has(named)) {
+        anchor = named
+      } else if (anchor === item.itemId) {
+        const opener = unstated.find(
+          ({ sent, submission }) =>
+            !claimed.has(sent.itemId) && sentBeforeAndTakenBackAfter(item, turn, submission, sent)
+        )
+        if (opener) {
+          claimed.add(opener.sent.itemId)
+          anchor = opener.sent.itemId
+        }
+      }
+    }
+    anchors.set(item.itemId, anchor)
     inFlightSinceLastTurn = null
   }
   // Only while running: an ended turn's tail would otherwise regroup when the next turn opens.
@@ -107,6 +157,41 @@ export function structuredAgentTurnAnchors(
     )
   }
   return anchors
+}
+
+/** For each turn a taken-back send started (`answeredInTurn.via` is `start`), that send's item id.
+ *  One steered into a turn opened none, nor one joined in a way this build does not know. */
+export function stoppedTurnOpeners(
+  takenBack: readonly AgentJournalSubmission[]
+): ReadonlyMap<string, string> {
+  const openers = new Map<string, string>()
+  for (const { answeredInTurn, clientMessageId } of takenBack) {
+    if (answeredInTurn?.via === 'start' && !openers.has(answeredInTurn.turnItemId)) {
+      openers.set(answeredInTurn.turnItemId, agentJournalSubmissionKey(clientMessageId))
+    }
+  }
+  return openers
+}
+
+/** For a rejection written before the host named turns: whether its send was sent before a turn
+ *  record and taken back after it. By journal order where the host publishes where it was sent (it
+ *  has moved the row to the take-back): kept for good, as old chats keep those rows, and it draws
+ *  them exactly as before. Else, on a host that publishes neither field, by its row's place and by
+ *  times, which a resume rewrites to whole seconds; Temporary, until a host version floor. */
+function sentBeforeAndTakenBackAfter(
+  record: AgentJournalRenderItem,
+  turn: AgentJournalTurnLifecycle,
+  submission: AgentJournalSubmission,
+  sent: AgentJournalRenderItem
+): boolean {
+  if (submission.submittedSequence !== undefined) {
+    return submission.submittedSequence < record.sequence && record.sequence < sent.sequence
+  }
+  if (turn.startedAt === undefined || submission.resolvedAt === null) {
+    return false
+  }
+  const sentBefore = sent.sequence < record.sequence || submission.submittedAt <= turn.startedAt
+  return sentBefore && turn.startedAt <= submission.resolvedAt
 }
 
 function anchorOf(

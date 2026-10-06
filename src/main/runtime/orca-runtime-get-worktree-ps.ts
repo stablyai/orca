@@ -22,6 +22,8 @@ import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-sl
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../agent-hooks/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../agent-hooks/first-work-rename-runtime'
+import { createStructuredChatNamingHandler } from '../native-chat/structured-chat-naming'
+import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { buildWorktreeListingPage } from './worktree-listing-host-scope'
@@ -160,12 +162,30 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
    * a launch's admission.
    */
   async ensureStructuredAgentSessionHost(): Promise<void> {
+    const logger = createStructuredAgentSessionLogger()
+    const nameChat = createStructuredChatNamingHandler(
+      structuredChatNamingDeps(
+        () => this.requireStore(),
+        {
+          resolveWorkspace: async (workspaceId) => {
+            const target = await this.resolveRuntimeFileTarget(`id:${workspaceId}`)
+            return { path: target.worktree.path, executionHostId: target.executionHostId }
+          },
+          getAgentEnvResolvers: () => this.getCommitMessageAgentEnvironmentResolvers(),
+          hasOpenDispatch: (record) =>
+            structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record),
+          onNamed: (workspaceId, sessionId) =>
+            this.refreshStructuredConversationTabTitle(workspaceId, sessionId)
+        },
+        logger
+      )
+    )
     await installStructuredAgentSessionHost({
       stateDirectory: getProfileUserDataPath(),
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,
       // The host's local trace file (the desktop's or orcad's own), plus the console.
-      logger: createStructuredAgentSessionLogger(),
+      logger,
       // Resolves folder workspaces as well as git worktrees, so a chat session
       // in a plain folder lands in the folder rather than failing to resolve.
       resolveWorkspacePath: async (workspaceId) =>
@@ -199,6 +219,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       // workspace rename listens to instead of `agentStatus:set`.
       onSessionStatusChanged: (summary, options) => {
         this.onStructuredSessionStatusForMail(summary)
+        nameChat(summary, options)
         void maybeAutoRenameWorkspaceOnFirstStructuredTurn(
           summary,
           options,

@@ -248,7 +248,7 @@ export function runLocalSourceControlPlan(input: {
           label: plan.label,
           outputFormat: plan.outputFormat,
           emptyResultName: input.emptyResultName,
-          includeStdoutDetail: operation !== 'branch-name'
+          includeStdoutDetail: operation !== 'branch-name' && operation !== 'conversation-name'
         })
       )
     }
