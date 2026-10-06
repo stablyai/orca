@@ -19,7 +19,6 @@ import {
   type AgentJournalMessageItem,
   type AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { readAgentSessionHydrationPage } from '../agent-session-wire/agent-session-history-page'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 
