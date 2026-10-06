@@ -125,21 +125,21 @@ resolveAntigravityWslTarget(target: AntigravityAccountTarget, operation: Antigra
 getWslGuestEnvironment(distro: string | undefined, budgetMs?: number, options?: { fresh?: boolean; signal?: AbortSignal }): Promise<WslGuestEnvironment | null>
 ```
 
-- [ ] **Step 1: 写失败测试。** 用已有 fenced probe mock 形状，测试默认目标从真实
+- [x] **Step 1: 写失败测试。** 用已有 fenced probe mock 形状，测试默认目标从真实
   WSL_DISTRO_NAME 得到 Ubuntu，列出顺序不影响选择；显式名字大小写别名具有同一
   authorityId。UID/HOME 改变使 authorityId 改变；非 Windows、超时、坏身份包拒绝。
   fake timers 断言 deadline 是开始时间加 15_000，过期 signal.aborted 为 true。
-- [ ] **Step 2: 验证失败。** `pnpm test src/main/antigravity/native-account-operation.test.ts
+- [x] **Step 2: 验证失败。** `pnpm test src/main/antigravity/native-account-operation.test.ts
   src/main/antigravity/native-wsl-account-target.test.ts src/main/wsl/wsl-guest-environment.test.ts`。
   预期新模块/新 fresh 行为尚不存在。
-- [ ] **Step 3: 实现目标与预算。** 默认目标只读探测后固定发行版；fresh 探测不采用旧 HOME
+- [x] **Step 3: 实现目标与预算。** 默认目标只读探测后固定发行版；fresh 探测不采用旧 HOME
   缓存，继续使用既有围栏、退出状态和子进程规则。作用域哈希输入固定为
   `JSON.stringify(['v1', 'wsl', distro.toLowerCase(), uid, canonicalHome])`。
   对不安全/不一致 HOME 拒绝，不用 Windows HOME 或 UNC stat 猜测 guest 身份。
   operation 用 AbortController 管理 15 秒，finally 清理 timer；过期前后不得启动新提交。
-- [ ] **Step 4: 验证通过。** 重跑三测试文件及 `pnpm tc:node`；现有 WSL 环境缓存用例保持。
+- [x] **Step 4: 验证通过。** 重跑三测试文件及 `pnpm tc:node`；现有 WSL 环境缓存用例保持。
   为阻塞/打印 banner 的登录 shell 添加受限 budget 与 fence 验证，不能继承无限等待。
-- [ ] **Step 5: 提交。** 只暂存上述文件与计划；提交 `feat(antigravity): resolve bound WSL account targets`。
+- [x] **Step 5: 提交。** 只暂存上述文件与计划；提交 `feat(antigravity): resolve bound WSL account targets`。
 
 ## Task 3: 复用权限代码实现严格的异步密文发布
 

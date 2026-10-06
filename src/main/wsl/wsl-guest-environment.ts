@@ -74,7 +74,8 @@ function parseProbePayload(payload: string | null): WslGuestEnvironment | null {
 
 async function probeGuestEnvironment(
   distro: string | undefined,
-  budgetMs: number
+  budgetMs: number,
+  signal?: AbortSignal
 ): Promise<ProbeOutcome> {
   // Resolve `env` rather than assume /usr/bin/env: a distro that moved it would
   // otherwise fail every later call.
@@ -92,9 +93,11 @@ async function probeGuestEnvironment(
     // and the NUL-separated payload below is read through NUL-riddled text.
     env: { ...process.env, WSL_UTF8: '1' },
     timeoutMs: Math.min(PROBE_TIMEOUT_MS, budgetMs),
-    maxOutputBytes: PROBE_MAX_OUTPUT_BYTES
+    maxOutputBytes: PROBE_MAX_OUTPUT_BYTES,
+    signal,
+    killOnOutputLimit: true
   })
-  if (result.timedOut) {
+  if (result.timedOut || result.outputTruncated || signal?.aborted) {
     return { kind: 'transient' }
   }
   if (result.code !== 0) {
@@ -122,8 +125,17 @@ export function getWslGuestEnvironment(
    * timer, so a 5s caller could reach `runProcess` with 1ms left and report a
    * timeout for a command that would have taken milliseconds.
    */
-  budgetMs = PROBE_TIMEOUT_MS
+  budgetMs = PROBE_TIMEOUT_MS,
+  options?: { fresh?: boolean; signal?: AbortSignal }
 ): Promise<WslGuestEnvironment | null> {
+  if (options?.fresh || options?.signal) {
+    if (options.signal?.aborted) {
+      return Promise.resolve(null)
+    }
+    return probeGuestEnvironment(distro, budgetMs, options.signal)
+      .then((outcome) => (outcome.kind === 'resolved' ? outcome.environment : null))
+      .catch(() => null)
+  }
   const key = cacheKey(distro)
   const cached = resolved.get(key)
   if (cached) {
