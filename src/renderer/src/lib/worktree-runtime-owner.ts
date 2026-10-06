@@ -1,4 +1,8 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost,
+  parseExecutionHostId
+} from '../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -25,6 +29,7 @@ import {
   resolveWorktreeOperationRouteResult,
   resolveWorktreeOperationRouteResultForHost
 } from './worktree-operation-route'
+import type { WorktreeOperationRouteResolution } from './worktree-operation-route'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 export type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 export { getRuntimeSessionMirrorEnvironmentIds } from './runtime-session-mirror-owners'
@@ -112,6 +117,16 @@ export function getRuntimeEnvironmentIdForWorktree(
 // Why: an unplaceable or ambiguous owner must not read as local; a non-empty id keeps it blocked.
 const UNRESOLVED_LOCAL_OPEN_OWNER = 'unresolved-owner'
 
+function resolveLocalOpenRoute(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): WorktreeOperationRouteResolution {
+  return executionHostId
+    ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, executionHostId)
+    : resolveWorktreeOperationRouteResult(state, worktreeId)
+}
+
 /**
  * Runtime owner of a workspace path for local OS opens (Finder, external editors): `null` means
  * no runtime owns it. SSH is not a runtime, so callers still gate SSH paths by connectionId.
@@ -128,12 +143,29 @@ export function getLocalOpenRuntimeOwnerForWorktree(
   if (!worktreeId) {
     return UNRESOLVED_LOCAL_OPEN_OWNER
   }
-  const resolution = executionHostId
-    ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, executionHostId)
-    : resolveWorktreeOperationRouteResult(state, worktreeId)
+  const resolution = resolveLocalOpenRoute(state, worktreeId, executionHostId)
   return resolution.kind === 'resolved'
     ? resolution.route.runtimeEnvironmentId
     : UNRESOLVED_LOCAL_OPEN_OWNER
+}
+
+/**
+ * SSH connection owning a workspace path, read from the same route as
+ * {@link getLocalOpenRuntimeOwnerForWorktree} so both owner dimensions name one host.
+ */
+export function getLocalOpenSshOwnerForWorktree(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string | null | undefined,
+  executionHostId?: ExecutionHostId
+): string | null {
+  if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return null
+  }
+  const resolution = resolveLocalOpenRoute(state, worktreeId, executionHostId)
+  // Why: an unresolved route is already blocked by the runtime owner's sentinel.
+  return resolution.kind === 'resolved'
+    ? getSshTargetIdForExecutionHost(resolution.route.executionHostId)
+    : null
 }
 
 export function getExplicitRuntimeEnvironmentIdForWorktree(

@@ -19,7 +19,10 @@ import {
   isRevealInFileManagerBlocked,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
-import { getLocalOpenRuntimeOwnerForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getLocalOpenRuntimeOwnerForWorktree,
+  getLocalOpenSshOwnerForWorktree
+} from '@/lib/worktree-runtime-owner'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
@@ -45,7 +48,7 @@ export function SourceControlEntryContextMenu({
   absolutePath,
   relativePath,
   hasWorkingTreeFile,
-  connectionId,
+  connectionId: repoConnectionId,
   onView,
   onRevealInExplorer,
   onOpenChange,
@@ -60,6 +63,9 @@ export function SourceControlEntryContextMenu({
   const runtimeEnvironmentId = useAppStore((s) =>
     getLocalOpenRuntimeOwnerForWorktree(s, currentWorktreeId)
   )
+  // Why: the repo prop is host-blind when ids repeat across hosts; the route names one host.
+  const connectionId =
+    useAppStore((s) => getLocalOpenSshOwnerForWorktree(s, currentWorktreeId)) ?? repoConnectionId
   const revealBlocked = isRevealInFileManagerBlocked(settings, {
     connectionId,
     runtimeEnvironmentId

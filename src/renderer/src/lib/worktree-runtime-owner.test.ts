@@ -5,6 +5,7 @@ import {
   getExecutionHostIdForWorktree,
   getKnownExecutionHostIdForWorktree,
   getLocalOpenRuntimeOwnerForWorktree,
+  getLocalOpenSshOwnerForWorktree,
   getRuntimeEnvironmentIdForWorktree,
   getRuntimeSessionMirrorEnvironmentIds,
   getSettingsForWorktreeRuntimeOwner,
@@ -410,6 +411,25 @@ describe('getLocalOpenRuntimeOwnerForWorktree', () => {
     expect(getLocalOpenRuntimeOwnerForWorktree(duplicateState, worktreeId, 'runtime:env-1')).toBe(
       'env-1'
     )
+  })
+
+  it('reads the SSH owner from the same route, so a card can name its own host', () => {
+    const sshState: WorktreeRuntimeOwnerState = {
+      repos: [{ id: 'ssh-repo', connectionId: 'ssh-1', executionHostId: null }],
+      worktreesByRepo: { 'ssh-repo': [{ id: 'ssh-repo::wt', repoId: 'ssh-repo' }] },
+      // Why: same-id folder rows on two hosts; a host-blind lookup takes the local row.
+      folderWorkspaces: [
+        { id: 'twin', projectGroupId: 'group', executionHostId: 'local' },
+        { id: 'twin', projectGroupId: 'group', executionHostId: 'ssh:ssh-1' }
+      ]
+    }
+
+    expect(getLocalOpenSshOwnerForWorktree(sshState, 'ssh-repo::wt')).toBe('ssh-1')
+    expect(getLocalOpenSshOwnerForWorktree(state, 'local-repo::wt-a')).toBeNull()
+    expect(getLocalOpenSshOwnerForWorktree(sshState, 'folder:twin', 'ssh:ssh-1')).toBe('ssh-1')
+    expect(getLocalOpenSshOwnerForWorktree(sshState, 'folder:twin', 'local')).toBeNull()
+    // Why: an unqualified twin is unresolved, which the runtime sentinel already blocks.
+    expect(getLocalOpenRuntimeOwnerForWorktree(sshState, 'folder:twin')).toBe('unresolved-owner')
   })
 })
 

@@ -17,20 +17,16 @@ type ReactElementLike = {
 }
 
 const owner = vi.hoisted(
-  (): { runtimeEnvironmentId: string | null; connectionId: string | null | undefined } => ({
+  (): { runtimeEnvironmentId: string | null; connectionId: string | null } => ({
     runtimeEnvironmentId: null,
-    connectionId: undefined
+    connectionId: null
   })
 )
 
 vi.mock(import('@/lib/worktree-runtime-owner'), async (importOriginal) => ({
   ...(await importOriginal()),
-  getLocalOpenRuntimeOwnerForWorktree: () => owner.runtimeEnvironmentId
-}))
-
-vi.mock(import('@/lib/connection-owner-resolution'), async (importOriginal) => ({
-  ...(await importOriginal()),
-  getConnectionIdFromState: () => owner.connectionId
+  getLocalOpenRuntimeOwnerForWorktree: () => owner.runtimeEnvironmentId,
+  getLocalOpenSshOwnerForWorktree: () => owner.connectionId
 }))
 
 const {
@@ -107,7 +103,7 @@ describe('WorktreeOpenInMenu', () => {
   beforeEach(() => {
     mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [] }
     owner.runtimeEnvironmentId = null
-    owner.connectionId = undefined
+    owner.connectionId = null
     toastErrorMock.mockReset()
     openInFileManagerMock.mockReset()
     openInExternalEditorMock.mockReset()

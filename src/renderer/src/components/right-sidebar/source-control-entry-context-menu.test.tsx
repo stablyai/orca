@@ -18,6 +18,7 @@ const storeState = vi.hoisted(
   })
 )
 const ownerRuntime = vi.hoisted((): { environmentId: string | null } => ({ environmentId: null }))
+const ownerSsh = vi.hoisted((): { connectionId: string | null } => ({ connectionId: null }))
 const revealInFileManager = vi.hoisted(() => vi.fn())
 
 vi.mock('@/components/ui/context-menu', async () => {
@@ -45,7 +46,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getLocalOpenRuntimeOwnerForWorktree: () => ownerRuntime.environmentId
+  getLocalOpenRuntimeOwnerForWorktree: () => ownerRuntime.environmentId,
+  getLocalOpenSshOwnerForWorktree: () => ownerSsh.connectionId
 }))
 
 vi.mock(import('@/lib/reveal-in-file-manager'), async (importOriginal) => ({
@@ -113,6 +115,7 @@ describe('SourceControlEntryContextMenu', () => {
     storeState.settings.activeRuntimeEnvironmentId = null
     storeState.settings.openInApplications = []
     ownerRuntime.environmentId = null
+    ownerSsh.connectionId = null
     revealInFileManager.mockReset()
     writeClipboardText.mockReset()
     vi.stubGlobal('window', {
@@ -177,6 +180,16 @@ describe('SourceControlEntryContextMenu', () => {
 
   it('disables reveal as local-only for a repo on an SSH host', () => {
     const revealItem = renderRevealItem({ connectionId: 'ssh-1' })
+
+    expect(revealItem?.disabled).toBe(true)
+    expect(showsLocalOnlyHint(revealItem)).toBe(true)
+  })
+
+  it('disables reveal as local-only when the route names an SSH host the repo prop misses', () => {
+    // Why: the repo prop is host-blind when ids repeat across hosts.
+    ownerSsh.connectionId = 'ssh-1'
+
+    const revealItem = renderRevealItem()
 
     expect(revealItem?.disabled).toBe(true)
     expect(showsLocalOnlyHint(revealItem)).toBe(true)
