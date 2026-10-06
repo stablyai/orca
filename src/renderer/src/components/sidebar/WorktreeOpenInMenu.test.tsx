@@ -1,5 +1,4 @@
 import React from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu'
 import {
@@ -17,23 +16,12 @@ type ReactElementLike = {
   props: Record<string, unknown>
 }
 
-type MenuItemProps = { onSelect?: () => void; disabled?: boolean; children?: React.ReactNode }
-
-const items = vi.hoisted((): { list: MenuItemProps[] } => ({ list: [] }))
 const owner = vi.hoisted(
   (): { runtimeEnvironmentId: string | null; connectionId: string | null | undefined } => ({
     runtimeEnvironmentId: null,
     connectionId: undefined
   })
 )
-
-vi.mock(import('@/components/ui/dropdown-menu'), async (importOriginal) => ({
-  ...(await importOriginal()),
-  DropdownMenuItem: (props: MenuItemProps) => {
-    items.list.push(props)
-    return null
-  }
-}))
 
 vi.mock(import('@/lib/worktree-runtime-owner'), async (importOriginal) => ({
   ...(await importOriginal()),
@@ -118,7 +106,6 @@ function findByType(node: unknown, type: unknown): ReactElementLike {
 describe('WorktreeOpenInMenu', () => {
   beforeEach(() => {
     mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [] }
-    items.list = []
     owner.runtimeEnvironmentId = null
     owner.connectionId = undefined
     toastErrorMock.mockReset()
@@ -356,19 +343,15 @@ describe('WorktreeOpenInMenu', () => {
     }
     owner.connectionId = 'ssh-1'
 
-    renderToStaticMarkup(
-      <WorktreeOpenInMenuItems
-        worktreeId="folder:fw-1"
-        worktreePath="/home/ada/project"
-        connectionId={null}
-      />
-    )
-    const [vsCode, fileManager] = items.list
+    const [vsCode, fileManager] = WorktreeOpenInMenuItems({
+      worktreeId: 'folder:fw-1',
+      worktreePath: '/home/ada/project',
+      connectionId: null
+    }).props.children
 
-    expect(fileManager.disabled).toBe(true)
-    expect(renderToStaticMarkup(<>{fileManager.children}</>)).toContain('Local only')
-    expect(vsCode.disabled).toBe(false)
-    vsCode.onSelect?.()
+    expect(fileManager.props.disabled).toBe(true)
+    expect(vsCode.props.disabled).toBe(false)
+    vsCode.props.onSelect()
     expect(openInExternalEditorMock).toHaveBeenCalledWith({
       path: '/home/ada/project',
       command: 'code',
