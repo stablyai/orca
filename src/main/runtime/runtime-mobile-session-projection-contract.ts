@@ -19,6 +19,8 @@ export type RuntimeMobileSessionProjectionHost = {
   getLiveBrowserTabs(worktreeId: string): Map<string, BrowserTabInfo>
   getProviderSessionRows(paneKey: string): AgentStatusIpcPayload[] | undefined
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
+  /** The provider's id for a structured chat, which is the name its status rows carry. */
+  resolveProviderSessionId(sessionId: string): string | undefined
   getStatusSnapshot(): AgentStatusIpcPayload[]
   getLeafKey(tabId: string, leafId: string): string
   findPty(

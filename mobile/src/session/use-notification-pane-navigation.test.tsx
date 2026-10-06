@@ -35,6 +35,34 @@ it('selects the originating split pane, not the first tab; closed and invalid pa
   expect(notificationPaneTab(tabs, `closed:${leaf}`)).toBeUndefined()
   expect(notificationPaneTab(tabs, 'invalid')).toBeUndefined()
 })
+const chatTabs: MobileSessionTab[] = [
+  {
+    type: 'agent-session',
+    id: 'agent-session:claude-session',
+    title: 'Claude',
+    sessionId: 'claude-session',
+    paneKey: `pane-tab:${leaf}`,
+    agent: 'claude',
+    isActive: true
+  },
+  {
+    type: 'agent-session',
+    id: 'agent-session:codex-session',
+    title: 'Codex',
+    sessionId: 'codex-session',
+    agent: 'codex',
+    isActive: false
+  }
+]
+it('resolves a chat tab by the pane key its host published on the tab', () => {
+  expect(notificationPaneTab(chatTabs, `pane-tab:${leaf}`)).toBe(chatTabs[0])
+  // A chat whose host published no pane key selects nothing, which is what every tap did before
+  // hosts sent one; an unmatched pane must never fall through to some other tab.
+  expect(notificationPaneTab(chatTabs, `closed:${leaf}`)).toBeUndefined()
+  // The tab's own id is `agent-session:<sessionId>`, which a pane key can never carry: its tab id
+  // may not contain `:`.
+  expect(notificationPaneTab(chatTabs, `agent-session:codex-session:${leaf}`)).toBeUndefined()
+})
 it('waits for tabs, switches through the existing action, and consumes the navigation request', async () => {
   route.paneKey = `tab-b:${leaf}`
   const switchSessionTab = vi.fn()

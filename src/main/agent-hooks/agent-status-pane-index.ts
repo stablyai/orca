@@ -20,3 +20,30 @@ export function indexAgentStatusRowsByPaneKey(
   }
   return byPaneKey
 }
+
+/** Inverts one agent-status snapshot to pane key by provider session id, so a projection can put a
+ *  chat tab — whose own id (`agent-session:<sessionId>`) is no pane key — back on the pane its agent
+ *  runs in. A session two panes both claim is ambiguous and drops out, as does a row naming only
+ *  one of the two. */
+export function indexPaneKeysByProviderSessionId(
+  rows: readonly AgentStatusIpcPayload[]
+): Map<string, string> {
+  const paneKeyBySessionId = new Map<string, string>()
+  const ambiguousSessionIds = new Set<string>()
+  for (const row of rows) {
+    const sessionId = row.providerSession?.id
+    if (!sessionId || !row.paneKey) {
+      continue
+    }
+    const known = paneKeyBySessionId.get(sessionId)
+    if (known === undefined) {
+      paneKeyBySessionId.set(sessionId, row.paneKey)
+    } else if (known !== row.paneKey) {
+      ambiguousSessionIds.add(sessionId)
+    }
+  }
+  for (const sessionId of ambiguousSessionIds) {
+    paneKeyBySessionId.delete(sessionId)
+  }
+  return paneKeyBySessionId
+}

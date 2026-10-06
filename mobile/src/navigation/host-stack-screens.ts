@@ -9,6 +9,7 @@ export const HOST_STACK_SCREENS = [
   { name: '[hostId]/agent-history/[worktreeId]', title: 'Agent Session History' },
   { name: '[hostId]/review/[worktreeId]', title: 'Changes' },
   { name: '[hostId]/pr/[worktreeId]', title: 'Pull Request' },
+  { name: '[hostId]/agents', title: 'Agents' },
   // Dev-flag only: redirects to the host screen unless the hybrid shell flag is on.
   { name: '[hostId]/web', title: 'Workspace' },
   // Last, and matched last: every pathname above has a file of its own, so this takes only what

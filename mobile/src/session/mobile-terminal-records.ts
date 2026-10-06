@@ -67,6 +67,7 @@ type MobileSessionTabLike =
       id: string
       title?: string
       sessionId?: string
+      paneKey?: string
       agent?: string
       isActive?: boolean
     }
@@ -161,7 +162,14 @@ function mobileSessionTabEqual(
         a.canGoForward === b.canGoForward
       )
     case 'agent-session':
-      return b.type === 'agent-session' && a.sessionId === b.sessionId && a.agent === b.agent
+      return (
+        b.type === 'agent-session' &&
+        a.sessionId === b.sessionId &&
+        a.agent === b.agent &&
+        // A host that starts publishing the pane key must not have that snapshot read as unchanged,
+        // or the tab keeps hiding from pane-keyed taps until some other field moves.
+        a.paneKey === b.paneKey
+      )
   }
 }
 
