@@ -25,6 +25,8 @@ export type MobileTerminalSessionTab = {
   launchDraft?: string
   launchDraftCreatedAt?: number
   terminalTheme?: MobileTerminalTheme
+  /** Host-published terminal/chat view for this tab; absent on hosts that never set one. */
+  viewMode?: 'terminal' | 'chat'
   isActive: boolean
 }
 
@@ -131,6 +133,9 @@ function mobileSessionTabEqual(
         // still has to reach the chat composer.
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
+        // A host-driven viewMode change carries no other delta, so it must break equality or the
+        // shared terminal/chat view would never re-resolve.
+        a.viewMode === b.viewMode &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
         mobileTerminalThemesEqual(a.terminalTheme, b.terminalTheme)
       )

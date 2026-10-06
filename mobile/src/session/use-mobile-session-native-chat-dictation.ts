@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useMemo } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { triggerError } from '../platform/haptics'
@@ -11,6 +11,8 @@ import {
   isDictationSetupRequiredError
 } from '../dictation/mobile-dictation-setup'
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
+import { sessionTabSetProps } from './mobile-session-write-operations'
+import type { MobileSessionTabViewModeBridge } from './use-mobile-session-view-mode'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'
 import { useMobileNativeChatSendError } from './use-mobile-native-chat-send-error'
@@ -27,6 +29,8 @@ export function useMobileSessionNativeChatDictation(
     worktreeId,
     client,
     connState,
+    sessionTabs,
+    sessionTabsViewModeSupported,
     agentSessionHostSupport,
     setInput,
     liveInputTerminalHandles,
@@ -62,10 +66,34 @@ export function useMobileSessionNativeChatDictation(
     activeHandle,
     connected: connState === 'connected'
   })
+  // Why: the view is host-shared only when the host advertised the capability, so the write
+  // callback is null otherwise and the hook keeps resolving the view device-locally.
+  const sessionTabViewMode = useMemo<MobileSessionTabViewModeBridge>(
+    () => ({
+      readHostViewMode: (tabId) => {
+        const tab = sessionTabs.find((candidate) => candidate.id === tabId)
+        return tab?.type === 'terminal' ? tab.viewMode : undefined
+      },
+      writeHostViewMode:
+        sessionTabsViewModeSupported && client
+          ? (tabId, view) =>
+              sessionTabSetProps
+                .request(client, { worktree: `id:${worktreeId}`, tabId, viewMode: view })
+                .then(() => undefined)
+          : null,
+      // Why: a rejected shared-view write left the user on a view the host never took, silently.
+      onHostViewModeWriteError: () => {
+        triggerError()
+        showToast('Could not switch view mode')
+      }
+    }),
+    [client, sessionTabs, sessionTabsViewModeSupported, showToast, worktreeId]
+  )
   const nativeChatController = useMobileNativeChatController({
     client,
     hostId,
     worktreeId,
+    sessionTabViewMode,
     activeSessionTab,
     activeSessionTabId,
     activeHandleRef,

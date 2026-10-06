@@ -8,7 +8,8 @@ import { serializePaneTree } from '@/components/terminal-pane/layout-serializati
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import type {
   RuntimeMobileSessionTabsSnapshot,
-  RuntimeRendererSyncWindowGraph
+  RuntimeRendererSyncWindowGraph,
+  RuntimeSyncWindowGraphResult
 } from '../../../../shared/runtime-types'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -25,8 +26,13 @@ import {
   NO_TRANSPORT_GRACE_MS
 } from './graph-state'
 
-export async function syncRuntimeGraph(): Promise<void> {
+export async function syncRuntimeGraph(
+  options: { throwOnError?: boolean } = {}
+): Promise<RuntimeSyncWindowGraphResult | undefined> {
   if (!graphState.syncEnabled || !graphState.getStoreState) {
+    if (options.throwOnError) {
+      throw new Error('Runtime graph sync is unavailable')
+    }
     return
   }
   // The store getter is injected to break the terminal-slice construction cycle.
@@ -201,9 +207,14 @@ export async function syncRuntimeGraph(): Promise<void> {
     if (result?.mobileSessionResyncWorktrees?.length) {
       scheduleTrailingGraphSync()
     }
+    return result
   } catch (error) {
     console.error('[runtime] Failed to sync renderer graph:', error)
+    if (options.throwOnError) {
+      throw error
+    }
   }
+  return undefined
 }
 
 let scheduleTrailingGraphSync: () => void = () => undefined

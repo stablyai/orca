@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import type { RuntimeSyncWindowGraphResult } from '../../../shared/runtime-types'
 import {
   activePaneIsCoveredByNativeChat,
   paneIsCoveredByNativeChat
@@ -140,20 +141,53 @@ export function scheduleRuntimeGraphSync(): void {
   }, RUNTIME_GRAPH_SYNC_COALESCE_MS)
 }
 
-async function runRuntimeGraphSync(): Promise<void> {
+async function runRuntimeGraphSync(
+  options: { throwOnError?: boolean } = {}
+): Promise<RuntimeSyncWindowGraphResult | undefined> {
   if (graphState.syncInFlight) {
     graphState.syncPendingAfterFlight = true
-    return
+    return graphState.syncFlight ?? Promise.resolve(undefined)
   }
   graphState.syncInFlight = true
-  try {
-    await syncRuntimeGraph()
-  } finally {
-    graphState.syncInFlight = false
-    if (graphState.syncPendingAfterFlight) {
-      graphState.syncPendingAfterFlight = false
-      scheduleRuntimeGraphSync()
+  const flight = (async () => {
+    try {
+      return await syncRuntimeGraph(options)
+    } finally {
+      graphState.syncInFlight = false
+      if (graphState.syncPendingAfterFlight) {
+        graphState.syncPendingAfterFlight = false
+        scheduleRuntimeGraphSync()
+      }
     }
+  })()
+  graphState.syncFlight = flight
+  try {
+    return await flight
+  } finally {
+    if (graphState.syncFlight === flight) {
+      graphState.syncFlight = null
+    }
+  }
+}
+
+export async function flushRuntimeGraphSync(worktreeId: string): Promise<void> {
+  if (!graphState.syncEnabled || !graphState.getStoreState) {
+    throw new Error('Runtime graph sync is unavailable')
+  }
+  clearScheduledRuntimeGraphSync()
+  if (graphState.syncFlight) {
+    await graphState.syncFlight
+    clearScheduledRuntimeGraphSync()
+    graphState.syncPendingAfterFlight = false
+  }
+  let result = await runRuntimeGraphSync({ throwOnError: true })
+  if (result?.mobileSessionResyncWorktrees?.includes(worktreeId)) {
+    clearScheduledRuntimeGraphSync()
+    graphState.syncPendingAfterFlight = false
+    result = await runRuntimeGraphSync({ throwOnError: true })
+  }
+  if (result?.mobileSessionResyncWorktrees?.includes(worktreeId)) {
+    throw new Error('Runtime graph publication requires resync')
   }
 }
 

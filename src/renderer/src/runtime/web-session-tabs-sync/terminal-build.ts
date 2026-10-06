@@ -7,6 +7,7 @@ import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from '../runti
 import { toWebTerminalSurfaceTabId } from '../web-runtime-session'
 import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
+import { shouldAdoptHostViewMode } from './last-local-view-mode-write'
 
 function pendingBindingBelongsToEnvironment(
   ptyId: string,
@@ -157,9 +158,15 @@ export function buildMirroredTerminalTabs(
     const isPinned = existing
       ? existing.isPinned === true
       : surfaces.some((surface) => surface.isPinned)
-    // Why: viewMode echoes back through host snapshots, so prefer the client's record during the echo window and adopt the host value only without a prior tab.
-    const hostViewModeSurface = surfaces.find((surface) => surface.viewMode)
-    const viewMode = existing ? existing.viewMode : hostViewModeSurface?.viewMode
+    // Why: viewMode is shared across paired clients, so a host value this client did not just send
+    // is another client's change and is adopted; its own write stays authoritative until the echo
+    // lands. Without a prior tab the host value is all there is.
+    const hostViewMode = surfaces.find((surface) => surface.viewMode)?.viewMode
+    const viewMode = existing
+      ? hostViewMode && shouldAdoptHostViewMode(localTabId)
+        ? hostViewMode
+        : existing.viewMode
+      : hostViewMode
     return {
       tab: {
         id: localTabId,

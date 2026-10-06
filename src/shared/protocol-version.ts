@@ -134,6 +134,10 @@ export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-comman
 // status.worktreeCreateIdempotency carries the optional host retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
+// Why: repo.add/create/clone were desktop-only RPCs; mobile gates its Add project
+// entry on this capability so an older host (no allowlisted methods, required
+// destination/parentPath) never receives a call it would reject.
+export const REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY = 'repo.add-project-mobile.v1' as const
 // Scope of the claim: a hook that RUNS and fails cannot delete the checkout. It does not promise
 // the hook was found — an SSH host whose orca.yaml cannot be read answers "no hook" and the removal
 // proceeds, because a failed read is indistinguishable from an absent file across the relay
@@ -169,6 +173,10 @@ export const SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY =
 // repeating the host's whole bounded list on every title tick.
 export const SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY =
   'session-tabs.retirement-proof-delta.v1' as const
+// Why: the host accepts a mobile `session.tabs.setTabProps` (viewMode) and republishes an adoptable
+// viewMode, so a phone may drive a shared tab's terminal/chat view for every paired client.
+export const SESSION_TABS_MOBILE_VIEW_MODE_RUNTIME_CAPABILITY =
+  'session-tabs.mobile-view-mode.v1' as const
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
@@ -382,12 +390,14 @@ export const RUNTIME_CAPABILITIES = [
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
+  SESSION_TABS_MOBILE_VIEW_MODE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   REMOTE_SERVER_UPDATE_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,

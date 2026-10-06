@@ -198,6 +198,24 @@ export const uiTerminalAndSessionTabsApi = {
     ipcRenderer.on('ui:moveSessionTab', listener)
     return () => ipcRenderer.removeListener('ui:moveSessionTab', listener)
   },
+  onSetSessionTabProps: (
+    callback: (data: {
+      requestId: string
+      worktreeId: string
+      tabId: string
+      viewMode?: 'terminal' | 'chat'
+    }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { requestId: string; worktreeId: string; tabId: string; viewMode?: 'terminal' | 'chat' }
+    ) => callback(data)
+    ipcRenderer.on('ui:sessionTabPropsRequest', listener)
+    return () => ipcRenderer.removeListener('ui:sessionTabPropsRequest', listener)
+  },
+  respondSessionTabProps: (response: { requestId: string; error?: string }): void => {
+    ipcRenderer.send('ui:sessionTabPropsResponse', response)
+  },
   onOpenFileFromMobile: (
     callback: (data: {
       worktreeId: string

@@ -33,6 +33,11 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     null
   )
   const [quickCommandsSupported, setQuickCommandsSupported] = useState<boolean | null>(null)
+  // Why: a tab's terminal/chat view is host-shared only when the host both accepts
+  // session.tabs.setTabProps from mobile and republishes an adoptable viewMode.
+  const [sessionTabsViewModeSupported, setSessionTabsViewModeSupported] = useState<boolean | null>(
+    null
+  )
   // Structured-session features are negotiated with the same host capability probe as
   // the other session surfaces; consumers never maintain a second status cache.
   const [agentSessionHostSupport, setAgentSessionHostSupport] =
@@ -131,6 +136,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     setAgentSessionHistorySupported,
     quickCommandsSupported,
     setQuickCommandsSupported,
+    sessionTabsViewModeSupported,
+    setSessionTabsViewModeSupported,
     agentSessionHostSupport,
     setAgentSessionHostSupport,
     browserScreencastSupportedRef,

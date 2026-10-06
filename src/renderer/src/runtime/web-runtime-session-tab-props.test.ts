@@ -78,13 +78,13 @@ describe('setWebRuntimeTabProps', () => {
     const runtimeCall = vi.fn().mockResolvedValue({ id: 'p', ok: true, result: { updated: true } })
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
-    expect(
+    await expect(
       setWebRuntimeTabProps({
         worktreeId: WORKTREE_ID,
         tabId: 'web-terminal-host-tab-1',
         isPinned: true
       })
-    ).toBe(true)
+    ).resolves.toBe(true)
 
     await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
     expect(runtimeCall).toHaveBeenCalledWith({
@@ -110,13 +110,13 @@ describe('setWebRuntimeTabProps', () => {
     const runtimeCall = vi.fn().mockResolvedValue({ id: 'p', ok: true, result: { updated: true } })
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
-    expect(
+    await expect(
       setWebRuntimeTabProps({
         worktreeId: WORKTREE_ID,
         tabId: 'local-browser-unified',
         color: '#3b82f6'
       })
-    ).toBe(true)
+    ).resolves.toBe(true)
 
     await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
     expect(runtimeCall).toHaveBeenCalledWith({
@@ -131,16 +131,16 @@ describe('setWebRuntimeTabProps', () => {
     })
   })
 
-  it('no-ops for a worktree with no runtime environment (local tab)', () => {
+  it('no-ops for a worktree with no runtime environment (local tab)', async () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
     mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
     mocks.getState.mockReturnValue({})
     const runtimeCall = vi.fn()
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
-    expect(
+    await expect(
       setWebRuntimeTabProps({ worktreeId: WORKTREE_ID, tabId: 'local-tab', color: '#fff' })
-    ).toBe(false)
+    ).resolves.toBe(false)
     expect(runtimeCall).not.toHaveBeenCalled()
   })
 })

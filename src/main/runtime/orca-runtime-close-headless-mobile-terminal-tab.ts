@@ -235,6 +235,18 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     // Why: a renderer-authoritative host owns + republishes tab props, so a
     // headless write would be overwritten. Persist only when headless.
     if (this.getAvailableAuthoritativeWindow()) {
+      if (!this.notifier?.setSessionTabProps) {
+        throw new Error('renderer_unavailable')
+      }
+      const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+      const hostTabId = snapshot
+        ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
+        : args.tabId
+      await this.notifier.setSessionTabProps(
+        worktreeId,
+        hostTabId,
+        args.viewMode === undefined ? {} : { viewMode: args.viewMode }
+      )
       return { updated: true }
     }
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)

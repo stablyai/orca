@@ -234,21 +234,23 @@ export async function updateWebRuntimePaneLayout(args: {
 }
 
 // Why: tab color/pin are host-authoritative; mirror the change so it persists (undefined field = leave as-is on host).
+// Resolves once the host call has settled, so a caller holding a local override open until the host
+// answers can await it instead of racing the round trip.
 export function setWebRuntimeTabProps(args: {
   worktreeId: string
   tabId: string
   color?: string | null
   isPinned?: boolean
   viewMode?: 'terminal' | 'chat'
-}): boolean {
+}): Promise<boolean> {
   const environmentId =
     getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
-    return false
+    return Promise.resolve(false)
   }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
   const state = useAppStore.getState()
-  void import('./web-session-tabs-sync')
+  return import('./web-session-tabs-sync')
     .then(({ resolveHostSessionTabIdForWebSessionTab }) => {
       const hostTabId =
         resolveHostSessionTabIdForWebSessionTab(state, {
@@ -270,12 +272,13 @@ export function setWebRuntimeTabProps(args: {
     })
     .then((response) => {
       unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ updated: true }>)
+      return true
     })
     .catch((error) => {
       console.warn(
         '[web-runtime-session] failed to set tab props:',
         error instanceof Error ? error.message : String(error)
       )
+      return false
     })
-  return true
 }

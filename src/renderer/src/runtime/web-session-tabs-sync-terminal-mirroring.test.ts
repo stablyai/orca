@@ -188,54 +188,6 @@ describe('applyWebSessionTabsSnapshot', () => {
     ).toBe('chat')
   })
 
-  it('keeps the client viewMode when an in-flight host snapshot echoes the old value', () => {
-    // Echo-window: client just toggled to chat; a host snapshot carrying the
-    // pre-toggle 'terminal' value must not revert it (mirrors color/pin rule).
-    const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
-    const existingTab: TerminalTab = {
-      id: mirroredId,
-      ptyId: 'remote:web-env-1@@terminal-1',
-      worktreeId: WT,
-      title: 'old title',
-      defaultTitle: 'old title',
-      customTitle: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: NOW,
-      viewMode: 'chat'
-    }
-
-    const patch = applyWebSessionTabsSnapshot(
-      makeState({
-        tabsByWorktree: { [WT]: [existingTab] },
-        ptyIdsByTabId: { [mirroredId]: ['remote:web-env-1@@terminal-1'] }
-      }),
-      makeSnapshot([
-        {
-          type: 'terminal',
-          id: HOST_SURFACE_ID,
-          // Title differs so the reconcile emits a tabsByWorktree delta; the echo
-          // rule must still keep the client's optimistic 'chat' viewMode.
-          title: 'new title',
-          parentTabId: 'host-tab-1',
-          leafId: LEAF_ID,
-          isActive: true,
-          viewMode: 'terminal',
-          status: 'ready',
-          terminal: 'terminal-1'
-        }
-      ]),
-      ENV,
-      NOW + 1
-    ) as Partial<WebSessionTabsSyncState>
-
-    expect(patch.tabsByWorktree?.[WT]?.[0]?.title).toBe('new title')
-    expect(patch.tabsByWorktree?.[WT]?.[0]?.viewMode).toBe('chat')
-    expect(
-      patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === mirroredId)?.viewMode
-    ).toBe('chat')
-  })
-
   it('preserves quick command labels from host terminal surfaces', () => {
     const patch = applyWebSessionTabsSnapshot(
       makeState(),
