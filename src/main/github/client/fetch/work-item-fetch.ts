@@ -17,6 +17,10 @@ import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-can
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import { getCachedGitHubPRStackSummary } from './../lookup/pr-stack-summary-cache'
 import {
+  fetchPullRequestMergeQueueEntry,
+  shouldFetchPullRequestMergeQueueEntry
+} from './../detect/pull-request-merge-queue-entry'
+import {
   WORK_ITEM_PR_DETAIL_JSON_FIELDS,
   usersFromUnknown,
   latestReviewsFromUnknown,
@@ -174,9 +178,16 @@ export async function fetchPullRequestWorkItem(
                 executionScope
               )
             : mergeMetadata
+        const mergeQueueEntry = shouldFetchPullRequestMergeQueueEntry({
+          state: mapped.state,
+          mergeQueueRequired: mergeMetadata.mergeQueueRequired
+        })
+          ? await fetchPullRequestMergeQueueEntry(ownerRepo, number, ghOptions)
+          : undefined
         return {
           ...mapped,
           mergeQueueRequired: mergeMetadata.mergeQueueRequired,
+          ...(mergeQueueEntry !== undefined ? { mergeQueueEntry } : {}),
           ...(mergeMetadata.autoMergeAllowed !== null
             ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
             : {}),

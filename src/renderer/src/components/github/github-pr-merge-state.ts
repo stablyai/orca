@@ -6,6 +6,8 @@ import {
   type GitHubPRMergeStateInput,
   type HostedReviewMergeTone
 } from '../../../../shared/github/pull-requests/merge/pull-request-merge-state'
+import type { ReviewMergeQueueEntry } from '../../../../shared/github/pull-requests/merge/review-merge-queue-entry'
+import { presentReviewMergeQueueEntry } from './review-merge-queue-presentation'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -218,9 +220,20 @@ function presentMergeChipKind(
 }
 
 export function presentGitHubPRMergeState(
-  item: GitHubPRMergeStateInput,
+  item: GitHubPRMergeStateInput & { mergeQueueEntry?: ReviewMergeQueueEntry | null },
   t?: Translate
 ): GitHubPRMergeStatePresentation {
+  // A queued PR is past the review and check gates, and GitHub owns the merge, so offer no merge action.
+  if (item.state === 'open' && item.mergeQueueEntry) {
+    const { label, tooltip, blocked } = presentReviewMergeQueueEntry(item.mergeQueueEntry, t)
+    return {
+      label,
+      tone: blocked ? DANGER_TONE : WARNING_TONE,
+      tooltip,
+      directMergeAvailable: false,
+      autoMergeAction: null
+    }
+  }
   const decision = resolveGitHubPRMergeState(item)
   const chip = getGitHubPRMergeChip(decision.kind, item)
   return {

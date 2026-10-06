@@ -7,6 +7,7 @@ import type {
   ProviderCheckSummary
 } from '../../github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity } from '../../github/repositories/repository-identity'
+import type { ReviewMergeQueueEntry } from '../../github/pull-requests/merge/review-merge-queue-entry'
 
 export type HostedReviewProvider =
   | 'github'
@@ -42,6 +43,7 @@ export type HostedReviewInfo = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  mergeQueueEntry?: ReviewMergeQueueEntry | null
   mergeStateStatus?: string | null
   headSha?: string
   /** GitHub repository that owns the PR; absent on older runtimes and other providers. */

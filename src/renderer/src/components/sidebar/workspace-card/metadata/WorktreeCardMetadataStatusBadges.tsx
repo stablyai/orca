@@ -3,7 +3,7 @@ import React from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getReviewChecksTone } from '../review/worktree-review-presentation'
 import { Badge } from '@/components/ui/badge'
-import { CircleCheck, CircleDot, CircleX, Clock, GitMerge } from 'lucide-react'
+import { CircleCheck, CircleDot, CircleX, Clock, GitMerge, ListOrdered } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import '../activity/worktree-card-empty-inputs'
 import { PullRequestIcon } from '../identity/worktree-card-glyphs'
@@ -11,6 +11,7 @@ import { checksLabel } from '../review/workspace-review-check-label'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { getReviewMergeQueueLabel } from '../../../github/review-merge-queue-presentation'
 
 function MetadataStatusBadge({
   label,
@@ -37,10 +38,12 @@ function MetadataStatusBadge({
 
 export function ReviewStateBadge({
   state,
-  label
+  label,
+  mergeQueueEntry
 }: {
   state: WorktreeCardPrDisplay['state']
   label: 'MR' | 'PR'
+  mergeQueueEntry?: WorktreeCardPrDisplay['mergeQueueEntry']
 }): React.JSX.Element | null {
   const t = useTranslate()
   if (!state) {
@@ -76,6 +79,18 @@ export function ReviewStateBadge({
         className="border-border bg-muted/30 text-muted-foreground"
       >
         <CircleDot />
+      </MetadataStatusBadge>
+    )
+  }
+
+  if (state === 'open' && mergeQueueEntry) {
+    return (
+      <MetadataStatusBadge
+        label={translate('reviewMergeQueue.stateBadge', 'State: {{queueLabel}}', {
+          queueLabel: getReviewMergeQueueLabel(mergeQueueEntry)
+        })}
+      >
+        <ListOrdered />
       </MetadataStatusBadge>
     )
   }

@@ -10,6 +10,7 @@ import type {
 } from '../../../../shared/github/pull-requests/pull-request-types'
 import { mapPRState } from '../../api/github-read-response'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { ReviewMergeQueueEntry } from '../../../../shared/github/pull-requests/merge/review-merge-queue-entry'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
 import type { GitHubRepositoryMergeMetadata } from './../detect/repository-merge-metadata-cache'
 
@@ -28,6 +29,7 @@ export function assemblePRRefreshFoundOutcome(args: {
   stack: GitHubPRStack | undefined
   mergeable: PRMergeableState
   stackMergeMetadata: GitHubRepositoryMergeMetadata | undefined
+  mergeQueueEntry?: ReviewMergeQueueEntry | null
   confirmedContainedHeadOid: string | null
   headDivergedFromMergedPRAtOid: string | null
   conflictSummary: PRConflictSummary | undefined
@@ -39,6 +41,7 @@ export function assemblePRRefreshFoundOutcome(args: {
     stack,
     mergeable,
     stackMergeMetadata,
+    mergeQueueEntry,
     confirmedContainedHeadOid,
     headDivergedFromMergedPRAtOid,
     conflictSummary
@@ -73,6 +76,7 @@ export function assemblePRRefreshFoundOutcome(args: {
           }
         : {}),
       ...(mergeMethodSettings ? { mergeMethodSettings } : {}),
+      ...(mergeQueueEntry !== undefined ? { mergeQueueEntry } : {}),
       ...(data.mergeStateStatus !== undefined ? { mergeStateStatus: data.mergeStateStatus } : {}),
       ...(stack ? { stack } : {}),
       headSha: data.headRefOid,

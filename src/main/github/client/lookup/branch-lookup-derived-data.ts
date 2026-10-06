@@ -1,9 +1,15 @@
+import { mapPRState } from '../../api/github-read-response'
 import { getPRConflictSummary } from '../../pull-requests/conflicts/conflict-summary'
 import type { ghRepoExecOptions } from '../../repositories/github-repository-identity'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { hydrateGitHubPRStack } from '../../pull-requests/stacks/github-pr-stack'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import type { GitHubRepositoryMergeMetadata } from './../detect/repository-merge-metadata-cache'
+import type { ReviewMergeQueueEntry } from '../../../../shared/github/pull-requests/merge/review-merge-queue-entry'
+import {
+  fetchPullRequestMergeQueueEntry,
+  shouldFetchPullRequestMergeQueueEntry
+} from './../detect/pull-request-merge-queue-entry'
 import { derivePullRequestMergeable, type PullRequestLookupData } from './pull-request-lookup-data'
 import { getCachedGitHubPRStackSummary } from './pr-stack-summary-cache'
 
@@ -21,6 +27,7 @@ export async function derivePRRefreshData(args: {
   mergeable: ReturnType<typeof derivePullRequestMergeable>
   stack: PullRequestLookupData['stack']
   stackMergeMetadata: GitHubRepositoryMergeMetadata | undefined
+  mergeQueueEntry: ReviewMergeQueueEntry | null | undefined
   conflictSummary: Awaited<ReturnType<typeof getPRConflictSummary>>
 }> {
   const { data, dataRepo, repoPath, connectionId, localGitOptions, ghOptions, executionScope } =
@@ -31,6 +38,7 @@ export async function derivePRRefreshData(args: {
       mergeable,
       stack: undefined,
       stackMergeMetadata: undefined,
+      mergeQueueEntry: undefined,
       conflictSummary: undefined
     }
   }
@@ -63,6 +71,16 @@ export async function derivePRRefreshData(args: {
     stack && dataRepo
       ? await detectRepositoryMergeMetadata(dataRepo, stack.baseRefName, ghOptions, executionScope)
       : undefined
+  const mergeQueueEntry =
+    dataRepo &&
+    shouldFetchPullRequestMergeQueueEntry({
+      state: mapPRState(data.state, data.isDraft),
+      mergeQueueRequired: stackMergeMetadata
+        ? stackMergeMetadata.mergeQueueRequired
+        : data.mergeQueueRequired
+    })
+      ? await fetchPullRequestMergeQueueEntry(dataRepo, data.number, ghOptions)
+      : undefined
   const conflictSummary =
     !connectionId &&
     mergeable === 'CONFLICTING' &&
@@ -77,5 +95,5 @@ export async function derivePRRefreshData(args: {
           localGitOptions
         )
       : undefined
-  return { mergeable, stack, stackMergeMetadata, conflictSummary }
+  return { mergeable, stack, stackMergeMetadata, mergeQueueEntry, conflictSummary }
 }

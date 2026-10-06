@@ -15,6 +15,7 @@ import type {
   GitHubRepositoryIdentity as GitHubOwnerRepo,
   GitHubRepositoryIdentity
 } from '../repositories/repository-identity'
+import type { ReviewMergeQueueEntry } from '../pull-requests/merge/review-merge-queue-entry'
 
 export type GitHubWorkItem = {
   id: string
@@ -49,6 +50,7 @@ export type GitHubWorkItem = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  mergeQueueEntry?: ReviewMergeQueueEntry | null
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean
