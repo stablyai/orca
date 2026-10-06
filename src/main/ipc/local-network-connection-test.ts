@@ -1,6 +1,6 @@
 import { execFile, type ExecFileException, type ExecFileOptions } from 'node:child_process'
 import { isIP } from 'node:net'
-import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
+import { classifyRemotePairingHostname } from '../../shared/remote-pairing-endpoint'
 import type {
   LocalNetworkConnectionTestFailure,
   LocalNetworkConnectionTestResult

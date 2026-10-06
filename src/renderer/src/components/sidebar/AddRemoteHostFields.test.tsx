@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../../shared/pairing'
-import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
+import { parseHostAccessLink } from '../../../../shared/remote-pairing-access-link'
 import { RemoteServerFields } from './AddRemoteHostFields'
 
 function loopbackAccessLink(): string {

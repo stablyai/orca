@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
 import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { parsePairingCode, type PairingOffer } from './pairing'
-import { classifyRemotePairingHostname } from './remote-pairing-address'
+import { classifyRemotePairingHostname } from './remote-pairing-endpoint'
 import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
 import { hardenExistingSecureFile } from './secure-file'
 import {
