@@ -109,8 +109,12 @@ export function getRuntimeEnvironmentIdForWorktree(
   return resolution.kind === 'resolved' ? resolution.route.runtimeEnvironmentId : null
 }
 
+// Why: an unplaceable or ambiguous owner must not read as local; a non-empty id keeps it blocked.
+const UNRESOLVED_LOCAL_OPEN_OWNER = 'unresolved-owner'
+
 /**
- * Owner of a workspace path for local OS opens (Finder, external editors): `null` is this client.
+ * Runtime owner of a workspace path for local OS opens (Finder, external editors): `null` means
+ * no runtime owns it. SSH is not a runtime, so callers still gate SSH paths by connectionId.
  * Routes like file operations, so a card can name its own host when ids repeat across hosts.
  */
 export function getLocalOpenRuntimeOwnerForWorktree(
@@ -121,15 +125,15 @@ export function getLocalOpenRuntimeOwnerForWorktree(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return null
   }
-  // Why: an unplaceable or ambiguous owner must not read as local; a non-empty id keeps it blocked.
-  const unresolvedOwner = 'unresolved-owner'
   if (!worktreeId) {
-    return unresolvedOwner
+    return UNRESOLVED_LOCAL_OPEN_OWNER
   }
   const resolution = executionHostId
     ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, executionHostId)
     : resolveWorktreeOperationRouteResult(state, worktreeId)
-  return resolution.kind === 'resolved' ? resolution.route.runtimeEnvironmentId : unresolvedOwner
+  return resolution.kind === 'resolved'
+    ? resolution.route.runtimeEnvironmentId
+    : UNRESOLVED_LOCAL_OPEN_OWNER
 }
 
 export function getExplicitRuntimeEnvironmentIdForWorktree(
