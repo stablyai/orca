@@ -1,0 +1,1056 @@
+{
+  "sha": "354c3efb70d0214bf8a9bdb44aab7baf50d4ae65",
+  "results": [
+    {
+      "name": "shot-dark-default",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": null,
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-dark-default.png"
+    },
+    {
+      "name": "shot-light-default",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "82%",
+        "fontFamily": "",
+        "saved": null,
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-light-default.png"
+    },
+    {
+      "name": "matching-on",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "\"SF Mono\", \"Menlo\", \"Monaco\", \"Cascadia Mono\", \"Consolas\", \"DejaVu Sans Mono\", \"Liberation Mono\", \"Orca Nerd Font Symbols\", \"Symbols Nerd Font Mono\", \"MesloLGS Nerd Font\", \"JetBrainsMono Nerd Font\", \"Hack Nerd Font\", monospace",
+        "saved": {
+          "matchTerminalInterface": true
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      }
+    },
+    {
+      "name": "shot-matching-on",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "\"SF Mono\", \"Menlo\", \"Monaco\", \"Cascadia Mono\", \"Consolas\", \"DejaVu Sans Mono\", \"Liberation Mono\", \"Orca Nerd Font Symbols\", \"Symbols Nerd Font Mono\", \"MesloLGS Nerd Font\", \"JetBrainsMono Nerd Font\", \"Hack Nerd Font\", monospace",
+        "saved": {
+          "matchTerminalInterface": true
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-matching-on.png"
+    },
+    {
+      "name": "matching-off",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": null,
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      }
+    },
+    {
+      "name": "width-Comfortable",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": null,
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      }
+    },
+    {
+      "name": "width-Wide",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "60rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "width": "wide"
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      }
+    },
+    {
+      "name": "width-Full",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "none",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "width": "full"
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      }
+    },
+    {
+      "name": "contrast-release",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "92.08%",
+        "fontFamily": "",
+        "saved": {
+          "contrast": 132
+        },
+        "savedContrast": 132,
+        "aria": 132,
+        "focused": true,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      }
+    },
+    {
+      "name": "contrast-keyboard",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "92.08%",
+        "fontFamily": "",
+        "saved": {
+          "contrast": 132
+        },
+        "savedContrast": 132,
+        "aria": 132,
+        "focused": true,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      }
+    },
+    {
+      "name": "reset-after-commit",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": null,
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      }
+    },
+    {
+      "name": "reset-default-draft",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": null,
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      }
+    },
+    {
+      "name": "collapse-reopen",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": null,
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      },
+      "retained": true
+    },
+    {
+      "name": "inert-contextmenu-deferred",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": null,
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      },
+      "tabsBefore": 1,
+      "tabsAfter": 1
+    },
+    {
+      "name": "shot-narrow-20-18",
+      "state": {
+        "viewport": {
+          "width": 980,
+          "height": 1300
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 542,
+          "height": 440
+        },
+        "columnWidth": 510,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-narrow-20-18.png"
+    },
+    {
+      "name": "shot-wide-20-18",
+      "state": {
+        "viewport": {
+          "width": 1600,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-wide-20-18.png"
+    },
+    {
+      "name": "shot-locale-en-20-18",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-en-20-18.png"
+    },
+    {
+      "name": "shot-locale-es-20-18",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "es",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-es-20-18.png"
+    },
+    {
+      "name": "shot-locale-fr-20-18",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "fr",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-fr-20-18.png"
+    },
+    {
+      "name": "shot-locale-ja-20-18",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "ja",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-ja-20-18.png"
+    },
+    {
+      "name": "shot-locale-ko-20-18",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "ko",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-ko-20-18.png"
+    },
+    {
+      "name": "shot-locale-zh-20-18",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 406.5234375,
+          "bottom": 435.09375,
+          "fullyInside": true
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "zh",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-zh-20-18.png"
+    },
+    {
+      "name": "shot-reset-final-default",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 353.921875,
+          "bottom": 373.921875,
+          "fullyInside": true
+        },
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": null,
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-reset-final-default.png"
+    }
+  ],
+  "screenshots": [
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-dark-default.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-light-default.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-matching-on.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-narrow-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-wide-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-en-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-es-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-fr-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-ja-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-ko-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-locale-zh-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/complete-reset-final-default.png"
+  ],
+  "failures": [],
+  "identity": {
+    "name": "Orca: OrcaWin/pr25658-review-qa-2",
+    "isDev": true,
+    "devLabel": "pr25658-review-qa-2",
+    "devBranch": "OrcaWin/pr25658-review-qa-2",
+    "devWorktreeName": "pr25658-review-qa-2",
+    "devRepoRoot": "/Users/m4air/orca/workspaces/orca/pr25658-review-qa-2",
+    "dockBadgeLabel": null
+  },
+  "contrast": {
+    "before": {
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      },
+      "preview": {
+        "top": 470.5,
+        "bottom": 910.5,
+        "width": 738,
+        "height": 440
+      },
+      "columnWidth": 706,
+      "closing": {
+        "top": 353.921875,
+        "bottom": 373.921875,
+        "fullyInside": true
+      },
+      "fontSize": "14px",
+      "codeFontSize": "12px",
+      "cap": "46rem",
+      "mix": "78%",
+      "fontFamily": "",
+      "saved": null,
+      "savedContrast": 100,
+      "aria": 100,
+      "focused": false,
+      "language": "en",
+      "inert": true,
+      "links": 0
+    },
+    "during": {
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      },
+      "preview": {
+        "top": 470.5,
+        "bottom": 910.5,
+        "width": 738,
+        "height": 440
+      },
+      "columnWidth": 706,
+      "closing": {
+        "top": 353.921875,
+        "bottom": 373.921875,
+        "fullyInside": true
+      },
+      "fontSize": "14px",
+      "codeFontSize": "12px",
+      "cap": "46rem",
+      "mix": "92.08%",
+      "fontFamily": "",
+      "saved": null,
+      "savedContrast": 100,
+      "aria": 132,
+      "focused": true,
+      "language": "en",
+      "inert": true,
+      "links": 0
+    },
+    "after": {
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      },
+      "preview": {
+        "top": 470.5,
+        "bottom": 910.5,
+        "width": 738,
+        "height": 440
+      },
+      "columnWidth": 706,
+      "closing": {
+        "top": 353.921875,
+        "bottom": 373.921875,
+        "fullyInside": true
+      },
+      "fontSize": "14px",
+      "codeFontSize": "12px",
+      "cap": "46rem",
+      "mix": "92.08%",
+      "fontFamily": "",
+      "saved": {
+        "contrast": 132
+      },
+      "savedContrast": 132,
+      "aria": 132,
+      "focused": true,
+      "language": "en",
+      "inert": true,
+      "links": 0
+    }
+  },
+  "resetDraft": {
+    "defaultBefore": {
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      },
+      "preview": {
+        "top": 470.5,
+        "bottom": 910.5,
+        "width": 738,
+        "height": 440
+      },
+      "columnWidth": 706,
+      "closing": {
+        "top": 353.921875,
+        "bottom": 373.921875,
+        "fullyInside": true
+      },
+      "fontSize": "14px",
+      "codeFontSize": "12px",
+      "cap": "46rem",
+      "mix": "78%",
+      "fontFamily": "",
+      "saved": null,
+      "savedContrast": 100,
+      "aria": 100,
+      "focused": false,
+      "language": "en",
+      "inert": true,
+      "links": 0
+    },
+    "held": {
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      },
+      "preview": {
+        "top": 470.5,
+        "bottom": 910.5,
+        "width": 738,
+        "height": 440
+      },
+      "columnWidth": 706,
+      "closing": {
+        "top": 353.921875,
+        "bottom": 373.921875,
+        "fullyInside": true
+      },
+      "fontSize": "14px",
+      "codeFontSize": "12px",
+      "cap": "46rem",
+      "mix": "88.56%",
+      "fontFamily": "",
+      "saved": null,
+      "savedContrast": 100,
+      "aria": 124,
+      "focused": true,
+      "language": "en",
+      "inert": true,
+      "links": 0
+    },
+    "cleared": {
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      },
+      "preview": {
+        "top": 470.5,
+        "bottom": 910.5,
+        "width": 738,
+        "height": 440
+      },
+      "columnWidth": 706,
+      "closing": {
+        "top": 353.921875,
+        "bottom": 373.921875,
+        "fullyInside": true
+      },
+      "fontSize": "14px",
+      "codeFontSize": "12px",
+      "cap": "46rem",
+      "mix": "78%",
+      "fontFamily": "",
+      "saved": null,
+      "savedContrast": 100,
+      "aria": 100,
+      "focused": false,
+      "language": "en",
+      "inert": true,
+      "links": 0
+    },
+    "afterRelease": {
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      },
+      "preview": {
+        "top": 470.5,
+        "bottom": 910.5,
+        "width": 738,
+        "height": 440
+      },
+      "columnWidth": 706,
+      "closing": {
+        "top": 353.921875,
+        "bottom": 373.921875,
+        "fullyInside": true
+      },
+      "fontSize": "14px",
+      "codeFontSize": "12px",
+      "cap": "46rem",
+      "mix": "78%",
+      "fontFamily": "",
+      "saved": null,
+      "savedContrast": 100,
+      "aria": 100,
+      "focused": false,
+      "language": "en",
+      "inert": true,
+      "links": 0
+    },
+    "activation": "keyboard Enter on the real Reset button while pointer remained held"
+  }
+}
