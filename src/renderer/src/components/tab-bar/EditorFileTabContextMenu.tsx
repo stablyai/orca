@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { OpenFile } from '../../store/slices/editor'
 import { translate } from '@/i18n/i18n'
@@ -99,9 +100,13 @@ export function EditorFileTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
+  // Why: matches the editor header; a folder workspace's synthetic repo has no connectionId.
   const revealBlocked = useAppStore((s) =>
     isRevealInFileManagerBlocked(s.settings, {
-      connectionId: file.externalSshTargetId ?? repoConnectionId,
+      connectionId:
+        file.externalSshTargetId ??
+        getConnectionIdFromState(s, file.worktreeId) ??
+        repoConnectionId,
       runtimeEnvironmentId: file.runtimeEnvironmentId
     })
   )

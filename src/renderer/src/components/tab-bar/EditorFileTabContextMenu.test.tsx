@@ -107,6 +107,7 @@ const useAppStoreMock = Object.assign(
       settings: Record<string, unknown>
       unifiedTabsByWorktree: Record<string, unknown[]>
       groupsByWorktree: Record<string, unknown[]>
+      folderWorkspaces: { id: string; executionHostId: string }[]
     }) => unknown
   ) =>
     selector({
@@ -116,7 +117,8 @@ const useAppStoreMock = Object.assign(
       },
       groupsByWorktree: {
         'wt-1': [{ id: 'group-1', tabOrder: ['tab-1', 'tab-2'] }]
-      }
+      },
+      folderWorkspaces: [{ id: 'fw-1', executionHostId: 'ssh:ssh-1' }]
     }),
   {
     getState: () => ({
@@ -209,9 +211,16 @@ async function renderMenu(
     runtimeEnvironmentId?: string | null
     externalSshTargetId?: string
     mode?: 'edit' | 'check-details'
+    worktreeId?: string
   } = {}
 ): Promise<unknown> {
-  const { runtimeEnvironmentId, externalSshTargetId, mode = 'edit', ...props } = overrides
+  const {
+    runtimeEnvironmentId,
+    externalSshTargetId,
+    mode = 'edit',
+    worktreeId = 'wt-1',
+    ...props
+  } = overrides
   const module = await import('./EditorFileTabContextMenu')
   return module.EditorFileTabContextMenu({
     open: true,
@@ -221,7 +230,7 @@ async function renderMenu(
       tabId: 'tab-1',
       filePath: '/repo/foo.ts',
       relativePath: 'foo.ts',
-      worktreeId: 'wt-1',
+      worktreeId,
       language: 'typescript',
       isDirty: false,
       mode,
@@ -402,7 +411,9 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
   it.each([
     ['on an SSH host', { repoConnectionId: 'ssh-1' }],
     ['owned by a remote runtime', { runtimeEnvironmentId: 'env-1' }],
-    ['opened from an SSH host outside the workspace', { externalSshTargetId: 'ssh-1' }]
+    ['opened from an SSH host outside the workspace', { externalSshTargetId: 'ssh-1' }],
+    // Why: a folder workspace's synthetic repo has no connectionId, and SSH is not a runtime.
+    ['in an SSH folder workspace', { worktreeId: 'folder:fw-1', runtimeEnvironmentId: null }]
   ])('disables reveal as local-only for a file %s', async (_owner, overrides) => {
     const reveal = await renderRevealItem(overrides)
 
