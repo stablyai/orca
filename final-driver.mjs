@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import fs from 'node:fs'
 const root = '/Users/m4air/orca/workspaces/orca/pr25658-review-qa-3'
-const base = '/Users/m4air/orca-qa/pr-25658/remote-released-parent'
+const base = '/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified'
 const { chromium } = createRequire(`${root}/package.json`)('@playwright/test')
 const report = { sha: '37f4353d0905d621c104f33fafdb9889a263b1fa', results: [], screenshots: [], failures: [] }
 const save = () => fs.writeFileSync(`${base}/complete-geometry.json`, JSON.stringify(report, null, 2))
@@ -144,10 +144,48 @@ try {
   await page.setViewportSize({ width: 980, height: 1300 }); await shot('narrow-20-18')
   await page.setViewportSize({ width: 1600, height: 1500 }); await shot('wide-20-18')
   await page.setViewportSize({ width: 1480, height: 1500 })
+  const localeSamples = {
+    en: {
+      question: 'Why does pnpm dev exit right after it starts on Windows?',
+      tool: 'Searched 1 pattern, read 1 file',
+      closing: 'Then run pnpm dev again.'
+    },
+    es: {
+      question: '¿Por qué pnpm dev se cierra justo después de iniciarse en Windows?',
+      tool: 'Se buscó 1 patrón y se leyó 1 archivo',
+      closing: 'Después, ejecuta pnpm dev de nuevo.'
+    },
+    fr: {
+      question: 'Pourquoi pnpm dev se ferme-t-il juste après son démarrage sous Windows ?',
+      tool: '1 motif recherché, 1 fichier lu',
+      closing: 'Puis relancez pnpm dev.'
+    },
+    ja: {
+      question: 'Windows で pnpm dev が起動直後に終了するのはなぜですか？',
+      tool: '1 件のパターンを検索、1 件のファイルを読み取り',
+      closing: 'その後、pnpm dev を再実行してください。'
+    },
+    ko: {
+      question: 'Windows에서 pnpm dev가 시작 직후 종료되는 이유는 무엇인가요?',
+      tool: '패턴 1개 검색, 파일 1개 읽음',
+      closing: '그런 다음 pnpm dev를 다시 실행하세요.'
+    },
+    zh: {
+      question: '为什么 pnpm dev 在 Windows 上刚启动就退出了？',
+      tool: '搜索了 1 个模式，读取了 1 个文件',
+      closing: '然后再次运行 pnpm dev。'
+    }
+  }
   for (const language of ['en', 'es', 'fr', 'ja', 'ko', 'zh']) {
     await page.evaluate(async uiLanguage => { await window.__store.getState().updateSettings({ uiLanguage }) }, language)
     await page.waitForFunction(language => window.__store.getState().settings?.uiLanguage === language, language)
-    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    const expected = localeSamples[language]
+    await page.waitForFunction(expected => {
+      const preview = document.querySelector('[data-native-chat-appearance-preview]')
+      const text = preview?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+      return text.includes(expected.question) && text.includes(expected.tool) && text.includes(expected.closing)
+    }, expected)
+    await record(`locale-${language}-resolved`, { expected })
     await shot(`locale-${language}-20-18`)
   }
   await page.evaluate(async () => { await window.__store.getState().updateSettings({ uiLanguage: 'en' }) })

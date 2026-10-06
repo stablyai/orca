@@ -9,8 +9,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 833.5,
-          "bottom": 1273.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -33,7 +33,7 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-dark-default.png"
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-dark-default.png"
     },
     {
       "name": "shot-light-default",
@@ -43,8 +43,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 833.5,
-          "bottom": 1273.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -67,7 +67,7 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-light-default.png"
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-light-default.png"
     },
     {
       "name": "matching-on",
@@ -77,8 +77,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -112,8 +112,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -138,7 +138,7 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-matching-on.png"
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-matching-on.png"
     },
     {
       "name": "matching-off",
@@ -148,8 +148,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -181,8 +181,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -214,8 +214,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -249,8 +249,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -284,8 +284,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -319,8 +319,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -354,8 +354,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -387,8 +387,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -420,8 +420,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -454,8 +454,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -489,8 +489,8 @@
           "height": 1300
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 542,
           "height": 440
         },
@@ -516,7 +516,7 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-narrow-20-18.png"
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-narrow-20-18.png"
     },
     {
       "name": "shot-wide-20-18",
@@ -526,8 +526,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -553,7 +553,48 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-wide-20-18.png"
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-wide-20-18.png"
+    },
+    {
+      "name": "locale-en-resolved",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "en",
+        "inert": true,
+        "links": 0
+      },
+      "expected": {
+        "question": "Why does pnpm dev exit right after it starts on Windows?",
+        "tool": "Searched 1 pattern, read 1 file",
+        "closing": "Then run pnpm dev again."
+      }
     },
     {
       "name": "shot-locale-en-20-18",
@@ -563,8 +604,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -590,18 +631,18 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-en-20-18.png"
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-en-20-18.png"
     },
     {
-      "name": "shot-locale-es-20-18",
+      "name": "locale-es-resolved",
       "state": {
         "viewport": {
           "width": 1480,
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -627,18 +668,59 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-es-20-18.png"
+      "expected": {
+        "question": "¿Por qué pnpm dev se cierra justo después de iniciarse en Windows?",
+        "tool": "Se buscó 1 patrón y se leyó 1 archivo",
+        "closing": "Después, ejecuta pnpm dev de nuevo."
+      }
     },
     {
-      "name": "shot-locale-fr-20-18",
+      "name": "shot-locale-es-20-18",
       "state": {
         "viewport": {
           "width": 1480,
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "es",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-es-20-18.png"
+    },
+    {
+      "name": "locale-fr-resolved",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -664,18 +746,59 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-fr-20-18.png"
+      "expected": {
+        "question": "Pourquoi pnpm dev se ferme-t-il juste après son démarrage sous Windows ?",
+        "tool": "1 motif recherché, 1 fichier lu",
+        "closing": "Puis relancez pnpm dev."
+      }
     },
     {
-      "name": "shot-locale-ja-20-18",
+      "name": "shot-locale-fr-20-18",
       "state": {
         "viewport": {
           "width": 1480,
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "fr",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-fr-20-18.png"
+    },
+    {
+      "name": "locale-ja-resolved",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -701,18 +824,59 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-ja-20-18.png"
+      "expected": {
+        "question": "Windows で pnpm dev が起動直後に終了するのはなぜですか？",
+        "tool": "1 件のパターンを検索、1 件のファイルを読み取り",
+        "closing": "その後、pnpm dev を再実行してください。"
+      }
     },
     {
-      "name": "shot-locale-ko-20-18",
+      "name": "shot-locale-ja-20-18",
       "state": {
         "viewport": {
           "width": 1480,
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "ja",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-ja-20-18.png"
+    },
+    {
+      "name": "locale-ko-resolved",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -738,18 +902,59 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-ko-20-18.png"
+      "expected": {
+        "question": "Windows에서 pnpm dev가 시작 직후 종료되는 이유는 무엇인가요?",
+        "tool": "패턴 1개 검색, 파일 1개 읽음",
+        "closing": "그런 다음 pnpm dev를 다시 실행하세요."
+      }
     },
     {
-      "name": "shot-locale-zh-20-18",
+      "name": "shot-locale-ko-20-18",
       "state": {
         "viewport": {
           "width": 1480,
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 435.09375,
+          "bottom": 463.6640625,
+          "fullyInside": false
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "ko",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-ko-20-18.png"
+    },
+    {
+      "name": "locale-zh-resolved",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -775,7 +980,48 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-zh-20-18.png"
+      "expected": {
+        "question": "为什么 pnpm dev 在 Windows 上刚启动就退出了？",
+        "tool": "搜索了 1 个模式，读取了 1 个文件",
+        "closing": "然后再次运行 pnpm dev。"
+      }
+    },
+    {
+      "name": "shot-locale-zh-20-18",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "preview": {
+          "top": 470.5,
+          "bottom": 910.5,
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "closing": {
+          "top": 406.5234375,
+          "bottom": 435.09375,
+          "fullyInside": true
+        },
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "mix": "78%",
+        "fontFamily": "",
+        "saved": {
+          "fontSize": 20,
+          "codeFontSize": 18
+        },
+        "savedContrast": 100,
+        "aria": 100,
+        "focused": false,
+        "language": "zh",
+        "inert": true,
+        "links": 0
+      },
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-zh-20-18.png"
     },
     {
       "name": "shot-reset-final-default",
@@ -785,8 +1031,8 @@
           "height": 1500
         },
         "preview": {
-          "top": 275.5,
-          "bottom": 715.5,
+          "top": 470.5,
+          "bottom": 910.5,
           "width": 738,
           "height": 440
         },
@@ -809,22 +1055,22 @@
         "inert": true,
         "links": 0
       },
-      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-reset-final-default.png"
+      "path": "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-reset-final-default.png"
     }
   ],
   "screenshots": [
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-dark-default.png",
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-light-default.png",
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-matching-on.png",
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-narrow-20-18.png",
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-wide-20-18.png",
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-en-20-18.png",
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-es-20-18.png",
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-fr-20-18.png",
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-ja-20-18.png",
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-ko-20-18.png",
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-locale-zh-20-18.png",
-    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/complete-reset-final-default.png"
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-dark-default.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-light-default.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-matching-on.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-narrow-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-wide-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-en-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-es-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-fr-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-ja-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-ko-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-locale-zh-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/verified/shots/complete-reset-final-default.png"
   ],
   "failures": [],
   "identity": {
@@ -843,8 +1089,8 @@
         "height": 1500
       },
       "preview": {
-        "top": 275.5,
-        "bottom": 715.5,
+        "top": 470.5,
+        "bottom": 910.5,
         "width": 738,
         "height": 440
       },
@@ -873,8 +1119,8 @@
         "height": 1500
       },
       "preview": {
-        "top": 275.5,
-        "bottom": 715.5,
+        "top": 470.5,
+        "bottom": 910.5,
         "width": 738,
         "height": 440
       },
@@ -903,8 +1149,8 @@
         "height": 1500
       },
       "preview": {
-        "top": 275.5,
-        "bottom": 715.5,
+        "top": 470.5,
+        "bottom": 910.5,
         "width": 738,
         "height": 440
       },
@@ -937,8 +1183,8 @@
         "height": 1500
       },
       "preview": {
-        "top": 275.5,
-        "bottom": 715.5,
+        "top": 470.5,
+        "bottom": 910.5,
         "width": 738,
         "height": 440
       },
@@ -967,8 +1213,8 @@
         "height": 1500
       },
       "preview": {
-        "top": 275.5,
-        "bottom": 715.5,
+        "top": 470.5,
+        "bottom": 910.5,
         "width": 738,
         "height": 440
       },
@@ -997,8 +1243,8 @@
         "height": 1500
       },
       "preview": {
-        "top": 275.5,
-        "bottom": 715.5,
+        "top": 470.5,
+        "bottom": 910.5,
         "width": 738,
         "height": 440
       },
@@ -1027,8 +1273,8 @@
         "height": 1500
       },
       "preview": {
-        "top": 275.5,
-        "bottom": 715.5,
+        "top": 470.5,
+        "bottom": 910.5,
         "width": 738,
         "height": 440
       },

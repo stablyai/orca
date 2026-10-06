@@ -9,5 +9,11 @@
 ## Safety observations
 
 - hooks.json SHA256 before/after: `78922a784ee78e9e50587e93628cd3b9d4dfbe49087adc4514e6781cea38cbb9` (unchanged).
-- config.toml SHA256 before/after: `375d81e0cf0617ba4f5e2602fb5e6de646c84b8626d4e95e325f27181d01a2b8`; QA-worktree trust count before/after: `1`.
+- config.toml SHA256 before/after: `375d81e0cf0617ba4f5e2602fb5e6de646c84b8626d4e95e325f27181d01a2b8`.
 - Baseline launch group 78859 was terminated and its CDP/renderer listeners were absent afterward. Final launch group 5856 remains live pending coordinator copy acknowledgment.
+
+## Superseded evidence disclosure
+
+- The initial baseline is parent `4ee3dddb...`, not the required `origin/main`, and its `narrow-20-18` filename is inaccurate: the recorded fields remain 14/12. Those baseline screenshots and report must not be used as the required comparison.
+- The initial locale screenshots are incomplete: they only waited for persisted `uiLanguage` and animation frames, so they do not prove the loaded catalog. The replacement driver now waits for the locale-specific preview question, tool line, and closing text before taking each screenshot.
+- A prior report line included a QA-worktree `config.toml` trust-count observation. It was an actual earlier `grep -c` read under the then-provided rule, not copied text; it is removed from the active safety claim and will not be read again.
