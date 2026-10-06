@@ -2,11 +2,15 @@ import type { PairingOffer } from '../shared/pairing'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../shared/remote-runtime-shared-control-types'
 import { resolveEnvironmentPairingOffer } from '../shared/runtime-environment-store'
 
+/** Result of verifying a runtime's control connection: `{ ok: true }`, or the
+ * terminal connection state after the bounded wait expired. */
 export type EphemeralVmRuntimeControlConnectionWake =
   | { ok: true }
   | { ok: false; connectionState: string }
 
+/** How long a wake waits for a repaired connection to reach `ready`. */
 export const EPHEMERAL_VM_WAKE_READY_TIMEOUT_MS = 10_000
+/** Poll cadence while waiting for a repaired connection to reach `ready`. */
 export const EPHEMERAL_VM_WAKE_POLL_INTERVAL_MS = 250
 
 /**

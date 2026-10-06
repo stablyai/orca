@@ -97,6 +97,18 @@ it('verifies the control connection of a running runtime before returning it', a
   expect(wakeMock.mock.calls[0][0].runtimeEnvironmentId).toBe('environment-wake')
 })
 
+it('verifies the control connection of a suspend-failed runtime before returning it', async () => {
+  await seedRuntime(
+    runtimeRecord({ status: 'suspend_failed', runtimeEnvironmentId: 'environment-wake' })
+  )
+  wakeMock.mockResolvedValue({ ok: true })
+  registerEphemeralVmRuntimeHandlers(storeStub())
+
+  await expect(resumeWorkspace()).resolves.toMatchObject({ status: 'suspend_failed' })
+  expect(wakeMock).toHaveBeenCalledTimes(1)
+  expect(wakeMock.mock.calls[0][0].runtimeEnvironmentId).toBe('environment-wake')
+})
+
 it('rejects when a running runtime cannot re-establish its control connection', async () => {
   await seedRuntime(runtimeRecord({ runtimeEnvironmentId: 'environment-wake' }))
   wakeMock.mockResolvedValue({ ok: false, connectionState: 'awaiting_authenticated' })
