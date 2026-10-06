@@ -1,0 +1,6 @@
+heading "Agent checkout fixture"
+text "Customer"
+[@e1] text input "Customer"
+[@e2] button "Submit order"
+[@e3] link "Next page"
+text "Waiting"

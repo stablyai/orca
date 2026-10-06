@@ -1,0 +1,14 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'dev.orca.automationproof'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'dev.orca.automationproof'
+        minSdk 28
+        targetSdk 36
+        versionCode 1
+        versionName '1'
+    }
+    buildTypes { release { debuggable false; signingConfig signingConfigs.debug } }
+}
+dependencies { implementation 'com.squareup.okhttp3:okhttp:4.12.0' }

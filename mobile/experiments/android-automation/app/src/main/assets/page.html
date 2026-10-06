@@ -1,0 +1,26 @@
+<!doctype html>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Android engine automation proof</title>
+<h1>Agent checkout fixture</h1>
+<label>Customer <input id="customer" aria-label="Customer" /></label>
+<button id="submit">Submit order</button>
+<a id="next" href="second.html">Next page</a>
+<pre id="status">Waiting</pre>
+<script>
+  window.events = []
+  for (const type of ['pointerdown', 'click', 'keydown', 'beforeinput', 'input']) {
+    document.addEventListener(type, (e) => {
+      events.push({
+        type,
+        trusted: e.isTrusted,
+        target: e.target.id,
+        value: e.target.value || '',
+        activation: navigator.userActivation.isActive
+      })
+    })
+  }
+  submit.addEventListener(
+    'click',
+    () => (document.getElementById('status').textContent = 'Ordered for ' + customer.value)
+  )
+</script>
