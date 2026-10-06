@@ -2,7 +2,11 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatToolRun } from './NativeChatToolRun'
-import type { NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatToolCallBlock,
+  NativeChatToolResultBlock
+} from '../../../../shared/native-chat-types'
 import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
@@ -29,6 +33,12 @@ const shell: NativeChatToolCallBlock = {
   state: 'failed',
   exitCode: 127,
   durationMs: 400
+}
+
+const shellResult: NativeChatToolResultBlock = {
+  type: 'tool-result',
+  output: 'command not found',
+  isError: true
 }
 
 function ToolRunDisclosureHarness({ expandOverride }: { expandOverride: boolean }) {
@@ -77,9 +87,11 @@ describe('inline tool annotations', () => {
   })
 
   it('uses provider call identities for byte-identical line disclosure keys', () => {
-    const blocks = [
+    const blocks: NativeChatBlock[] = [
       { ...shell, callId: 'call-a' },
-      { ...shell, callId: 'call-b' }
+      shellResult,
+      { ...shell, callId: 'call-b' },
+      shellResult
     ]
     render(
       <NativeChatDisclosureContext.Provider value={capturedDisclosures}>
@@ -95,7 +107,11 @@ describe('inline tool annotations', () => {
   it('keeps occurrence identity as the fallback for calls without provider IDs', () => {
     render(
       <NativeChatDisclosureContext.Provider value={capturedDisclosures}>
-        <NativeChatToolRun blocks={[shell, shell]} expandSignal disclosureId="message-1" />
+        <NativeChatToolRun
+          blocks={[shell, shellResult, shell, shellResult]}
+          expandSignal
+          disclosureId="message-1"
+        />
       </NativeChatDisclosureContext.Provider>
     )
 
@@ -111,10 +127,7 @@ describe('inline tool annotations', () => {
     render(
       <NativeChatDisclosureContext.Provider value={capturedDisclosures}>
         <NativeChatToolRun
-          blocks={[
-            { ...shell, callId: ' ' },
-            { ...shell, callId: '\t' }
-          ]}
+          blocks={[{ ...shell, callId: ' ' }, shellResult, { ...shell, callId: '\t' }, shellResult]}
           expandSignal
           disclosureId="message-1"
         />
@@ -132,7 +145,7 @@ describe('inline tool annotations', () => {
   it('keeps command completion annotations on the collapsed tool line', () => {
     render(
       <NativeChatToolRun
-        blocks={[shell]}
+        blocks={[shell, shellResult]}
         expandSignal={false}
         expandOverride
         activeTurnIsWorking={false}
@@ -181,7 +194,7 @@ describe('inline tool annotations', () => {
       />
     )
     expect(screen.queryByRole('link')).toBeNull()
-    fireEvent.click(screen.getByText('web_search', { selector: 'code' }).closest('button')!)
+    fireEvent.click(screen.getByText('Searched the web').closest('button')!)
     const link = screen.getByRole('link', { name: /Reference docs/ })
     expect(link.getAttribute('href')).toBe('https://example.com/docs')
     expect(link.closest('button')).toBeNull()
@@ -196,7 +209,7 @@ it.each(['tools/read', 'browser.open', 'package.lock', 'linear/list_issues'])(
   'keeps an ordinary tool name %s intact',
   (name) => {
     render(<NativeChatToolRun blocks={[{ type: 'tool-call', name, input: null }]} expandSignal />)
-    expect(screen.getByText(name, { selector: 'code' })).toBeTruthy()
+    expect(screen.getByText(name)).toBeTruthy()
     expect(document.querySelector('.lucide-plug')).toBeNull()
   }
 )

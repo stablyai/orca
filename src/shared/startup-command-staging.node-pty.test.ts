@@ -107,9 +107,7 @@ async function launchInRealShell(shell: LiveShell, prompt: string): Promise<Agen
     }
   })
   const typeLine = (): void =>
-    proc.write(
-      buildStartupCommandSubmission(staging.command, { bracketedPasteSafe: false })
-    )
+    proc.write(buildStartupCommandSubmission(staging.command, { bracketedPasteSafe: false }))
   // Why fish differs: it blocks on terminal queries and drops input typed before its prompt, which
   // is why hosts wait for its ready marker; the other shells get the harsher at-spawn write.
   let typed = false

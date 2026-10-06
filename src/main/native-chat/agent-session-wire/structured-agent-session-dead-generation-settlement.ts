@@ -8,13 +8,12 @@ import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
-import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
+import { terminalAgentJournalBody } from '../agent-session-journal/journal-terminal-settlement'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   agentSessionFailureWords,
@@ -176,7 +175,7 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     }
     for (const item of items) {
       const identity = parseAgentJournalItemKey(item.itemId)
-      const body = terminalDeadGenerationBody(item)
+      const body = terminalAgentJournalBody(item.body)
       if (identity && body) {
         mutations.push({
           kind: 'item',
@@ -234,7 +233,7 @@ export async function settleStaleStructuredAgentSessionState(input: {
   const mutations: JournalLifecycleMutationInput[] = []
   for (const item of items) {
     const identity = parseAgentJournalItemKey(item.itemId)
-    const body = terminalDeadGenerationBody(item)
+    const body = terminalAgentJournalBody(item.body)
     if (identity && body) {
       mutations.push({
         kind: 'item',
@@ -288,20 +287,10 @@ export async function settleStaleStructuredAgentSessionState(input: {
   return mutations.length
 }
 
-function terminalDeadGenerationBody(item: AgentJournalRenderItem): AgentJournalItemBody | null {
-  if (item.body.kind === 'tool-call' && item.body.state === 'running') {
-    return { ...item.body, state: 'failed' }
-  }
-  if (item.body.kind === 'approval' || item.body.kind === 'question') {
-    return item.body.resolution.state === 'pending' ? cancelledJournalPromptBody(item.body) : null
-  }
-  return null
-}
-
 function isUnfinishedItem(item: AgentJournalRenderItem): boolean {
   return (
     readAgentJournalTurn(item.body)?.state === 'running' ||
-    terminalDeadGenerationBody(item) !== null
+    terminalAgentJournalBody(item.body) !== null
   )
 }
 

@@ -3,6 +3,18 @@
   color: var(--chat-foreground-strong);
 }
 
+.native-chat-markdown h1 {
+  font-size: 1.2857142857em;
+}
+
+.native-chat-markdown h2 {
+  font-size: 1.1428571429em;
+}
+
+.native-chat-markdown h3 {
+  font-size: 1.0714285714em;
+}
+
 .native-chat-markdown a {
   word-break: normal;
   overflow-wrap: anywhere;
@@ -16,7 +28,7 @@
   background: var(--chat-inline-code-surface);
   padding: 0.0625rem 0.3125rem;
   color: var(--chat-code-foreground);
-  font-size: 0.86em;
+  font-size: var(--chat-inline-code-ratio, 0.8571428571em);
 }
 
 .native-chat-markdown pre:not([data-native-chat-code-content]) {

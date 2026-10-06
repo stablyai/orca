@@ -365,6 +365,7 @@ describe('per-job path classification', () => {
       'src/shared/protocol-version.ts',
       'src/shared/terminal-stream-protocol.ts',
       'src/shared/agent-session-wire.ts',
+      'src/shared/agent-session-provider-handle.ts',
       'src/shared/agent-session-mutation-envelope.ts',
       'src/shared/agent-session-journal-item-key.ts',
       'src/shared/agent-session-journal-types.ts',

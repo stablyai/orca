@@ -180,12 +180,7 @@ export function session(messages: NativeChatMessage[]): NativeChatLiveSession {
 
 export function list(messages: NativeChatMessage[]): React.JSX.Element {
   return (
-    <NativeChatMessageList
-      session={session(messages)}
-      isWorking={false}
-      expandSignal={false}
-      fontScale={1}
-    />
+    <NativeChatMessageList session={session(messages)} isWorking={false} expandSignal={false} />
   )
 }
 

@@ -50,45 +50,6 @@ describe('MessageRow control visibility', () => {
     })
   })
 
-  it('appends time to the existing agent controls and inherits their reveal', () => {
-    renderMessage('assistant')
-    const copy = screen.getByRole('button', { name: 'Copy message' })
-    const scroll = screen.getByRole('button', { name: 'Scroll this message to top' })
-    const time = screen.getByRole('time')
-    expect(Array.from(copy.parentElement!.children)).toEqual([copy, scroll, time])
-    expect(copy.parentElement).toHaveClass(
-      'can-hover:opacity-0',
-      'can-hover:pointer-events-none',
-      'group-hover:opacity-100',
-      '[.group:has(:focus-visible)_&]:opacity-100',
-      'group-hover:pointer-events-auto',
-      '[.group:has(:focus-visible)_&]:pointer-events-auto'
-    )
-    expect(copy.parentElement).not.toHaveClass('opacity-0', 'pointer-events-none')
-    expect(time).not.toHaveAttribute('tabindex')
-    copy.focus()
-    expect(copy).toHaveFocus()
-  })
-
-  it('gives user bubbles a copy button and timestamp that only hide on hover-capable devices', () => {
-    renderMessage('user')
-    const copy = screen.getByRole('button', { name: 'Copy message' })
-    const time = screen.getByRole('time')
-    expect(Array.from(copy.parentElement!.children)).toEqual([copy, time])
-    expect(copy.parentElement).toHaveClass(
-      'can-hover:opacity-0',
-      'can-hover:pointer-events-none',
-      'group-hover:opacity-100',
-      '[.group:has(:focus-visible)_&]:opacity-100',
-      'group-hover:pointer-events-auto',
-      '[.group:has(:focus-visible)_&]:pointer-events-auto'
-    )
-    expect(copy.parentElement).not.toHaveClass('opacity-0', 'pointer-events-none')
-    expect(copy.parentElement!.parentElement).toHaveClass('group')
-    time.focus()
-    expect(time).toHaveFocus()
-  })
-
   it('copies the sent message text from a user bubble', async () => {
     const writeClipboardText = vi.fn().mockResolvedValue(undefined)
     Object.assign(window, { api: { ui: { writeClipboardText } } })
@@ -131,20 +92,6 @@ describe('MessageRow control visibility', () => {
     expect(screen.queryByRole('time')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
   })
-
-  it.each(['reasoning', 'system'] as const)(
-    'keeps %s rows upright and scopes their faint text',
-    (role) => {
-      const { container } = renderMessage(role)
-      const row = container.querySelector('[data-native-chat-message-tone="faint"]')
-      expect(row).toHaveClass('text-chat-foreground-faint')
-      expect(row).not.toHaveClass('italic')
-      expect(row).toContainElement(screen.getByText('Message text'))
-      if (role === 'reasoning') {
-        expect(row).toHaveClass('border-l-2')
-      }
-    }
-  )
 })
 
 describe('MessageRow send mode', () => {

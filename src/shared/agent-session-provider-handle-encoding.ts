@@ -107,6 +107,13 @@ function isLegacyNamespace(handle: AgentSessionProviderHandleNamespace): boolean
   )
 }
 
+/** Whether builds before the neutral handle read a record of this namespace at all. */
+export function isAgentSessionProviderHandleReadByOlderBuilds(
+  handle: AgentSessionProviderHandleNamespace
+): boolean {
+  return isLegacyNamespace(handle)
+}
+
 /**
  * An in-memory handle. A Claude or Codex handle must also fit its typed stored shape: Claude's
  * resume cursor is a leaf id, and Codex has none.

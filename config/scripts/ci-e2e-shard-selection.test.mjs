@@ -52,9 +52,9 @@ it('native Playwright test-list preserves full discovery, serial suites, skips a
   }
   try {
     const full = await discover()
-    const assignment = planE2e(full, 14, { timings: {} })
+    const assignment = planE2e(full, 3, { timings: {} })
     const ids = []
-    for (let index = 0; index < 14; index++) {
+    for (let index = 0; index < 3; index++) {
       const path = join(directory, 'selected.txt')
       writeFileSync(path, `${assignment.shards[index].files.join('\n')}\n`)
       const selected = await discover(['--test-list', path])

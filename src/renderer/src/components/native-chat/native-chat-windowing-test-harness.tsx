@@ -292,7 +292,6 @@ export function list(messages: NativeChatMessage[], isVisible = true): React.JSX
       isVisible={isVisible}
       isWorking={false}
       expandSignal={false}
-      fontScale={1}
     />
   )
 }

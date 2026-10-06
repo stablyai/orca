@@ -326,7 +326,10 @@ export function ProviderFrameRow({
           </span>
         ) : null}
       </summary>
-      <pre className="scrollbar-sleek mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-xs text-foreground">
+      <pre
+        data-native-chat-code-content
+        className="scrollbar-sleek mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-xs text-foreground"
+      >
         {frame.payload.head}
         {frame.payload.truncated ? '\n…' : ''}
       </pre>

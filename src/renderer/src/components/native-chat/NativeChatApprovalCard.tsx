@@ -149,6 +149,7 @@ export function NativeChatApprovalCard({
               ) : approval.detail ? (
                 <div
                   data-native-chat-approval-detail="true"
+                  data-native-chat-code-content
                   className="whitespace-pre-wrap break-words font-mono"
                 >
                   {approval.detail}

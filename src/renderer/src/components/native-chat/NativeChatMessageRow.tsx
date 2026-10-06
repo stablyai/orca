@@ -178,7 +178,7 @@ export const MessageRow = memo(function MessageRow({
     return (
       <div ref={rowRef} className="group relative flex flex-col items-end gap-0.5">
         {/* A distinct surface separates the user's prompt from the assistant's prose. */}
-        <div className="max-w-[80%] rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-sm text-chat-foreground-strong">
+        <div className="max-w-[80%] rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-sm native-chat-message-text text-chat-foreground-strong">
           {markdown ? (
             <>
               <NativeChatImageAttachments
@@ -189,7 +189,7 @@ export const MessageRow = memo(function MessageRow({
               <NativeChatMarkdown
                 content={markdown}
                 variant="document"
-                className="text-sm"
+                className="text-sm native-chat-message-text"
                 renderCodeBlock={NativeChatCodeBlock}
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
@@ -247,6 +247,7 @@ export const MessageRow = memo(function MessageRow({
       data-native-chat-message-tone={isReasoning || isSystem ? 'faint' : undefined}
       className={cn(
         'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',
+        !isSystem && 'native-chat-message-text',
         // Reasoning stays quieter while keeping the same upright text as prose.
         isReasoning && 'border-l-2 border-border/60 pl-3 text-chat-foreground-faint',
         isSystem && 'text-xs text-chat-foreground-faint'
@@ -261,7 +262,7 @@ export const MessageRow = memo(function MessageRow({
         <NativeChatMarkdown
           content={markdown}
           variant="document"
-          className="text-sm"
+          className="text-sm native-chat-message-text"
           renderCodeBlock={NativeChatCodeBlock}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}

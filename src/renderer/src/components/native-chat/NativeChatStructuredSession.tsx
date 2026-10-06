@@ -1,3 +1,8 @@
+import { cn } from '@/lib/utils'
+import {
+  NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
+  useNativeChatAppearanceStyle
+} from './native-chat-appearance-style'
 import { useMemo, useRef, useState } from 'react'
 import { agentSessionPromptQuestions } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
@@ -12,7 +17,7 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
 import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
-import { useNativeChatFontScale } from './use-native-chat-font-scale'
+import { useNativeChatFontSize } from './use-native-chat-font-size'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
@@ -134,7 +139,12 @@ export function NativeChatStructuredSession(
   // already on screen: nothing in it can act, and its words say why once.
   const readFailedFinally = readFailure?.final === true
   const viewState = selectNativeChatViewState(session, { readRetries: !readFailedFinally })
-  const fontScale = useNativeChatFontScale(viewState.kind === 'ready')
+  useNativeChatFontSize(
+    viewState.kind === 'ready' && props.isVisible && props.isFocusedGroup,
+    rootRef
+  )
+  const appearanceSettings = useAppStore((state) => state.settings?.nativeChatAppearance)
+  const appearanceStyle = useNativeChatAppearanceStyle({ nativeChatAppearance: appearanceSettings })
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     fileLinkContext,
@@ -248,7 +258,11 @@ export function NativeChatStructuredSession(
       onKeyUpCapture={paneCommands.onSelectionCapture}
       onKeyDownCapture={paneCommands.onKeyDownCapture}
       onContextMenuCapture={paneCommands.onContextMenuCapture}
-      className="flex h-full min-h-0 w-full flex-col bg-chat-canvas focus:outline-none"
+      className={cn(
+        NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
+        'flex h-full min-h-0 w-full flex-col focus:outline-none'
+      )}
+      style={appearanceStyle}
     >
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
@@ -271,7 +285,6 @@ export function NativeChatStructuredSession(
             isVisible={props.isVisible}
             isWorking={controller.isWorking}
             expandSignal={false}
-            fontScale={fontScale.scale}
             workingStartedAt={controller.workingStartedAt}
             settledTurns={controller.settledTurns}
             awaitingInput={prompt === null ? null : 'shown'}
