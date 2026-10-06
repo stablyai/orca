@@ -11,6 +11,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
+  attachHostSessionShadow,
   indexWorktreeHostClaims,
   mergeWorkspaceSessionsWithHostShadow,
   pickPrimaryHostForClaims
@@ -428,5 +429,59 @@ describe('read-time primary is the one the write path honours', () => {
     // workspace whose row the merge actually kept.
     expect(read.runtimeHostIdByWorkspaceSessionKey[SHARED_ID]).toBeUndefined()
     expect(read.contestedPrimaryHostBySessionKey[SHARED_ID]).toBe('local')
+  })
+})
+
+describe('attachHostSessionShadow', () => {
+  it('identifies hosts with testimony-invalidatable shadows separately from hosts with only non-terminal shadows', () => {
+    const worktreeKey = 'worktree:repo-1::/work'
+    const claims = indexWorktreeHostClaims(
+      { 'repo-1': [{ id: worktreeKey, repoId: 'repo-1' }] },
+      new Map([['repo-1', SSH_HOST]])
+    )
+    const terminalShadow = {
+      [SSH_HOST]: {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeKey]: [tab('tab-1', worktreeKey)]
+        }
+      }
+    }
+    const nonTerminalShadow = {
+      [SSH_HOST]: {
+        ...getDefaultWorkspaceSession(),
+        openFilesByWorktree: {
+          [worktreeKey]: [
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture mock
+            {
+              filePath: '/work/index.ts',
+              relativePath: 'index.ts',
+              worktreeId: worktreeKey,
+              language: 'ts'
+            } as never
+          ]
+        }
+      }
+    }
+
+    const slicesForTerminal = { [SSH_HOST]: { ...getDefaultWorkspaceSession() } }
+    const resTerminal = attachHostSessionShadow(
+      slicesForTerminal,
+      terminalShadow,
+      claims,
+      'replace'
+    )
+    expect(resTerminal.hostsWithAttachedShadow.has(SSH_HOST)).toBe(true)
+    expect(resTerminal.hostsWithTestimonyInvalidatableShadow.has(SSH_HOST)).toBe(true)
+
+    const slicesForNonTerminal = { [SSH_HOST]: { ...getDefaultWorkspaceSession() } }
+    const resNonTerminal = attachHostSessionShadow(
+      slicesForNonTerminal,
+      nonTerminalShadow,
+      claims,
+      'replace'
+    )
+    expect(resNonTerminal.hostsWithAttachedShadow.has(SSH_HOST)).toBe(true)
+    expect(resNonTerminal.hostsWithTestimonyInvalidatableShadow.has(SSH_HOST)).toBe(false)
   })
 })

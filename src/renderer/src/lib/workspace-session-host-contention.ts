@@ -6,10 +6,15 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
-import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
+import {
+  PARKABLE_HOST_SESSION_FIELDS,
+  WORKSPACE_SESSION_FIELD_OWNERSHIP
+} from '../../../shared/workspace-session-host-field-ownership'
 import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
 import {
+  buildWorktreeIdByTabId,
   isWorkspaceSessionRecord,
+  worktreeIdForPaneKey,
   type WorkspaceSessionRecord
 } from '../../../shared/workspace-session-host-records'
 import type { WorkspaceRuntimeOwnerProjection } from './workspace-runtime-host-ownership'
@@ -17,6 +22,7 @@ import {
   mergeWorkspaceSessionsFromHosts,
   type HostSessionSlices
 } from './workspace-session-host-split'
+import { isShadowRowSubjectToHostTestimony } from './workspace-session-host-shadow-testimony'
 
 /**
  * Which execution hosts publish each workspace id, and what persistence does when two of them
@@ -43,9 +49,16 @@ import {
 
 export type WorktreeHostClaims = ReadonlyMap<string, ReadonlySet<ExecutionHostId>>
 
-const WORKTREE_KEYED_FIELDS = (
+export const WORKTREE_KEYED_FIELDS = (
   Object.keys(WORKSPACE_SESSION_FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]
 ).filter((field) => WORKSPACE_SESSION_FIELD_OWNERSHIP[field] === 'worktreeKeyed')
+
+/** `WORKTREE_KEYED_FIELDS` plus the tab- and pane-keyed fields a declined tab also owns
+ *  (`terminalLayoutsByTabId`, `remoteSessionIdsByTabId`, `localOnlyScrollbackByTabId`,
+ *  `terminalPtyIncarnationsByPaneKey`). `attachHostSessionShadow` restores over this wider set so a
+ *  GAP-03 stranded-partition shadow (`partitionRowsTheWriteWontReturn`) can carry a declined tab's
+ *  dependent rows back with it, not just its `tabsByWorktree` entry. */
+export { PARKABLE_HOST_SESSION_FIELDS }
 
 /** Bare worktree id behind a session key. Lives in shared because the partition adoption read needs
  *  the same normalization, and two implementations of it would drift. */
@@ -260,16 +273,24 @@ function hostStillClaimsKey(
 /** Whether the slices will be applied as a merge-by-field patch or a full partition replace. */
 export type HostSessionWriteMode = 'patch' | 'replace'
 
+export type AttachedHostSessionShadowResult = {
+  hostsWithAttachedShadow: Set<ExecutionHostId>
+  hostsWithTestimonyInvalidatableShadow: Set<ExecutionHostId>
+}
+
 /** Write parked entries back into their own host's slice so a write for the primary host cannot
- *  erase a co-claimant's persisted session. Mutates the slices produced by the split. */
+ *  erase a co-claimant's persisted session. Mutates the slices produced by the split.
+ *  Returns the set of host IDs that received parked shadow entries and those carrying testimony-invalidatable entries. */
 export function attachHostSessionShadow(
   slices: HostSessionSlices,
   shadow: HostSessionSlices | undefined,
   claims: WorktreeHostClaims,
   mode: HostSessionWriteMode
-): void {
+): AttachedHostSessionShadowResult {
+  const hostsWithAttachedShadow = new Set<ExecutionHostId>()
+  const hostsWithTestimonyInvalidatableShadow = new Set<ExecutionHostId>()
   if (!shadow) {
-    return
+    return { hostsWithAttachedShadow, hostsWithTestimonyInvalidatableShadow }
   }
   for (const [hostId, shadowSlice] of Object.entries(shadow) as [
     ExecutionHostId,
@@ -279,7 +300,23 @@ export function attachHostSessionShadow(
     if (!slice || !shadowSlice) {
       continue
     }
-    for (const field of WORKTREE_KEYED_FIELDS) {
+    const worktreeIdByTabId = buildWorktreeIdByTabId(shadowSlice)
+    for (const [worktreeKey, tabs] of Object.entries(slice.tabsByWorktree ?? {})) {
+      for (const tab of tabs) {
+        if (!worktreeIdByTabId.has(tab.id)) {
+          worktreeIdByTabId.set(tab.id, tab.worktreeId ?? worktreeKey)
+        }
+      }
+    }
+    for (const tabs of Object.values(slice.unifiedTabs ?? {})) {
+      for (const tab of tabs) {
+        if (!worktreeIdByTabId.has(tab.id)) {
+          worktreeIdByTabId.set(tab.id, tab.worktreeId)
+        }
+      }
+    }
+    for (const field of PARKABLE_HOST_SESSION_FIELDS) {
+      const ownership = WORKSPACE_SESSION_FIELD_OWNERSHIP[field]
       const parked = shadowSlice[field]
       if (!isWorkspaceSessionRecord(parked)) {
         continue
@@ -295,11 +332,25 @@ export function attachHostSessionShadow(
         ;(slice as WorkspaceSessionRecord)[field] = target
       }
       for (const [key, entry] of Object.entries(parked)) {
-        if (Object.hasOwn(target, key) || !hostStillClaimsKey(claims, key, hostId)) {
+        if (Object.hasOwn(target, key)) {
+          continue
+        }
+        const worktreeId =
+          ownership === 'worktreeKeyed'
+            ? key
+            : ownership === 'tabKeyed'
+              ? worktreeIdByTabId.get(key)
+              : worktreeIdForPaneKey(worktreeIdByTabId, key)
+        if (!hostStillClaimsKey(claims, worktreeId ?? key, hostId)) {
           continue
         }
         target[key] = entry
+        hostsWithAttachedShadow.add(hostId)
+        if (isShadowRowSubjectToHostTestimony(field, worktreeId ?? key)) {
+          hostsWithTestimonyInvalidatableShadow.add(hostId)
+        }
       }
     }
   }
+  return { hostsWithAttachedShadow, hostsWithTestimonyInvalidatableShadow }
 }

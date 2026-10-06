@@ -108,7 +108,10 @@ export function registerMobileAndTerminalCloseIpcBridge(
                 await persistWorkspaceSessionByHost(
                   window.api.session,
                   buildWorkspaceSessionPayload(state),
-                  state
+                  {
+                    ...state,
+                    getLiveTestimonyState: () => useAppStore.getState()
+                  }
                 )
                 respond()
               })().catch((error: unknown) => {
