@@ -137,7 +137,9 @@ export function projectStructuredAgentSessionMessages(
         blocks: entry.body.blocks,
         ...(entry.state === 'rejected' || structuredAgentSessionEntryHeldForRetry(entry)
           ? { unsent: true as const }
-          : {})
+          : entry.sentWhileStopping
+            ? { sentWhileStopping: true as const }
+            : {})
       }))
   ]
 }

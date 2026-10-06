@@ -66,9 +66,12 @@ import { openTestJournalHostDatabase } from '../../../src/main/native-chat/agent
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { describeReleasedStopNoteProjection } from './cross-version-stop-note-scenarios'
 
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
+
+describeReleasedStopNoteProjection({ build: () => current, callBuild, runtimeStub })
 
 const CLIENT_CAPABILITY_UPDATE_METHOD = 'runtime.clientCapabilities.update'
 

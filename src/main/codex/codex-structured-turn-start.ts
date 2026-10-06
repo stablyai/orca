@@ -61,6 +61,8 @@ export type CodexTurnHost = {
   catalogAccess?: CodexSessionCatalogAccess
   dispatchEchoes: CodexDispatchEchoes
   activeTurnIds?: ReadonlySet<string>
+  /** Running turns whose interrupt Codex already answered: aborted, so never steered. */
+  abortedTurnIds?: ReadonlySet<string>
   turnOpenWaits: Pick<CodexTurnOpenWaits, 'wait'>
 }
 
@@ -154,11 +156,15 @@ export async function startCodexTurn(
   if (!host.dispatchEchoes.arm(input.clientMessageId, input.requestedAt)) {
     return false
   }
+  // A turn whose interrupt Codex answered has aborted, though its end may still be on the wire:
+  // the send opens its own turn.
+  const steerable = (turnId: string | null | undefined): turnId is string =>
+    typeof turnId === 'string' && turnId !== '' && !host.abortedTurnIds?.has(turnId)
   const runningTurnId = await codexRunningOrOpeningTurn(host)
-  let steered = runningTurnId ? await steerCodexTurn(host, runningTurnId, input) : null
+  let steered = steerable(runningTurnId) ? await steerCodexTurn(host, runningTurnId, input) : null
   // Refused because a turn Orca heard of meanwhile is running: steer that one, once.
   const runningSince = steered ? undefined : [...(host.activeTurnIds ?? [])].at(-1)
-  if (runningSince && runningSince !== runningTurnId) {
+  if (steerable(runningSince) && runningSince !== runningTurnId) {
     steered = await steerCodexTurn(host, runningSince, input)
   }
   if (steered) {

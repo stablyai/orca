@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
 import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ProcessSpec } from '../../shared/child-process/process-spec'
 import type { spawnProcess } from '../../shared/child-process/run-process'
 import {
   isCodexAppServerRequestError,
@@ -171,6 +172,31 @@ function responseLine(targetBytes: number, id: number): string {
 }
 
 describe('openCodexAppServerConnection', () => {
+  it.runIf(process.platform !== 'win32')(
+    'has its supervisor close Codex by its stdin end, the way its own close does',
+    async () => {
+      const { child, spawnImpl } = stubChild()
+      const specs: ProcessSpec[] = []
+      answerInitialize(child)
+
+      const connection = await openCodexAppServerConnection(
+        { command: 'codex', args: ['app-server'] },
+        {},
+        (spec: ProcessSpec) => {
+          specs.push(spec)
+          return spawnImpl(spec)
+        }
+      )
+
+      expect(
+        JSON.parse(
+          Buffer.from(String(specs[0]?.env?.ORCA_PROVIDER_SUPERVISOR_SPEC), 'base64').toString()
+        )
+      ).toMatchObject({ closeRequest: 'stdin-end' })
+      await connection.close()
+    }
+  )
+
   it('advertises the experimental API required for rollout-path resume', async () => {
     const { child, spawnImpl, written } = stubChild()
     answerInitialize(child)

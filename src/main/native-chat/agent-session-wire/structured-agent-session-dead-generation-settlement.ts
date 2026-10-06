@@ -195,7 +195,8 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
         })
       }
     }
-    mutations.push(...runningTurnLifecycleRevisions(items, input.verdict))
+    const turnEnds = runningTurnLifecycleRevisions(items, input.verdict)
+    mutations.push(...turnEnds)
     const batchId = `dead-generation:${input.settlementId}`
     for (const chunk of partitionJournalLifecycleMutations(batchId, mutations)) {
       await input.journal.appendLifecycleBatch({

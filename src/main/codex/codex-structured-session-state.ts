@@ -130,6 +130,9 @@ export type CodexSession = {
   /** Primary-thread turns Codex reported started and not yet ended, as read off the wire: what
    *  rewind waits out and what a Stop naming no turn interrupts when the journal shows none. */
   activeTurnIds?: Set<string>
+  /** Of those, the turns whose interrupt Codex answered. It answers as the turn aborts, ahead of
+   *  that turn's `turn/completed`, so none of them can take a steer any more. */
+  abortedTurnIds?: Set<string>
   /** Stops waiting for the turn Codex answered a send into to open. */
   turnOpenWaits: CodexTurnOpenWaits
   dispatchPending?: boolean

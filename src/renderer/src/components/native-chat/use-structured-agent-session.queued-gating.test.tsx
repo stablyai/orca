@@ -74,6 +74,7 @@ import {
   readNativeChatDraftCache
 } from './native-chat-draft-cache'
 import { useStructuredAgentSession } from './use-structured-agent-session'
+import { nativeChatStructuredStopControls } from './native-chat-structured-stop-controls'
 
 const RUNNING_TURN: AgentJournalRenderItem = {
   itemId: 'turn-1',
@@ -82,6 +83,28 @@ const RUNNING_TURN: AgentJournalRenderItem = {
   observedAt: 1,
   body: { kind: 'turn', turnId: 'provider-turn', state: 'running' }
 }
+
+/** A pending approval; one of a subject kind this build does not know cannot be answered here. */
+function approval(subject: Record<string, unknown>): AgentJournalRenderItem {
+  return JSON.parse(
+    JSON.stringify({
+      itemId: `approval-${String(subject.kind)}`,
+      revision: 1,
+      sequence: 2,
+      observedAt: 1,
+      body: {
+        kind: 'approval',
+        title: 'Review',
+        detail: null,
+        subject,
+        options: [{ id: 'allow', label: 'Approve' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      }
+    })
+  )
+}
+
+const newerApproval = (): AgentJournalRenderItem => approval({ kind: 'diff', path: 'a.ts' })
 
 function draft(id: string): AgentSessionQueuedMessage {
   return {
@@ -158,31 +181,30 @@ describe('against a capable host', () => {
     })
   })
 
+  // While a Stop runs, the composer says what a send made now does: queued after the stop, or sent.
+  describe('the words for a send after a Stop', () => {
+    const afterStop = (queueFollowUps?: boolean) => {
+      const { result } = render(queueFollowUps)
+      return nativeChatStructuredStopControls(result.current, true).composer.afterStop
+    }
+
+    it('say it queues while the setting is on', () => {
+      expect(afterStop()).toBe('queue')
+    })
+
+    it('say it is sent while the setting is off, though the host queues', () => {
+      expect(afterStop(false)).toBe('send')
+    })
+
+    it('say it is sent while every pending prompt is one this build cannot answer', () => {
+      items = [RUNNING_TURN, newerApproval()]
+      expect(afterStop()).toBe('send')
+    })
+  })
+
   // The host's queue would hold a send behind a prompt nothing here can settle.
   it('sends immediately while every pending prompt is one this build cannot answer', () => {
-    const approval = (subject: Record<string, unknown>): AgentJournalRenderItem =>
-      JSON.parse(
-        JSON.stringify({
-          itemId: `approval-${String(subject.kind)}`,
-          revision: 1,
-          sequence: 2,
-          observedAt: 1,
-          body: {
-            kind: 'approval',
-            title: 'Review',
-            detail: null,
-            subject,
-            options: [{ id: 'allow', label: 'Approve' }],
-            resolution: {
-              state: 'pending',
-              selectedOptionId: null,
-              resolvedBy: null,
-              resolvedAt: null
-            }
-          }
-        })
-      )
-    const newer = approval({ kind: 'diff', path: 'a.ts' })
+    const newer = newerApproval()
     items = [newer]
     render()
     expect(mocks.outboxArgs.at(-1)?.queueDelivery).toEqual({

@@ -200,7 +200,8 @@ export function appendStructuredAgentSessionOutboxMessage(
   sessionId: string,
   text: string,
   attachments: readonly StructuredAgentSessionAttachment[] = [],
-  source?: 'launch'
+  source?: 'launch',
+  sentWhileStopping = false
 ): StructuredAgentSessionOutboxEntry | null {
   const entry = {
     ...createStructuredAgentSessionOutboxEntry({
@@ -210,7 +211,8 @@ export function appendStructuredAgentSessionOutboxMessage(
       attachments,
       queuedAt: Date.now()
     }),
-    ...(source ? { source } : {})
+    ...(source ? { source } : {}),
+    ...(sentWhileStopping ? { sentWhileStopping: true as const } : {})
   }
   return commitStructuredAgentSessionOutbox(
     sessionId,

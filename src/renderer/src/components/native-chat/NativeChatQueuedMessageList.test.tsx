@@ -118,6 +118,21 @@ describe('NativeChatQueuedMessageList', () => {
     expect(owner.remove).toHaveBeenCalledWith('draft-2')
   })
 
+  it("holds every card's Steer while a person's Stop ends the turn; Delete still works", () => {
+    const owner = controller([card({ messageId: 'draft-1', position: 1 })])
+    render(
+      <TooltipProvider delayDuration={0}>
+        <NativeChatQueuedMessageList controller={owner} steerHeld />
+      </TooltipProvider>
+    )
+    const steer = screen.getByRole('button', { name: 'Steer' })
+    expect(steer).toHaveProperty('disabled', true)
+    fireEvent.click(steer)
+    expect(owner.steer).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(owner.remove).toHaveBeenCalledWith('draft-1')
+  })
+
   it.each(['Delete', 'Steer'])(
     '%s hands focus to the composer once the focused card is gone',
     async (name) => {

@@ -28,7 +28,7 @@ function structuredAgentSessionLeadState(
  *  `childWork` is the host's child records (or their views); only an older host's summary, which
  *  publishes none, is read by its live background tasks. */
 export function structuredAgentSessionAgentStatus(
-  summary: Pick<AgentSessionStatusSummary, 'turnOutcome'> & {
+  summary: Pick<AgentSessionStatusSummary, 'turnOutcome' | 'stopping'> & {
     status: StructuredAgentSessionProjectedStatus
     childWork?: readonly AgentChildWorkLivenessCandidate[]
   }
@@ -43,7 +43,8 @@ export function structuredAgentSessionAgentStatus(
     ...(resolution.workingMode ? { workingMode: resolution.workingMode } : {}),
     mainAgent: {
       state: leadState,
-      ...(leadState === 'done' && summary.turnOutcome ? { outcome: summary.turnOutcome } : {})
+      ...(leadState === 'done' && summary.turnOutcome ? { outcome: summary.turnOutcome } : {}),
+      ...(leadState === 'working' && summary.stopping ? { stopping: true as const } : {})
     }
   }
 }

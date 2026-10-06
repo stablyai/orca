@@ -125,6 +125,7 @@ function Harness({
       promptCancel: promptCancelSupported,
       questionAnswers: questionAnswersSupported,
       queuedMessages: false,
+      statusFeed: false,
       quietRepeatedStop: false
     },
     onSendError: vi.fn()

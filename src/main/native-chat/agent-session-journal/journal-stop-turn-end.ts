@@ -23,7 +23,7 @@ import type { JournalQueuePauseMarks, JournalStopSettle } from './queued-message
 export type JournalLatestStop = NonNullable<JournalQueuePauseMarks['latestStop']>
 
 /** Only a person's own Stop, or their close of this chat, makes a cut turn their cancellation. */
-function stopIsAPersons(reason: JournalStopEvent['reason']): boolean {
+export function stopIsAPersons(reason: JournalStopEvent['reason']): boolean {
   switch (reason) {
     case 'user-stop':
     case 'user-close':

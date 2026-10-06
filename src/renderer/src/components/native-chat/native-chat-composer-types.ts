@@ -9,6 +9,7 @@ import type {
 } from '../../../../shared/native-chat-session-options'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 
 export type NativeChatOptionPickerRequest = {
@@ -61,6 +62,11 @@ export type NativeChatComposerProps = {
   canSend?: boolean
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
+  /** This client's Stop request is in flight: the Stop control is disabled and says so. */
+  isStopping?: boolean
+  /** The chat reads Stopping: the placeholder says a message runs after the stop, queued as a
+   *  card where the host holds sends as cards (`queue`), else sent and held by the host (`send`). */
+  afterStop?: NativeChatAfterStopSend
   /** Interrupt the hosted agent, usually by sending ESC into the PTY. */
   onStop?: () => void
   /** Render an optimistic echo until the real transcript turn lands. */

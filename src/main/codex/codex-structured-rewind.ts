@@ -304,5 +304,6 @@ export function observeCodexRewindActivity(
   }
   if (turnId && method === 'turn/completed') {
     session.activeTurnIds?.delete(turnId)
+    session.abortedTurnIds?.delete(turnId)
   }
 }

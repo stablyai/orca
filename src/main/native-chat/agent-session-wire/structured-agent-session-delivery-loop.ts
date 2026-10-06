@@ -69,6 +69,8 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   logger: StructuredAgentSessionLogger
   record: (sessionId: string) => AgentSessionRecord | null
   readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
+  /** A person's Stop is still ending the session's work: the status feed's own reading. */
+  stopping: (sessionId: string) => boolean
   now: () => number
 }
 
@@ -232,6 +234,12 @@ export class StructuredAgentSessionDeliveryLoop {
           // Gone with no end observed: nothing says the provider stopped.
           { failure: startFailure ?? agentSessionFailureFact('startFailed') }
       })
+    }
+    // Never steer into a turn a person's Stop is ending: the message runs after it, as its own
+    // turn, and the turn's end is a commit that wakes the loop again. Read here, at the handover,
+    // because a Stop can land while this step waits on the child's start.
+    if (this.deps.stopping(sessionId)) {
+      return this.stop(sessionId)
     }
     const next = oldestQueuedSubmission(session)
     if (!next) {

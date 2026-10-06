@@ -17,8 +17,17 @@ import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema
 export type QueuePauseReason = 'stopped' | 'cleared' | 'restarted'
 
 /** What a person's Stop that named no turn binds, held in memory and never read from a row, so a
- *  reopen binds nothing: while it settles, every turn that ends; once settled, the turn it stopped. */
-export type JournalStopSettle = { settling: boolean; turnId?: string }
+ *  reopen binds nothing: while it settles, every turn that ends; once settled, the turn it stopped.
+ *  `failedOn`: the turn a Stop that failed could not stop, which reads "Stopping…" until it ends:
+ *  the one running when it failed, or with none, the first that opens after the journal position
+ *  it failed at. Display only: no turn-end rule reads it, so that turn's own end stays its own. */
+export type JournalStopSettle = {
+  settling: boolean
+  turnId?: string
+  failedOn?: JournalStopFailedOn
+}
+
+export type JournalStopFailedOn = { turnId: string } | { openedAfter: number }
 
 /** The latest Stop event, whatever its reason, and the latest Resume row, folded by the reducer. */
 export type JournalQueuePauseMarks = {
