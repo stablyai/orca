@@ -39,9 +39,13 @@ describe('isStructuredAgentSessionThinking', () => {
         state,
         ...(state === 'completed' ? { completedAt: 3 } : {})
       })
-    expect(isStructuredAgentSessionThinking([turnStart, withState('running')])).toBe(true)
+    expect(isStructuredAgentSessionThinking({ items: [turnStart, withState('running')] })).toBe(
+      true
+    )
     // Ended reasoning stays the newest row while Claude streams a tool's input after it.
-    expect(isStructuredAgentSessionThinking([turnStart, withState('completed')])).toBe(false)
+    expect(isStructuredAgentSessionThinking({ items: [turnStart, withState('completed')] })).toBe(
+      false
+    )
   })
 
   it('is false once a tool call, a message or a diff lands after the reasoning', () => {
