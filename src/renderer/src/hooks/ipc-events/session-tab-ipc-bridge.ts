@@ -16,13 +16,13 @@ import { findTabAndWorktree, patchTab } from '../../store/slices/tab-group-state
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
 import { patchTerminalTabRow } from '../../store/slices/tabs/tabs-host-mirroring'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { flushRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 
-export function applySessionTabProps(args: {
+export async function applySessionTabProps(args: {
   worktreeId: string
   tabId: string
   viewMode?: 'terminal' | 'chat'
-}): void {
+}): Promise<void> {
   if (args.viewMode === undefined) {
     return
   }
@@ -38,7 +38,7 @@ export function applySessionTabProps(args: {
   }))
   // The direct authoritative patch bypasses the normal tab action, so explicitly publish the
   // updated viewMode before the next stale graph snapshot can overwrite the two local rows.
-  scheduleRuntimeGraphSync()
+  await flushRuntimeGraphSync(args.worktreeId)
 }
 
 export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
@@ -153,9 +153,9 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
 
   if (window.api.ui.onSetSessionTabProps) {
     unsubs.push(
-      window.api.ui.onSetSessionTabProps(({ requestId, worktreeId, tabId, viewMode }) => {
+      window.api.ui.onSetSessionTabProps(async ({ requestId, worktreeId, tabId, viewMode }) => {
         try {
-          applySessionTabProps({ worktreeId, tabId, viewMode })
+          await applySessionTabProps({ worktreeId, tabId, viewMode })
           window.api.ui.respondSessionTabProps?.({ requestId })
         } catch (error) {
           window.api.ui.respondSessionTabProps?.({
