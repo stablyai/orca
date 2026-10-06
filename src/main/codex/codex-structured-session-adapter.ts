@@ -16,6 +16,7 @@ import { supportsCodexStructuredLocation } from './codex-structured-location-sup
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
   applyCodexStructuredSessionOption,
+  prepareLiveCodexSessionOptions,
   readLiveCodexSessionOptions
 } from './codex-structured-session-options'
 import {
@@ -78,8 +79,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     })
   }
 
-  supportsLocation = (location: Parameters<typeof supportsCodexStructuredLocation>[0]): boolean =>
-    supportsCodexStructuredLocation(location, this.deps.isWindowsProcessStartTimeAvailable)
+  supportsLocation = supportsCodexStructuredLocation
 
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
     acquireCodexStructuredSession({
@@ -166,6 +166,17 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
    *  owner of "what runs", and this stays only so tests can hold the two rule sets side by side. */
   backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined =>
     this.sessions.get(sessionId)?.backgroundTasks.state
+
+  // `ended` is set in the same turn as the connection's own exit report.
+  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
+    const session = this.sessions.get(sessionId)
+    return (
+      session?.acquisitionGeneration === acquisitionGeneration &&
+      session.connection.pid !== undefined &&
+      !session.ended &&
+      session.exitObservedAt === undefined
+    )
+  }
 
   // Codex exposes no honest stop for a child thread or a persistent command.
   backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
@@ -268,16 +279,41 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     if (!isCodexTurnOptionKey(input.key)) {
       throw new Error(`codex app-server has no thread option named ${input.key}`)
     }
-    return applyCodexStructuredSessionOption(
-      this.session(input.sessionId),
-      input.key,
-      input.value,
-      this.deps.requestTimeoutMs
-    )
+    return applyCodexStructuredSessionOption(this.session(input.sessionId), input.key, input.value)
   }
 
   readOptions = (input: { sessionId: string; fence: number }) =>
     readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
+
+  prepareReadOptions = (input: { sessionId: string; fence: number }) =>
+    prepareLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
+
+  readAcquisitionOptions = (input: {
+    sessionId: string
+    fence: number
+    priorOptions?: Readonly<Record<string, string>>
+  }) => {
+    const session = this.session(input.sessionId)
+    const options = {
+      ...Object.fromEntries(
+        Object.entries(input.priorOptions ?? {}).filter(([key]) => !isCodexTurnOptionKey(key))
+      ),
+      ...Object.fromEntries(session.options)
+    }
+    const reported = session.reportedOptions
+    // The thread's effort belongs to the thread's model, not to a different saved one.
+    if (
+      options.effort === undefined &&
+      reported.effort &&
+      (options.model === undefined || options.model === reported.model)
+    ) {
+      options.effort = reported.effort
+    }
+    if (options.model === undefined && reported.model) {
+      options.model = reported.model
+    }
+    return Object.keys(options).length > 0 ? options : undefined
+  }
 
   closeSession = (sessionId: string): Promise<boolean> => this.teardown.close(sessionId)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)

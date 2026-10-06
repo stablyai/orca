@@ -13,7 +13,7 @@ import { isCodexManagedCommand, setupCodexHookHomes } from '../codex/hook-servic
 
 // Why this file (QA case 4, full launch path): Codex's approval of the real-home
 // entry runs in the background. A launch during it goes to the managed home and
-// waits only on that home's own setup, which is bounded by its inline approval.
+// waits only on that home's own setup, bounded by the wait for Codex's hook hashes.
 // A resume has no other home, so it waits for that one approval to settle.
 
 const { getPathMock, homedirMock, resolveCodexCommandMock, settings } = vi.hoisted(() => {
@@ -36,6 +36,12 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: homedirMock }
 })
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
+// Why: stands in for asking a real Codex for its hook hashes.
+vi.mock('../codex/codex-hook-trust-derivation', async (importOriginal) =>
+  (await import('../codex/codex-hook-trust-derivation.test-fixture')).answeringCodexForTests(
+    await importOriginal()
+  )
+)
 vi.mock('../wsl', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
 vi.mock('../codex/codex-legacy-session-resume', () => ({
   prepareLegacySharedCodexSessionResume: async () => ({ useRealCodexHome: false })
@@ -95,6 +101,8 @@ const {
 const { isAgentStatusHooksEnabledForAgent } =
   await import('../../shared/agent-status-hooks-setting')
 const { getOrcaManagedCodexHomePath } = await import('../codex/codex-home-paths')
+const { deriveCodexHookHashes } = await import('../codex/codex-hook-trust-derivation')
+const { startCodexHookHashLookup } = await import('../codex/codex-hook-hash-lookup')
 const { prepareCodexRuntimeHomeForLaunch } = await import('./codex-launch-preparation')
 const { applyAgentWorkspaceTrust } = await import('../agent-workspace-trust')
 const { prepareCodexSessionResumeForLaunch } = await import('./codex-session-resume-launch')
@@ -109,6 +117,10 @@ const { createCodexHookTrustEntry } = await import('../codex/codex-hook-identity
 const { readOrcaEntryTrust } = await import('../codex/codex-real-home-entry-trust')
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
+// Why started: lets the lookup ask the stand-in Codex, as the app does.
+beforeEach(() => {
+  startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
+})
 
 function settlesWithin<T>(promise: Promise<T>, ms: number): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -280,8 +292,8 @@ describe('a Codex launch while the real-home approval hangs', () => {
       expect(await settlesWithin(second, 2_000)).toBe(true)
       expect(await second).toBe(getOrcaManagedCodexHomePath())
       expect(realHomeSessions).toBe(1)
-      // Why: the second launch finds the managed home's approval in its ledger.
-      expect(managedSessions).toBe(1)
+      // Why: the managed home is approved with Codex's hook hash, not a session of its own.
+      expect(managedSessions).toBe(0)
 
       const managedHooks = readFileSync(join(getOrcaManagedCodexHomePath(), 'hooks.json'), 'utf-8')
       expect(managedHooks).toContain('codex-hook')
@@ -296,53 +308,41 @@ describe('a Codex launch while the real-home approval hangs', () => {
     }
   })
 
-  it("waits up to the managed home's own 10 s approval when that home is cold too", async () => {
+  it("waits at most 3 s for Codex's hook hashes when the managed home is cold too", async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     let release: () => void = () => {}
     const hung = new Promise<void>((resolve) => {
       release = resolve
     })
-    const managedTimeouts: number[] = []
     grantInternals.setGrantSessionRunner(async (request: CodexHookTrustGrantRequest) => {
       if (isRealHomeSession(request)) {
         await hung
-        throw new Error('codex app-server exited before completing the session')
       }
-      managedTimeouts.push(request.invocation.timeoutMs)
-      // Why: as the real session does, a cold app-server fails at its own deadline.
-      return new Promise<never>((_resolve, reject) =>
-        setTimeout(
-          () => reject(new CodexAppServerTimeoutError('codex app-server session timed out')),
-          request.invocation.timeoutMs
-        )
-      )
+      throw new Error('codex app-server exited before completing the session')
     })
-    const workspaces = workspaceDirs()
+    // Why: a cold Codex answers long after a launch may wait.
+    vi.mocked(deriveCodexHookHashes).mockReturnValueOnce(new Promise(() => {}))
 
     try {
-      let firstSettled = false
-      const first = launch(workspaces[0]).finally(() => {
-        firstSettled = true
+      let settled = false
+      const launched = prepareCodexRuntimeHomeForLaunch(undefined, undefined, {
+        launchesCodex: true
+      }).finally(() => {
+        settled = true
       })
-      await vi.advanceTimersByTimeAsync(9_999)
-      expect(firstSettled).toBe(false)
-      await vi.advanceTimersByTimeAsync(1)
-      expect(firstSettled).toBe(true)
-      expect(await first).toBe(getOrcaManagedCodexHomePath())
-      expect(managedTimeouts).toEqual([10_000])
-
-      // Why: the managed home's failed approval cools down for 5 minutes, so the next launch does not wait.
-      let secondSettled = false
-      const second = launch(workspaces[1]).finally(() => {
-        secondSettled = true
-      })
-      await vi.advanceTimersByTimeAsync(0)
-      expect(secondSettled).toBe(true)
-      expect(await second).toBe(getOrcaManagedCodexHomePath())
-      expect(managedTimeouts).toEqual([10_000])
+      await vi.advanceTimersByTimeAsync(2_999)
+      expect(settled).toBe(false)
+      for (let tick = 0; tick < 10 && !settled; tick += 1) {
+        await vi.advanceTimersByTimeAsync(1)
+      }
+      expect(settled).toBe(true)
+      expect(await launched).toBe(getOrcaManagedCodexHomePath())
+      // Why: with no answer and nothing approved yet, the home gets Orca's own hash, as on main.
+      expect(readFileSync(join(getOrcaManagedCodexHomePath(), 'hooks.json'), 'utf-8')).toContain(
+        'codex-hook'
+      )
     } finally {
       release()
-      // Why: a failed assertion must not leave a managed session holding the lane.
       await vi.advanceTimersByTimeAsync(60_000)
       await realHomeInternals.settledVerdictForTesting()
     }

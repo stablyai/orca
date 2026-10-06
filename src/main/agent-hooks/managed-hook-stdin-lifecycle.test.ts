@@ -3,6 +3,7 @@
 // Exception (#11549): Windows batch hooks give up stdin ownership on the
 // missing-Orca-env path, so their writer may break there.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
 import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -34,8 +35,11 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
-vi.mock('../codex/codex-hook-trust-grant', () => ({
-  grantManagedCodexHookTrust: async () => ({ lane: 'fallback', reason: 'unsupported' })
+// Why: stands in for asking a real Codex for its hook hashes, as the grant stub once did.
+vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+  ...(await importOriginal<typeof CodexHookHashLookup>()),
+  resolveCodexHookAnswerForLaunch: async () =>
+    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({
@@ -246,9 +250,8 @@ async function generatePosixScripts(): Promise<Map<string, string>> {
   return scripts
 }
 
-// Why: the Codex installer awaits an app-server trust-grant session, so the
-// override has to stay pinned across the await instead of being restored by a
-// synchronous `finally` while the install is still running.
+// Why: the Codex installer is async, so the override has to stay pinned across
+// the await instead of being restored by a synchronous `finally` while it runs.
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })

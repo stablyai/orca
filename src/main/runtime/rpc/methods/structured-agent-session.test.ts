@@ -16,6 +16,7 @@ import {
 } from '../../../../shared/protocol-version'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ALL_RPC_METHODS } from './index'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { CLEANUP_METHODS } from './structured-agent-session-gate-classification.test-fixture'
@@ -425,6 +426,46 @@ describe('method routing', () => {
     )
   })
 
+  it('keeps the host-resolved floating folder outside a worktree create payload', async () => {
+    const worktree = `id:${FLOATING_TERMINAL_WORKTREE_ID}`
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields: { worktree, agent: 'codex' }
+        })
+      }),
+      worktree,
+      agent: 'codex'
+    }
+
+    expect(
+      await call('agentSession.create', params, STRUCTURED_CLIENT, {
+        resolveStructuredAgentSessionCreateIntent: async () => ({
+          envelope: params.envelope,
+          location: {
+            executionHostId: 'local',
+            wslDistro: null,
+            workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+            workspaceKind: 'folder'
+          },
+          provider: 'codex',
+          agent: 'codex',
+          accountHome: { variable: 'CODEX_HOME', path: '/host/account' },
+          runtimeKind: 'native',
+          hostLaunchDirectory: '/host/floating-folder'
+        })
+      })
+    ).toMatchObject({ ok: true, result: { ok: true } })
+    expect(hostCalls.attach).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.not.objectContaining({ hostLaunchDirectory: expect.anything() }),
+      { hostLaunchDirectory: '/host/floating-folder' }
+    )
+  })
+
   it('refuses a create whose declared fingerprint omits the tab it reserved', async () => {
     // The tab id is part of the intent fingerprint, so a payload whose declared digest omits it
     // is refused rather than admitted as the blank create it looks like.
@@ -589,6 +630,41 @@ describe('method routing', () => {
     const ensured = await call('agentSession.ensure', attachParams({ envelope: envelope() }))
     expect(ensured).toMatchObject({ ok: true })
   })
+
+  it.each(['agentSession.create', 'agentSession.ensure'] as const)(
+    'routes a new floating client location through host attach for %s',
+    async (method) => {
+      const params = attachParams({
+        location: {
+          executionHostId: 'local',
+          wslDistro: null,
+          workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+          workspaceKind: 'folder'
+        }
+      })
+
+      expect(await call(method, params, STRUCTURED_CLIENT)).toMatchObject({ ok: true })
+      expect(hostCalls.attach).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ location: params.location })
+      )
+      expect(hostCalls.attach.mock.calls[0]?.[1]).not.toHaveProperty('launchDirectory')
+    }
+  )
+
+  it.each(['agentSession.create', 'agentSession.ensure'] as const)(
+    'rejects a client-selected floating launch directory for %s',
+    async (method) => {
+      const response = await call(
+        method,
+        { ...attachParams(), launchDirectory: '/client/selected-folder' },
+        STRUCTURED_CLIENT
+      )
+
+      expect(response).toMatchObject({ ok: false })
+      expect(hostCalls.attach).not.toHaveBeenCalled()
+    }
+  )
 
   /** A client-supplied location skips the worktree-resolving support check, so both attach-shaped
    *  entries must ask the executing host directly or a host that cannot fence a provider child

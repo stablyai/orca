@@ -4,7 +4,7 @@
 // host advertises the queue and no pending prompt is one this build cannot answer.
 
 import { useCallback } from 'react'
-import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
 import { pendingPromptsAllUnanswerableHere } from '../../../src/shared/agent-session-approval-subject'
 import {
   structuredAgentSessionSendBody,
@@ -95,7 +95,7 @@ export function useMobileStructuredSendWithOutcome(args: {
           ...controller
         },
         canRun: () =>
-          !activeStructuredAgentSessionTurnId(stateRef.current.items) &&
+          !runningStructuredAgentSessionTurnId(stateRef.current) &&
           !stateRef.current.items.some(
             (item) => pendingStructuredApproval(item) || pendingStructuredQuestion(item)
           ),

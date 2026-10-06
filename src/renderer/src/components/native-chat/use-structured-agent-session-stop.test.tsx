@@ -11,6 +11,7 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
@@ -21,6 +22,7 @@ let items: AgentJournalRenderItem[] = []
 let submissions: AgentJournalSubmission[] = []
 let outbox: StructuredAgentSessionOutboxEntry[] = []
 let fence = 3
+let latestTurn: AgentSessionLatestTurn | null | undefined
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
@@ -30,7 +32,15 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 vi.mock('./use-structured-agent-session-read', () => ({
   useStructuredAgentSessionRead: () => ({
-    state: { fence, items, submissions, status: 'ready', error: null, hasOlder: false },
+    state: {
+      fence,
+      items,
+      submissions,
+      status: 'ready',
+      error: null,
+      hasOlder: false,
+      ...(latestTurn !== undefined ? { latestTurn } : {})
+    },
     loadingOlder: false,
     loadOlder: vi.fn()
   })
@@ -139,6 +149,7 @@ beforeEach(() => {
   submissions = []
   outbox = []
   fence = 3
+  latestTurn = undefined
 })
 
 describe('Stop against a host that stops the conversation', () => {
@@ -540,5 +551,44 @@ describe.each([
     })
     expect(cancels()).toEqual([expect.objectContaining({ turnId: 'provider-turn' })])
     expect(mocks.withdrawUnsent).not.toHaveBeenCalled()
+  })
+})
+
+// A long turn's record sits above the loaded page; the host's record is what says it runs.
+describe('a running turn whose record is not loaded', () => {
+  beforeEach(() => {
+    items = []
+    latestTurn = {
+      itemId: 'turn-1',
+      observedAt: 1,
+      turn: { turnId: 'provider-turn', state: 'running', startedAt: 1 }
+    }
+  })
+
+  it('shows Working and Stop, and an older host gets the turn by name', async () => {
+    setLocalRuntimeCapabilitiesForTests([])
+    const { result } = render()
+
+    expect(result.current.isWorking).toBe(true)
+    expect(result.current.turnId).toBe('provider-turn')
+    expect(result.current.canStop).toBe(true)
+    await act(async () => {
+      await result.current.stop()
+    })
+    expect(cancels()).toEqual([expect.objectContaining({ turnId: 'provider-turn' })])
+  })
+
+  it('reads idle once the host ends it, though a running record is still loaded', () => {
+    items = [RUNNING_TURN]
+    latestTurn = {
+      itemId: 'turn-1',
+      observedAt: 2,
+      turn: { turnId: 'provider-turn', state: 'completed', startedAt: 1, completedAt: 2 }
+    }
+    setLocalRuntimeCapabilitiesForTests([])
+    const { result } = render()
+
+    expect(result.current.isWorking).toBe(false)
+    expect(result.current.canStop).toBe(false)
   })
 })

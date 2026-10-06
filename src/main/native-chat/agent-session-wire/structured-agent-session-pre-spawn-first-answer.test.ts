@@ -158,6 +158,12 @@ describe('a create that fails before any process spawns', () => {
       'While a Claude account is added in WSL, Claude chats need a Windows Claude account. Choose or add one in Claude Accounts settings, then send your message again.'
     ],
     [
+      'a floating chat whose launch folder is gone',
+      'the folder this chat ran in no longer exists: /gone/floating',
+      'launchFolderMissing',
+      'The folder this chat ran in no longer exists. Restore it to continue this chat.'
+    ],
+    [
       "Orca's own reason",
       'claude sessions pin CLAUDE_CONFIG_DIR, not CODEX_HOME',
       undefined,

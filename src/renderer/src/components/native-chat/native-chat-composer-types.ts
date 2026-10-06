@@ -69,6 +69,8 @@ export type NativeChatComposerProps = {
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   /** Remove an optimistic echo when its delayed submit is canceled. */
   onOptimisticSendCanceled?: (pendingId: string) => void
+  /** A prompt card owns the input region; the composer stays mounted but hidden. */
+  inputOwnedByCard?: boolean
   /** Record a dispatched slash command that does not create a chat turn; `output`
    *  carries the host's answer when the agent never saw the command. */
   onSlashCommand?: (command: string, output?: string) => void

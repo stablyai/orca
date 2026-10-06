@@ -624,7 +624,12 @@ describe('Claude stream-json connection', () => {
     const closed = await connection.close()
     expect(connection.exitVerdict.root).toBe('exited')
     expect(['exited', 'unverifiable']).toContain(connection.exitVerdict.tree)
-    expect(closed).toBe(connection.exitVerdict.tree === 'exited')
+    if (process.platform === 'win32') {
+      // The self-exit is the close, unless a reap racing it already forced the tree.
+      expect(closed || connection.exitVerdict.tree === 'unverifiable').toBe(true)
+    } else {
+      expect(closed).toBe(connection.exitVerdict.tree === 'exited')
+    }
   })
 
   it.runIf(process.platform !== 'win32')(

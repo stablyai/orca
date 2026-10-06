@@ -14,8 +14,11 @@ import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallback-decision'
 import { ensureRealHomeCodexHookState } from '../codex/codex-real-home-hook-install'
+import { startCodexHookHashLookup } from '../codex/codex-hook-hash-lookup'
+import { hydrateAgentCliShellPath } from '../agent-hooks/local-agent-cli-presence'
 import {
   installManagedAgentHooks,
+  isAgentStatusHooksEnabledForAgent,
   resolveStartupManagedHookAction,
   shouldContinueManagedHookStartup,
   shouldInstallStartupManagedAgentHook
@@ -98,6 +101,11 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     refreshInstalledOpenCodeStatusPlugins(store.getSettings())
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
+  // Why after PATH hydration: the first managed Codex launch usually finds Codex's hook hash ready.
+  startCodexHookHashLookup({
+    pathReady: app.isPackaged ? hydrateAgentCliShellPath() : Promise.resolve(),
+    isEnabled: () => isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
+  })
   // Why: the real-home ensure stays ordered before managed-hook reconciliation, so its
   // in-slot conversion lands before the managed install's retired-form sweep removes
   // the prior command. Codex's approval then runs in the background (#16441).

@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => {
     capture: vi.fn(async () => {}),
     refresh: (...args: unknown[]) => refresh(...args),
     reap: vi.fn(async () => 'exited' as const),
-    treeVerdict: 'unverifiable' as const
+    treeVerdict: 'unverifiable' as const,
+    forcedReapAttempted: false
   }
   return { proveClaudeChildExit, refresh, tree }
 })

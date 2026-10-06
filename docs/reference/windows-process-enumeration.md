@@ -374,10 +374,9 @@ relay uses the scan and the WMI launch fallback.
    `node_addon_api.gyp` resolves outside the repo and hourly Windows builds
    die at configure. `node-pty` is patched the same way for the same reason.
 4. **No PEB reads, no `PROCESS_VM_READ`.** See below.
-5. **The `CreationTime` flag (4).** Upstream exposes no process start time, and
-   `isWindowsProcessStartTimeAvailable()` gates structured Claude and Codex
-   chat on it, so without this change win32 silently fell back to the legacy
-   transcript path. `GetProcessCreationTime` opens
+5. **The `CreationTime` flag (4).** Upstream exposes no process start time.
+   Structured Claude and Codex chat no longer depend on it; the owner probe and
+   the orcad runtime preflight still read it. `GetProcessCreationTime` opens
    `PROCESS_QUERY_LIMITED_INFORMATION` and converts `GetProcessTimes`' FILETIME
    to Unix ms; a process that denies the handle is emitted with the field
    absent, never zero, because callers must be able to tell "cannot identify"
@@ -395,9 +394,9 @@ relay uses the scan and the WMI launch fallback.
    so itself.
 
    Two readers depend on it. `isWindowsProcessStartTimeAvailable()` returns
-   false unless this bit is set, because claiming otherwise leaves
-   `captureWindowsDescendantSnapshot` returning null forever while structured
-   chat believes it has a reaper. And `windows-process-tree-creation-time.cjs`
+   false unless this bit is set, so the owner probe never scans the whole table
+   for times it cannot get (the Windows Claude descendant snapshot that once
+   relied on it is gone). And `windows-process-tree-creation-time.cjs`
    asserts it during install, which is what forces a from-source rebuild —
    the same role `node-pty-job-ownership.cjs` plays for node-pty's job exports.
 

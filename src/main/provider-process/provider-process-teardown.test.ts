@@ -22,9 +22,9 @@ describe('terminateProviderProcessTree', () => {
     resetSelfInitiatedTreeKillLogForTest()
   })
 
-  it('waits for the Windows tree kill before releasing the wrapper, and claims no observation', async () => {
+  it('waits for the Windows tree kill before releasing the wrapper, and reports what taskkill reported', async () => {
     const target = child()
-    const release = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<boolean>()
     const terminateWindowsTree = vi.fn(() => release.promise)
 
     const teardown = terminateProviderProcessTree(target, {
@@ -33,16 +33,29 @@ describe('terminateProviderProcessTree', () => {
       terminateWindowsTree
     })
     expect(target.kill).not.toHaveBeenCalled()
-    release.resolve()
-    // taskkill resolves alike on success, failure and timeout.
-    await expect(teardown).resolves.toBeNull()
+    release.resolve(true)
+    await expect(teardown).resolves.toBe('exited')
 
     expect(terminateWindowsTree).toHaveBeenCalledWith(1234, { site: 'codex-app-server-teardown' })
     expect(target.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
+  it('reports an unproven Windows tree when taskkill does not exit cleanly', async () => {
+    const target = child()
+
+    await expect(
+      terminateProviderProcessTree(target, {
+        site: 'codex-app-server-teardown',
+        platform: 'win32',
+        terminateWindowsTree: async () => false
+      })
+    ).resolves.toBe('unverifiable')
+    // The held child is still killed through its handle.
+    expect(target.kill).toHaveBeenCalledWith('SIGKILL')
+  })
+
   it('passes a non-Codex diagnostic label to Windows teardown', async () => {
-    const terminateWindowsTree = vi.fn(async () => undefined)
+    const terminateWindowsTree = vi.fn(async () => true)
 
     await terminateProviderProcessTree(child(), {
       site: 'provider-test-teardown',

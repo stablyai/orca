@@ -224,6 +224,49 @@ describe('mobile structured prompt cancellation', () => {
     )
   })
 
+  it("stops the host's running turn when its record is not loaded", async () => {
+    state = {
+      ...state,
+      hasOlder: true,
+      items: [pendingApproval()],
+      latestTurn: {
+        itemId: 'turn-status',
+        observedAt: 1,
+        turn: { turnId: 'turn-1', state: 'running', startedAt: 1 }
+      }
+    }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.isWorking).toBe(true)
+    await act(async () => {
+      expect(await hook.cancelPrompt()).toBe(true)
+    })
+    expect(mocks.sendRequest).toHaveBeenCalledWith(
+      'agentSession.cancel',
+      expect.objectContaining({
+        turnId: 'turn-1',
+        prompt: { itemId: 'approval-1', expectedRevision: 4 }
+      }),
+      expect.any(Object)
+    )
+  })
+
+  it('reads a turn the host ended as ended, though its running row is still loaded', () => {
+    state = {
+      ...state,
+      latestTurn: {
+        itemId: 'turn-status',
+        observedAt: 1,
+        turn: { turnId: 'turn-1', state: 'completed', startedAt: 1, completedAt: 2 }
+      }
+    }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.turnId).toBeNull()
+  })
+
   it('uses the rendered prompt identity when the journal changes before tap', async () => {
     act(() => {
       renderer = create(createElement(Harness, { promptCancelSupported: true }))
@@ -242,5 +285,29 @@ describe('mobile structured prompt cancellation', () => {
       expect.objectContaining({ prompt: renderedIdentity }),
       expect.any(Object)
     )
+  })
+
+  it("names the host's running turn for a plain Stop when its record is not loaded", async () => {
+    state = {
+      ...state,
+      hasOlder: true,
+      items: [],
+      latestTurn: {
+        itemId: 'turn-status',
+        observedAt: 1,
+        turn: { turnId: 'turn-1', state: 'running' }
+      }
+    }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.turnId).toBe('turn-1')
+    await act(async () => {
+      hook.cancel()
+    })
+    const call = mocks.sendRequest.mock.calls.find(([method]) => method === 'agentSession.cancel')
+    expect(call).toBeDefined()
+    expect(call?.[1]).toMatchObject({ turnId: 'turn-1' })
+    expect(call?.[1]).not.toHaveProperty('prompt')
   })
 })

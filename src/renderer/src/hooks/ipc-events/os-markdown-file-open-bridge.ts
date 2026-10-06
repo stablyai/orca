@@ -1,7 +1,6 @@
 import { toast } from 'sonner'
 import type { FileDocument } from '../../../../shared/filesystem-entry-types'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
-import { isFloatingWorkspacePanelVisible } from '@/lib/floating-workspace-terminal-actions'
+import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
 import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
@@ -39,11 +38,7 @@ async function openOsRequestedDocuments(documents: FileDocument[]): Promise<void
     await store.updateSettings({ floatingTerminalEnabled: true })
   }
   // Why deferred a frame: the panel only honors the toggle once the enabled flag has reached React.
-  requestAnimationFrame(() => {
-    if (!isFloatingWorkspacePanelVisible()) {
-      window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
-    }
-  })
+  requestAnimationFrame(() => revealFloatingWorkspacePanel(useAppStore.getState()))
 }
 
 function reportOsRequestedDocumentFailure(error: unknown): void {

@@ -20,6 +20,7 @@ import {
   removeCodexTrustGrantLedgerHome,
   type CodexTrustGrantLedgerHome
 } from './codex-trust-grant-ledger'
+import type { CodexHookHashes } from './codex-hook-trust-derivation'
 
 export function readCodexTrustGrantLedgerHomeForReconciliation(
   runtimeHomePath: string
@@ -31,7 +32,7 @@ export function readCodexTrustGrantLedgerHomeForReconciliation(
   }
 }
 
-export function getCodexLedgerTrustedHash(
+function getCodexLedgerTrustedHash(
   ledgerHome: CodexTrustGrantLedgerHome | null,
   key: string,
   expectedEntry: CodexTrustEntry
@@ -56,6 +57,27 @@ function addLedgerRecognizedHashes(
   }
 }
 
+/**
+ * Per entry main's grant recorded in this home's ledger, the hash Codex gave
+ * Orca's entry, when the recorded hook is Orca's `command`.
+ */
+export function readLedgerOrcaHashes(
+  runtimeHomePath: string,
+  command: string,
+  timeoutSec: number
+): CodexHookHashes[] {
+  const ledgerHome = readCodexTrustGrantLedgerHomeForReconciliation(runtimeHomePath)
+  return Object.keys(ledgerHome?.entries ?? {}).flatMap((key) => {
+    const parts = parseTrustKey(key)
+    if (!parts) {
+      return []
+    }
+    const hashes = new Set<string>()
+    addLedgerRecognizedHashes(hashes, [ledgerHome], key, { ...parts, command, timeoutSec })
+    return [...hashes].map((hash) => ({ [parts.eventLabel]: hash }))
+  })
+}
+
 type CodexManagedHookTrustOwnershipOptions = {
   runtimeHomePath: string
   /** hooks.json first, then other spellings Codex may key it by (same hash). */
@@ -65,6 +87,8 @@ type CodexManagedHookTrustOwnershipOptions = {
   timeoutSec: number
   /** Explicit native homes resolve their parent before hook discovery. */
   sourceUsesExplicitCodexHome?: boolean
+  /** Codex's own hashes Orca may have approved its entry with, from any Codex version. */
+  codexHashes?: readonly CodexHookHashes[]
 }
 
 function getCodexManagedHookTrustEntryKeys(
@@ -110,6 +134,12 @@ function getCodexManagedHookTrustEntryKeys(
         computeTrustKey(expectedEntry),
         expectedEntry
       )
+    }
+    for (const hashes of options.codexHashes ?? []) {
+      const codexHash = hashes[parts.eventLabel]
+      if (codexHash) {
+        recognizedHashes.add(codexHash)
+      }
     }
     if (state.trustedHash && recognizedHashes.has(state.trustedHash)) {
       ownedKeys.push(key)

@@ -97,7 +97,6 @@ const BLOCKER_REASON: Record<
 > = {
   'reused-terminal': 'reused_terminal',
   'agent-without-structured-session': 'agent_without_structured_session',
-  'floating-workspace': 'structured_unsupported_on_host',
   'custom-start-directory': 'tui_launch_command',
   'remote-execution-host': 'remote_execution_host',
   'project-runtime': 'wsl_execution_runtime',
@@ -147,10 +146,8 @@ export function decideAgentLaunchMode(args: {
     executionHostId: 'local',
     reusesTerminal: Boolean(placement.terminal),
     hostCapabilities: RUNTIME_CAPABILITIES,
-    // The floating workspace has nowhere to keep a session, so it is decided here rather than left
-    // to the host probe below, which cannot answer for a workspace with no record. WSL still is:
-    // the create-support probe reads the resolved workspace rather than guessing from a
-    // client-side project runtime.
+    // The host resolves the floating workspace to its configured directory; create-support still
+    // answers for the resolved workspace, including whether it uses WSL.
     ...(placement.workspaceKind ? { workspaceKind: placement.workspaceKind } : {}),
     // Mirrors the renderer's own route input (`agent-launch-route-input.ts`): a cwd is terminal-only
     // when it names somewhere other than the workspace root, by the same shared rule.
@@ -210,7 +207,7 @@ async function readStructuredCreateSupport(
 
 /**
  * Applies the executing host's `agentSession.createSupport` answer, which is the authority on WSL,
- * remoteness and the Windows process-start-time gate for the resolved workspace.
+ * remoteness and per-agent support for the resolved workspace.
  */
 export function downgradeAgentLaunchModeForHost(
   receipt: AgentLaunchModeReceipt,

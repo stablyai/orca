@@ -714,4 +714,36 @@ describe('MobileNativeChatView', () => {
       vi.useRealTimers()
     }
   })
+  // Why: a terminal-backed send types into the agent's prompt and could answer it; drafting cannot.
+  describe('a prompt card owns Send in terminal-backed chat', () => {
+    const permission = { title: 'Approve?', options: [{ label: 'Allow', send: '1' }] }
+
+    it('blocks only Send while the card shows, and frees it when the card clears', async () => {
+      await render({ permission })
+      expect(composer().props.sendDisabled).toBe(true)
+      expect(composer().props.disabled).toBe(false)
+      expect(composer().props.placeholder).toBe('Message, @files, /commands')
+
+      await update({ permission: null })
+      expect(composer().props.sendDisabled).toBe(false)
+    })
+
+    it('blocks Send for an ask and a heuristic question too', async () => {
+      await render({
+        ask: {
+          questions: [{ question: 'Tabs?', multiSelect: false, options: [{ label: 'Tabs' }] }]
+        }
+      })
+      expect(composer().props.sendDisabled).toBe(true)
+      await update({
+        question: { question: 'Name?', options: [], multiSelect: false, optionTokens: [] }
+      })
+      expect(composer().props.sendDisabled).toBe(true)
+    })
+
+    it('leaves a structured chat composer open: its host queues the send behind the prompt', async () => {
+      await render({ permission, structuredActivityUi: true })
+      expect(composer().props.sendDisabled).toBe(false)
+    })
+  })
 })

@@ -216,4 +216,50 @@ describe('transcript row height estimate', () => {
       estimateNativeChatRowHeight(prose, NO_CHROME)
     )
   })
+
+  it('reserves a bounded two-line tool header across supported text sizes', () => {
+    const estimates = [12, 14, 20].map((fontSize) => {
+      const style = nativeChatAppearanceStyle({ nativeChatAppearance: { fontSize } })
+      const typography = {
+        lineHeightPx: style['--chat-estimated-line-height'],
+        charsPerLine: style['--chat-estimated-chars-per-line']
+      }
+      const heightFor = (command: string): number =>
+        estimateNativeChatRowHeight(
+          nativeChatRowContentMetrics({
+            id: command,
+            role: 'assistant',
+            blocks: [{ type: 'tool-call', name: 'shell', input: { command }, state: 'completed' }],
+            timestamp: 1,
+            source: 'transcript'
+          }),
+          NO_CHROME,
+          typography
+        )
+      const estimate = heightFor('x'.repeat(5000))
+
+      expect(estimate).toBe(heightFor('ls'))
+      expect(estimate).toBeGreaterThan(2 * typography.lineHeightPx)
+      expect(estimate).toBeLessThan(2 * typography.lineHeightPx + 24)
+      return estimate
+    })
+
+    expect(estimates[0]).toBeLessThan(estimates[1])
+    expect(estimates[1]).toBeLessThan(estimates[2])
+  })
+
+  it('grows the collapsed reasoning trigger with chat text size above its floor', () => {
+    const reasoning = nativeChatRowContentMetrics(message('thinking', 'reasoning'))
+    const [small, standard, large] = [12, 14, 20].map((fontSize) => {
+      const style = nativeChatAppearanceStyle({ nativeChatAppearance: { fontSize } })
+      return estimateNativeChatRowHeight(reasoning, NO_CHROME, {
+        lineHeightPx: style['--chat-estimated-line-height'],
+        charsPerLine: style['--chat-estimated-chars-per-line']
+      })
+    })
+
+    expect(small).toBe(24)
+    expect(standard).toBe(24)
+    expect(large).toBeGreaterThan(standard)
+  })
 })

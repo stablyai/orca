@@ -26,7 +26,7 @@ function getActivityThreadExecutionHostId(
 
 type ActivityThreadWorkspaceCatalog = Pick<
   AppState,
-  'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces'
+  'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces' | 'floatingWorkspacePath'
 > & { defaultHostId: ExecutionHostId }
 
 function readActivityThreadWorkspaceCatalog(): ActivityThreadWorkspaceCatalog {

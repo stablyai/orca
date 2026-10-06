@@ -200,6 +200,39 @@ describe('the live turn', () => {
   })
 })
 
+describe('a turn whose record is above the loaded rows', () => {
+  const tail = () => [assistant('a300', inTurn('t1')), assistant('a301', inTurn('t1'))]
+  const hostTurn = (state: 'running' | 'completed', itemId = 't1') => ({
+    itemId,
+    observedAt: 1,
+    turn: { turnId: itemId, state, userItemId: 'u1' }
+  })
+  const membership = (
+    items: readonly AgentJournalRenderItem[],
+    latestTurn: ReturnType<typeof hostTurn>
+  ) => nativeChatTurnMembership(rows(items), { items, submissions: [], latestTurn })
+
+  it('groups its tail under the live bar while it runs, marked partial', () => {
+    const live = membership(tail(), hostTurn('running'))
+    expect(live.turnKeys).toEqual(['t1', 't1'])
+    expect(live.liveTurnKey).toBe('t1')
+    expect(live.partialTurnKey).toBe('t1')
+  })
+
+  it('leaves its tail ungrouped once it ends, whichever turn is newest', () => {
+    expect(membership(tail(), hostTurn('completed')).turnKeys).toEqual([undefined, undefined])
+    const next = membership([...tail(), user('u2')], hostTurn('running', 't2'))
+    expect(next.turnKeys.slice(0, 2)).toEqual([undefined, undefined])
+  })
+
+  it('is whole once its record loads', () => {
+    const items = [user('u1'), turn('t1', 'u1', THREAD, 'running'), ...tail()]
+    const loaded = membership(items, hostTurn('running'))
+    expect(loaded.turnKeys).toEqual(['u1', 'u1', 'u1'])
+    expect(loaded.partialTurnKey).toBeUndefined()
+  })
+})
+
 // A message sent while A runs, which the provider queued behind A: its turn opens only after A's
 // remaining rows, which the journal wrote after it.
 describe('a message the provider answered after the running turn', () => {

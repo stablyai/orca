@@ -14,6 +14,7 @@ import {
   requireStructuredHost
 } from './structured-agent-session-gate'
 import { ModelCatalogParams, OptionsParams } from './structured-agent-session-schemas'
+import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-launch-directory'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
@@ -35,6 +36,13 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
       const catalog = host.deps.modelCatalog
       if (!catalog) {
         return { origin: 'unknown' as const }
+      }
+      // A floating chat runs in the folder it was created in, not the floating setting's current one.
+      const record =
+        params.sessionId === undefined ? null : host.deps.store.getRecord(params.sessionId)
+      const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
+      if (launchDirectory) {
+        return catalog.read({ ...params, workspacePath: launchDirectory })
       }
       if (worktree === undefined) {
         return catalog.read(params)

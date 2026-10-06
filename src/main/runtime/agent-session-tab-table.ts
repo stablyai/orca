@@ -114,6 +114,26 @@ function reopenedTabId(sessionId: string, held: (tabId: string) => boolean): str
   return tabId
 }
 
+/** The sessions whose chat tab is shown, in tab order, skipping any without a record. */
+export function listVisibleAgentSessionIds(state: AgentSessionStoreState): string[] {
+  return (state.sessionTabs?.sessionIds() ?? []).filter((sessionId) => state.records.has(sessionId))
+}
+
+/** Unrecorded, `sessionIds` are the tab rows a chat opened while the import was owed left. */
+export function agentSessionVisibleTabIndex(state: AgentSessionStoreState): {
+  present: boolean
+  sessionIds: string[]
+} {
+  return {
+    present: state.sessionTabs !== null,
+    sessionIds: state.sessionTabs
+      ? listVisibleAgentSessionIds(state)
+      : (state.unrecordedSessionTabs?.sessionIds() ?? []).filter((sessionId) =>
+          state.records.has(sessionId)
+        )
+  }
+}
+
 export function setAgentSessionTabVisibility(
   state: AgentSessionStoreState,
   sessionId: string,

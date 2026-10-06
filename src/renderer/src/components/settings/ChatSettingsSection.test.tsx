@@ -144,4 +144,25 @@ describe('Chat settings page', () => {
       expect(getSettingsScrollTarget(entry.targetSectionId ?? '', container)).toBeTruthy()
     }
   })
+
+  it.each([
+    ['Match terminal interface', 'chat-match-terminal-interface', 'switch'],
+    ['Contrast', 'chat-contrast', 'slider']
+  ])('searches %s and resolves its Chat deep link', (title, targetSectionId, role) => {
+    state.settingsSearchQuery = title
+    const { container } = renderChat(true)
+    expect(screen.getByRole(role, { name: title })).toBeTruthy()
+    const sections = buildSettingsNavigationMetadata({
+      isMac: true,
+      isWindows: false,
+      isWebClient: false,
+      experimentalStructuredNativeChat: true,
+      repos: []
+    })
+    const result = buildCmdJSettingsResults(sections).find(
+      (entry) => entry.sectionId === 'chat' && entry.title === title
+    )
+    expect(result?.targetSectionId).toBe(targetSectionId)
+    expect(getSettingsScrollTarget(targetSectionId, container)).toBeTruthy()
+  })
 })

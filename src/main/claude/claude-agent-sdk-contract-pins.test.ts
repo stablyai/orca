@@ -14,7 +14,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '../../shared/child-process/run-process'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { claudeQuerySettingsReader } from './claude-agent-sdk-control-requests'
 import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 
@@ -148,7 +147,7 @@ function resolvedLaunch(permissionMode: PermissionMode, launchArgs: string[] = [
   } as unknown as AgentSessionRecord
   return createClaudeStructuredLaunchResolver({
     resolveLaunchArgs: () => launchArgs,
-    store: { getRecord: () => record } as unknown as AgentSessionRecordStore,
+    store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async () => '/repos/workspace-1',
     resolveCommand: () => FAKE_CLI,
     resolveAuthPolicy: () => ({ stripAuthEnv: true }),

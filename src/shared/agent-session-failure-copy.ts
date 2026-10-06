@@ -35,6 +35,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   accountSwitchInProgress: 'A Claude account switch is in progress. Try again after it finishes.',
   managedAccountUnsupported:
     'While a Claude account is added in WSL, Claude chats need a Windows Claude account.',
+  launchFolderMissing:
+    'The folder this chat ran in no longer exists. Restore it to continue this chat.',
   chooseClaudeAccount: 'Choose or add one in Claude Accounts settings.',
   chooseClaudeAccountThenRunCommand:
     'Choose or add one in Claude Accounts settings, then run /{{command}} again.',

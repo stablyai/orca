@@ -12,6 +12,7 @@ import type {
 
 export * from './agent-session-wire-refusals'
 export * from './agent-session-queued-message-wire'
+export * from './agent-session-turn-completion-wire'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
 // ─── Structured agent-session wire contract ─────────────────────────────────
@@ -28,15 +29,10 @@ import type {
   AgentJournalResolution,
   AgentJournalSubmission,
   AgentJournalThreadGoal,
-  AgentJournalTurnOutcome
+  AgentJournalTurnLifecycle
 } from './agent-session-journal-types'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
-import {
-  agentSessionScopeKey,
-  type AgentSessionExecutionLocation,
-  type AgentSessionHandoffStage,
-  type AgentSessionRecord
-} from './agent-session-record'
+import type { AgentSessionHandoffStage, AgentSessionRecord } from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { NativeChatSubagentEntry } from './native-chat-types'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
@@ -62,6 +58,18 @@ export { agentSessionBackgroundTasksEqual } from './agent-session-background-tas
 export type AgentSessionTurnActivity = {
   turnId: string
   text: string
+}
+
+/** The session's newest turn record over the WHOLE journal. A page windows the timeline and a
+ *  turn's record keeps the place it opened at, so a long turn's record falls off the page; this is
+ *  what tells a client a turn is running. Present null: the journal records no turn. Absent: an
+ *  older host, whose clients still read the loaded rows. */
+export type AgentSessionLatestTurn = {
+  /** The record's journal key, which rows of the turn name as their scope. */
+  itemId: string
+  /** Host clock at the record's creation, as on its own row; a revision does not move it. */
+  observedAt: number
+  turn: AgentJournalTurnLifecycle
 }
 
 export const AGENT_SESSION_ID_MAX_LENGTH = 512
@@ -133,6 +141,8 @@ export type AgentSessionHistoryPage = {
   /** Names the subagents with rows on the page whose roster row is older than it; bounded.
    *  Absent from older hosts, and when every such roster row is on the page. */
   subagentRoster?: AgentSessionSubagentRosterEntry[]
+  /** As of the page's read; a client applies it only from a page that replaces its state. */
+  latestTurn?: AgentSessionLatestTurn | null
 }
 
 export type AgentSessionHistoryResult =
@@ -192,6 +202,9 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
+      /** Rides every batch that carries rows, removals or submissions, so absent there means an
+       *  older host; absent on one that carries none, which changes no turn. */
+      latestTurn?: AgentSessionLatestTurn | null
     } & AgentSessionHostClockField)
   | ({
       type: 'reset'
@@ -253,6 +266,9 @@ export type AgentSessionStatusSummary = {
    *  the background-task channel. */
   children?: AgentChildWorkView[]
   providerSession?: AgentProviderSessionMetadata
+  /** Host-path directory the session is held to regardless of its workspace's current directory
+   *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
+  launchDirectory?: string
   updatedAt: number
   /** When the session's own agent entered `status`, dated by its own lifecycle edges and never by
    *  row activity: `updatedAt` also moves for a subagent's rows. Absent from older hosts, and when
@@ -266,53 +282,6 @@ export type AgentSessionStatusEvent =
   | { type: 'snapshot'; sessions: AgentSessionStatusSummary[] }
   | { type: 'status'; session: AgentSessionStatusSummary }
   | { type: 'end' }
-
-// ─── Turn completion feed ───────────────────────────────────────────────────
-
-/**
- * The session's latest request reaching a terminal outcome — a root turn, or a send the agent or
- * its start refused — derived by the EXECUTION HOST at journal commit.
- *
- * This is the EDGE, with turn identity; `AgentSessionStatusSummary.turnOutcome` is the STATE.
- * The summary carries the verdict only while the session is idle, as a fact about the main agent's
- * last turn that a status reader may act on (attention alerts, the `mainAgent.outcome` row field),
- * and never a turn id: a reader that needs to know WHICH turn finished, or to react exactly once
- * per finish, subscribes here. Re-broadcasting the summary on every status change therefore
- * repeats a state, not a completion.
- *
- * `outcome` is the journal's recorded verdict (the provider's, a stop, or the host's supersede) and
- * is never inferred — a turn the host only observed ending carries no outcome and produces no event
- * at all, because absent means UNKNOWN, not success.
- */
-export type AgentSessionTurnCompletion = {
-  /** Host-and-workspace scope; a bare provider turn id is not globally unique. */
-  scope: AgentSessionExecutionLocation
-  sessionId: string
-  /** The request's identity: the root turn's id, or for a send refused before any turn, that
-   *  send's journal item key. Neither is minted here. */
-  turnId: string
-  outcome: AgentJournalTurnOutcome
-  /** Execution host's clock at journal commit. */
-  completedAt: number
-  /** The request settled while a prompt waits on the user. Absent otherwise, and from older hosts. */
-  awaitingUser?: true
-}
-
-/**
- * LIVE-ONLY: there is no snapshot arm and no replay arm, by decision. A subscriber is told what
- * completes while it is subscribed and nothing else; completions that land while it is away are
- * dropped rather than queued, so nothing durable can strand. On reconnect the client baselines.
- */
-export type AgentSessionTurnCompletionEvent =
-  | { type: 'completion'; completion: AgentSessionTurnCompletion }
-  | { type: 'end' }
-
-/** Delivery dedupe address. Unread is idempotent and does not need it; mobile fanout does. */
-export function agentSessionTurnCompletionKey(completion: AgentSessionTurnCompletion): string {
-  return [agentSessionScopeKey(completion.scope), completion.sessionId, completion.turnId].join(
-    '\u0000'
-  )
-}
 
 // ─── Mutation envelope ──────────────────────────────────────────────────────
 

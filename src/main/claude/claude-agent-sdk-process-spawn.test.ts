@@ -132,7 +132,8 @@ describe('claude agent SDK process spawn', () => {
       const tree = {
         capture: vi.fn(async () => {}),
         reap: vi.fn(async () => 'exited' as const),
-        treeVerdict: 'exited' as const
+        treeVerdict: 'exited' as const,
+        forcedReapAttempted: false
       }
       await expect(proveClaudeChildExitWithReaper({ managed, tree }, () => tree)).resolves.toBe(
         true

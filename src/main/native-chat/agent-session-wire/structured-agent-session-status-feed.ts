@@ -22,6 +22,7 @@ import type { AgentChildWorkView } from '../../../shared/agent-status-child-work
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
+import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'
 import { structuredStatusChildWork } from './structured-agent-session-status-child-work'
 import {
   StructuredAgentSessionJournalProjections,
@@ -264,6 +265,7 @@ export class StructuredAgentSessionStatusFeed {
     // The journal has no model: the record's acknowledged options are where a mid-session
     // switch lands, so the row follows whichever is in force.
     const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
+    const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
     return {
       sessionId,
       workspaceId: session.params.location.workspaceId,
@@ -281,6 +283,7 @@ export class StructuredAgentSessionStatusFeed {
       ...(model ? { model } : {}),
       ...this.childWorkFields(sessionId, session.params.provider),
       ...(providerSession ? { providerSession } : {}),
+      ...(launchDirectory ? { launchDirectory } : {}),
       updatedAt: journal.lastActivityAt() || this.deps.now()
     }
   }

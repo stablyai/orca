@@ -86,8 +86,6 @@ export type CodexStructuredSessionAdapterDeps = {
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
   }) => Promise<CodexStructuredLaunch>
-  /** Host capability seam; production uses the native Windows process table. */
-  isWindowsProcessStartTimeAvailable?: () => boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
   /** Where bookkeeping a close or exit does after the child is gone reports a failure. */
   logger?: StructuredAgentSessionLogger
@@ -143,8 +141,6 @@ export type CodexSession = {
     serviceTier?: string | null
     serviceTierKnown?: true
   }
-  /** Exact provider-advertised Fast request value for each discovered model. */
-  fastModeTierByModel: Map<string, string>
   /** Absent when the adapter runs without a host catalog store (tests). */
   catalogAccess?: CodexSessionCatalogAccess
   /** Sends whose identity is still to be settled by the provider echo. */

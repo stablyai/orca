@@ -46,7 +46,7 @@ type NativeChatAttachmentOwnerState = Pick<
   | 'sshConnectionStates'
   | 'tabsByWorktree'
   | 'worktreesByRepo'
->
+> & { floatingWorkspacePath?: AppState['floatingWorkspacePath'] }
 
 /** Resolve who owns the composer's backing worktree at attach time. Mirrors the
  *  terminal drop resolver's order: runtime owner first, then SSH vs local. */

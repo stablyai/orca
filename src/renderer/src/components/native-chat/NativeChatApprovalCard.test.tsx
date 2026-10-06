@@ -131,6 +131,30 @@ describe('NativeChatApprovalCard', () => {
     outside.remove()
   })
 
+  it.each([
+    ['this pane', true],
+    ['another surface', false]
+  ] as const)('with a text field focused in %s, takes focus: %s', (_where, takes) => {
+    const pane = document.createElement('div')
+    pane.setAttribute('data-native-chat-root', 'true')
+    const draft = document.createElement('textarea')
+    ;(takes ? pane : document.body).appendChild(draft)
+    document.body.appendChild(pane)
+    draft.focus()
+    render(
+      <NativeChatApprovalCard
+        approval={{ title: 'Allow command?', options: [{ label: 'Allow', send: 'allow' }] }}
+        onChoose={() => {}}
+        shouldFocus
+      />,
+      { container: pane }
+    )
+    const card = screen.getByRole('group', { name: 'Allow command?' })
+    expect(document.activeElement).toBe(takes ? card : draft)
+    pane.remove()
+    draft.remove()
+  })
+
   it('keeps all oversized provider context in one bounded scroller above the actions', () => {
     const description = `Read access outside the workspace ${'description '.repeat(400)}`
     const decisionReason = `The path is outside the allowed root. ${'reason '.repeat(400)}`

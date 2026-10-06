@@ -92,3 +92,14 @@ export function useSettledMobileNativeChatInputLock(
   }, [lockHeld, rawLockHeld])
   return lockHeld ? (rawLockReason ?? 'waiting') : null
 }
+
+/** What the composer says while the input lease blocks it, or its normal prompt. */
+export function mobileNativeChatComposerPlaceholder(
+  lockReason: MobileNativeChatInputLockReason | null
+): string {
+  return lockReason === 'disconnected'
+    ? 'Reconnecting…'
+    : lockReason === 'waiting'
+      ? 'Waiting for terminal…'
+      : 'Message, @files, /commands'
+}

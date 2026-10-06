@@ -5,6 +5,7 @@ import { structuredSlashCommands } from '../../shared/structured-agent-session-c
 import { discoverSkills } from '../skills/discovery'
 import { scanClaudeCommandFolders } from './claude-command-folder-scan'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
+import { agentSessionPinnedLaunchDirectory } from '../runtime/agent-session-record-launch-directory'
 
 /** How long one scan answers for a workspace and account before the next read scans again. */
 export const CLAUDE_AT_REST_COMMANDS_TTL_MS = 10_000
@@ -110,7 +111,10 @@ export class ClaudeAtRestCommandCatalog {
   }
 
   private async scan(record: AgentSessionRecord): Promise<AgentSessionSlashCommand[]> {
-    const cwd = await this.deps.resolveWorkspacePath(record.location.workspaceId)
+    // The folder Claude will launch in: a floating chat's pin, not the floating setting's current one.
+    const cwd =
+      agentSessionPinnedLaunchDirectory(record) ??
+      (await this.deps.resolveWorkspacePath(record.location.workspaceId))
     const account = record.accountHome.path
     const [custom, discovered] = await Promise.all([
       scanClaudeCommandFolders([join(cwd, '.claude', 'commands'), join(account, 'commands')]),

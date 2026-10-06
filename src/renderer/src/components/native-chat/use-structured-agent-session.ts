@@ -233,6 +233,8 @@ export function useStructuredAgentSession(args: {
           )
       }),
     journalItems: transcriptItems,
+    /** The host's newest turn record, which places a live turn whose record is not loaded. */
+    latestTurn: transportState.latestTurn,
     subagentRoster: transportState.subagentRoster,
     messages,
     status: transportEnabled ? state.status : 'ready',
