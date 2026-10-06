@@ -25,6 +25,7 @@ import {
   type AgentSessionFailureSay
 } from './agent-session-failure-copy'
 import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
+import { providerRetryWords, withRetryCause } from './agent-session-provider-retry-words'
 import { joinSentences } from './sentence-joining'
 import {
   DISPATCH_REJECTED_CANCELLED,
@@ -120,11 +121,6 @@ function quotingPersonDetail(
           .replace(/[.\s]+$/, '')
       : ''
   return quoted ? say(quotedLead, { ...values, detail: quoted }) : say(lead, values)
-}
-
-/** The provider's account of what failed goes on the line under the sentence, as it wrote it. */
-function withRetryCause(sentence: string, cause: string | undefined): string {
-  return cause ? `${sentence}\n${cause}` : sentence
 }
 
 /** The next step after a start or restart that failed: the command, or the message, again. */
@@ -259,23 +255,18 @@ const FAILURE_SENTENCES = {
   hostStopped: (context, _fact, _surface, say) => say('hostStopped', agent(say, context)),
   // A provider that says how its retry is going, for a person, is quoted: that is the progress.
   providerRetrying: (context, { retry, detail }, _surface, say) =>
-    withRetryCause(
-      detail?.audience === 'person'
-        ? quotingPersonDetail(
+    detail?.audience === 'person'
+      ? withRetryCause(
+          quotingPersonDetail(
             say,
             'providerRetrying',
             'providerRetryingQuoted',
             detail,
             agent(say, context)
-          )
-        : say(
-            retry?.error === 'rate_limit' || retry?.status === 429
-              ? 'providerRateLimited'
-              : 'providerRetrying',
-            agent(say, context)
           ),
-      retry?.cause
-    ),
+          retry?.cause
+        )
+      : providerRetryWords(say, agent(say, context), retry),
   previousExitUnverifiable: (context, _fact, _surface, say) =>
     say('previousExitUnverifiable', agent(say, context))
 } satisfies Record<AgentSessionFailureKind, Sentence>

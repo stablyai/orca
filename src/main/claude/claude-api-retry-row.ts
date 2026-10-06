@@ -13,7 +13,12 @@ import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 export const CLAUDE_API_RETRY_FRAME_KIND = 'message:system:api_retry'
 
 export function claudeApiRetryRowBody(message: Record<string, unknown>): AgentJournalStatusItem {
-  const retry = readProviderRetry({ error: message.error, status: message.error_status })
+  const retry = readProviderRetry({
+    error: message.error,
+    status: message.error_status,
+    attempt: message.attempt,
+    maxAttempts: message.max_retries
+  })
   const words = agentSessionFailureWords(
     agentSessionFailureFact('providerRetrying', {
       detail: providerDiagnostic(JSON.stringify(message), 'log'),

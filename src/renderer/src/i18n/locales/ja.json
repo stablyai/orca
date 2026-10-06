@@ -17631,6 +17631,9 @@
         "providerRateLimited": "{{agent}} はレート制限を受けているため、再試行しています。",
         "providerRetrying": "{{agent}} で一時的な問題が発生したため、再試行しています。",
         "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。",
+        "providerRetryAttempt": "{{attempt}} 回目の試行です。",
+        "providerRetryAttemptOf": "{{maxAttempts}} 回中 {{attempt}} 回目の試行です。",
+        "providerRetryLastError": "直近のエラー: {{detail}}。",
         "previousExitUnverifiable": "以前の {{agent}} を停止できませんでした。"
       },
       "writeNotice": {

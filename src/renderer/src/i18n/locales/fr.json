@@ -17695,6 +17695,9 @@
         "providerRateLimited": "{{agent}} est limité en débit et réessaie.",
         "providerRetrying": "{{agent}} a rencontré un problème temporaire et réessaie.",
         "providerRetryingQuoted": "{{agent}} réessaie : {{detail}}.",
+        "providerRetryAttempt": "Tentative {{attempt}}.",
+        "providerRetryAttemptOf": "Tentative {{attempt}} sur {{maxAttempts}}.",
+        "providerRetryLastError": "Dernière erreur : {{detail}}.",
         "previousExitUnverifiable": "Impossible d'arrêter l'exécution précédente de {{agent}}."
       },
       "writeNotice": {

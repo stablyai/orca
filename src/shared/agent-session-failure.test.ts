@@ -66,7 +66,7 @@ describe('reading a failure fact', () => {
     expect(
       readAgentSessionFailureFact({
         kind: 'providerRetrying',
-        retry: { error: 'rate_limit', status: 429, attempt: 3 }
+        retry: { error: 'rate_limit', status: 429, retryDelayMs: 600 }
       })
     ).toEqual({ kind: 'providerRetrying', retry: { error: 'rate_limit', status: 429 } })
     expect(
@@ -104,6 +104,17 @@ describe('reading a failure fact', () => {
       })
     ).toEqual({ kind: 'restartFailed', refusal: { code: 'agent_session_conflict' } })
   })
+
+  it("keeps a retry's attempt, and its maximum only where it bounds that attempt", () => {
+    expect(readProviderRetry({ attempt: 3, maxAttempts: 10 })).toEqual({
+      attempt: 3,
+      maxAttempts: 10
+    })
+    expect(readProviderRetry({ status: 502, maxAttempts: 10 })).toEqual({ status: 502 })
+    expect(readProviderRetry({ attempt: 12, maxAttempts: 10 })).toEqual({ attempt: 12 })
+    expect(readProviderRetry({ attempt: 0, maxAttempts: 10 })).toBeUndefined()
+    expect(readProviderRetry({ attempt: 2.5, status: 502 })).toEqual({ status: 502 })
+  })
 })
 
 describe('reading all of a failure fact', () => {
@@ -120,6 +131,14 @@ describe('reading all of a failure fact', () => {
       }),
       agentSessionFailureFact('providerRetrying', {
         retry: readProviderRetry({ error: 'rate_limit', status: 429 })
+      }),
+      agentSessionFailureFact('providerRetrying', {
+        retry: readProviderRetry({
+          error: 'server_error',
+          status: 502,
+          attempt: 3,
+          maxAttempts: 10
+        })
       })
     ]) {
       expect(readWholeAgentSessionFailureFact(JSON.parse(JSON.stringify(fact)))).toEqual(fact)

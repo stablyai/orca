@@ -17596,6 +17596,9 @@
         "providerRateLimited": "{{agent}} alcanzó un límite de solicitudes y está reintentando.",
         "providerRetrying": "{{agent}} tuvo un problema temporal y está reintentando.",
         "providerRetryingQuoted": "{{agent}} está reintentando: {{detail}}.",
+        "providerRetryAttempt": "Intento {{attempt}}.",
+        "providerRetryAttemptOf": "Intento {{attempt}} de {{maxAttempts}}.",
+        "providerRetryLastError": "Último error: {{detail}}.",
         "previousExitUnverifiable": "No se pudo detener la ejecución anterior de {{agent}}."
       },
       "writeNotice": {

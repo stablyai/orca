@@ -17631,6 +17631,9 @@
         "providerRateLimited": "{{agent}}이(가) 속도 제한에 걸려 다시 시도하고 있습니다.",
         "providerRetrying": "{{agent}}에 일시적인 문제가 발생하여 다시 시도하고 있습니다.",
         "providerRetryingQuoted": "{{agent}}이(가) 다시 시도하고 있습니다: {{detail}}.",
+        "providerRetryAttempt": "{{attempt}}번째 시도입니다.",
+        "providerRetryAttemptOf": "{{maxAttempts}}회 중 {{attempt}}번째 시도입니다.",
+        "providerRetryLastError": "마지막 오류: {{detail}}.",
         "previousExitUnverifiable": "이전에 실행된 {{agent}}을(를) 중지하지 못했습니다."
       },
       "writeNotice": {
