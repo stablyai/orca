@@ -126,7 +126,8 @@ export function planAgentHibernationCandidates(
       continue
     }
     for (const tab of tabs) {
-      if (foregroundTerminalTabIds.has(tab.id)) {
+      // Why: the user opted this tab out (e.g. an orchestration coordinator waiting on messages).
+      if (foregroundTerminalTabIds.has(tab.id) || tab.neverHibernate === true) {
         continue
       }
       const tabLivePtyIds = getLivePtyIdsForTab(

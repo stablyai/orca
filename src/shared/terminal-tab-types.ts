@@ -73,6 +73,9 @@ export type TerminalTab = {
   color: string | null
   /** Pinned tabs survive "close others"; host-persisted for remote servers. */
   isPinned?: boolean
+  /** Exempts every agent pane in this tab from idle agent hibernation. Local desktop tabs only;
+   *  absent means hibernation may apply as usual. */
+  neverHibernate?: boolean
   /** Per-tab view preference (terminal xterm vs native chat); host-persisted so
    *  paired clients converge. Optional: older persisted tabs default to 'terminal'. */
   viewMode?: 'terminal' | 'chat'
