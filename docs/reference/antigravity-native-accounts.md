@@ -55,8 +55,9 @@ with a nonce and strict UTF-8/base64 decoding; it never goes into argv, environm
 WSL snapshots stay on Windows under `userData/antigravity-accounts/wsl/<scope hash>/vault`.
 The hash includes the concrete distro, UID and canonical HOME, and encrypted contents repeat
 that scope for verification. Meaningful OS encryption and checked private Windows ACLs are
-required before guest mutation. Vault reads bind the checked descriptor and consume at most the checked size plus one byte,
-with a 4 MiB cap and before/after metadata verification. Vault publication is asynchronous, checks cancellation before
+required before guest mutation. Vault reads bind the checked descriptor and consume at most the
+checked size plus one byte, with a 4 MiB cap and before/after metadata verification, on the host
+vault as well as the WSL one. Vault publication is asynchronous, checks cancellation before
 rename, and reports failures after publication as requiring verification. Windows 8.3 and long
 path spellings are canonicalized when protecting newly created directory chains. Host snapshots
 retain their existing format. A reinstall with the same distro name, UID and HOME cannot be

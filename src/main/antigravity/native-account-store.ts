@@ -1,5 +1,10 @@
 import { lstat } from 'node:fs/promises'
-import { readAntigravityAccountVault } from './native-account-vault-read'
+import {
+  MAX_VAULT_BYTES,
+  readAntigravityAccountVault,
+  sameVaultFile,
+  vaultReadByteBudget
+} from './native-account-vault-read'
 import { writeProtectedFileAtomic } from '../../shared/secure-file'
 import {
   remainingAccountOperationMs,
@@ -7,7 +12,17 @@ import {
   type AntigravityAccountOperation
 } from './native-account-operation'
 import type { ResolvedAntigravityWslTarget } from './native-wsl-account-target'
-import { existsSync, lstatSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  statSync
+} from 'node:fs'
 import { dirname } from 'node:path'
 import { getSecretStore } from '../../shared/secret-store'
 import { writeCredentialFileAtomic } from '../integration-credential-file'
@@ -28,8 +43,6 @@ export type AntigravityAccountStore = {
     operation?: AntigravityAccountOperation
   ): void | Promise<void>
 }
-
-const MAX_VAULT_BYTES = 4 * 1024 * 1024
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -127,6 +140,48 @@ function checkVaultStat(stat: { isFile(): boolean; size: number; mode: number })
     throw new Error('unsafe vault')
   }
 }
+/**
+ * Reads the vault through one descriptor, bounded by the size it verified.
+ *
+ * Why not `readFileSync`: it consumes whatever is on disk at that moment, so a vault that grows
+ * between the size check and the read is read whole, however large it has become.
+ */
+function readVaultBoundedSync(path: string): Buffer {
+  const before = lstatSync(path)
+  checkVaultStat(before)
+  const descriptor = openSync(
+    path,
+    process.platform === 'win32'
+      ? constants.O_RDONLY
+      : constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK
+  )
+  try {
+    const opened = fstatSync(descriptor)
+    checkVaultStat(opened)
+    if (!sameVaultFile(before, opened)) {
+      throw new Error('vault changed before reading')
+    }
+    const buffer = Buffer.alloc(vaultReadByteBudget(opened.size))
+    let total = 0
+    while (total < buffer.length) {
+      const bytesRead = readSync(descriptor, buffer, total, buffer.length - total, total)
+      if (bytesRead === 0) {
+        break
+      }
+      total += bytesRead
+    }
+    if (
+      total !== opened.size ||
+      !sameVaultFile(opened, fstatSync(descriptor)) ||
+      !sameVaultFile(opened, lstatSync(path))
+    ) {
+      throw new Error('vault changed while reading')
+    }
+    return buffer.subarray(0, total)
+  } finally {
+    closeSync(descriptor)
+  }
+}
 export function createEncryptedAntigravityAccountStore(path: string): SynchronousAccountStore
 export function createEncryptedAntigravityAccountStore(
   path: string,
@@ -189,8 +244,7 @@ export function createEncryptedAntigravityAccountStore(
       }
       requireProtection()
       try {
-        checkVaultStat(lstatSync(path))
-        return parseVault(readFileSync(path))
+        return parseVault(readVaultBoundedSync(path))
       } catch {
         throw new Error(READ_ERROR)
       }

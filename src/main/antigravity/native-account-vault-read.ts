@@ -7,8 +7,12 @@ import {
   type AntigravityAccountOperation
 } from './native-account-operation'
 
-const MAX_VAULT_BYTES = 4 * 1024 * 1024
-function sameFile(first: Stats, second: Stats): boolean {
+export const MAX_VAULT_BYTES = 4 * 1024 * 1024
+/** One byte past the checked size reveals a same-metadata append, but never past the cap. */
+export function vaultReadByteBudget(checkedSize: number): number {
+  return Math.min(checkedSize + 1, MAX_VAULT_BYTES)
+}
+export function sameVaultFile(first: Stats, second: Stats): boolean {
   return (
     first.dev === second.dev &&
     first.ino === second.ino &&
@@ -63,11 +67,10 @@ export async function readAntigravityAccountVault(
   try {
     const opened = await file.stat()
     privateFile(opened)
-    if (!sameFile(before, opened)) {
+    if (!sameVaultFile(before, opened)) {
       throw new Error('Antigravity vault changed before reading')
     }
-    // One byte past the checked size reveals a same-metadata append, but never past the cap.
-    const buffer = Buffer.alloc(Math.min(opened.size + 1, MAX_VAULT_BYTES))
+    const buffer = Buffer.alloc(vaultReadByteBudget(opened.size))
     let total = 0
     while (total < buffer.length) {
       remainingAccountOperationMs(operation)
@@ -82,8 +85,8 @@ export async function readAntigravityAccountVault(
     const parentAfter = await lstat(parent)
     if (
       total !== opened.size ||
-      !sameFile(opened, after) ||
-      !sameFile(opened, pathAfter) ||
+      !sameVaultFile(opened, after) ||
+      !sameVaultFile(opened, pathAfter) ||
       directory.ino !== parentAfter.ino ||
       directory.dev !== parentAfter.dev ||
       parentAfter.isSymbolicLink() ||
