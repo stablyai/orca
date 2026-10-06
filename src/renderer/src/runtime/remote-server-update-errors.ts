@@ -48,6 +48,11 @@ export function remoteServerUpdateErrorMessage(error: unknown): string {
         'auto.runtime.remoteServerUpdateErrors.reconnectTimeout',
         'The server did not reconnect on the updated version.'
       )
+    case 'remote_update_live_terminals':
+      return translate(
+        'auto.runtime.remoteServerUpdateErrors.liveTerminals',
+        'The server still has live terminals or agents. Close them, then try the update again.'
+      )
     default:
       return message
   }

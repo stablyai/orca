@@ -1,6 +1,6 @@
 import type { useAppStore } from '@/store'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/client-platform'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'

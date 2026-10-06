@@ -8,11 +8,20 @@ import type {
 } from '../../shared/remote-server-update'
 import { hasServeUpdateSupervisor } from '../serve-update-handoff'
 import { getLinuxPackageType } from '../linux-update-package-type'
+import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { UpdaterNudge } from './updater-nudge'
 import type { UpdateInstallMode } from './updater-state'
 
+export type ServeUpdateCensusGate = () => Promise<{ ok: true } | { ok: false; reason: string }>
+
 /** Exposes updater state to runtime RPC callers without leaking internal mutators. */
 export abstract class UpdaterRemoteStatus extends UpdaterNudge {
+  /** Set by serve startup; a null gate means interactive installs need no census. */
+  private serveUpdateCensusGate: ServeUpdateCensusGate | null = null
+
+  setServeUpdateCensusGate(gate: ServeUpdateCensusGate | null): void {
+    this.serveUpdateCensusGate = gate
+  }
   protected getUpdateStatus(): UpdateStatus {
     return this.currentStatus
   }
@@ -43,6 +52,16 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
         installMode: this.updateInstallMode,
         automatic: false,
         reason: 'manual-service-update-required'
+      }
+    }
+    // Why: the verdict must reflect what installRemoteServerUpdate will actually accept —
+    // on supervised Linux serve that is the root helper. Interactive desktop installs
+    // never route through the helper, so the gate must not bind them.
+    if (this.updateInstallMode === 'supervised-headless-serve' && !hasServeUpdateSupervisor()) {
+      return {
+        installMode: this.updateInstallMode,
+        automatic: false,
+        reason: 'updater-unavailable'
       }
     }
     return { installMode: this.updateInstallMode, automatic: true, reason: 'available' }
@@ -81,10 +100,26 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
     return this.getRemoteServerUpdaterSnapshot(runtimeId)
   }
 
-  protected installRemoteServerUpdate(runtimeId: string): RemoteServerUpdateInstallResult {
+  protected async installRemoteServerUpdate(
+    runtimeId: string
+  ): Promise<RemoteServerUpdateInstallResult> {
     this.assertRemoteServerUpdateAvailable()
     if (this.currentStatus.state !== 'downloaded') {
       throw new Error('remote_update_not_downloaded')
+    }
+    // Why: the install RPC is the one path that ends in a server restart, so the
+    // census gate runs here — as close to the quit as possible — rather than in
+    // the check/download paths that do not kill anything.
+    if (this.serveUpdateCensusGate) {
+      const census = await this.serveUpdateCensusGate()
+      if (!census.ok) {
+        recordUpdaterLifecycle(
+          'headless_serve_update_census_blocked',
+          { reason: census.reason },
+          { level: 'warn', message: 'Server update blocked: live terminals may exist' }
+        )
+        throw new Error('remote_update_live_terminals')
+      }
     }
     const targetVersion = this.currentStatus.version
     const result: RemoteServerUpdateInstallResult = {

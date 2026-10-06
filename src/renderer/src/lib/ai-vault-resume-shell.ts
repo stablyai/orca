@@ -3,7 +3,7 @@ import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-co
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
 import { getAiVaultResumeWorkspaceExecutionHostId } from './ai-vault-resume-target'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/client-platform'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../shared/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
 import {

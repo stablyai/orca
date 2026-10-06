@@ -1145,6 +1145,9 @@ jobs:
           node config/scripts/run-headless-serve-shutdown-docker.mjs
           --appimage dist/orca-linux.AppImage --all-entrypoints
 
+      - name: Verify headless serve update flow
+        run: node config/scripts/run-headless-serve-update-docker.mjs --appimage dist/orca-linux.AppImage
+
       # A default container reproduces the hostile AppImage launch environment.
       - wait: cli-fixture-cache
 

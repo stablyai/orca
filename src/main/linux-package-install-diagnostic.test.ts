@@ -33,6 +33,7 @@ describe('redactLinuxPackageInstallText', () => {
   })
 
   it('replaces every cached package-path occurrence before the home directory', () => {
+    vi.spyOn(os, 'userInfo').mockReturnValue({ username: 'devuser' } as os.UserInfo<string>)
     const home = os.homedir()
     const packagePath = `${home}/.cache/orca-updater/Orca-1.2.3.deb`
     const text = `${packagePath} failed; retry ${packagePath}; config ${home}/.config/orca`

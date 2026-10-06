@@ -96,6 +96,7 @@ vi.mock('@/lib/launch-work-item-direct', () => ({
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
+vi.mock('@/lib/client-platform', () => ({ CLIENT_PLATFORM: 'win32' }))
 
 vi.mock('../../../shared/source-control-launch-agent-selection', () => ({
   pickSourceControlLaunchAgent: mocks.pickSourceControlLaunchAgent,

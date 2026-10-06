@@ -104,7 +104,10 @@ async function makeRuntime() {
     }),
     'utf-8'
   )
-  vi.resetModules()
+  // Why no vi.resetModules(): the full persistence+runtime re-import costs 30s+ per test
+  // under full-suite parallelism and blew the 30s default. Isolation holds without it:
+  // the env + initDataPath() re-capture below re-point the module-level data path, and
+  // every test constructs its own Store over a fresh orca-data.json.
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
   const store = createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
@@ -134,8 +137,11 @@ afterEach(async () => {
 })
 
 describe('scoped automationsChanged publication', () => {
+  // Why 120s on every test: Store construction over a real orca-data.json slows
+  // past the 30s default under full-suite parallelism.
   it.each(['update', 'delete'] as const)(
     'waits for durable %s before publishing success',
+    { timeout: 120_000 },
     async (operation) => {
       const { store, runtime, published } = await makeRuntime()
       const gate = Promise.withResolvers<void>()
@@ -152,16 +158,20 @@ describe('scoped automationsChanged publication', () => {
     }
   )
 
-  it('rejects a failed durable definition write without publishing success', async () => {
-    const { store, runtime, published } = await makeRuntime()
-    vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValue(new Error('disk full'))
-    await expect(runtime.updateAutomation('local-1', { name: 'Changed' })).rejects.toThrow(
-      'disk full'
-    )
-    expect(published).toEqual([])
-  })
+  it(
+    'rejects a failed durable definition write without publishing success',
+    { timeout: 120_000 },
+    async () => {
+      const { store, runtime, published } = await makeRuntime()
+      vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValue(new Error('disk full'))
+      await expect(runtime.updateAutomation('local-1', { name: 'Changed' })).rejects.toThrow(
+        'disk full'
+      )
+      expect(published).toEqual([])
+    }
+  )
 
-  it('names the host a delete removed a row from', async () => {
+  it('names the host a delete removed a row from', { timeout: 120_000 }, async () => {
     const { runtime, published } = await makeRuntime()
     await runtime.deleteAutomation('ssh-1-a', {
       selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 }
@@ -171,31 +181,35 @@ describe('scoped automationsChanged publication', () => {
     ])
   })
 
-  it('names the orphan bucket when an unowned row is deleted', async () => {
+  it('names the orphan bucket when an unowned row is deleted', { timeout: 120_000 }, async () => {
     const { runtime, published } = await makeRuntime()
     await runtime.deleteAutomation('orphan-1', { selector: { kind: 'orphan' } })
     expect(published).toEqual([{ reason: 'definition', selector: { kind: 'orphan' } }])
   })
 
-  it('publishes source and destination when an update moves a record between hosts', async () => {
-    const { runtime, published, store } = await makeRuntime()
-    await runtime.updateAutomation(
-      'local-1',
-      { repo: 'repo-ssh' },
-      {
-        expectedOwner: { selector: { kind: 'self' } },
-        destination: { selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 } }
-      }
-    )
-    expect(published).toEqual([
-      { reason: 'definition', selector: { kind: 'self' } },
-      { reason: 'definition', selector: { kind: 'ssh', targetId: 'ssh-1' } }
-    ])
-    expect(store.automationChangeSelector('local-1')).toEqual({
-      kind: 'ssh',
-      targetId: 'ssh-1'
-    })
-  })
+  it(
+    'publishes source and destination when an update moves a record between hosts',
+    { timeout: 120_000 },
+    async () => {
+      const { runtime, published, store } = await makeRuntime()
+      await runtime.updateAutomation(
+        'local-1',
+        { repo: 'repo-ssh' },
+        {
+          expectedOwner: { selector: { kind: 'self' } },
+          destination: { selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 } }
+        }
+      )
+      expect(published).toEqual([
+        { reason: 'definition', selector: { kind: 'self' } },
+        { reason: 'definition', selector: { kind: 'ssh', targetId: 'ssh-1' } }
+      ])
+      expect(store.automationChangeSelector('local-1')).toEqual({
+        kind: 'ssh',
+        targetId: 'ssh-1'
+      })
+    }
+  )
 
   it('publishes one event when an update leaves the record on the same host', async () => {
     const { runtime, published } = await makeRuntime()
