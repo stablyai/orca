@@ -1,6 +1,7 @@
 import React from 'react'
 import { EyeOff, Github, Gitlab, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { TodoistIcon } from '@/components/icons/TodoistIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import {
   ContextMenu,
@@ -226,6 +227,17 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
                 onOpen={() => openTaskPage({ taskSource: 'jira' })}
               >
                 <JiraIcon className="size-3.5" />
+              </TaskProviderShortcut>
+            ) : null}
+            {visibleTaskProviders.includes('todoist') ? (
+              <TaskProviderShortcut
+                label={translate(
+                  'auto.components.sidebar.SidebarNav.openTodoistTasks',
+                  'Open Todoist tasks'
+                )}
+                onOpen={() => openTaskPage({ taskSource: 'todoist' })}
+              >
+                <TodoistIcon className="size-3.5" />
               </TaskProviderShortcut>
             ) : null}
           </span>

@@ -507,6 +507,9 @@
               }
             }
           }
+        },
+        "todoist": {
+          "disconnectFailed": "No se pudo desconectar Todoist"
         }
       }
     },
@@ -2263,7 +2266,21 @@
         "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
         "loadPageUnreachable": "La página {{value0}} está más allá de lo que la búsqueda de GitHub puede devolver.",
         "loadPageFailed": "No se pudo cargar la página {{value0}} desde GitHub.",
-        "loadPageNoMoreResults": "No hay más resultados en la página {{value0}}."
+        "loadPageNoMoreResults": "No hay más resultados en la página {{value0}}.",
+        "todoist": {
+          "connectTitle": "Conecta tu cuenta de Todoist",
+          "connectDescription": "Explora tus tareas de Todoist y crea espacios de trabajo a partir de ellas directamente desde aquí.",
+          "connect": "Conectar Todoist",
+          "hide": "Ocultar Todoist",
+          "filterPlaceholder": "Filtro de Todoist, p. ej. today | overdue, #Work, @label",
+          "shown": "mostradas",
+          "refresh": "Actualizar",
+          "empty": "No se encontraron tareas de Todoist",
+          "emptyFilter": "Prueba con otro filtro de Todoist.",
+          "emptyAll": "No tienes tareas activas.",
+          "start": "Iniciar"
+        },
+        "todoistSource": "Todoist"
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -5391,7 +5408,8 @@
           "fee535205b": "Tareas",
           "d599269755": "Ocultar de la barra lateral",
           "artifacts": "Artefactos",
-          "skills": "Habilidades"
+          "skills": "Habilidades",
+          "openTodoistTasks": "Abrir tareas de Todoist"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Limpiar",
@@ -8604,7 +8622,14 @@
           "integrationsHint": "Las credenciales de todos los proveedores también están en",
           "integrationsLink": "Integraciones",
           "skillHint": ". Después de conectar Linear, los ejemplos de uso están en Ajustes → Linear.",
-          "incompleteBannerBodyWithLinear": "Oculta los proveedores que no uses o expande una tarjeta y completa sus pasos. Para Linear: acceso a la API, la habilidad del agente y Mostrar en Tareas."
+          "incompleteBannerBodyWithLinear": "Oculta los proveedores que no uses o expande una tarjeta y completa sus pasos. Para Linear: acceso a la API, la habilidad del agente y Mostrar en Tareas.",
+          "connectTodoistTitle": "Conectar Todoist",
+          "todoistConnectedAs": "Conectado como {{email}}.",
+          "connectTodoistDescription": "Añade tu token de API desde la configuración de integraciones de Todoist.",
+          "disconnectTodoist": "Desconectar",
+          "addTodoist": "Añadir token de Todoist",
+          "todoistLabel": "Todoist",
+          "todoistDescription": "Conecta Todoist con un token de API y muéstralo en Tareas."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Grosor de la línea divisoria del panel.",
@@ -17472,6 +17497,37 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Desvincular {{value0}} del espacio de trabajo",
         "description": "Orca ocultará los detalles de {{value0}} {{value1}} en este espacio de trabajo. El {{value0}} y la rama en {{value2}} no se modificarán."
+      },
+      "todoist": {
+        "connect": {
+          "dialog": {
+            "title": "Conectar Todoist",
+            "description": "Usa tu token de API de Todoist para explorar tareas y crear espacios de trabajo a partir de ellas.",
+            "tokenLabel": "Token de API",
+            "tokenPlaceholder": "Token de API de Todoist",
+            "tokenHint": "Copia tu token desde",
+            "tokenLink": "la configuración de integraciones de Todoist",
+            "storage": "Tu token se guarda localmente y se cifra cuando el almacenamiento local lo admite.",
+            "cancel": "Cancelar",
+            "verifying": "Verificando…",
+            "connect": "Conectar"
+          }
+        }
+      },
+      "TodoistTaskDrawer": {
+        "title": "Tarea de Todoist",
+        "description": "Consulta, completa y empieza a trabajar desde la tarea seleccionada.",
+        "close": "Cerrar vista previa de la tarea de Todoist",
+        "start": "Iniciar espacio de trabajo",
+        "complete": "Completar",
+        "open": "Abrir en Todoist",
+        "noDescription": "Sin descripción.",
+        "comments": "Comentarios",
+        "noComments": "Sin comentarios."
+      },
+      "TodoistTaskStatusBadge": {
+        "completed": "Completada",
+        "open": "Abierta"
       }
     },
     "i18n": {

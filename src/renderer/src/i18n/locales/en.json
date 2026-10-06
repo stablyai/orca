@@ -680,6 +680,9 @@
               }
             }
           }
+        },
+        "todoist": {
+          "disconnectFailed": "Couldn’t disconnect Todoist"
         }
       }
     },
@@ -2471,7 +2474,21 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "todoist": {
+          "connectTitle": "Connect your Todoist account",
+          "connectDescription": "Browse your Todoist tasks and start workspaces from them directly from here.",
+          "connect": "Connect Todoist",
+          "hide": "Hide Todoist",
+          "filterPlaceholder": "Todoist filter, e.g. today | overdue, #Work, @label",
+          "shown": "shown",
+          "refresh": "Refresh",
+          "empty": "No Todoist tasks found",
+          "emptyFilter": "Try a different Todoist filter.",
+          "emptyAll": "You have no active tasks.",
+          "start": "Start"
+        },
+        "todoistSource": "Todoist"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -5625,7 +5642,8 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "openTodoistTasks": "Open Todoist tasks"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -8866,7 +8884,14 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "connectTodoistTitle": "Connect Todoist",
+          "todoistConnectedAs": "Connected as {{email}}.",
+          "connectTodoistDescription": "Add your Todoist API token from Todoist integration settings.",
+          "disconnectTodoist": "Disconnect",
+          "addTodoist": "Add Todoist token",
+          "todoistLabel": "Todoist",
+          "todoistDescription": "Connect Todoist with an API token and show it in Tasks."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -17659,6 +17684,37 @@
             "hostOnly": "Cursor sign-in details are only readable on the computer running Orca."
           }
         }
+      },
+      "TodoistTaskDrawer": {
+        "title": "Todoist task",
+        "description": "Preview, complete, and start work from the selected task.",
+        "close": "Close Todoist task preview",
+        "start": "Start workspace",
+        "complete": "Complete",
+        "open": "Open in Todoist",
+        "noDescription": "No description.",
+        "comments": "Comments",
+        "noComments": "No comments."
+      },
+      "todoist": {
+        "connect": {
+          "dialog": {
+            "title": "Connect Todoist",
+            "description": "Use your Todoist API token to browse tasks and start workspaces from them.",
+            "tokenLabel": "API token",
+            "tokenPlaceholder": "Todoist API token",
+            "tokenHint": "Copy your token from",
+            "tokenLink": "Todoist integration settings",
+            "storage": "Your token is stored locally and encrypted when local runtime storage supports it.",
+            "cancel": "Cancel",
+            "verifying": "Verifying…",
+            "connect": "Connect"
+          }
+        }
+      },
+      "TodoistTaskStatusBadge": {
+        "completed": "Completed",
+        "open": "Open"
       }
     },
     "i18n": {

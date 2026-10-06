@@ -27,6 +27,9 @@ export function useTaskSourceProviderReadiness(
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const todoistStatus = useAppStore((s) => s.todoistStatus)
+  const todoistStatusChecked = useAppStore((s) => s.todoistStatusChecked)
+  const todoistStatusContextKey = useAppStore((s) => s.todoistStatusContextKey)
   const linearConnected = useLinearProviderConnected()
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
@@ -59,6 +62,9 @@ export function useTaskSourceProviderReadiness(
     preflightStatus.glab.authenticated === true
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
+  const todoistChecking =
+    todoistStatusContextKey !== providerRuntimeContextKey || !todoistStatusChecked
+  const todoistConnected = !todoistChecking && todoistStatus.connected
   const linearChecking =
     linearStatusContextKey !== providerRuntimeContextKey || !linearStatusChecked
   // Normalization returns a new array, so memoize by provider contents.
@@ -91,6 +97,11 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      todoist: {
+        connected: todoistConnected,
+        checking: todoistChecking,
+        visible: visible.has('todoist')
       }
     }
   }, [
@@ -106,6 +117,8 @@ export function useTaskSourceProviderReadiness(
     linearSkillUnverifiable,
     reviewChecking,
     reviewUnavailable,
+    todoistChecking,
+    todoistConnected,
     visibleProvidersKey
   ])
 }

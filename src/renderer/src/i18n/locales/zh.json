@@ -507,6 +507,9 @@
               }
             }
           }
+        },
+        "todoist": {
+          "disconnectFailed": "无法断开 Todoist 连接"
         }
       }
     },
@@ -2263,7 +2266,21 @@
         "jiraLinkSourceUnavailable": "无法关联此 Jira 议题。请重新连接 Jira 或选择匹配的站点，然后重试。",
         "loadPageUnreachable": "第 {{value0}} 页超出了 GitHub 搜索可返回的范围。",
         "loadPageFailed": "无法从 GitHub 加载第 {{value0}} 页。",
-        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。"
+        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。",
+        "todoist": {
+          "connectTitle": "连接你的 Todoist 账户",
+          "connectDescription": "直接在这里浏览 Todoist 任务并从中启动工作区。",
+          "connect": "连接 Todoist",
+          "hide": "隐藏 Todoist",
+          "filterPlaceholder": "Todoist 筛选器，例如 today | overdue, #Work, @label",
+          "shown": "项已显示",
+          "refresh": "刷新",
+          "empty": "未找到 Todoist 任务",
+          "emptyFilter": "请尝试其他 Todoist 筛选器。",
+          "emptyAll": "你没有进行中的任务。",
+          "start": "开始"
+        },
+        "todoistSource": "Todoist"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -5372,7 +5389,8 @@
           "fee535205b": "任务",
           "d599269755": "从侧边栏隐藏",
           "artifacts": "工件",
-          "skills": "技能"
+          "skills": "技能",
+          "openTodoistTasks": "打开 Todoist 任务"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "清除",
@@ -8589,7 +8607,14 @@
           "integrationsHint": "所有提供商的凭据也可在此管理：",
           "integrationsLink": "集成",
           "skillHint": "。连接 Linear 后，可在设置 → Linear 中查看使用示例。",
-          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。"
+          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。",
+          "connectTodoistTitle": "连接 Todoist",
+          "todoistConnectedAs": "已以 {{email}} 身份连接。",
+          "connectTodoistDescription": "从 Todoist 集成设置中添加你的 API 令牌。",
+          "disconnectTodoist": "断开连接",
+          "addTodoist": "添加 Todoist 令牌",
+          "todoistLabel": "Todoist",
+          "todoistDescription": "使用 API 令牌连接 Todoist 并在任务中显示。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "窗格分隔线的厚度。",
@@ -17472,6 +17497,37 @@
             "hostOnly": "Cursor 登录详情仅可在运行 Orca 的电脑上读取。"
           }
         }
+      },
+      "todoist": {
+        "connect": {
+          "dialog": {
+            "title": "连接 Todoist",
+            "description": "使用你的 Todoist API 令牌浏览任务并从任务启动工作区。",
+            "tokenLabel": "API 令牌",
+            "tokenPlaceholder": "Todoist API 令牌",
+            "tokenHint": "从以下位置复制令牌：",
+            "tokenLink": "Todoist 集成设置",
+            "storage": "你的令牌存储在本地，并在本地存储支持时加密。",
+            "cancel": "取消",
+            "verifying": "正在验证…",
+            "connect": "连接"
+          }
+        }
+      },
+      "TodoistTaskDrawer": {
+        "title": "Todoist 任务",
+        "description": "预览、完成所选任务并从中开始工作。",
+        "close": "关闭 Todoist 任务预览",
+        "start": "启动工作区",
+        "complete": "完成",
+        "open": "在 Todoist 中打开",
+        "noDescription": "无描述。",
+        "comments": "评论",
+        "noComments": "无评论。"
+      },
+      "TodoistTaskStatusBadge": {
+        "completed": "已完成",
+        "open": "未完成"
       }
     },
     "i18n": {

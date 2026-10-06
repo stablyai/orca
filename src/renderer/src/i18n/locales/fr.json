@@ -608,6 +608,9 @@
               }
             }
           }
+        },
+        "todoist": {
+          "disconnectFailed": "Impossible de déconnecter Todoist"
         }
       }
     },
@@ -2368,7 +2371,21 @@
         "linearModeHasWorktreeTooltip": "Tickets Linear liés à un espace de travail Orca",
         "linearEmptyHasWorktree": "Aucun ticket Linear n'est encore lié à un espace de travail Orca. Démarrez le travail depuis une issue Linear pour le voir ici.",
         "linearOpenAttachedWorkspace": "Ouvrir l'espace de travail attaché à {{value0}}",
-        "linearWorktreesColumn": "Espaces de travail"
+        "linearWorktreesColumn": "Espaces de travail",
+        "todoist": {
+          "connectTitle": "Connectez votre compte Todoist",
+          "connectDescription": "Parcourez vos tâches Todoist et créez des espaces de travail à partir d’elles directement ici.",
+          "connect": "Connecter Todoist",
+          "hide": "Masquer Todoist",
+          "filterPlaceholder": "Filtre Todoist, p. ex. today | overdue, #Work, @label",
+          "shown": "affichées",
+          "refresh": "Actualiser",
+          "empty": "Aucune tâche Todoist trouvée",
+          "emptyFilter": "Essayez un autre filtre Todoist.",
+          "emptyAll": "Vous n’avez aucune tâche active.",
+          "start": "Démarrer"
+        },
+        "todoistSource": "Todoist"
       },
       "Terminal": {
         "73768427cf": "Fermer",
@@ -5511,7 +5528,8 @@
           "fee535205b": "Tâches",
           "d599269755": "Masquer de la barre latérale",
           "artifacts": "Artefacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "openTodoistTasks": "Ouvrir les tâches Todoist"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Effacer",
@@ -8747,7 +8765,14 @@
           "integrationsHint": "Les identifiants de tous les fournisseurs se trouvent aussi sous",
           "integrationsLink": "Intégrations",
           "skillHint": ". Une fois Linear connecté, des exemples d'utilisation restent disponibles sous Paramètres → Linear.",
-          "incompleteBannerBodyWithLinear": "Masquez les fournisseurs que vous n'utilisez pas, ou dépliez une carte et terminez ses étapes. Pour Linear : accès API, skill d'agent et Afficher dans Tâches."
+          "incompleteBannerBodyWithLinear": "Masquez les fournisseurs que vous n'utilisez pas, ou dépliez une carte et terminez ses étapes. Pour Linear : accès API, skill d'agent et Afficher dans Tâches.",
+          "connectTodoistTitle": "Connecter Todoist",
+          "todoistConnectedAs": "Connecté en tant que {{email}}.",
+          "connectTodoistDescription": "Ajoutez votre jeton d’API depuis les paramètres d’intégration de Todoist.",
+          "disconnectTodoist": "Déconnecter",
+          "addTodoist": "Ajouter un jeton Todoist",
+          "todoistLabel": "Todoist",
+          "todoistDescription": "Connectez Todoist avec un jeton d’API et affichez-le dans Tâches."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Épaisseur de la ligne de séparation des volets.",
@@ -17573,6 +17598,37 @@
             "hostOnly": "Les détails de connexion Cursor ne sont lisibles que sur l'ordinateur qui exécute Orca."
           }
         }
+      },
+      "todoist": {
+        "connect": {
+          "dialog": {
+            "title": "Connecter Todoist",
+            "description": "Utilisez votre jeton d’API Todoist pour parcourir vos tâches et créer des espaces de travail à partir d’elles.",
+            "tokenLabel": "Jeton d’API",
+            "tokenPlaceholder": "Jeton d’API Todoist",
+            "tokenHint": "Copiez votre jeton depuis",
+            "tokenLink": "les paramètres d’intégration de Todoist",
+            "storage": "Votre jeton est stocké localement et chiffré lorsque le stockage local le permet.",
+            "cancel": "Annuler",
+            "verifying": "Vérification…",
+            "connect": "Connecter"
+          }
+        }
+      },
+      "TodoistTaskDrawer": {
+        "title": "Tâche Todoist",
+        "description": "Prévisualisez, terminez et démarrez le travail depuis la tâche sélectionnée.",
+        "close": "Fermer l’aperçu de la tâche Todoist",
+        "start": "Démarrer un espace de travail",
+        "complete": "Terminer",
+        "open": "Ouvrir dans Todoist",
+        "noDescription": "Aucune description.",
+        "comments": "Commentaires",
+        "noComments": "Aucun commentaire."
+      },
+      "TodoistTaskStatusBadge": {
+        "completed": "Terminée",
+        "open": "Ouverte"
       }
     },
     "i18n": {

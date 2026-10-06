@@ -507,6 +507,9 @@
               }
             }
           }
+        },
+        "todoist": {
+          "disconnectFailed": "Todoist の接続を解除できませんでした"
         }
       }
     },
@@ -2263,7 +2266,21 @@
         "jiraLinkSourceUnavailable": "この Jira Issue をリンクできませんでした。Jira に再接続するか該当するサイトを選択してから、もう一度お試しください。",
         "loadPageUnreachable": "ページ {{value0}} は GitHub 検索が返せる範囲を超えています。",
         "loadPageFailed": "GitHub からページ {{value0}} を読み込めませんでした。",
-        "loadPageNoMoreResults": "ページ {{value0}} にはこれ以上結果がありません。"
+        "loadPageNoMoreResults": "ページ {{value0}} にはこれ以上結果がありません。",
+        "todoist": {
+          "connectTitle": "Todoist アカウントを接続",
+          "connectDescription": "ここから Todoist のタスクを閲覧し、ワークスペースを開始できます。",
+          "connect": "Todoist を接続",
+          "hide": "Todoist を非表示",
+          "filterPlaceholder": "Todoist フィルター（例: today | overdue, #Work, @label）",
+          "shown": "件表示",
+          "refresh": "更新",
+          "empty": "Todoist のタスクが見つかりません",
+          "emptyFilter": "別の Todoist フィルターを試してください。",
+          "emptyAll": "アクティブなタスクはありません。",
+          "start": "開始"
+        },
+        "todoistSource": "Todoist"
       },
       "Terminal": {
         "73768427cf": "閉じる",
@@ -5372,7 +5389,8 @@
           "fee535205b": "タスク",
           "d599269755": "サイドバーから非表示",
           "artifacts": "アーティファクト",
-          "skills": "スキル"
+          "skills": "スキル",
+          "openTodoistTasks": "Todoist のタスクを開く"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "クリア",
@@ -8626,7 +8644,14 @@
           "integrationsHint": "すべてのプロバイダーの認証情報は次の場所でも管理できます：",
           "integrationsLink": "連携",
           "skillHint": "。Linear の接続後、使用例は設定 → Linear で確認できます。",
-          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。"
+          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。",
+          "connectTodoistTitle": "Todoist を接続",
+          "todoistConnectedAs": "{{email}} として接続済み。",
+          "connectTodoistDescription": "Todoist の連携設定から API トークンを追加します。",
+          "disconnectTodoist": "接続を解除",
+          "addTodoist": "Todoist トークンを追加",
+          "todoistLabel": "Todoist",
+          "todoistDescription": "API トークンで Todoist を接続し、タスクに表示します。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "ペイン分割線の太さ。",
@@ -17472,6 +17497,37 @@
             "hostOnly": "Cursor のサインイン詳細は、Orca を実行しているコンピュータでのみ読み取れます。"
           }
         }
+      },
+      "todoist": {
+        "connect": {
+          "dialog": {
+            "title": "Todoist を接続",
+            "description": "Todoist の API トークンを使ってタスクを閲覧し、タスクからワークスペースを開始します。",
+            "tokenLabel": "API トークン",
+            "tokenPlaceholder": "Todoist API トークン",
+            "tokenHint": "トークンのコピー元:",
+            "tokenLink": "Todoist の連携設定",
+            "storage": "トークンはローカルに保存され、ローカルストレージが対応している場合は暗号化されます。",
+            "cancel": "キャンセル",
+            "verifying": "確認中…",
+            "connect": "接続"
+          }
+        }
+      },
+      "TodoistTaskDrawer": {
+        "title": "Todoist タスク",
+        "description": "選択したタスクをプレビュー、完了し、作業を開始します。",
+        "close": "Todoist タスクのプレビューを閉じる",
+        "start": "ワークスペースを開始",
+        "complete": "完了",
+        "open": "Todoist で開く",
+        "noDescription": "説明はありません。",
+        "comments": "コメント",
+        "noComments": "コメントはありません。"
+      },
+      "TodoistTaskStatusBadge": {
+        "completed": "完了済み",
+        "open": "未完了"
       }
     },
     "i18n": {

@@ -52,18 +52,16 @@ export function getTaskSourceContextSummary(args: {
       return getRepoBackedTaskSourceSummary(args)
     case 'linear':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.linearWorkspaceName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
+        ...args,
+        accountLabel: args.linearWorkspaceName
       })
     case 'jira':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.jiraSiteName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
+        ...args,
+        accountLabel: args.jiraSiteName
       })
+    case 'todoist':
+      return getAccountBackedTaskSourceSummary(args.providerLabel, { ...args, accountLabel: null })
   }
 }
 
@@ -154,7 +152,7 @@ function getAccountBackedTaskSourceSummary(
   providerLabel: string,
   args: {
     accountLabel: string | null | undefined
-    accountHostId: ExecutionHostScope | null | undefined
+    accountHostId?: ExecutionHostScope | null
     hostLabelById?: HostLabelLookup
     hostAvailability?: readonly TaskSourceHostAvailability[]
   }
@@ -198,6 +196,8 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'todoist':
+      return identity.projectName ?? identity.projectId ?? null
   }
 }
 

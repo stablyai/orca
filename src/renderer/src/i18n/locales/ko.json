@@ -507,6 +507,9 @@
               }
             }
           }
+        },
+        "todoist": {
+          "disconnectFailed": "Todoist 연결을 해제하지 못했습니다"
         }
       }
     },
@@ -2263,7 +2266,21 @@
         "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
         "loadPageUnreachable": "{{value0}} 페이지는 GitHub 검색이 반환할 수 있는 범위를 벗어났습니다.",
         "loadPageFailed": "GitHub에서 {{value0}} 페이지를 불러오지 못했습니다.",
-        "loadPageNoMoreResults": "{{value0}} 페이지에 더 이상 결과가 없습니다."
+        "loadPageNoMoreResults": "{{value0}} 페이지에 더 이상 결과가 없습니다.",
+        "todoist": {
+          "connectTitle": "Todoist 계정 연결",
+          "connectDescription": "여기에서 바로 Todoist 작업을 탐색하고 워크스페이스를 시작하세요.",
+          "connect": "Todoist 연결",
+          "hide": "Todoist 숨기기",
+          "filterPlaceholder": "Todoist 필터 (예: today | overdue, #Work, @label)",
+          "shown": "개 표시",
+          "refresh": "새로 고침",
+          "empty": "Todoist 작업을 찾을 수 없음",
+          "emptyFilter": "다른 Todoist 필터를 사용해 보세요.",
+          "emptyAll": "활성 작업이 없습니다.",
+          "start": "시작"
+        },
+        "todoistSource": "Todoist"
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -5372,7 +5389,8 @@
           "fee535205b": "작업",
           "d599269755": "사이드바에서 숨기기",
           "artifacts": "아티팩트",
-          "skills": "스킬"
+          "skills": "스킬",
+          "openTodoistTasks": "Todoist 작업 열기"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "지우기",
@@ -8589,7 +8607,14 @@
           "integrationsHint": "모든 제공업체의 자격 증명은 다음에서도 관리할 수 있습니다:",
           "integrationsLink": "연동",
           "skillHint": ". Linear를 연결한 후 사용 예시는 설정 → Linear에서 확인할 수 있습니다.",
-          "incompleteBannerBodyWithLinear": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다."
+          "incompleteBannerBodyWithLinear": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다.",
+          "connectTodoistTitle": "Todoist 연결",
+          "todoistConnectedAs": "{{email}}(으)로 연결됨.",
+          "connectTodoistDescription": "Todoist 통합 설정에서 API 토큰을 추가하세요.",
+          "disconnectTodoist": "연결 해제",
+          "addTodoist": "Todoist 토큰 추가",
+          "todoistLabel": "Todoist",
+          "todoistDescription": "API 토큰으로 Todoist를 연결하고 작업에 표시하세요."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "창 구분선의 두께입니다.",
@@ -17472,6 +17497,37 @@
             "hostOnly": "Cursor 로그인 정보는 Orca가 실행 중인 컴퓨터에서만 읽을 수 있습니다."
           }
         }
+      },
+      "todoist": {
+        "connect": {
+          "dialog": {
+            "title": "Todoist 연결",
+            "description": "Todoist API 토큰으로 작업을 탐색하고 작업에서 워크스페이스를 시작하세요.",
+            "tokenLabel": "API 토큰",
+            "tokenPlaceholder": "Todoist API 토큰",
+            "tokenHint": "토큰 복사 위치:",
+            "tokenLink": "Todoist 통합 설정",
+            "storage": "토큰은 로컬에 저장되며 로컬 저장소가 지원하면 암호화됩니다.",
+            "cancel": "취소",
+            "verifying": "확인 중…",
+            "connect": "연결"
+          }
+        }
+      },
+      "TodoistTaskDrawer": {
+        "title": "Todoist 작업",
+        "description": "선택한 작업을 미리 보고, 완료하고, 작업을 시작하세요.",
+        "close": "Todoist 작업 미리 보기 닫기",
+        "start": "워크스페이스 시작",
+        "complete": "완료",
+        "open": "Todoist에서 열기",
+        "noDescription": "설명이 없습니다.",
+        "comments": "댓글",
+        "noComments": "댓글이 없습니다."
+      },
+      "TodoistTaskStatusBadge": {
+        "completed": "완료됨",
+        "open": "열림"
       }
     },
     "i18n": {
