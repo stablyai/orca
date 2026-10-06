@@ -99,6 +99,11 @@ export const TerminalRename = TerminalHandle.extend({
   })
 })
 
+// An explicit empty string clears the pane; an omitted title must not clear it.
+export const TerminalSetPaneTitle = TerminalHandle.extend({
+  title: z.string()
+})
+
 export const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),

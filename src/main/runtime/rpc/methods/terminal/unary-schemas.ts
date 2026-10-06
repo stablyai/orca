@@ -13,6 +13,7 @@ export {
   TerminalResolveActive,
   TerminalResolvePane,
   TerminalSend,
+  TerminalSetPaneTitle,
   TerminalSetViewerColors,
   TerminalSleep,
   TerminalSplit,

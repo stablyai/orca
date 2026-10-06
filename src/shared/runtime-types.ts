@@ -165,6 +165,7 @@ export type {
   RuntimeTerminalPromptStage,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
+  RuntimeTerminalSetPaneTitle,
   RuntimeTerminalResolvePane,
   RuntimeTerminalSend,
   RuntimeTerminalShow,

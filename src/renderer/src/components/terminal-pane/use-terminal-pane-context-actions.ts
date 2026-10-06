@@ -21,14 +21,11 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     handleStartRename,
     managerRef,
     paneCwdRef,
-    paneTitlesRef,
     paneTransportsRef,
-    persistLayoutSnapshot,
     quickCommandGroupId,
     quickCommandRepoId,
     projectHostSetupProjection,
     removePaneTitle,
-    removedTitleLeafIdsRef,
     renameBlurCommitEnabledRef,
     renameEnableBlurFrameRef,
     renameFocusFrameRef,
@@ -42,7 +39,7 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     rightClickToPaste,
     setAgentSessionContinuation,
     setAgentSessionFork,
-    setPaneTitles,
+    setPaneTitle,
     setRenamingPaneId,
     setTerminalError,
     tabId,
@@ -55,26 +52,17 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
       return
     }
     renameSubmittedRef.current = true
-    const trimmed = renameValue.trim()
-    if (trimmed.length === 0) {
-      if (paneTitlesRef.current[renamingPaneId]) {
-        removePaneTitle(renamingPaneId)
-      }
-      closeRenameSession()
-      setRenamingPaneId(null)
-      return
-    }
-    setPaneTitles((previous) => ({ ...previous, [renamingPaneId]: trimmed }))
-    paneTitlesRef.current = { ...paneTitlesRef.current, [renamingPaneId]: trimmed }
-    const leafId = managerRef.current?.getPanes().find((pane) => pane.id === renamingPaneId)?.leafId
-    if (leafId) {
-      removedTitleLeafIdsRef.current.delete(leafId)
-    }
+    setPaneTitle(renamingPaneId, renameValue)
     closeRenameSession()
     setRenamingPaneId(null)
-    persistLayoutSnapshot()
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [closeRenameSession, renamingPaneId, renameValue, removePaneTitle, persistLayoutSnapshot])
+  }, [
+    closeRenameSession,
+    renamingPaneId,
+    renameValue,
+    renameSubmittedRef,
+    setPaneTitle,
+    setRenamingPaneId
+  ])
   const handleRenameCancel = useCallback(() => {
     renameSubmittedRef.current = true
     closeRenameSession()

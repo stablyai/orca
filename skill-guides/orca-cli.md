@@ -177,12 +177,15 @@ ORCA terminal create --worktree active --command "codex" --json
 ORCA terminal split --terminal <handle> --direction vertical --json
 ORCA terminal split --terminal <handle> --direction horizontal --command "npm test" --json
 ORCA terminal rename --terminal <handle> --title "New Name" --json
+ORCA terminal set-pane-title --terminal <handle> --title "REVIEWER" --json
 ORCA terminal switch --terminal <handle> --json
 ORCA terminal close --terminal <handle> --json
 ORCA terminal close --worktree id:<repoId>::<worktreePath> --all --json
 ```
 
 Terminal rules:
+
+- `terminal rename` names the tab. `terminal set-pane-title` names one pane through the running desktop and persists its custom header; pass `--title ""` to clear it.
 
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
 - Use `terminal close --terminal <handle>` to close one terminal. Use `terminal close --worktree <selector> --all` to stop every terminal process in exactly that workspace and durably remove its terminal tabs, layouts, and agent-resume records.

@@ -94,6 +94,7 @@ export type RuntimeNotifier = {
     }
   ): void
   renameTerminal(tabId: string, title: string | null): void
+  setPaneTitle?(tabId: string, leafId: string, title: string | null): boolean
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>

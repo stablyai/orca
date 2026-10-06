@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SetTerminalPaneTitleDetail } from '@/constants/terminal'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
@@ -54,16 +55,19 @@ const APP_TS = { filePath: '/repo1/background/src/app.ts', relativePath: 'src/ap
 const VIEWED_APP_TS = { filePath: '/repo1/viewed/src/app.ts', relativePath: 'src/app.ts' }
 
 function setup(viewedSurface: 'editor' | 'terminal'): {
+  paneTitle: (payload: SetTerminalPaneTitleDetail) => void
   openFile: (payload: OpenFilePayload) => void
   openDiff: (payload: OpenDiffPayload) => void
   store: TestStore
 } {
   const mockApi = createStoreSessionMockApi()
   const listeners: {
+    paneTitle?: (payload: SetTerminalPaneTitleDetail) => void
     openFile?: (payload: OpenFilePayload) => void
     openDiff?: (payload: OpenDiffPayload) => void
   } = {}
   vi.stubGlobal('window', {
+    dispatchEvent: vi.fn(),
     api: {
       ...mockApi,
       ui: {
@@ -73,6 +77,10 @@ function setup(viewedSurface: 'editor' | 'terminal'): {
         },
         onOpenDiffFromMobile: (cb: (payload: OpenDiffPayload) => void) => {
           listeners.openDiff = cb
+          return () => {}
+        },
+        onSetPaneTitle: (cb: (payload: SetTerminalPaneTitleDetail) => void) => {
+          listeners.paneTitle = cb
           return () => {}
         },
         onCloseTerminal: () => () => {},
@@ -106,11 +114,11 @@ function setup(viewedSurface: 'editor' | 'terminal'): {
   }
   store.setState({ activeView: 'terminal', pendingRevealWorktree: null })
   registerMobileAndTerminalCloseIpcBridge([], vi.fn())
-  const { openFile, openDiff } = listeners
-  if (!openFile || !openDiff) {
+  const { openFile, openDiff, paneTitle } = listeners
+  if (!openFile || !openDiff || !paneTitle) {
     throw new Error('file-open listeners were not registered')
   }
-  return { openFile, openDiff, store }
+  return { openFile, openDiff, paneTitle, store }
 }
 
 /** Everything the user can see or type into on the desktop. */
@@ -400,5 +408,41 @@ describe('runtime file opens on the host desktop', () => {
     expect(state.activeWorktreeId).toBe(BACKGROUND)
     expect(state.openFiles.find((file) => file.id === state.activeFileId)?.mode).toBe('diff')
     expect(state.pendingRevealWorktree?.worktreeId).toBe(BACKGROUND)
+  })
+})
+
+describe('pane titles without a mounted pane manager', () => {
+  it('persists set and clear in the existing layout without disturbing siblings or focus', () => {
+    const { paneTitle, store } = setup('terminal')
+    const tab = store.getState().createTab(BACKGROUND)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const siblingId = '22222222-2222-4222-8222-222222222222'
+    const layout = {
+      root: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', leafId },
+        second: { type: 'leaf', leafId: siblingId }
+      },
+      activeLeafId: siblingId,
+      expandedLeafId: null,
+      titlesByLeafId: { [siblingId]: 'DEVELOPER' },
+      ptyIdsByLeafId: { [leafId]: 'pty-1', [siblingId]: 'pty-2' },
+      buffersByLeafId: { [leafId]: 'scrollback' }
+    } as const
+    store.getState().setTabLayout(tab.id, layout)
+    const before = screenState(store)
+    paneTitle({ tabId: tab.id, leafId, title: 'REVIEWER' })
+    expect(store.getState().terminalLayoutsByTabId[tab.id]).toEqual({
+      ...layout,
+      titlesByLeafId: { [leafId]: 'REVIEWER', [siblingId]: 'DEVELOPER' }
+    })
+    paneTitle({ tabId: tab.id, leafId, title: null })
+    expect(store.getState().terminalLayoutsByTabId[tab.id]).toEqual(layout)
+    paneTitle({ tabId: tab.id, leafId: '33333333-3333-4333-8333-333333333333', title: 'WRONG' })
+    paneTitle({ tabId: tab.id, leafId: 'pane:7', title: 'WRONG' })
+    expect(store.getState().terminalLayoutsByTabId[tab.id]).toEqual(layout)
+    expect(store.getState().tabsByWorktree[BACKGROUND][0].customTitle).toBeNull()
+    expect(screenState(store)).toEqual(before)
   })
 })

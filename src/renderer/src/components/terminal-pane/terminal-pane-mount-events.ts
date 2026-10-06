@@ -1,5 +1,11 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { CLOSE_TERMINAL_PANE_EVENT, type CloseTerminalPaneDetail } from '@/constants/terminal'
+import {
+  CLOSE_TERMINAL_PANE_EVENT,
+  SET_TERMINAL_PANE_TITLE_EVENT,
+  type CloseTerminalPaneDetail,
+  type SetTerminalPaneTitleDetail
+} from '@/constants/terminal'
+import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
@@ -23,6 +29,7 @@ export function installTerminalPaneMountEvents(args: {
     worktreeId: string
     isActive: boolean
     managerRef: React.RefObject<PaneManager | null>
+    setPaneTitle: (paneId: number, title: string | null) => void
     persistLayoutSnapshot: () => void
     syncCanExpandState: () => void
     queueResizeAll: (focusActive: boolean) => void
@@ -110,8 +117,24 @@ export function installTerminalPaneMountEvents(args: {
     deps.persistLayoutSnapshot()
   }
 
+  const onSetPaneTitle = (event: Event): void => {
+    if (!(event instanceof CustomEvent)) {
+      return
+    }
+    const detail: SetTerminalPaneTitleDetail = event.detail
+    if (!detail || detail.tabId !== deps.tabId) {
+      return
+    }
+    const resolution = resolveLeafIdForManager(deps.tabId, detail.leafId, deps.managerRef.current)
+    if (resolution.status === 'resolved') {
+      deps.setPaneTitle(resolution.numericPaneId, detail.title)
+    }
+  }
+
+  window.addEventListener(SET_TERMINAL_PANE_TITLE_EVENT, onSetPaneTitle)
   window.addEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
   return () => {
+    window.removeEventListener(SET_TERMINAL_PANE_TITLE_EVENT, onSetPaneTitle)
     unregisterTerminalPaneSplitRequestHandler()
     window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
   }

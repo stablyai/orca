@@ -6,6 +6,7 @@ export const PASTE_TERMINAL_TEXT_EVENT = 'orca-paste-terminal-text'
 export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT = 'orca-request-active-terminal-pane-split'
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
+export const SET_TERMINAL_PANE_TITLE_EVENT = 'orca-set-terminal-pane-title'
 export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-terminal-worktree'
 
 // Why: mobile wake (experimental agent sleep) must fire the cold-restore
@@ -71,6 +72,14 @@ export type CloseTerminalPaneDetail = {
   preservePty?: boolean
   retireSurface?: boolean
   expectedPtyId?: string
+}
+
+export type SetTerminalPaneTitleDetail = {
+  tabId: string
+  /** Durable layout key; the mounted pane resolves it to its renderer-local numeric id. */
+  leafId: string
+  /** Trimmed title, or null to fall back to the pane's automatic title. */
+  title: string | null
 }
 
 export type BackgroundMountTerminalWorktreeDetail = {

@@ -105,6 +105,7 @@ export function useTerminalPaneMountLifecycle(
         worktreeId: deps.worktreeId,
         isActive: deps.isActive,
         managerRef: deps.managerRef,
+        setPaneTitle: deps.setPaneTitle,
         persistLayoutSnapshot: deps.persistLayoutSnapshot,
         syncCanExpandState: preparation.syncCanExpandState,
         queueResizeAll

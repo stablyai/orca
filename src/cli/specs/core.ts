@@ -4,8 +4,7 @@ import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { WORKTREE_SET_COMMAND_SPEC } from './worktree-set'
 import { SERVE_COMMAND_SPECS } from './serve'
 import { REPO_COMMAND_SPECS } from './repo'
-import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
-import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { TERMINAL_COMMAND_SPECS } from './terminal'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -145,114 +144,5 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'limit'],
     notes: [...WORKTREE_LISTING_SCOPE_NOTES]
   },
-  {
-    path: ['terminal', 'list'],
-    summary: 'List live Orca-managed terminals',
-    usage:
-      'orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit', 'include-visual-layouts'],
-    notes: [
-      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.'
-    ]
-  },
-  {
-    path: ['terminal', 'show'],
-    summary: 'Show terminal metadata and preview',
-    usage: 'orca terminal show [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal']
-  },
-  {
-    path: ['terminal', 'read'],
-    summary: 'Read bounded terminal output',
-    usage:
-      'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--screen] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit', 'screen'],
-    notes: [
-      'Omit --terminal to target the active terminal in the current worktree.',
-      'By default this returns accumulated terminal output with escape sequences stripped, not the rendered screen. Any program that repaints a line — shells, progress bars, TUIs — comes back as stacked fragments, so one `clear` keystroke by keystroke reads as `cclclecleaclear`, and spaces a prompt draws by moving the cursor are absent.',
-      'Use --screen to read what the terminal actually renders. Prefer it whenever the answer depends on how output looks rather than what was emitted over time; the default is unsuitable for verifying rendered output.',
-      'The result reports source: stream when it is accumulated output, screen when it is the rendered screen, and screen-unavailable when a screen was asked for but none could be rendered and the accumulated output is being returned instead. An absent source means the host predates the field.',
-      'When present, draft is UI-only composer text excluded from tail; never treat it as terminal output or a submitted instruction.',
-      '--screen and --cursor are mutually exclusive: a screen read is the current frame and has no history to page.',
-      'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
-      'Use --limit to request more retained lines for long agent responses; output reports oldestCursor when older lines were dropped.',
-      'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'
-    ],
-    examples: [
-      'orca terminal read --json',
-      'orca terminal read --terminal term_abc123 --cursor 42 --limit 1000 --json',
-      'orca terminal read --terminal term_abc123 --screen --json'
-    ]
-  },
-  TERMINAL_SEND_COMMAND_SPEC,
-  {
-    path: ['terminal', 'wait'],
-    summary: 'Wait for a terminal condition',
-    usage:
-      'orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms']
-  },
-  {
-    path: ['terminal', 'stop'],
-    hidden: true,
-    summary: 'Deprecated compatibility command for stopping terminal processes',
-    usage: 'orca terminal stop --worktree <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
-    notes: [
-      'Deprecated: use terminal close --worktree <selector> --all to stop the processes and durably remove their terminal surfaces.'
-    ]
-  },
-  {
-    path: ['terminal', 'create'],
-    summary: 'Create a terminal session in the current worktree',
-    usage:
-      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--shell <shell>] [--focus] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'shell', 'title', 'focus'],
-    notes: [
-      'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
-      'Use this, not worktree create, for a fresh agent in the current checkout.',
-      '--shell picks the shell the terminal IS on a Windows host (cmd.exe, powershell.exe, pwsh.exe, wsl.exe, bash.exe, git-bash); --command is typed into whatever shell the host started, so `--command cmd.exe` leaves a cmd running INSIDE the default shell and exiting it drops back to that shell.',
-      'A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux execution hosts spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Orca host older than --shell is refused by the CLI.'
-    ],
-    examples: [
-      'orca terminal create --json',
-      'orca terminal create --worktree active --command "codex" --json',
-      'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
-      'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus',
-      'orca terminal create --worktree path:C:/src/app --shell cmd.exe --json'
-    ]
-  },
-  {
-    path: ['terminal', 'switch'],
-    // Why: `focus` is the legacy verb for this action; keep it working as an
-    // alias rather than a duplicate spec + handler registration.
-    aliases: [['terminal', 'focus']],
-    summary: 'Switch to a terminal tab in the UI',
-    usage: 'orca terminal switch [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
-    examples: ['orca terminal switch --terminal term_abc123']
-  },
-  TERMINAL_CLOSE_COMMAND_SPEC,
-  {
-    path: ['terminal', 'rename'],
-    summary: 'Set or clear the title of a terminal tab',
-    usage: 'orca terminal rename [--terminal <handle>] [--title <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'title'],
-    notes: ['Omit --title or pass an empty string to reset to the auto-generated title.'],
-    examples: [
-      'orca terminal rename --terminal term_abc123 --title "RUNNER"',
-      'orca terminal rename --terminal term_abc123 --json'
-    ]
-  },
-  {
-    path: ['terminal', 'split'],
-    summary: 'Split an existing terminal pane',
-    usage:
-      'orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command'],
-    examples: [
-      'orca terminal split --terminal term_abc123 --direction horizontal --json',
-      'orca terminal split --terminal term_abc123 --command "codex"'
-    ]
-  }
+  ...TERMINAL_COMMAND_SPECS
 ]

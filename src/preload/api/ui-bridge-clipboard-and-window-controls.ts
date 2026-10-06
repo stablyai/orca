@@ -59,6 +59,16 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.on('ui:closeTerminal', listener)
     return () => ipcRenderer.removeListener('ui:closeTerminal', listener)
   },
+  onSetPaneTitle: (
+    callback: (data: { tabId: string; leafId: string; title: string | null }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { tabId: string; leafId: string; title: string | null }
+    ) => callback(data)
+    ipcRenderer.on('ui:setPaneTitle', listener)
+    return () => ipcRenderer.removeListener('ui:setPaneTitle', listener)
+  },
   onTerminalTabCloseRequest: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
       callback(request)

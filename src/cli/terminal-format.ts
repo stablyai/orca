@@ -13,6 +13,7 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalRename,
   RuntimeTerminalSend,
+  RuntimeTerminalSetPaneTitle,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
@@ -225,6 +226,14 @@ export function formatTerminalRename(result: { rename: RuntimeTerminalRename }):
   return result.rename.title
     ? `Renamed terminal ${result.rename.handle} to "${result.rename.title}".`
     : `Cleared title for terminal ${result.rename.handle}.`
+}
+
+export function formatTerminalSetPaneTitle(result: {
+  paneTitle: RuntimeTerminalSetPaneTitle
+}): string {
+  return result.paneTitle.title
+    ? `Set title of pane ${result.paneTitle.leafId} to "${result.paneTitle.title}".`
+    : `Cleared title of pane ${result.paneTitle.leafId}.`
 }
 
 export function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
