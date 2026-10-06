@@ -69,10 +69,14 @@ function fileNode(operationOwner: TreeNode['operationOwner']): TreeNode {
   }
 }
 
-function renderRevealItem(operationOwner: TreeNode['operationOwner']): ItemProps | undefined {
+function renderRevealItem(
+  operationOwner: TreeNode['operationOwner'],
+  connectionId: string | null = null
+): ItemProps | undefined {
   renderToStaticMarkup(
     <FileExplorerRowContextMenu
       node={fileNode(operationOwner)}
+      connectionId={connectionId}
       isExpanded={false}
       deleteShortcutLabel=""
       targetDir="/repo/src"
@@ -137,6 +141,13 @@ describe('FileExplorerRowContextMenu reveal in file manager', () => {
 
   it.each(nonLocalOwners)('disables reveal as local-only for a %s row', (_label, owner) => {
     const reveal = renderRevealItem(owner)
+
+    expect(reveal?.disabled).toBe(true)
+    expect(showsLocalOnlyHint(reveal)).toBe(true)
+  })
+
+  it('disables reveal for a stale local row of an SSH repo', () => {
+    const reveal = renderRevealItem({ kind: 'local' }, 'ssh-1')
 
     expect(reveal?.disabled).toBe(true)
     expect(showsLocalOnlyHint(reveal)).toBe(true)

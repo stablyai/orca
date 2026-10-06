@@ -114,9 +114,9 @@ export function FileExplorerRowContextMenu({
     supportsFolderDownload
   )
   const showCopyFileAction = shouldShowCopyFileAction(node, connectionId, selectionSize)
-  // Why: the host that listed this row owns its path; a globally focused
-  // runtime does not make a local workspace's files remote.
-  const revealBlocked = node.operationOwner?.kind !== 'local'
+  // Why: the host that listed this row owns its path; a globally focused runtime does not make a
+  // local workspace's files remote. An SSH repo still blocks a row listed before a host change.
+  const revealBlocked = node.operationOwner?.kind !== 'local' || Boolean(connectionId?.trim())
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return
