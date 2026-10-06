@@ -542,4 +542,19 @@ describe('turn-owned grouping', () => {
       ['C', false]
     ])
   })
+
+  it('skips only the open reasoning the live line discloses, and only while it does', () => {
+    const reasoning = (id: string, state: 'running' | 'completed'): NativeChatMessage => ({
+      ...text(id, 'Weighing two approaches', 'reasoning'),
+      state
+    })
+    const live = { turnKeys: ['A', 'A', 'A'], liveTurnKey: 'A', isWorking: true }
+    const rows = [text('A', 'go', 'user'), reasoning('r-1', 'running'), reasoning('r-2', 'running')]
+    const ids = (overrides: Partial<Parameters<typeof build>[1]>) =>
+      build(rows, { ...live, ...overrides }).map((slot) => slot.message.id)
+    expect(ids({ liveReasoningId: 'r-2' })).toEqual(['A', 'r-1'])
+    // Nothing discloses it (a prompt took the line, or it says something else): it draws.
+    expect(ids({ liveReasoningId: null })).toEqual(['A', 'r-1', 'r-2'])
+    expect(ids({})).toEqual(['A', 'r-1', 'r-2'])
+  })
 })

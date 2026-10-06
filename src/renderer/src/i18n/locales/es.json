@@ -17533,6 +17533,7 @@
   },
   "components": {
     "native-chat": {
+      "reasoning": "Razonamiento",
       "contextMenu": {
         "copyOrcaSessionId": "Copiar ID de sesión de Orca",
         "orcaSessionIdCopied": "ID de sesión de Orca copiado",
@@ -17951,6 +17952,8 @@
         "queuePaused": "Cola en pausa",
         "resume": "Reanudar"
       },
+      "thought": "Pensó",
+      "thoughtForDuration": "Pensó durante {{duration}}",
       "receipt": {
         "cancelled": "Cancelado",
         "unavailable": "Respuesta seleccionada no disponible",

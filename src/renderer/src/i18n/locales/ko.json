@@ -17568,6 +17568,7 @@
       }
     },
     "native-chat": {
+      "reasoning": "추론",
       "contextMenu": {
         "copyOrcaSessionId": "Orca 세션 ID 복사",
         "orcaSessionIdCopied": "Orca 세션 ID를 복사했습니다",
@@ -18104,6 +18105,8 @@
         "queuePaused": "대기열이 일시 중지되었습니다",
         "resume": "재개"
       },
+      "thought": "생각함",
+      "thoughtForDuration": "{{duration}} 동안 생각함",
       "structuredSessionHostDeclined": "{{value0}}을(를) 터미널에서 열었습니다",
       "structuredSessionHostDeclinedDescription": "이 서버는 이 워크스페이스에서 {{value0}} 채팅을 실행할 수 없습니다.",
       "structuredSessionHostUnreachable": "{{value0}}에 연결할 수 없습니다",

@@ -17763,6 +17763,7 @@
       "empty": "No users found"
     },
     "native-chat": {
+      "reasoning": "Reasoning",
       "failureWords": {
         "theAgent": "The agent",
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
@@ -18320,6 +18321,8 @@
         "queuePaused": "Queue paused",
         "resume": "Resume"
       },
+      "thought": "Thought",
+      "thoughtForDuration": "Thought for {{duration}}",
       "structuredSessionHostDeclined": "Opened {{value0}} in a terminal",
       "structuredSessionHostDeclinedDescription": "This server can't run a {{value0}} chat in this workspace.",
       "structuredSessionHostUnreachable": "Could not reach {{value0}}",

@@ -100,6 +100,11 @@ export type AgentJournalBoundedPayload = {
 export const AGENT_JOURNAL_MESSAGE_SEND_MODES = ['goal'] as const
 export type AgentJournalMessageSendMode = (typeof AGENT_JOURNAL_MESSAGE_SEND_MODES)[number]
 
+/** Whether the provider is still producing a message. Persisted and open for growth: a reader
+ *  that cannot place a value reads it as `completed`. */
+export const AGENT_JOURNAL_MESSAGE_STATES = ['running', 'completed'] as const
+export type AgentJournalMessageState = (typeof AGENT_JOURNAL_MESSAGE_STATES)[number]
+
 export type AgentJournalMessageItem = {
   kind: 'message'
   role: NativeChatRole
@@ -110,6 +115,13 @@ export type AgentJournalMessageItem = {
   /** Present on a conversation command the user sent, such as `/compact`. The text is what the
    *  user typed; this names the command so no reader parses it. Open like `sentAs`. */
   command?: { name: string }
+  /** Written on reasoning rows. ABSENT MEANS UNKNOWN — an older host, or a row from before the
+   *  field — and never reads as live. The row's `observedAt` is when it started. */
+  state?: AgentJournalMessageState
+  /** Host clock when the host saw the message end: its own end, or the end of the turn or
+   *  stream that cut it off. Absent only when no end was seen live — history, a crash sweep — so
+   *  no duration is claimed. */
+  completedAt?: number
 }
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
