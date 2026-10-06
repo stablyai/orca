@@ -57,13 +57,13 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       id: 'grok-4.7',
       label: 'Grok 4.7',
       description: 'xAI frontier model',
+      isDefault: true,
       options: [grokEffort('xhigh')]
     },
     {
       id: 'grok-4.6',
       label: 'Grok 4.6',
       description: 'xAI frontier model',
-      isDefault: true,
       options: [grokEffort('xhigh')]
     },
     {
@@ -88,8 +88,8 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   // Why: grok's selectable ids retire between releases, so a stale seed entry
   // must be droppable — picking one is a fatal launch, not a warning.
   discoveredModelsAreAuthoritative: true,
-  // Why: `grok models` prints `Default model: grok-4.6` and marks the row `(default)`,
-  // so the seed states the CLI's own choice rather than a preference of ours.
+  // Why: the seed names the CLI's default so unflagged launches can be labeled;
+  // discovery replaces it with the signed-in account's reported default.
   defaultModelIsCliDefault: true,
   listModels: { command: 'grok models', parse: parseGrokCatalogModels }
 }
