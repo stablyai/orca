@@ -274,6 +274,14 @@ export function disposeStructuredAgentSessionSendResult(
       error: null
     }
   }
+  // The host kept it as a card, first reply or replay: the card owns the text, so the entry
+  // leaves as the reconcile drops it, with no Retry that could send words the card's Delete took.
+  if (submission.dispatchState === 'rejected' && submission.keptAsQueuedMessageId !== undefined) {
+    return {
+      entries: dropEntry(input),
+      error: null
+    }
+  }
   // Recorded, so the journal's row shows it once it arrives; until then the entry draws it, saying
   // why and offering no Retry.
   if (submission.dispatchState === 'rejected') {

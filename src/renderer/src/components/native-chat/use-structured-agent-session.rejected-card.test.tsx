@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-// The session controller hands the queue's live cards to the transcript: a rejected message one of
-// them holds under its own id is drawn as that card, never also as a not-sent row.
+// A send the host kept as a card is drawn as that card, never also as a not-sent row, and its
+// card's Edit or Delete brings no row back: the transcript reads the send's own record.
 
 import { renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -15,6 +15,7 @@ import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session
 import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../shared/structured-agent-session-dispatch-rejection'
 
 let queuedMessages: AgentSessionQueuedMessage[] = []
+let submissions: AgentJournalSubmission[] = []
 
 const KEPT_BODY: AgentJournalMessageItem = {
   kind: 'message',
@@ -52,7 +53,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
     state: {
       fence: 3,
       items: [KEPT_ITEM],
-      submissions: [KEPT_SUBMISSION],
+      submissions,
       status: 'ready',
       error: null,
       hasOlder: false,
@@ -104,13 +105,19 @@ function keptRows(): { id: string; unsent?: true }[] {
 
 beforeEach(() => {
   queuedMessages = []
+  submissions = [{ ...KEPT_SUBMISSION, keptAsQueuedMessageId: 'kept' }]
 })
 
-it('draws no row for a rejected message while a card holds it under its id', () => {
+it('draws no row for a kept send while its card is there', () => {
   queuedMessages = [card('kept')]
   expect(keptRows()).toEqual([])
 })
 
-it('draws it as not sent once no card holds it', () => {
+it('draws no row for a kept send once its card was edited or deleted', () => {
+  expect(keptRows()).toEqual([])
+})
+
+it('draws a rejected send the host did not keep as not sent', () => {
+  submissions = [KEPT_SUBMISSION]
   expect(keptRows()).toEqual([{ id: KEPT_ITEM.itemId, unsent: true }])
 })

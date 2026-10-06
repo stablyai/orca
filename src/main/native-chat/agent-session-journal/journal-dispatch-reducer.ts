@@ -35,6 +35,13 @@ export function applyJournalDispatchRow(
   } else {
     delete submission.rejection
   }
+  if (
+    row.state === 'rejected' &&
+    typeof row.keptAsQueuedMessageId === 'string' &&
+    row.keptAsQueuedMessageId.length > 0
+  ) {
+    submission.keptAsQueuedMessageId = row.keptAsQueuedMessageId
+  }
   if (row.state === 'rejected' && row.answeredInTurn !== undefined) {
     submission.answeredInTurn = readAnsweredTurn(row.answeredInTurn)
   } else {

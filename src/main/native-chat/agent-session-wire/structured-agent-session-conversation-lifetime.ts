@@ -14,7 +14,7 @@ import { createJournalOpenReadRefusals } from '../agent-session-journal/journal-
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import { releaseLeaseOfEndedStructuredAgentSessionChild } from './structured-agent-session-child-close'
 import {
-  abandonQueuedStructuredAgentSessionMessages,
+  holdClosedStructuredAgentSessionSends,
   closeStructuredAgentSessionConversationUnderSerialize,
   stopStructuredAgentSessionAgentUnderSerialize,
   type StructuredAgentSessionCloseCause,
@@ -153,14 +153,14 @@ export function createStructuredAgentSessionConversationLifetime(host: {
       })
     },
     /** Ends a chat's resources, not the chat: its record and journal stay on disk, and what is
-     *  still queued will not be sent. */
+     *  still queued will not be sent; a person's message stays as a held card. */
     close: (sessionId: string, cause: StructuredAgentSessionCloseCause): Promise<void> =>
       serialize(sessionId, async () => {
         readRefusals.forget(sessionId)
         const session = sessions.get(sessionId)
         if (session) {
-          // Abandoned before the stop, so no start delivers it.
-          await abandonQueuedStructuredAgentSessionMessages(deps(), sessionId, session.journal)
+          // Settled before the stop, so no start delivers it.
+          await holdClosedStructuredAgentSessionSends(deps(), sessionId, session.journal)
         }
         await stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, { cause })
         await closeConversation(sessionId)

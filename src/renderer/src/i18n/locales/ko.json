@@ -11,6 +11,9 @@
     "retrying": "재시도 중…"
   },
   "settings": {
+    "chat": {
+      "description": "채팅 모양을 선택하세요."
+    },
     "terminal": {
       "optionLayoutAlt": "ABC 또는 U.S. — Option 키가 Alt/Esc 시퀀스를 전송합니다",
       "optionLayoutCompose": "이 배열에서는 Option 키로 @, €, [, ] 같은 문자를 입력합니다",
@@ -67,8 +70,7 @@
         "wide": "넓게",
         "full": "전체",
         "pixels": "px",
-        "reset": "초기화",
-        "summary": "{{fontSize}}px · {{width}} 너비"
+        "reset": "초기화"
       }
     },
     "browser": {
@@ -18094,6 +18096,7 @@
         "turnOffQueueing": "대기열 사용 안 함",
         "withdrawnHold": "전송 전에 중지됨",
         "pausedSendFailed": "보낼 수 없습니다. 보내기를 눌러 다시 시도하세요.",
+        "pausedKept": "아직 보내지 않았습니다. 보내기를 눌러 보내세요.",
         "paused": "일시 중지됨",
         "queuePausedStopped": "중단했기 때문에 대기열이 일시 중지되었습니다",
         "queuePausedRestarted": "Orca가 다시 시작되어 대기열이 일시 중지되었습니다",

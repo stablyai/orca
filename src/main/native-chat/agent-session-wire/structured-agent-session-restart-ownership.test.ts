@@ -132,6 +132,9 @@ it('replays the same logical continuation through the durable send ledger', asyn
   if (!sent) {
     throw new Error('the continuation was not sent')
   }
+  // No person's: re-derived by its own records after another restart, so never kept as a card.
+  expect(sent).not.toHaveProperty('source')
+  expect((await host.journalSnapshot(SESSION)).submissions[0]).not.toHaveProperty('source')
   const replay = await host.send(
     { callerKey: STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER },
     { envelope: sent.envelope, body: sent.body }

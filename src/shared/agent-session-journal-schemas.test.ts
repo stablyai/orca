@@ -3,9 +3,9 @@ import {
   AgentJournalItemBodySchema,
   isAdmissibleAgentJournalItemBody,
   isAdmissibleAgentJournalMessageBody,
-  isAdmissibleAgentJournalRenderItem,
-  isAdmissibleAgentJournalSubmission
+  isAdmissibleAgentJournalRenderItem
 } from './agent-session-journal-schemas'
+import { isAdmissibleAgentJournalSubmission } from './agent-session-journal-submission-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
