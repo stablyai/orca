@@ -50,6 +50,8 @@ const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   freebuff: 'none',
   'command-code': 'none',
   continue: 'none',
+  // `interpreter` is generic, so its process name is not a stable title identity.
+  openinterpreter: 'none',
   kimi: 'none',
   'mistral-vibe': 'none',
   'qwen-code': 'none',
