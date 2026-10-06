@@ -7,7 +7,10 @@
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionWireRefusalCode } from '../../../../shared/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({
@@ -25,6 +28,8 @@ import { structuredAgentSessionDeliveryNotices } from './structured-agent-sessio
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 import { structuredAgentSessionEntryHeldForRetry } from '../../../../shared/structured-agent-session-outbox-admission'
+
+const NO_JOURNAL_ITEMS: readonly AgentJournalRenderItem[] = []
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -93,6 +98,7 @@ function refusedResult(code: AgentSessionWireRefusalCode) {
 function renderOutbox() {
   return renderHook(() =>
     useStructuredAgentSessionOutbox({
+      journalItems: NO_JOURNAL_ITEMS,
       sessionId: 'session-1',
       target: LOCAL_TARGET,
       fence: 1,
@@ -199,6 +205,7 @@ describe('structured agent session outbox admission', () => {
       )
       const delivery = settleStructuredAgentLaunchPrompt({
         launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+        target: { kind: 'local' },
         options: { prompt: 'review this' },
         stagedEntry
       })
@@ -229,6 +236,7 @@ describe('structured agent session outbox admission', () => {
     const { result, rerender } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
+          journalItems: NO_JOURNAL_ITEMS,
           sessionId: 'session-1',
           target: LOCAL_TARGET,
           fence: 1,
@@ -310,6 +318,7 @@ describe('structured agent session outbox admission', () => {
     const { result, rerender } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
+          journalItems: NO_JOURNAL_ITEMS,
           sessionId: 'session-1',
           target: LOCAL_TARGET,
           fence: 1,

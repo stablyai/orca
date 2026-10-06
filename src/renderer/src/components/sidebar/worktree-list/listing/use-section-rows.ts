@@ -16,6 +16,8 @@ import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, Row, WorktreeGroupBy } from '../grouping/row-types'
 import { getLogicalRepoOrderRankById } from '../../project-header-drop'
 import { getEmptyProjectPlaceholderRepoIds } from '../../empty-project-placeholder-repos'
+import { PINNED_GROUP_KEY } from '../grouping/group-keys'
+import { scopePinnedSectionCollapse } from '../../host-pinned-sections'
 import { addHostSectionRows } from '../../host-section-rows'
 import { orderHostSectionOptions } from '../../host-section-order'
 import { buildSidebarHostOptions } from '../../sidebar-host-options'
@@ -141,6 +143,18 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [hostOptions]
   )
 
+  const hostScopedPinnedGroups =
+    args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
+  // Host sections apply pinned collapse after splitting the rows by owner.
+  const rowCollapsedGroups = useMemo(() => {
+    if (!hostScopedPinnedGroups || !effectiveCollapsedGroups.has(PINNED_GROUP_KEY)) {
+      return effectiveCollapsedGroups
+    }
+    const next = new Set(effectiveCollapsedGroups)
+    next.delete(PINNED_GROUP_KEY)
+    return next
+  }, [effectiveCollapsedGroups, hostScopedPinnedGroups])
+
   const rows: Row[] = useMemo(
     () =>
       buildRows(
@@ -148,7 +162,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         worktrees,
         repoMap,
         args.prCache,
-        effectiveCollapsedGroups,
+        rowCollapsedGroups,
         repoOrder,
         args.workspaceStatuses,
         args.projectOrderBy,
@@ -172,7 +186,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       worktrees,
       repoMap,
       args.prCache,
-      effectiveCollapsedGroups,
+      rowCollapsedGroups,
       defaultHostId,
       repoOrder,
       args.workspaceStatuses,
@@ -215,29 +229,35 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     },
     [orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
   )
-  const sectionRows = useMemo(
-    () =>
-      addHostSectionRows({
-        rows,
-        hostOptions: orderedHostOptions,
-        workspaceHostScope: args.workspaceHostScope,
-        visibleWorkspaceHostIds: args.visibleWorkspaceHostIds,
-        defaultHostId,
-        collapsedHostKeys: effectiveCollapsedGroups,
-        forceCollapseHosts: hostDragActive,
-        // Why: projects/workspaces are the primary sidebar object; host sections are only an explicit host-filter view.
-        preferProjectGrouping: true
-      }),
-    [
-      args.visibleWorkspaceHostIds,
-      args.workspaceHostScope,
+  const sectionRows = useMemo(() => {
+    const sectioned = addHostSectionRows({
+      rows,
+      hostOptions: orderedHostOptions,
+      workspaceHostScope: args.workspaceHostScope,
+      visibleWorkspaceHostIds: args.visibleWorkspaceHostIds,
       defaultHostId,
-      effectiveCollapsedGroups,
-      hostDragActive,
-      orderedHostOptions,
-      rows
-    ]
-  )
+      collapsedHostKeys: effectiveCollapsedGroups,
+      forceCollapseHosts: hostDragActive,
+      // Why: projects/workspaces are the primary sidebar object; host sections are only an explicit host-filter view.
+      preferProjectGrouping: true
+    })
+    return hostScopedPinnedGroups
+      ? scopePinnedSectionCollapse({
+          rows: sectioned,
+          collapsedGroups: effectiveCollapsedGroups,
+          defaultHostId
+        })
+      : sectioned
+  }, [
+    args.visibleWorkspaceHostIds,
+    args.workspaceHostScope,
+    defaultHostId,
+    effectiveCollapsedGroups,
+    hostDragActive,
+    hostScopedPinnedGroups,
+    orderedHostOptions,
+    rows
+  ])
   const renderedSidebarRowKeys = useMemo(
     () => collectRenderedSidebarRowKeys(sectionRows),
     [sectionRows]

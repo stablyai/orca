@@ -26,6 +26,7 @@ jobs:
   test:
     name: tests node ${{ matrix.node }} ${{ matrix.shard.index }}/${{ matrix.shard.count }}
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -47,6 +48,10 @@ jobs:
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/bun-version
+
       - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
@@ -60,7 +65,7 @@ jobs:
         run: |
           ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
           export ORCA_SHARD_SOURCE_SHA
-          pnpm exec vitest run --config config/vitest.config.ts \
+          node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
             --shard=${{ matrix.shard.index }}/${{ matrix.shard.count }} \
             ${{ inputs.runner == 'ubuntu-24.04-arm' && '--maxWorkers=4' || '' }}
 
@@ -82,6 +87,7 @@ jobs:
       matrix:
         node: ${{ fromJSON(inputs.node_versions) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -91,9 +97,8 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
         with:
-          native-runtime: node
+          native-runtime: none
           node-version: ${{ matrix.node }}
-          cache-electron-package: 'true'
           cache-dependency-path: |
             pnpm-lock.yaml
             cloud/pnpm-lock.yaml
@@ -103,8 +108,8 @@ jobs:
       - name: Install relay integration dependencies
         working-directory: cloud
         run: |
-          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
-          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay^...' build
+          npx --yes pnpm@10.34.6 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
+          npx --yes pnpm@10.34.6 --filter '@orca-cloud/relay^...' build
 
       - name: Test relay integration contracts
         env:

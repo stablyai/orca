@@ -56,10 +56,6 @@ export class DispatcherClientWriter {
     return this.admission.retainedProducerBytes
   }
 
-  get supportsWriteCallback(): boolean {
-    return this.sink.supportsWriteCallback
-  }
-
   get producerFrameCapacity(): number {
     return this.sink.producerFrameCapacity
   }

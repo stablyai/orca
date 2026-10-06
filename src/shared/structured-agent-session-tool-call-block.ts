@@ -37,6 +37,7 @@ export function structuredAgentSessionToolCallBlock(
     name: action.name,
     input: action.input,
     state: action.state,
+    ...(action.endedAs !== undefined ? { endedAs: action.endedAs } : {}),
     ...(action.callId !== undefined ? { callId: action.callId } : {}),
     ...(action.mcpIdentity !== undefined ? { mcpIdentity: action.mcpIdentity } : {}),
     ...(action.exitCode !== undefined ? { exitCode: action.exitCode } : {}),

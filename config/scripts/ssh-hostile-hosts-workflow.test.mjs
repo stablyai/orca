@@ -17,10 +17,16 @@ describe('SSH hostile-host workflow', () => {
   it('runs on demand and on path-filtered, non-draft pull requests only', () => {
     expect(Object.keys(workflow.on).sort()).toEqual(['pull_request', 'workflow_dispatch'])
     expect(workflow.on.pull_request.paths).toContain('src/main/ssh/ssh-relay-*')
-    expect(workflow.jobs.glibc_slot.if).toContain('github.event.pull_request.draft != true')
-    expect(workflow.jobs.musl_slot.needs).toBe('glibc_slot')
-    expect(workflow.jobs.glibc217_slot.needs).toBe('musl_slot')
-    expect(workflow.jobs.hosts.needs).toBe('glibc217_slot')
+    for (const lane of ['glibc_slot', 'musl_slot', 'glibc217_slot']) {
+      expect(workflow.jobs[lane].if).toContain('github.event.pull_request.draft != true')
+      expect(workflow.jobs[lane].needs).toBeUndefined()
+      expect(
+        workflow.jobs[lane].steps.some((step) =>
+          String(step.uses).startsWith('actions/download-artifact')
+        )
+      ).toBe(false)
+    }
+    expect(workflow.jobs.hosts.needs).toEqual(['glibc_slot', 'musl_slot', 'glibc217_slot'])
   })
 
   // Why: the slots must come from the same builders the headless-server lanes qualify, so a
@@ -46,20 +52,39 @@ describe('SSH hostile-host workflow', () => {
     const compat = workflow.jobs.glibc217_slot.steps.map((step) => step.run ?? '').join('\n')
     expect(compat).toContain('--slot=linux-x64-glibc217 --print-runtime')
     expect(compat).toContain('--slot=linux-x64-glibc217 --smoke')
-    const upload = workflow.jobs.glibc217_slot.steps.find((step) =>
-      String(step.uses).startsWith('actions/upload-artifact')
+    const artifactNames = ['glibc_slot', 'musl_slot', 'glibc217_slot'].map(
+      (lane) =>
+        workflow.jobs[lane].steps.find((step) =>
+          String(step.uses).startsWith('actions/upload-artifact')
+        ).with.name
     )
+    expect(artifactNames).toEqual([
+      'hostile-hosts-glibc-slot',
+      'hostile-hosts-musl-slot',
+      'hostile-hosts-glibc217-slot'
+    ])
     const download = workflow.jobs.hosts.steps.find((step) =>
       String(step.uses).startsWith('actions/download-artifact')
     )
-    expect(download.with.name).toBe(upload.with.name)
+    expect(download.with.pattern).toBe('hostile-hosts-*-slot')
+    expect(download.with['merge-multiple']).not.toBe(true)
+    const merge = workflow.jobs.hosts.steps.find(
+      (step) => step.name === 'Merge verified Linux slots'
+    )
+    expect(merge.run).toContain('node config/scripts/merge-orcad-prebuilds.mjs')
+    expect(merge.run).toContain('--require-slots linux-x64-glibc,linux-x64-musl,linux-x64-glibc217')
+    expect(workflow.jobs.hosts.steps.indexOf(merge)).toBeLessThan(
+      workflow.jobs.hosts.steps.findIndex(
+        (step) => step.name === 'Build the orcad template and relay'
+      )
+    )
   })
 
   it('opts the matrix in and runs it against both x64 Linux slots', () => {
     const steps = workflow.jobs.hosts.steps
     const matrix = steps.find((step) => step.name === 'Run the hostile-host matrix')
     expect(matrix.env.ORCA_RUN_SSH_HOSTILE_HOSTS).toBe('1')
-    expect(matrix.run).toBe('pnpm test src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts')
+    expect(matrix.run).toBe('pnpm test:node src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts')
     expect(steps.map((step) => step.run ?? '').join('\n')).toContain(
       '--targets linux-x64-glibc,linux-x64-musl'
     )
@@ -71,7 +96,7 @@ describe('SSH hostile-host workflow', () => {
     const job = workflow.jobs.macos_hosts
     expect(job.if).toContain('github.event.pull_request.draft != true')
     expect(job.needs).toBeUndefined()
-    const runners = { 'darwin-arm64': 'macos-14', 'darwin-x64': 'macos-15-intel' }
+    const runners = { 'darwin-arm64': 'macos-15', 'darwin-x64': 'macos-15-intel' }
     const macCells = HOSTILE_HOST_CELLS.filter((cell) => cell.host === 'local-sshd')
     expect(
       job.strategy.matrix.include.map(({ os, target, cell }) => ({ os, target, cell }))
@@ -90,6 +115,6 @@ describe('SSH hostile-host workflow', () => {
       ORCA_RUN_SSH_HOSTILE_HOSTS: '1',
       ORCA_SSH_HOSTILE_HOST_CELLS: '${{ matrix.cell }}'
     })
-    expect(cellStep.run).toBe('pnpm test src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts')
+    expect(cellStep.run).toBe('pnpm test:node src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts')
   })
 })

@@ -41,7 +41,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     // Why: paired web panes cannot provide a local post-boundary process scan.
     confirmForegroundProcess: () => Promise.resolve(null),
     // Why: a paired client's terminals belong to the host, whose Codex settings this client does not own.
-    isCodexOnSharedServer: () => Promise.resolve(false),
+    isCodexOnSharedServer: () => Promise.resolve({ joined: false }),
     disableCodexSharedServerAutoStart: () => Promise.resolve(false),
     stopCodexSharedServer: () => Promise.resolve(false),
     getCwd: () => Promise.resolve('~'),

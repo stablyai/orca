@@ -22,6 +22,7 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
+import { canReusePreparedRelayAddon } from './relay-windows-process-tree-prepared-addon.mjs'
 import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../src/shared/relay-artifacts.ts'
 import {
   ensureWindowsProcessTreeCommandLinePatch,
@@ -410,14 +411,15 @@ function applyWindowsProcessTreeBuildFixes() {
   const repairedCreationTime = repairCreationTimeSources()
   stageWindowsProcessTreeNodeAddonApiHeaders(PACKAGE_DIR)
   const repairedCommandLine = ensureWindowsProcessTreeCommandLinePatch(PACKAGE_DIR)
-  if (
+  const repaired =
     bindingGyp !== originalBinding ||
     processCc !== originalProcess ||
     repairedCommandLine ||
     repairedCreationTime
-  ) {
+  if (repaired) {
     console.warn('[windows-process-tree] Repaired un-applied pnpm patch hunks before build.')
   }
+  return repaired
 }
 
 function main() {
@@ -431,14 +433,24 @@ function main() {
   if (!existsSync(PACKAGE_DIR)) {
     throw new Error(`${PACKAGE_DIR} is missing. Run pnpm install first.`)
   }
-  applyWindowsProcessTreeBuildFixes()
+  const sourceRepaired = applyWindowsProcessTreeBuildFixes()
   assertPatchApplied()
 
-  const gyp = nodeGypRebuildInvocation(arch)
-  console.log(`[windows-process-tree] building ${arch} from ${gyp.cwd}`)
-  execFileSync(process.execPath, gyp.args, { cwd: gyp.cwd, stdio: 'inherit' })
-
   const built = join(PACKAGE_DIR, 'build', 'Release', 'windows_process_tree.node')
+  if (
+    canReusePreparedRelayAddon({
+      enabled: process.argv.includes('--reuse-prepared-runtime'),
+      arch,
+      addonPath: built,
+      sourceRepaired
+    })
+  ) {
+    console.log(`[windows-process-tree] reusing the prepared ${arch} addon`)
+  } else {
+    const gyp = nodeGypRebuildInvocation(arch)
+    console.log(`[windows-process-tree] building ${arch} from ${gyp.cwd}`)
+    execFileSync(process.execPath, gyp.args, { cwd: gyp.cwd, stdio: 'inherit' })
+  }
   if (!existsSync(built)) {
     throw new Error(`node-gyp reported success but ${built} is missing.`)
   }

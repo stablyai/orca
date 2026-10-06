@@ -70,10 +70,11 @@ function explicitResumeConversationRoot(request: RuntimeEnsureAgentSessionReques
   if (request.kind !== 'explicit' || !isAgentSessionHandleProvider(request.agent)) {
     return null
   }
-  const handle: AgentSessionProviderHandle =
-    request.agent === 'claude'
-      ? { provider: 'claude', sessionId: request.providerSession.id, leafUuid: null }
-      : { provider: 'codex', threadId: request.providerSession.id }
+  const handle: AgentSessionProviderHandle = {
+    transport: request.agent === 'claude' ? 'claude-sdk' : 'codex-app-server',
+    agent: request.agent,
+    nativeId: request.providerSession.id
+  }
   return agentSessionProviderHandleRoot(handle)
 }
 

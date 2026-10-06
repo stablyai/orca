@@ -25,6 +25,10 @@ import {
   readNativeChatDraftCache
 } from './native-chat-draft-cache'
 
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+
+const NO_JOURNAL_ITEMS: readonly AgentJournalRenderItem[] = []
+
 // Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
 afterEach(cleanup)
 
@@ -66,6 +70,7 @@ describe('a Stop with a queued send in doubt', () => {
     const view = renderHook(
       (props: { fence: number | null }) =>
         useStructuredAgentSessionOutbox({
+          journalItems: NO_JOURNAL_ITEMS,
           sessionId: 'session-1',
           target: REMOTE,
           fence: props.fence,
@@ -110,6 +115,7 @@ describe('a Stop with a queued send in doubt', () => {
     mocks.call.mockImplementationOnce(() => answer.promise)
     const { result } = renderHook(() =>
       useStructuredAgentSessionOutbox({
+        journalItems: NO_JOURNAL_ITEMS,
         sessionId: 'session-1',
         target: TARGET,
         fence: 1,
@@ -170,6 +176,7 @@ describe('a Stop with a queued send in doubt', () => {
     ])
     const { result } = renderHook(() =>
       useStructuredAgentSessionOutbox({
+        journalItems: NO_JOURNAL_ITEMS,
         sessionId: 'session-1',
         target: TARGET,
         fence: 1,

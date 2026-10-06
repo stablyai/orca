@@ -1,28 +1,32 @@
-import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment, markEnvironmentUsed } from '../../shared/runtime-environment-store'
-import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
+import { isOrchestrationMutation } from '../../shared/orchestration-rpc-contract'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../shared/runtime-types'
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
 } from '../../shared/remote-runtime-client'
 import { withRemoteRuntimeTailscaleHint } from '../../shared/remote-runtime-tailscale-hint'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
+import { getRuntimeEnvironmentStatusOwner } from './runtime-environment-request-connections'
 import {
   sendRemoteRuntimeConnectionRequestAbortable,
   sendRemoteRuntimeRequestAbortable
 } from './runtime-environment-abortable-requests'
+import { attachRemoteControlDiagnostics } from './runtime-environment-status-diagnostics'
+
+import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { runtimeEnvironmentRevisionFailure } from './runtime-environment-revision-guard'
+import { withTailscaleHintForResponse } from './runtime-environment-tailscale-response'
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
 import {
   executeSupportRoutedCall,
-  shouldUseSharedControlEnvelope,
   shouldRouteCallBySupport,
   shouldRouteSubscriptionBySupport,
   subscribeSupportRoutedRuntimeEnvironment
@@ -32,7 +36,32 @@ const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
 export { resetSharedControlSupport }
 
-export { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
+export async function getRuntimeEnvironmentStatus(
+  userDataPath: string,
+  selector: string,
+  timeoutMs?: number,
+  options?: { observeOnly?: true; signal?: AbortSignal; reconnect?: true }
+): Promise<RuntimeRpcResponse<RuntimeStatus>> {
+  const environment = resolveEnvironment(userDataPath, selector)
+  if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+    return {
+      id: 'status.get',
+      ok: false,
+      error: {
+        code: 'runtime_manually_disconnected',
+        message: 'Runtime environment is manually disconnected.'
+      }
+    }
+  }
+  const response = await getRuntimeEnvironmentStatusOwner(userDataPath, environment.id).refresh({
+    timeoutMs,
+    ...options
+  })
+  return attachRemoteControlDiagnostics(
+    withTailscaleHintForResponse(response, getPreferredPairingOffer(environment).endpoint),
+    environment.id
+  )
+}
 
 export async function callRuntimeEnvironment(
   userDataPath: string,
@@ -65,10 +94,7 @@ export async function callRuntimeEnvironment(
       environment.id,
       method,
       async () => {
-        const currentEnvironment = await resolveManagedRuntimeEnvironment(
-          userDataPath,
-          environment.id
-        )
+        const currentEnvironment = resolveEnvironment(userDataPath, environment.id)
         const revisionFailure = runtimeEnvironmentRevisionFailure(
           currentEnvironment,
           expectedEnvironmentPairingRevision,
@@ -159,9 +185,10 @@ export async function subscribeRuntimeEnvironment(
     ) => void
     onClose: () => void
   },
-  isCurrent: () => boolean = () => true
+  isCurrent: () => boolean = () => true,
+  signal?: AbortSignal
 ): Promise<RemoteRuntimeSubscription> {
-  const environment = await resolveManagedRuntimeEnvironment(userDataPath, selector)
+  const environment = resolveEnvironment(userDataPath, selector)
   const pairing = getPreferredPairingOffer(environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
   let markedUsed = false
@@ -203,7 +230,8 @@ export async function subscribeRuntimeEnvironment(
         params,
         timeoutMs: effectiveTimeoutMs,
         callbacks,
-        isCurrent
+        isCurrent,
+        signal
       })
     }
     return await subscribeRemoteRuntimeRequest(
@@ -212,7 +240,7 @@ export async function subscribeRuntimeEnvironment(
       params,
       effectiveTimeoutMs,
       callbacksWithMarkUsed,
-      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
+      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, signal }
     )
   } catch (error) {
     if (error instanceof Error) {
@@ -234,4 +262,14 @@ function markEnvironmentUsedFromResponse(
 
 function shouldUseCachedRequestConnection(method: string): boolean {
   return method === 'terminal.send' || method === 'terminal.updateViewport'
+}
+
+function shouldUseSharedControlEnvelope(
+  method: string,
+  params: unknown,
+  envelope: RuntimeOrchestrationEnvelope | undefined
+): RuntimeOrchestrationEnvelope | undefined {
+  return envelope && method.startsWith('orchestration.') && !isOrchestrationMutation(method, params)
+    ? envelope
+    : undefined
 }

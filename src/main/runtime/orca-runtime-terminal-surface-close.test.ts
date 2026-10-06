@@ -23,7 +23,7 @@ import {
   retireTerminalSurfaceFromPersistence,
   sanitizeWorkspaceSessionTerminalRetirements
 } from './mobile-session-terminal-persistence-retirement'
-import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 
 const splitLayout = {
   root: {

@@ -21,7 +21,7 @@ import type {
 } from './worktree-operation-options'
 import { gitExecOptions, resolveWorktreeAddTimeoutMs } from './worktree-operation-options'
 import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
-import { assertNoPendingWorktreeRemovalConflict } from '../worktree-background-removal'
+import { assertNoPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 
 export type WorktreeAddBaseContext = Pick<AddWorktreeResult, 'localBaseRefUpdateSuggestion'> & {
   effectiveBase: string

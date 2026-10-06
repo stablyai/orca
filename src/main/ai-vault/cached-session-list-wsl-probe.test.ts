@@ -2,18 +2,18 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as childProcess from 'node:child_process'
 
-const { execFileMock, scanAiVaultSessionsInWorker } = vi.hoisted(() => ({
+const { execFileMock, scanAiVaultSessionsInService } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
-  scanAiVaultSessionsInWorker: vi.fn()
+  scanAiVaultSessionsInService: vi.fn()
 }))
 
 vi.mock('child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof childProcess>()),
   execFile: execFileMock
 }))
-vi.mock('./session-scanner-worker-spawn', () => ({
-  scanAiVaultSessionsInWorker,
-  resetAiVaultScannerWorkerForTests: vi.fn()
+vi.mock('./session-scanner-service-spawn', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  scanAiVaultSessionsInService
 }))
 vi.mock('./opencode-wsl-runtime-preparation', () => ({
   prepareOpenCodeWslReaders: vi.fn(async () => [])
@@ -44,7 +44,7 @@ describe('AI Vault listing wsl.exe probes', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     resetAiVaultSessionListCacheForTests()
     configureAiVaultSessionSources({ getAdditionalCodexHomePaths: () => [NATIVE_CODEX_HOME] })
-    scanAiVaultSessionsInWorker.mockResolvedValue({ sessions: [], issues: [], scannedAt: 'scan' })
+    scanAiVaultSessionsInService.mockResolvedValue({ sessions: [], issues: [], scannedAt: 'scan' })
   })
   afterEach(() => {
     execFileMock.mockReset()
@@ -59,7 +59,7 @@ describe('AI Vault listing wsl.exe probes', () => {
     await listAiVaultSessions()
 
     expect(wslSpawns()).toEqual([])
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledWith(
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledWith(
       expect.objectContaining({
         additionalCodexSessionsDirs: [join(NATIVE_CODEX_HOME, 'sessions')],
         wslHomeDirs: []
@@ -80,7 +80,7 @@ describe('AI Vault listing wsl.exe probes', () => {
       ['--list', '--running', '--quiet'],
       ['-d', 'Ubuntu', '--exec', 'bash', '-c', 'echo $HOME']
     ])
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledWith(
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledWith(
       expect.objectContaining({ wslHomeDirs: [WSL_HOME] }),
       expect.anything()
     )

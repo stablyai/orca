@@ -1,20 +1,23 @@
 import { countAgentTuiInputLines } from './agent-tui-input-clear'
 import { iterateTerminalInputChunks, TERMINAL_INPUT_CHUNK_MAX_BYTES } from './terminal-input'
-import type { TuiAgent } from './tui-agent'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import type { TerminalAgent } from './terminal-agent'
+import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
 
 export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'
 export const AGENT_PROMPT_BRACKETED_PASTE_END = '\x1b[201~'
 export const AGENT_PROMPT_SUBMIT = '\r'
+/** Why: Claude Code can leave a prompt as editable text when paste-end and Enter arrive in the
+ *  same PTY write, so the desktop's draft paste sends Enter on the next turn, this long after. */
+export const AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS = 50
 
 /** Why unknown agents keep the lead: an unidentified Claude still needs it, while known non-Claude
  *  TUIs get pre-lead bytes because Codex drops typed text that shares the paste's write (STA-8200). */
-export function agentPromptTakesLeadLine(agent: TuiAgent | null | undefined): boolean {
-  return !agent || TUI_AGENT_CONFIG[agent].pasteNeedsTypedRequest === true
+export function agentPromptTakesLeadLine(agent: TerminalAgent | null | undefined): boolean {
+  return !isTuiAgent(agent) || TUI_AGENT_CONFIG[agent].pasteNeedsTypedRequest === true
 }
 
 /** OMP recognizes a submitted bracketed paste only when Enter shares its PTY write. */
-export function agentPromptSubmitJoinsPasteFrame(agent: TuiAgent | null | undefined): boolean {
+export function agentPromptSubmitJoinsPasteFrame(agent: TerminalAgent | null | undefined): boolean {
   return agent === 'omp'
 }
 
@@ -92,9 +95,9 @@ export function getAgentPromptSubmitDelayMs(
 export function resolveAgentPromptSubmitDelayForAgent(
   platform: NodeJS.Platform,
   prompt: string,
-  agent: TuiAgent | null | undefined
+  agent: TerminalAgent | null | undefined
 ): number {
-  const config = agent ? TUI_AGENT_CONFIG[agent] : undefined
+  const config = isTuiAgent(agent) ? TUI_AGENT_CONFIG[agent] : undefined
   return getAgentPromptSubmitDelayMs(
     platform,
     Buffer.byteLength(buildAgentPromptPasteBytes(prompt), 'utf8'),

@@ -11,6 +11,7 @@ import {
   uploadNativeChatAttachmentPaths,
   type NativeChatAttachmentOwner
 } from './native-chat-attachment-upload'
+import { userNamedFileAccess } from '@/lib/local-file-access'
 
 export type UseNativeChatExternalAttachmentsArgs = {
   terminalTabId: string
@@ -94,7 +95,7 @@ export function useNativeChatExternalAttachments({
         nativeChatAttachmentOwnerUnchanged(owner, resolveAttachmentOwner())
       if (owner.kind !== 'ssh') {
         void (async () => {
-          const authorizedPaths: string[] = []
+          const readablePaths: string[] = []
           for (const targetPath of paths) {
             if (disabledRef.current) {
               return
@@ -104,8 +105,8 @@ export function useNativeChatExternalAttachments({
               return
             }
             try {
-              await window.api.fs.authorizeExternalPath({ targetPath })
-              authorizedPaths.push(targetPath)
+              await window.api.fs.stat({ filePath: targetPath, access: userNamedFileAccess() })
+              readablePaths.push(targetPath)
             } catch {
               // Skip unreadable paths, matching workspace composer drops.
             }
@@ -117,11 +118,11 @@ export function useNativeChatExternalAttachments({
             setNotice(nativeChatAttachmentOwnerChangedNotice())
             return
           }
-          if (authorizedPaths.length === 0) {
+          if (readablePaths.length === 0) {
             setNotice(nativeChatAttachmentUnreadableNotice())
             return
           }
-          attachResolvedPaths(authorizedPaths)
+          attachResolvedPaths(readablePaths)
         })()
         return
       }

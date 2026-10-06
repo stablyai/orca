@@ -9,6 +9,7 @@ import type {
 } from '../../../../shared/native-chat-session-options'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 
 export type NativeChatOptionPickerRequest = {
   id: string
@@ -50,6 +51,9 @@ export type NativeChatComposerProps = {
   terminalTabId: string
   /** Stable split-leaf identity; unlike a PTY id, this survives reconnects. */
   paneKey: string
+  /** Owner of the unsent draft; defaults to `paneKey`. A structured chat's is its conversation,
+   *  shared by every composer showing it. */
+  draftScopeKey?: string
   /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
   agent: AgentType
@@ -65,8 +69,11 @@ export type NativeChatComposerProps = {
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   /** Remove an optimistic echo when its delayed submit is canceled. */
   onOptimisticSendCanceled?: (pendingId: string) => void
-  /** Record a dispatched slash command that does not create a chat turn. */
-  onSlashCommand?: (command: string) => void
+  /** Record a dispatched slash command that does not create a chat turn; `output`
+   *  carries the host's answer when the agent never saw the command. */
+  onSlashCommand?: (command: string, output?: string) => void
+  /** The host's own answer to a command the agent must not see, or null to send it. */
+  answerCommandLocally?: NativeChatLocalCommandAnswer
   /** Picker-only agent commands continue in the hosted TUI after dispatch. */
   onSwitchToTerminal?: () => void
   /** Reads the hosted TUI's current rendered screen when chat is entered. */

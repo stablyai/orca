@@ -154,15 +154,17 @@ jobs:
             echo "No specs requiring the reusable E2E workflow"
           fi
 
-  static_analysis:
-    name: static analysis
+  preflight:
+    name: static analysis and typecheck
     needs: [code_paths]
-    if: needs.code_paths.outputs.static_analysis == 'true'
+    if: needs.code_paths.outputs.static_analysis == 'true' || needs.code_paths.outputs.typecheck == 'true'
     # Why ARM: measured 128s against 172s on ubuntu-latest, with every compute step faster --
     # type-aware 24s->15s, anti-slop 28->19s, localization extraction 67->46s, the orcad smoke
     # 39->14s. Both lint engines ship linux-arm64 and the Bun target follows process.arch, so
-    # the whole toolchain resolves. Free for public repositories, same as the typecheck job.
+    # the whole toolchain resolves. Free for public repositories.
     runs-on: ubuntu-24.04-arm
+    outputs:
+      shards: ${{ steps.unit-plan.outputs.shards }}
 
     steps:
       - name: Checkout
@@ -197,21 +199,35 @@ jobs:
 
       # Keep each check in its own log while sharing this runner.
       - name: Lint
+        if: '!cancelled()'
         id: root-lint
         background: true
-        run: pnpm exec oxlint --format github
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          pnpm exec oxlint --format github
 
       - name: Reject low-evidence patterns
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run audit:anti-slop
 
       - wait: root-lint
 
       - name: Enforce focused code-quality plugins
+        if: '!cancelled()'
         id: native-code-quality
         background: true
-        run: pnpm run audit:code-quality:native
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          pnpm run audit:code-quality:native
 
       - name: Enforce type-aware code-quality baseline
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run audit:code-quality:type-aware
 
       # Mobile installation changes import resolution for the native cycle check.
@@ -221,28 +237,39 @@ jobs:
       # resolves types from mobile/node_modules. Without the install every mobile type
       # degrades to an `error` type — reported as phantom findings against the changed lines.
       - uses: ./.github/actions/install-mobile-dependencies
-        if: needs.code_paths.outputs.mobile_dependencies == 'true'
+        if: needs.code_paths.outputs.static_analysis == 'true' && needs.code_paths.outputs.mobile_dependencies == 'true'
 
       - name: Enforce changed-code quality
+        if: '!cancelled()'
         id: changed-code-quality
         background: true
-        run: pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
 
       - name: Enforce React Doctor on changed lines
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run check:react-doctor:changed -- "${{ github.event.pull_request.base.sha }}"
 
       - wait: changed-code-quality
 
       - name: Check Zustand selector fan-out budget
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run check:zustand-selector-fanout
 
       - name: Check reliability gate manifest
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run check:reliability-gates
 
       - name: Enforce dead design-system classes
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run check:dead-classes
 
       - name: Check VM runtime rollback compatibility
+        if: needs.code_paths.outputs.static_analysis == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -264,25 +291,33 @@ jobs:
             config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts
 
       - name: Enforce max-lines ratchet
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run check:max-lines-ratchet
 
       - name: Enforce ts-nocheck ratchet
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run check:ts-nocheck-ratchet
 
       - name: Enforce runtime Electron-import ratchet
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run check:runtime-electron-ratchet
 
       - name: Check Node runtime pin
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run check:node-runtime-pin
 
       # Why: extraction writes sorted evidence to an isolated temporary path,
       # so feature PRs need one normalized AST pass rather than a three-OS matrix.
       - name: Verify localization extraction
+        if: '!cancelled()'
         id: localization-extraction
         background: true
         env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           # Detection failures run the full check; renames retain the removed input path.
           DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
           if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/localization-changes" &&
@@ -296,6 +331,7 @@ jobs:
       # which is a property of the import graph. This proves the Node artifact it enables
       # actually boots, pairs, creates a worktree and round-trips a real PTY.
       - name: Boot orcad and round-trip a terminal
+        if: needs.code_paths.outputs.static_analysis == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           ORCA_BACKGROUND_LAUNCH: '1'
@@ -310,20 +346,34 @@ jobs:
           fi
 
       - name: Verify the generated RPC params catalog
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run verify:rpc-params-catalog
 
+      - name: Verify the generated ACP protocol schema
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: pnpm run verify:acp-protocol
+
       - name: Verify bundled skill guides
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run verify:bundled-skill-guides
 
       - name: Verify skill freshness manifest
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run verify:skill-bundle-manifest
 
       - name: Verify localization catalogs
+        if: '!cancelled()'
         id: localization-catalogs
         background: true
-        run: pnpm run verify:localization-catalogs
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          pnpm run verify:localization-catalogs
 
       - name: Verify localization coverage
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run verify:localization-coverage
 
       - wait: [localization-catalogs, localization-extraction]
@@ -334,6 +384,7 @@ jobs:
       # in .d.ts to `any`, which is how #1186 shipped a broken IPC signature
       # past typecheck. See .github/CONTRIBUTING.md#type-declarations-prefer-ts-over-dts.
       - name: Guard against project-owned .d.ts in preload/shared
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: |
           matches=$(find src/preload src/shared -name '*.d.ts' 2>/dev/null || true)
           if [ -n "$matches" ]; then
@@ -346,33 +397,19 @@ jobs:
           fi
 
       - name: Check feature wall asset budget
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm check:feature-wall-assets
 
       - name: Verify macOS entitlements
+        if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm verify:macos-entitlements
-
-  typecheck:
-    needs: [code_paths]
-    if: needs.code_paths.outputs.typecheck == 'true'
-    # Typechecking uses no native runtime, so it can use the free public ARM runner.
-    runs-on: ubuntu-24.04-arm
-    outputs:
-      shards: ${{ steps.unit-plan.outputs.shards }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-
-      - uses: ./.github/actions/install-node-dependencies
 
       # Why: every project is `composite`, so tsc already writes a .tsbuildinfo that lets
       # the next run skip unchanged files. Share one cache entry across commits while the
       # PR base stays stable; actions/cache keeps the first successful graph and the
       # compiler still invalidates stale files from its content hashes.
       - name: Cache TypeScript incremental state
+        if: needs.code_paths.outputs.typecheck == 'true'
         uses: actions/cache@v5
         with:
           path: config/*.tsbuildinfo
@@ -382,17 +419,24 @@ jobs:
 
       # Planning shares setup and stays off the compiler's critical path.
       - name: Plan unit selection
+        if: '!cancelled()'
         id: unit-plan
         background: true
         env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.typecheck == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
           ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
-        run: node config/scripts/ci-unit-plan.mjs
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node config/scripts/ci-unit-plan.mjs
 
       - run: pnpm run typecheck
+        if: needs.code_paths.outputs.typecheck == 'true'
 
       - wait: unit-plan
 
       - uses: actions/upload-artifact@v7
+        if: needs.code_paths.outputs.typecheck == 'true'
         with:
           name: unit-selection-attempt-${{ github.run_attempt }}
           path: ci-shards/unit-selection.json
@@ -400,8 +444,12 @@ jobs:
 
   git_compatibility:
     name: Git compatibility
-    needs: [code_paths]
-    if: needs.code_paths.outputs.git_compatibility == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.git_compatibility == 'true' &&
+      needs.preflight.result == 'success'
     runs-on: ubuntu-latest
 
     steps:
@@ -415,6 +463,8 @@ jobs:
       - uses: ./.github/actions/prepare-git-compatibility
 
       - name: Verify Git binary compatibility matrix
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
         run: |
           specs=(
             "alpine/git:edge-2.38.1|2.38.1"
@@ -429,9 +479,13 @@ jobs:
           pids=()
           (
             ORCA_GIT_COMPAT_BINARY="$HOME/.cache/orca-git-compat/git-2.25.5/git" \
+              GIT_EXEC_PATH="$HOME/.cache/orca-git-compat/git-2.25.5" \
               ORCA_GIT_COMPAT_VERSION="2.25.5" \
               pnpm exec vitest run --config config/vitest.config.ts \
-              src/shared/git-binary-compatibility.test.ts
+              src/shared/git-binary-compatibility.test.ts \
+              src/main/git/worktree-safety-real-git.test.ts \
+              src/main/git/worktree-rebase-update-refs-real-git.test.ts \
+              src/relay/git-review-draft-binary-compatibility.test.ts
           ) &
           pids+=("$!")
 
@@ -441,7 +495,10 @@ jobs:
               version="${spec#*|}"
               ORCA_GIT_COMPAT_IMAGE="$image" ORCA_GIT_COMPAT_VERSION="$version" \
                 pnpm exec vitest run --config config/vitest.config.ts \
-                src/shared/git-binary-compatibility.test.ts
+                src/shared/git-binary-compatibility.test.ts \
+                src/main/git/worktree-safety-real-git.test.ts \
+                src/main/git/worktree-rebase-update-refs-real-git.test.ts \
+                src/relay/git-review-draft-binary-compatibility.test.ts
             ) &
             pids+=("$!")
           done
@@ -460,8 +517,12 @@ jobs:
   # repair stops happening. Pinned because the binary is the thing expected to drift.
   codex_index_heal_contract:
     name: Codex index-heal contract
-    needs: [code_paths]
-    if: needs.code_paths.outputs.codex_index_heal_contract == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.codex_index_heal_contract == 'true' &&
+      needs.preflight.result == 'success'
     # Why ARM: @openai/codex ships @openai/codex-linux-arm64.
     runs-on: ubuntu-24.04-arm
     env:
@@ -526,8 +587,12 @@ jobs:
 
   xterm_patch_sync:
     name: xterm patch sync
-    needs: [code_paths]
-    if: needs.code_paths.outputs.xterm_patch_sync == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.xterm_patch_sync == 'true' &&
+      needs.preflight.result == 'success'
     # Why ARM: the patch check rebuilds 4 packages x 2 builds and byte-compares against the
     # checked-in bundles. Those were generated on Linux x64 and reproduce byte-for-byte on
     # darwin-arm64, so the output is neither host-arch nor host-OS dependent.
@@ -555,8 +620,12 @@ jobs:
 
   shell_contracts:
     name: shell contracts
-    needs: [code_paths]
-    if: needs.code_paths.outputs.shell_contracts == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.shell_contracts == 'true' &&
+      needs.preflight.result == 'success'
     # Why ARM: fish 4.x is published for noble/arm64 and zsh is in the arm64 archive.
     runs-on: ubuntu-24.04-arm
     # Why: this job's cost is almost entirely package download, and a stalled mirror has
@@ -671,6 +740,7 @@ jobs:
             src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             src/main/fish-xdg-data-dirs-handoff.test.ts \
             src/main/shell-startup-feature-channel.test.ts \
+            src/main/zsh-deferred-startup-line-init.live-shell.test.ts \
             src/main/terminal-history-fish-session.node-pty.test.ts \
             src/main/zsh-scoped-histfile.live-shell.test.ts \
             src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
@@ -682,35 +752,38 @@ jobs:
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
-  # Static analysis saves the Node cache; typecheck publishes the plan before tests fan out.
+  # Preflight saves the Node cache and publishes the plan before tests fan out.
   test:
-    needs: [code_paths, static_analysis, typecheck]
+    needs: [code_paths, preflight]
     # Cancellation and failed prerequisites stop the expensive matrix.
     if: >-
       !cancelled() &&
       needs.code_paths.outputs.test == 'true' &&
-      needs.static_analysis.result == 'success' &&
-      needs.typecheck.result == 'success'
+      needs.preflight.result == 'success'
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24"]'
       runner: ubuntu-24.04-arm
-      shards: ${{ needs.typecheck.outputs.shards }}
+      shards: ${{ needs.preflight.outputs.shards }}
 
   # Why a sibling and not part of the test workflow: it is advisory, so it must not delay the
   # gate. Inside unit-tests.yml a caller's `needs: test` waited for it, holding verify ~36s
   # after the last shard. Deliberately absent from verify's needs for the same reason.
   unit_selection_evidence:
     needs: [test]
-    if: ${{ !cancelled() && needs.test.result == 'success' }}
+    if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'failure') }}
     uses: ./.github/workflows/unit-selection-evidence.yml
 
   # Why a separate job: the test needs a real Chrome, and the sharded `test` matrix
   # would pay for it on every shard to run one file in whichever shard it landed in.
   orcad_browser:
     name: orcad browser provider
-    needs: [code_paths]
-    if: needs.code_paths.outputs.orcad_browser == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.orcad_browser == 'true' &&
+      needs.preflight.result == 'success'
     runs-on: ubuntu-latest
 
     steps:
@@ -762,7 +835,7 @@ jobs:
       # in this job loads node-pty.
       - uses: ./.github/actions/install-node-dependencies
         with:
-          native-runtime: node
+          native-runtime: none
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
@@ -823,8 +896,12 @@ jobs:
 
   cross-version-wire:
     name: cross-version wire compatibility
-    needs: [code_paths]
-    if: needs.code_paths.outputs.cross-version-wire == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.cross-version-wire == 'true' &&
+      needs.preflight.result == 'success'
     # Why ARM: source-only: tagged checkout plus in-process vitest, no docker or browser.
     runs-on: ubuntu-24.04-arm
 
@@ -860,26 +937,19 @@ jobs:
           DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
           pnpm run check:runtime-launcher-protocol-ratchet -- --base "$DIFF_BASE"
 
-      # A path filter that matches nothing exits 1 ("No test files found"), so this
-      # lane cannot report success while running zero tests.
+      # Runs the whole directory so a new file there cannot be left out; an empty match
+      # exits 1 ("No test files found"), so this lane cannot pass while running zero tests.
       - name: Old/new client and server compatibility journeys
-        run: >-
-          pnpm exec vitest run --config config/vitest.config.ts
-          tests/e2e/cross-version-wire/release-checkout.unit.test.ts
-          tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts
-          tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
-          tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts
-          tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
-          tests/e2e/cross-version-wire/cross-version-worktree-identity-downgrade.unit.test.ts
-          tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.test.ts
-          tests/e2e/cross-version-wire/agent-session-resume-marker-downgrade.unit.test.ts
-          tests/e2e/cross-version-wire/agent-session-stop-event-downgrade.unit.test.ts
-          tests/e2e/cross-version-wire/cross-version-worktree-ps-verdict.unit.test.ts
+        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/
 
   managed_hook_node18:
     name: managed hooks on Node 18
-    needs: [code_paths]
-    if: needs.code_paths.outputs.managed_hook_node18 == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.managed_hook_node18 == 'true' &&
+      needs.preflight.result == 'success'
     # Why ARM: Node 18 publishes linux-arm64; the per-platform runtime files are read as data.
     runs-on: ubuntu-24.04-arm
 
@@ -904,7 +974,7 @@ jobs:
 
   package:
     name: package
-    needs: [code_paths, static_analysis, typecheck]
+    needs: [code_paths, preflight]
     if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-latest
     # Let the serial Docker gates reach their own deadlines and report cleanup failures.
@@ -1061,7 +1131,7 @@ jobs:
 
   package_windows:
     name: package (windows)
-    needs: [code_paths, static_analysis, typecheck]
+    needs: [code_paths, preflight]
     if: needs.code_paths.outputs.package_windows == 'true'
     runs-on: windows-2022
     timeout-minutes: 30
@@ -1102,11 +1172,8 @@ jobs:
         if: steps.deps.outputs.native-cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
-          path: |
-            node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
-            native/windows-registry/build
-            node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
+          path: ${{ steps.deps.outputs.native-cache-path }}
+          key: ${{ steps.deps.outputs.native-cache-key }}
 
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
@@ -1142,6 +1209,7 @@ jobs:
           src/shared/child-process/windows-cmd-shim-resolution.test.ts
           src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts
           src/main/agent-hooks/windows-hook-payload-delivery.test.ts
+          src/main/jcode/hook-gate-script.test.ts
           src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts
           src/main/codex/windows-hook-command.test.ts
           src/main/codex/windows-hook-upgrade.test.ts
@@ -1156,7 +1224,6 @@ jobs:
           src/main/windows-live-tree-kill.win32.test.ts
           src/main/wsl/wsl-runner.test.ts
           src/main/wsl/wsl-guest-environment.test.ts
-          src/main/wsl/wsl-invocation-boundary.test.ts
           src/main/wsl/wsl-executable-path.win32.test.ts
           src/main/wsl/wsl-w1-w3-contract.test.ts
           src/shared/source-scan/source-tree-scan.test.ts
@@ -1172,6 +1239,8 @@ jobs:
           src/main/runtime/unreadable-secret-store-preservation.win32.test.ts
           src/main/ipc/pty-codex-account-attribution.test.ts
           src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts
+          src/main/ipc/preflight-provider-command-selection.test.ts
+          src/main/ipc/preflight-runnable-local-cli.test.ts
           src/relay/windows-port-scan.win32.test.ts
           src/main/ssh/ssh-relay-upload-stage-windows-identity.test.ts
           src/main/ssh/remote-node-runtime-store-windows.test.ts
@@ -1206,17 +1275,11 @@ jobs:
       - name: Build package inputs
         run: pnpm run build:release:parallel
 
-      - name: Restore compiled Electron native modules
-        uses: actions/cache@v5
-        with:
-          path: |
-            node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
-            native/windows-registry/build
-            node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
-
       - name: Prepare Electron native runtime
-        run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
+        uses: ./.github/actions/prepare-native-runtime
+        with:
+          native-runtime: electron
+          node-version: ${{ steps.deps.outputs.node-version }}
 
       - name: Package unpacked app
         env:
@@ -1231,8 +1294,19 @@ jobs:
 
   e2e:
     name: e2e
-    needs: code_paths
-    if: needs.code_paths.outputs.e2e_should_run == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.e2e_should_run == 'true' &&
+      (
+        needs.preflight.result == 'success' ||
+        (
+          needs.preflight.result == 'skipped' &&
+          needs.code_paths.outputs.static_analysis == 'false' &&
+          needs.code_paths.outputs.typecheck == 'false'
+        )
+      )
     # Why: reusable e2e.yml only checkouts, builds, and uploads artifacts.
     permissions:
       contents: read
@@ -1275,8 +1349,7 @@ jobs:
     if: ${{ !cancelled() }}
     needs:
       - code_paths
-      - static_analysis
-      - typecheck
+      - preflight
       - git_compatibility
       - codex_index_heal_contract
       - xterm_patch_sync
@@ -1305,10 +1378,8 @@ jobs:
         env:
           CODE_PATHS: ${{ needs.code_paths.result }}
           SHOULD_RUN: ${{ needs.code_paths.outputs.should_run }}
-          STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
-          STATIC_ANALYSIS_SHOULD_RUN: ${{ needs.code_paths.outputs.static_analysis }}
-          TYPECHECK: ${{ needs.typecheck.result }}
-          TYPECHECK_SHOULD_RUN: ${{ needs.code_paths.outputs.typecheck }}
+          PREFLIGHT: ${{ needs.preflight.result }}
+          PREFLIGHT_SHOULD_RUN: ${{ needs.code_paths.outputs.static_analysis == 'true' || needs.code_paths.outputs.typecheck == 'true' }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
           GIT_COMPATIBILITY_SHOULD_RUN: ${{ needs.code_paths.outputs.git_compatibility }}
           CODEX_INDEX_HEAL_CONTRACT: ${{ needs.codex_index_heal_contract.result }}
@@ -1354,8 +1425,7 @@ jobs:
             fi
           }
           # Require success when the PR has code-relevant changes
-          check_job static_analysis "$STATIC_ANALYSIS" "$STATIC_ANALYSIS_SHOULD_RUN"
-          check_job typecheck "$TYPECHECK" "$TYPECHECK_SHOULD_RUN"
+          check_job preflight "$PREFLIGHT" "$PREFLIGHT_SHOULD_RUN"
           check_job git_compatibility "$GIT_COMPATIBILITY" "$GIT_COMPATIBILITY_SHOULD_RUN"
           check_job codex_index_heal_contract "$CODEX_INDEX_HEAL_CONTRACT" "$CODEX_INDEX_HEAL_CONTRACT_SHOULD_RUN"
           check_job xterm_patch_sync "$XTERM_PATCH_SYNC" "$XTERM_PATCH_SYNC_SHOULD_RUN"

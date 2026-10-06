@@ -92,9 +92,11 @@ export class StructuredAgentSessionHostRuntimeState {
     this.eventSinks.delete(sessionId)
   }
 
+  /** Through `currentEventSink`: a failed sink is terminal, so its old error never fails a later
+   *  caller's barrier. */
   flushEventSink(sessionId: string): Promise<void> {
     return this.requireSuccessfulBarrier(
-      this.eventSinks.get(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
+      this.currentEventSink(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
     )
   }
 

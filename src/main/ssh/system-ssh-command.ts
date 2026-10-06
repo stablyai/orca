@@ -96,10 +96,6 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     },
     write(chunk, encoding, cb) {
       proc.stdin!.write(chunk, encoding, cb)
-    },
-    final(cb) {
-      // EOF must reach the remote reader, not just this local facade.
-      proc.stdin!.end(cb)
     }
   })
   const channel = duplex as unknown as SystemSshCommandChannel

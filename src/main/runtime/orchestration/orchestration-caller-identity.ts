@@ -2,23 +2,10 @@ import type { RunRow } from './types'
 import { isEquivalentPaneKey } from './db/pane-key-match'
 import { currentRunCoordinatorOrcaSessionId } from './db/runs/run-coordinator-orca-session'
 import { formatOrcaSessionAddress, type OrcaSessionId } from '../../../shared/orca-session-address'
+import type { OrchestrationPartyIdentity } from '../../../shared/orchestration-party-identity'
 
-/**
- * Who an orchestration caller is, as Run binding and mail routing match it.
- *
- * A PTY agent is its terminal: a handle and a pane key, no Orca session id. An agent that is a
- * structured session is its Orca session id, addressed as `orca_session_id:<id>`; a structured worker also
- * has the handle and pane key it was minted, and an ordinary chat has neither. Methods pass this
- * through whole and never branch on which fields are set; the lookups below own that.
- */
-export type OrchestrationCallerIdentity = Readonly<{
-  /** Mailbox address the caller sends from and reads: its terminal handle, else its session address. */
-  address: string
-  terminalHandle: string | null
-  paneKey: string | null
-  /** The bare Orca session id the caller is addressed by; mail spells it `orca_session_id:<id>`. */
-  orcaSessionId: OrcaSessionId | null
-}>
+/** Who an orchestration caller is; shared so a queued message can name its sender the same way. */
+export type OrchestrationCallerIdentity = OrchestrationPartyIdentity
 
 /** The part of a caller a Run binding stores and matches. */
 export type OrchestrationCoordinatorKey = Pick<

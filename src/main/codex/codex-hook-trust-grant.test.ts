@@ -117,6 +117,18 @@ describe('grantManagedCodexHookTrust', () => {
     expect(runner).not.toHaveBeenCalled()
   })
 
+  it('treats an unreadable session index as pending instead of running a trust RPC', async () => {
+    writeFileSync(join(runtimeHomeDir, 'state_5.sqlite'), 'not a sqlite database')
+    const runner = vi.fn()
+    _internals.setGrantSessionRunner(runner)
+
+    expect(await grantManagedCodexHookTrust(buildPlan([managedEntry('stop')]))).toMatchObject({
+      lane: 'fallback',
+      reason: 'retry-cached'
+    })
+    expect(runner).not.toHaveBeenCalled()
+  })
+
   it('returns granted entries with codex-verbatim hashes and records the ledger', async () => {
     const entries = [managedEntry('session_start'), managedEntry('stop')]
     const runner = vi.fn(async (_request: CodexHookTrustGrantRequest) =>

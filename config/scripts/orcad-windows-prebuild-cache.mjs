@@ -19,6 +19,7 @@ const root = resolve(import.meta.dirname, '../..')
 const ownership = require('./node-pty-job-ownership.cjs')
 export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'package.json',
+  '.github/actions/prepare-orcad-prebuilds/action.yml',
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   'config/patches/node-pty@1.1.0.patch',

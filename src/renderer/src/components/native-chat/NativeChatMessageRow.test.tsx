@@ -3,23 +3,37 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { MessageRow } from './NativeChatMessageRow'
+import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import type { NativeChatRewindSurface } from './use-native-chat-rewind'
+
+const confirm = vi.hoisted(() => vi.fn())
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => confirm
+}))
 
 afterEach(cleanup)
 
-function renderMessage(role: NativeChatMessage['role'], timestamp: number | null = 0) {
+function renderMessage(
+  role: NativeChatMessage['role'],
+  timestamp: number | null = 0,
+  rewind?: NativeChatRewindSurface
+) {
   return render(
-    <MessageRow
-      message={{
-        id: 'message',
-        role,
-        timestamp,
-        source: 'transcript',
-        blocks: [{ type: 'text', text: 'Message text' }]
-      }}
-      expandSignal={false}
-      onScrollMessageToTop={vi.fn()}
-    />
+    <TooltipProvider>
+      <MessageRow
+        message={{
+          id: 'message',
+          role,
+          timestamp,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'Message text' }]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+        rewind={rewind}
+      />
+    </TooltipProvider>
   )
 }
 
@@ -50,43 +64,18 @@ describe('MessageRow control visibility', () => {
     })
   })
 
-  it('appends time to the existing agent controls and inherits their reveal', () => {
-    renderMessage('assistant')
-    const copy = screen.getByRole('button', { name: 'Copy message' })
-    const scroll = screen.getByRole('button', { name: 'Scroll this message to top' })
-    const time = screen.getByRole('time')
-    expect(Array.from(copy.parentElement!.children)).toEqual([copy, scroll, time])
-    expect(copy.parentElement).toHaveClass(
-      'can-hover:opacity-0',
-      'can-hover:pointer-events-none',
-      'group-hover:opacity-100',
-      '[.group:has(:focus-visible)_&]:opacity-100',
-      'group-hover:pointer-events-auto',
-      '[.group:has(:focus-visible)_&]:pointer-events-auto'
-    )
-    expect(copy.parentElement).not.toHaveClass('opacity-0', 'pointer-events-none')
-    expect(time).not.toHaveAttribute('tabindex')
-    copy.focus()
-    expect(copy).toHaveFocus()
-  })
-
-  it('gives user bubbles a copy button and timestamp that only hide on hover-capable devices', () => {
-    renderMessage('user')
+  it('composes the edit-from-here action into the user hover/focus strip', () => {
+    const request = vi.fn()
+    renderMessage('user', 0, { disabledReason: null, request })
     const copy = screen.getByRole('button', { name: 'Copy message' })
     const time = screen.getByRole('time')
-    expect(Array.from(copy.parentElement!.children)).toEqual([copy, time])
-    expect(copy.parentElement).toHaveClass(
-      'can-hover:opacity-0',
-      'can-hover:pointer-events-none',
-      'group-hover:opacity-100',
-      '[.group:has(:focus-visible)_&]:opacity-100',
-      'group-hover:pointer-events-auto',
-      '[.group:has(:focus-visible)_&]:pointer-events-auto'
-    )
-    expect(copy.parentElement).not.toHaveClass('opacity-0', 'pointer-events-none')
-    expect(copy.parentElement!.parentElement).toHaveClass('group')
-    time.focus()
-    expect(time).toHaveFocus()
+    const edit = screen.getByRole('button', { name: 'Rewind to here' })
+    expect(Array.from(copy.parentElement!.children)).toEqual([copy, time, edit])
+    expect(copy.parentElement).toHaveClass('can-hover:opacity-0', 'group-hover:opacity-100')
+    edit.focus()
+    expect(edit).toHaveFocus()
+    fireEvent.click(edit)
+    expect(request).toHaveBeenCalledWith('message', confirm)
   })
 
   it('copies the sent message text from a user bubble', async () => {
@@ -163,8 +152,8 @@ describe('MessageRow send mode', () => {
   })
 })
 
-describe('a user message that did not go through', () => {
-  function renderUser(deliveryNotice?: { text: string; onRetry?: () => void }) {
+describe('what a user message says about its delivery', () => {
+  function renderUser(deliveryNotice?: NativeChatDeliveryNotice) {
     return render(
       <MessageRow
         message={{
@@ -202,5 +191,42 @@ describe('a user message that did not go through', () => {
   it('says nothing when it went through', () => {
     renderUser()
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  // Muted, in the time's place, and shown without hover: a message nothing confirmed yet never
+  // looks like one that went through. Copy keeps its hover reveal, and the row its height.
+  it('says quietly that it is still sending in place of its time, with no Retry', () => {
+    renderUser({ sending: true })
+
+    const sending = screen.getByText('Sending…')
+    const copy = screen.getByRole('button', { name: 'Copy message' })
+    expect(sending).toHaveClass('text-xs', 'text-chat-foreground-faint')
+    expect(Array.from(sending.parentElement!.children)).toEqual([copy, sending])
+    expect(sending.parentElement).not.toHaveClass('can-hover:opacity-0')
+    expect(sending.parentElement!.parentElement).toHaveClass('group')
+    expect(copy).toHaveClass('can-hover:opacity-0', 'group-hover:opacity-100')
+    expect(screen.queryByRole('time')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  it('keeps the same row when the message is confirmed, with the time back in its place', () => {
+    const { rerender } = renderUser({ sending: true })
+    const meta = screen.getByText('Sending…').parentElement
+    rerender(
+      <MessageRow
+        message={{
+          id: 'message',
+          role: 'user',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'Message text' }]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+      />
+    )
+    expect(screen.queryByText('Sending…')).toBeNull()
+    expect(screen.getByRole('time').parentElement).toBe(meta)
+    expect(meta).toHaveClass('can-hover:opacity-0')
   })
 })

@@ -19,6 +19,10 @@ import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
 import type { NativeChatOptimisticSendOutcome } from './native-chat-composer-types'
+import {
+  answerNativeChatCommandInComposer,
+  type NativeChatLocalCommandAnswer
+} from './use-native-chat-local-command-answer'
 
 export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
@@ -33,7 +37,8 @@ export function useNativeChatPtyComposerSend(args: {
   classifySend: NativeChatPickerState['classifySend']
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
-  onSlashCommand?: (command: string) => void
+  onSlashCommand?: (command: string, output?: string) => void
+  answerCommandLocally?: NativeChatLocalCommandAnswer
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   terminalTabId: string
   trackPendingSend: NativeChatSendLifecycle['trackPendingSend']
@@ -59,6 +64,9 @@ export function useNativeChatPtyComposerSend(args: {
       return
     }
     const classification = args.classifySend(text)
+    if (classification === 'command' && answerNativeChatCommandInComposer(args)) {
+      return
+    }
     const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,

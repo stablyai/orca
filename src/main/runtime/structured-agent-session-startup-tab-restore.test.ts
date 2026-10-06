@@ -14,7 +14,10 @@ import {
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
-import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  SAVED_BY_NEWER_ORCA
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { journalIdentityFor } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { attachParamsForRecord } from '../native-chat/agent-session-wire/structured-agent-session-conversation-open'
@@ -27,7 +30,8 @@ import {
 } from './agent-session-record-store-file'
 import {
   readPersistedTestAgentSessionStore,
-  seedTestAgentSessionStoreFromNewerBuild
+  seedTestAgentSessionStoreFromNewerBuild,
+  storedTestAgentSessionRecord
 } from './agent-session-record-store-test-harness'
 import { openStructuredAgentSessionJournalDatabase } from './structured-agent-session-journal-open'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -37,6 +41,7 @@ import {
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 // `failing` fails every record write; `grants` lets that many more through, then fails.
 const writes = vi.hoisted(() => ({ failing: false, grants: Infinity, refused: 0 }))
@@ -94,7 +99,7 @@ function chatRecord(
         provider: 'codex' as const,
         providerHandleChain: record.providerHandleChain.map((link) => ({
           ...link,
-          handle: { provider: 'codex' as const, threadId: `thread-${sessionId}` }
+          handle: codexProviderHandle(`thread-${sessionId}`)
         })),
         accountHome: { variable: 'CODEX_HOME' as const, path: join(root, 'codex-home') }
       }
@@ -128,7 +133,9 @@ async function seedProfile(
     JSON.stringify({
       schemaVersion: AGENT_SESSION_STORE_SCHEMA_VERSION,
       hostId: 'local',
-      records: Object.fromEntries(records.map((record) => [record.sessionId, record])),
+      records: Object.fromEntries(
+        records.map((record) => [record.sessionId, storedTestAgentSessionRecord(record)])
+      ),
       operations: {},
       retiredClaimKeys: [],
       unusableRecords: {},
@@ -182,7 +189,7 @@ async function seedChatOpenedWhileOwed(record: AgentSessionRecord, tabId: string
   })
   database.db
     .prepare('INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?)')
-    .run(record.sessionId, JSON.stringify(record))
+    .run(record.sessionId, JSON.stringify(storedTestAgentSessionRecord(record)))
   await AgentSessionRecordStore.open({
     journalDatabase: database,
     hostId: 'local'
@@ -269,7 +276,7 @@ describe('restoring the chat tabs open at quit', () => {
     { store: 'records a newer Orca wrote', newer: true, writesFail: false },
     { store: 'a store whose writes keep failing', newer: false, writesFail: true }
   ])(
-    'lists and reads every chat from $store, and writes nothing',
+    'lists every chat from $store and writes nothing; it reads them unless a newer Orca saved them',
     async ({ newer, writesFail }) => {
       const records = [
         chatRecord(CHAT_A),
@@ -298,12 +305,17 @@ describe('restoring the chat tabs open at quit', () => {
         `agent-session:${CHAT_B}`
       ])
       expect(published()[0]).toMatchObject({ replacesSessionId: CLEARED })
-      await expectHistory(CHAT_A)
-      await expectHistory(CHAT_B)
-      // A newer Orca's leases are adjudicated in memory, so nothing fails there.
+      // A newer Orca's leases are adjudicated in memory, so nothing fails there; its chats do not open.
       if (newer) {
-        expect(log.entries).toEqual([])
+        for (const sessionId of [CHAT_A, CHAT_B]) {
+          await expect(
+            getStructuredAgentSessionHost()!.journalSnapshot(sessionId)
+          ).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+        }
+        expect(log.entries.map((entry) => entry.fields.scope)).not.toContain('lease-reconcile')
       } else {
+        await expectHistory(CHAT_A)
+        await expectHistory(CHAT_B)
         expect(log.entries).toEqual([
           expect.objectContaining({
             fields: {

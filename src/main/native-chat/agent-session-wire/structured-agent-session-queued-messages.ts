@@ -9,6 +9,10 @@
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
+  USER_MESSAGE_SOURCE,
+  type AgentMessageSource
+} from '../../../shared/agent-session-message-source'
+import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionSendResult,
   type AgentSessionWireRefusal
@@ -23,6 +27,7 @@ import { isUnsettledQueuedMessage } from '../agent-session-journal/queued-messag
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/journal-queued-messages'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -185,15 +190,15 @@ export async function maybeQueueStructuredAgentSessionSend(
   context: {
     deps: { store: { getRecord: (sessionId: string) => AgentSessionRecord | null } }
   },
-  ctx: {
-    sessionId: string
-    journal: AgentSessionJournal
-    fence: number
-  },
+  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'journal' | 'fence' | 'operationReceipt'>,
   params: {
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
+    /** A person's send at a chat surface; it outranks any `source`. */
+    userSend?: true
+    /** Who a host-side send is from. */
+    source?: AgentMessageSource
   }
 ): Promise<
   | { ok: true; value: AgentSessionSendResult }
@@ -214,9 +219,7 @@ export async function maybeQueueStructuredAgentSessionSend(
   if (ctx.journal.submissions().some((entry) => entry.clientMessageId === clientMessageId)) {
     return null
   }
-  // A newer Orca's journal takes no new draft: the immediate path refuses the send.
   if (
-    ctx.journal.isReadOnly ||
     !shouldQueueStructuredAgentSessionSend({
       journal: ctx.journal,
       record: context.deps.store.getRecord(ctx.sessionId),
@@ -231,12 +234,16 @@ export async function maybeQueueStructuredAgentSessionSend(
   }
   // The insert notifies through the journal's commit listener: publication and
   // the drain re-derive with no call here to forget.
-  const row = await ctx.journal.queuedMessages.insert({
-    messageId: clientMessageId,
-    body: params.body,
-    fingerprint: queuedMessageFingerprint(ctx.sessionId, params.body),
-    hostInstance: structuredAgentSessionHostInstance()
-  })
+  const row = await ctx.journal.queuedMessages.insert(
+    {
+      messageId: clientMessageId,
+      body: params.body,
+      fingerprint: queuedMessageFingerprint(ctx.sessionId, params.body),
+      hostInstance: structuredAgentSessionHostInstance(),
+      source: params.userSend ? USER_MESSAGE_SOURCE : (params.source ?? USER_MESSAGE_SOURCE)
+    },
+    ctx.operationReceipt
+  )
   return {
     ok: true,
     value: {
@@ -250,9 +257,6 @@ export type QueuedMessageDrainDeps = {
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
-  /** The streamed-event barrier: a turn-open already accepted by the host is
-   *  committed before the gates are read, so no stored busy flag is needed. */
-  flushStreamedEvents: (sessionId: string) => Promise<void>
   conversationFence: (sessionId: string) => number
   /** The consumed submission is ordinary #22821 work from here on. */
   wakeDelivery: (sessionId: string) => void
@@ -272,12 +276,12 @@ export class StructuredAgentSessionQueuedMessageDrain {
 
   schedule(sessionId: string): void {
     const journal = this.deps.sessions.get(sessionId)?.journal
-    if (!journal || journal.isReadOnly) {
+    if (!journal) {
       return
     }
     // Cheap pre-check so token streams do not pay a serialized step per delta.
     // Skipping while working is safe: whatever ends the work is itself a commit
-    // that schedules again, and the step re-reads every gate after its flush.
+    // that schedules again, and the step re-reads every gate from the fold.
     try {
       if (
         !journal.queuedMessages.settlementOwed() &&
@@ -315,10 +319,9 @@ export class StructuredAgentSessionQueuedMessageDrain {
 
   private async step(sessionId: string): Promise<void> {
     const session = this.deps.sessions.get(sessionId)
-    if (!session || session.journal.isReadOnly) {
+    if (!session) {
       return
     }
-    await this.deps.flushStreamedEvents(sessionId)
     const journal = session.journal
     if (journal.queuedMessages.settlementOwed() || journal.queuedMessages.deliveredByEchoOwed()) {
       // A live per-row hook was skipped; heal now, before a draft sends, rather than at reopen.

@@ -119,7 +119,22 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+        env:
+          ORCA_E2E_APT_PACKAGES: build-essential python3
+        run: &install_e2e_tools |
+          read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            if [ -f "$source" ]; then
+              sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+            fi
+          done
+          sudo tee /etc/apt/apt.conf.d/99-orca-e2e >/dev/null <<'APTCONF'
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          Acquire::Retries "1";
+          APTCONF
+          timeout 120 sudo apt-get update
+          timeout 300 sudo apt-get install -y "${packages[@]}"
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -176,7 +191,11 @@ jobs:
       # Native cache misses need the compiler, Electron needs Xvfb, and paired
       # Quick Open needs ripgrep. Install them in one apt transaction per shard.
       - name: Install native build and headless UI tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 ripgrep xvfb zsh openbox x11-utils
+        # The Azure archive took 16 minutes for one font package; bound setup
+        # separately so a slow mirror cannot consume the shard's test budget.
+        env: &e2e_tool_packages
+          ORCA_E2E_APT_PACKAGES: build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils
+        run: *install_e2e_tools
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -241,7 +260,7 @@ jobs:
       # them as an artifact makes post-mortem debugging on CI possible without
       # re-running locally.
       - name: Upload Playwright traces
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces-${{ matrix.shard_name }}
@@ -267,7 +286,8 @@ jobs:
         # unbounded inventory fallback; the paired fixture exercises that real boundary.
         # Why openssh-client: the Docker-SSH fixture shells out to ssh/ssh-keygen, and this
         # lane now receives those specs from pr.yml's SSH source mapping.
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils
+        env: *e2e_tool_packages
+        run: *install_e2e_tools
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -295,6 +315,7 @@ jobs:
               . != "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts" and
               . != "tests/e2e/ssh-cold-activation-restore.spec.ts" and
               . != "tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts" and
+              . != "tests/e2e/ssh-emptied-worktree-reactivation.spec.ts" and
               . != "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts" and
               . != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts" and
               . != "tests/e2e/ssh-docker-half-open-link.spec.ts" and
@@ -344,7 +365,7 @@ jobs:
             pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
 
       - name: Upload Playwright traces
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces-changed
@@ -366,6 +387,7 @@ jobs:
       contains(inputs.test_files, 'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-cold-activation-restore.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/ssh-emptied-worktree-reactivation.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-docker-half-open-link.spec.ts') ||
@@ -403,7 +425,8 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build and headless UI tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils
+        env: *e2e_tool_packages
+        run: *install_e2e_tools
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -459,7 +482,7 @@ jobs:
           fi
 
       - name: Upload watcher isolation traces
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces-ssh-docker-watcher-isolation-${{ matrix.shard }}
@@ -544,7 +567,7 @@ jobs:
           ORCA_E2E_FORWARD_APP_LOGS: '1'
         run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-localhost.spec.ts --project=electron-headless --workers=1
       - uses: actions/upload-artifact@v7
-        if: failure()
+        if: failure() || cancelled()
         with:
           name: localhost-ssh-traces
           path: test-results/

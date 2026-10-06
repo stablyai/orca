@@ -53,7 +53,7 @@ function directoryMayOverride(dir: string, accountHomePath: string): Promise<boo
 
 /** True when a new chat in `workspacePath` could run a model other than the listed default. */
 export async function workspaceMayOverrideDefaultModel(input: {
-  agent: 'claude' | 'codex'
+  agent: string
   workspacePath: string
   accountHomePath: string
 }): Promise<boolean> {

@@ -178,7 +178,10 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   // Why: the shared --agent help describes launching a TUI agent in a terminal,
   // which is the wrong meaning here — this selects the account provider.
   if (command === 'account add' && flag === 'agent') {
-    return '--agent <id>           Account provider: claude or codex (default claude)'
+    return '--agent <id>           Account provider: claude, codex, opencode, or devin (default claude)'
+  }
+  if (command.startsWith('account ') && flag === 'agent') {
+    return '--agent <id>           Account provider: opencode or devin'
   }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'

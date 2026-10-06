@@ -16,9 +16,12 @@ on:
       - '.npmrc'
       - '.pnpmfile.cjs'
       - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/restore-pnpm-verification/**'
+      - '.github/actions/prepare-headless-compiler/**'
+      - '.github/actions/prepare-native-runtime/**'
+      - '.github/actions/prepare-orcad-prebuilds/**'
       - '.github/workflows/node-server-tests.yml'
-  # The pull request qualifies one platform for an unflavoured change; this is where all six
-  # are re-qualified, so a platform break surfaces minutes after merge instead of next cron.
+  # Relevant main pushes qualify every platform after the dependency check.
   push:
     branches: [main]
     paths:
@@ -34,6 +37,10 @@ on:
       - '.npmrc'
       - '.pnpmfile.cjs'
       - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/restore-pnpm-verification/**'
+      - '.github/actions/prepare-headless-compiler/**'
+      - '.github/actions/prepare-native-runtime/**'
+      - '.github/actions/prepare-orcad-prebuilds/**'
       - '.github/workflows/node-server-tests.yml'
   workflow_dispatch:
     inputs:
@@ -58,40 +65,79 @@ on:
 permissions:
   contents: read
 
-# Why a run-scoped group for template builds: a release call shares github.ref with main's push
-# runs, and cancelling either would drop a release's template or a main qualification.
+# Main pushes must finish detection before they can supersede relevant qualification.
 concurrency:
-  group: node-server-${{ inputs.build_template && format('template-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ !inputs.build_template }}
+  group: node-server-${{ (inputs.build_template || github.event_name == 'push') && format('run-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !inputs.build_template && github.event_name != 'push' }}
 
 jobs:
   changes:
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft != true)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      should_run: ${{ steps.scope.outputs.should_run }}
-      qualification: ${{ steps.scope.outputs.qualification }}
-      runners: ${{ steps.scope.outputs.runners }}
+      should_run: ${{ steps.scope.outputs.should_run || steps.graph.outputs.should_run }}
+      qualification: ${{ steps.scope.outputs.qualification || steps.graph.outputs.qualification }}
+      runners: ${{ steps.scope.outputs.runners || steps.graph.outputs.runners }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 2
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
       - name: Detect headless-server build and test inputs
         id: scope
         shell: bash
+        env:
+          PUSH_BASE: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          if [ "$EVENT_NAME" = push ]; then
+            # Compare the entire push, including multi-commit pushes and removed files.
+            if git fetch --no-tags --depth=1 origin "$PUSH_BASE" &&
+               git diff --name-only --no-renames -z "$PUSH_BASE" HEAD > "$RUNNER_TEMP/node-server-changes"; then
+              node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph --full-qualification
+            else
+              echo 'should_run=true' >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
           # Compare the tested merge with its base, retaining both sides of renames.
           if git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-changes"; then
-            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes"
+            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph
           else
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
+      - uses: ./.github/actions/prepare-headless-compiler
+        id: compiler
+        if: steps.scope.outputs.graph_required == 'true'
+        continue-on-error: true
+      - uses: ./.github/actions/install-node-dependencies
+        if: steps.scope.outputs.graph_required == 'true' && steps.compiler.outputs.available != 'true'
+      - name: Check the headless import graph
+        id: graph
+        if: steps.scope.outputs.graph_required == 'true'
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = push ]; then
+            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --full-qualification
+          else
+            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes"
+          fi
+
   persistence:
     needs: changes
+    concurrency:
+      group: node-server-persistence-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
     # Missing/failed detection runs the full matrix; manual runs remain unconditional.
     # A draft carries no platform verdict; readiness re-triggers this workflow. Spelled against
     # the event name so the push and schedule paths do not rest on a null property comparison.
@@ -101,7 +147,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(needs.changes.outputs.runners || '["ubuntu-22.04","ubuntu-24.04-arm","macos-14","macos-15-intel","windows-2022","windows-11-arm"]') }}
+        os: ${{ fromJSON(needs.changes.outputs.runners || '["ubuntu-22.04","ubuntu-24.04-arm","macos-15","macos-15-intel","windows-2022","windows-11-arm"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -114,69 +160,44 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: ${{ runner.os == 'Windows' && 'node' || 'none' }}
-      - name: Resolve this Windows server prebuild cache
-        id: orcad-prebuild-cache-identity
-        if: >-
-          runner.os == 'Windows' && (runner.arch == 'X64' || runner.arch == 'ARM64') &&
-          !inputs.build_template && inputs.ref == '' &&
-          (github.event_name == 'pull_request' ||
-          (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)))
-        continue-on-error: true
-        shell: bash
-        run: node config/scripts/orcad-windows-prebuild-cache.mjs --fingerprint
-      - name: Restore the exact Windows server prebuild for this pull request
-        id: orcad-prebuild-cache-restore
-        if: >-
-          github.event_name == 'pull_request' &&
-          steps.orcad-prebuild-cache-identity.outcome == 'success' &&
-          steps.orcad-prebuild-cache-identity.outputs.key != ''
-        continue-on-error: true
-        uses: actions/cache/restore@v5
-        with:
-          path: ${{ steps.orcad-prebuild-cache-identity.outputs.path }}
-          key: ${{ steps.orcad-prebuild-cache-identity.outputs.key }}
-      # Before setup-node 18: the scripts import the TypeScript runtime pin.
-      # Linux release slots come from the Ubuntu 20.04 and Alpine lanes below, where their libc
-      # floors live; this runner's slot only packages orcad for its own tests.
-      - name: Build and smoke this runner's node-pty prebuild slot under the pinned Node
-        shell: bash
-        env:
-          WINDOWS_PREBUILD_CACHE_HIT: ${{ steps.orcad-prebuild-cache-restore.outputs.cache-hit }}
-          WINDOWS_PREBUILD_CACHE_RESTORE_OUTCOME: ${{ steps.orcad-prebuild-cache-restore.outcome }}
-        run: |
-          if [ "$RUNNER_OS" = Windows ] && [ "$WINDOWS_PREBUILD_CACHE_HIT" = true ] &&
-             [ "$WINDOWS_PREBUILD_CACHE_RESTORE_OUTCOME" = success ] &&
-             node config/scripts/orcad-windows-prebuild-cache.mjs --validate; then
-            echo 'Using the validated Windows server prebuild'
-          else
-            if [ "$RUNNER_OS" = Windows ]; then
-              rm -rf -- out/orcad-prebuilds
-            fi
-            pnpm build:orcad-prebuilds
-          fi
-          pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
-          pnpm build:orcad-prebuilds --smoke
-      - run: pnpm build:orcad
+          cache-pnpm-store: ${{ runner.os != 'Windows' }}
+          cache-pnpm-store-lookup-only: 'true'
       # Design D7 upgrade and rollback: the last Bun orcad, built from a main commit that shipped
       # it, beside this checkout's Node slot; the live-terminal hand-over skips once PROTOCOL_VERSION
-      # moves past the Bun daemon's. Same lockfile, so its build reuses this checkout's node_modules.
+      # moves past the Bun daemon's. Install its pinned dependencies independently of this checkout.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         if: runner.os == 'Linux'
         with:
           bun-version: 1.4.2
       - name: Build the last Bun orcad for the cross-runtime tests
-        if: runner.os == 'Linux'
+        id: bun-orcad
+        background: true
         shell: bash
         env:
           BUN_ORCAD_COMMIT: f4092c06d639ee13ad446261dcabc78b27a21fbc
         run: |
+          if [ "$RUNNER_OS" != Linux ]; then exit 0; fi
           git fetch --no-tags --depth=1 origin "$BUN_ORCAD_COMMIT"
           git worktree add --detach "$RUNNER_TEMP/bun-orcad-source" "$BUN_ORCAD_COMMIT"
-          ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/bun-orcad-source/node_modules"
+          pnpm --dir "$RUNNER_TEMP/bun-orcad-source" install --frozen-lockfile --ignore-scripts
           node "$RUNNER_TEMP/bun-orcad-source/config/scripts/build-orcad-bun.mjs" --out-dir "$RUNNER_TEMP/bun-orcad"
-          echo "ORCA_BUN_ORCAD_SLOT=$RUNNER_TEMP/bun-orcad" >> "$GITHUB_ENV"
-          echo "BUN_EXECUTABLE=$(command -v bun)" >> "$GITHUB_ENV"
+          echo "slot=$RUNNER_TEMP/bun-orcad" >> "$GITHUB_OUTPUT"
+          echo "executable=$(command -v bun)" >> "$GITHUB_OUTPUT"
+      # Linux release slots come from the floor and Alpine lanes; this slot serves local tests.
+      - uses: ./.github/actions/prepare-orcad-prebuilds
+        id: orcad-prebuild
+        with:
+          resolve-windows-cache: >-
+            ${{ !inputs.build_template && inputs.ref == '' &&
+            (github.event_name == 'pull_request' ||
+            (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name))) }}
+          restore-windows-cache: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+      - run: pnpm build:orcad
+      - wait: bun-orcad
       - run: pnpm test:node-server --artifact ${{ runner.os == 'Linux' && '--cross-runtime' || '' }}
+        env:
+          ORCA_BUN_ORCAD_SLOT: ${{ steps.bun-orcad.outputs.slot }}
+          BUN_EXECUTABLE: ${{ steps.bun-orcad.outputs.executable }}
       # Only a Windows runner compiles it; arm64 cross-compiles here, as release-cut does for the relay.
       # Before the Node 18 check below: the build script imports TypeScript, which Node 18 cannot load.
       - name: Build the Windows process-table addons for the desktop template
@@ -211,13 +232,13 @@ jobs:
           success() && runner.os == 'Windows' && (runner.arch == 'X64' || runner.arch == 'ARM64') &&
           !inputs.build_template && inputs.ref == '' && github.ref == 'refs/heads/main' &&
           contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) &&
-          steps.orcad-prebuild-cache-identity.outcome == 'success' &&
-          steps.orcad-prebuild-cache-identity.outputs.key != ''
+          steps.orcad-prebuild.outputs.cache-identity-outcome == 'success' &&
+          steps.orcad-prebuild.outputs.cache-key != ''
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
-          path: ${{ steps.orcad-prebuild-cache-identity.outputs.path }}
-          key: ${{ steps.orcad-prebuild-cache-identity.outputs.key }}
+          path: ${{ steps.orcad-prebuild.outputs.cache-path }}
+          key: ${{ steps.orcad-prebuild.outputs.cache-key }}
       # Linux release slots come from the floor and Alpine lanes; these runners own the rest.
       - name: Keep this runner's qualified slot for the desktop template
         if: inputs.build_template && runner.os != 'Linux'
@@ -232,6 +253,9 @@ jobs:
 
   linux_glibc_floor:
     needs: [changes, persistence]
+    concurrency:
+      group: node-server-linux_glibc_floor-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
     # A failed smoke already blocks qualification; missing scope still selects every platform.
     if: >-
       ${{ !cancelled() && needs.persistence.result == 'success' &&
@@ -260,7 +284,17 @@ jobs:
       PYTHON: /opt/python/cp312-cp312/bin/python3
     steps:
       - name: Install glibc 2.28 prerequisites
-        run: dnf install -y git procps-ng unzip which xz
+        run: |
+          missing_tool=false
+          for tool in git ps unzip which xz; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+              missing_tool=true
+            fi
+          done
+          if [ "$missing_tool" = true ]; then
+            # The image's source-built Git needs no RPM; missing tools come from AlmaLinux.
+            dnf --disablerepo='epel*' install -y git procps-ng unzip which xz
+          fi
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref }}
@@ -287,6 +321,9 @@ jobs:
 
   linux_glibc217_compat:
     needs: [changes, persistence]
+    concurrency:
+      group: node-server-linux_glibc217_compat-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
     # A failed smoke already blocks qualification; missing scope still selects every platform.
     if: >-
       ${{ !cancelled() && needs.persistence.result == 'success' &&
@@ -339,6 +376,9 @@ jobs:
 
   linux_musl:
     needs: [changes, persistence]
+    concurrency:
+      group: node-server-linux_musl-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
     # A failed smoke already blocks qualification; missing scope still selects every platform.
     if: >-
       ${{ !cancelled() && needs.persistence.result == 'success' &&
@@ -357,11 +397,19 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
+      - uses: ./.github/actions/restore-pnpm-verification
+        id: pnpm-verification
+        with:
+          container-toolchain: 'true'
       - name: Verify native Alpine artifact and persistence
+        env:
+          VERIFICATION_CACHE_PATH: ${{ steps.pnpm-verification.outputs.path }}
         run: |
+          touch "$VERIFICATION_CACHE_PATH"
           # Multi-arch index digest of the tag; re-resolve it whenever NODE_RUNTIME_PIN moves.
           docker run --rm --init -i \
             -e ORCA_BACKGROUND_LAUNCH=1 \
+            -v "$VERIFICATION_CACHE_PATH:/root/.cache/pnpm/lockfile-verified.jsonl" \
             -v "$GITHUB_WORKSPACE:/work" -w /work \
             node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 sh -s <<'NODE_SERVER_QUALIFICATION'
           set -eu

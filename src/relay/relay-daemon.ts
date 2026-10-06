@@ -1,8 +1,4 @@
-import { join } from 'node:path'
 import { installRelayLogRotation } from './rotating-log-writer'
-import { registerRelayOwnerReset } from './relay-owner-reset-registration'
-import { RelayOwnerResetPreparationJournal } from './relay-owner-reset-preparation-journal'
-import { endpointDirForRelaySocket } from './agent-hook-endpoint-coordinates'
 import { readLaunchVersion } from './relay-handshake'
 import type { RelayLaunchOptions } from './relay-launch-options'
 import { RELAY_EMPTY_DETACHED_STARTUP_GRACE_MS, RELAY_IDLE_GRACE_MS } from './relay-launch-options'
@@ -94,24 +90,6 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
       }
     }
   )
-  // Beside the relay endpoint so a prepared reset survives a daemon restart.
-  const resetJournal = new RelayOwnerResetPreparationJournal(
-    join(
-      options.endpointDir ?? endpointDirForRelaySocket(options.sockPath),
-      'owner-reset-preparations'
-    ),
-    options.sockPath,
-    launchVersion
-  )
-  const readOwnerResetStatus = registerRelayOwnerReset(primaryChannel.dispatcher, {
-    owners: runtime.ptyConsumerSessionAdapter,
-    lifecycle,
-    persistPrepared: (request, principal, authenticationKind, assertAuthority) =>
-      resetJournal.persist(request, principal, authenticationKind, assertAuthority),
-    describePreparation: (principal, authenticationKind) =>
-      resetJournal.describe(principal, authenticationKind),
-    socket: socketOwnership
-  })
   const startedAt = Date.now()
   registerRelayStatus(
     primaryChannel,
@@ -120,8 +98,7 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
     socketOwnership,
     lifecycle,
     options,
-    startedAt,
-    readOwnerResetStatus
+    startedAt
   )
 
   try {
@@ -170,37 +147,32 @@ function registerRelayStatus(
   socketOwnership: RelaySocketOwnership,
   lifecycle: RelayGraceLifecycle,
   options: RelayLaunchOptions,
-  startedAt: number,
-  readOwnerResetStatus: ReturnType<typeof registerRelayOwnerReset>
+  startedAt: number
 ): void {
-  primaryChannel.dispatcher.onRequest('relay.status', async (_params, context) => {
-    const resetStatus = readOwnerResetStatus(context)
-    return {
-      ...resetStatus,
-      capabilities: [...SKILL_RELAY_CAPABILITIES, ...resetStatus.capabilities],
-      pid: process.pid,
-      uptimeMs: Date.now() - startedAt,
-      detached: options.detached,
-      stdoutAlive: primaryChannel.isAlive,
-      memory: process.memoryUsage(),
-      ptys: { active: runtime.ptyHandler.activePtyCount },
-      ptySourceCredit: {
-        enabled: true,
-        session: runtime.ptyConsumerSessionAdapter.getDebugSnapshot(),
-        publication: runtime.ptySourcePublication.getDebugSnapshot()
-      },
-      socket: {
-        path: options.sockPath,
-        owned: socketOwnership.owned,
-        listening: socketOwnership.server?.listening ?? false,
-        clients: reconnectListener.clientCount,
-        acceptedConnections: reconnectListener.acceptedConnections
-      },
-      grace: {
-        active: runtime.ptyHandler.graceTimerActive,
-        deadlineAt: lifecycle.deadlineAt,
-        reason: lifecycle.reason
-      }
+  primaryChannel.dispatcher.onRequest('relay.status', async () => ({
+    capabilities: SKILL_RELAY_CAPABILITIES,
+    pid: process.pid,
+    uptimeMs: Date.now() - startedAt,
+    detached: options.detached,
+    stdoutAlive: primaryChannel.isAlive,
+    memory: process.memoryUsage(),
+    ptys: { active: runtime.ptyHandler.activePtyCount },
+    ptySourceCredit: {
+      enabled: true,
+      session: runtime.ptyConsumerSessionAdapter.getDebugSnapshot(),
+      publication: runtime.ptySourcePublication.getDebugSnapshot()
+    },
+    socket: {
+      path: options.sockPath,
+      owned: socketOwnership.owned,
+      listening: socketOwnership.server?.listening ?? false,
+      clients: reconnectListener.clientCount,
+      acceptedConnections: reconnectListener.acceptedConnections
+    },
+    grace: {
+      active: runtime.ptyHandler.graceTimerActive,
+      deadlineAt: lifecycle.deadlineAt,
+      reason: lifecycle.reason
     }
-  })
+  }))
 }

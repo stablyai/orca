@@ -1,6 +1,5 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
-import { isFloatingWorkspacePanelVisible } from '@/lib/floating-workspace-terminal-actions'
+import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
@@ -48,25 +47,6 @@ export function hasActivityThreadWorkspace(
   )
 }
 
-function toggleFloatingWorkspacePanelIfHidden(): void {
-  if (!isFloatingWorkspacePanelVisible()) {
-    window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
-  }
-}
-
-// Why enable first: floating tabs outlive a feature disable, and the panel ignores the toggle
-// while disabled, so a live floating agent row would otherwise be a silent no-op.
-function revealFloatingWorkspacePanel(state: AppState): void {
-  if (state.settings?.floatingTerminalEnabled === true) {
-    toggleFloatingWorkspacePanelIfHidden()
-    return
-  }
-  void state.updateSettings({ floatingTerminalEnabled: true }).then(() => {
-    // Why deferred a frame: the panel only honors the toggle once the enabled flag has reached React.
-    requestAnimationFrame(toggleFloatingWorkspacePanelIfHidden)
-  })
-}
-
 export function createActivityThreadActions({
   getMarkAllReadThreads,
   acknowledgeAgents,
@@ -84,17 +64,23 @@ export function createActivityThreadActions({
 }): {
   markThreadRead: (thread: AgentPaneThread) => void
   markThreadUnread: (thread: AgentPaneThread) => void
+  markThreadsRead: (threads: readonly AgentPaneThread[]) => void
+  markThreadsUnread: (threads: readonly AgentPaneThread[]) => void
   selectThread: (thread: AgentPaneThread) => void
   jumpToWorkspace: (thread: AgentPaneThread) => void
   markAllThreadsRead: () => void
 } {
-  const markThreadRead = (thread: AgentPaneThread): void => {
-    acknowledgeAgents([thread.paneKey])
+  const markThreadsRead = (threads: readonly AgentPaneThread[]): void => {
+    acknowledgeAgents(threads.map((thread) => thread.paneKey))
   }
 
-  const markThreadUnread = (thread: AgentPaneThread): void => {
-    unacknowledgeAgents([thread.paneKey])
+  const markThreadsUnread = (threads: readonly AgentPaneThread[]): void => {
+    unacknowledgeAgents(threads.map((thread) => thread.paneKey))
   }
+
+  const markThreadRead = (thread: AgentPaneThread): void => markThreadsRead([thread])
+
+  const markThreadUnread = (thread: AgentPaneThread): void => markThreadsUnread([thread])
 
   const activateThreadTarget = (thread: AgentPaneThread): void => {
     const isFloatingTerminal = thread.worktree.id === FLOATING_TERMINAL_WORKTREE_ID
@@ -171,6 +157,8 @@ export function createActivityThreadActions({
   return {
     markThreadRead,
     markThreadUnread,
+    markThreadsRead,
+    markThreadsUnread,
     selectThread,
     jumpToWorkspace,
     markAllThreadsRead

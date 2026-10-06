@@ -3,7 +3,6 @@ import type { SshRepoReadoption, SshTarget } from '../../shared/ssh-types'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { normalizeSshConfigAlias } from '../../shared/ssh-config-alias'
 import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
-import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
 import {
   buildRemovedSshTargetTombstone,
   readoptOrphanedWorkspacesForTarget
@@ -85,11 +84,6 @@ export class SshConnectionStore {
     return next
   }
 
-  /** Exclusive managed-orcad ownership of a target; see ssh-target-orcad-claims. */
-  getOrcadRuntimeClaims(): SshTargetOrcadClaims {
-    return new SshTargetOrcadClaims(this.store)
-  }
-
   updateTarget(id: string, updates: Partial<Omit<SshTarget, 'id'>>): SshTarget | null {
     const existing = this.store.getSshTarget(id)
     // Why: a new runtime choice or endpoint must re-run the ladder, not replay the old rung.
@@ -167,7 +161,6 @@ export class SshConnectionStore {
       const alias = normalizeSshConfigAlias(existing.configHost ?? existing.label)
       if (
         existing.source === 'manual' ||
-        isRuntimeOwnedSshTarget(existing) ||
         (existing.source === undefined && !isLegacyConfigImportTarget(existing))
       ) {
         manualAliases.add(alias)
@@ -260,7 +253,7 @@ export function getRuntimeOwnedSshTargetId(runtimeId: string): string {
 }
 
 export function isRuntimeOwnedSshTarget(target: SshTarget): boolean {
-  return target.owner !== undefined || target.orcadProvisioning !== undefined
+  return target.owner?.type === 'on-demand-runtime'
 }
 
 function isLegacyConfigImportTarget(target: SshTarget): boolean {

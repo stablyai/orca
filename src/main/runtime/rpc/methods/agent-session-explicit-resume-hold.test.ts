@@ -11,6 +11,7 @@ import {
   agentSessionProviderHandleKey,
   type AgentSessionProviderHandle
 } from '../../../../shared/agent-session-provider-handle'
+import { claudeProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
 import {
   isAgentSessionRefusalError,
   type AgentSessionRefusalError
@@ -27,11 +28,10 @@ import {
   type StructuredRecordHost
 } from './agent-session-explicit-resume-hold'
 
-const CLAUDE_CONVERSATION: AgentSessionProviderHandle = {
-  provider: 'claude',
-  sessionId: 'provider-session-alpha-1',
-  leafUuid: null
-}
+const CLAUDE_CONVERSATION: AgentSessionProviderHandle = claudeProviderHandle(
+  'provider-session-alpha-1',
+  null
+)
 const LIVE = agentSessionLeaseFixture()
 const EXITED = agentSessionLeaseFixture({
   claimStatus: 'released',
@@ -113,11 +113,7 @@ function refusalFrom(run: () => void): AgentSessionRefusalError {
 
 describe('assertExplicitResumeConversationUnowned', () => {
   it('allows a resume of a conversation no record holds', () => {
-    const other = recordHolding({
-      provider: 'claude',
-      sessionId: 'another-session',
-      leafUuid: null
-    })
+    const other = recordHolding(claudeProviderHandle('another-session', null))
     expect(() =>
       assertExplicitResumeConversationUnowned(
         explicitResume('claude', 'provider-session-alpha-1'),
@@ -184,11 +180,10 @@ describe('assertExplicitResumeConversationUnowned', () => {
   })
 
   it('allows when the only chain naming the conversation has forked away from it', () => {
-    const forked = recordForkedFrom(CLAUDE_CONVERSATION, {
-      provider: 'claude',
-      sessionId: 'provider-session-beta-2',
-      leafUuid: null
-    })
+    const forked = recordForkedFrom(
+      CLAUDE_CONVERSATION,
+      claudeProviderHandle('provider-session-beta-2', null)
+    )
     expect(() =>
       assertExplicitResumeConversationUnowned(
         explicitResume('claude', 'provider-session-alpha-1'),
@@ -247,9 +242,7 @@ describe('terminal.ensureAgentSession hold wiring', () => {
   })
 
   it('passes a resume of an unheld conversation to the runtime', async () => {
-    installHost([
-      recordHolding({ provider: 'claude', sessionId: 'another-session', leafUuid: null }, LIVE)
-    ])
+    installHost([recordHolding(claudeProviderHandle('another-session', null), LIVE)])
     const runtime = runtimeStub()
     const response = await dispatcherFor(runtime).dispatch(
       request(explicitResume('claude', 'provider-session-alpha-1'))

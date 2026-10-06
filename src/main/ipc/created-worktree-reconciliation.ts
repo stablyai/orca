@@ -23,7 +23,7 @@ export function findCreatedWorktree<T extends { path: string; branch?: string }>
 
 export type CreatedWorktreeResolution = {
   created: GitWorktreeInfo
-  /** Rows `git worktree list` returned; empty when only the direct read found the worktree. */
+  /** Rows `git worktree list` returned; empty when the direct read found the worktree. */
   worktrees: readonly GitWorktreeInfo[]
   /** Whether `worktrees` is the repo's whole listing, and so usable as its authorized-root set. */
   listingComplete: boolean
@@ -36,16 +36,10 @@ export function createdWorktreeNotFoundError(worktreePath: string, branchName: s
   )
 }
 
-/**
- * Find the row for a worktree `git worktree add` just created, preferring the repo listing and
- * falling back to asking Git about the worktree itself.
- *
- * Why the fallback: the listing was the only witness the old code had, so any Git-level listing
- * failure failed a create whose worktree and branch were already on disk, orphaning both (#16520).
- */
-/** A listing that burned the whole budget still leaves the direct read a chance to answer. */
-const MIN_CREATED_WORKTREE_RECOVERY_MS = 5_000
+/** A failed direct read still leaves the listing a chance to verify the create. */
+const MIN_CREATED_WORKTREE_LIST_FALLBACK_MS = 5_000
 
+/** Verify the new checkout directly; listing every existing worktree is only a fallback. */
 export async function resolveCreatedWorktree(
   repoPath: string,
   worktreePath: string,
@@ -53,11 +47,28 @@ export async function resolveCreatedWorktree(
   options?: GitWorktreeExecOptions
 ): Promise<CreatedWorktreeResolution> {
   const startedAt = Date.now()
+  let directReadError: Error | undefined
+  try {
+    const created = options
+      ? await describeCreatedWorktree(repoPath, worktreePath, branchName, options)
+      : await describeCreatedWorktree(repoPath, worktreePath, branchName)
+    if (created) {
+      return { created, worktrees: [], listingComplete: false }
+    }
+  } catch (err) {
+    directReadError = err instanceof Error ? err : new Error(String(err))
+  }
+
+  const remainingMs = Math.max(
+    (options?.timeout ?? WORKTREE_LIST_TIMEOUT_MS) - (Date.now() - startedAt),
+    MIN_CREATED_WORKTREE_LIST_FALLBACK_MS
+  )
   let listingError: Error | undefined
   try {
-    const worktrees = options
-      ? await listWorktreesSharedStrict(repoPath, options)
-      : await listWorktreesSharedStrict(repoPath)
+    const worktrees = await listWorktreesSharedStrict(repoPath, {
+      ...options,
+      timeout: options?.timeout ?? remainingMs
+    })
     const created = findCreatedWorktree(worktrees, worktreePath, branchName)
     if (created) {
       return { created, worktrees, listingComplete: true }
@@ -65,39 +76,18 @@ export async function resolveCreatedWorktree(
   } catch (err) {
     listingError = err instanceof Error ? err : new Error(String(err))
   }
-
-  try {
-    // One budget for verifying the create, not one per attempt: a hung Git already spent the
-    // listing's deadline, and charging the recovery a fresh one doubles the wait before the error.
-    const remainingMs = Math.max(
-      WORKTREE_LIST_TIMEOUT_MS - (Date.now() - startedAt),
-      MIN_CREATED_WORKTREE_RECOVERY_MS
-    )
-    const described = await describeCreatedWorktree(repoPath, worktreePath, branchName, {
-      ...options,
-      timeout: options?.timeout ?? remainingMs
-    })
-    if (described) {
-      return { created: described, worktrees: [], listingComplete: false }
-    }
-  } catch (err) {
-    if (listingError) {
-      // The listing's failure stays the thrown one, but the recovery's reason -- often
-      // `repo common dir unverifiable: ...` -- would otherwise vanish from the record entirely.
+  if (listingError) {
+    if (directReadError) {
       console.warn('[worktrees:create] created-worktree recovery also failed', {
-        err,
+        err: directReadError,
         worktreePath
       })
-      throw listingError
     }
-    // The listing simply omitted the row, so the direct read holds the only actionable failure.
-    const notFound = createdWorktreeNotFoundError(worktreePath, branchName)
-    throw new Error(`${notFound.message}: ${err instanceof Error ? err.message : String(err)}`, {
-      cause: err
-    })
-  }
-  if (listingError) {
     throw listingError
   }
-  throw createdWorktreeNotFoundError(worktreePath, branchName)
+  const notFound = createdWorktreeNotFoundError(worktreePath, branchName)
+  if (directReadError) {
+    throw new Error(`${notFound.message}: ${directReadError.message}`, { cause: directReadError })
+  }
+  throw notFound
 }

@@ -80,14 +80,6 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     return this.writer.writeLatestJsonExport(dataFile)
   }
 
-  writeJsonCompatibilityExport(targetPath: string): Promise<number | undefined> {
-    return this.writer.writeJsonCompatibilityExportAsync(targetPath)
-  }
-
-  writeJsonCompatibilityExportAsync(targetPath: string): Promise<number | undefined> {
-    return this.writeJsonCompatibilityExport(targetPath)
-  }
-
   scheduleBackup(): void {
     if (!this.closing) {
       this.backups.schedule()

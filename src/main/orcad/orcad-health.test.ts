@@ -11,21 +11,13 @@ const {
   readDaemonPidRecordMock,
   daemonOwnsFreshPersistentPtysMock
 } = vi.hoisted(() => ({
-  checkDaemonHealthMock: vi.fn<(socketPath: string, tokenPath: string) => Promise<DaemonHealth>>(),
+  checkDaemonHealthMock: vi.fn<() => Promise<DaemonHealth>>(),
   getDaemonEndpointFactsMock: vi.fn<() => unknown>(),
   readDaemonPidRecordMock: vi.fn<() => ParsedDaemonPid | null>(),
   daemonOwnsFreshPersistentPtysMock: vi.fn<() => boolean>()
 }))
 
-// The real coverage fallback is per platform; a daemon may also report its own coverage.
-const reportedCoverage = vi.hoisted(() => ({ value: new Array<'pty-spawn' | 'handshake'>() }))
-vi.mock('../daemon/daemon-health', () => ({
-  checkDaemonHealthWithCoverage: async (socketPath: string, tokenPath: string) => ({
-    verdict: await checkDaemonHealthMock(socketPath, tokenPath),
-    coverage:
-      reportedCoverage.value.shift() ?? (process.platform === 'win32' ? 'handshake' : 'pty-spawn')
-  })
-}))
+vi.mock('../daemon/daemon-health', () => ({ checkDaemonHealth: checkDaemonHealthMock }))
 vi.mock('../daemon/daemon-init', () => ({
   getDaemonEndpointFacts: getDaemonEndpointFactsMock,
   readDaemonPidRecord: readDaemonPidRecordMock,
@@ -130,12 +122,6 @@ describe('collectTerminalDaemonHealth', () => {
     // `checkPtySpawnHealth` returns immediately on win32 without spawning anything, so a
     // green verdict there must not be reported as a PTY round trip.
     expect(health.selfTest.coverage).toBe('handshake')
-  })
-
-  it('reports the coverage the daemon says its probe achieved', async () => {
-    reportedCoverage.value.push('handshake')
-    const health = await collectTerminalDaemonHealth()
-    expect(health.selfTest).toMatchObject({ ok: true, coverage: 'handshake' })
   })
 })
 

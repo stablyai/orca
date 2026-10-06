@@ -2,7 +2,9 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-prompt-injection'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
+import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scanner'
 import { useAppStore } from '@/store'
 import {
   inspectRuntimeTerminalProcess,
@@ -34,7 +36,7 @@ export {
 // line-edit shortcuts. Callers choose whether to append Enter after the paste.
 export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
 export { BRACKETED_PASTE_END }
-export const POST_PASTE_SUBMIT_DELAY_MS = 50
+export const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS
 
 // Why: "the tab has a PTY" and "the agent's composer accepts input" are separate
 // states with separate failure modes, so they get separate budgets. A PTY that
@@ -71,8 +73,7 @@ export function getSettingsForAgentTabRuntimeOwner(
  *   1. `\x1b[?2004h` (DECSET 2004 — bracketed-paste-enable) on the PTY
  *      output. This is the protocol-level "I accept bracketed paste"
  *      handshake.
- *   2. Either ≥`BRACKETED_PASTE_QUIET_MS` of silence after the last byte of
- *      the post-handshake render burst, or Codex's composer prompt glyph.
+ *   2. The agent's composer-ready signal, or its configured quiet window.
  */
 export async function pasteDraftWhenAgentReady(args: {
   tabId: string
@@ -98,7 +99,7 @@ export async function pasteDraftWhenAgentReady(args: {
     return false
   }
 
-  const readySignal = agentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
+  const readySignal = resolvePasteReadySignal(agentConfig, submit === true)
   const settings = getSettingsForAgentTabRuntimeOwner(tabId)
   const readinessTimeoutMs = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
   const readiness = await waitForAgentDraftInputReadyOnTab({
@@ -119,16 +120,18 @@ export async function pasteDraftWhenAgentReady(args: {
     // this sidecar subscription attaches. If process/title inspection says the
     // launched agent owns the PTY, fall back to a best-effort paste instead of
     // silently dropping generated prompts.
-    const fallbackReady = agentConfig
-      ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
-      : { ready: false }
+    // A running Codex can still own a startup dialog or discard provisional input.
+    const fallbackReady =
+      agentConfig && agent !== 'codex'
+        ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
+        : { ready: false }
     if (!fallbackReady.ready) {
       onTimeout?.()
       return false
     }
-    // Why: the process merely exists -- its composer was never observed. On Windows this is
-    // the ONLY path: ConPTY does not forward DECSET 2004, so no 2004-anchored ready signal
-    // can ever fire. Callers must be able to tell this blind write apart from a real delivery.
+    // Why: the process merely exists -- its composer was never observed (e.g. the readiness
+    // budget expired mid-startup, #22479). Callers must be able to tell this blind write apart
+    // from a real delivery.
     onUnconfirmedDelivery?.()
   }
 
@@ -172,13 +175,14 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   }
 
   const settings = getSettingsForAgentTabRuntimeOwner(tabId)
-  const readySignal = agentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
+  const readySignal = resolvePasteReadySignal(agentConfig, submit === true)
   const budget = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
   const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal, settings)
   if (!ready) {
-    const fallbackReady = agentConfig
-      ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000, settings)
-      : false
+    const fallbackReady =
+      agentConfig && agent !== 'codex'
+        ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000, settings)
+        : false
     if (!fallbackReady) {
       onTimeout?.()
       return false

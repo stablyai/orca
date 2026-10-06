@@ -20,19 +20,20 @@ import {
   readTestJournalRows
 } from './journal-host-database-test-support'
 import type Database from '../../sqlite/sync-database'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'local',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const OTHER: AgentSessionJournalIdentity = {
   ...IDENTITY,
   sessionId: 'session-2',
-  providerHandle: { kind: 'codex', threadId: 'thread-2' }
+  providerHandle: codexProviderHandle('thread-2')
 }
 
 const SUBMISSION = {
@@ -232,8 +233,9 @@ describe('quit', () => {
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
     const database = openTestJournalHostDatabase(root)
     const installed = {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown calls only `flushAllStreamedEvents` on the host.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown calls only `stopDelivery` and `flushAllStreamedEvents` on the host.
       host: {
+        stopDelivery: () => {},
         flushAllStreamedEvents: async () => {
           // A child's last row, delivered while quit is draining its sink.
           await new Promise<void>((resolve) => setTimeout(resolve, 10))

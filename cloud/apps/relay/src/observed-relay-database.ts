@@ -29,10 +29,20 @@ export function observeRelayDatabase(
         error instanceof Error &&
         error.message === 'database_lock_unavailable'
     )
+  const commitWithFinal = database.commitWithFinal?.bind(database)
   return {
     dialect: database.dialect,
     query,
     queryLocked,
+    ...(commitWithFinal
+      ? {
+          commitWithFinal: (sql: string, params?: unknown[]): Promise<boolean> =>
+            timedRelayOperation(
+              () => commitWithFinal(sql, params),
+              (durationMs, success) => observer.recordSql(durationMs, success)
+            )
+        }
+      : {}),
     transaction: async <T>(
       operation: (transaction: RelayDatabase) => Promise<T>,
       options?: RelayTransactionOptions

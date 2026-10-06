@@ -9,7 +9,8 @@ import { ClaudeHookService } from './hook-service'
 import { getWindowsManagedLifecycleHook } from './hook-settings'
 import { getWindowsClaudeHookEntry, getWindowsClaudeHookPayloadPath } from './windows-hook-files'
 import { codebuddyHookService } from '../codebuddy/hook-service'
-import { qoderHookService } from '../qoder/hook-service'
+import { qoderHookService, qoderCnHookService } from '../qoder/hook-service'
+import { qwenCodeHookService } from '../qwen-code/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 const { home } = vi.hoisted(() => ({ home: { path: '' } }))
@@ -143,15 +144,16 @@ describe('Windows Claude hook files', () => {
   it('keeps compatible agents on their existing single-file scripts', async () => {
     for (const [name, compatible] of [
       ['qoder', qoderHookService],
+      ['qoder-cn', qoderCnHookService],
+      ['qwen-code', qwenCodeHookService],
       ['codebuddy', codebuddyHookService],
       ['openclaude', openClaudeHookService]
     ] as const) {
       expect(compatible.install().state).toBe('installed')
       await compatible.refreshManagedScripts()
       const path = join(home.path, '.orca', 'agent-hooks', `${name}-hook.cmd`)
-      expect(readFileSync(path, 'utf8')).toContain(
-        `/hook/${name === 'openclaude' ? 'claude' : name}`
-      )
+      const source = name === 'openclaude' ? 'claude' : name
+      expect(readFileSync(path, 'utf8')).toContain(`/hook/${source}`)
       expect(readFileSync(path, 'utf8')).not.toContain('claude-hook-impl.cmd')
       expect(existsSync(join(home.path, '.orca', 'agent-hooks', `${name}-hook-impl.cmd`))).toBe(
         false

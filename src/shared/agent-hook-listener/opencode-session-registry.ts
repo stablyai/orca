@@ -19,7 +19,7 @@ export type OpenCodeSessionBinding = {
   /** ms epoch of the bind; oldest-bound evicts first once capped. */
   boundAt: number
   /** How the binder learned this owner. */
-  basis: 'argv' | 'creation-correlation' | 'single-pane-directory'
+  basis: 'argv' | 'creation-correlation' | 'single-pane-directory' | 'tui'
 }
 
 /** Upper bound; sessions are cheap rows but the map must not grow forever. */
@@ -68,6 +68,61 @@ export function lookupOpenCodeSessionPane(
   sessionId: string
 ): OpenCodeSessionBinding | undefined {
   return bindings(state).get(sessionId.trim())
+}
+
+/** Structural client evidence strengthens an existing owner without transferring it. */
+export function bindOpenCodeTuiSession(
+  state: HookListenerState,
+  source: AgentHookSource,
+  body: unknown,
+  sessionId: string | undefined
+): void {
+  if (!sessionId || source !== 'opencode' || !isOpenCodeSharedServerPost(source, body)) {
+    return
+  }
+  if (!body || typeof body !== 'object') {
+    return
+  }
+  if (!('opencodeTui' in body) || body.opencodeTui !== 1) {
+    return
+  }
+  if (!('paneKey' in body) || typeof body.paneKey !== 'string') {
+    return
+  }
+  const existing = lookupOpenCodeSessionPane(state, sessionId)
+  bindOpenCodeSession(state, sessionId, {
+    paneKey: existing?.paneKey ?? body.paneKey,
+    worktreeId: existing
+      ? existing.worktreeId
+      : 'worktreeId' in body && typeof body.worktreeId === 'string'
+        ? body.worktreeId
+        : undefined,
+    boundAt: Date.now(),
+    basis: 'tui'
+  })
+}
+
+/** A capable shared server cannot speak for an unknown root or override its TUI. */
+export function suppressOpenCodeSharedServerPost(
+  state: HookListenerState,
+  source: AgentHookSource,
+  body: unknown,
+  sessionId: string | undefined
+): boolean {
+  if (source !== 'opencode' || !isOpenCodeSharedServerPost(source, body)) {
+    return false
+  }
+  if (!body || typeof body !== 'object') {
+    return false
+  }
+  if ('opencodeTui' in body && body.opencodeTui === 1) {
+    return false
+  }
+  const binding = sessionId ? lookupOpenCodeSessionPane(state, sessionId) : undefined
+  return (
+    binding?.basis === 'tui' ||
+    ('opencodeSharedServer' in body && body.opencodeSharedServer === 1 && !binding)
+  )
 }
 
 /**
@@ -181,6 +236,15 @@ export function resolveOpenCodeSharedServerEnvelope(args: {
   }
   const binding = lookupOpenCodeSessionPane(state, sessionId)
   if (!binding) {
+    return stamped
+  }
+  if (
+    binding.paneKey === stamped.paneKey &&
+    typeof args.body === 'object' &&
+    args.body &&
+    'opencodeTui' in args.body &&
+    args.body.opencodeTui === 1
+  ) {
     return stamped
   }
   return {

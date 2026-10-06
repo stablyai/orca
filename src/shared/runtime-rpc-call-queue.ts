@@ -16,15 +16,6 @@ export class RuntimeRpcCallQueueOverloadError extends Error {
   }
 }
 
-export class RuntimeRpcCallQueueBusyError extends Error {
-  readonly code = 'runtime_rpc_queue_busy'
-
-  constructor() {
-    super('Runtime calls are active or their routing is changing; retry after they settle.')
-    this.name = 'RuntimeRpcCallQueueBusyError'
-  }
-}
-
 type QueuedRuntimeCall<T> = {
   background: boolean
   retainedBytes: number
@@ -60,19 +51,15 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
   )
 }
 
-// Why its own lane: worktree.rm replies only when Git has deleted the checkout, so its calls would
-// hold the foreground slots listing refreshes need; the background lane's slots belong to status.
+// Why its own lane: these reply only when slow host work finishes (worktree.rm when Git has deleted
+// the checkout, a model catalog read that waits on the first listing), so they would hold the
+// foreground slots listing refreshes and sends need; the background lane's slots belong to status.
 function isLongWaitRuntimeMethod(method: string): boolean {
-  return method === 'worktree.rm'
-}
-
-function longWaitQueueKey(selector: string): string {
-  return `${selector}\u0000long-wait`
+  return method === 'worktree.rm' || method === 'agentSession.modelCatalog'
 }
 
 export class RuntimeRpcCallQueuePool {
   private readonly queues = new Map<string, RuntimeCallQueue>()
-  private readonly heldSelectors = new Set<string>()
   private queuedCallCount = 0
   private retainedCallBytes = 0
 
@@ -84,32 +71,6 @@ export class RuntimeRpcCallQueuePool {
     private readonly maxRetainedBytes = REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES
   ) {}
 
-  /** Acquires all idle selectors atomically; release never replays refused calls. */
-  holdIdleSelectors(selectors: readonly string[]): () => void {
-    const unique = [...new Set(selectors)]
-    // A selector's long-wait lane counts too: holding it must see every call still in flight.
-    const busy = (selector: string): boolean =>
-      this.heldSelectors.has(selector) ||
-      this.queues.has(selector) ||
-      this.queues.has(longWaitQueueKey(selector))
-    if (unique.some(busy)) {
-      throw new RuntimeRpcCallQueueBusyError()
-    }
-    for (const selector of unique) {
-      this.heldSelectors.add(selector)
-    }
-    let released = false
-    return () => {
-      if (released) {
-        return
-      }
-      released = true
-      for (const selector of unique) {
-        this.heldSelectors.delete(selector)
-      }
-    }
-  }
-
   enqueue<T>(
     selector: string,
     method: string,
@@ -120,11 +81,8 @@ export class RuntimeRpcCallQueuePool {
     if (signal?.aborted) {
       return Promise.reject(abortSignalReason(signal))
     }
-    if (this.heldSelectors.has(selector)) {
-      return Promise.reject(new RuntimeRpcCallQueueBusyError())
-    }
     // Same concurrency bound, counted apart from the selector's other calls; global caps still apply.
-    const queueKey = isLongWaitRuntimeMethod(method) ? longWaitQueueKey(selector) : selector
+    const queueKey = isLongWaitRuntimeMethod(method) ? `${selector}\u0000long-wait` : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }

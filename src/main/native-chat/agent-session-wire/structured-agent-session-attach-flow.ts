@@ -32,7 +32,11 @@ import {
   type AttachedJournal
 } from './structured-agent-session-attach'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { adapterSupportsCreateIfDeclared } from './structured-agent-session-provider-support'
+import {
+  adapterSupportsCreateIfDeclared,
+  hostCanStartRecord
+} from './structured-agent-session-provider-support'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
@@ -51,10 +55,13 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { withAgentSessionConversationGate } from '../../runtime/rpc/methods/agent-session-explicit-resume-hold'
 import { agentSessionProviderHandleRoot } from '../../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleFromWire } from '../../../shared/agent-session-provider-handle-encoding'
 
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
+  /** What decides whether this build may start a record's agent at all (`agentDrivesSession`). */
+  agents: Pick<StructuredAgentRegistry, 'definition'>
   logger: StructuredAgentSessionLogger
   authority: AgentSessionAttachAuthority
   callerKey: string
@@ -93,15 +100,7 @@ export async function performAttach(
   const { params } = input
   const adoptedHandle = params.adopt?.providerHandle ?? params.providerHandle
   const conversationRoot = adoptedHandle
-    ? agentSessionProviderHandleRoot(
-        adoptedHandle.kind === 'claude'
-          ? {
-              provider: 'claude',
-              sessionId: adoptedHandle.sessionId,
-              leafUuid: adoptedHandle.leafUuid
-            }
-          : { provider: 'codex', threadId: adoptedHandle.threadId }
-      )
+    ? agentSessionProviderHandleRoot(agentSessionProviderHandleFromWire(adoptedHandle))
     : null
   return await withAgentSessionConversationGate(conversationRoot, () =>
     performAttachUnderGate(input)
@@ -139,8 +138,15 @@ async function performAttachUnderGate(
       }
     }
   }
+  // Every start of every agent passes here, so this is where a record this build cannot drive (its
+  // transport or account variable is not its agent's) is refused; reading it never is.
+  const supported = (record: AgentSessionRecord | null) =>
+    record === null
+      ? input.agents.definition(params.agent) !== null &&
+        adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)
+      : hostCanStartRecord(input, record)
   // Ensure/recovery bypass create-intent, so recheck before reserving or spawning.
-  if (!adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)) {
+  if (!supported(store.getRecord(sessionId))) {
     return unsupported()
   }
 
@@ -177,7 +183,7 @@ async function performAttachUnderGate(
     // every reservation at its effect boundary so it cannot bypass the support
     // gate, and release a pending reservation that support drift invalidated.
     reservedRecord = record
-    if (!adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)) {
+    if (!supported(record)) {
       if (
         record.lease.claimStatus === 'reserved' &&
         record.lease.handoffStage === 'new-owner-proving' &&

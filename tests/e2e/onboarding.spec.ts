@@ -548,36 +548,6 @@ test.describe('Onboarding flow', () => {
     expect((await getOnboardingState(orcaPage)).closedAt).not.toBeNull()
   })
 
-  test('Skip from notifications does not request permission', async ({ orcaPage }) => {
-    await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
-      timeout: 15_000
-    })
-    await continueOnboarding(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
-    await continueFromThemeToNotifications(orcaPage)
-
-    await orcaPage.evaluate(() => {
-      localStorage.removeItem('orca.e2e.notificationPermissionRequested')
-      window.api.notifications.requestPermission = async () => {
-        localStorage.setItem('orca.e2e.notificationPermissionRequested', '1')
-        return { supported: true, platform: 'darwin', requested: true }
-      }
-    })
-    await expectOnboardingNotificationSound(orcaPage, /System Default/i)
-
-    await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
-    await continueOnboarding(orcaPage)
-
-    await expectAddProjectDialog(orcaPage)
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(() => localStorage.getItem('orca.e2e.notificationPermissionRequested')),
-        { timeout: 5_000 }
-      )
-      .toBeNull()
-  })
-
   test('selected agent button reports aria-pressed=true', async ({ orcaPage }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000

@@ -1,3 +1,7 @@
+import type {
+  OpenCodeTranscriptPage,
+  OpenCodeTranscriptSignal
+} from '../native-chat/transcript-opencode-sqlite-query'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type { SessionFileCandidate } from './session-scanner-types'
 import type { TranscriptMessage } from './session-transcript-consumers'
@@ -39,10 +43,22 @@ export type OpenCodeSqliteCaptureRequest = {
   agent?: 'opencode2' | 'zcode'
 }
 
+export type OpenCodeNativeChatReadRequest = {
+  id: number
+  kind: 'native-page' | 'native-signal'
+  dbPath: string
+  sessionId: string
+  limit?: number
+  beforeMessageRowId?: number
+}
+
+export type OpenCodeNativeChatReadValue = OpenCodeTranscriptPage | OpenCodeTranscriptSignal | null
+
 export type OpenCodeSqliteWorkerRequest = (
   | OpenCodeSqliteListRequest
   | OpenCodeSqliteParseRequest
   | OpenCodeSqliteCaptureRequest
+  | OpenCodeNativeChatReadRequest
 ) & { timeoutMs?: number }
 
 // The list leg returns candidates plus the issues it accumulated; the worker

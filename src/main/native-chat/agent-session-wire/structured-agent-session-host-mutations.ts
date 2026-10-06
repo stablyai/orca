@@ -37,6 +37,7 @@ import {
   setOptionPlan
 } from './structured-agent-session-mutation-plans'
 import { runQueueableStructuredAgentSessionSend } from './structured-agent-session-queued-send'
+import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
 export type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
@@ -60,8 +61,12 @@ export function sendStructuredAgentSessionTurn(
      *  Orchestration mail, a restart continuation and `agent.launch`'s host-sent
      *  prompt never set it. */
     userSend?: true
+    /** Host-local, never on the wire: who a host-side `queue-if-active` send queues for, recorded
+     *  on its card. A client's send is always its person's (`userSend`). */
+    source?: AgentMessageSource
     beforeRun?: () => void
-  }
+  },
+  arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const plan = sendPlan(params)
   return mutateStructuredAgentSession(
@@ -80,7 +85,7 @@ export function sendStructuredAgentSessionTurn(
             (await plan.run(ctx))
         )
     },
-    sendPreparation(context, params.envelope)
+    sendPreparation(context, params.envelope, arrival)
   )
 }
 
@@ -156,7 +161,7 @@ export async function setStructuredAgentSessionOption(
       },
       run: (ctx) =>
         atRest()
-          ? recordStructuredAgentSessionOptionIntent(context.deps.store, ctx, params)
+          ? recordStructuredAgentSessionOptionIntent(context.deps, ctx, params)
           : plan.run(ctx)
     },
     openForProviderWrite(context, params.envelope)

@@ -10,6 +10,7 @@ import type { AgentType } from './agent-status-types'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { formatAgentTypeLabel } from './agent-type-label'
+import { isJcodeIdentityTerminalTitle } from './jcode-terminal-title'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 import type { TerminalTab } from './terminal-tab-types'
@@ -97,6 +98,10 @@ function conversationNameFromLiveTitle(
     STATUS_WITH_CONTEXT_RE.test(stripped) ||
     DEFAULT_TERMINAL_TITLE_RE.test(stripped) ||
     isClaudeManagementTitle(stripped) ||
+    // Why: jcode repaints `jcode <codename> · +N -M · last ~23s` every second. The
+    // tail is live status and the head is its own identity, so accepting it as a
+    // name pins a row to "jcode Puppy…" where every other agent shows the prompt.
+    isJcodeIdentityTerminalTitle(stripped) ||
     isCwdLikeTitle(stripped)
   ) {
     return null

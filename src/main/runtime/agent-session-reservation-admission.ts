@@ -38,7 +38,7 @@ import { isAgentSessionLaunchArgs } from '../../shared/agent-session-launch-args
 import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
 import {
   agentSessionProviderHandleRoot,
-  type AgentSessionHandleProvider,
+  type StructuredAgentId,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
 import {
@@ -51,7 +51,7 @@ import { agentSessionRecordIdentityFields } from './agent-session-record-foundin
 export type AgentSessionReserveRequest = {
   sessionId: string
   location: AgentSessionExecutionLocation
-  provider: AgentSessionHandleProvider
+  provider: StructuredAgentId
   accountHome: AgentSessionAccountHome
   /** Arguments pinned on first reservation so owner replacement repeats the same launch. */
   launchArgs?: AgentSessionLaunchArgs

@@ -50,17 +50,28 @@ beforeEach(() => {
 })
 
 describe('sidebar reveal actions', () => {
-  it('switch the sidebar body back to Spaces so the worktree list can consume the reveal', () => {
+  it('skip reveals while the activity view is showing instead of switching bodies', () => {
     const store = createUIStore()
     store.getState().setSidebarBody('agents')
 
     store.getState().revealWorktreeInSidebar('wt-1', { highlight: true })
+    store.getState().revealSidebarRow('repo:r1')
+
+    expect(store.getState().sidebarBody).toBe('agents')
+    expect(store.getState().pendingRevealWorktree).toBeNull()
+    expect(store.getState().pendingRevealSidebarRow).toBeNull()
+  })
+
+  it('reveal after an explicit switch to the workspace list', () => {
+    const store = createUIStore()
+    store.getState().setSidebarBody('agents')
+
+    store.getState().setSidebarBody('workspaces')
+    store.getState().revealWorktreeInSidebar('wt-1', { highlight: true })
+    store.getState().revealSidebarRow('repo:r1')
+
     expect(store.getState().sidebarBody).toBe('workspaces')
     expect(store.getState().pendingRevealWorktree?.worktreeId).toBe('wt-1')
-
-    store.getState().setSidebarBody('agents')
-    store.getState().revealSidebarRow('repo:r1')
-    expect(store.getState().sidebarBody).toBe('workspaces')
     expect(store.getState().pendingRevealSidebarRow?.rowKey).toBe('repo:r1')
   })
 })
@@ -212,6 +223,43 @@ describe('createUISlice hydratePersistedUI', () => {
     })
 
     expect(store.getState().rightSidebarWidth).toBe(360)
+  })
+
+  it('hydrates a persisted closed left sidebar preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ sidebarOpen: false }))
+
+    expect(store.getState().sidebarOpen).toBe(false)
+  })
+
+  it('hydrates a persisted open left sidebar preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ sidebarOpen: true }))
+
+    expect(store.getState().sidebarOpen).toBe(true)
+  })
+
+  it('hydrates a missing left sidebar preference as open', () => {
+    const store = createUIStore()
+
+    store.setState({ sidebarOpen: false })
+    store.getState().hydratePersistedUI({ ...makePersistedUI(), sidebarOpen: undefined })
+
+    expect(store.getState().sidebarOpen).toBe(true)
+  })
+
+  it('keeps an unsaved left sidebar close when a sync omits the left sidebar preference', () => {
+    const store = createUIStore()
+    store.getState().hydratePersistedUI(makePersistedUI(), 'startup')
+
+    store.getState().setSidebarOpen(false)
+    store.getState().hydratePersistedUI({ ...makePersistedUI(), sidebarOpen: undefined }, 'sync')
+
+    // Why: the baseline must stay open or the writer sees no diff and the close never persists.
+    expect(store.getState().sidebarOpen).toBe(false)
+    expect(store.getState().persistedUIWriteBaseline?.sidebarOpen).toBe(true)
   })
 
   it('hydrates a persisted closed right sidebar preference', () => {
@@ -432,7 +480,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).not.toHaveBeenCalled()
   })
 
-  it('persists workspace host scope changes', () => {
+  it('updates workspace host scope for the guarded UI writer', () => {
     const setUI = vi.fn(() => Promise.resolve())
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -441,13 +489,10 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().workspaceHostScope).toBe('runtime:env-1')
     expect(store.getState().visibleWorkspaceHostIds).toEqual(['runtime:env-1'])
-    expect(setUI).toHaveBeenCalledWith({
-      workspaceHostScope: 'runtime:env-1',
-      visibleWorkspaceHostIds: ['runtime:env-1']
-    })
+    expect(setUI).not.toHaveBeenCalled()
   })
 
-  it('persists visible workspace host changes independently of focused host', () => {
+  it('updates host visibility independently of focused host for the guarded UI writer', () => {
     const setUI = vi.fn(() => Promise.resolve())
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -457,10 +502,7 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().workspaceHostScope).toBe('runtime:env-1')
     expect(store.getState().visibleWorkspaceHostIds).toEqual(['local', 'runtime:env-1'])
-    expect(setUI).toHaveBeenLastCalledWith({
-      workspaceHostScope: 'runtime:env-1',
-      visibleWorkspaceHostIds: ['local', 'runtime:env-1']
-    })
+    expect(setUI).not.toHaveBeenCalled()
   })
 
   it('persists workspace host order changes', () => {

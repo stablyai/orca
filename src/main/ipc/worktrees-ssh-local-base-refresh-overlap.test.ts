@@ -108,6 +108,9 @@ function createProvider(overrides: {
 }) {
   return {
     exec: vi.fn().mockImplementation(async (args: string[]) => {
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '', stderr: '' }
+      }
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
@@ -208,6 +211,9 @@ describe('SSH local base refresh overlap', () => {
   it('does not refresh or warn when the create makes the local base branch itself', async () => {
     const provider = createProvider({ refreshLocalBaseRefForWorktreeCreate: vi.fn() })
     provider.exec.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '', stderr: '' }
+      }
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }

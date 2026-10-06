@@ -144,7 +144,7 @@ export function buildSkillDiscoverySources(
     source(
       'home-antigravity',
       'Antigravity home',
-      pathApi.join(home, '.gemini', 'antigravity', 'skills'),
+      pathApi.join(home, '.gemini', 'config', 'skills'),
       'home',
       ['agent-skills'],
       'antigravity'

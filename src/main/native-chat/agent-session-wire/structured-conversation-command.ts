@@ -11,7 +11,6 @@ import { admitAndRunAgentSessionMutation } from './structured-agent-session-muta
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { sendPreparation } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
-import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   committedClearOfCaller,
   conversationCommandBlocked
@@ -23,6 +22,7 @@ import {
   type AgentSessionFailureWordsContext
 } from '../../../shared/agent-session-failure-words'
 import { carryQueuedMessagesToClearReplacement } from './structured-agent-session-queued-mutations'
+import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 
 /** A command's `error` is the sentence its row shows. */
 export function conversationCommandFailure(
@@ -44,7 +44,7 @@ export type ConversationReplacement = {
   sourceSessionId: string
   sessionId: string
   workspaceId: string
-  agent: 'claude' | 'codex'
+  agent: StructuredAgentId
 }
 
 const clearFingerprintOf = (sessionId: string) =>
@@ -86,7 +86,6 @@ async function answerFromCommittedClear(
  */
 export function runStructuredConversationCommand(
   context: StructuredAgentSessionMutationContext,
-  host: Pick<StructuredAgentSessionHost, 'flushStreamedEvents'>,
   caller: StructuredAgentSessionCaller,
   params: ConversationCommandParams
 ): Promise<AgentSessionMutationResult<AgentSessionConversationCommandResult>> {
@@ -107,14 +106,14 @@ export function runStructuredConversationCommand(
     return admitAndRunAgentSessionMutation({
       store,
       adapter: context.deps.adapter,
+      agents: context.deps.agents,
       logger: context.deps.logger,
       callerKey: caller.callerKey,
       envelope,
       // Starts the agent only to settle a rewind in doubt, as a send does; a /clear itself starts nothing.
-      prepareSession: sendPreparation(context, envelope),
+      prepareSession: sendPreparation(context, envelope, { refusesInRun: true }),
       journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
-      flushStreamedEvents: context.flushStreamedEvents,
       now: context.now,
       plan: {
         method: 'agentSession.conversationCommand',
@@ -133,7 +132,6 @@ export function runStructuredConversationCommand(
         // The commit is the only write, so a clear with no committed answer changed nothing.
         rerunWhenReplayMissing: () => true,
         run: async (ctx) => {
-          await host.flushStreamedEvents(sessionId)
           const record = store.getRecord(sessionId)!
           const blocked = conversationCommandBlocked(
             ctx,

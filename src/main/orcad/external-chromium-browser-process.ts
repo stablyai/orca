@@ -37,10 +37,8 @@ export class ExternalChromiumBrowserProcess {
     this.tabs = new ExternalChromiumTabRegistry(this.session)
   }
 
-  async start(signal?: AbortSignal): Promise<void> {
-    const activeTabId = await this.session.start(signal)
-    signal?.throwIfAborted()
-    this.tabs.initialize(activeTabId)
+  async start(): Promise<void> {
+    this.tabs.initialize(await this.session.start())
     this.available = true
   }
 

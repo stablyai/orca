@@ -240,7 +240,9 @@ describe('answerClaudePrompt', () => {
       journalPrompts: {
         resolve: resolvePrompt,
         handOver: () => () => {},
-        cancel: () => ({ accepted: true })
+        cancel: () => ({ accepted: true }),
+        openCards: () => [][Symbol.iterator](),
+        whenWritten: () => undefined
       },
       currentTurnId: null,
       commandTurnId: null,

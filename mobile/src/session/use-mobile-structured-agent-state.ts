@@ -18,8 +18,10 @@ import {
 } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  agentSessionReadFailureRefusal,
   agentSessionReadFailureText,
-  callAgentSession
+  callAgentSession,
+  openAgentSessionTranscript
 } from './mobile-structured-agent-session-rpc'
 import {
   reduceMobileQueuePause,
@@ -37,37 +39,8 @@ type QueuedFeed = { messages: MobileQueuedMessageFeed; pause: MobileQueuePause }
 const NO_QUEUED_FEED: QueuedFeed = { messages: null, pause: null }
 
 const MAX_RETAINED_SESSION_STATES = 32
-/** Bounded so a busy stream cannot turn one Load-earlier tap into an endless read chain. */
 const OLDER_PAGE_ANCHOR_ATTEMPTS = 3
-/** Bounds the pages one Load-earlier reads past that hold only subagent rows. */
 const OLDER_PAGES_PER_LOAD = 8
-
-/**
- * Opens the transcript stream once the hold settles, either way: a refused hold is an older host
- * saying it could not start the agent — which the next send does — never a reason to hide the
- * transcript. Returns what ends the stream, opened or not yet. Outside the effect so its cleanup
- * rule can see the stream is owned.
- */
-function openTranscriptAfterHold(
-  client: RpcClient,
-  sessionId: string,
-  held: Promise<unknown>,
-  onFrame: (raw: unknown) => void
-): () => void {
-  let ended = false
-  let close = (): void => {}
-  void held
-    .catch(() => undefined)
-    .then(() => {
-      if (!ended) {
-        close = client.subscribe('agentSession.subscribe', { sessionId }, onFrame)
-      }
-    })
-  return () => {
-    ended = true
-    close()
-  }
-}
 
 function isSubscribeEvent(value: unknown): value is AgentSessionSubscribeEvent {
   if (typeof value !== 'object' || value === null) {
@@ -98,14 +71,10 @@ export function useMobileStructuredAgentState(args: {
   loadEarlier: () => void
 } {
   const { client, connected, enabled, sessionId, sessionKey } = args
-  // Keep a bounded cache so offline tab switches select the right transcript
-  // synchronously without growing for the lifetime of the app.
   const [sessionStates, setSessionStates] = useState<Map<string, StructuredAgentSessionState>>(
     () => new Map()
   )
   const [queuedBySession, setQueuedBySession] = useState<Map<string, QueuedFeed>>(() => new Map())
-  // Keyed by the chat's own session id rather than this hook's transcript key: a resume targets
-  // the chat, and the id is what the tab long-press holds.
   const [providerSessions, setProviderSessions] = useState<MobileProviderSessions>(
     () => NO_MOBILE_PROVIDER_SESSIONS
   )
@@ -115,7 +84,6 @@ export function useMobileStructuredAgentState(args: {
       : EMPTY_STRUCTURED_AGENT_SESSION
   const queued =
     (enabled && sessionKey ? queuedBySession.get(sessionKey) : undefined) ?? NO_QUEUED_FEED
-  const queuedMessages = queued.messages
   const [loadingOlder, setLoadingOlder] = useState(false)
   const stateRef = useRef(state)
   const sessionKeyRef = useRef(sessionKey)
@@ -150,6 +118,17 @@ export function useMobileStructuredAgentState(args: {
       })
     },
     [sessionKey]
+  )
+  const applyReadFailure = useCallback(
+    (failure: unknown) => {
+      const refusal = agentSessionReadFailureRefusal(failure)
+      apply({
+        type: 'error',
+        message: agentSessionReadFailureText(failure),
+        ...(refusal ? { refusal } : {})
+      })
+    },
+    [apply]
   )
 
   const applyQueued = useCallback(
@@ -195,8 +174,6 @@ export function useMobileStructuredAgentState(args: {
       return
     }
     if (!connected) {
-      // The cleanup above drops the dead hold and stream; keyed state keeps this
-      // session's transcript visible while another tab can be selected.
       return
     }
     apply({ type: 'loading' })
@@ -205,14 +182,12 @@ export function useMobileStructuredAgentState(args: {
       sessionId,
       holderId
     })
-    const endStream = openTranscriptAfterHold(client, sessionId, held, (raw) => {
+    const endStream = openAgentSessionTranscript(client, sessionId, held, (raw) => {
       if (typeof raw === 'object' && raw !== null && 'type' in raw && raw.type === 'error') {
-        apply({ type: 'error', message: agentSessionReadFailureText(raw) })
+        applyReadFailure(raw)
         return
       }
       if (isSubscribeEvent(raw)) {
-        // The opening snapshot names the provider session, so a terminal resume is offered
-        // before any history read; other frames pass none, which keeps the previous value.
         keepProviderSession(sessionId, raw.type === 'snapshot' ? raw.providerSession : undefined)
         apply({ type: 'event', event: raw })
         applyQueued(raw)
@@ -235,21 +210,28 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, applyQueued, client, connected, enabled, keepProviderSession, sessionId, sessionKey])
+  }, [
+    apply,
+    applyQueued,
+    applyReadFailure,
+    client,
+    connected,
+    enabled,
+    keepProviderSession,
+    sessionId,
+    sessionKey
+  ])
 
   const loadEarlier = useCallback(() => {
-    const current = stateRef.current
-    if (!client || !sessionId || !sessionKey || loadingOlder || !current.hasOlder) {
+    if (!client || !sessionId || !sessionKey || loadingOlder || !stateRef.current.hasOlder) {
       return
     }
-    if (!oldestStructuredAgentSessionCursor(current)) {
+    if (!oldestStructuredAgentSessionCursor(stateRef.current)) {
       return
     }
-    const requestSessionKey = sessionKey
     const requestGeneration = streamGenerationRef.current
     const isCurrentRead = (): boolean =>
-      sessionKeyRef.current === requestSessionKey &&
-      streamGenerationRef.current === requestGeneration
+      sessionKeyRef.current === sessionKey && streamGenerationRef.current === requestGeneration
     setLoadingOlder(true)
     void (async () => {
       // A live batch can head-trim past the anchor mid-read, and the reducer drops that
@@ -275,7 +257,6 @@ export function useMobileStructuredAgentState(args: {
               limit: AGENT_SESSION_HISTORY_MAX_LIMIT
             }
           )
-          // Every arm names it, a reset included; the page alone cannot be resumed.
           keepProviderSession(sessionId, result.providerSession)
           if (!result.ok || !isCurrentRead()) {
             break
@@ -293,8 +274,6 @@ export function useMobileStructuredAgentState(args: {
         if (pages.length === 0 || !isCurrentRead()) {
           return
         }
-        // The reducer drops a page whose anchor slid, so only an intact anchor lands;
-        // each later page abuts the one before it.
         if (oldestStructuredAgentSessionCursor(stateRef.current)?.sequence === cursor.sequence) {
           for (const { requestedCursor: pageCursor, page } of pages) {
             apply({ type: 'older-page', requestedCursor: pageCursor, page })
@@ -305,7 +284,7 @@ export function useMobileStructuredAgentState(args: {
     })()
       .catch((error: unknown) => {
         if (isCurrentRead()) {
-          apply({ type: 'error', message: agentSessionReadFailureText(error) })
+          applyReadFailure(error)
         }
       })
       .finally(() => {
@@ -313,11 +292,8 @@ export function useMobileStructuredAgentState(args: {
           setLoadingOlder(false)
         }
       })
-  }, [apply, client, keepProviderSession, loadingOlder, sessionId, sessionKey])
+  }, [apply, applyReadFailure, client, keepProviderSession, loadingOlder, sessionId, sessionKey])
 
-  // A window of only a subagent's rows draws nothing, and an empty list cannot be scrolled
-  // to ask for more, so it reads back once from each such head. A first page can be one: an
-  // older host's for any burst, a current host's when a burst fills its byte bound.
   const drawsNothingFrom =
     state.status === 'ready' && state.hasOlder && !state.items.some(isRootAgentJournalItem)
       ? `${sessionKey}:${state.epoch}:${state.items[0]?.sequence}`
@@ -334,7 +310,7 @@ export function useMobileStructuredAgentState(args: {
   return {
     state,
     stateRef,
-    queuedMessages,
+    queuedMessages: queued.messages,
     queuePause: queued.pause,
     providerSessions,
     loadingOlder,

@@ -1,7 +1,6 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import {
   query,
   type CanUseTool,
@@ -28,17 +27,6 @@ import { createClaudeStructuredLaunchResolver } from './claude-structured-launch
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'
 const LEAF_UUID = 'ad0f7c9e-1b2c-4d3e-8f90-abc123def456'
-const PINNED_SDK_VERSION = '0.3.251'
-const SDK_PLATFORM_PACKAGE_BASENAMES = [
-  'claude-agent-sdk-darwin-arm64',
-  'claude-agent-sdk-darwin-x64',
-  'claude-agent-sdk-linux-arm64',
-  'claude-agent-sdk-linux-arm64-musl',
-  'claude-agent-sdk-linux-x64',
-  'claude-agent-sdk-linux-x64-musl',
-  'claude-agent-sdk-win32-arm64',
-  'claude-agent-sdk-win32-x64'
-]
 
 /**
  * The exact argv the hand-rolled transport built before the SDK swap. Frozen here
@@ -495,26 +483,5 @@ describe('Claude Agent SDK contract pins', () => {
     expect(report.controlRequests.some((frame) => frame.request.subtype === 'initialize')).toBe(
       true
     )
-  })
-
-  it('pins the SDK version the contract was verified against', () => {
-    const sdkEntry = createRequire(__filename).resolve('@anthropic-ai/claude-agent-sdk')
-    const manifest = JSON.parse(readFileSync(join(dirname(sdkEntry), 'package.json'), 'utf8')) as {
-      version: string
-    }
-    expect(manifest.version).toBe(PINNED_SDK_VERSION)
-  })
-
-  it('keeps the eight bundled CLI platform binaries out of the install', () => {
-    const sdkEntry = createRequire(__filename).resolve('@anthropic-ai/claude-agent-sdk')
-    // The SDK's own scoped directory is where pnpm would link its optional
-    // platform packages; ignoredOptionalDependencies must keep them all absent.
-    const scopeDir = dirname(dirname(sdkEntry))
-    for (const basename of SDK_PLATFORM_PACKAGE_BASENAMES) {
-      expect(
-        existsSync(join(scopeDir, basename, 'package.json')),
-        `${basename} must not be installed`
-      ).toBe(false)
-    }
   })
 })

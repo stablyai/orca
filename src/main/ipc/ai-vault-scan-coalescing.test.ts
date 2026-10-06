@@ -5,8 +5,8 @@ import type { IFilesystemProvider } from '../providers/types'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 
 const mocks = vi.hoisted(() => ({
-  scanAiVaultSessionsInWorker: vi.fn(),
-  resolveAiVaultSessionTitlesInWorker: vi.fn(),
+  scanAiVaultSessionsInService: vi.fn(),
+  resolveAiVaultSessionTitlesInService: vi.fn(),
   scanRemoteAiVaultSessions: vi.fn(),
   scanRuntimeAiVaultSessions: vi.fn(),
   getSshFilesystemProvider: vi.fn(),
@@ -18,10 +18,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { on: vi.fn() }, ipcMain: { handle: mocks.ipcHandle } }))
-vi.mock('../ai-vault/session-scanner-worker-spawn', () => ({
-  scanAiVaultSessionsInWorker: mocks.scanAiVaultSessionsInWorker,
-  resolveAiVaultSessionTitlesInWorker: mocks.resolveAiVaultSessionTitlesInWorker,
-  resetAiVaultScannerWorkerForTests: vi.fn()
+vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  scanAiVaultSessionsInService: mocks.scanAiVaultSessionsInService,
+  resolveAiVaultSessionTitlesInService: mocks.resolveAiVaultSessionTitlesInService
 }))
 vi.mock('../ai-vault/remote-session-scanner', () => ({
   scanRemoteAiVaultSessions: mocks.scanRemoteAiVaultSessions
@@ -54,8 +54,8 @@ const EMPTY_RESULT: AiVaultListResult = {
 beforeEach(() => {
   vi.clearAllMocks()
   _internals.resetAiVaultCacheForTests()
-  mocks.scanAiVaultSessionsInWorker.mockResolvedValue(EMPTY_RESULT)
-  mocks.resolveAiVaultSessionTitlesInWorker.mockResolvedValue({ titles: [] })
+  mocks.scanAiVaultSessionsInService.mockResolvedValue(EMPTY_RESULT)
+  mocks.resolveAiVaultSessionTitlesInService.mockResolvedValue({ titles: [] })
   mocks.scanRemoteAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
   mocks.scanRuntimeAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
   mocks.getSshFilesystemProvider.mockReturnValue({} as IFilesystemProvider)
@@ -67,7 +67,7 @@ beforeEach(() => {
 
 describe('Agent Session History scan coalescing', () => {
   it.each([
-    ['local', mocks.scanAiVaultSessionsInWorker],
+    ['local', mocks.scanAiVaultSessionsInService],
     ['runtime:remote-server', mocks.scanRuntimeAiVaultSessions]
   ] as const)('coalesces %s scans while isolating caller cancellation', async (scope, scan) => {
     let resolveScan: ((result: AiVaultListResult) => void) | undefined
@@ -113,7 +113,7 @@ describe('Agent Session History scan coalescing', () => {
     const second = _internals.listAiVaultSessions({ executionHostScope: 'all' })
     await vi.waitFor(() => expect(resolveRuntime).toBeDefined())
 
-    expect(mocks.scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+    expect(mocks.scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
     expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
     expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledTimes(1)
     controller.abort()
@@ -181,7 +181,7 @@ describe('Agent Session History scan coalescing', () => {
   })
 
   it('reports a failed local scan as a host issue rather than rejecting', async () => {
-    mocks.scanAiVaultSessionsInWorker.mockRejectedValue(new Error('transcript root is unreadable'))
+    mocks.scanAiVaultSessionsInService.mockRejectedValue(new Error('transcript root is unreadable'))
     registerAiVaultHandlers()
     const list = ipcHandler('aiVault:listSessions')
 
@@ -206,7 +206,7 @@ describe('Agent Session History scan coalescing', () => {
         signal.addEventListener('abort', () => resolve(EMPTY_RESULT), { once: true })
       })
     }
-    mocks.scanAiVaultSessionsInWorker.mockImplementation((_args, signal: AbortSignal) =>
+    mocks.scanAiVaultSessionsInService.mockImplementation((_args, signal: AbortSignal) =>
       waitForAbort(signal)
     )
     mocks.requestActiveSshAiVaultSessionList.mockImplementation(
@@ -256,7 +256,7 @@ describe('Agent Session History scan coalescing', () => {
     finishOwnership?.()
 
     await expect(pending).resolves.toMatchObject({ cancelled: true })
-    expect(mocks.scanAiVaultSessionsInWorker).not.toHaveBeenCalled()
+    expect(mocks.scanAiVaultSessionsInService).not.toHaveBeenCalled()
     expect(event.sender.eventNames()).toEqual([])
   })
 

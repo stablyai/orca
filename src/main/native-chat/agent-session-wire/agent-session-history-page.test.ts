@@ -35,13 +35,14 @@ import type {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { readAgentSessionHistory, resolveHistoryLimit } from './agent-session-history-page'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const journals = createTrackedJournalOpener()
@@ -319,9 +320,12 @@ describe('history page byte ceiling', () => {
       readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
     )
     expect(tail.items).toHaveLength(1)
-    const bodyOnPage = tail.items[0]?.body
-    expect(bodyOnPage?.kind).toBe('status')
-    expect(bodyOnPage?.kind === 'status' ? bodyOnPage.text : '').toContain('[Orca: item truncated')
+    // Named for the client to word, with English for a client that can't.
+    expect(tail.items[0]?.body).toEqual({
+      kind: 'status',
+      text: 'This part of the chat was too large to show.',
+      presentation: 'history-item-too-large'
+    })
   })
 })
 

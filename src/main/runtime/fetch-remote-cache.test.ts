@@ -246,6 +246,33 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     })
   })
 
+  it.each(['refs/heads/feature/加', 'refs/tags/release'])(
+    'does not reinterpret a qualified nonremote ref through a remote named refs: %s',
+    async (base) => {
+      gitExecFileAsyncMock.mockResolvedValue({ stdout: 'refs\n', stderr: '' })
+      const runtime = new OrcaRuntimeService(null)
+      for (const options of [{}, { wslDistro: 'Ubuntu' }]) {
+        await expect(
+          runtime.resolveRemoteTrackingBase('/repo/e', base, options)
+        ).resolves.toBeNull()
+      }
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('preserves a qualified remote whose name begins with refs', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'refs/heads\n', stderr: '' })
+    const runtime = new OrcaRuntimeService(null)
+    await expect(
+      runtime.resolveRemoteTrackingBase('/repo/e', 'refs/remotes/refs/heads/feature/加')
+    ).resolves.toEqual({
+      remote: 'refs/heads',
+      branch: 'feature/加',
+      ref: 'refs/remotes/refs/heads/feature/加',
+      base: 'refs/heads/feature/加'
+    })
+  })
+
   it('resolves full remote-tracking refs with longest configured remote matching', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'foo\nfoo/bar\norigin\n', stderr: '' })
     const runtime = new OrcaRuntimeService(null)

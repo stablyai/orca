@@ -5,7 +5,9 @@
 // or a spawn call returning is the parent's view of the child, not the child's, and the CLI sends
 // every child its own terminal frame, so none of them settles one. When Orca ends the session and
 // proves its tree gone, what is still live is stopped (`stopLive`); any other end leaves it for the
-// host to settle as unknown. Edges wait here until the frame is journaled, then take the host clock.
+// host to settle as unknown. A live child blocked on a permission request reads waiting; no task
+// frame says so, so the caller hands over which children a request blocks. Edges wait here until
+// the frame is journaled, then take the host clock.
 
 import type {
   AgentChildWorkKind,
@@ -55,7 +57,8 @@ function observation(
   id: string,
   task: DecodedClaudeTask,
   facts: ClaudeTaskFacts,
-  observedAt: number
+  observedAt: number,
+  waiting: boolean
 ): AgentChildWorkLiveObservation {
   const operation: AgentChildWorkOperation | undefined = facts.toolName
     ? { toolName: facts.toolName, basis: 'reported', observedAt }
@@ -68,7 +71,7 @@ function observation(
     },
     kind: task.kind,
     residency: task.backgrounded ? 'background' : 'foreground',
-    state: task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
+    state: waiting ? 'waiting' : task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
     // The published row names a task's type as both its name and its agent type.
     ...(task.name ? { name: task.name, agentType: task.name } : {}),
     ...(task.description ? { description: task.description } : {}),
@@ -84,6 +87,8 @@ export class ClaudeChildWorkDecoder {
   private readonly live = new Map<string, DecodedClaudeTask>()
   /** Ended task ids, with the spawn call each ended under. */
   private readonly ended = new Map<string, string | undefined>()
+  /** The children a pending permission request blocks, as the caller last derived them. */
+  private waiting: ReadonlySet<string> = new Set()
   private pending: PendingEdge[] = []
 
   observe(message: Record<string, unknown>): void {
@@ -124,6 +129,19 @@ export class ClaudeChildWorkDecoder {
     }
   }
 
+  /** Which children a pending request blocks, re-derived by the caller before every drain. A
+   *  live child that starts or stops waiting is a live edge of its own. */
+  observeWaiting(waiting: ReadonlySet<string>): void {
+    const previous = this.waiting
+    this.waiting = waiting
+    for (const id of new Set([...previous, ...waiting])) {
+      const task = this.live.get(id)
+      if (task && previous.has(id) !== waiting.has(id)) {
+        this.report(id, task, {})
+      }
+    }
+  }
+
   /** Orca ended the session and proved its process tree gone: what still ran is stopped. The
    *  ending is Orca's, not the child's, so a frame of the child's own still replaces it. */
   stopLive(): void {
@@ -136,6 +154,7 @@ export class ClaudeChildWorkDecoder {
   clear(): void {
     this.live.clear()
     this.ended.clear()
+    this.waiting = new Set()
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))
   }
 
@@ -237,10 +256,15 @@ export class ClaudeChildWorkDecoder {
     }
     this.ended.delete(id)
     this.live.set(id, task)
+    this.report(id, task, facts, restart)
+  }
+
+  /** Whether the child waits is read at drain, so every live edge a drain carries agrees. */
+  private report(id: string, task: DecodedClaudeTask, facts: ClaudeTaskFacts, restart = false) {
     this.pending.push((observedAt) => ({
       type: 'live',
       observedAt,
-      child: observation(id, task, facts, observedAt),
+      child: observation(id, task, facts, observedAt, this.waiting.has(id)),
       ...(restart ? { restart: true } : {})
     }))
   }

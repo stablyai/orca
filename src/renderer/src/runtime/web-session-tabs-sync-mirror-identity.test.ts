@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createStore } from 'zustand/vanilla'
+import { shallow } from 'zustand/shallow'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type {
@@ -302,6 +303,37 @@ describe('remote mirror resource identity', () => {
     expect(next.browserPagesByWorkspace).not.toBe(state.browserPagesByWorkspace)
     expect(next.remoteBrowserPageHandlesByPageId).toBe(state.remoteBrowserPageHandlesByPageId)
     expect(next.browserCertificateFailuresByPageId).toBe(state.browserCertificateFailuresByPageId)
+  })
+
+  it('keeps an unchanged browser tab record when a sibling browser tab changes', () => {
+    const browserTab = (index: number, title: string) => ({
+      type: 'browser' as const,
+      id: `host-browser-tab-${index}`,
+      browserWorkspaceId: `host-browser-workspace-${index}`,
+      browserPageId: `host-browser-page-${index}`,
+      title,
+      url: `https://example.com/${index}`,
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      certificateFailure: null,
+      isActive: index === 1
+    })
+    const state = applySnapshot(
+      makeState(),
+      makeSnapshot(WORKTREE_A, [browserTab(1, 'One'), browserTab(2, 'Two')], 'browser')
+    )
+    const next = applySnapshot(
+      state,
+      makeSnapshot(WORKTREE_A, [browserTab(1, 'One'), browserTab(2, 'Renamed')], 'browser'),
+      NOW + 1
+    )
+
+    const [unchanged, renamed] = next.browserTabsByWorktree[WORKTREE_A]!
+    const [previous] = state.browserTabsByWorktree[WORKTREE_A]!
+    expect(renamed!.title).toBe('Renamed')
+    // Why: the tab strip compares each record field by field, so a rebuilt page list re-renders the tab.
+    expect(shallow(unchanged, previous)).toBe(true)
   })
 
   it('clears a same-page certificate failure without replacing its page or handle', () => {

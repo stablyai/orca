@@ -40,7 +40,7 @@ export function NativeChatLaunchRetry({
         )
       : ''
   return (
-    <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-1 text-xs text-destructive">
+    <div className="mx-auto flex w-full max-w-(--chat-content-max-width) items-center justify-between gap-3 px-4 py-1 text-xs text-destructive">
       <span className="min-w-0 break-words">
         {cause ? joinSentences([message, cause]) : message}
       </span>

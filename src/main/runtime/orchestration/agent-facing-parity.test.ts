@@ -113,7 +113,7 @@ async function renderPreamble(worker: 'chat' | 'terminal'): Promise<string> {
 /** The turn text the structured lane sends a chat for one message on `mailbox`. */
 async function renderChatPointer(mailbox: string): Promise<string> {
   const texts: string[] = []
-  db.insertMessage({ from: 'term_peer', to: mailbox, subject: 'hi' })
+  const message = db.insertMessage({ from: 'term_peer', to: mailbox, subject: 'hi' })
   const delivery = new OrchestrationStructuredMailboxPointerDelivery({
     getDb: () => db,
     getMessageWaiters: () => undefined,
@@ -121,7 +121,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
     // The runtime's wiring of the structured lane.
     getCliCommand: localOrchestrationCliCommand,
     host: {
-      readGateFacts: async () => ({ turnRunning: false, awaitingHuman: false, submissions: [] }),
+      readSessionFacts: async () => ({ submissions: [] }),
       currentFence: () => 1,
       send: async (input) => {
         for (const block of input.body.blocks) {
@@ -133,6 +133,8 @@ async function renderChatPointer(mailbox: string): Promise<string> {
   })
   delivery.deliverForHandle(mailbox)
   await vi.waitFor(() => expect(texts).toHaveLength(1))
+  // Read, as the agent's `check` reads it, so this mailbox's next mail is pointed too.
+  db.markAsRead([message.id])
   return texts[0]!
 }
 
@@ -185,7 +187,6 @@ describe('the orchestration guide an agent loads', () => {
 })
 
 describe('agent-read text about an Orca session ID', () => {
-  // CLI help, specs and status text: src/cli/orca-session-id-wording.test.ts.
   const guideDir = join(process.cwd(), 'skill-guides')
   const guide = [
     join(guideDir, 'orchestration.md'),

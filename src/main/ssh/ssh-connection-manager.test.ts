@@ -1,4 +1,3 @@
-import { managerTargetActive } from './ssh-connection-manager-test-probes'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 
@@ -13,7 +12,6 @@ const mockState = vi.hoisted(() => ({
 
 vi.mock('./ssh-connection', () => ({
   SshConnection: class MockSshConnection {
-    subscribeTransportClosure = vi.fn(() => () => {})
     status: 'connecting' | 'connected' | 'disconnected' = 'connecting'
     connect = vi.fn(async () => {
       await (mockState.connectResults.shift() ?? Promise.resolve())
@@ -22,7 +20,6 @@ vi.mock('./ssh-connection', () => ({
     disconnect = vi.fn(async () => {
       this.status = 'disconnected'
     })
-    reconnect = vi.fn(async () => {})
 
     constructor() {
       mockState.instances.push(this)
@@ -48,53 +45,6 @@ const target = {
 } as SshTarget
 
 describe('SshConnectionManager', () => {
-  it('reports invalidated pending attempts even after disconnect removes the registration', async () => {
-    let reject!: (error: Error) => void
-    mockState.connectResults.push(
-      new Promise<void>((_resolve, fail) => {
-        reject = fail
-      })
-    )
-    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
-    const pending = manager.connect(target)
-    const rejected = expect(pending).rejects.toThrow('cancelled')
-    await manager.disconnect(target.id)
-    expect(manager.getConnection(target.id)).toBeUndefined()
-    expect(managerTargetActive(manager, target.id)).toBe(true)
-    expect(managerTargetActive(manager, 'unrelated')).toBe(false)
-    reject(new Error('cancelled'))
-    await rejected
-    expect(managerTargetActive(manager, target.id)).toBe(false)
-  })
-
-  it('tracks detached exact-connection teardown until its promise settles', async () => {
-    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
-    const conn = await manager.connect(target)
-    await manager.disconnect(target.id)
-    let finish!: () => void
-    mockState.instances[0].disconnect.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          finish = resolve
-        })
-    )
-    const pending = manager.disconnectConnection(target.id, conn)
-    expect(managerTargetActive(manager, target.id)).toBe(true)
-    finish()
-    await pending
-    expect(managerTargetActive(manager, target.id)).toBe(false)
-  })
-
-  it('retains uncertainty after bulk teardown fails and removes the registration', async () => {
-    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
-    await manager.connect(target)
-    mockState.instances[0].disconnect.mockRejectedValueOnce(new Error('close unconfirmed'))
-    await manager.disconnectAll()
-    expect(manager.getConnection(target.id)).toBeUndefined()
-    expect(managerTargetActive(manager, target.id)).toBe(true)
-    expect(managerTargetActive(manager, 'unrelated')).toBe(false)
-  })
-
   beforeEach(() => {
     mockState.connectResults.length = 0
     mockState.instances.length = 0

@@ -86,6 +86,32 @@ export async function prepareLegacySharedCodexSessionResume(
   return { useRealCodexHome: true }
 }
 
+/** Explicit account restarts must move the verified rollout before changing credentials. */
+export async function prepareCodexAccountRestartResume(args: {
+  sourceHome: string
+  transcriptPath: string
+  targetHome: string
+  systemCodexHomePath: string
+}): Promise<string> {
+  if (sameRuntimePath(args.sourceHome, args.targetHome)) {
+    return args.targetHome
+  }
+  const relativePath = relative(
+    resolve(join(args.sourceHome, 'sessions')),
+    resolve(args.transcriptPath)
+  )
+  if (!isDatedRolloutRelativePath(relativePath)) {
+    throw new Error(RETRYABLE_RESUME_ERROR)
+  }
+  const paths = resolveCodexSessionBackfillPaths(args.systemCodexHomePath)
+  await materializeLegacyRollout(
+    args.transcriptPath,
+    join(args.targetHome, 'sessions', relativePath),
+    paths.auditLogPath
+  )
+  return args.targetHome
+}
+
 /**
  * Repins a per-account resume to the selected account's home, or null to keep
  * the session's own home.

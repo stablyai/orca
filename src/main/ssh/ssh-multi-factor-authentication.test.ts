@@ -1,6 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
-import type * as Os from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   Client,
@@ -11,15 +10,10 @@ import {
   type KeyboardAuthContext,
   type PasswordAuthContext
 } from 'ssh2'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import { buildConnectConfig } from './ssh-connection-utils'
-
-vi.mock('node:os', async (importOriginal) => {
-  const actual = await importOriginal<typeof Os>()
-  return { ...actual, homedir: vi.fn(() => actual.tmpdir()) }
-})
 
 // OpenSSH's default; a host that burns it disconnects before the MFA stage is reached.
 const MAX_AUTH_TRIES = 6
@@ -192,11 +186,19 @@ function connectWithOrcaConfig(
 describe('multi-stage SSH authentication', () => {
   let tempDir: string
   let keyPaths: string[]
+  let homeEnv: { HOME?: string; USERPROFILE?: string }
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-mfa-'))
-    // Default-key discovery must never read the developer's SSH credentials.
-    vi.mocked(homedir).mockReturnValue(tempDir)
+    // Why: the cases below pass `resolved: null`, so `resolvePrivateKeys` falls through to
+    // `findDefaultKeyFile`, which reads `~/.ssh/id_*` through `homedir()`. On a developer
+    // machine that picks up a real key, and an encrypted one makes ssh2 reject with
+    // "Cannot parse privateKey" before authentication is exercised at all. Hosted CI has no
+    // key, so this only ever failed locally. Pointing home at the fixture directory keeps
+    // default-key discovery inside the test's control on every machine.
+    homeEnv = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE }
+    process.env.HOME = tempDir
+    process.env.USERPROFILE = tempDir
     keyPaths = ['id_a', 'id_b'].map((name) => {
       const path = join(tempDir, name)
       writeFileSync(path, utils.generateKeyPairSync('ecdsa', { bits: 256 }).private)
@@ -205,7 +207,14 @@ describe('multi-stage SSH authentication', () => {
   })
 
   afterEach(() => {
-    vi.mocked(homedir).mockReturnValue(tmpdir())
+    for (const key of ['HOME', 'USERPROFILE'] as const) {
+      const previous = homeEnv[key]
+      if (previous === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = previous
+      }
+    }
     rmSync(tempDir, { recursive: true, force: true })
   })
 

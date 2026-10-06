@@ -12,8 +12,7 @@
 //
 // Every offset below is in the scroll container's own pixels (rows are placed at
 // `item.start - scrollMargin` inside a sizer sitting `scrollMargin` down), which is
-// the same space as `scrollTop`. That keeps the comparison honest under the
-// transcript's `zoom`, where a bounding rect would be off by exactly the zoom factor.
+// the same coordinate space as `scrollTop`.
 
 import { NATIVE_CHAT_BOTTOM_THRESHOLD_PX } from './native-chat-autoscroll'
 

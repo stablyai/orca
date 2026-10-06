@@ -10,6 +10,7 @@ import {
   disposeStructuredAgentSessionSendFailure,
   disposeStructuredAgentSessionSendRefusal,
   disposeStructuredAgentSessionSendResult,
+  STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED,
   type StructuredAgentSessionSendDisposition
 } from '../../../../shared/structured-agent-session-send-disposition'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
@@ -24,6 +25,7 @@ import {
   commitStructuredAgentSessionOutbox,
   getStructuredAgentSessionOutbox
 } from './structured-agent-session-outbox-storage'
+import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
   getStructuredAgentLaunchPromptDispatch,
   shareStructuredAgentLaunchPromptDispatch
@@ -111,7 +113,7 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
           (entry) => ({ ...entry, lastFailure: { kind: 'failed' } })
         )
       )
-      args.setError('Message could not be saved to the outbox')
+      args.setError(agentSessionWriteNoticeText(STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED))
       return false
     }
     // No `finally` release below: `applyDisposition` frees single-flight as part of the state

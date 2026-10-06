@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   hasStructuredAgentLaunchCancellationTombstonePersisted,
   markStructuredAgentLaunchCancelledPersisted,
@@ -40,12 +41,16 @@ export function beginStructuredAgentSessionAuthoritativeInventory(): number {
   return authoritativeInventorySequence
 }
 
-/** Claims restored tombstones for best-effort host cleanup before an authoritative census. */
-export function claimStructuredAgentLaunchCancellationCleanups(): readonly string[] {
+/** Claims `executionHostId`'s restored tombstones for best-effort cleanup on that host before
+ *  its authoritative census. */
+export function claimStructuredAgentLaunchCancellationCleanups(
+  executionHostId: ExecutionHostId
+): readonly string[] {
   restoreCancellationRetirementFences()
+  const owned = new Set(readStructuredAgentLaunchCancellationTombstoneSessionIds(executionHostId))
   const claimed: string[] = []
   for (const [sessionId, retirement] of cancellationRetirementBySessionId) {
-    if (retirement.restored && !retirement.cleanupStarted) {
+    if (owned.has(sessionId) && retirement.restored && !retirement.cleanupStarted) {
       retirement.cleanupStarted = true
       claimed.push(sessionId)
     }
@@ -71,9 +76,10 @@ export function settleStructuredAgentLaunchCancellationCleanup(
 }
 
 export function startStructuredAgentLaunchCancellationCleanup(
+  executionHostId: ExecutionHostId,
   cleanup: (sessionId: string) => Promise<unknown>
 ): void {
-  for (const sessionId of claimStructuredAgentLaunchCancellationCleanups()) {
+  for (const sessionId of claimStructuredAgentLaunchCancellationCleanups(executionHostId)) {
     void cleanup(sessionId).then(
       () => settleStructuredAgentLaunchCancellationCleanup(sessionId, true),
       (error: unknown) => {
@@ -86,10 +92,11 @@ export function startStructuredAgentLaunchCancellationCleanup(
 
 export function markStructuredAgentLaunchCancellation(
   sessionId: string,
+  executionHostId: ExecutionHostId,
   alreadyCancelled: boolean,
   launchPromise?: Promise<unknown>
 ): void {
-  markStructuredAgentLaunchCancelledPersisted(sessionId)
+  markStructuredAgentLaunchCancelledPersisted(sessionId, executionHostId)
   if (launchPromise) {
     const retirement: CancellationRetirement = {
       retireAfterInventory: null,
@@ -119,9 +126,11 @@ export function retireStructuredAgentLaunchCancellation(sessionId: string): void
   cancellationRetirementBySessionId.delete(sessionId)
 }
 
+/** `publishedSessionIds` is `executionHostId`'s own authoritative inventory. */
 export function retireAbsentStructuredAgentLaunchCancellations(
   publishedSessionIds: ReadonlySet<string>,
-  authoritativeInventory: number
+  authoritativeInventory: number,
+  executionHostId: ExecutionHostId
 ): boolean {
   restoreCancellationRetirementFences()
   const retainedSessionIds = new Set(publishedSessionIds)
@@ -133,8 +142,10 @@ export function retireAbsentStructuredAgentLaunchCancellations(
       retainedSessionIds.add(sessionId)
     }
   }
-  const changed =
-    retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted(retainedSessionIds)
+  const changed = retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted(
+    retainedSessionIds,
+    executionHostId
+  )
   if (changed) {
     for (const sessionId of cancellationRetirementBySessionId.keys()) {
       if (!hasStructuredAgentLaunchCancellationTombstonePersisted(sessionId)) {

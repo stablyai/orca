@@ -1,5 +1,4 @@
 import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
-import type { OrcadSshProvisioningIntent } from './orcad-ssh-provisioning'
 
 // ─── SSH Connection Types ───────────────────────────────────────────
 
@@ -89,12 +88,10 @@ export type SshTarget = {
    *  re-adopt only, so automations fenced on an old registration cannot run on a
    *  later target that happens to reuse the id. Never advanced by connect state. */
   generation?: number
-  /** Main-owned provisioning intent; never fall back to a relay while it exists. */
-  orcadProvisioning?: OrcadSshProvisioningIntent
 }
 
 /** Renderer-authored target fields; registration generations are allocated and owned by main. */
-export type SshTargetCreateInput = Omit<SshTarget, 'id' | 'generation' | 'orcadProvisioning'>
+export type SshTargetCreateInput = Omit<SshTarget, 'id' | 'generation'>
 export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
 
 /** Public target identity and observed host metadata safe to mirror to a paired client. */

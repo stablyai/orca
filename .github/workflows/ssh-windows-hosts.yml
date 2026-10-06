@@ -28,12 +28,16 @@ on:
       - 'config/patches/@vscode__windows-process-tree*'
       - 'config/scripts/build-windows-process-tree-relay-addon.mjs'
       - 'config/scripts/relay-windows-process-tree-staging.mjs'
+      - 'config/scripts/relay-windows-process-tree-prepared-addon*.mjs'
       - 'config/scripts/windows-process-tree-gyp-rebuild.mjs'
       - 'src/shared/relay-windows-breakaway-launch.ts'
       - '!src/**/*.test.ts'
       - 'src/main/ssh/ssh-relay-windows-host-lane.test.ts'
       - 'config/ci/windows-ssh-provider/**'
       - '.github/workflows/ssh-windows-hosts.yml'
+      - '.github/actions/prepare-orcad-prebuilds/**'
+      - '.github/actions/restore-pnpm-verification/**'
+      - 'config/scripts/orcad-windows-prebuild-cache.mjs'
   workflow_dispatch:
     inputs:
       cells:
@@ -80,9 +84,17 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: node
+          # Keep complete server/test trees; missing future imports fail the unchanged builds.
+          sparse-checkout: |
+            .github
+            config
+            native
+            resources
+            tests
+            src/main
+            src/shared
+            src/relay
+            src/types
       - name: Self-test the provisioning scripts before touching the machine
         shell: pwsh
         run: |
@@ -92,20 +104,49 @@ jobs:
             if($errors.Count){throw "PowerShell parse failed: $($file.FullName)"}
           }
           & config/ci/windows-ssh-provider/preview-ssh/test-preview-diagnostics.ps1
+      # ARM inbox servicing can finish while the independent Node artifacts are prepared.
+      - name: Prepare the Windows inbox SSH capability
+        id: inbox-capability
+        background: true
+        shell: pwsh
+        run: |
+          if('${{ matrix.server }}' -eq 'inbox' -and '${{ matrix.arch }}' -eq 'arm64'){
+            $receipts=Join-Path $pwd '.build/ssh-windows-host-receipts'
+            New-Item -ItemType Directory -Force -Path $receipts | Out-Null
+            . config/ci/windows-ssh-provider/preview-ssh/windows-ssh-capability.ps1
+            Initialize-WindowsInboxSshCapability -Arch '${{ matrix.arch }}' -Receipt (Join-Path $receipts 'inbox-capability-preparation.json')
+          }
+      - uses: ./.github/actions/install-node-dependencies
+        id: dependencies
+        with:
+          native-runtime: node
+          cache-pnpm-store: 'false'
       # The deploy materializes rung A from this template; only this runner's slot exists here.
       # The process-tree addon carries the launcher that starts the relay outside sshd's job; the
       # orcad slot and the relay both stage it, and a standard-user host has no other launch route.
-      - name: Build this runner's orcad slot, the win32 template and the relay
+      - name: Build this runner's Windows process-table addon
+        shell: bash
+        env:
+          REUSE_PREPARED_RUNTIME: ${{ github.event_name == 'pull_request' && steps.dependencies.outputs.native-cache-hit == 'true' }}
+        run: |
+          reuse_args=()
+          if [ "$REUSE_PREPARED_RUNTIME" = true ]; then
+            reuse_args+=(--reuse-prepared-runtime)
+          fi
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=${{ matrix.arch }} "${reuse_args[@]}"
+      - uses: ./.github/actions/prepare-orcad-prebuilds
+        with:
+          resolve-windows-cache: ${{ github.event_name == 'pull_request' }}
+          restore-windows-cache: ${{ github.event_name == 'pull_request' }}
+      - name: Build the win32 template and the relay
         shell: bash
         env:
           ORCA_REQUIRE_RELAY_NATIVE_ADDONS: ${{ matrix.arch }}
         run: |
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=${{ matrix.arch }}
-          pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "win32-${{ matrix.arch }}"
-          pnpm build:orcad-prebuilds --smoke
           node config/scripts/build-orcad-template.mjs --targets "win32-${{ matrix.arch }}"
           pnpm run build:relay
+      - wait: inbox-capability
       - name: Run the Windows host cells against a private ${{ matrix.server }} sshd
         shell: pwsh
         timeout-minutes: 50
@@ -119,6 +160,8 @@ jobs:
           $cells=@($env:CELLS -split ',' | ForEach-Object {$_.Trim()} | Where-Object {$_})
           if(-not $cells.Count){$cells=@('pinned-cmd','pinned-powershell','legacy-opt-out')}
           $archive=''
+          $preparation=''
+          if('${{ matrix.server }}' -eq 'inbox' -and '${{ matrix.arch }}' -eq 'arm64'){$preparation=Join-Path $receipts 'inbox-capability-preparation.json'}
           if('${{ matrix.server }}' -eq 'preview'){
             $archive=Join-Path $env:RUNNER_TEMP 'preview-${{ matrix.archive }}'
             # The provisioning script refuses the archive unless its sha256 and every binary's match the pin.
@@ -128,7 +171,7 @@ jobs:
           $callback={param($context)
             & (Join-Path $tools 'invoke-pinned-relay-cells.ps1') -SourceRoot $sourceRoot -Context $context -Target 'win32-${{ matrix.arch }}' -ReceiptRoot $receipts -Cells $cells
           }.GetNewClosure()
-          & (Join-Path $tools 'preview-ssh/prove-preview-openssh.ps1') -Archive $archive -Arch '${{ matrix.arch }}' -Server '${{ matrix.server }}' -Receipt (Join-Path $receipts 'provider-server.json') -Accounts $cells.Count -HiddenTools @('npm','npx','node-gyp','gcc','g++','cc','c++','make','cl','clang','clang++','msbuild','cmake') -HostCellProbe $callback 2>&1 | Tee-Object (Join-Path $receipts 'provision.log')
+          & (Join-Path $tools 'preview-ssh/prove-preview-openssh.ps1') -Archive $archive -Arch '${{ matrix.arch }}' -Server '${{ matrix.server }}' -Receipt (Join-Path $receipts 'provider-server.json') -InboxPreparationReceipt $preparation -Accounts $cells.Count -HiddenTools @('npm','npx','node-gyp','gcc','g++','cc','c++','make','cl','clang','clang++','msbuild','cmake') -HostCellProbe $callback 2>&1 | Tee-Object (Join-Path $receipts 'provision.log')
       - uses: actions/upload-artifact@v7
         if: always()
         with:

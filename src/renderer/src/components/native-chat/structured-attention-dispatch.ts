@@ -23,6 +23,9 @@
  * something I am watching" is already answered by focus, in the surface adapter's viewed gates and
  * in main's `suppressWhenFocused`; there is no second suppression path here.
  */
+import { notificationSourceForOwner } from '../../../../shared/notification-source'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { AGENT_JOURNAL_TURN_OUTCOMES } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
@@ -39,7 +42,8 @@ import type { StructuredTab } from './structured-agent-session-tabs'
 
 export function dispatchStructuredTurnCompletionAttention(
   tab: StructuredTab,
-  completion: AgentSessionTurnCompletion
+  completion: AgentSessionTurnCompletion,
+  subscriptionTarget?: RuntimeClientTarget
 ): void {
   // ABSENT OUTCOME IS UNKNOWN AND LIGHTS NOTHING. The wire type makes it required and this host
   // never omits it, but a host that predates the field reaches here as `undefined`, and reading
@@ -103,6 +107,13 @@ export function dispatchStructuredTurnCompletionAttention(
           worktreeId: request.workspaceId,
           paneKey: request.subjectKey ?? undefined,
           ...getNotificationWorkspaceLabels(state, request.workspaceId, tab.label),
+          notificationSourceId: notificationSourceForOwner(
+            // The receiving subscription identifies the paired source even when tab ownership is ambiguous.
+            subscriptionTarget?.kind === 'environment'
+              ? { executionHostId: null, runtimeEnvironmentId: subscriptionTarget.environmentId }
+              : resolveNotificationTabOwner(state, tab),
+            state
+          ),
           terminalTitle: tab.label,
           isActiveWorktree: request.workspaceIsActive,
           ...(row?.agentType ? { agentType: row.agentType } : {}),

@@ -65,7 +65,7 @@ export function useRichMarkdownReviewData({
           'All unsent notes'
         ),
         notes: unsentNotes,
-        prompt: formatMarkdownReviewNotes(unsentNotes, markdownReviewContent)
+        formatPrompt: (notes) => formatMarkdownReviewNotes(notes, markdownReviewContent)
       }
     ]
   }, [markdownReviewContent, markdownReviewNotes])

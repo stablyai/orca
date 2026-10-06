@@ -27,6 +27,7 @@ on:
       - '!src/**/*.test.ts'
       - 'src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts'
       - '.github/workflows/ssh-hostile-hosts.yml'
+      - '.github/actions/restore-pnpm-verification/**'
   workflow_dispatch:
     inputs:
       cells:
@@ -56,7 +57,17 @@ jobs:
       PYTHON: /opt/python/cp312-cp312/bin/python3
     steps:
       - name: Install glibc 2.28 prerequisites
-        run: dnf install -y git procps-ng unzip which xz
+        run: |
+          missing_tool=false
+          for tool in git ps unzip which xz; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+              missing_tool=true
+            fi
+          done
+          if [ "$missing_tool" = true ]; then
+            # The image's source-built Git needs no RPM; missing tools come from AlmaLinux.
+            dnf --disablerepo='epel*' install -y git procps-ng unzip which xz
+          fi
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
@@ -77,23 +88,26 @@ jobs:
           if-no-files-found: error
 
   musl_slot:
-    needs: glibc_slot
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      # Why chained after the glibc slot: the musl build merges into the same prebuild manifest.
-      - uses: actions/download-artifact@v8
+      - uses: ./.github/actions/restore-pnpm-verification
+        id: pnpm-verification
         with:
-          name: hostile-hosts-glibc-slot
-          path: out/orcad-prebuilds
+          container-toolchain: 'true'
       - name: Build and smoke the linux-x64-musl slot on Alpine
+        env:
+          VERIFICATION_CACHE_PATH: ${{ steps.pnpm-verification.outputs.path }}
         run: |
+          touch "$VERIFICATION_CACHE_PATH"
           # Same digest as the headless-server musl lane; re-resolve it whenever NODE_RUNTIME_PIN moves.
           docker run --rm --init -i \
             -e ORCA_BACKGROUND_LAUNCH=1 \
+            -v "$VERIFICATION_CACHE_PATH:/root/.cache/pnpm/lockfile-verified.jsonl" \
             -v "$GITHUB_WORKSPACE:/work" -w /work \
             node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 sh -s <<'MUSL_SLOT'
           set -eu
@@ -102,12 +116,12 @@ jobs:
           npm install -g "$(node -p "require('./package.json').packageManager.split('+')[0]")"
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm build:orcad-prebuilds --slot=linux-x64-musl
-          pnpm build:orcad-prebuilds --require-slots linux-x64-glibc,linux-x64-musl
+          pnpm build:orcad-prebuilds --require-slots linux-x64-musl
           pnpm build:orcad-prebuilds --slot=linux-x64-musl --smoke
           MUSL_SLOT
       - uses: actions/upload-artifact@v7
         with:
-          name: hostile-hosts-slots
+          name: hostile-hosts-musl-slot
           path: out/orcad-prebuilds
           include-hidden-files: true
           retention-days: 1
@@ -116,7 +130,7 @@ jobs:
   # Design D6 rung B: the CentOS 7 cell lands on the glibc 2.17 compat slot, built exactly as the
   # headless-server compat lane builds it (see linux_glibc217_compat in node-server-tests.yml).
   glibc217_slot:
-    needs: musl_slot
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     env:
@@ -126,11 +140,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
-      # Why chained after musl: the compat build merges into the same prebuild manifest.
-      - uses: actions/download-artifact@v8
-        with:
-          name: hostile-hosts-slots
-          path: out/orcad-prebuilds
       - name: Build and smoke the glibc 2.17 compat slot under the glibc-217 Node
         run: |
           compat_node="$(node config/scripts/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217 --print-runtime)"
@@ -148,20 +157,20 @@ jobs:
           set -eu
           export PATH="$(dirname "$COMPAT_NODE"):$PATH"
           node config/scripts/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217
-          node config/scripts/build-orcad-prebuilds.mjs --require-slots linux-x64-glibc,linux-x64-musl,linux-x64-glibc217
+          node config/scripts/build-orcad-prebuilds.mjs --require-slots linux-x64-glibc217
           # The image's devtoolset LD_LIBRARY_PATH must not stand in for a host C++ runtime.
           env -u LD_LIBRARY_PATH node config/scripts/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217 --smoke
           GLIBC217_COMPAT_SLOT
       - uses: actions/upload-artifact@v7
         with:
-          name: hostile-hosts-slots-compat
+          name: hostile-hosts-glibc217-slot
           path: out/orcad-prebuilds
           include-hidden-files: true
           retention-days: 1
           if-no-files-found: error
 
   hosts:
-    needs: glibc217_slot
+    needs: [glibc_slot, musl_slot, glibc217_slot]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -175,8 +184,12 @@ jobs:
           native-runtime: node
       - uses: actions/download-artifact@v8
         with:
-          name: hostile-hosts-slots-compat
-          path: out/orcad-prebuilds
+          pattern: hostile-hosts-*-slot
+          path: ${{ runner.temp }}/hostile-host-prebuild-lanes
+      - name: Merge verified Linux slots
+        run: |
+          node config/scripts/merge-orcad-prebuilds.mjs "$RUNNER_TEMP"/hostile-host-prebuild-lanes/*
+          pnpm build:orcad-prebuilds --require-slots linux-x64-glibc,linux-x64-musl,linux-x64-glibc217
       # The deploy materializes rung A, B and C addons from this template; only the x64 Linux
       # slots exist here, so it is built for those two, and glibc217 is staged beside its base.
       - name: Build the orcad template and relay
@@ -187,7 +200,7 @@ jobs:
         env:
           ORCA_RUN_SSH_HOSTILE_HOSTS: '1'
           ORCA_SSH_HOSTILE_HOST_CELLS: ${{ github.event.inputs.cells || '' }}
-        run: pnpm test src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts
+        run: pnpm test:node src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts
 
   # Design D6 on macOS: the runner is the SSH host. A user-level sshd on a loopback port logs in
   # as the runner user with PATH cut to the toolchain shims and /usr/bin:/bin, so Homebrew's node
@@ -198,7 +211,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             target: darwin-arm64
             cell: macos-arm64-local-sshd
           - os: macos-15-intel
@@ -226,4 +239,4 @@ jobs:
         env:
           ORCA_RUN_SSH_HOSTILE_HOSTS: '1'
           ORCA_SSH_HOSTILE_HOST_CELLS: ${{ matrix.cell }}
-        run: pnpm test src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts
+        run: pnpm test:node src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts

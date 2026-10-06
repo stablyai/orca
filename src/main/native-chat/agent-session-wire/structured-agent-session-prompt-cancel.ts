@@ -45,17 +45,12 @@ export async function cancelStructuredAgentSessionPrompt(
     const dismissed = await dismissPrompt(ctx, validated, true)
     return dismissed.ok ? cancelled : dismissed
   }
-  // Judged once the provider's accepted lifecycle has landed: its own cancel of the card, or the end
-  // of the turn that raised it, may still be queued. A failed drain judges what has landed.
-  await ctx.flushStreamedEvents().catch(() => undefined)
-  const current = validatePendingPrompt(ctx, input.prompt)
-  if (!current.ok) {
-    return answerCancelOfSettledPrompt(ctx, input, current)
-  }
-  if (!raisedByLiveTurn(ctx, current)) {
+  // Judged on the fold as it stands: the provider's own cancel of the card, or the end of the turn
+  // that raised it, landed when it was handed over.
+  if (!raisedByLiveTurn(ctx, validated)) {
     // A request that outlived its turn, such as a background agent's: the turn running now is not
     // the one the user is cancelling, so nothing stops and the request is declined.
-    const dismissed = await dismissPrompt(ctx, current, true)
+    const dismissed = await dismissPrompt(ctx, validated, true)
     return dismissed.ok ? cancelled : dismissed
   }
   const stopped = await routes.stop()
@@ -64,7 +59,7 @@ export async function cancelStructuredAgentSessionPrompt(
   }
   // Settled in the Stop's own step, so the card is not answerable while the child ends. That end
   // takes the provider's request with it; a Stop that ends nothing must answer the request itself.
-  const dismissed = await dismissPrompt(ctx, current, !stopped.endsSession)
+  const dismissed = await dismissPrompt(ctx, validated, !stopped.endsSession)
   return dismissed.ok ? cancelled : dismissed
 }
 
@@ -74,8 +69,8 @@ function raisedByLiveTurn(ctx: AgentSessionTurnContext, pending: PendingPrompt):
   return live.kind === 'turn' && raised?.kind === 'turn' && raised.turnItemId === live.turnItemId
 }
 
-/** Records the card as cancelled by the caller, the provider's lifecycle drained first so nothing
- *  it already sent lands after; `answer` also declines the provider's request. */
+/** Records the card as cancelled by the caller, after every row the provider already sent (each
+ *  landed at its call); `answer` also declines the provider's request. */
 async function dismissPrompt(
   ctx: AgentSessionTurnContext,
   pending: PendingPrompt,
@@ -95,7 +90,6 @@ async function dismissPrompt(
   }
   let committed = false
   const commit = async (): Promise<void> => {
-    await ctx.flushStreamedEvents()
     await ctx.journal.appendItem(
       identity,
       {

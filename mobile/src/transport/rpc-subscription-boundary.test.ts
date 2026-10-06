@@ -5,15 +5,17 @@ import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import { censusSourceFiles } from '../test-support/census-source-files'
 import { readScenarios } from '../test-support/rpc-recording/scenario-input'
+import { READY_STREAM_RELEASE_METHODS } from './rpc-client-server-subscription'
 import { RPC_SUBSCRIPTION_SITES, type RpcSubscriptionSite } from './rpc-subscription-inventory'
 
 /**
  * Makes the subscription inventory bind.
  *
- * Four failures, all of which mean "edit the list":
+ * Five failures, all of which mean "edit the list":
  *   - a file opens a stream and is not listed,
  *   - a listed file no longer opens one (stale entry — how allow-lists rot),
  *   - a listed file opens a different method than its entry claims,
+ *   - the `ready-id` entries and the transport's release table name different methods,
  *   - a `recorded` entry names a family the scenario manifest does not have.
  *
  * The last one is what separates this from prose. A comment saying a stream is covered stays true
@@ -175,6 +177,20 @@ describe('RPC subscription boundary', () => {
       missing,
       'A recorded entry must name a family in pilot-scenarios.json, or the claim is prose.'
     ).toEqual([])
+  })
+
+  it('releases by ready id exactly the streams the transport release table names', () => {
+    const declared = [
+      ...new Set(
+        RPC_SUBSCRIPTION_SITES.filter((site) => site.release === 'ready-id').map(
+          (site) => site.method
+        )
+      )
+    ].sort()
+    expect(
+      declared,
+      'A stream whose host id arrives in `ready` is released only through READY_STREAM_RELEASE_METHODS.'
+    ).toEqual([...READY_STREAM_RELEASE_METHODS.keys()].sort())
   })
 
   it('names the wall on every walled entry', () => {

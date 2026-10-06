@@ -9,8 +9,6 @@ import type { DispatcherClientWriter, SinkWriteSettlement } from './dispatcher-c
 
 export type RequestContext = {
   clientId: number
-  /** Monotonic transport generation; optional for in-process callers. */
-  transportGeneration?: number
   isStale: () => boolean
   signal?: AbortSignal
   sessionIdentity?: RelayClientSessionIdentity

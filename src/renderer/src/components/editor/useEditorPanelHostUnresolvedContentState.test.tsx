@@ -98,7 +98,7 @@ describe('useEditorPanelContentState — host cannot resolve a mirrored file (#2
     latestFileContents = {}
     // Why: opening any tab arms useLocalLogTail's change subscription on window.api.
     vi.stubGlobal('api', {
-      fs: { authorizeExternalPath: vi.fn(), onLocalLogTailChanged: vi.fn(() => () => {}) }
+      fs: { onLocalLogTailChanged: vi.fn(() => () => {}) }
     })
     mocks.readRuntimeFileContent.mockReset()
     mocks.getState.mockReset()

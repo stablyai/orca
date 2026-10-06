@@ -88,7 +88,9 @@ function journalList(
   return (
     <NativeChatMessageList
       session={{
-        messages: projectStructuredAgentSessionMessages(items, [], submissions),
+        messages: projectStructuredAgentSessionMessages(items, [], submissions, {
+          rejectedInPlace: true
+        }),
         status: 'ready',
         sessionId: 'session-1',
         agent: 'codex',
@@ -104,7 +106,6 @@ function journalList(
       isWorking={isWorking}
       workingStartedAt={workingStartedAt}
       expandSignal={false}
-      fontScale={1}
     />
   )
 }

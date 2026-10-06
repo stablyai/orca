@@ -25,6 +25,7 @@ import {
 } from './structured-agent-session-status-feed'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'status-session'
 const TURN_IDENTITY = {
@@ -61,7 +62,7 @@ async function openJournal(sessionId = SESSION, now?: () => number) {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     now,
     stateDirectory: join(root, sessionId)
@@ -666,7 +667,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: 'idle' } })
   })
 
-  it('invalidates cached status on unreadability and keeps record metadata live', async () => {
+  it('keeps record metadata live', async () => {
     const journal = await openJournal()
     await journal.appendItem(
       USER_IDENTITY,
@@ -681,12 +682,6 @@ describe('StructuredAgentSessionStatusFeed', () => {
       type: 'status',
       session: { status: 'idle', model: 'second-model' }
     })
-    const readOnly = vi.spyOn(journal, 'isReadOnly', 'get').mockReturnValue(true)
-    feed.publish(SESSION)
-    expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: null } })
-    readOnly.mockRestore()
-    feed.publish(SESSION)
-    expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: 'idle' } })
   })
 })
 
@@ -734,7 +729,6 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
     expect(published.at(-1)).toMatchObject({ sessionId: SESSION, status: 'idle' })
     expect(published.at(-1)?.hostExecutionOwned).toBeUndefined()
     expect(published.at(-1)?.hostExecutionPhase).toBeUndefined()
-    expect(published.at(-1)?.hostExecutionChild).toBeUndefined()
 
     // Exactly what `close` does after eviction: the cache keeps the projection, the sink does not.
     sessions.delete(SESSION)

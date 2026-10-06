@@ -12,6 +12,7 @@ import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-sess
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
 import { JournalRowWriter } from './journal-row-writer'
+import { JournalWriteQueue } from './journal-write-queue'
 import {
   openTestJournalHostDatabase,
   readTestJournalRows,
@@ -60,10 +61,11 @@ describe('journal row writer', () => {
   function writerHarness() {
     const committedRows: JournalRow[] = []
     let sequence = 1
+    const queue = new JournalWriteQueue(SESSION_ID)
     const writer = new JournalRowWriter({
       sessionId: SESSION_ID,
       now: () => 1,
-      serialize: (run) => run(),
+      serialize: (run) => queue.serialize(run),
       database: () => database,
       readOnly: () => readOnly,
       highestFence: () => 0,
@@ -90,5 +92,18 @@ describe('journal row writer', () => {
     await expect(writer.enqueue((seq, ts) => row(seq + 1, ts))).resolves.toMatchObject({
       kind: 'item'
     })
+  })
+
+  it('writes several rows as one: a failure on the last leaves none', async () => {
+    const { writer, committedRows } = writerHarness()
+    // Sequence 2 is taken, so the second of the two rows violates the primary key.
+    insertTestJournalRow(database.db, SESSION_ID, row(2, 1))
+
+    await expect(writer.enqueueRows(() => [row, row])).rejects.toThrow()
+
+    expect(committedRows).toHaveLength(0)
+    expect(readTestJournalRows(database.db, SESSION_ID, EPOCH).map((stored) => stored.seq)).toEqual(
+      [2]
+    )
   })
 })

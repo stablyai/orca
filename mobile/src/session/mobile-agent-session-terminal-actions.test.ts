@@ -44,10 +44,20 @@ describe('mobile agent-session terminal actions', () => {
     expect(onOpen).not.toHaveBeenCalled()
   })
 
-  it('offers nothing for an agent with no TUI resume', () => {
+  it('offers the hand-off for Cursor, which supports TUI resume', () => {
     expect(
       getMobileAgentSessionTerminalActions({
         tab: { sessionId: 'chat-1', agent: 'cursor' },
+        providerSession: PROVIDER_SESSION,
+        onOpen: vi.fn()
+      })
+    ).toHaveLength(1)
+  })
+
+  it('offers nothing for an unknown agent with no TUI resume', () => {
+    expect(
+      getMobileAgentSessionTerminalActions({
+        tab: { sessionId: 'chat-1', agent: 'unknown-agent' },
         providerSession: PROVIDER_SESSION,
         onOpen: vi.fn()
       })

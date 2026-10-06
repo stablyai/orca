@@ -93,6 +93,8 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  // Desktop's "Also show pinned worktrees in their original lists"; off by default.
+  const [showPinnedInGroups, setShowPinnedInGroups] = useState(false)
   // Why: ref so the ui.get merge and ui.set writes read the latest values without re-creating callbacks on every state change.
   const viewStateRef = useRef<MobileViewState>({
     groupMode: 'repo',
@@ -159,6 +161,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setSearch,
     setShowAddProject,
     setShowFilterModal,
+    setShowPinnedInGroups,
     setShowGroupPicker,
     setShowPlusActionSheet,
     setShowSearch,
@@ -170,6 +173,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setWorktreesLoaded,
     showAddProject,
     showFilterModal,
+    showPinnedInGroups,
     showGroupPicker,
     showPlusActionSheet,
     showSearch,

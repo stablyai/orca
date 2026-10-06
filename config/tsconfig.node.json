@@ -2,10 +2,13 @@
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "include": [
     "../electron.vite.config.*",
+    "./vitest.config.ts",
     "./build-plugins/**/*",
     "./scripts/vitest-host-ports-setup.ts",
     "./scripts/vitest-caller-identity-env-setup.ts",
     "./scripts/vitest-real-agent-home-write-guard.ts",
+    "./scripts/vitest-bun-node-builtins.ts",
+    "./scripts/vitest-node-runtime-pool.ts",
     "../src/main/**/*",
     "../src/renderer/src/lib/skill-freshness-display-status.ts",
     "../src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts",

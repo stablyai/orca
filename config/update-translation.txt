@@ -65,3 +65,59 @@ Method (reproducible):
   ko 색인화. R3 sign-off clean on all locales (R2 fixes byte-verified,
   full placeholder parity 0 mismatches, 0 missing keys).
 
+## Scan 2026-10-05
+
+- HEAD scanned: d3943c6d81 (origin/main; branch rebased onto it). Base: a15a5c8c1a6.
+  Window: a15a5c8c1a6 .. HEAD (~1008 commits). Note: origin/main was still advancing
+  during the scan; the one en key added in the last 13 commits (browser markup
+  `...tool.eraser`) already shipped translated upstream in all five locales.
+- Gates before fix: catalog verify PASS (all five locales missing the SAME 87 keys),
+  coverage --check PASS (13 allowlisted), extraction PASS, runtime-catalog PASS.
+  So no unkeyed strings and en.json in sync; the gap was target-locale coverage only.
+- Delta since base: 87 new en keys (csv editor x34, provider credit balance x11,
+  activity x31, jira assignee x3, workspace-delete change checks x5, nested-worktree
+  removal x10) plus 18 changed en values (Gemini CLI legacy, structured-chat copy/scope,
+  markdown notes, unverifiable -> "no recent update", onboarding casing, arrow spacing).
+  es had fully caught up to fr/ja/ko/zh, so all five shared the same 87-key gap.
+- **11 of the 87 are intentionally untranslated**: the provider credit-balance keys
+  (`auto.components.status.bar.{StatusBar.*,tooltip.*,provider.extra.usage.section.*}`)
+  are pinned as sparse-fallback by `provider-credit-balance-locales.test.ts` (#25408),
+  which asserts every target catalog OMITS them and falls back to English at runtime.
+  Translated the remaining 76 new keys (x5) and left the 11 balance keys absent.
+- Changed-value review: 15 of the 18 already matched the new English upstream; only 3
+  were stale (AccountsPane Gemini legacy description + label, onboarding arrow spacing).
+- Applied 76 new keys x5 via apply-translation-delta.mjs (pipeline repaired ja
+  open->オープン, zh 智能体->代理 xN, ko refreshFailed spacing) + 3 stale updates x5 via
+  the same repairTranslatedValue gate. Strictly additive: +380 new keys, 0 removed.
+- Gates after fix: catalog verify PASS (all five 15268/15279; the 11 omissions are the
+  pinned balance keys), coverage --check PASS (13 allowlisted), extraction PASS,
+  runtime-catalog PASS, locale vitest suites PASS (34 files, 288 tests).
+- Reviews (3 of max 4 rounds; round 0 = 5 parallel translators, then 5 reviewers/round):
+  R1 applied 11 fixes (es structuredCopy "Off"->"Si está desactivado", structuredScope
+  semicolon lowercase, 5f02e6fb21 review->"de revisión"; fr nestedRemoval pronoun
+  agreement; ja f80603d293 compound-word space + csv.indexProgress->インデックス作成中;
+  ko f80603d293 agent->에이전트 + structuredScope fallback + structuredCopy 지원->기반;
+  zh f80603d293 切换->交接/注释->笔记 + threadListOptionsActive->个生效).
+  R1 rejected 2 as repo-convention conflicts: ja TaskPage half-width 例: (28 existing
+  occurrences) and ko showMoreAgents (pinned Latin "agents" by
+  config/scripts/locale-ko-key-overrides.json, so no locale change).
+  R2 applied 3 (es structuredScope unified "chat de terminal"; zh structuredCopy
+  ->基于终端的 + activity hideAutomation/CLI-created re-add 工作区 to match ja/ko);
+  ko re-flagged the pinned override, rejected again.
+  R3 sign-off clean on all five locales (0 errors, 0 warns; placeholders byte-identical,
+  0 stale changed keys, 0 generic-term regressions).
+
+## Terminology change 2026-10-06 — zh Agent is 智能体, not 代理
+
+- Standardized Simplified Chinese on 智能体 for the Agent concept. Converted 131 zh values
+  (incl. 子代理 -> 子智能体) and updated the pipeline so it is not reverted:
+  `locale-phrase-fixes.mjs` now maps 客服人员/代理商/座席 -> 智能体 and replaces 代理 -> 智能体
+  when the English names an agent (guarded to exclude "user agent"); the old
+  智能体 -> 代理 rule was removed.
+- 代理 stays for proxy senses: HTTP/network proxy, SSH Proxy Command, reverse proxy, and
+  browser "user agent" (26 zh values left untouched). Overrides updated to match
+  (locale-value-overrides, locale-key-overrides, locale-macos-tcc-key-overrides,
+  locale-zh-value-overrides, locale-search-keyword-overrides agent/agents -> 智能体, proxy -> 代理).
+- Gates: catalog verify, coverage --check, extraction, runtime-catalog pass; 296 locale
+  tests pass (policy, zh-round5, generic-terms, etc.).
+

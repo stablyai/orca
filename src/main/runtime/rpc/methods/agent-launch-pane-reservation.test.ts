@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 /**
  * The pane a caller reserves for the terminal `agent.launch` creates.
  *

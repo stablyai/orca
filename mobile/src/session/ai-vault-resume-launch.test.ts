@@ -5,6 +5,7 @@ import {
   buildMobileAiVaultResumeLaunch,
   buildMobileAiVaultResumeCommand,
   createMobileAiVaultResumeMutationRegistry,
+  readMobileAiVaultResumeHost,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
   resumeAiVaultSessionInTerminal
@@ -242,6 +243,75 @@ describe('buildMobileAiVaultResumeLaunch', () => {
 })
 
 describe('resumeAiVaultSessionInTerminal', () => {
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'lets the %s execution host select the Qoder resume command at creation',
+    async (hostPlatform) => {
+      const launch = buildMobileAiVaultResumeLaunch({
+        session: session({ agent: 'qoder', sessionId: 'same-qoder-session' }),
+        hostPlatform
+      })
+      const sendRequest = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Terminal' } }
+        })
+        .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+      await resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', {
+        ...launch,
+        clientMutationId: 'qoder-resume',
+        hostCapabilities: ['session.tabs.qoderOwnedCreate.v1']
+      })
+      expect(sendRequest).toHaveBeenCalledTimes(1)
+      expect(sendRequest).toHaveBeenCalledWith(
+        'session.tabs.createTerminal',
+        expect.objectContaining({
+          command: launch.command,
+          launchAgent: 'qoder',
+          launchConfig: launch.launchConfig
+        }),
+        { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+      )
+      expect(launch.command).toContain('same-qoder-session')
+    }
+  )
+
+  it.each(
+    [undefined, [], ['aiVault.v1']].flatMap((hostCapabilities) =>
+      (['darwin', 'linux', 'win32'] as const).map((hostPlatform) => ({
+        hostCapabilities,
+        hostPlatform
+      }))
+    )
+  )(
+    'keeps the acknowledged-create fallback on an older $hostPlatform host',
+    async ({ hostCapabilities, hostPlatform }) => {
+      const launch = buildMobileAiVaultResumeLaunch({
+        session: session({ agent: 'qoder', sessionId: 'legacy-session' }),
+        hostPlatform
+      })
+      const sendRequest = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Terminal' } }
+        })
+        .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+      await resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', {
+        ...launch,
+        hostCapabilities,
+        clientMutationId: 'same-legacy-resume'
+      })
+      expect(sendRequest).toHaveBeenCalledTimes(2)
+      expect(sendRequest.mock.calls[0]?.[1]).not.toHaveProperty('command')
+      expect(sendRequest.mock.calls[1]).toEqual([
+        'terminal.send',
+        { terminal: 'pty-1', text: launch.command, enter: true },
+        { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+      ])
+    }
+  )
+
   it('creates a fresh terminal and sends the command with Enter', async () => {
     const sendRequest = vi
       .fn()
@@ -400,4 +470,20 @@ describe('resume platform helpers', () => {
     expect(resolveMobileAiVaultResumePlatform('local', 'win32', 'C:\\repo', 'linux')).toBe('linux')
     expect(resolveMobileAiVaultResumePlatform('runtime', 'linux')).toBeNull()
   })
+})
+
+it.each([null, {}, { capabilities: 'session.tabs.qoderOwnedCreate.v1' }, { capabilities: [1] }])(
+  'does not infer safe Qoder creation from unreadable host capabilities',
+  (status) => {
+    expect(readMobileAiVaultResumeHost(status).capabilities).toBeUndefined()
+  }
+)
+
+it('reads the execution platform and advertised safe-create capability together', () => {
+  expect(
+    readMobileAiVaultResumeHost({
+      hostPlatform: 'win32',
+      capabilities: ['session.tabs.qoderOwnedCreate.v1']
+    })
+  ).toEqual({ platform: 'win32', capabilities: ['session.tabs.qoderOwnedCreate.v1'] })
 })

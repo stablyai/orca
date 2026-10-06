@@ -7,6 +7,7 @@ import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
 } from '../../../shared/agent-session-journal-types'
 import type {
+  AgentSessionBackgroundTaskState,
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
@@ -25,6 +26,10 @@ import { StructuredAgentSessionStatusFeed } from './structured-agent-session-sta
 import { MAX_RETAINED_SESSION_ACTIVITIES } from './structured-agent-session-activity-retention'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'subscriber-session'
 
@@ -48,7 +53,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'activity-churn-journal')
     })
@@ -68,7 +73,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'checkpoint-journal')
     })
@@ -107,13 +112,17 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'clock-journal')
     })
     let now = 1_000
+    let roster: AgentSessionBackgroundTaskState | null = null
     const events: AgentSessionSubscribeEvent[] = []
-    const subscribers = new AgentSessionSubscribers({ now: () => (now += 1) })
+    const subscribers = new AgentSessionSubscribers({
+      now: () => (now += 1),
+      readBackgroundTasks: () => roster
+    })
     const emit = (event: AgentSessionSubscribeEvent): void => {
       events.push(event)
     }
@@ -125,8 +134,12 @@ describe('AgentSessionSubscribers', () => {
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     subscribers.publish(SESSION, journal)
-    subscribers.backgroundTasks(SESSION, null, 1)
-    subscribers.reset(SESSION, journal, 'epoch_changed', 1)
+    roster = {
+      state: 'monitoring',
+      tasks: [{ id: 'task-1', kind: 'command', description: 'run the build' }]
+    }
+    subscribers.republishBackgroundTasks(SESSION, 1)
+    subscribers.snapshot(SESSION, journal, 1)
 
     expect(events.map((event) => ('hostNow' in event ? event.hostNow : null))).toEqual([
       1_001, 1_002,
@@ -140,8 +153,8 @@ describe('AgentSessionSubscribers', () => {
       'batch',
       'batch',
       'batch',
-      'reset',
-      'reset'
+      'snapshot',
+      'snapshot'
     ])
   })
 
@@ -152,7 +165,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'catalog-journal')
     })
@@ -195,7 +208,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'provider-session-journal')
     })
@@ -230,7 +243,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'hook-journal')
     })
@@ -243,10 +256,9 @@ describe('AgentSessionSubscribers', () => {
     })
 
     subscribers.publish(SESSION, journal)
-    subscribers.reset(SESSION, journal, 'epoch_changed', 1)
     subscribers.snapshot(SESSION, journal, 1)
 
-    expect(published).toEqual([SESSION, SESSION, SESSION])
+    expect(published).toEqual([SESSION, SESSION])
   })
 
   it('settles a session nobody is reading, from running to idle', async () => {
@@ -259,7 +271,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'unread-journal')
     })
@@ -325,27 +337,28 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'claude',
-        providerHandle: { kind: 'claude', sessionId: 'provider-1', leafUuid: null }
+        providerHandle: claudeProviderHandle('provider-1', null)
       },
       stateDirectory: join(root, 'background-journal')
     })
-    const subscribers = new AgentSessionSubscribers()
+    let roster: AgentSessionBackgroundTaskState | null = null
+    const subscribers = new AgentSessionSubscribers({ readBackgroundTasks: () => roster })
     const events: AgentSessionSubscribeEvent[] = []
     subscribers.open({
       id: 'subscriber-1',
       sessionId: SESSION,
       journal,
       fence: 1,
-      backgroundTasks: null,
       emit: (event) => events.push(event)
     })
     const cursor = journal.cursor()
 
-    const backgroundTasks = {
-      state: 'monitoring' as const,
-      tasks: [{ id: 'task-1', kind: 'command' as const, description: 'run the build' }]
+    const backgroundTasks: AgentSessionBackgroundTaskState = {
+      state: 'monitoring',
+      tasks: [{ id: 'task-1', kind: 'command', description: 'run the build' }]
     }
-    subscribers.backgroundTasks(SESSION, backgroundTasks, 2)
+    roster = backgroundTasks
+    subscribers.republishBackgroundTasks(SESSION, 2)
 
     expect(journal.cursor()).toEqual(cursor)
     expect(events.at(-1)).toEqual({
@@ -374,7 +387,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: join(root, 'activity-journal')
     })
@@ -426,7 +439,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: journalDir
     })
@@ -477,7 +490,7 @@ describe('AgentSessionSubscribers', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: journalDir
     })

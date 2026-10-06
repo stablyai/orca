@@ -58,7 +58,8 @@ function addLedgerRecognizedHashes(
 
 type CodexManagedHookTrustOwnershipOptions = {
   runtimeHomePath: string
-  sourcePath: string
+  /** hooks.json first, then other spellings Codex may key it by (same hash). */
+  sourcePaths: readonly [string, ...string[]]
   command: string
   managedEventLabels: ReadonlySet<CodexEventLabel>
   timeoutSec: number
@@ -71,17 +72,21 @@ function getCodexManagedHookTrustEntryKeys(
   options: CodexManagedHookTrustOwnershipOptions
 ): string[] {
   const ledgerHome = readCodexTrustGrantLedgerHomeForReconciliation(options.runtimeHomePath)
+  const [sourcePath, ...aliases] = options.sourcePaths
   const expectedSourcePath = options.sourceUsesExplicitCodexHome
-    ? getCodexExplicitHomeHookSourcePath(options.sourcePath)
-    : normalizeCodexHookSourcePath(options.sourcePath)
+    ? getCodexExplicitHomeHookSourcePath(sourcePath)
+    : normalizeCodexHookSourcePath(sourcePath)
+  const aliasSourcePaths = aliases.map(normalizeCodexHookSourcePath)
   const ownedKeys: string[] = []
   for (const [key, state] of existingEntries) {
     const parts = parseTrustKey(key)
-    if (
-      !parts ||
-      !codexHookSourcePathsEqual(parts.sourcePath, expectedSourcePath) ||
-      !options.managedEventLabels.has(parts.eventLabel)
-    ) {
+    if (!parts || !options.managedEventLabels.has(parts.eventLabel)) {
+      continue
+    }
+    const isAlias = aliasSourcePaths.some((alias) =>
+      codexHookSourcePathsEqual(parts.sourcePath, alias)
+    )
+    if (!isAlias && !codexHookSourcePathsEqual(parts.sourcePath, expectedSourcePath)) {
       continue
     }
     const expectedEntry: CodexTrustEntry = {
@@ -97,6 +102,15 @@ function getCodexManagedHookTrustEntryKeys(
       computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
     ])
     addLedgerRecognizedHashes(recognizedHashes, [ledgerHome], key, expectedEntry)
+    if (isAlias) {
+      // Why: the ledger records Codex's grant under the primary spelling's key only.
+      addLedgerRecognizedHashes(
+        recognizedHashes,
+        [ledgerHome],
+        computeTrustKey(expectedEntry),
+        expectedEntry
+      )
+    }
     if (state.trustedHash && recognizedHashes.has(state.trustedHash)) {
       ownedKeys.push(key)
     }

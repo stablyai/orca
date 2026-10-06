@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import { useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -157,8 +158,8 @@ export function NativeChatQuestionCard({
     // Part of the composer: docked in the bottom input region, matching the
     // composer's width and padding, rendered as the "ask" dialog card directly
     // above the text input. Its free-text row is the answer input.
-    <div className="shrink-0 bg-background" aria-busy={isSubmitting}>
-      <div className="mx-auto w-full max-w-4xl px-3 pt-2 pb-4 sm:px-4">
+    <div className="shrink-0 bg-chat-canvas" aria-busy={isSubmitting}>
+      <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-4 sm:px-4">
         {total > 1 ? (
           <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-sleek">
             {prompt.questions.map((qq, i) => (
@@ -242,7 +243,7 @@ export function NativeChatQuestionCard({
                       AskUserQuestion tool result: it reaches the model but never the command
                       parser, so `/compact` and friends are inert, while a skill name can
                       still be acted on. */}
-                  <input
+                  <ImeInput
                     ref={answerInputRef}
                     disabled={isSubmitting}
                     value={otherText[index]}

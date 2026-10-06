@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { ArrowRight, LoaderCircle, Plus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -187,7 +188,7 @@ export function LinearIssueSubIssues({
         </PopoverTrigger>
         <PopoverContent className="w-80 p-3" align="start">
           <div className="space-y-3">
-            <input
+            <ImeInput
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               onKeyDown={(event) => {

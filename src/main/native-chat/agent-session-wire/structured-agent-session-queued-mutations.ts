@@ -117,7 +117,8 @@ export async function carryQueuedMessagesToClearReplacement(
         body: row.body,
         fingerprint: queuedMessageFingerprint(input.replacementSessionId, row.body),
         hostInstance: structuredAgentSessionHostInstance(),
-        carriedFrom: ctx.sessionId
+        carriedFrom: ctx.sessionId,
+        source: row.source
       })
     }
     await withdrawQueuedMessagesForOperation(ctx.journal, {

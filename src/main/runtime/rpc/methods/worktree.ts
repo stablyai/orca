@@ -72,7 +72,8 @@ export const WORKTREE_METHODS = [
         navigation: resolveRuntimeNavigationTarget({
           navigation: params.navigation,
           notifyClients: params.notifyClients,
-          clientKind
+          clientKind,
+          defaultTarget: 'host'
         })
       })
   }),

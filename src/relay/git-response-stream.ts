@@ -44,13 +44,8 @@ function encodeChunks(payload: Buffer, chunkBytes = GIT_RESPONSE_CHUNK_SIZE): st
 export class GitResponseStreamRegistry {
   private streams = new Map<number, GitResponseStreamEntry>()
   private nextId = 1
-  private disposed = false
-  private readonly pendingPumps = new Set<Promise<void>>()
 
   private register(ownerClientId: number): number {
-    if (this.disposed) {
-      throw new Error('relay_response_stream_shutdown_fenced')
-    }
     const streamId = this.nextId++
     this.streams.set(streamId, {
       ownerClientId,
@@ -146,17 +141,8 @@ export class GitResponseStreamRegistry {
     const chunks = encodeChunks(payload, Math.min(GIT_RESPONSE_CHUNK_SIZE, sinkChunkBytes))
     // Why: kick the pump off the response task so the client sees the sentinel
     // (and can subscribe/reassemble) before the first chunk frame arrives.
-    // Why: no Promise.withResolvers — the relay bundle still targets Node 18 hosts.
-    let finish!: () => void
-    const completion = new Promise<void>((resolve) => {
-      finish = () => {
-        this.pendingPumps.delete(completion)
-        resolve()
-      }
-    })
-    this.pendingPumps.add(completion)
     setImmediate(() => {
-      void this.pump(streamId, chunks, dispatcher, context).then(finish, finish)
+      void this.pump(streamId, chunks, dispatcher, context)
     })
     return {
       __orcaGitResponseStream: { streamId, totalBytes: payload.length, chunkCount: chunks.length }
@@ -212,9 +198,10 @@ export class GitResponseStreamRegistry {
             clientId
           }
         )
+        // Sent chunks are never retried; ACK waits must not retain their encoded copies.
+        chunks[seq] = ''
       }
-      // Why: disposal may abort while the final chunk write is in flight.
-      if (endReason === 'end' && !entry.aborted && !context.isStale()) {
+      if (endReason === 'end') {
         await dispatcher.notifyBulk('git.responseEnd', { streamId }, { clientId })
       }
     } catch (err) {
@@ -238,19 +225,12 @@ export class GitResponseStreamRegistry {
     }
   }
 
-  /** Permanently fences new streams and aborts every pump; use disposeAllAndWait to await them. */
   disposeAll(): void {
-    this.disposed = true
     for (const entry of this.streams.values()) {
       entry.aborted = true
       this.wake(entry)
     }
     this.streams.clear()
-  }
-
-  async disposeAllAndWait(): Promise<void> {
-    this.disposeAll()
-    await Promise.all(this.pendingPumps)
   }
 }
 

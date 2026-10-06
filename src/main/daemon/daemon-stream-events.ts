@@ -9,7 +9,6 @@ export type DataEvent = {
   sessionId: string
   payload: {
     data: string
-    incarnationId?: PtyIncarnationId
     seq?: number
     rawLength?: number
     transformed?: boolean

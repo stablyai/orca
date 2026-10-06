@@ -6,7 +6,7 @@ import {
 } from './git/local-repo-ref-maintenance'
 import { hasWorktreeRemovalsInFlight } from './ipc/worktrees/worktree-ipc-context'
 import { hasPendingWorktreeCreatePreparations } from './worktree-create-preparation'
-import { hasPendingWorktreeRemovals } from './worktree-background-removal'
+import { hasPendingWorktreeRemovals } from './worktree-removal-table'
 
 /**
  * The app-wide "not now" answer for idle repo maintenance.

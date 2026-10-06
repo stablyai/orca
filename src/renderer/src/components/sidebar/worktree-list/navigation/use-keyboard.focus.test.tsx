@@ -148,6 +148,7 @@ describe('workspace list focus ownership', () => {
     expect(activate.mock.calls.map(([id]) => id)).toEqual(['b', 'c', 'b'])
     expect(activate).toHaveBeenLastCalledWith('b', {
       navigationIntent: 'user-open',
+      revealInSidebar: false,
       executionHostId: 'ssh:fixture'
     })
     expect(terminal.focus).not.toHaveBeenCalled()

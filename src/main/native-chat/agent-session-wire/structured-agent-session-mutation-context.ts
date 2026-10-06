@@ -23,7 +23,6 @@ export type StructuredAgentSessionMutationContext = {
   deps: StructuredAgentSessionHostDeps
   sessions: Map<string, StructuredAgentSessionHostSession>
   publish: (sessionId: string, journal: StructuredAgentSessionHostSession['journal']) => void
-  flushStreamedEvents: (sessionId: string) => Promise<void>
   /** The host's accessor, for a caller outside the session's serialize. */
   conversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession>
   /** The session's child records, as the strip reads them; what command admission decides on. */
@@ -33,9 +32,9 @@ export type StructuredAgentSessionMutationContext = {
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
   /** Gives the session a provider child; inside the caller's serialize. */
   ensureAgent: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
-  /** Finishes a stop an earlier attempt left owed, for an operation that starts no child; inside
-   *  the caller's serialize. */
-  finishOwedStop: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
+  /** Joins a close a stop began on the session's child, for an operation that starts no child;
+   *  inside the caller's serialize. */
+  joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
   /** A message was accepted: the session's delivery loop hands it over. */
   wakeDelivery: (sessionId: string) => void
   /** Stops the session's provider child, keeping its conversation; inside the caller's serialize.
@@ -60,6 +59,7 @@ export function mutateStructuredAgentSession<TValue>(
     admitAndRunAgentSessionMutation({
       store: context.deps.store,
       adapter: context.deps.adapter,
+      agents: context.deps.agents,
       logger: context.deps.logger,
       callerKey: caller.callerKey,
       envelope,
@@ -67,7 +67,6 @@ export function mutateStructuredAgentSession<TValue>(
       journal: () => context.sessions.get(envelope.sessionId)?.journal,
       prepareSession,
       publish: (journal) => context.publish(envelope.sessionId, journal),
-      flushStreamedEvents: context.flushStreamedEvents,
       providerChildPhase: () => context.sessions.get(envelope.sessionId)?.child?.phase,
       now: () => context.now()
     })

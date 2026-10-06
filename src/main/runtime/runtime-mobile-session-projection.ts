@@ -4,25 +4,28 @@ import {
   resolveCompatibleAgentTypeForOwner
 } from '../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../shared/agent-status-types'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
-import {
-  indexAgentStatusRowsByPaneKey,
-  indexPaneKeysByProviderSessionId
-} from '../agent-hooks/agent-status-pane-index'
+import { indexPaneKeysByProviderSessionId } from '../agent-hooks/agent-status-pane-index'
 import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
 import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
+import {
+  createProviderSessionRowsReader,
+  createStatusRowsReader
+} from './runtime-mobile-session-projection-status-rows'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import {
   getLatestAgentCandidateTitle,
+  getLeafDisplayRecord,
+  getPtyDisplayRecord,
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
 
@@ -34,59 +37,8 @@ export function projectRuntimeMobileSessionTabs(
   const liveBrowserTabsByPageId = host.getLiveBrowserTabs(snapshot.worktree)
   // Production reads hook rows by pane; the snapshot fallback remains for tests
   // and embedders that have not adopted the narrow getter.
-  let hookRowsByPaneKey: Map<string, AgentStatusIpcPayload[]> | null = null
-  const hookRowsForPane = new Map<string, AgentStatusIpcPayload[]>()
-  const getHookRowsForPane = (paneKey: string): AgentStatusIpcPayload[] => {
-    const cached = hookRowsForPane.get(paneKey)
-    if (cached) {
-      return cached
-    }
-    const direct = host.getProviderSessionRows(paneKey)
-    if (direct) {
-      hookRowsForPane.set(paneKey, direct)
-      return direct
-    }
-    hookRowsByPaneKey ??= indexAgentStatusRowsByPaneKey(host.getProviderSessionSnapshot())
-    const rows = hookRowsByPaneKey.get(paneKey) ?? []
-    hookRowsForPane.set(paneKey, rows)
-    return rows
-  }
-  let statusRowsByPaneKey: Map<string, AgentStatusIpcPayload[]> | null = null
-  let statusRowsByTerminalHandle: Map<string, AgentStatusIpcPayload[]> | null = null
-  const getStatusRows = (
-    paneKey: string,
-    terminalHandle: string | null
-  ): AgentStatusIpcPayload[] => {
-    if (!statusRowsByPaneKey || !statusRowsByTerminalHandle) {
-      statusRowsByPaneKey = new Map()
-      statusRowsByTerminalHandle = new Map()
-      for (const row of host.getStatusSnapshot()) {
-        const paneRows = statusRowsByPaneKey.get(row.paneKey)
-        if (paneRows) {
-          paneRows.push(row)
-        } else {
-          statusRowsByPaneKey.set(row.paneKey, [row])
-        }
-        if (row.terminalHandle) {
-          const handleRows = statusRowsByTerminalHandle.get(row.terminalHandle)
-          if (handleRows) {
-            handleRows.push(row)
-          } else {
-            statusRowsByTerminalHandle.set(row.terminalHandle, [row])
-          }
-        }
-      }
-    }
-    const paneRows = statusRowsByPaneKey.get(paneKey) ?? []
-    if (!terminalHandle) {
-      return paneRows
-    }
-    const handleRows = statusRowsByTerminalHandle.get(terminalHandle) ?? []
-    if (paneRows.length === 0) {
-      return handleRows
-    }
-    return [...paneRows, ...handleRows.filter((row) => !paneRows.includes(row))]
-  }
+  const getHookRowsForPane = createProviderSessionRowsReader(host)
+  const getStatusRows = createStatusRowsReader(host)
   // Why: a live PTY backs one surface; claim each once so two leaves resolving to it can't emit duplicate React keys and crash the client.
   const claimedLivePtyIds = new Set<string>()
   // Why: a chat tab's id (`agent-session:<sessionId>`) is not a pane key, so a tap carrying only a
@@ -162,16 +114,20 @@ export function projectRuntimeMobileSessionTabs(
     // null, because persisted ids can collide with an unrelated pane after restart — reading
     // that pane's tracker would publish its title here, ahead of every other source.
     const trackerOnlyTitle = host.getTrackedTitle(liveLeafPtyId ?? pty?.ptyId ?? null)
-    const leafTitle = leaf
+    const displayLeaf = leaf
+      ? getLeafDisplayRecord(leaf, host.getTitleDisplayClear(leaf.ptyId))
+      : null
+    const displayPty = pty ? getPtyDisplayRecord(pty, host.getTitleDisplayClear(pty.ptyId)) : null
+    const leafTitle = displayLeaf
       ? getLatestAgentCandidateTitle(
-          { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-          { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
+          { title: displayLeaf.paneTitle, updatedAt: displayLeaf.paneTitleUpdatedAt },
+          { title: displayLeaf.lastOscTitle, updatedAt: displayLeaf.lastOscTitleAt }
         )
       : null
-    const ptyTitle = pty
+    const ptyTitle = displayPty
       ? getLatestAgentCandidateTitle(
-          { title: pty.title, updatedAt: pty.titleUpdatedAt },
-          { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
+          { title: displayPty.title, updatedAt: displayPty.titleUpdatedAt },
+          { title: displayPty.lastOscTitle, updatedAt: displayPty.lastOscTitleAt }
         )
       : null
     // Renderer omission is authoritative: PTY launch provenance outlives agent exit.
@@ -214,7 +170,10 @@ export function projectRuntimeMobileSessionTabs(
         (hookAgentStatus.providerSessionReceivedAt ?? -1) >= tab.agentStatus.updatedAt)
         ? hookAgentStatus.providerSession
         : tab.agentStatus?.providerSession
-    const statusPty = liveLeafPty ?? mobileStatusPty
+    const nativeStatusPty = liveLeafPty ?? mobileStatusPty
+    const statusPty = nativeStatusPty
+      ? getPtyDisplayRecord(nativeStatusPty, host.getTitleDisplayClear(nativeStatusPty.ptyId))
+      : null
     const normalizedTabAgentStatus = renewRuntimeMobileAgentStatusFromPtyTitle(
       tab.agentStatus
         ? normalizeCompatibleAgentStatusEntryForOwner(
@@ -263,14 +222,17 @@ export function projectRuntimeMobileSessionTabs(
           }
         : null
     // Why: web/mobile clients hold handles across renderer graph syncs; leaf handles are epoch-bound but PTY handles stay streamable.
-    const terminalPty = liveLeafPtyId
-      ? host.recordPty(liveLeafPtyId, snapshot.worktree, {
-          tabId: tab.parentTabId,
-          paneKey,
-          connected: true
-        })
+    const terminalHandle = liveLeafPtyId
+      ? host.issuePtyHandle(
+          host.recordPty(liveLeafPtyId, snapshot.worktree, {
+            tabId: tab.parentTabId,
+            paneKey,
+            connected: true
+          })
+        )
       : livePty
-    const terminalHandle = terminalPty ? host.issuePtyHandle(terminalPty) : null
+        ? host.issuePtyHandle(livePty)
+        : null
     const projectedAgentStatus =
       agentStatus ??
       host.buildPtyStatus(
@@ -303,8 +265,6 @@ export function projectRuntimeMobileSessionTabs(
       leafId: tab.leafId,
       title,
       ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
-      // Bind identity to the handle's live owner, never a stale persisted surface.
-      ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),
       ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...clientAgentStatus,

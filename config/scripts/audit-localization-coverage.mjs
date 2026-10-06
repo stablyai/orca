@@ -5,13 +5,12 @@ import process from 'node:process'
 
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
+import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
-// Why: test-only modules live beside their spec as `*-test-harness.ts` / `*-test-rig.ts` / `*-fixtures.ts` here, not under `__tests__/`.
-const TEST_SUPPORT_FILE_PATTERN =
-  /[.-](?:test-harness|test-rig|test-fixtures?|test-state|test-support|fixtures?)\.[cm]?[jt]sx?$/
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
 const LOCALIZATION_CALL_NAMES = new Set(['t', 'translate'])
+const CLASS_PROPERTY_NAMES = new Set(['className', 'classNames'])
 const USER_VISIBLE_JSX_ATTRIBUTES = new Set([
   'ariaLabel',
   'aria-label',
@@ -78,13 +77,7 @@ function normalizePath(root, filePath) {
 
 export function isSkippedFile(root, filePath) {
   const relative = normalizePath(root, filePath)
-  if (
-    relative.endsWith('.d.ts') ||
-    relative.includes('.test.') ||
-    relative.includes('.spec.') ||
-    relative.includes('/__tests__/') ||
-    TEST_SUPPORT_FILE_PATTERN.test(relative)
-  ) {
+  if (relative.endsWith('.d.ts') || isTestOnlySourcePath(relative)) {
     return true
   }
   return relative.split('/').some((part) => SKIP_PATH_PARTS.has(part))
@@ -322,7 +315,7 @@ function isUserVisibleCallArgument(node) {
 }
 
 function classifyStringNode(node) {
-  if (hasAncestorObjectPropertyName(node, new Set(['className', 'classNames']))) {
+  if (hasAncestorObjectPropertyName(node, CLASS_PROPERTY_NAMES)) {
     return undefined
   }
 
@@ -432,10 +425,16 @@ export function collectLocalizationCandidates(filePath, sourceText, root = proce
       return
     }
 
-    const kind = classifyStringNode(node)
-    if (kind) {
-      for (const part of stringParts(node)) {
-        pushReport(node, kind, part.text, part.dynamic)
+    if (
+      ts.isStringLiteralLike(node) ||
+      ts.isNoSubstitutionTemplateLiteral(node) ||
+      ts.isTemplateExpression(node)
+    ) {
+      const kind = classifyStringNode(node)
+      if (kind) {
+        for (const part of stringParts(node)) {
+          pushReport(node, kind, part.text, part.dynamic)
+        }
       }
     }
 

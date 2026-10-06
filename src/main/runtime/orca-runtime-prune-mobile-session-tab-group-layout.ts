@@ -104,6 +104,7 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       getRetainedStatus: (paneKey, pty, tab, getRows) =>
         this.getFreshRetainedAgentStatusForMobileTab(paneKey, pty, tab, getRows),
       getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId),
+      getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
       issuePtyHandle: (pty) => this.issuePtyHandle(pty),
       recordPty: (ptyId, worktreeId, state) => this.recordPtyWorktree(ptyId, worktreeId, state),
       buildPtyStatus: (pty, tab, terminalHandle, retained, getRows) =>
@@ -122,12 +123,23 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     retained: RuntimeAgentRowSnapshot | null,
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
-    return buildRuntimeMobileAgentStatus(pty, tab, terminalHandle, retained, getHookRowsForPane, {
-      getPaneKey: (candidate) => this.getMobileTerminalPaneKey(candidate),
-      getLeaf: (candidate) =>
-        this.leaves.get(this.getLeafKey(candidate.parentTabId, candidate.leafId)) ?? null,
-      getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId)
-    })
+    // Why display records: a phone status is presentation, so it shows the stale-working clear.
+    const displayPty = pty ? this.getPtyDisplayRecord(pty) : null
+    return buildRuntimeMobileAgentStatus(
+      displayPty,
+      tab,
+      terminalHandle,
+      retained,
+      getHookRowsForPane,
+      {
+        getPaneKey: (candidate) => this.getMobileTerminalPaneKey(candidate),
+        getLeaf: (candidate) => {
+          const leaf = this.leaves.get(this.getLeafKey(candidate.parentTabId, candidate.leafId))
+          return leaf ? this.getLeafDisplayRecord(leaf) : null
+        },
+        getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId)
+      }
+    )
   }
 
   protected getFreshRetainedAgentStatusForMobileTab(

@@ -1,9 +1,12 @@
+import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import { getChatAppearanceSearchEntries, getChatWidthOptions } from './chat-appearance-search'
 import type React from 'react'
 import { useLayoutEffect, useState } from 'react'
-import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
+import { AppWindow, MessageSquare, PanelLeft, TerminalSquare } from 'lucide-react'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
+import { AppearanceChatSection } from './AppearanceChatSection'
 import { AppearanceSection } from './AppearanceSection'
 import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'
 import { AppearanceWindowSidebarSection } from './AppearanceWindowSidebarSection'
@@ -54,11 +57,12 @@ type AppearancePaneProps = {
   warpThemes: UseWarpThemeImportReturn
 }
 
-type AppearanceSectionKey = 'interface' | 'terminal' | 'window'
+type AppearanceSectionKey = 'interface' | 'terminal' | 'chat' | 'window'
 
 const ALL_APPEARANCE_SECTIONS = [
   'interface',
   'terminal',
+  'chat',
   'window'
 ] as const satisfies readonly AppearanceSectionKey[]
 
@@ -125,6 +129,21 @@ export function AppearancePane({
     'auto.components.settings.AppearancePane.terminalTitle',
     'Terminal'
   )
+  const chatTitle = translate('settings.appearance.chat.title', 'Chat')
+  const chatMatches = matchesSettingsSearch(searchQuery, [
+    { title: chatTitle },
+    ...getChatAppearanceSearchEntries()
+  ])
+  const chatLabelMatches = matchesSettingsSearch(searchQuery, { title: chatTitle })
+  const chatAppearance = resolveNativeChatAppearanceSettings(settings.nativeChatAppearance)
+  const chatSummary = translate(
+    'settings.appearance.chat.summary',
+    '{{fontSize}}px · {{width}} width',
+    {
+      fontSize: chatAppearance.fontSize,
+      width: getChatWidthOptions().find((option) => option.value === chatAppearance.width)?.label
+    }
+  )
   const windowSidebarTitle = translate(
     'auto.components.settings.AppearancePane.windowSidebarTitle',
     'Window & Sidebar'
@@ -183,7 +202,9 @@ export function AppearancePane({
         ? interfaceMatches
         : key === 'terminal'
           ? terminalMatches
-          : windowMatches
+          : key === 'chat'
+            ? chatMatches
+            : windowMatches
     }
     return openSections.has(key)
   }
@@ -231,12 +252,6 @@ export function AppearancePane({
         </AppearanceSection>
       ) : null}
 
-      {/* Why: Code & Markdown is intentionally omitted. Orca has no Appearance-level
-          code/markdown settings — the Monaco editor reuses the terminal font and
-          there is no markdown-style or line-number setting — so a fourth row would
-          be empty. We surface only the three sections that hold real controls
-          rather than fabricate settings. */}
-
       {terminalMatches ? (
         <AppearanceSection
           id="terminal"
@@ -256,6 +271,24 @@ export function AppearancePane({
             ghostty={ghostty}
             warpThemes={warpThemes}
             forceVisiblePrimary={terminalLabelMatches}
+          />
+        </AppearanceSection>
+      ) : null}
+
+      {chatMatches ? (
+        <AppearanceSection
+          id="chat"
+          icon={<MessageSquare aria-hidden="true" />}
+          title={chatTitle}
+          summary={chatSummary}
+          open={isSectionOpen('chat')}
+          onToggle={() => toggleSection('chat')}
+          toggleDisabled={isSearching}
+        >
+          <AppearanceChatSection
+            settings={settings}
+            updateSettings={updateSettings}
+            forceVisiblePrimary={chatLabelMatches}
           />
         </AppearanceSection>
       ) : null}

@@ -15,18 +15,17 @@ export class StructuredConversationCommandController {
   readonly pending = new Map<string, { key: string; count: number }>()
   constructor(
     private readonly context: () => StructuredAgentSessionMutationContext,
-    private readonly host: Pick<
-      StructuredAgentSessionHost,
-      'flushStreamedEvents' | 'waitForSendSettlement'
-    >
+    private readonly host: Pick<StructuredAgentSessionHost, 'waitForSendSettlement'>
   ) {}
+  /** Whether a clear is in flight is read as the send arrives; it refuses only a first run, so an
+   *  id with a recorded answer by the send's turn gets that answer, behind the clear. */
   send = (
     caller: StructuredAgentSessionCaller,
     params: Parameters<typeof sendStructuredAgentSessionTurn>[2]
   ): ReturnType<typeof sendStructuredAgentSessionTurn> =>
-    this.pending.has(params.envelope.sessionId)
-      ? Promise.resolve({ ok: false, refusal: conversationCommandInFlight() })
-      : sendStructuredAgentSessionTurn(this.context(), caller, params)
+    sendStructuredAgentSessionTurn(this.context(), caller, params, {
+      clearInFlight: this.pending.has(params.envelope.sessionId)
+    })
 
   run = (caller: StructuredAgentSessionCaller, params: ConversationCommandParams) => {
     if (params.command === 'compact') {
@@ -40,16 +39,14 @@ export class StructuredConversationCommandController {
     const entry = pending ?? { key, count: 0 }
     entry.count++
     this.pending.set(params.envelope.sessionId, entry)
-    return runStructuredConversationCommand(this.context(), this.host, caller, params).finally(
-      () => {
-        if (--entry.count === 0 && this.pending.get(params.envelope.sessionId) === entry) {
-          this.pending.delete(params.envelope.sessionId)
-        }
-        // A clear can settle with no journal commit (a refusal), and drafts held behind it
-        // would otherwise wait for an unrelated commit.
-        this.context().wakeQueuedDrain?.(params.envelope.sessionId)
+    return runStructuredConversationCommand(this.context(), caller, params).finally(() => {
+      if (--entry.count === 0 && this.pending.get(params.envelope.sessionId) === entry) {
+        this.pending.delete(params.envelope.sessionId)
       }
-    )
+      // A clear can settle with no journal commit (a refusal), and drafts held behind it
+      // would otherwise wait for an unrelated commit.
+      this.context().wakeQueuedDrain?.(params.envelope.sessionId)
+    })
   }
 
   replacements = () => {

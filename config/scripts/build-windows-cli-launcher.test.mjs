@@ -17,6 +17,7 @@ import {
   windowsCliLauncherFileVersion,
   windowsCliLauncherFingerprint
 } from './build-windows-cli-launcher.mjs'
+import { findDynamicVcRuntimeImports, readPeImportedDllNames } from './windows-pe-imports.mjs'
 
 const itCrossHost = process.platform === 'win32' ? it.skip : it
 const projectRoot = resolve(import.meta.dirname, '../..')
@@ -131,6 +132,9 @@ describe('Windows CLI launcher', () => {
         expect(info.ProductVersion).toBe(version)
         const binary = readFileSync(launcherPath)
         expect(binary.includes(Buffer.from('requestedExecutionLevel level="asInvoker"'))).toBe(true)
+        const imports = readPeImportedDllNames(binary)
+        expect(imports.map((name) => name.toLowerCase())).toContain('kernel32.dll')
+        expect(findDynamicVcRuntimeImports(imports)).toEqual([])
         const icon = readFileSync(join(projectRoot, 'resources', 'build', 'icon.ico'))
         const imageSize = icon.readUInt32LE(14)
         const imageOffset = icon.readUInt32LE(18)

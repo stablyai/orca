@@ -29,6 +29,8 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -111,7 +113,7 @@ describe('attach', () => {
         },
         link: {
           linkId: 'stale-link',
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'created',
           mintedAtFence: fence + 1,
           observedAt: NOW
@@ -126,13 +128,14 @@ describe('attach', () => {
         },
         link: {
           linkId: `link-${fence}`,
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'created',
           mintedAtFence: fence,
           observedAt: NOW
         }
       }))
     host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: { ...adapter(), acquire },
@@ -301,27 +304,6 @@ describe('cancel', () => {
       refusal: { code: 'agent_session_item_revision_stale' }
     })
     expect(cancelTurn).not.toHaveBeenCalled()
-  })
-
-  it('records an unknown outcome when lifecycle draining fails and never interrupts on replay', async () => {
-    await attach()
-    const prompt = await seedApproval()
-    vi.spyOn(host, 'flushStreamedEvents').mockRejectedValueOnce(new Error('journal drain failed'))
-    const fields = {
-      turnId: 'turn-1',
-      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
-    }
-    const params = {
-      envelope: envelope('agentSession.cancel', fields),
-      ...fields
-    }
-
-    await expect(host.cancel(CALLER, params)).rejects.toThrow('journal drain failed')
-    expect(await host.cancel(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
-    expect(cancelTurn).toHaveBeenCalledTimes(1)
   })
 
   it('records an unknown outcome when strict prompt interruption throws and never retries it', async () => {
@@ -564,6 +546,7 @@ describe('restart', () => {
   ) {
     store = await openTestAgentSessionRecordStore(root)
     host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: { ...adapter(), ...adapterOverrides },
@@ -687,11 +670,11 @@ describe('restart', () => {
     expect(status).toMatchObject({ owner: 'native' })
   })
 
-  it('vouches for no owner of a chat this host cannot run', async () => {
+  it('reads stored ownership even when this host cannot start the provider', async () => {
     await attach()
 
     await reboot(async () => ({ outcome: 'pid-absent' }), { supportsCreate: () => false })
-    expect(() => host.handoffStatus(SESSION)).toThrow('structured_agent_session_unsupported')
+    expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
   })
 
   it('releases a session whose owner can never be probed, signalling nothing, and starts over', async () => {

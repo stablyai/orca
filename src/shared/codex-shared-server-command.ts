@@ -120,3 +120,12 @@ export const CODEX_STOP_SHARED_SERVER_ARGS = ['app-server', 'daemon', 'stop'] as
 /** What the fix dialog shows the user it runs. */
 export const CODEX_DISABLE_AUTO_START_COMMAND = `codex ${CODEX_DISABLE_SHARED_SERVER_ARGS.join(' ')}`
 export const CODEX_STOP_SHARED_SERVER_COMMAND = `codex ${CODEX_STOP_SHARED_SERVER_ARGS.join(' ')}`
+
+/** Whether a local pane's Codex is a client of Codex's shared server. */
+export type CodexSharedServerStatus =
+  | { joined: false }
+  | {
+      joined: true
+      /** The pane's shell lacks the codex function a new terminal would give it. */
+      openedBeforeWrapper: boolean
+    }

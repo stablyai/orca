@@ -169,7 +169,9 @@ describe('per-job path classification', () => {
     // Keep the real-binary gate live when a transport or launch dependency changes.
     for (const file of [
       'src/main/codex/codex-app-server-capability-signal.ts',
-      'src/main/codex/codex-process-exit-deadline.ts',
+      'src/main/provider-process/provider-process-exit-deadline.ts',
+      'src/main/provider-process/provider-process-launch.ts',
+      'src/main/provider-process/provider-record-reader.ts',
       'src/main/codex/codex-session-backfill.ts',
       'src/main/codex/codex-session-index-heal-state.ts',
       'src/main/codex-cli/command.ts',
@@ -286,6 +288,23 @@ describe('per-job path classification', () => {
     })
   })
 
+  it('runs shell contracts for the structured-session login-shell test, its harness and its subject', () => {
+    expectClassification(
+      ['src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts'],
+      { shell_contracts: true }
+    )
+    for (const file of [
+      'src/main/runtime/structured-session-login-shell-test-harness.ts',
+      'src/main/runtime/structured-session-child-identity-env.ts'
+    ]) {
+      expectClassification([file], {
+        shell_contracts: true,
+        package: true,
+        package_windows: true
+      })
+    }
+  })
+
   it('runs orcad browser when Chrome launch, session, or tab modules change', () => {
     for (const file of [
       'src/main/orcad/external-chromium-browser-session.ts',
@@ -346,6 +365,7 @@ describe('per-job path classification', () => {
       'src/shared/protocol-version.ts',
       'src/shared/terminal-stream-protocol.ts',
       'src/shared/agent-session-wire.ts',
+      'src/shared/agent-session-provider-handle.ts',
       'src/shared/agent-session-mutation-envelope.ts',
       'src/shared/agent-session-journal-item-key.ts',
       'src/shared/agent-session-journal-types.ts',
@@ -367,7 +387,11 @@ describe('per-job path classification', () => {
       'src/main/runtime/runtime-worktree-agent-rows.ts',
       'src/main/runtime/runtime-worktree-pty-agent-sources.ts',
       'src/shared/runtime-worktree-contracts.ts',
-      'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
+      'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts',
+      'src/shared/structured-agent-session-projection.ts',
+      'src/shared/agent-turn-outcome.ts',
+      'src/main/runtime/orchestration/db.ts',
+      'src/main/runtime/orchestration/orchestration-schema-version-skew.ts'
     ]) {
       expectClassification([file], {
         'cross-version-wire': true,
@@ -398,6 +422,7 @@ describe('per-job path classification', () => {
       'package.json',
       'pnpm-lock.yaml',
       '.github/actions/install-node-dependencies/action.yml',
+      '.github/actions/prepare-native-runtime/action.yml',
       'config/scripts/ensure-native-runtime.mjs',
       'config/scripts/rebuild-native-deps.mjs',
       'config/patches/node-pty@1.1.0.patch'
@@ -565,14 +590,16 @@ describe('PR Checks skip wiring', () => {
     expect(prWorkflow.jobs.code_paths.outputs.mobile_dependencies).toBe(
       '${{ steps.filter.outputs.mobile_dependencies }}'
     )
-    const steps = prWorkflow.jobs.static_analysis.steps
+    const steps = prWorkflow.jobs.preflight.steps
     const install = steps.findIndex(
       (step) => step.uses === './.github/actions/install-mobile-dependencies'
     )
     const gate = steps.findIndex((step) => step.name === 'Enforce changed-code quality')
     expect(install).toBeGreaterThan(-1)
     expect(install).toBeLessThan(gate)
-    expect(steps[install].if).toBe("needs.code_paths.outputs.mobile_dependencies == 'true'")
+    expect(steps[install].if).toBe(
+      "needs.code_paths.outputs.static_analysis == 'true' && needs.code_paths.outputs.mobile_dependencies == 'true'"
+    )
     // The install itself moved into the action the packaging jobs share; assert it there so
     // this job cannot keep the step while the action stops installing anything.
     const action = parse(
@@ -599,21 +626,17 @@ describe('PR Checks skip wiring', () => {
   })
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {
-    for (const jobName of expensiveJobs.filter((jobName) => jobName !== 'test')) {
-      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(
-        ['package', 'package_windows'].includes(jobName)
-          ? ['code_paths', 'static_analysis', 'typecheck']
-          : ['code_paths']
-      )
-      expect(prWorkflow.jobs[jobName].if, jobName).toBe(
+    for (const jobName of expensiveJobs.filter(
+      (jobName) => !['test', 'static_analysis', 'typecheck'].includes(jobName)
+    )) {
+      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths', 'preflight'])
+      expect(prWorkflow.jobs[jobName].if, jobName).toContain(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }
-    expect(prWorkflow.jobs.test.needs).toEqual(['code_paths', 'static_analysis', 'typecheck'])
-    expect(prWorkflow.jobs.test.if).toContain("needs.static_analysis.result == 'success'")
-    expect(prWorkflow.jobs.test.if).toContain("needs.typecheck.result == 'success'")
+    expect(prWorkflow.jobs.test.if).toContain("needs.preflight.result == 'success'")
     expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
-    expect(prWorkflow.jobs.test.with.shards).toBe('${{ needs.typecheck.outputs.shards }}')
+    expect(prWorkflow.jobs.test.with.shards).toBe('${{ needs.preflight.outputs.shards }}')
     expect(prWorkflow.jobs.unit_plan).toBeUndefined()
     expect(prWorkflow.jobs.test_native_cache).toBeUndefined()
   })
@@ -637,7 +660,7 @@ describe('PR Checks skip wiring', () => {
     expect(verifyStep.run).toContain('expected skipped')
     expect(verifyStep.run).toContain('expected success')
     for (const job of prWorkflow.jobs.verify.needs) {
-      if (job === 'code_paths') {
+      if (job === 'code_paths' || job === 'preflight') {
         continue
       }
       const envVar = `${job.replaceAll('-', '_').toUpperCase()}_SHOULD_RUN`

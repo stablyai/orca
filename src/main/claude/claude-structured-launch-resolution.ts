@@ -5,7 +5,11 @@ import type {
   PermissionMode
 } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
+import {
+  agentSessionProviderHandleChainHead,
+  agentSessionProviderHandleRoot
+} from '../../shared/agent-session-provider-handle'
+import { claudeProviderHandleLeafUuid } from '../../shared/agent-session-provider-handle-encoding'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
@@ -30,6 +34,7 @@ import { resolveClaudeCommand } from '../codex-cli/command'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
@@ -246,8 +251,9 @@ export function createClaudeStructuredLaunchResolver(
         `claude structured sessions run on the local host, not ${record.location.executionHostId}`
       )
     }
-    if (record.accountHome.variable !== 'CLAUDE_CONFIG_DIR') {
-      throw new Error(`claude sessions pin CLAUDE_CONFIG_DIR, not ${record.accountHome.variable}`)
+    const pinned = CLAUDE_STRUCTURED_AGENT.accountHomeVariable
+    if (record.accountHome.variable !== pinned) {
+      throw new Error(`claude sessions pin ${pinned}, not ${record.accountHome.variable}`)
     }
     // Every acquisition, not just the first: the account state can change under a live session, and
     // a reacquire after an unexpected exit would otherwise spawn under whatever it has become.
@@ -260,24 +266,25 @@ export function createClaudeStructuredLaunchResolver(
         gate && hasWslBoundClaudeAccount(gate) ? { reason: 'managedAccountUnsupported' } : {}
       )
     }
-    const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+    // A Claude record's chain holds only Claude handles; the attach admission refuses anything else.
+    const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle ?? null
     if (
-      head?.handle.provider === 'claude' &&
-      (identity.providerHandle.kind !== 'claude' ||
-        identity.providerHandle.sessionId !== head.handle.sessionId)
+      head &&
+      (!identity.providerHandle ||
+        agentSessionProviderHandleRoot(identity.providerHandle) !==
+          agentSessionProviderHandleRoot(head))
     ) {
       throw new Error('claude durable resume identity changed before spawn')
     }
-    const providerSessionId =
-      head?.handle.provider === 'claude'
-        ? head.handle.sessionId
-        : claudeSessionIdForOrcaSession(identity.sessionId)
-    const continuesChain = head?.handle.provider === 'claude'
+    const providerSessionId = head
+      ? head.nativeId
+      : claudeSessionIdForOrcaSession(identity.sessionId)
+    const continuesChain = head !== null
     // A start that failed before its first turn wrote no transcript, and `--resume` of an absent
     // one exits; launch that id fresh instead. With a transcript, `--session-id` would collide.
     const resumesTranscript =
-      head?.handle.provider === 'claude' &&
-      (head.handle.leafUuid !== null ||
+      head !== null &&
+      (claudeProviderHandleLeafUuid(head) !== null ||
         (await (deps.hasTranscript ?? claudeTranscriptExists)({
           providerSessionId,
           claudeConfigDir: record.accountHome.path
@@ -308,8 +315,7 @@ export function createClaudeStructuredLaunchResolver(
       env,
       claudeConfigDir: record.accountHome.path,
       providerSessionId,
-      resumeLeafUuid:
-        resumesTranscript && head?.handle.provider === 'claude' ? head.handle.leafUuid : null,
+      resumeLeafUuid: resumesTranscript && head ? claudeProviderHandleLeafUuid(head) : null,
       resumesTranscript,
       continuesChain
     }

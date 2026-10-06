@@ -6,6 +6,7 @@ import {
 } from '../shared/git-discard-path-safety'
 import { partitionTrackedPathSpecs } from '../shared/git-tracked-pathspecs'
 import { detectConflictOperation } from './git-handler-status-ops'
+import { encodeGitPathspecs } from '../shared/git-pathspec-stdin'
 
 const BULK_CHUNK_SIZE = GIT_BULK_CHUNK_SIZE
 
@@ -46,7 +47,7 @@ export class GitHandlerDiscardOperations extends GitHandlerOperationContext {
 
       if (tracked) {
         await this.git(
-          ['restore', '--worktree', '--source=HEAD', '--', this.literalPathspec(filePath)],
+          ['restore', '--worktree', '--', this.literalPathspec(filePath)],
           worktreePath
         )
         return
@@ -96,19 +97,14 @@ export class GitHandlerDiscardOperations extends GitHandlerOperationContext {
         untrackedPaths,
         (targetPaths) => this.cleanUntrackedPaths(worktreePath, targetPaths),
         async () => {
-          for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-            const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-            await this.git(
-              [
-                'restore',
-                '--worktree',
-                '--source=HEAD',
-                '--',
-                ...chunk.map((p) => this.literalPathspec(p))
-              ],
-              worktreePath
-            )
+          if (trackedPaths.length === 0) {
+            return
           }
+          await this.git(
+            ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
+            worktreePath,
+            { stdin: encodeGitPathspecs(trackedPaths.map((p) => this.literalPathspec(p))) }
+          )
         }
       )
     } finally {

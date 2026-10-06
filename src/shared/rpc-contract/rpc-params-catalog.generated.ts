@@ -23,17 +23,19 @@ import {
   PairingProvisionRelayParamsSchema
 } from '../mobile-relay-credential-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
-import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
 import { pluginConsentRequestSchema } from '../plugins/plugin-consent-request'
 import {
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,
   AddCodexFromHomeParams,
+  AddDataAccountParams,
   ConsumeCodexResetCreditParams,
   ListAccountsParams,
   RemoveAccountParams,
+  RemoveDataAccountParams,
   SelectAccountParams,
-  SelectCodexAccountForTargetParams
+  SelectCodexAccountForTargetParams,
+  SelectDataAccountParams
 } from './accounts-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
@@ -43,6 +45,10 @@ import {
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from './ai-vault-params'
+import {
+  AntigravityAccountMutationParams,
+  AntigravityAccountTargetParams
+} from './antigravity-accounts-params'
 import { ArtifactsDeleteParams, ListOptions, SourceRequest, WriteRequest } from './artifacts-params'
 import {
   AutomationCreate,
@@ -466,6 +472,7 @@ import {
 } from './speech-params'
 import { SshTarget } from './ssh-params'
 import {
+  AgentsParams,
   AttachParams,
   CancelParams,
   ConversationCommandParams,
@@ -559,18 +566,27 @@ import {
 export const RPC_PARAMS_BY_METHOD = {
   'accounts.addClaudeFromConfigDir': AddClaudeFromConfigDirParams,
   'accounts.addCodexFromHome': AddCodexFromHomeParams,
+  'accounts.addDataFromHome': AddDataAccountParams,
+  'accounts.antigravityAddCurrent': AntigravityAccountTargetParams,
+  'accounts.antigravityList': AntigravityAccountTargetParams,
+  'accounts.antigravityRemove': AntigravityAccountMutationParams,
+  'accounts.antigravitySelect': AntigravityAccountMutationParams,
   'accounts.consumeCodexResetCredit': ConsumeCodexResetCreditParams,
   'accounts.list': ListAccountsParams,
+  'accounts.listData': null,
   'accounts.removeClaude': RemoveAccountParams,
   'accounts.removeCodex': RemoveAccountParams,
+  'accounts.removeData': RemoveDataAccountParams,
   'accounts.selectClaude': SelectAccountParams,
   'accounts.selectCodex': SelectAccountParams,
   'accounts.selectCodexForTarget': SelectCodexAccountForTargetParams,
+  'accounts.selectData': SelectDataAccountParams,
   'accounts.subscribe': null,
   'accounts.unsubscribe': AccountsUnsubscribeParams,
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
+  'agentSession.agents': AgentsParams,
   'agentSession.cancel': CancelParams,
   'agentSession.close': OptionsParams,
   'agentSession.commands': OptionsParams,
@@ -988,7 +1004,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'notifications.testPush': null,
   'notifications.unregisterPush': null,
   'notifications.unsubscribe': NotificationUnsubscribeParams,
-  'orcad.terminalCensus': OrcadTerminalCensusParamsSchema,
   'orchestration.ask': AskParams,
   'orchestration.callerShow': null,
   'orchestration.check': CheckParams,

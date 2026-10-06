@@ -33,8 +33,15 @@ import {
 export type StructuredAgentSessionSendDisposition = {
   entries: StructuredAgentSessionOutboxEntry[]
   /** Only for an outcome with no entry left to carry it; a kept entry holds its own failure. */
-  error: string | null
+  error: AgentSessionWriteNoticePart[] | null
 }
+
+/** A message this client couldn't store to send; the composer's draft or the row's Retry still
+ *  has it. */
+export const STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED: readonly AgentSessionWriteNoticePart[] = [
+  'messageNotSaved',
+  'tryAgain'
+]
 
 type SendDispositionInput = {
   entries: readonly StructuredAgentSessionOutboxEntry[]
@@ -76,8 +83,8 @@ function dropEntry(input: SendDispositionInput): StructuredAgentSessionOutboxEnt
  * the outbox. Nothing is lost from the conversation: the durable submission row
  * already renders the message.
  *
- * A `rejected` submission takes the other path — the message provably did not
- * happen, so Retry rotates the id and sends it as a genuinely new message.
+ * A `rejected` submission is the host's to show, with no Retry: the reconcile
+ * drops its entry once the journal carries it.
  */
 function refusedRedelivery(
   entry: StructuredAgentSessionOutboxEntry,
@@ -247,7 +254,7 @@ export function disposeStructuredAgentSessionSendResult(
   if (refusedRedelivery(input.entry, submission)) {
     return {
       entries: dropEntry(input),
-      error: 'Message delivery is unconfirmed and Orca will not send it again'
+      error: ['sendOutcomeLost']
     }
   }
   if (submission.dispatchState === 'accepted') {
@@ -267,6 +274,8 @@ export function disposeStructuredAgentSessionSendResult(
       error: null
     }
   }
+  // Recorded, so the journal's row shows it once it arrives; until then the entry draws it, saying
+  // why and offering no Retry.
   if (submission.dispatchState === 'rejected') {
     return {
       entries: replaceEntryState(

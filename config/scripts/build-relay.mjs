@@ -9,6 +9,7 @@
  * gracefully degraded.
  */
 import { build } from 'esbuild'
+import { JSONC_PARSER_ESM_ALIAS } from '../build-plugins/jsonc-parser-esm.ts'
 import { createHash } from 'node:crypto'
 import {
   copyFileSync,
@@ -60,7 +61,6 @@ const MANAGED_HOOK_RUNTIME_ENTRY = join(
   'agent-hooks',
   'managed-hook-runtime.ts'
 )
-const JSONC_PARSER_ESM_ENTRY = join(ROOT, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js')
 const NODE_PTY_CONSOLE_LIST_PATCH_FILENAME = 'node-pty-1.1.0-console-list-agent-patch.cjs'
 const NODE_PTY_CONSOLE_LIST_PATCH_SOURCE = join(
   ROOT,
@@ -102,6 +102,7 @@ const RELAY_VERSION = '0.1.0'
 async function buildRelayBundles(outDir) {
   await build({
     entryPoints: [RELAY_ENTRY],
+    alias: JSONC_PARSER_ESM_ALIAS,
     bundle: true,
     platform: 'node',
     target: 'node18',
@@ -186,7 +187,7 @@ async function buildRelayBundles(outDir) {
     outfile: join(outDir, 'managed-hook-runtime.js'),
     // Why: jsonc-parser's default UMD build keeps relative dynamic requires
     // that break after bundling; its ESM entry is equivalent and self-contained.
-    alias: { 'jsonc-parser': JSONC_PARSER_ESM_ENTRY },
+    alias: JSONC_PARSER_ESM_ALIAS,
     sourcemap: false,
     minify: true,
     define: {
@@ -293,6 +294,7 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
   mkdirSync(outDir, { recursive: true })
   await build({
     entryPoints: [wslHookEntry],
+    alias: JSONC_PARSER_ESM_ALIAS,
     bundle: true,
     platform: 'node',
     target: 'node18',

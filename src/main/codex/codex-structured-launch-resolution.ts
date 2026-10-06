@@ -15,6 +15,7 @@ import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
+import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
 
 export type CodexStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
@@ -85,15 +86,17 @@ export function createCodexStructuredLaunchResolver(
     ) {
       throw new Error('codex structured sessions require Windows process creation-time proof')
     }
-    if (accountHome.variable !== 'CODEX_HOME') {
-      throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)
+    const pinned = CODEX_STRUCTURED_AGENT.accountHomeVariable
+    if (accountHome.variable !== pinned) {
+      throw new Error(`codex sessions pin ${pinned}, not ${accountHome.variable}`)
     }
     const { command, environment } = await resolveCodexStructuredInvocation(deps)
     // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
     // concern, and the permission posture they used to smuggle in is derived per acquisition.
     const permissionPolicy = deps.resolvePermissionPolicy?.()
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
+    // A Codex record's chain holds only Codex handles; the attach admission refuses anything else.
+    const resumeThreadId = head?.handle.nativeId ?? null
     // The same saved options every turn sends, so the thread and its turns name one model.
     const model = record.options?.model
     return {

@@ -485,7 +485,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(deliveredCloses).toEqual([])
   })
 
-  it('fences late payloads and duplicate close after full retirement', async () => {
+  it('suppresses stale payloads from a retired transport but never re-sends its close', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     let transportCallbacks: {
       onResponse: (response: Record<string, unknown>) => void
@@ -533,16 +533,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       }
     )
 
-    await invalidateRuntimeEnvironmentTransport(added.environment.id)
+    invalidateRuntimeEnvironmentTransport(added.environment.id)
     expect(retirePairedRuntimeBrowserClientHostEnvironmentMock).toHaveBeenCalledWith(
       added.environment.id,
       expect.objectContaining({ message: 'Runtime environment transport was invalidated' })
     )
-    expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
-    expect(senderSend).toHaveBeenCalledWith('runtimeEnvironments:subscriptionEvent', {
-      subscriptionId: 'multiplex-stale',
-      type: 'close'
-    })
     senderSend.mockClear()
     // A late frame from the retired socket must not reach the renderer...
     transportCallbacks!.onResponse({

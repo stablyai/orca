@@ -1,3 +1,5 @@
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
 import type { AgentType } from '../../shared/native-chat-types'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { resolveSessionFilePath } from './session-file-resolver'
@@ -104,6 +106,9 @@ export async function readNativeChatTranscriptCached(
   /** Hook-reported authoritative transcript path, preferred over the id glob. */
   transcriptPath?: string
 ): Promise<ReadTranscriptResult> {
+  if (resolveNativeChatTranscriptAgent(agent) === 'opencode') {
+    return readOpenCodeNativeChatTranscriptFull(sessionId)
+  }
   const epoch = cacheEpoch
   let filePath: string | null
   try {

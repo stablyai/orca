@@ -37,10 +37,8 @@ describe('StructuredAgentSessionReadableRestorer', () => {
       openDeps: {
         store: { getRecord: () => null, listRecords: () => records },
         journalDatabase: openTestJournalHostDatabase(stateDirectory),
-        adapter: {},
         logger: recordingStructuredAgentSessionLogger().logger
       },
-      supportsRecord: () => true,
       reconcile: async () => true,
       resolveRecovery: async () => true,
       serialize: async (_sessionId, task) => task(),

@@ -154,19 +154,6 @@ export function withRolledBackVersion(
   }
 }
 
-/** The record after decommissioning `active`: nothing serves; the stopped build stays pinned. */
-export function withDeactivatedVersion(record: OrcadActivationRecord): OrcadActivationRecord {
-  return {
-    schemaVersion: ORCAD_ACTIVATION_SCHEMA_VERSION,
-    active: null,
-    // Kept so GC leaves the slot whose daemon may still own terminals, and a redeploy can find it.
-    previous: record.active,
-    activatedAt: null,
-    // No version is active, so there is nothing a pre-activation snapshot could roll back to.
-    snapshot: null
-  }
-}
-
 /**
  * Version dirs GC must not remove, as directory names.
  *

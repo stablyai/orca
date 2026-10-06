@@ -6,7 +6,10 @@ import {
   useState,
   useSyncExternalStore
 } from 'react'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import {
   admitStructuredAgentSessionOutboxEntry,
@@ -14,6 +17,7 @@ import {
 } from '../../../../shared/structured-agent-session-outbox-admission'
 import {
   journalAnswersInFlightSend,
+  STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED,
   type StructuredAgentSessionSendDisposition
 } from '../../../../shared/structured-agent-session-send-disposition'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
@@ -46,6 +50,7 @@ import {
 } from '../../../../shared/structured-agent-session-outbox-delivery'
 import { retryStructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox-retry'
 import { useStructuredAgentSessionOutboxFailedHere } from './use-structured-agent-session-outbox-failed-here'
+import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 
 const NO_QUEUE_DELIVERY: StructuredAgentSessionQueueDelivery = {
   capability: 'unsupported',
@@ -61,6 +66,8 @@ export function useStructuredAgentSessionOutbox(args: {
   target: RuntimeClientTarget
   fence: number | null
   submissions: readonly AgentJournalSubmission[]
+  /** The loaded journal rows: a rejected message stays here until the row that draws it loads. */
+  journalItems: readonly AgentJournalRenderItem[]
   /** The composer that gets back what a Stop withdrew from this client's outbox. */
   composerScopeKey?: string
   /** The host's queued-messages capability and the user's setting; a send stamped
@@ -74,6 +81,7 @@ export function useStructuredAgentSessionOutbox(args: {
   const {
     composerScopeKey,
     fence,
+    journalItems,
     queueDelivery = NO_QUEUE_DELIVERY,
     queuedMessageIds,
     sessionId,
@@ -145,15 +153,13 @@ export function useStructuredAgentSessionOutbox(args: {
         .map((submission) => submission.clientMessageId),
       ...handedOffQueuedMessageIds(submissions)
     ])
-    const next = reconcileStructuredAgentSessionOutboxWithQueue(current, submissions)
+    const next = reconcileStructuredAgentSessionOutboxWithQueue(current, submissions, journalItems)
     const admittedInFlight = journalAnswersInFlightSend(submissions, inFlightIdRef.current)
-    if (
-      admittedInFlight ||
-      next.some((entry, index) => entry !== current[index]) ||
-      next.length !== current.length
-    ) {
+    // The reconcile returns `current` itself when no entry changed, so a batch that changes
+    // nothing writes nothing.
+    if (admittedInFlight || next !== current) {
       restoreWithdrawn.byHost(current, submissions)
-      commitStructuredAgentSessionOutbox(sessionId, next)
+      commitStructuredAgentSessionOutbox(sessionId, [...next])
     }
     // Keyed on the entry actually in flight, which is no longer always the head: the journal
     // owning it outranks a send promise that has not settled, so release single-flight and make
@@ -172,7 +178,7 @@ export function useStructuredAgentSessionOutbox(args: {
     ) {
       setError(null)
     }
-  }, [restoreWithdrawn, sessionId, submissions])
+  }, [journalItems, restoreWithdrawn, sessionId, submissions])
 
   // The one place that owns the refs, the React state and the storage write.
   const applyDisposition = useCallback(
@@ -180,7 +186,7 @@ export function useStructuredAgentSessionOutbox(args: {
       // Released here rather than in a `.finally`: the state write below is what re-runs the
       // drain, so a later microtask would leave the queue with no trigger to move on.
       inFlightIdRef.current = null
-      setError(disposition.error)
+      setError(disposition.error ? agentSessionWriteNoticeText(disposition.error) : null)
       recordFailures(getStructuredAgentSessionOutbox(sessionId), disposition.entries)
       commitStructuredAgentSessionOutbox(sessionId, disposition.entries)
     },
@@ -266,7 +272,7 @@ export function useStructuredAgentSessionOutbox(args: {
       }
       // Whether it asks to be queued is decided when it first goes out.
       if (!appendStructuredAgentSessionOutboxMessage(sessionId, text, attachments)) {
-        setError('Message could not be saved to the outbox')
+        setError(agentSessionWriteNoticeText(STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED))
         return false
       }
       setError(null)

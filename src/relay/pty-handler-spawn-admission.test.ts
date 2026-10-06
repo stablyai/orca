@@ -1,11 +1,13 @@
 import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import * as ptyChildProcessInspection from './pty-child-process-inspection'
 import * as ptyShellUtils from './pty-shell-utils'
 import * as processTableSnapshotReader from '../shared/process-table-snapshot-reader'
+import * as runProcessModule from '../shared/child-process/run-process'
+import * as nodePtyBindingSurvey from './node-pty-binding-survey'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -325,28 +327,76 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(0)
   })
 
-  it('keeps the load error it was handed instead of replacing it with guesses', async () => {
-    // #17830: the user got three remedies for four possible faults and could verify none.
-    // The relay must carry what it was actually told, and must not prescribe a toolchain
-    // install it never probed for.
-    const thrown =
-      'Failed to load native module: conpty.node, checked: build/Release, prebuilds/win32-x64'
-    mockPtySpawn.mockImplementationOnce(() => {
-      throw new Error(thrown)
-    })
+  const THROWN_LOAD_ERROR =
+    'Failed to load native module: pty.node, checked: build/Release, prebuilds/linux-x64'
 
-    const message = await dispatcher.callRequest('pty.spawn', {}).then(
-      () => '',
-      (error: Error) => error.message
+  function failSpawnWithToolchainProbe(
+    toolchainProbeStdout: string
+  ): Promise<(Error & { data?: unknown }) | null> {
+    const realRunProcess = runProcessModule.runProcess
+    vi.spyOn(runProcessModule, 'runProcess').mockImplementation((spec) =>
+      spec.program === '/bin/sh'
+        ? Promise.resolve({
+            stdout: toolchainProbeStdout,
+            stderr: '',
+            code: 0,
+            signal: null,
+            timedOut: false
+          })
+        : realRunProcess(spec)
     )
+    mockPtySpawn.mockImplementationOnce(() => {
+      throw new Error(THROWN_LOAD_ERROR)
+    })
+    return dispatcher.callRequest('pty.spawn', {}).then(
+      () => null,
+      (error: Error & { data?: unknown }) => error
+    )
+  }
 
-    expect(message).toContain(thrown)
-    expect(message).not.toContain('install make, a C++ compiler, and python3')
-    // Nothing here established a cause — the relay's node-pty directory is not on disk in
-    // this harness — so per docs/reference/ssh-execution-boundary.md it must say so rather
-    // than pick a diagnosis. Every message still names the host, for the bug report.
-    expect(message).toContain('could not establish why')
+  it('diagnoses a relay installed without node-pty instead of asking for a reconnect (#20386)', async () => {
+    // Relies on no node-pty beside the relay source — what the no-toolchain deploy leaves. Absence
+    // is observed on the owning host, so it is a diagnosis (docs/reference/ssh-execution-boundary.md).
+    expect(typeof process.resourcesPath, 'packaged node-pty lookup must be off').not.toBe('string')
+    expect(
+      existsSync(join(__dirname, 'node_modules', 'node-pty')),
+      'a node-pty beside src/relay would turn this into the installed-but-unbuilt case'
+    ).toBe(false)
+    // The checkout's own node_modules holds a node-pty an SSH host's relay dir never has.
+    vi.spyOn(nodePtyBindingSurvey, 'resolveNodePtyInstallDir').mockReturnValue(null)
+
+    const rejection = await failSpawnWithToolchainProbe('HAVE python3\nPKG apt-get\n')
+    const message = rejection?.message ?? ''
+
+    // #17830: the load error the relay was handed still travels with the rejection.
+    // No compiler means no rebuild, so the client must not auto-reconnect on this one.
+    expect(rejection?.data).toMatchObject({
+      reason: 'toolchain_missing',
+      repairable: false,
+      rawError: THROWN_LOAD_ERROR
+    })
+    expect(message).not.toContain('could not establish why')
+    expect(message).toContain('node-pty is not installed at')
+    expect(message).toContain('sudo apt-get install -y build-essential python3')
+    // Every message still names the host, for the bug report.
     expect(message).toMatch(/Host: linux\/\w+, .*Node v[\d.]+ \(ABI \d+\)/)
+  })
+
+  it('diagnoses the node-pty an ancestor node_modules supplied, not the absent one beside the relay', async () => {
+    const ancestorInstall = join(mkdtempSync(join(tmpdir(), 'orca-node-pty-')), 'node-pty')
+    mkdirSync(ancestorInstall)
+    vi.spyOn(nodePtyBindingSurvey, 'resolveNodePtyInstallDir').mockReturnValue(ancestorInstall)
+
+    try {
+      const message =
+        (await failSpawnWithToolchainProbe('HAVE make\nHAVE g++\nHAVE python3\nPKG apt-get\n'))
+          ?.message ?? ''
+
+      expect(message).not.toContain('node-pty is not installed at')
+      expect(message).toContain(`under ${ancestorInstall}`)
+    } finally {
+      rmSync(dirname(ancestorInstall), { recursive: true, force: true })
+    }
   })
 
   it('preserves unrelated node-pty spawn failures', async () => {

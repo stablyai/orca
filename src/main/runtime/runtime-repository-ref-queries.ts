@@ -28,7 +28,12 @@ type RuntimeRepositoryRefQueryDependencies = {
 export class RuntimeRepositoryRefQueries {
   constructor(private readonly deps: RuntimeRepositoryRefQueryDependencies) {}
 
-  async search(repoSelector: string, query: string, limit: number): Promise<RuntimeRepoSearchRefs> {
+  async search(
+    repoSelector: string,
+    query: string,
+    limit: number,
+    includeQualifiedRefs = true
+  ): Promise<RuntimeRepoSearchRefs> {
     if (!isRepoSearchRefsRequestLimit(limit)) {
       throw new Error('invalid_limit')
     }
@@ -39,8 +44,8 @@ export class RuntimeRepositoryRefQueries {
       return { refs: [], truncated: false }
     }
     const refDetails = repo.connectionId
-      ? await this.searchRemote(repo, query, probeLimit)
-      : await searchBaseRefDetails(repo.path, query, probeLimit)
+      ? await this.searchRemote(repo, query, probeLimit, includeQualifiedRefs)
+      : await searchBaseRefDetails(repo.path, query, probeLimit, includeQualifiedRefs)
     return {
       refs: refDetails.slice(0, effectiveLimit).map((entry) => entry.refName),
       refDetails: refDetails.slice(0, effectiveLimit),
@@ -106,7 +111,8 @@ export class RuntimeRepositoryRefQueries {
   private async searchRemote(
     repo: Repo,
     query: string,
-    limit: number
+    limit: number,
+    includeQualifiedRefs: boolean
   ): Promise<BaseRefSearchResult[]> {
     const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
     if (!provider) {
@@ -150,11 +156,13 @@ export class RuntimeRepositoryRefQueries {
       if (normalizedQuery.split('/').filter((token) => token.length > 0).length > 1) {
         const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
         return mergeBaseRefSearchResultGroups(
-          results.map((stdout) => parseAndFilterSearchRefDetails(stdout, limit, remotes)),
+          results.map((stdout) =>
+            parseAndFilterSearchRefDetails(stdout, limit, remotes, includeQualifiedRefs)
+          ),
           limit
         )
       }
-      return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes)
+      return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes, includeQualifiedRefs)
     } catch (error) {
       console.warn('[runtime:repo.searchRefs] SSH for-each-ref failed', {
         path: repo.path,

@@ -3,6 +3,7 @@ import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-typ
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
+import { getDescriptionImageUrls } from './linear-description-images'
 import {
   ATTACHMENT_BY_UUID_QUERY,
   COMMENT_BY_UUID_QUERY,
@@ -43,10 +44,16 @@ export async function getIssue(
     await acquire()
     try {
       const issue = await entry.client.issue(id)
-      return await mapIssueForWorkspace(entry, issue, {
+      const mapped = await mapIssueForWorkspace(entry, issue, {
         includeChildren: true,
         includeProject: true
       })
+      const descriptionImageUrls = await getDescriptionImageUrls(
+        entry,
+        mapped.id,
+        mapped.description
+      )
+      return { ...mapped, ...(descriptionImageUrls ? { descriptionImageUrls } : {}) }
     } catch (error) {
       if (isAuthError(error)) {
         clearToken(entry.workspace.id)

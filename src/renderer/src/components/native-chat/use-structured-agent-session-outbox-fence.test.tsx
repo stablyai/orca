@@ -20,6 +20,10 @@ import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-sessio
 import { enqueueStructuredAgentSessionLaunchPrompt } from './structured-agent-session-outbox-storage'
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+
+const NO_JOURNAL_ITEMS: readonly AgentJournalRenderItem[] = []
+
 // Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
 afterEach(cleanup)
 
@@ -65,6 +69,7 @@ function render(fence: number | null = 1) {
   return renderHook(
     (props) =>
       useStructuredAgentSessionOutbox({
+        journalItems: NO_JOURNAL_ITEMS,
         sessionId: 'session-1',
         target: LOCAL_TARGET,
         fence: props.fence,
@@ -138,6 +143,7 @@ describe('an outbox on a host that accepts a send before any agent has it', () =
     const delivery = await act(async () =>
       settleStructuredAgentLaunchPrompt({
         launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+        target: { kind: 'local' },
         options: { prompt: 'launch notes' },
         stagedEntry: staged
       })

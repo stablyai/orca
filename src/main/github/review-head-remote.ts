@@ -49,5 +49,5 @@ export async function resolveGitHubReviewHeadRemote(args: {
   if (args.connectionId) {
     return pickPreferredGitRemote(remotes)
   }
-  return getDefaultRemote(args.repoPath, args.localGitOptions ?? {})
+  return getDefaultRemote(args.repoPath, args.localGitOptions ?? {}, remotes)
 }

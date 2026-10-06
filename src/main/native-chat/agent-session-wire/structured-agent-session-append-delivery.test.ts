@@ -27,6 +27,8 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'Claude Code is not signed in. Sign in with the Claude CLI'
@@ -37,10 +39,10 @@ let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let generation = 0
 
-/** Everything a live subscriber was sent after it opened. */
-function liveReader() {
+/** Everything a live subscriber was sent after its opening snapshot. */
+async function liveReader() {
   const events: AgentSessionSubscribeEvent[] = []
-  host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => events.push(event) })
+  await host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => events.push(event) })
   const opened = events.length
   const received = () => {
     const items: AgentJournalRenderItem[] = []
@@ -119,7 +121,7 @@ beforeEach(async () => {
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: generation === 0 ? ('created' as const) : ('resumed' as const),
       mintedAtFence: fence,
       observedAt: NOW
@@ -129,6 +131,7 @@ beforeEach(async () => {
   }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
@@ -158,7 +161,7 @@ afterEach(async () => {
 describe('an open chat receives every row its journal commits', () => {
   it('shows a failed start whose lease could not be handed back', async () => {
     const held = await send('hello')
-    const pane = liveReader()
+    const pane = await liveReader()
     // The exit settles the journal, then fails to release the lease: nothing moves the fence.
     vi.spyOn(store, 'transitionHandoff').mockRejectedValueOnce(new Error('record store busy'))
 
@@ -177,7 +180,7 @@ describe('an open chat receives every row its journal commits', () => {
   })
 
   it('shows a revision the provider queued with no publish behind it', async () => {
-    const pane = liveReader()
+    const pane = await liveReader()
     const identity = { provider: 'orca' as const, clientMessageId: 'context-usage' }
     const body = { kind: 'status' as const, text: 'context usage answered after the turn' }
 
@@ -194,7 +197,7 @@ describe('an open chat receives every row its journal commits', () => {
   })
 
   it('shows a row appended straight to the journal', async () => {
-    const pane = liveReader()
+    const pane = await liveReader()
     const journal = host['sessions'].get(SESSION)?.journal
     if (!journal) {
       throw new Error('the attached chat has no journal')
@@ -215,7 +218,7 @@ describe('an open chat receives every row its journal commits', () => {
 
 describe('an open chat receives each row once', () => {
   it('when the provider frame that wrote it also publishes', async () => {
-    const pane = liveReader()
+    const pane = await liveReader()
     const sink = providerSink()
     const journal = host['sessions'].get(SESSION)?.journal
     if (!journal) {
@@ -237,7 +240,7 @@ describe('an open chat receives each row once', () => {
   })
 
   it('when a writer publishes the row it appended', async () => {
-    const pane = liveReader()
+    const pane = await liveReader()
     const journal = host['sessions'].get(SESSION)?.journal
     if (!journal) {
       throw new Error('the attached chat has no journal')

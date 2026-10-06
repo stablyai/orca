@@ -10,6 +10,7 @@ import { CodexStructuredSessionAdapter } from './codex-structured-session-adapte
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 // Proves the host's child records are actually REACHED from provider traffic: the tracker is
 // unit-tested separately, and a producer that is correct but unwired publishes nothing while
@@ -51,7 +52,7 @@ function identity(sessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'ws-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD_ID }
+    providerHandle: codexProviderHandle(THREAD_ID)
   }
 }
 

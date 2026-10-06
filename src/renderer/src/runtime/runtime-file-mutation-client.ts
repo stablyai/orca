@@ -11,20 +11,23 @@ import {
 } from './runtime-file-routing'
 import { callRuntimeFileMutation } from './runtime-file-mutation-rpc'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import type { LocalFileAccess } from '../../../shared/local-file-access'
+import { localAccess } from './runtime-file-read-client'
 
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
-  dirPath: string
+  dirPath: string,
+  options: { followSymlinks?: boolean } = {}
 ): Promise<DirEntry[]> {
   const remoteArgs = getRemoteFileArgs(context, dirPath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    return window.api.fs.readDir({ dirPath, connectionId: context.connectionId })
+    return window.api.fs.readDir({ dirPath, connectionId: context.connectionId, ...options })
   }
   return callRuntimeRpc<DirEntry[]>(
     remoteArgs.target,
     'files.readDir',
-    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
+    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath, ...options },
     { timeoutMs: 15_000 }
   )
 }
@@ -32,13 +35,19 @@ export async function readRuntimeDirectory(
 export async function writeRuntimeFile(
   context: RuntimeFileOperationArgs,
   filePath: string,
-  content: string
+  content: string,
+  access?: LocalFileAccess
 ): Promise<void> {
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     await window.api.fs.writeFile(
-      withSshMutationExpectation(context, { filePath, content, connectionId: context.connectionId })
+      withSshMutationExpectation(context, {
+        filePath,
+        content,
+        connectionId: context.connectionId,
+        ...localAccess(context.connectionId, access)
+      })
     )
     return
   }
@@ -88,14 +97,20 @@ export async function createRuntimePath(
 export async function renameRuntimePath(
   context: RuntimeFileOperationArgs,
   oldPath: string,
-  newPath: string
+  newPath: string,
+  access?: LocalFileAccess
 ): Promise<void> {
   const oldRemoteArgs = getRemoteFileArgs(context, oldPath)
   const newRelativePath = getRelativePathInsideWorktree(context.worktreePath, newPath)
   if (!oldRemoteArgs || newRelativePath === null) {
     assertLocalFilesystemFallbackAllowed(context)
     await window.api.fs.rename(
-      withSshMutationExpectation(context, { oldPath, newPath, connectionId: context.connectionId })
+      withSshMutationExpectation(context, {
+        oldPath,
+        newPath,
+        connectionId: context.connectionId,
+        ...localAccess(context.connectionId, access)
+      })
     )
     return
   }

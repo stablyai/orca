@@ -11,6 +11,10 @@
 import { attachFingerprintFields } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
 import type { AgentSessionAttachParams } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
+import {
+  createStructuredAgentSessionOutboxEntry,
+  structuredAgentSessionSendRequest
+} from '../../../src/shared/structured-agent-session-outbox'
 
 export const SESSION = 'session-alpha'
 export const WORKSPACE = 'workspace-1'
@@ -183,7 +187,13 @@ export const STRUCTURED_CALLS: {
   },
   // Teardown runs through the runtime's subscription registry rather than the
   // host, so its reply is the only signal that the gate opened.
-  { method: 'agentSession.unsubscribe', hostMethod: null, result: { unsubscribed: true } }
+  { method: 'agentSession.unsubscribe', hostMethod: null, result: { unsubscribed: true } },
+  // The host's registered agents, each with its declared capability record.
+  {
+    method: 'agentSession.agents',
+    hostMethod: 'agentDefinitions',
+    result: { agents: [{ agent: 'codex', capabilities: { compact: true } }] }
+  }
 ]
 
 export function envelope(args: {
@@ -237,9 +247,21 @@ export function createIntentParams(): Record<string, unknown> {
   return { envelope: envelope({ method: 'agentSession.create', fields, fence: null }), ...fields }
 }
 
-export function sendParams(text: string, fence: number): Record<string, unknown> {
-  const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
-  return { envelope: envelope({ method: 'agentSession.send', fields: { body }, fence }), body }
+/** Built by the outbox clients send from, so an older host is handed exactly what a current
+ *  client puts on the wire, fingerprint included. */
+export function sendParams(
+  text: string,
+  fence: number,
+  sentDelivery?: 'queue-if-active'
+): Record<string, unknown> {
+  const entry = createStructuredAgentSessionOutboxEntry({
+    clientMessageId: operationId(),
+    sessionId: SESSION,
+    text,
+    attachments: [],
+    queuedAt: NOW
+  })
+  return structuredAgentSessionSendRequest({ ...entry, sentDelivery }, fence)
 }
 
 /** Schema-valid params per method; values only need to survive validation. */
@@ -294,6 +316,7 @@ export function paramsFor(method: string): unknown {
     case 'agentSession.hold':
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }
+    case 'agentSession.agents':
     case 'agentSession.restartResumable':
     case 'agentSession.restartResumableDismiss':
     case 'agentSession.restartResume':

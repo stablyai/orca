@@ -23,7 +23,7 @@ import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
 type TestStore = {
   getState: () => AppState
-  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+  setState: (state: Partial<AppState>) => void
 }
 type BridgeMocks = {
   store: TestStore | null
@@ -52,11 +52,6 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null
-}))
-
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcClientModule>()),
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
@@ -68,6 +63,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { StructuredAgentSessionAttentionBridge } from './StructuredAgentSessionAttentionBridge'
+import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync'
+import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
 import {
   getStructuredAgentSessionStatusFeed,
@@ -219,10 +216,11 @@ describe('StructuredAgentSessionAttentionBridge', () => {
       activeGroupIdByWorktree: { [WORKSPACE]: GROUP },
       // The user is working elsewhere — the case the dot exists for.
       activeWorktreeId: 'other-workspace',
+      activeWorkspaceExecutionHostId: null,
+      runtimeEnvironments: [],
       unreadTerminalTabs: {},
       unreadTerminalPanes: {},
       unreadAgentCompletionPanes: {},
-      testRuntimeOwner: null,
       // The attention dispatch reads exactly one field; GlobalSettings has no test factory.
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only field read.
       settings: { experimentalTerminalAttention: true } as GlobalSettings
@@ -393,9 +391,277 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     })
   })
 
+  it('keeps a legacy published paired chat subscribed and delivers after a workspace-id collision', async () => {
+    const store = mocks.store
+    if (!store) {
+      throw new Error('test store was not initialized')
+    }
+    const remoteWorktree = makeWorktree({
+      id: WORKSPACE,
+      repoId: 'repo1',
+      hostId: 'runtime:env-1',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
+    store.setState({
+      activeWorktreeId: WORKSPACE,
+      activeWorkspaceExecutionHostId: 'runtime:env-1',
+      worktreesByRepo: { repo1: [remoteWorktree] },
+      unifiedTabsByWorktree: {},
+      runtimeEnvironments: [
+        {
+          id: 'env-1',
+          name: 'Paired server',
+          createdAt: 1,
+          updatedAt: 1,
+          lastUsedAt: null,
+          runtimeId: null,
+          endpoints: [],
+          preferredEndpointId: 'endpoint'
+        }
+      ]
+    })
+    store.setState(
+      applyWebSessionTabsSnapshot(
+        store.getState(),
+        {
+          worktree: WORKSPACE,
+          publicationEpoch: 'remote-epoch',
+          snapshotVersion: 1,
+          activeGroupId: GROUP,
+          activeTabId: 'agent-session:session-1',
+          activeTabType: 'agent-session',
+          tabs: [
+            {
+              type: 'agent-session',
+              id: 'agent-session:session-1',
+              title: 'Remote chat',
+              sessionId: SESSION,
+              agent: 'codex',
+              isActive: true
+            }
+          ]
+        },
+        'env-1',
+        100
+      )
+    )
+    const publishedTab = store.getState().unifiedTabsByWorktree[WORKSPACE][0]
+    if (!publishedTab) {
+      throw new Error('snapshot did not publish a chat tab')
+    }
+    // Why: restored tabs from before host stamping can still have ambiguous catalog ownership.
+    const { executionHostId, ...legacyTab } = publishedTab
+    expect(executionHostId).toBe('runtime:env-1')
+    const tab = makeUnifiedTab(legacyTab)
+    store.setState({ unifiedTabsByWorktree: { [WORKSPACE]: [tab] } })
+    expect(tab.contentType).toBe('agent-session')
+    expect(tab.executionHostId).toBeUndefined()
+    render(<StructuredAgentSessionAttentionBridge />)
+    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+    expect(mocks.subscribeCompletions.mock.calls[0]?.[0]).toEqual({
+      kind: 'environment',
+      environmentId: 'env-1'
+    })
+
+    await act(async () =>
+      store.setState({
+        worktreesByRepo: {
+          repo1: [remoteWorktree, makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'local' })]
+        },
+        groupsByWorktree: {
+          [WORKSPACE]: store
+            .getState()
+            .groupsByWorktree[WORKSPACE].map((group) => ({ ...group, activeTabId: 'other-tab' }))
+        }
+      })
+    )
+    expect(resolveNotificationTabOwner(store.getState(), tab)).toBeNull()
+    expect(mocks.unsubscribe).not.toHaveBeenCalled()
+    expect(mocks.subscribeCompletions).toHaveBeenCalledOnce()
+
+    act(() => hostStream()(completionFrame()))
+    const paneKey = structuredAgentSessionPaneKey(tab.id, SESSION)
+    expect(onlyDispatch()).toMatchObject({ notificationSourceId: 'runtime:env-1', paneKey })
+    expect(store.getState().unreadAgentCompletionPanes[paneKey]).toBe('agent-completion')
+    expect(store.getState().unreadTerminalTabs[tab.id]).toBe('agent-completion')
+  })
+
+  it.each<{ selected: string; activeAfterCollision: Partial<AppState> }>([
+    { selected: 'the paired workspace', activeAfterCollision: {} },
+    {
+      selected: 'another workspace',
+      activeAfterCollision: {
+        activeWorktreeId: 'repo1::/tmp/other',
+        activeWorkspaceExecutionHostId: 'local'
+      }
+    }
+  ])(
+    'keeps a published paired chat subscribed and delivers after a workspace-id collision with $selected selected',
+    async ({ activeAfterCollision }) => {
+      const store = mocks.store
+      if (!store) {
+        throw new Error('test store was not initialized')
+      }
+      const remoteWorktree = makeWorktree({
+        id: WORKSPACE,
+        repoId: 'repo1',
+        hostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1'
+      })
+      store.setState({
+        activeWorktreeId: WORKSPACE,
+        activeWorkspaceExecutionHostId: 'runtime:env-1',
+        worktreesByRepo: { repo1: [remoteWorktree] },
+        unifiedTabsByWorktree: {},
+        runtimeEnvironments: [
+          {
+            id: 'env-1',
+            name: 'Paired server',
+            createdAt: 1,
+            updatedAt: 1,
+            lastUsedAt: null,
+            runtimeId: null,
+            endpoints: [],
+            preferredEndpointId: 'endpoint'
+          }
+        ]
+      })
+      store.setState(
+        applyWebSessionTabsSnapshot(
+          store.getState(),
+          {
+            worktree: WORKSPACE,
+            publicationEpoch: 'remote-epoch',
+            snapshotVersion: 1,
+            activeGroupId: GROUP,
+            activeTabId: 'agent-session:session-1',
+            activeTabType: 'agent-session',
+            tabs: [
+              {
+                type: 'agent-session',
+                id: 'agent-session:session-1',
+                title: 'Remote chat',
+                sessionId: SESSION,
+                agent: 'codex',
+                isActive: true
+              }
+            ]
+          },
+          'env-1',
+          100
+        )
+      )
+      const tab = store.getState().unifiedTabsByWorktree[WORKSPACE][0]
+      if (!tab) {
+        throw new Error('snapshot did not publish a chat tab')
+      }
+      expect(tab.contentType).toBe('agent-session')
+      // The snapshot stamps each mirrored chat with its host, so a later id collision cannot reassign it.
+      expect(tab.executionHostId).toBe('runtime:env-1')
+      render(<StructuredAgentSessionAttentionBridge />)
+      await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+      expect(mocks.subscribeCompletions.mock.calls[0]?.[0]).toEqual({
+        kind: 'environment',
+        environmentId: 'env-1'
+      })
+
+      await act(async () =>
+        store.setState({
+          ...activeAfterCollision,
+          worktreesByRepo: {
+            repo1: [
+              remoteWorktree,
+              makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'local' })
+            ]
+          },
+          groupsByWorktree: {
+            [WORKSPACE]: store
+              .getState()
+              .groupsByWorktree[WORKSPACE].map((group) => ({ ...group, activeTabId: 'other-tab' }))
+          }
+        })
+      )
+      expect(resolveNotificationTabOwner(store.getState(), tab)).toEqual({
+        executionHostId: 'runtime:env-1',
+        runtimeEnvironmentId: 'env-1'
+      })
+      expect(mocks.unsubscribe).not.toHaveBeenCalled()
+      expect(mocks.subscribeCompletions).toHaveBeenCalledOnce()
+
+      act(() => hostStream()(completionFrame()))
+      const paneKey = structuredAgentSessionPaneKey(tab.id, SESSION)
+      expect(onlyDispatch()).toMatchObject({ notificationSourceId: 'runtime:env-1', paneKey })
+      expect(store.getState().unreadAgentCompletionPanes[paneKey]).toBe('agent-completion')
+      expect(store.getState().unreadTerminalTabs[tab.id]).toBe('agent-completion')
+    }
+  )
+
+  it('keeps a local chat on this machine when a paired workspace with its id is selected', async () => {
+    mocks.store?.setState({
+      unifiedTabsByWorktree: { [WORKSPACE]: [chatTab({ executionHostId: 'local' })] }
+    })
+    render(<StructuredAgentSessionAttentionBridge />)
+    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+    expect(mocks.subscribeCompletions.mock.calls[0]?.[0]).toEqual({ kind: 'local' })
+
+    await act(async () =>
+      mocks.store?.setState({
+        activeWorktreeId: WORKSPACE,
+        activeWorkspaceExecutionHostId: 'runtime:env-1',
+        worktreesByRepo: {
+          repo1: [
+            makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'local' }),
+            makeWorktree({
+              id: WORKSPACE,
+              repoId: 'repo1',
+              hostId: 'runtime:env-1',
+              runtimeOwnerEnvironmentId: 'env-1'
+            })
+          ]
+        }
+      })
+    )
+    expect(mocks.unsubscribe).not.toHaveBeenCalled()
+    expect(mocks.subscribeCompletions).toHaveBeenCalledOnce()
+  })
+
+  // An unrecorded tab follows the chat pane's rule: an id two hosts share names no owner until
+  // the tab's first snapshot records its host.
+  it('pauses an unrecorded chat while its workspace id names two hosts, until its host is recorded', async () => {
+    render(<StructuredAgentSessionAttentionBridge />)
+    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+    expect(mocks.subscribeCompletions.mock.calls[0]?.[0]).toEqual({ kind: 'local' })
+    await act(async () =>
+      mocks.store?.setState({
+        worktreesByRepo: {
+          repo1: [
+            makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'local' }),
+            makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'ssh:qa' })
+          ]
+        }
+      })
+    )
+    expect(mocks.unsubscribe).toHaveBeenCalledOnce()
+
+    await act(async () =>
+      mocks.store?.setState({
+        unifiedTabsByWorktree: { [WORKSPACE]: [chatTab({ executionHostId: 'local' })] }
+      })
+    )
+    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledTimes(2))
+    expect(mocks.subscribeCompletions.mock.calls[1]?.[0]).toEqual({ kind: 'local' })
+    act(() => hostStream(1)(completionFrame()))
+    expect(onlyDispatch().notificationSourceId).toBe('local')
+    expect(indicators().paneDot).toBe('agent-completion')
+  })
+
   it('does not subscribe a remote host that lacks the capability', async () => {
     mocks.supportsCapability.mockResolvedValue(false)
-    mocks.store?.setState({ testRuntimeOwner: 'env-1' })
+    mocks.store?.setState({
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'runtime:env-1' })]
+      }
+    })
     render(<StructuredAgentSessionAttentionBridge />)
     await act(() => Promise.resolve())
 

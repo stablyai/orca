@@ -18,7 +18,8 @@ import {
   interruptedRestart,
   startAgent,
   statusNotes,
-  supersededRefusal
+  supersededRefusal,
+  throwAfterContinuationAccepted
 } from './structured-agent-session-restart-interruption-test-harness'
 import {
   attach,
@@ -141,38 +142,30 @@ it('replays the same logical continuation through the durable send ledger', asyn
 })
 
 // A send that throws after Orca may have taken it is not proof it was not delivered.
-it.each([false, true])(
-  'keeps a continuation unconfirmed when its acceptance cannot be recorded (uncertainty write fails: %s)',
-  async (uncertaintyFails) => {
-    const { host, store } = await interruptedRestart()
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    expect(await host.restartResume.list()).toHaveLength(1)
-    const settle = store.recordOperationOutcome.bind(store)
-    const recording = vi.spyOn(store, 'recordOperationOutcome')
-    recording.mockImplementation(async (input) => {
-      // Only the continuation's own record: the start it makes records its attach as usual.
-      if (
-        input.callerKey === STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER &&
-        (input.outcome.status === 'succeeded' || uncertaintyFails)
-      ) {
-        throw new Error('operation outcome could not be persisted')
-      }
-      return settle(input)
-    })
+it('keeps a continuation unconfirmed when its send throws after acceptance', async () => {
+  const { host, store } = await interruptedRestart()
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  expect(await host.restartResume.list()).toHaveLength(1)
+  throwAfterContinuationAccepted()
 
-    const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
+  const result = await host.restartResume
+    .continueAfterRestart([SESSION], 'modal')
+    .finally(() => vi.restoreAllMocks())
 
-    expect(result.continued).toMatchObject([{ sessionId: SESSION, outcome: 'unknown' }])
-    // Filed as unconfirmed, with a warning in the chat.
-    expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'unconfirmed' }])
-    expect(await statusNotes(host)).toContainEqual({
-      text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
-      tone: 'warning'
-    })
-    recording.mockRestore()
-    warning.mockRestore()
-  }
-)
+  expect(result.continued).toMatchObject([{ sessionId: SESSION, outcome: 'unknown' }])
+  // Filed as unconfirmed, with a warning in the chat.
+  expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'unconfirmed' }])
+  expect(await statusNotes(host)).toContainEqual({
+    text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
+    tone: 'warning'
+  })
+  // Its acceptance committed with its submission: a resend replays it.
+  expect(
+    store
+      .listOperationRows()
+      .find((row) => row.callerKey === STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER)
+  ).toMatchObject({ outcome: { status: 'succeeded' } })
+})
 
 // The continuation is accepted, then its start fails: the message is rejected with the cause and
 // the failure is filed, and nothing is stopped because nothing started.

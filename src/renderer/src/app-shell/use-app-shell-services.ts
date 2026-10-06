@@ -21,6 +21,9 @@ import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-
 import { useTerminalViewerColorPublication } from './use-terminal-viewer-color-publication'
 import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/browser-user-agent-migration-notice'
 import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/codex-terminal-server-isolation-notice'
+import { useCodexSharedSettingsNotice } from '../components/terminal-pane/codex-shared-settings-notice'
+import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
+import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 
 /**
  * App-level subscriptions that must outlive any individual surface. Each one is here because
@@ -41,6 +44,8 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   // Subscribe to IPC push events
   useIpcEvents()
   useRemoteRuntimeRecoveryTriggers()
+  useVisibleReviewRefreshReporting()
+  useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
   useTerminalViewerColorPublication()
   useAutomationDispatchEvents()
   // Why: git polling lives at App level (RightSidebar unmounts when closed, stranding stale Rebasing/Merging badges); gate on workspaceSessionReady so it doesn't compete with first paint.
@@ -56,4 +61,5 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
   useBrowserIdentityMigrationNotice()
   useCodexTerminalServerIsolationNotice()
+  useCodexSharedSettingsNotice()
 }

@@ -5,8 +5,10 @@ import type {
   AgentJournalProducerLinkage,
   AgentJournalRowAttribution,
   AgentJournalTurnScope,
-  AgentSessionProviderHandle
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import {
   agentJournalLinkageFields,
@@ -63,7 +65,7 @@ export function journalTombstoneRowBuilder(
 
 export function journalSubmissionRowBuilder(
   state: () => JournalReducerState,
-  providerHandle: AgentSessionProviderHandle,
+  identity: Pick<AgentSessionJournalIdentity, 'providerHandle' | 'agent'>,
   input: {
     clientMessageId: string
     payloadFingerprint: string
@@ -85,7 +87,7 @@ export function journalSubmissionRowBuilder(
     const queuedMessageId = consume?.messageId ?? input.queuedMessageId
     return buildJournalSubmissionRow({
       state: state(),
-      providerHandle,
+      providerHandle: agentSessionJournalProviderHandle(identity),
       ...input,
       ...(queuedMessageId !== undefined ? { queuedMessageId } : {}),
       seq,
@@ -110,6 +112,17 @@ export function journalDispatchRowBuilder(
     providerItemId,
     reason: boundedDispatchReason(input),
     ...(input.state === 'rejected' ? { rejection: input.rejection } : {}),
+    // Every rejection states its turn, null for none, so a reader tells it from an older row.
+    ...(input.state === 'rejected'
+      ? {
+          answeredInTurn: input.answeredInTurn
+            ? {
+                turnItemId: agentJournalItemKey(input.answeredInTurn.turn),
+                via: input.answeredInTurn.via
+              }
+            : null
+        }
+      : {}),
     ...journalRowBase(state().epoch, seq, input.fence, ts),
     ...(input.recovered ? { recovered: input.recovered } : {}),
     ...(input.state === 'pending' ? { turnScope: input.turnScope } : {})
@@ -300,7 +313,7 @@ export function buildJournalSubmissionRow(input: {
   state: JournalReducerState
   clientMessageId: string
   payloadFingerprint: string
-  providerHandle: AgentSessionProviderHandle
+  providerHandle: AgentSessionJournalProviderHandle
   body: AgentJournalMessageItem
   seq: number
   fence: number

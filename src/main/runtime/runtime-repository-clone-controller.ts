@@ -12,7 +12,7 @@ import {
   deriveValidatedClonePath,
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
-import { gitSpawnAfterWindowsEnvironmentReady, nonInteractiveGitEnv } from '../git/runner'
+import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../git/runner'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -112,7 +112,7 @@ export class RuntimeRepositoryCloneController {
         {
           cwd: trimmedDestination,
           admissionTier: 'interactive',
-          env: nonInteractiveGitEnv(),
+          env: promptGuardGitEnv(),
           stdio: ['ignore', 'ignore', 'pipe']
         }
       )

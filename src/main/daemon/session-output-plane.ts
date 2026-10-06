@@ -5,7 +5,6 @@ import { normalizePtySize } from './daemon-pty-size'
 import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import type { PendingOutputRecord, TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { TerminalOwner } from '../../shared/terminal-owner'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
 
@@ -16,14 +15,6 @@ const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
 export type AttachedClient = {
   token: symbol
   onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
-  /** Identity-bearing callback used by mutation-aware consumers; legacy clients keep the old shape. */
-  onDataWithIncarnation?: (
-    data: string,
-    rawLength: number | undefined,
-    transformed: boolean | undefined,
-    seq: number | undefined,
-    incarnationId: PtyIncarnationId
-  ) => void
   onExit: (code: number, incarnationId: string, cause?: TerminalExitCause) => void
 }
 
@@ -33,7 +24,6 @@ export type SessionOutputPlaneOptions = {
   scrollback?: number | undefined
   wslDistro?: string | undefined
   historySeedChunks?: readonly string[] | undefined
-  incarnationId?: PtyIncarnationId | undefined
   /** Read from the recovery barrier at snapshot time; the barrier scans bytes
    *  before this plane receives them, so its owner never lags the emulator. */
   getTerminalOwner?: (() => TerminalOwner | undefined) | undefined
@@ -45,7 +35,6 @@ export class SessionOutputPlane {
   readonly historySeeded: boolean | undefined
   private readonly emulator: HeadlessEmulator
   private readonly readTerminalOwner: (() => TerminalOwner | undefined) | undefined
-  private readonly incarnationId: PtyIncarnationId | undefined
   private attachedClients: AttachedClient[] = []
   private pendingOutputRecords: PendingOutputRecord[] = []
   private pendingOutputBytes = 0
@@ -75,7 +64,6 @@ export class SessionOutputPlane {
         ? undefined
         : opts.historySeedChunks.every((chunk) => this.emulator.writeSync(chunk))
     this.readTerminalOwner = opts.getTerminalOwner
-    this.incarnationId = opts.incarnationId
   }
 
   get responderParser(): HeadlessEmulator['responderParser'] {
@@ -209,7 +197,9 @@ export class SessionOutputPlane {
       return
     }
     this.record({ kind: 'output', data: pending })
-    this.broadcastData(pending, 0, true, this._outputSequence)
+    for (const client of this.attachedClients) {
+      client.onData(pending, 0, true, this._outputSequence)
+    }
   }
 
   emit(emission: PtyIngressEmission): void {
@@ -226,24 +216,9 @@ export class SessionOutputPlane {
     }
 
     // Broadcast to attached clients
-    if (emission.transformed || rawLength !== data.length) {
-      this.broadcastData(data, rawLength, true, this._outputSequence)
-    } else {
-      this.broadcastData(data)
-    }
-  }
-
-  private broadcastData(
-    data: string,
-    rawLength?: number,
-    transformed?: boolean,
-    seq?: number
-  ): void {
     for (const client of this.attachedClients) {
-      if (client.onDataWithIncarnation && this.incarnationId) {
-        client.onDataWithIncarnation(data, rawLength, transformed, seq, this.incarnationId)
-      } else if (transformed || rawLength !== undefined || seq !== undefined) {
-        client.onData(data, rawLength, transformed, seq)
+      if (emission.transformed || rawLength !== data.length) {
+        client.onData(data, rawLength, true, this._outputSequence)
       } else {
         client.onData(data)
       }

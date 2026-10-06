@@ -11,6 +11,56 @@ import {
 } from './agent-process-recognition'
 
 describe('agent process recognition', () => {
+  it.each([
+    '/usr/local/bin/dsb',
+    '/usr/bin/deepseek-build',
+    'C:\\Users\\dev\\bin\\dsb.cmd',
+    'C:\\Users\\dev\\bin\\deepseek-build-agent.exe'
+  ])('recognizes manually started DeepSeek Build at %s', (processName) => {
+    expect(recognizeAgentProcess(processName)?.agent).toBe('dsb')
+  })
+
+  it('recognizes DeepSeek Build by binary name and its npm shim', () => {
+    expect(recognizeAgentProcess('dsb')).toEqual({ agent: 'dsb', processName: 'dsb' })
+    expect(recognizeAgentProcess('deepseek-build')).toEqual({
+      agent: 'dsb',
+      processName: 'deepseek-build'
+    })
+    expect(recognizeAgentProcess('deepseek-build-agent')).toEqual({
+      agent: 'dsb',
+      processName: 'deepseek-build-agent'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/dsb.js'
+      )
+    ).toEqual({ agent: 'dsb', processName: 'dsb' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/dsb.js run "explain this"'
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('dsb run "explain this"')).toBeNull()
+  })
+
+  it.each([
+    '-r ./preload.js',
+    '--require "./preload path.js"',
+    '--import ./preload.mjs',
+    '--loader ./loader.mjs',
+    '--experimental-loader ./loader.mjs',
+    '--require=./preload.js',
+    '--import=./preload.mjs'
+  ])('excludes a one-shot DSB npm shim after Node options %s', (options) => {
+    const shim = `node ${options} /usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/dsb.js`
+    expect(recognizeAgentProcessFromCommandLine(`${shim} run "task"`)).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(`${shim} run "task"`, { includeHeadlessOneShot: true })
+        ?.agent
+    ).toBe('dsb')
+    expect(recognizeAgentProcessFromCommandLine(`${shim} agent`)?.agent).toBe('dsb')
+  })
+
   it('recognizes packaged Codex foreground process names', () => {
     expect(recognizeAgentProcess('codex-aarch64-ap')).toEqual({
       agent: 'codex',
@@ -53,6 +103,13 @@ describe('agent process recognition', () => {
       expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
       expect(detectExplicitPiAgentKindFromCommand(command)).toBeNull()
     }
+  })
+
+  it('recognizes both published DeepSeek Build npm entrypoints and excludes run with cwd', () => {
+    const shim = '/usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/deepseek-build.js'
+    expect(recognizeAgentProcessFromCommandLine(`node ${shim}`)?.agent).toBe('dsb')
+    expect(recognizeAgentProcessFromCommandLine(`node ${shim} --cwd folder run task`)).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('dsb --cwd folder run task')).toBeNull()
   })
 
   it('recognizes the OpenClaude foreground process', () => {
@@ -348,12 +405,38 @@ describe('agent process recognition', () => {
     ).toEqual({ agent: 'gemini', processName: 'gemini' })
   })
 
-  it.each(['earendil-works', 'mariozechner'])('recognizes the @%s Pi npm entrypoint', (scope) => {
-    expect(
-      recognizeAgentProcessFromCommandLine(
-        String.raw`node.exe C:\Users\dev\AppData\Roaming\npm\node_modules\@${scope}\pi-coding-agent\dist\cli.js`
-      )
-    ).toEqual({ agent: 'pi', processName: 'pi' })
+  it.each([
+    ['earendil-works', 'cli.js'],
+    ['earendil-works', 'bundle/cli.js'],
+    ['mariozechner', 'cli.js'],
+    ['mariozechner', 'bundle/cli.js']
+  ])('recognizes the @%s Pi npm entrypoint at dist/%s', (scope, entrypoint) => {
+    const windowsEntrypoint = entrypoint.replace('/', '\\')
+    const windowsPath = `C:\\Users\\Dev User\\AppData\\Roaming\\npm\\node_modules\\@${scope}\\pi-coding-agent\\dist\\${windowsEntrypoint}`
+    for (const command of [
+      `node /usr/local/lib/node_modules/@${scope}/pi-coding-agent/dist/${entrypoint}`,
+      `node.exe ${windowsPath.replace('Dev User', 'dev')}`,
+      String.raw`"C:\Program Files\nodejs\node.exe" "${windowsPath}"`
+    ]) {
+      expect(recognizeAgentProcessFromCommandLine(command)).toEqual({
+        agent: 'pi',
+        processName: 'pi'
+      })
+    }
+  })
+
+  it.each([
+    'node /tmp/dist/bundle/cli.js',
+    'node /tmp/node_modules/@other/pi-coding-agent/dist/bundle/cli.js',
+    'node /tmp/node_modules/@earendil-works/not-pi-coding-agent/dist/bundle/cli.js',
+    'node /tmp/notnode_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js',
+    'node /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js.extra',
+    'node /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/nested/cli.js',
+    'node /tmp/server.js /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js',
+    'node --require /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js /tmp/server.js',
+    'node --eval "console.log(1)" /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js'
+  ])('does not recognize a Pi entrypoint lookalike or argument: %s', (command) => {
+    expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
   })
 
   it('recognizes Prime Agent by its binary and npm entrypoint', () => {

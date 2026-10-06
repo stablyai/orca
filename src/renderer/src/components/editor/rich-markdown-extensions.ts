@@ -43,6 +43,8 @@ import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
+import { documentResourceAccess } from '@/lib/local-file-access'
+import { resolveRichMarkdownImageUrl } from './rich-markdown-image-context'
 
 const lowlight = createCachedLowlight(createLowlight(common))
 
@@ -146,22 +148,31 @@ export function createRichMarkdownExtensions({
               | undefined
             const contextVersionAtLoad = getImageContextVersion(this.storage)
             if (src && fp) {
-              releaseImageLease = acquireLocalImageSrcLease(src, fp, undefined, runtimeContext)
-              void loadLocalImageSrc(src, fp, undefined, runtimeContext).then((resolved) => {
-                if (currentSrc !== src || currentContextVersion !== contextVersionAtLoad) {
-                  return
+              const access = documentResourceAccess(fp)
+              releaseImageLease = acquireLocalImageSrcLease(
+                src,
+                fp,
+                undefined,
+                runtimeContext,
+                access
+              )
+              void loadLocalImageSrc(src, fp, undefined, runtimeContext, access).then(
+                (resolved) => {
+                  if (currentSrc !== src || currentContextVersion !== contextVersionAtLoad) {
+                    return
+                  }
+                  if (resolved) {
+                    img.src = resolved
+                    return
+                  }
+                  // Why: local image paths must go through main's file
+                  // checks; a failed load should render missing, not hand
+                  // the raw path back to Chromium.
+                  img.removeAttribute('src')
                 }
-                if (resolved) {
-                  img.src = resolved
-                  return
-                }
-                // Why: local image paths must stay behind IPC/runtime
-                // authorization; a failed load should render missing, not
-                // hand the raw path back to Chromium.
-                img.removeAttribute('src')
-              })
+              )
             } else if (src) {
-              img.src = src
+              img.src = resolveRichMarkdownImageUrl(this.storage, src)
             } else {
               img.removeAttribute('src')
             }

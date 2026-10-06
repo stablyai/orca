@@ -35,6 +35,20 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   less: 6,
   nano: 2,
   opencode: 5,
+  // Captured boots expose the existing background/cursor restore loss; serializer code is unchanged.
+  'opencode-1-18-32-timed-boot-hidden-pane': 16,
+  'opencode-1-18-32-timed-boot-slow': 16,
+  'opencode-1-18-32-timed-first-launch': 16,
+  'opencode-2-0-18-timed-boot-hidden-pane': 14,
+  // STA-9359 OpenCode 2 captures, serializer untouched: every background diff is the live pen's
+  // panel colour on restored cells, plus the rows kept below the source after a shrink.
+  'opencode-2-0-14-timed-cold-standalone': 4,
+  'opencode-2-0-21-timed-cold-standalone': 36,
+  'opencode-2-0-21-timed-cold-standalone-hidden-pane': 6,
+  'opencode-2-0-21-timed-natural-load-enter-dropped': 12,
+  'opencode-cmd-2-0-21-timed-warm-server': 21,
+  // The same, plus the cursor one column short after a shrink and the pen's bold bit on a glyph.
+  'opencode-2-0-21-timed-narrow-pane': 8,
   // Shrink leaves the cursor one column short; also present in the pre-Qoder serializer.
   'qoder-no-account': 2,
   'qoder-ready': 2,
@@ -60,6 +74,11 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'codex-0-158-0-approval': 12,
   'codex-0-158-0-timed-turn': 20,
   'codex-0-158-0-trustprompt': 36,
+  // Fullscreen startup captures diverge identically with the base b58f8197dc36 serializer.
+  'codex-fullscreen-custom-footer': 18,
+  'codex-fullscreen-early-input': 4,
+  'codex-fullscreen-multiline-early-input': 10,
+  'codex-fullscreen-startup': 14,
   'claude-dialog-trust-workspace-answered': 13,
   // DSH-TUI's whale intro paints whole rows of 24-bit background, and every one of this
   // transcript's divergences is the same shape: `visible-grid row=0`, a true-colour
@@ -99,7 +118,12 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'prime-agent-0-9-8-slash-menu': 34,
   'prime-agent-0-9-8-tool-turn': 40,
   'prime-agent-0-9-8-trace-question': 4,
-  'prime-agent-0-9-8-turn-ended': 24
+  'prime-agent-0-9-8-turn-ended': 24,
+  // OMP 18.4.5 captures, serializer untouched: after a shrink the restored cursor sits one column
+  // short, as for Qoder. The unscrubbed captures diverge identically, so the scrub is not the cause.
+  'omp-18-composer': 2,
+  'omp-18-composer-narrow': 7,
+  'omp-18-setup': 6
 }
 
 // Exact resize checkpoints and full GridDiff hashes from base 6835b9b4e3ea, not this branch.
@@ -243,7 +267,13 @@ describe('serialize round trip over captured PTY transcripts', () => {
           'jitter/true/2/34:0db2561506ff28d2e83276b07bc8684541957f61e488b6f8081627e8cad80c63'
         ])
       }
-      if (SEEDS === 2 && transcript.name.startsWith('freebuff-')) {
+      // The pre-#22586 serializer has these same row-1 bold diffs on the untouched capture.
+      if (SEEDS === 2 && transcript.name === 'dsb-6-9-0-folder') {
+        expect(failureSignatures).toEqual([
+          'jitter/false/2/19:2050835176269320209c56be5ae9e525424635dfca511d44d3911d3a22ba9d27',
+          'jitter/true/2/19:2050835176269320209c56be5ae9e525424635dfca511d44d3911d3a22ba9d27'
+        ])
+      } else if (SEEDS === 2 && transcript.name.startsWith('freebuff-')) {
         expect(failureSignatures).toEqual(FREEBUFF_BASELINE[transcript.name] ?? [])
       } else if (!OLD_ADDON_PATH && SEEDS === 2) {
         expect(counts['new-fail'] ?? 0).toBe(KNOWN_PREEXISTING_I2_FAILURES[transcript.name] ?? 0)

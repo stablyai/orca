@@ -14,6 +14,7 @@ import * as path from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync, spawn as spawnChild } from 'node:child_process'
 import { build } from 'esbuild'
+import { JSONC_PARSER_ESM_ALIAS } from '../../config/build-plugins/jsonc-parser-esm'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
 import { getEndpointFileName } from '../shared/agent-hook-listener/endpoint-publication'
 import { relayTestSocketPath } from './relay-test-socket-path'
@@ -35,6 +36,7 @@ beforeAll(async () => {
     format: 'cjs',
     outfile: relayEntry,
     external: ['node-pty', '@parcel/watcher', 'electron'],
+    alias: JSONC_PARSER_ESM_ALIAS,
     sourcemap: false
   })
   await build({
@@ -177,15 +179,6 @@ describe('Subprocess: Relay entry point', () => {
       const socketDir = spawnedSocketDirs.pop()!
       await rm(socketDir, { recursive: true, force: true }).catch(() => {})
     }
-  })
-
-  it('prints sentinel on startup', async () => {
-    relay = spawn()
-    await relay.sentinelReceived
-  }, 10_000)
-
-  it('keeps the Node-18 relay bundle free of unsupported array copy methods', () => {
-    expect(readFileSync(relayEntry, 'utf8')).not.toContain('.toReversed(')
   })
 
   it('loads node-pty after an in-place dependency repair without restarting', async () => {

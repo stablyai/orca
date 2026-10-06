@@ -12,6 +12,7 @@ import {
   canSetStructuredAgentSessionOption,
   commitStructuredAgentSessionOptionValues,
   lockedStructuredAgentSessionOptionSnapshot,
+  pendingModelListStructuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionPicks,
   structuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionView,
@@ -89,20 +90,21 @@ export function useStructuredAgentSessionOptions(args: {
     unloadedTurnRevisions: args.unloadedTurnRevisions
   })
 
-  useHostModelCatalogUpgrade({
+  const awaitingHostModelList = useHostModelCatalogUpgrade({
     agent,
     sessionId,
     target,
     optionCatalog,
     enabled: args.isVisible,
-    // A resumed conversation may keep its own model, so only a new one runs the listed default —
-    // and only Codex's listing names the configured model; Claude's settings or env may pick another.
-    namesDefault: launch?.kind === 'new' && agent === 'codex',
+    // A resumed conversation may keep its own model, so only a new one runs the listed default.
+    namesDefault: launch?.kind === 'new' && optionCatalog?.hostListingNamesConfiguredModel === true,
     ...(launch?.worktree ? { worktree: launch.worktree } : {}),
     fence,
     activeOptionRecordRef,
     updateOptionState
   })
+  // The running provider's own list ends the wait for the host's.
+  const modelListPending = awaitingHostModelList && optionState.catalogSource !== 'live'
 
   // What a settled pick must remember so the next launch starts where the user left off.
   const rememberOptionPicks = useCallback(
@@ -205,8 +207,9 @@ export function useStructuredAgentSessionOptions(args: {
     const snapshot = structuredAgentSessionOptionSnapshot(
       structuredAgentSessionOptionView(optionState, launchSeedOptions, held)
     )
-    return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
-  }, [acceptsPicks, held, launchSeedOptions, optionState])
+    const shown = acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
+    return modelListPending ? pendingModelListStructuredAgentSessionOptionSnapshot(shown) : shown
+  }, [acceptsPicks, held, launchSeedOptions, modelListPending, optionState])
   const setStructuredOption = useCallback(
     async (id: string, value: string | boolean): Promise<boolean> => {
       const view = structuredAgentSessionOptionView(optionStateRef.current, launchSeedOptions, held)
@@ -214,6 +217,8 @@ export function useStructuredAgentSessionOptions(args: {
       if (
         !optionCatalog ||
         encoded === null ||
+        // A typed `/model` reaches here without the picker.
+        optionSnapshot.some((descriptor) => descriptor.id === id && descriptor.choicesPending) ||
         !canSetStructuredAgentSessionOption(view, id, value)
       ) {
         return false
@@ -234,6 +239,7 @@ export function useStructuredAgentSessionOptions(args: {
       held,
       launchSeedOptions,
       optionCatalog,
+      optionSnapshot,
       optionStateRef,
       pendingOptionRef,
       sendStructuredOption,
@@ -277,6 +283,8 @@ export function useStructuredAgentSessionOptions(args: {
     threadGoal: support?.threadGoal,
     /** Absent from a host that predates it or a session that writes no context facts. */
     contextUsage: support?.contextUsage,
+    /** Undefined until this fence's options read answers. */
+    rewind: support?.fence === fence ? support.rewind : undefined,
     optionSnapshot,
     optionSurface,
     setStructuredOption

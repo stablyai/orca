@@ -246,8 +246,7 @@ export class DaemonStreamDataBatcher {
         this.maxLineBytes,
         sliceSequenceChars,
         entry.seq,
-        entry.transformed,
-        entry.incarnationId
+        entry.transformed
       )
     }
     this.updateBackpressure(clientId, batch)

@@ -162,6 +162,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     clipboardHasImage,
     // Browsers expose copied files only inside a paste event.
     readClipboardFilePaths: async () => [],
+    // Why empty: a browser has no local paste folder, so restored pastes stay to attach again.
+    restoreNativeChatPastes: async () => [],
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
     writeClipboardText: writeWebClipboardText,
     writeTerminalClipboardText: writeWebClipboardText,

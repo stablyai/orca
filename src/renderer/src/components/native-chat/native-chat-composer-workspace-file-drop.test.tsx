@@ -165,7 +165,8 @@ function ComposerProbe({
           on a bare wrapper so the drop logic is exercised on its own. */}
       <div {...workspaceFileDropHandlers}>
         <NativeChatComposerField
-          composerScopeKey={`pane:${workspaceId}`}
+          dropScopeKey={`pane:${workspaceId}`}
+          draftScopeKey={`pane:${workspaceId}`}
           textareaRef={inputRef}
           draft={draft}
           disabled={disabled}

@@ -4,8 +4,10 @@ import {
   readRuntimeFixture,
   replayTranscript
 } from './agent-transcript-replay-test-harness'
-import { isPrimeAgentComposerReadyScreen } from './prime-agent-terminal-readiness'
-import { describeScreenRuledAgentTranscripts } from './screen-ruled-agent-transcript-suite'
+import {
+  describeScreenRuledAgentTranscripts,
+  readsIdleComposer
+} from './screen-ruled-agent-transcript-suite'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -42,7 +44,6 @@ describe('Prime Agent readiness from captured bytes', () => {
   describeScreenRuledAgentTranscripts({
     agent: 'prime-agent',
     foregroundProcess: 'prime-agent',
-    rule: isPrimeAgentComposerReadyScreen,
     ready: READY,
     notReady: NOT_READY,
     // Why all: an idle Prime is quiet, so the quiet-process lane settles it.
@@ -70,7 +71,7 @@ describe('Prime Agent readiness from captured bytes', () => {
       const screen = screenOf(ruledScreenLines)
       markerSeen ||= submittedMarker !== null && screen.includes(submittedMarker)
       questionSeen ||= screen.includes('Share agent traces')
-      if (markerSeen && !questionSeen && isPrimeAgentComposerReadyScreen(ruledScreenLines)) {
+      if (markerSeen && !questionSeen && readsIdleComposer('prime-agent', ruledScreenLines)) {
         readyAfterMarker += 1
       }
     }

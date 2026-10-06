@@ -26,11 +26,11 @@ the structured-session mapping and nothing else.
 An audit on 2026-09-09 found six producers and three consumers, and three
 separate copies of the same row inside the main process alone:
 
-| Main-process copy                 | Keyed by  | Owned by                                                                          | Persisted          | Evicted                      |
-| --------------------------------- | --------- | --------------------------------------------------------------------------------- | ------------------ | ---------------------------- |
-| hook server `lastStatusByPaneKey` | paneKey   | `src/main/agent-hooks/server.ts`                                                  | `last-status.json` | tab close, pty exit, hydrate |
-| runtime `RuntimeAgentRowStore`    | paneKey   | `runtime-agent-row-store.ts` (deleted in PR 1b)                                   | no                 | pty exit only                |
-| structured feed `published`       | sessionId | `src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.ts` | no                 | never (a broadcast cache)    |
+| Main-process copy                 | Keyed by  | Owned by                                                                          | Persisted          | Evicted                                        |
+| --------------------------------- | --------- | --------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------- |
+| hook server `lastStatusByPaneKey` | paneKey   | `src/main/agent-hooks/server.ts`                                                  | `last-status.json` | tab close, pty exit, hydrate, worktree removal |
+| runtime `RuntimeAgentRowStore`    | paneKey   | `runtime-agent-row-store.ts` (deleted in PR 1b)                                   | no                 | pty exit only                                  |
+| structured feed `published`       | sessionId | `src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.ts` | no                 | never (a broadcast cache)                      |
 
 The second copy is a duplicate write: the OSC status parsed in main is
 forwarded to the hook server _and_ retained in the runtime store from the same
@@ -288,7 +288,10 @@ Every lane, Codex included, combines through the fold. A child waiting on a
 human is a fold input (`childWorkLiveness: 'waiting'`, derived from the child's
 own `waiting` state; a child's `blocked` means it failed and stays live work)
 and makes the row wait whatever the main agent is doing, unless the main agent
-is itself asking. Only the Codex hook lane feeds that input today. Known
+is itself asking. The Codex hook lane feeds it from its child transcripts, and
+the structured lanes from child records, which read `waiting` for a Codex child
+thread's approval or input flag and for a Claude subagent's open permission
+request. Known
 divergences, pinned by name in the parity table
 (`src/shared/main-agent-status-parity.test.ts`) where they are reachable, so a
 reader does not mistake them for drift:
@@ -299,8 +302,13 @@ reader does not mistake them for drift:
   main agent event overwrites the slot, so the row stops reading `waiting`
   while the child is still asking, and a second asking child replaces the
   first.
-- The structured lane has no per-child wait: a child's pending prompt makes
-  the session `attention`, which reads as the main agent's own `blocked`.
+- In the structured lane a child's pending prompt also makes the session
+  `attention`, which reads as the main agent's own `blocked`: one needs-input
+  state whoever asked. A Claude subagent reads `waiting` only while the
+  journal holds its card pending: from after the card's row is written until
+  just before anyone closes it, so every publish that shows the child waiting
+  also shows the session's `attention`, and the row never reads `waiting` for
+  a Claude subagent's request.
 - The Codex hook lane drops its roster on a root `Stop` when it tracks no
   child transcripts, so a still-running or still-asking child stops holding
   the row.
@@ -424,6 +432,7 @@ writers:
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Command Code output seeds, parked-pane seeds, pty-exit removal    | delete; main already emits the same facts                                                                |
 | structured bridge status writes                                   | delete; main now publishes the row                                                                       |
+| structured bridge failed-start row (the host refused the create)  | keep; a refused create leaves the host no session, so the bridge writes it from the launch record        |
 | launch placeholder seeds (a user launched an agent with a prompt) | keep for now; main holds the launch config and can seed later                                            |
 | dismissal, acknowledgement, unmount                               | keep; user facts and component lifecycle                                                                 |
 | remote-runtime OSC parse (bytes never transit local main)         | keep, fenced behind the host's published row once the host is new enough; rule 3 of the wire doc applies |
@@ -440,6 +449,45 @@ the renderer, `runtime-worktree-status-projection.ts` in main, and
 `agent-row-display.ts` in mobile, which hand-copies the 30-minute constant.
 PR 3 moves the rollup and the decay into `src/shared` and makes all three
 call it.
+
+## Readiness reads the store
+
+`terminal wait --for tui-idle` is a reader too. Before STA-9100 hook state
+reached it only through the `<Agent> ready` titles the window writes, so a
+headless `orca serve` never saw it (#16095). Now an agent whose rule file says
+`profile.hooks: "authoritative"` (OpenCode, OpenCode 2, Pi, OMP) or
+`"turn-end"` (Codex) has its fresh row read straight from the store, through the same
+`selectFreshExplicitAgentStatusRow` join prompt-receipt verification uses
+(`src/main/runtime/tui-idle-hook-lane.ts`):
+
+- the main agent's turn, not the combined row, decides: `mainAgent.state` when
+  published, so a subagent's Stop does not end the lead turn. `done` settles
+  the wait, `working` holds it, and a permission wait never settles. The tail's
+  blocked text goes through the existing permission arbiter with the turn as
+  its explicit status, so a denied prompt's dialog left in the tail no longer
+  blocks a turn the hook says ended;
+- the row joins on any pane key or terminal handle the PTY owns; a pane neither
+  reaches, a stale or restored row, a session-start `done`, a row from before
+  the PTY respawned, and a `done` received before the pane's latest input all
+  leave the decision to the screen and text rules, which is also how startup
+  readiness works before an agent's first hook. The input is the PTY run's
+  `lastInputAt` (`terminal-run-facts.ts`), which both write funnels record, so
+  a key the user typed counts like a prompt Orca sent: the next turn's first
+  hook may still be in flight, and an agent restarted in the same shell has
+  not posted one. A shell command marker is no process boundary: Pi paints
+  OSC 133 zones itself;
+- every other agent stays `identity-only`: Claude sends no event when an
+  approval is denied or Esc stops a tool, so its row can sit at `waiting` or
+  `working` forever, and the rules keep deciding;
+- Codex is `turn-end`: only a `done` decides (it settles the wait), and a
+  `working` or permission row leaves the decision to the rules. Before its
+  `Interrupt` hook an Esc mid-turn can leave the row `working`, and an older
+  TUI can hand its hooks to a newer shared app server, so no version check
+  tells which Codex posts it. A `done` is a real turn end on every version, so
+  trusting only that one keeps the headless gain (no quiet window after the
+  turn) without letting a missing cancel hang the wait.
+
+The titles stay for display; remote clients read them.
 
 ## What does not change
 

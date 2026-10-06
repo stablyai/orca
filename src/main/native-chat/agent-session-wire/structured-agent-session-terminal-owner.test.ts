@@ -27,6 +27,8 @@ import {
   closeTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const THREAD = 'terminal-owned-thread'
@@ -149,12 +151,15 @@ async function rig() {
         acquireEntered.resolve()
         await acquireBarrier
         const providerHandle = identity.providerHandle
-        const thread = providerHandle.kind === 'codex' ? providerHandle.threadId : THREAD
+        if (providerHandle?.agent !== 'codex') {
+          throw new Error('codex handle expected')
+        }
+        const thread = providerHandle.nativeId
         return {
           process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
           link: {
             linkId: 'link',
-            handle: { provider: 'codex', threadId: thread },
+            handle: codexProviderHandle(thread),
             origin: 'resumed',
             mintedAtFence: fence,
             observedAt: NOW
@@ -206,6 +211,7 @@ async function rig() {
     return performAttach({
       store,
       adapter,
+      agents: claudeAndCodexAgents(adapter),
       logger: createStructuredAgentSessionLogger(),
       openConversation: openTestAttachConversation(openTestJournalHostDatabase(stateDirectory)),
       onAttached: async ({ journal }) => {

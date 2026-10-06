@@ -88,3 +88,6 @@
 /mobile/web-entry/**/*.otf -text
 /mobile/web-entry/**/*.woff -text
 /mobile/web-entry/**/*.woff2 -text
+
+# Generated ACP schemas are checked byte-for-byte against formatted output.
+/src/main/acp/generated/*.generated.ts linguist-generated=true text eol=lf

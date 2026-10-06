@@ -11,6 +11,7 @@ import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listen
 import type { AgentHookSource } from '../shared/agent-hook-relay'
 import type { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
 import { hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
+import { bindOpenCodeTuiSession } from '../shared/agent-hook-listener/opencode-session-registry'
 
 export async function handleRelayHookRequest(
   req: IncomingMessage,
@@ -19,12 +20,15 @@ export async function handleRelayHookRequest(
     token: string
     env: string
     state: HookListenerState
+    isPaneSurfaceRetired: (paneKey: string) => boolean
+    getAgentLaunchToken: (paneKey: string) => string | undefined
     applyEvent: (
       event: AgentHookEventPayload,
       source: AgentHookSource,
       env?: string,
       version?: string
     ) => AgentHookEventPayload | undefined
+    ingestTmuxHook?: (source: AgentHookSource, body: unknown) => Promise<boolean>
     retryScheduler: AgentHookResultRetryScheduler
     transportInterference: ReturnType<typeof createHookTransportInterferenceTracker>
   }
@@ -55,8 +59,19 @@ export async function handleRelayHookRequest(
     }
     const body = await readRequestBody(req)
     const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
+    if (await options.ingestTmuxHook?.(source, hookBody)) {
+      res.writeHead(204)
+      res.end()
+      return
+    }
+    let admittedOpenCodeTuiOwner = false
     const event = normalizeHookPayload(options.state, source, hookBody, options.env, {
-      deferCompactOwnershipToClient: true
+      deferCompactOwnershipToClient: true,
+      admitOpenCodeTui: (identity) => {
+        const admission = admitRelayOpenCodeTui(options, identity)
+        admittedOpenCodeTuiOwner = admission === true
+        return admission
+      }
     })
     if (event) {
       // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
@@ -64,8 +79,12 @@ export async function handleRelayHookRequest(
       const version = hookBodyVersion(hookBody)
       const stored = options.applyEvent(event, source, env, version)
       if (stored) {
+        if (admittedOpenCodeTuiOwner) {
+          bindOpenCodeTuiSession(options.state, source, hookBody, event.providerSession?.id)
+        }
         options.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, stored, env, version)
         options.retryScheduler.scheduleTranscriptPoll(source, hookBody, stored, env, version)
+        options.retryScheduler.armClaudeOwedNotificationExpiry(source, stored.paneKey, env, version)
       }
     }
     res.writeHead(204)
@@ -83,4 +102,18 @@ export async function handleRelayHookRequest(
     res.writeHead(204)
     res.end()
   }
+}
+
+export function admitRelayOpenCodeTui(
+  host: {
+    isPaneSurfaceRetired: (paneKey: string) => boolean
+    getAgentLaunchToken: (paneKey: string) => string | undefined
+  },
+  identity: Pick<AgentHookEventPayload, 'paneKey' | 'launchToken'>
+): boolean | 'preserve-poster' {
+  if (host.isPaneSurfaceRetired(identity.paneKey)) {
+    return false
+  }
+  const expected = host.getAgentLaunchToken(identity.paneKey)
+  return expected ? identity.launchToken?.trim() === expected : 'preserve-poster'
 }

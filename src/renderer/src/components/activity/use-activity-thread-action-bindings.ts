@@ -6,6 +6,8 @@ import type { AgentPaneThread } from './activity-thread-types'
 type ActivityThreadActionBindings = {
   markThreadRead: (thread: AgentPaneThread) => void
   markThreadUnread: (thread: AgentPaneThread) => void
+  markThreadsRead: (threads: readonly AgentPaneThread[]) => void
+  markThreadsUnread: (threads: readonly AgentPaneThread[]) => void
   selectThread: (thread: AgentPaneThread) => void
   jumpToWorkspace: (thread: AgentPaneThread) => void
   markAllThreadsRead: () => void

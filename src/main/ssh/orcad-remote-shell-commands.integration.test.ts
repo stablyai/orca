@@ -49,7 +49,6 @@ import {
   restoreOrcadStateSnapshotCommand
 } from './orcad-state-snapshot'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import { ORCAD_STOP_REQUEST_FILENAME } from '../../shared/orcad-stop-request'
 
 const host = getRemoteHostPlatform('linux-x64')
 let root = ''
@@ -87,39 +86,20 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-async function launchTestRuntime(
-  legacyWrapper = false,
-  stopRequests = false
-): Promise<{
+async function launchTestRuntime(legacyWrapper = false): Promise<{
   runtimePid: number
   recordedPid: number
   terminatedFile: string
 }> {
   const terminatedFile = join(versionDir, 'terminated')
-  const requestFile = join(versionDir, ORCAD_STOP_REQUEST_FILENAME)
   writeFileSync(
     join(versionDir, 'orcad.js'),
     [
-      `const fs = require('node:fs');`,
       `process.on('SIGTERM', () => {`,
-      `  fs.writeFileSync(${JSON.stringify(terminatedFile)}, 'terminated');`,
+      `  require('node:fs').writeFileSync(${JSON.stringify(terminatedFile)}, 'terminated');`,
       `  process.exit(0);`,
       `});`,
-      ...(stopRequests
-        ? [
-            // Like orcad's listener: consume the slot request, then stop.
-            `setInterval(() => {`,
-            `  if (fs.existsSync(${JSON.stringify(requestFile)})) {`,
-            `    fs.unlinkSync(${JSON.stringify(requestFile)});`,
-            `    fs.writeFileSync(${JSON.stringify(terminatedFile)}, 'requested');`,
-            `    process.exit(0);`,
-            `  }`,
-            `}, 20);`
-          ]
-        : []),
-      `console.log(JSON.stringify({type: 'orca_server_ready', health: {pid: process.pid${
-        stopRequests ? ', stopRequests: 1' : ''
-      }}}));`,
+      `console.log(JSON.stringify({type: 'orca_server_ready', health: {pid: process.pid}}));`,
       `setTimeout(() => process.exit(1), 10_000);`
     ].join('\n')
   )
@@ -356,21 +336,6 @@ describe('liveness and stop commands, run for real', () => {
     expect(sh(`ps -o stat= -p ${runtimePid} || true`).trim()).toMatch(/^(?:Z.*)?$/)
     expect(existsSync(join(versionDir, ORCAD_PID_FILENAME))).toBe(true)
     expect(stopTestRuntime()).toBe('already-exited')
-  })
-
-  it('stops a build that consumes stop requests by request file, not by signal', async () => {
-    const { terminatedFile } = await launchTestRuntime(false, true)
-    expect(stopTestRuntime()).toBe('stopped')
-    expect(readFileSync(terminatedFile, 'utf8')).toBe('requested')
-    expect(existsSync(join(versionDir, ORCAD_STOP_REQUEST_FILENAME))).toBe(false)
-  })
-
-  it('clears a stop request the previous process never consumed before launching', async () => {
-    writeFileSync(join(versionDir, ORCAD_STOP_REQUEST_FILENAME), '')
-    const { runtimePid } = await launchTestRuntime(false, true)
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('LIVE')
-    expect(runtimePid).toBeGreaterThan(1)
   })
 
   it('refuses a legacy wrapper PID both before and after its shell exits', async () => {

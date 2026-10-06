@@ -60,7 +60,7 @@ describe('openMobileAgentSessionInTerminal', () => {
     )
 
     await expect(openMobileAgentSessionInTerminal(client, TARGET)).rejects.toThrow(
-      "Orca hasn't confirmed that this chat's previous agent stopped. Reopen the chat to check again."
+      'The previous agent in this chat may still be running. Reopen the chat to check again.'
     )
   })
 

@@ -87,8 +87,8 @@ export async function cancelClaudeStructuredTurn(input: {
     )
   }
   // Judge against the published journal, because that is the only turn a client could have been
-  // shown — but only while it HAS an answer. The journal drains through a serialized async queue,
-  // so a null read means the row has not landed yet, not that nothing is running; falling back to
+  // shown — but only while it HAS an answer. A null read can mean the row never landed (a sink not
+  // yet bound, or refusing under backpressure), not that nothing is running; falling back to
   // the in-memory turn there keeps Stop from being gated on bookkeeping. No live turn either way
   // means nothing has published an identity this request can contradict.
   const ownsRequestedTurn = (): boolean => {
@@ -208,4 +208,18 @@ export async function dismissClaudeStructuredPrompt(input: {
   } finally {
     session.prompts.releaseClaim(claim)
   }
+}
+
+/** An answered or dismissed request frees the child it blocked before the host records the card,
+ *  so no row reads the child waiting beside a closed card; no provider frame says so first. */
+export function settleClaudePromptFreeingChild<R extends { commit: () => Promise<void> }>(
+  input: { request: R; sessions: Map<string, ClaudeSession>; free: () => void },
+  settle: (input: { request: R; sessions: Map<string, ClaudeSession> }) => Promise<void>
+): Promise<void> {
+  const { request, sessions, free } = input
+  const commit = async (): Promise<void> => {
+    free()
+    await request.commit()
+  }
+  return settle({ request: { ...request, commit }, sessions }).finally(free)
 }

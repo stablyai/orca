@@ -14,7 +14,7 @@ vi.mock('./ssh-relay-gc-claim', () => ({
 }))
 
 import { execCommand } from './ssh-relay-deploy-helpers'
-import { acquireInstallLock, RemoteInstallLockBusyError } from './ssh-relay-install-lock'
+import { acquireInstallLock } from './ssh-relay-install-lock'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 describe('acquireInstallLock', () => {
@@ -45,30 +45,5 @@ describe('acquireInstallLock', () => {
         { signal: controller.signal }
       )
     ).rejects.toBe(termination)
-  })
-
-  it.each([
-    [true, 'OK'],
-    [false, 'BUSY']
-  ])('steals a stale lock only when takeover is allowed (%s)', async (allow, expected) => {
-    vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
-      if (command.includes('.steal')) {
-        return 'OK'
-      }
-      return command.includes('mkdir -p') ? '' : 'BUSY'
-    })
-    const acquired = acquireInstallLock(
-      {} as SshConnection,
-      '/home/u/.orca-remote/.orcad-activation-transaction',
-      getRemoteHostPlatform('linux-x64'),
-      { relayGcClaim: false, allowStaleTakeover: allow, waitTimeoutMs: 0 }
-    ).then(
-      () => 'OK',
-      (error: unknown) => (error instanceof RemoteInstallLockBusyError ? 'BUSY' : String(error))
-    )
-    expect(await acquired).toBe(expected)
-    expect(
-      vi.mocked(execCommand).mock.calls.some(([, command]) => command.includes('.steal'))
-    ).toBe(allow)
   })
 })

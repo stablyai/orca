@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 /**
  * #12547: `files.listAll` did not declare `maxResults`, so "the client names its cap and a full page
  * means there is more" was wired only on the Electron IPC hop. Web and mobile were saved incidentally,

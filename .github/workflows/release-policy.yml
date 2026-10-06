@@ -22,7 +22,9 @@ jobs:
       # Why: release events run this file from the tagged commit, so load the module from the same commit.
       - uses: actions/checkout@v6
         with:
-          sparse-checkout: config/scripts/release-policy.mjs
+          sparse-checkout: |
+            config/scripts/release-policy.mjs
+            config/scripts/release-tag-patterns.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: Enforce release policy

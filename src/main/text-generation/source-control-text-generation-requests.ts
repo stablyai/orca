@@ -28,6 +28,7 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../shared/sourc
 import { formatLinkedIssueTemplateValue } from '../../shared/source-control-ai-action-variables'
 import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
+import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
 import { runLocalPlanForAgent } from './source-control-local-generation'
 import { runRemoteSourceControlPlan } from './source-control-remote-generation'
 import type {
@@ -61,21 +62,29 @@ async function executeGenerationPlan(input: {
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
 }): Promise<InternalTextGenerationResult> {
-  const result = await (input.target.kind === 'remote'
-    ? runRemoteSourceControlPlan({
-        plan: input.plan,
-        target: input.target,
-        emptyResultName: input.emptyResultName,
-        operation: input.operation
-      })
-    : runLocalPlanForAgent({
-        agentId: input.params.agentId,
-        plan: input.plan,
-        target: input.target,
-        emptyResultName: input.emptyResultName,
-        operation: input.operation,
-        spawnAgent: input.spawnAgent
-      }))
+  const execute = (plan: CommitMessagePlan): Promise<InternalTextGenerationResult> =>
+    input.target.kind === 'remote'
+      ? runRemoteSourceControlPlan({
+          plan,
+          target: input.target,
+          emptyResultName: input.emptyResultName,
+          operation: input.operation
+        })
+      : runLocalPlanForAgent({
+          agentId: input.params.agentId,
+          plan,
+          target: input.target,
+          emptyResultName: input.emptyResultName,
+          operation: input.operation,
+          spawnAgent: input.spawnAgent
+        })
+  let result = await execute(input.plan)
+  if (!result.success && input.params.agentId === 'opencode') {
+    const retry = openCodeVariantRetryPlan(input.plan, result.failureOutput?.stderr ?? '')
+    if (retry) {
+      result = await execute(retry)
+    }
+  }
   // Why: only a custom command runs a raw model whose chat template can swallow
   // the opening think tag; a built-in agent's message may just mention the tag.
   // PR fields are JSON, so they strip only when parsing fails instead.

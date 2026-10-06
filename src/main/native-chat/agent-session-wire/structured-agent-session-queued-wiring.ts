@@ -30,7 +30,6 @@ export function wireStructuredAgentSessionQueuedMessages(
     sessions,
     getRecord: (sessionId) => context().deps.store.getRecord(sessionId),
     serialize: (sessionId, task) => context().serialize(sessionId, task),
-    flushStreamedEvents: (sessionId) => context().flushStreamedEvents(sessionId),
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(context().deps.store, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
@@ -45,7 +44,7 @@ export function wireStructuredAgentSessionQueuedMessages(
     onJournalActivity: (sessionId: string) => {
       sessions.touch(sessionId)
       const journal = sessions.get(sessionId)?.journal
-      if (journal && !journal.isReadOnly) {
+      if (journal) {
         void adoptEndedRestartPause(sessionId, journal, context().deps.logger)
       }
       drain.schedule(sessionId)

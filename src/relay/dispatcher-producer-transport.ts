@@ -83,8 +83,7 @@ export abstract class RelayDispatcherProducerTransport extends RelayDispatcherRp
     client: RelayClient,
     frame: PreparedRelayFrame,
     lane: 'interactive' | 'ordinary' | 'fixed-bulk' | 'bulk',
-    onSettled: (result: SinkWriteSettlement) => void = () => {},
-    isStillAdmitted?: () => boolean
+    onSettled: (result: SinkWriteSettlement) => void = () => {}
   ): boolean {
     const bytes = frame.frameBytes
     const fixedBlocked =
@@ -97,7 +96,7 @@ export abstract class RelayDispatcherProducerTransport extends RelayDispatcherRp
     if (!leases) {
       return false
     }
-    return this.enqueueLeasedFrame(client, frame, lane, leases[0], onSettled, isStillAdmitted)
+    return this.enqueueLeasedFrame(client, frame, lane, leases[0], onSettled)
   }
 
   protected publishBulkWhenAvailable(
@@ -149,21 +148,13 @@ export abstract class RelayDispatcherProducerTransport extends RelayDispatcherRp
     frame: PreparedRelayFrame,
     lane: 'interactive' | 'ordinary' | 'fixed-bulk' | 'bulk',
     lease: LegacyPublicationLease,
-    onSettled: (result: SinkWriteSettlement) => void = () => {},
-    isStillAdmitted?: () => boolean
+    onSettled: (result: SinkWriteSettlement) => void = () => {}
   ): boolean {
-    const accepted = this.enqueuePreparedFrame(
-      client,
-      frame,
-      lane,
-      (result) => {
-        lease.release()
-        onSettled(result)
-        this.notifyLegacyCapacityIfLow()
-      },
-      undefined,
-      isStillAdmitted
-    )
+    const accepted = this.enqueuePreparedFrame(client, frame, lane, (result) => {
+      lease.release()
+      onSettled(result)
+      this.notifyLegacyCapacityIfLow()
+    })
     if (!accepted) {
       lease.release()
       this.notifyLegacyCapacityIfLow()

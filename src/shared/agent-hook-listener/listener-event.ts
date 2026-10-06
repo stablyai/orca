@@ -10,6 +10,8 @@ export type AgentHookEventPayload = {
   source?: AgentHookSource
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
+  /** Host-minted live turn revision for guarded interrupt commands; never persisted. */
+  hostTurnRevision?: string
   tabId?: string
   worktreeId?: string
   /** SSH connection the event arrived on, or null for local. Only `ingestRemote` can stamp it — the loopback HTTP path has no mux identity — and receivers key off it to drop
@@ -43,7 +45,7 @@ export type AgentHookEventPayload = {
   providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
-  /** Transport-only Claude background-work evidence used to reject false input-based interrupts. */
+  /** Claude live work the child list does not show (a shell, a cron, an owed task notification); rejects false input-based interrupts. */
   claudeRunningNonAgentTask?: boolean
   /** Row projected from a structured session the host holds: `owned` while its provider child
    *  runs here, `held` once the child is gone but the session is still open. Never persisted. */
@@ -52,6 +54,8 @@ export type AgentHookEventPayload = {
    *  Lets a reader rejoin the row to its terminal after the pane key moved. Never persisted:
    *  a handle belongs to the runtime that issued it. */
   terminalHandle?: string
+  /** Execution-host clock retained for age-preserving projection replay; never sent verbatim. */
+  hostEvidenceObservedAt?: number
   payload: ParsedAgentStatusPayload
 }
 

@@ -90,7 +90,6 @@ export function getActiveMultiplexer(connectionId: string): SshChannelMultiplexe
 }
 
 let registeredGetSshConnectionManager: (() => SshConnectionManager | null) | null = null
-let registeredHasDirectSshAuthority: ((targetId: string) => boolean) | null = null
 
 export function setSshConnectionManagerResolver(
   resolve: (() => SshConnectionManager | null) | null
@@ -108,15 +107,4 @@ export function setSshConnectionManagerResolver(
  */
 export function getSshConnectionManager(): SshConnectionManager | null {
   return registeredGetSshConnectionManager?.() ?? null
-}
-
-export function setDirectSshAuthorityResolver(
-  resolve: ((targetId: string) => boolean) | null
-): void {
-  registeredHasDirectSshAuthority = resolve
-}
-
-/** Whether this process currently holds the target's relay session; false when unregistered. */
-export function hasRegisteredDirectSshAuthority(targetId: string): boolean {
-  return registeredHasDirectSshAuthority?.(targetId) ?? false
 }

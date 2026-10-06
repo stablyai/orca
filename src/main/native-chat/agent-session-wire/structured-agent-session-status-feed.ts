@@ -177,7 +177,6 @@ export class StructuredAgentSessionStatusFeed {
     const {
       hostExecutionOwned: _hostExecutionOwned,
       hostExecutionPhase: _hostExecutionPhase,
-      hostExecutionChild: _hostExecutionChild,
       ...retained
     } = previous
     this.published.set(sessionId, retained)
@@ -242,12 +241,8 @@ export class StructuredAgentSessionStatusFeed {
   private retireSettledChildrenOnNewTurn(
     sessionId: string,
     session: StatusFeedSession,
-    acceptedSendKey: string | null
+    acceptedSendKey: string
   ): void {
-    // An unreadable journal says nothing about the user's turns: the last send read stands.
-    if (acceptedSendKey === null) {
-      return
-    }
     const seen = this.acceptedSends.has(sessionId)
     const previous = this.acceptedSends.get(sessionId)
     this.acceptedSends.set(sessionId, acceptedSendKey)
@@ -276,8 +271,7 @@ export class StructuredAgentSessionStatusFeed {
       ...(session.child
         ? {
             hostExecutionOwned: true as const,
-            hostExecutionPhase: session.child.phase,
-            hostExecutionChild: { generation: session.child.generation, fence: session.child.fence }
+            hostExecutionPhase: session.child.phase
           }
         : {}),
       ...projected,

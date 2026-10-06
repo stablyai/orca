@@ -363,15 +363,12 @@ export function mobileWebAppBuildOptions(routes) {
  */
 export function entryStaticClosure(metafile, entryOutputPath) {
   const reached = new Set([entryOutputPath])
-  const queue = [entryOutputPath]
-  while (queue.length > 0) {
-    const current = queue.shift()
+  for (const current of reached) {
     for (const imported of metafile.outputs[current]?.imports ?? []) {
       if (imported.kind !== 'import-statement' || reached.has(imported.path)) {
         continue
       }
       reached.add(imported.path)
-      queue.push(imported.path)
     }
   }
   return reached

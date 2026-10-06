@@ -7,7 +7,10 @@
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import { createStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import {
@@ -27,6 +30,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 import { writeOutbox } from './structured-agent-session-outbox-storage'
+
+const NO_JOURNAL_ITEMS: readonly AgentJournalRenderItem[] = []
 
 // Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
 afterEach(cleanup)
@@ -77,6 +82,7 @@ function renderOutbox() {
   return renderHook(
     (props: Props) =>
       useStructuredAgentSessionOutbox({
+        journalItems: NO_JOURNAL_ITEMS,
         sessionId: 'session-1',
         target: TARGET,
         fence: 1,

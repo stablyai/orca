@@ -174,6 +174,7 @@ describe('FloatingTerminalWindowControls default-agent launch', () => {
     clickLaunch()
 
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith({
+      requestId: expect.any(String),
       agent: 'claude',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       launchSource: 'shortcut'

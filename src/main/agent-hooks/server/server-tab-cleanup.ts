@@ -7,6 +7,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   /** Drop every status/cache claim attributable to a closed tab prefix. */
   dropStatusEntriesByTabPrefix(tabId: string): void {
     this.markTabClosedForAgentStatus(tabId)
+    this.clearTmuxTabSubjects(tabId)
     const paneKeysToClear = new Set<string>()
     const statusPaneKeysToClear = new Set<string>()
     const statusRowsToClear: EnrichedAgentHookEventPayload[] = []
@@ -100,8 +101,18 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     }
   }
 
-  clearPaneState(paneKey: string, options?: { emitStatusRowMutation?: boolean }): void {
+  clearPaneState(
+    paneKey: string,
+    options?: {
+      emitStatusRowMutation?: boolean
+      preserveTmuxInnerSubjects?: boolean
+      statusUnavailable?: true
+    }
+  ): void {
     const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+    if (!options?.preserveTmuxInnerSubjects) {
+      this.clearTmuxInnerSubjects(resolvedPaneKey)
+    }
     const paneKeys = new Set([paneKey, resolvedPaneKey])
     // Why: only persist when a status entry was actually evicted; dropping prompt/tool caches doesn't change the file.
     const previousStatus = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
@@ -143,7 +154,10 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
-      this.emitPaneStatusCleared({ paneKey: resolvedPaneKey })
+      this.emitPaneStatusCleared({
+        paneKey: resolvedPaneKey,
+        statusUnavailable: options?.statusUnavailable
+      })
     }
   }
 }

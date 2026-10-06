@@ -1,13 +1,12 @@
 import type { GitStatusEntry, GitStatusResult } from '../../../shared/git-status-types'
 import { capGitStatusEntries, resolveGitStatusLimit } from '../../../shared/git-status-limit'
-import { parseNumstat } from '../../../shared/git-uncommitted-line-stats'
+import { gitChangeListArgs, parseGitChangeList } from '../../../shared/git-change-list'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import type { GetStatusOptions } from './get-status-options'
 import { getStatus } from './status-read'
 import { resolveSubmoduleWorktreePath } from './submodule-paths'
-import { parseBranchChangeLine } from './branch-change-entries'
 import {
   readGitlinkOidFromIndex,
   readGitlinkOidFromTree,
@@ -83,41 +82,10 @@ async function computeSubmoduleRangeEntries(
     ...gitOptionsForWorktree(submoduleWorktreePath, options),
     env: gitOptionalLocksDisabledEnv()
   }
-  let nameStatus = ''
-  let numstat = ''
   try {
-    const [statusResult, numstatResult] = await Promise.all([
-      gitExecFileAsync(
-        ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', fromOid, toOid],
-        gitOptions
-      ),
-      gitExecFileAsync(
-        ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', '-C', fromOid, toOid],
-        gitOptions
-      )
-    ])
-    nameStatus = statusResult.stdout
-    numstat = numstatResult.stdout
+    const { stdout } = await gitExecFileAsync(gitChangeListArgs(fromOid, toOid), gitOptions)
+    return parseGitChangeList(stdout).map((entry) => ({ ...entry, area: 'unstaged' }))
   } catch {
     return []
   }
-  const statsByPath = parseNumstat(numstat)
-  const entries: GitStatusEntry[] = []
-  for (const line of nameStatus.split(/\r?\n/)) {
-    if (!line) {
-      continue
-    }
-    const change = parseBranchChangeLine(line)
-    if (!change) {
-      continue
-    }
-    entries.push({
-      path: change.path,
-      status: change.status,
-      area: 'unstaged',
-      ...(change.oldPath ? { oldPath: change.oldPath } : {}),
-      ...statsByPath.get(change.path)
-    })
-  }
-  return entries
 }

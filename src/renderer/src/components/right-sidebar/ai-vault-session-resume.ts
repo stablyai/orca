@@ -1,3 +1,4 @@
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -22,7 +23,8 @@ import {
 export type AiVaultSessionResumeTargetState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings'>>
 
 export type AiVaultSessionResumeState = {
   blocked: boolean
@@ -201,7 +203,8 @@ function resolveSupportedResumeWorktreeId(args: {
       sessionFilePath: args.sessionFilePath,
       sessionExecutionHostId: args.sessionExecutionHostId,
       targetStatus,
-      targetExecutionHostId
+      targetExecutionHostId,
+      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(args.targetState, args.worktreeId)
     })
   ) {
     return null

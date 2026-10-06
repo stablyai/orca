@@ -133,18 +133,30 @@ export function countCodexSessionFilesUpTo(sessionsRoot: string, limit: number):
 
 export const BACKFILL_PENDING_MIN_SESSION_FILES = 100
 
-export function isCodexStateDbBackfillPending(codexHomePath: string): boolean {
+export type CodexStateDbBackfillPendingState = 'pending' | 'not-pending' | 'unreadable'
+
+/** `unreadable` means the index could not be read, so the caller picks its own safe side. */
+export function readCodexStateDbBackfillPendingState(
+  codexHomePath: string
+): CodexStateDbBackfillPendingState {
   const status = readCodexStateDbBackfillStatus(codexHomePath)
   if (status.kind === 'incomplete') {
-    return true
+    return 'pending'
+  }
+  if (status.kind === 'unreadable') {
+    return 'unreadable'
   }
   if (status.kind !== 'missing' && status.kind !== 'not-tracked') {
-    return false
+    return 'not-pending'
   }
-  return (
-    countCodexSessionFilesUpTo(
-      join(codexHomePath, 'sessions'),
-      BACKFILL_PENDING_MIN_SESSION_FILES
-    ) >= BACKFILL_PENDING_MIN_SESSION_FILES
-  )
+  return countCodexSessionFilesUpTo(
+    join(codexHomePath, 'sessions'),
+    BACKFILL_PENDING_MIN_SESSION_FILES
+  ) >= BACKFILL_PENDING_MIN_SESSION_FILES
+    ? 'pending'
+    : 'not-pending'
+}
+
+export function isCodexStateDbBackfillPending(codexHomePath: string): boolean {
+  return readCodexStateDbBackfillPendingState(codexHomePath) === 'pending'
 }

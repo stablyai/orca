@@ -15,6 +15,10 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 import { appendStructuredAgentSessionOutboxMessage } from './structured-agent-session-outbox-storage'
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+
+const NO_JOURNAL_ITEMS: readonly AgentJournalRenderItem[] = []
+
 afterEach(cleanup)
 
 beforeEach(() => {
@@ -39,6 +43,7 @@ it('delivers a message queued from outside the chat through the open outbox', as
   })
   const { result } = renderHook(() =>
     useStructuredAgentSessionOutbox({
+      journalItems: NO_JOURNAL_ITEMS,
       sessionId: 'session-1',
       target: { kind: 'local' },
       fence: 1,

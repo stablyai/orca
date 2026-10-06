@@ -7,17 +7,15 @@ import type {
   WatcherProcessSubscription
 } from './parcel-watcher-process-subscription'
 import { RuntimeWatcherPendingAssignment } from './runtime-watcher-pending-assignment'
-import { RuntimeWatcherDisposalOwners } from './runtime-watcher-disposal-owners'
 import { RuntimeWatcherPoolLifecycle } from './runtime-watcher-pool-lifecycle'
 import { RuntimeWatcherPredecessorBarriers } from './runtime-watcher-predecessor-barriers'
 import { RuntimeWatcherQuarantineQueue } from './runtime-watcher-quarantine-queue'
 import { handleRuntimeWatcherSubscriptionFailure } from './runtime-watcher-subscription-failure'
-import {
-  activeWatcherSlots,
-  type RuntimeWatcherPoolAssignment,
-  type RuntimeWatcherPoolSlot,
-  type RuntimeWatcherPoolSupervisor,
-  type RuntimeWatcherProcessPoolOptions
+import type {
+  RuntimeWatcherPoolAssignment,
+  RuntimeWatcherPoolSlot,
+  RuntimeWatcherPoolSupervisor,
+  RuntimeWatcherProcessPoolOptions
 } from './runtime-watcher-pool-state'
 
 export type { RuntimeWatcherProcessPoolOptions } from './runtime-watcher-pool-state'
@@ -41,7 +39,6 @@ export class RuntimeWatcherProcessPool {
     RuntimeWatcherPendingAssignment<RuntimeWatcherPoolAssignment>
   >()
   private readonly lifecycle = new RuntimeWatcherPoolLifecycle()
-  private disposalOwners = new RuntimeWatcherDisposalOwners()
   private readonly predecessorBarriers = new RuntimeWatcherPredecessorBarriers()
   private readonly quarantineQueue: RuntimeWatcherQuarantineQueue<RuntimeWatcherPoolSlot>
 
@@ -145,11 +142,8 @@ export class RuntimeWatcherProcessPool {
 
   resetForTest(): void {
     this.dispose()
-    this.disposalOwners = new RuntimeWatcherDisposalOwners()
     this.lifecycle.reset()
   }
-
-  disposeAndWait = (): Promise<void> => this.disposalOwners.disposeAndWait(() => this.dispose())
 
   forgetRoot(dir: string): void {
     // Physical subscriptions release their assignment through unsubscribe or
@@ -227,7 +221,9 @@ export class RuntimeWatcherProcessPool {
   }
 
   private sharedSlot(): RuntimeWatcherPoolSlot {
-    const sharedSlots = activeWatcherSlots(this.activeSlots, false)
+    const sharedSlots = Array.from(this.activeSlots).filter(
+      (slot) => !slot.isolated && !slot.retired
+    )
     if (sharedSlots.length < this.maxSharedSupervisors) {
       return this.createSlot(false)
     }
@@ -237,7 +233,9 @@ export class RuntimeWatcherProcessPool {
   }
 
   private quarantineSlot(dir: string): RuntimeWatcherPoolSlot | Promise<RuntimeWatcherPoolSlot> {
-    const quarantineSlots = activeWatcherSlots(this.activeSlots, true)
+    const quarantineSlots = Array.from(this.activeSlots).filter(
+      (slot) => slot.isolated && !slot.retired
+    )
     if (quarantineSlots.length < this.maxQuarantineSupervisors) {
       return this.createSlot(true)
     }
@@ -275,11 +273,7 @@ export class RuntimeWatcherProcessPool {
     slot.roots.clear()
     // Why: failAllSubscriptions is still iterating callbacks; defer disposal
     // so every logical root receives the supervisor failure first.
-    const owners = this.disposalOwners
     queueMicrotask(() => {
-      if (this.disposalOwners !== owners) {
-        return
-      }
       this.disposeSlot(slot)
       this.drainQuarantineWaiters()
     })
@@ -314,7 +308,8 @@ export class RuntimeWatcherProcessPool {
   private drainQuarantineWaiters(): void {
     while (
       this.quarantineQueue.length > 0 &&
-      activeWatcherSlots(this.activeSlots, true).length < this.maxQuarantineSupervisors
+      Array.from(this.activeSlots).filter((slot) => slot.isolated && !slot.retired).length <
+        this.maxQuarantineSupervisors
     ) {
       this.quarantineQueue.grantNext(this.createSlot(true))
     }
@@ -325,7 +320,7 @@ export class RuntimeWatcherProcessPool {
       return
     }
     slot.disposed = true
-    this.disposalOwners.retire(slot.supervisor)
+    slot.supervisor.dispose()
     this.allSlots.delete(slot)
   }
 }

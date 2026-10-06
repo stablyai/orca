@@ -4,8 +4,9 @@
 // so no class instances, Maps, or Dates.
 //
 // Rows are append-only. `schemaVersion` is upcast at read time and never
-// rewritten in place, so a host that cannot read a row refuses to write the
-// journal rather than skipping or compacting past it.
+// rewritten in place, so a host that cannot read a row (a newer version, or a
+// newer kind) refuses to write the journal rather than skipping or compacting
+// past it.
 
 import type { UnreadAgentSessionFailureFact } from './agent-session-failure'
 import type { AgentSessionFailureRowWords } from './agent-session-failure-words'
@@ -14,14 +15,15 @@ import type { AgentSessionQuestionAnswer } from './agent-session-question-answer
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
+import type { AgentSessionProviderHandle } from './agent-session-provider-handle'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 
 export { type AgentType }
 
 /** Bump only alongside a read-time upcaster in `journal-row-schema.ts`. */
 /** v3 introduced the `turn` item. A row without one is still written at v2 so
- *  an older host keeps reading it; the first v3 row latches that host read-only
- *  instead of truncating the epoch. */
+ *  an older host keeps reading it; the first v3 row stops that host writing the chat
+ *  (a released one keeps it read-only, this build fails its load) instead of truncating. */
 export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 3
 export const AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION = 3
 const AGENT_SESSION_JOURNAL_PRE_TURN_SCHEMA_VERSION = 2
@@ -38,10 +40,11 @@ export type AgentJournalCursor = {
   sequence: number
 }
 
-/** The durable provider session a journal is bound to.
- *  Codex is one thread id; Claude needs the leaf because concurrent resumes of
- *  one session id branch the same transcript. */
-export type AgentSessionProviderHandle =
+/** A provider handle as journal rows record it, and (without `opaque`) as
+ *  `agentSession.attach` carries it. Persisted and on the wire: never reshape an
+ *  arm. Derived from the in-memory handle by `agentSessionJournalProviderHandle`;
+ *  `opaque` names any other transport, or `pending` before a handle is proved. */
+export type AgentSessionJournalProviderHandle =
   | { kind: 'codex'; threadId: string }
   | { kind: 'claude'; sessionId: string; leafUuid: string | null }
   | { kind: 'opaque'; agent: AgentType; value: string }
@@ -57,7 +60,8 @@ export type AgentSessionJournalIdentity = {
   /** Execution host that owns the process, so a client restart adjudicates nothing. */
   hostId: string
   agent: AgentType
-  providerHandle: AgentSessionProviderHandle
+  /** The record's proved handle; null before the provider has proved one. */
+  providerHandle: AgentSessionProviderHandle | null
 }
 
 // ─── Item identity ──────────────────────────────────────────────────────────
@@ -110,6 +114,13 @@ export type AgentJournalMessageItem = {
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
 
+/** How a call that did not finish on its own ended, finer than its `failed` state. Persisted and
+ *  open for growth: a reader that cannot place a value reads `state`. `unverifiable` is a call its
+ *  session's end closed when nothing proved that end, so a later proof naming its owner finds it
+ *  and revises it to `interrupted`, as it does the turn. */
+export const AGENT_JOURNAL_TOOL_CALL_ENDINGS = ['interrupted', 'unverifiable'] as const
+export type AgentJournalToolCallEnding = (typeof AGENT_JOURNAL_TOOL_CALL_ENDINGS)[number]
+
 export type AgentJournalToolCallItem = NativeChatToolMetadata & {
   kind: 'tool-call'
   name: string
@@ -117,6 +128,9 @@ export type AgentJournalToolCallItem = NativeChatToolMetadata & {
   /** Provider-supplied identity within this item stream; optional for mixed-version peers. */
   callId?: string
   state: AgentJournalToolCallState
+  /** Only beside `state: 'failed'`, which builds that predate it read as they always did. Read
+   *  both through `agentJournalToolCallLifecycle`. */
+  endedAs?: AgentJournalToolCallEnding
   output?: AgentJournalBoundedPayload
 }
 
@@ -166,11 +180,24 @@ export type AgentJournalApprovalMatchedAskRule = {
   ruleContent?: string
 }
 
-export type AgentJournalApprovalSubject = {
+export type AgentJournalPlanApprovalSubject = {
   kind: 'plan'
   text: string
   filePath?: string
 }
+
+declare const agentJournalUnknownKind: unique symbol
+/** A kind tag this build does not know. Branded, so it never stands in for a known tag. */
+export type AgentJournalUnknownKind = string & { readonly [agentJournalUnknownKind]: true }
+
+/** A subject of a kind a newer Orca wrote: carried as it was, with whatever fields it holds, and
+ *  never drawn or approved here. */
+export type AgentJournalUnknownApprovalSubject = { readonly kind: AgentJournalUnknownKind }
+
+/** Open, as the journal schema reads it: narrow with `isPlanApprovalSubject` before reading it. */
+export type AgentJournalApprovalSubject =
+  | AgentJournalPlanApprovalSubject
+  | AgentJournalUnknownApprovalSubject
 
 export type AgentJournalApprovalItem = {
   kind: 'approval'
@@ -390,6 +417,19 @@ export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
 
 // ─── Submissions ────────────────────────────────────────────────────────────
 
+/** The turn a send was answered into: its record's item id, and how the send joined it. `start`:
+ *  the provider answered the send's start request with that turn; `steer`: Orca steered it into
+ *  that running turn. Known limit: a start the provider silently folds into a running turn reads
+ *  as `start`, including into a turn no user entry opened. A newer host may name another way,
+ *  which a reader leaves unclaimed. */
+export type AgentJournalAnsweredTurn = { turnItemId: string; via: AgentJournalTurnJoin }
+export type AgentJournalTurnJoin = 'start' | 'steer'
+/** The same, as a writer names it: the turn record's identity, keyed when the row is written. */
+export type AgentJournalAnsweredTurnIdentity = {
+  turn: AgentJournalItemIdentity
+  via: AgentJournalTurnJoin
+}
+
 export const AGENT_JOURNAL_DISPATCH_STATES = ['pending', 'accepted', 'rejected', 'unknown'] as const
 export type AgentJournalDispatchState = (typeof AGENT_JOURNAL_DISPATCH_STATES)[number]
 
@@ -410,6 +450,15 @@ export type AgentJournalSubmission = {
   rejection?: UnreadAgentSessionFailureFact
   submittedAt: number
   resolvedAt: number | null
+  /** Where the journal wrote this submission's row: its sequence, recomputed on every fold and
+   *  never stored. Needed because a rejected send's own row moves to its rejection, which erases
+   *  where it was sent. Absent from hosts that predate it. */
+  submittedSequence?: number
+  /** On `rejected`: the turn a Codex send was answered into, when that turn ended without taking
+   *  it. null: the host recorded that it was answered into no turn, as every other rejection is
+   *  (Claude, a queued message taken back before handover, restart recovery). Absent: written
+   *  before this field existed, or not rejected. A stored value this build cannot read is null. */
+  answeredInTurn?: AgentJournalAnsweredTurn | null
   /** Set when crash reconciliation resolved the dispatch, not the provider. A live
    *  `unknown` is a send still outstanding; a recovered one outlived its writer. */
   recovered?: true
@@ -418,13 +467,16 @@ export type AgentJournalSubmission = {
   handoverRecorded?: true
   /** When the host handed it to the provider (its `dispatch{pending}` row). */
   handedOverAt?: number
-  /** Host-only: the submission row's sequence, which tells which host process accepted it. */
+  /** Host-only: the submission row's sequence, which tells which host process accepted it. Set
+   *  only on a send accepted for later handover. The snapshot still carries it, but the submission
+   *  schema omits it; no released client reads it, and clients read `submittedSequence` instead. */
   acceptedSequence?: number
   /** The queued draft this submission hands off; absent for a direct send. Read this, never
    *  a draft id compared with `clientMessageId`. */
   queuedMessageId?: string
   /** Host-only: who asked for this turn — a person over the client send RPC, or Orca itself.
-   *  A person's turn is what ends a Stop's queue pause. */
+   *  A person's turn is what ends a Stop's queue pause. The snapshot still carries it; no released
+   *  client reads it. */
   origin?: 'client' | 'host'
 }
 

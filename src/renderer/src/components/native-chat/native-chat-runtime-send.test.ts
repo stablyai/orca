@@ -338,6 +338,16 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
     resetNativeChatPtySendQueuesForTests()
   })
 
+  it('escapes a pasted image path with spaces, so an attachment agent sees one path', () => {
+    sendNativeChatMessageWithImageAttachments('codex', SETTINGS, PTY, '', [
+      '/Users/me/Library/Application Support/orca/native-chat-pastes/orca-paste-1-ab.png'
+    ])
+    expectWriteOrder(sendRuntimePtyInput.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      '\x1b[200~/Users/me/Library/Application\\ Support/orca/native-chat-pastes/orca-paste-1-ab.png\x1b[201~'
+    ])
+  })
+
   it.each(['', 'describe'])('separates every OMP image reference before %j', (text) => {
     sendNativeChatMessageWithImageAttachments('omp', SETTINGS, PTY, text, [
       '/tmp/a.png',

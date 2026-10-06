@@ -2342,9 +2342,6 @@
   "auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c": {
     "ko": "가용성"
   },
-  "auto.components.settings.MobilePane.35100bca5d": {
-    "ko": "휴대폰에서 terminals을 사용하는 동안 Orca는 휴대폰 화면에 맞게 terminals을 축소합니다. 앱을 닫거나 다른 곳으로 전환하면 terminals이 휴대폰 크기로 유지되는지(대화형 CLI 도구가 리플로우되지 않음) 또는 데스크탑으로 다시 크기가 조정되는지 여부가 제어됩니다. 배너에서 '이 terminals 복원' 또는 '모든 terminals 복원'을 사용해 언제든지 수동으로 크기를 조정할 수 있습니다."
-  },
   "auto.components.settings.MobileSettingsPane.b0088412a1": {
     "ko": "또는 다음에서 Android APK를 받으세요"
   },
@@ -4885,12 +4882,6 @@
   },
   "auto.components.terminal.pane.CloseTerminalDialog.stop_command_title": {
     "ko": "실행 중인 명령을 중지할까요?"
-  },
-  "auto.components.terminal.pane.MobileDriverOverlay.54f7d6f69d": {
-    "ko": "모든 terminals 제어권 가져오기"
-  },
-  "auto.components.terminal.pane.MobileDriverOverlay.faa367dc74": {
-    "ko": "휴대폰이 이 화면을 휴대폰 크기로 남겨 두었습니다"
   },
   "auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d": {
     "ko": "삽입"

@@ -144,7 +144,6 @@ export function createSshIpcMocks(): SshIpcMocks {
       installSshPtySourceCancellationPublisher: vi.fn().mockReturnValue(() => {})
     },
     sshConnectionStore: {
-      isRuntimeOwnedSshTarget: (target: { owner?: unknown }) => target.owner !== undefined,
       SshConnectionStore: class MockSshConnectionStore {
         constructor() {
           return mockSshStore

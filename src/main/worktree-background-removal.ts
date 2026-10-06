@@ -2,14 +2,23 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../shared/executi
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { normalizeLocalBranchRef } from './git/worktree-operation-options'
-import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { acquireWatcherRemovalGate, type WatcherRemovalGate } from './ipc/watcher-removal-gate'
+import { runWorktreeChangeInvalidators } from './ipc/worktree-change-invalidators'
 import { parseWslPath } from './wsl'
+import { readWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
 import {
-  readWorktreeRemovalRecords,
-  writeWorktreeRemovalRecords,
-  type WorktreeRemovalRecord
-} from './worktree-removal-records'
+  differentCheckoutAtPathError,
+  isCheckoutRegistered,
+  isUnregisteredRemovalLeftover
+} from './worktree-removal-leftover'
+import {
+  failedWorktreeRemovals,
+  finishedWorktreeRemovals,
+  pendingWorktreeRemovals,
+  persistWorktreeRemovalRecords,
+  setWorktreeRemovalRecordsDirectory,
+  worktreeCheckoutExists
+} from './worktree-removal-table'
 
 export type BackgroundWorktreeRemovalJob = {
   /** `stopSignal` aborts on an orderly quit; pass it only to the checkout delete. */
@@ -18,36 +27,40 @@ export type BackgroundWorktreeRemovalJob = {
   publish: () => void
 }
 
-/** The removals pending when a listing began to read Git. */
-export type PendingWorktreeRemovals = ReadonlyMap<string, WorktreeRemovalRecord>
-
 type RemovalSettlement = {
   result: Promise<RemoveWorktreeResult>
   resolve: (result: RemoveWorktreeResult) => void
   reject: (error: unknown) => void
 }
 
-// The accepted removals, mirrored to disk on every change; listings and joins read only this.
-const pendingByWorktreeId = new Map<string, WorktreeRemovalRecord>()
 const jobsByWorktreeId = new Map<string, Promise<void>>()
 // What every request for a pending removal waits on: the first one and any that join it.
 const settlementsByWorktreeId = new Map<string, RemovalSettlement>()
 const stopControllers = new Set<AbortController>()
 // Loaded removals' terminal/watcher fences, held until the resumed job takes its own gate.
 const startupFencesByWorktreeId = new Map<string, WatcherRemovalGate>()
-// Why weak: a listing that read Git before a delete finished holds the record until it replies.
-const removedRecords = new WeakSet<WorktreeRemovalRecord>()
-const NO_PENDING_REMOVALS: PendingWorktreeRemovals = new Map()
-let recordsDirectory: string | null = null
 
 /**
  * Loads removals a quit or crash interrupted, so listings mark them before the first paint and
  * session restore cannot open a terminal or watcher in a half-deleted checkout before the resume.
  */
-export async function loadWorktreeRemovalRecords(directory: string): Promise<void> {
-  recordsDirectory = directory
+export async function loadWorktreeRemovalRecords(
+  directory: string,
+  hasRepo: (repoId: string) => boolean = () => true
+): Promise<void> {
+  setWorktreeRemovalRecordsDirectory(directory)
+  let droppedFailure = false
   for (const record of await readWorktreeRemovalRecords(directory)) {
-    if (!pendingByWorktreeId.has(record.worktreeId)) {
+    if (record.failure) {
+      // Why the repo: only its listing shows the row, so nothing else could end a removed repo's.
+      if (hasRepo(record.repoId) && (await worktreeCheckoutExists(record.worktreePath))) {
+        failedWorktreeRemovals.set(record.worktreeId, record)
+      } else {
+        droppedFailure = true
+      }
+      continue
+    }
+    if (!pendingWorktreeRemovals.has(record.worktreeId)) {
       addPendingRemoval(record)
       try {
         startupFencesByWorktreeId.set(
@@ -58,6 +71,9 @@ export async function loadWorktreeRemovalRecords(directory: string): Promise<voi
         // An overlapping loaded removal already fences this path.
       }
     }
+  }
+  if (droppedFailure) {
+    await persistWorktreeRemovalRecords()
   }
 }
 
@@ -77,21 +93,11 @@ function addPendingRemoval(record: WorktreeRemovalRecord): RemovalSettlement {
   // Why: a removal nobody waits on (an older client's, or one a restart resumed) may still fail.
   result.catch(() => {})
   const settlement = { result, resolve, reject }
-  pendingByWorktreeId.set(record.worktreeId, record)
+  // A new removal of the same workspace supersedes its failed one.
+  failedWorktreeRemovals.delete(record.worktreeId)
+  pendingWorktreeRemovals.set(record.worktreeId, record)
   settlementsByWorktreeId.set(record.worktreeId, settlement)
   return settlement
-}
-
-function persistRecords(): Promise<void> {
-  if (!recordsDirectory) {
-    return Promise.resolve()
-  }
-  return writeWorktreeRemovalRecords(recordsDirectory, () => [
-    ...pendingByWorktreeId.values()
-  ]).catch((error: unknown) => {
-    // Why: bookkeeping must not gate the delete; a lost write only costs resuming it after a quit.
-    console.warn('[worktrees] failed to persist worktree removal records', error)
-  })
 }
 
 /**
@@ -126,41 +132,6 @@ export function removesInBackground(
   return !options.wslDistro && !parseWslPath(worktreePath)
 }
 
-export function hasPendingWorktreeRemovals(): boolean {
-  return pendingByWorktreeId.size > 0
-}
-
-export function findPendingWorktreeRemovalConflict(
-  repoPath: string,
-  target: { worktreePath?: string; branch?: string }
-): WorktreeRemovalRecord | undefined {
-  const branch = target.branch?.replace(/^refs\/heads\//, '')
-  for (const removal of pendingByWorktreeId.values()) {
-    if (!areWorktreePathsEqual(removal.repoPath, repoPath)) {
-      continue
-    }
-    if (
-      (target.worktreePath && areWorktreePathsEqual(removal.worktreePath, target.worktreePath)) ||
-      (branch && removal.branch === branch)
-    ) {
-      return removal
-    }
-  }
-  return undefined
-}
-
-export function assertNoPendingWorktreeRemovalConflict(
-  repoPath: string,
-  target: { worktreePath?: string; branch?: string }
-): void {
-  const removal = findPendingWorktreeRemovalConflict(repoPath, target)
-  if (removal) {
-    throw new Error(
-      `Orca is still deleting the workspace at ${removal.worktreePath}. Cleanup is pending; try again shortly.`
-    )
-  }
-}
-
 /**
  * Records an accepted removal and runs its delete detached from the request that asked for it, so
  * the delete finishes even when that request times out or its client goes away. Resolves with the
@@ -183,8 +154,44 @@ export function startBackgroundWorktreeRemoval(
     requestedAt: Date.now()
   }
   const settlement = addPendingRemoval(record)
-  runBackgroundWorktreeRemoval(record, args, persistRecords())
+  runBackgroundWorktreeRemoval(record, args, persistWorktreeRemovalRecords())
   publishSafely(args.publish)
+  return settlement.result
+}
+
+/**
+ * Delete on a failed delete's leftover that Git's current listing still does not register: runs the
+ * recorded removal again, with the choices the user made the first time, or joins the one another
+ * request started while this one listed Git. Undefined when neither.
+ */
+export function retryFailedWorktreeRemoval(
+  worktreeId: string,
+  hostId: ExecutionHostId | undefined,
+  jobFor: (record: WorktreeRemovalRecord) => BackgroundWorktreeRemovalJob
+): Promise<RemoveWorktreeResult> | undefined {
+  const failed =
+    (hostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID
+      ? failedWorktreeRemovals.get(worktreeId)
+      : undefined
+  if (!failed) {
+    return waitForPendingWorktreeRemoval(worktreeId, hostId)
+  }
+  const { failure: _failure, ...record } = failed
+  const settlement = addPendingRemoval(record)
+  const job = jobFor(record)
+  const leftoverOnly: BackgroundWorktreeRemovalJob = {
+    ...job,
+    run: async (stopSignal) => {
+      // Why: the recorded choices (force, branch) were for the leftover; a checkout Git registered
+      // at the path after the caller listed is a new one, which only the normal delete may remove.
+      if (await isCheckoutRegistered(record)) {
+        throw differentCheckoutAtPathError(record.worktreePath)
+      }
+      return job.run(stopSignal)
+    }
+  }
+  runBackgroundWorktreeRemoval(record, leftoverOnly, persistWorktreeRemovalRecords())
+  publishSafely(job.publish)
   return settlement.result
 }
 
@@ -192,7 +199,7 @@ export function startBackgroundWorktreeRemoval(
 export function resumeInterruptedWorktreeRemovals(
   jobFor: (record: WorktreeRemovalRecord) => BackgroundWorktreeRemovalJob
 ): void {
-  for (const record of pendingByWorktreeId.values()) {
+  for (const record of pendingWorktreeRemovals.values()) {
     if (!jobsByWorktreeId.has(record.worktreeId)) {
       runBackgroundWorktreeRemoval(record, jobFor(record), Promise.resolve())
     }
@@ -237,12 +244,13 @@ async function settleBackgroundWorktreeRemoval(
 ): Promise<void> {
   await waitForRecordWrite(record, recorded)
   let settle: (settlement: RemovalSettlement) => void
+  let failure: WorktreeRemovalRecord['failure']
   try {
     if (stopSignal.aborted) {
       return
     }
     const result = await job.run(stopSignal)
-    removedRecords.add(record)
+    finishedWorktreeRemovals.add(record)
     settle = (settlement) => settlement.resolve(result)
   } catch (error) {
     if (stopSignal.aborted) {
@@ -251,15 +259,29 @@ async function settleBackgroundWorktreeRemoval(
     }
     console.warn(`[worktrees] background removal of ${record.worktreePath} failed`, error)
     settle = (settlement) => settlement.reject(error)
+    // Why: Git drops the registration even when it fails to delete the checkout, and Orca lists
+    // workspaces from Git, so without the record the leftover would vanish with no way to retry.
+    if (await isCheckoutLeftUnregistered(record)) {
+      failure = {
+        message: error instanceof Error ? error.message : String(error),
+        failedAt: Date.now()
+      }
+    }
   } finally {
     // A resumed job that ended before taking its own gate still holds the fence loading gave it.
     releaseStartupRemovalFence(record.worktreeId)
   }
-  // Why clear on failure too: the row returns live and retryable instead of retrying unseen.
-  const cleared = pendingByWorktreeId.get(record.worktreeId) === record
+  // Why clear on failure too: the row returns with its error and Delete retries it; nothing
+  // retries unseen.
+  const cleared = pendingWorktreeRemovals.get(record.worktreeId) === record
   if (cleared) {
-    pendingByWorktreeId.delete(record.worktreeId)
+    pendingWorktreeRemovals.delete(record.worktreeId)
     settlementsByWorktreeId.delete(record.worktreeId)
+    if (failure) {
+      failedWorktreeRemovals.set(record.worktreeId, { ...record, failure })
+      // Git's catalog changed under a failed delete; cached scans still list the checkout.
+      runWorktreeChangeInvalidators(record.repoId)
+    }
   }
   // Why this run's own settlement: desktop IPC and runtime RPC coalesce separately, so a concurrent
   // removal can replace the record, and the request waiting on this delete must still get its reply.
@@ -270,7 +292,23 @@ async function settleBackgroundWorktreeRemoval(
   // re-runs a finish that re-derives what is left from Git.
   publishSafely(job.publish)
   if (cleared) {
-    await persistRecords()
+    await persistWorktreeRemovalRecords()
+  }
+}
+
+async function isCheckoutLeftUnregistered(record: WorktreeRemovalRecord): Promise<boolean> {
+  if (!(await worktreeCheckoutExists(record.worktreePath))) {
+    return false
+  }
+  try {
+    return (
+      !(await isCheckoutRegistered(record)) &&
+      (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath))
+    )
+  } catch (error) {
+    // Unknowable: the row stays however Git lists it, as before this record existed.
+    console.warn(`[worktrees] could not list worktrees of ${record.repoPath}`, error)
+    return false
   }
 }
 
@@ -306,45 +344,6 @@ function publishSafely(publish: () => void): void {
   }
 }
 
-/** Taken before a listing reads Git; pass it to projectPendingWorktreeRemovals with the rows. */
-export function snapshotPendingWorktreeRemovals(): PendingWorktreeRemovals {
-  return pendingByWorktreeId.size === 0 ? NO_PENDING_REMOVALS : new Map(pendingByWorktreeId)
-}
-
-/**
- * Marks rows whose checkout this host is deleting, or leaves them out for a client that cannot
- * read the marker: such a client already dropped the row on acceptance and would re-show it.
- */
-export function projectPendingWorktreeRemovals<
-  T extends { hostId?: ExecutionHostId; removing?: true }
->(
-  rows: T[],
-  idOf: (row: T) => string,
-  clientReadsMarker: boolean,
-  pendingAtScan: PendingWorktreeRemovals
-): T[] {
-  if (pendingByWorktreeId.size === 0 && pendingAtScan.size === 0) {
-    return rows
-  }
-  const projected: T[] = []
-  for (const row of rows) {
-    const id = idOf(row)
-    const local = row.hostId === undefined || row.hostId === LOCAL_EXECUTION_HOST_ID
-    if (local && pendingByWorktreeId.has(id)) {
-      if (clientReadsMarker) {
-        projected.push({ ...row, removing: true })
-      }
-      continue
-    }
-    const scanned = local ? pendingAtScan.get(id) : undefined
-    // Why: Git was read before this delete finished; unmarked, the gone row reads as a failed delete.
-    if (!scanned || !removedRecords.has(scanned)) {
-      projected.push(row)
-    }
-  }
-  return projected
-}
-
 export async function _settlePendingWorktreeRemovalsForTests(): Promise<void> {
   while (jobsByWorktreeId.size > 0) {
     await Promise.all(jobsByWorktreeId.values())
@@ -352,7 +351,8 @@ export async function _settlePendingWorktreeRemovalsForTests(): Promise<void> {
 }
 
 export function _resetPendingWorktreeRemovalsForTests(): void {
-  pendingByWorktreeId.clear()
+  pendingWorktreeRemovals.clear()
+  failedWorktreeRemovals.clear()
   jobsByWorktreeId.clear()
   settlementsByWorktreeId.clear()
   stopControllers.clear()
@@ -360,5 +360,5 @@ export function _resetPendingWorktreeRemovalsForTests(): void {
     fence.release()
   }
   startupFencesByWorktreeId.clear()
-  recordsDirectory = null
+  setWorktreeRemovalRecordsDirectory(null)
 }

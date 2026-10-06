@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/agent-process-recognition'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import { createPaneForegroundProcessReader } from './pane-foreground-process-reader'
@@ -60,7 +60,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   /** True while any read is scheduled or running, whatever its authority. */
   hasReadInFlight: () => boolean
   onVisiblePtyBound: (expectsAgent?: boolean) => boolean
-  onCommandStarted: (expectedAgent?: TuiAgent | null) => void
+  onCommandStarted: (expectedAgent?: TerminalAgent | null) => void
   /** True when pane identity must remain visible until an async shell confirmation. */
   onCommandFinished: () => boolean
   /** The process monitor confirmed this agent exited (no agent, no children, settled). */

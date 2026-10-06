@@ -1,5 +1,5 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from './types'
+import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
@@ -13,6 +13,7 @@ import type {
 } from './ssh-pty-provider-contract'
 import { SshPtyProviderOutputState } from './ssh-pty-provider-output-state'
 import { spawnFreshSshPty } from './ssh-agent-session-create-operation'
+import { mapSshPtyProcessList } from './ssh-agent-session-process-list'
 import {
   requestSshPtyAttach,
   reattachSshPtySessionForSpawn,
@@ -25,7 +26,6 @@ import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { spawnWithTerminalRuntimeRepair, type TerminalRepairHook } from './ssh-pty-spawn-repair'
 import { createSshPtyProviderRpcOperations } from './ssh-pty-provider-rpc-operations'
-import { createSshPtyProcessLister } from './ssh-pty-process-list'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
@@ -38,7 +38,6 @@ export class SshPtyProvider implements IPtyProvider {
   private connectionId: string
   private livePtyIds = new Set<string>()
   readonly getAppliedSize: NonNullable<IPtyProvider['getAppliedSize']>
-  readonly listProcesses: IPtyProvider['listProcesses']
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
   private readonly outputState: SshPtyProviderOutputState
@@ -101,12 +100,6 @@ export class SshPtyProvider implements IPtyProvider {
       recordExit: (relayPtyId, incarnationId) => {
         this.spawnExitRaces.recordExit(relayPtyId, incarnationId)
       }
-    })
-    this.listProcesses = createSshPtyProcessLister({
-      mux,
-      connectionId,
-      livePtyIds: this.livePtyIds,
-      outputState: this.outputState
     })
   }
 
@@ -275,6 +268,26 @@ export class SshPtyProvider implements IPtyProvider {
       relayTimeoutOptions(opts.deadlineMs)
     )
     this.livePtyIds.delete(id)
+  }
+
+  async listProcesses(opts?: {
+    deadlineMs?: number
+    includeForegroundProcessEvidence?: boolean
+  }): Promise<PtyProcessInfo[]> {
+    const result = await this.mux.request(
+      'pty.listProcesses',
+      opts?.includeForegroundProcessEvidence === undefined
+        ? undefined
+        : { includeForegroundProcessEvidence: opts.includeForegroundProcessEvidence },
+      relayTimeoutOptions(opts?.deadlineMs)
+    )
+    const processes = mapSshPtyProcessList(result as PtyProcessInfo[], (id) => this.toAppPtyId(id))
+    for (const process of processes) {
+      this.livePtyIds.add(process.id)
+      const relayPtyId = this.toRelayPtyId(process.id)
+      this.outputState.rememberPtyIncarnation(relayPtyId, process.incarnationId)
+    }
+    return processes
   }
 
   hasPty = (id: string): boolean => this.livePtyIds.has(id)

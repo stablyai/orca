@@ -16,6 +16,7 @@ import {
   journalLifecycleBatchRowBuilder
 } from './journal-row-builders'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 // A row's producer is fixed by the write that created it. A revision naming no
 // producer — a settlement, a prompt answer, a reopen sweep — keeps it; a
@@ -170,7 +171,7 @@ describe('producer inheritance across a reopen', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'root' }
+        providerHandle: codexProviderHandle('root')
       },
       stateDirectory: root,
       now: () => 1_000

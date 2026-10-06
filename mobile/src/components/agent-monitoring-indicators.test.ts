@@ -32,6 +32,7 @@ vi.mock('react-native', () => ({
     timing: animationTiming
   },
   Easing: { linear: 'linear' },
+  Platform: { OS: 'ios' },
   StyleSheet: { create: <T>(styles: T) => styles },
   View: 'View'
 }))
@@ -85,6 +86,22 @@ describe('mobile monitoring indicators', () => {
 
     expect(animationTiming).toHaveBeenCalledOnce()
     expect(animationLoop).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the native driver for both working rings on native', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement('View', null, [
+          createElement(AgentSpinner, { key: 'spinner', status: 'working' }),
+          createElement(AgentStateDot, { key: 'dot', state: 'working' })
+        ])
+      )
+    })
+
+    expect(animationTiming).toHaveBeenCalledTimes(2)
+    for (const call of animationTiming.mock.calls) {
+      expect(call).toEqual([expect.anything(), expect.objectContaining({ useNativeDriver: true })])
+    }
   })
 
   it.each([

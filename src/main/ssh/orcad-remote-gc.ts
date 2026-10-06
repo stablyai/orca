@@ -10,8 +10,7 @@
  *
  * On top of the ownership rule, orcad pins three directories that are idle-looking but
  * load-bearing: the active version, the rollback target, and whichever version the LIVE
- * terminal daemon was forked from. Every version an in-flight activation journal names is
- * pinned too, and an unreadable journal skips the pass entirely.
+ * terminal daemon was forked from.
  */
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
@@ -26,7 +25,6 @@ import {
 } from './orcad-remote-launch'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { gcRemoteNodeRuntimeStore } from './remote-node-runtime-store-gc'
-import { readOrcadGcTransactionPins } from './orcad-gc-transaction-pins'
 
 export type OrcadGcOptions = {
   conn: SshConnection
@@ -52,11 +50,6 @@ export type OrcadGcOptions = {
 }
 
 export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<void> {
-  const transaction = await readOrcadGcTransactionPins(options)
-  if (transaction.state === 'keep-all') {
-    console.warn('[orcad-gc] An activation transaction is unreadable or unjournaled; skipping GC.')
-    return
-  }
   await gcOldRemoteInstallVersions(
     options.conn,
     ORCAD_INSTALL_MODEL,
@@ -64,10 +57,7 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<void>
     options.currentDirAbsPath,
     options.host,
     {
-      pinnedDirNames: [
-        ...orcadGcPinnedDirNames(options.record, options.liveDaemonVersion),
-        ...transaction.dirNames
-      ],
+      pinnedDirNames: orcadGcPinnedDirNames(options.record, options.liveDaemonVersion),
       isDirLive: async (dir) => {
         try {
           const probe = await execCommand(

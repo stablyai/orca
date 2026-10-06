@@ -86,13 +86,8 @@ describe('parcel watcher process canary', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(sendMock).toHaveBeenCalledWith(
-      expect.objectContaining({ op: 'subscribe-failed', id: 7 }),
-      expect.any(Function)
+      expect.objectContaining({ op: 'subscribe-failed', id: 7 })
     )
-    const failedSend = sendMock.mock.calls.find(([message]) => message.op === 'subscribe-failed')
-    expect(() =>
-      failedSend![1](Object.assign(new Error('host disconnected'), { code: 'EPIPE' }))
-    ).not.toThrow()
     expect(watchMock).not.toHaveBeenCalledWith('/repo/.git', expect.anything(), expect.anything())
   })
 
@@ -318,13 +313,10 @@ describe('parcel watcher process canary', () => {
     finishActiveCrawl?.({ unsubscribe: vi.fn().mockResolvedValue(undefined) })
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(sendMock).toHaveBeenCalledWith({ op: 'unsubscribed', id: 2 }, expect.any(Function))
+    expect(sendMock).toHaveBeenCalledWith({ op: 'unsubscribed', id: 2 })
     expect(subscribeMock).toHaveBeenCalledTimes(2)
-    expect(sendMock).not.toHaveBeenCalledWith(
-      { op: 'subscribe-started', id: 2 },
-      expect.any(Function)
-    )
-    expect(sendMock).not.toHaveBeenCalledWith({ op: 'subscribed', id: 2 }, expect.any(Function))
+    expect(sendMock).not.toHaveBeenCalledWith({ op: 'subscribe-started', id: 2 })
+    expect(sendMock).not.toHaveBeenCalledWith({ op: 'subscribed', id: 2 })
   })
 
   it('unsubscribes a late cancel after the crawl already finished', async () => {
@@ -340,16 +332,13 @@ describe('parcel watcher process canary', () => {
     process.emit('message', { op: 'subscribe', id: 1, dir: '/finished', opts: {} })
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(sendMock).toHaveBeenCalledWith({ op: 'subscribed', id: 1 }, expect.any(Function))
+    expect(sendMock).toHaveBeenCalledWith({ op: 'subscribed', id: 1 })
     process.emit('message', { op: 'cancel-subscribe', id: 1 })
     await vi.advanceTimersByTimeAsync(0)
 
     expect(unsubscribe).toHaveBeenCalledTimes(1)
-    expect(sendMock).toHaveBeenCalledWith({ op: 'unsubscribed', id: 1 }, expect.any(Function))
-    expect(sendMock).not.toHaveBeenCalledWith(
-      { op: 'cancel-requires-restart', id: 1 },
-      expect.any(Function)
-    )
+    expect(sendMock).toHaveBeenCalledWith({ op: 'unsubscribed', id: 1 })
+    expect(sendMock).not.toHaveBeenCalledWith({ op: 'cancel-requires-restart', id: 1 })
   })
 
   it('reports native unsubscribe rejection without acknowledging handle release', async () => {
@@ -367,15 +356,12 @@ describe('parcel watcher process canary', () => {
     process.emit('message', { op: 'unsubscribe', id: 1 })
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(sendMock).toHaveBeenCalledWith(
-      {
-        op: 'unsubscribe-failed',
-        id: 1,
-        message: 'native handle still active'
-      },
-      expect.any(Function)
-    )
-    expect(sendMock).not.toHaveBeenCalledWith({ op: 'unsubscribed', id: 1 }, expect.any(Function))
+    expect(sendMock).toHaveBeenCalledWith({
+      op: 'unsubscribe-failed',
+      id: 1,
+      message: 'native handle still active'
+    })
+    expect(sendMock).not.toHaveBeenCalledWith({ op: 'unsubscribed', id: 1 })
   })
 
   it('asks the host to restart when an active crawl is cancelled', async () => {
@@ -394,13 +380,10 @@ describe('parcel watcher process canary', () => {
     await vi.advanceTimersByTimeAsync(0)
     process.emit('message', { op: 'cancel-subscribe', id: 1 })
 
-    expect(sendMock).toHaveBeenCalledWith(
-      { op: 'cancel-requires-restart', id: 1 },
-      expect.any(Function)
-    )
+    expect(sendMock).toHaveBeenCalledWith({ op: 'cancel-requires-restart', id: 1 })
     finishCrawl?.({ unsubscribe: vi.fn().mockResolvedValue(undefined) })
     await vi.advanceTimersByTimeAsync(0)
-    expect(sendMock).not.toHaveBeenCalledWith({ op: 'subscribed', id: 1 }, expect.any(Function))
+    expect(sendMock).not.toHaveBeenCalledWith({ op: 'subscribed', id: 1 })
   })
 
   it('still restarts after consecutive missed events once every subscription is live', async () => {
@@ -498,14 +481,11 @@ describe('parcel watcher process canary', () => {
     callback?.(null, [{ type: 'update', path: '/repo/after-overflow.txt' }])
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(sendMock).toHaveBeenCalledWith(
-      {
-        op: 'watch-error',
-        id: 1,
-        message: 'Events were dropped by the FSEvents client. File system must be re-scanned.'
-      },
-      expect.any(Function)
-    )
+    expect(sendMock).toHaveBeenCalledWith({
+      op: 'watch-error',
+      id: 1,
+      message: 'Events were dropped by the FSEvents client. File system must be re-scanned.'
+    })
     expect(sendMock).toHaveBeenCalledWith(
       {
         op: 'events',
@@ -514,6 +494,92 @@ describe('parcel watcher process canary', () => {
       },
       expect.any(Function)
     )
+  })
+
+  it.each(['/repo', '/repo/Café'])(
+    'invalidates only the deleted root %s after delivering its batch',
+    async (dir) => {
+      let callback:
+        | ((err: Error | null, events: { type: string; path: string }[]) => void)
+        | undefined
+      subscribeMock
+        .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+        .mockImplementationOnce(async (_dir, nextCallback) => {
+          callback = nextCallback
+          return { unsubscribe: vi.fn() }
+        })
+      const sendMock = vi.fn()
+      process.send = sendMock
+      await import('./parcel-watcher-process-entry')
+      await vi.advanceTimersByTimeAsync(0)
+      process.emit('message', { op: 'subscribe', id: 1, dir, opts: {} })
+      await vi.advanceTimersByTimeAsync(0)
+      sendMock.mockClear()
+
+      callback?.(null, [{ type: 'delete', path: `${dir}/nested` }])
+      callback?.(null, [{ type: 'delete', path: `${dir}-other` }])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(sendMock.mock.calls.some(([message]) => message.op === 'watch-error')).toBe(false)
+      sendMock.mockClear()
+
+      callback?.(null, [{ type: 'delete', path: dir }])
+      callback?.(null, [{ type: 'update', path: `${dir}/late.txt` }])
+      callback?.(null, [{ type: 'delete', path: dir }])
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(sendMock.mock.calls.map(([message]) => message)).toEqual([
+        { op: 'events', id: 1, events: [{ type: 'delete', path: dir }] },
+        { op: 'watch-error', id: 1, message: expect.stringContaining('root') }
+      ])
+    }
+  )
+
+  it('invalidates an overflowing root-delete batch after IPC backpressure clears', async () => {
+    let callback:
+      | ((err: Error | null, events: { type: string; path: string }[]) => void)
+      | undefined
+    subscribeMock
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+      .mockImplementationOnce(async (_dir, nextCallback) => {
+        callback = nextCallback
+        return { unsubscribe: vi.fn() }
+      })
+    let releaseEvent: (() => void) | undefined
+    const sendMock = vi.fn((message, onSent) => {
+      if (message.op === 'events') {
+        releaseEvent = onSent
+        return false
+      }
+      return true
+    })
+    process.send = sendMock
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', {
+      op: 'subscribe',
+      id: 1,
+      dir: '/repo',
+      opts: {},
+      delivery: { maxEventsPerBatch: 1 }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    sendMock.mockClear()
+
+    callback?.(null, [{ type: 'update', path: '/repo/first.txt' }])
+    await vi.advanceTimersByTimeAsync(0)
+    callback?.(null, [
+      { type: 'delete', path: '/repo/child.txt' },
+      { type: 'delete', path: '/repo' }
+    ])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sendMock.mock.calls.map(([message]) => message.op)).toEqual(['events'])
+    releaseEvent?.()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sendMock.mock.calls.map(([message]) => message.op)).toEqual([
+      'events',
+      'overflow',
+      'watch-error'
+    ])
   })
 
   it('bounds pending event batches while child IPC reports backpressure', async () => {

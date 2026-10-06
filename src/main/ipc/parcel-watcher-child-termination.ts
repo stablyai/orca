@@ -10,13 +10,6 @@ export const WATCHER_PROCESS_HARD_KILL_DELAY_MS = 5_000
 export const WATCHER_PROCESS_EXIT_DEADLINE_MS = RUNTIME_FILE_WATCH_EXIT_DEADLINE_MS
 
 const physicalExitPromises = new WeakMap<ChildProcess, Promise<void>>()
-const signalledChildren = new WeakSet<ChildProcess>()
-
-/** Sends the graceful signal once; a later awaited termination only escalates and waits. */
-export function signalWatcherChild(child: ChildProcess): void {
-  signalledChildren.add(child)
-  child.kill()
-}
 
 export function registerWatcherChildPhysicalExit(child: ChildProcess): () => void {
   let resolveExit: () => void = () => undefined
@@ -93,10 +86,6 @@ export function terminateWatcherChild(child: ChildProcess): Promise<boolean> {
     hardKillTimer.unref?.()
     const exitDeadlineTimer = setTimeout(() => finish(false), WATCHER_PROCESS_EXIT_DEADLINE_MS)
     exitDeadlineTimer.unref?.()
-    if (signalledChildren.has(child)) {
-      return
-    }
-    signalledChildren.add(child)
     try {
       child.kill()
     } catch {
@@ -105,10 +94,11 @@ export function terminateWatcherChild(child: ChildProcess): Promise<boolean> {
   })
 }
 
-export function watcherChildPhysicalExit(child: ChildProcess): Promise<void> {
-  return child.exitCode !== null || child.signalCode !== null
-    ? Promise.resolve()
-    : (physicalExitPromises.get(child) ??
+export function createWatcherChildTerminationFailure(child: ChildProcess): WatcherProcessFailure {
+  const physicalExit =
+    child.exitCode !== null || child.signalCode !== null
+      ? Promise.resolve()
+      : (physicalExitPromises.get(child) ??
         new Promise<void>((resolve) => {
           const finish = (): void => {
             child.removeListener('exit', finish)
@@ -118,14 +108,11 @@ export function watcherChildPhysicalExit(child: ChildProcess): Promise<void> {
           child.once('exit', finish)
           child.once('close', finish)
         }))
-}
-
-export function createWatcherChildTerminationFailure(child: ChildProcess): WatcherProcessFailure {
   return new WatcherProcessFailure(
     'file watcher process did not exit after termination deadline',
     'supervisor',
     'process_unavailable',
-    watcherChildPhysicalExit(child)
+    physicalExit
   )
 }
 
@@ -140,12 +127,10 @@ export async function terminateIdleWatcherChild(
   pendingUnsubscribes: Map<number, PendingWatcherUnsubscribe>,
   onFinished: (exited: boolean) => void
 ): Promise<void> {
-  // Windows directory handles require physical exit, not merely an accepted signal.
   try {
     await requireWatcherChildTermination(child)
     onFinished(true)
   } catch (error) {
-    // Idle children retain capacity but cannot double-watch; the owner may remain reusable.
     onFinished(false)
     resolvePendingWatcherUnsubscribes(
       pendingUnsubscribes,

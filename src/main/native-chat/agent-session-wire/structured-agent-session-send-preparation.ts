@@ -11,6 +11,7 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
 import { journalOpenRefusal } from '../agent-session-journal/journal-open-failure'
 import {
@@ -22,16 +23,24 @@ import {
   AGENT_SESSION_NOT_ATTACHED,
   type AgentSessionMutationSessionPreparation
 } from './structured-agent-session-mutation-admission'
+import { agentSessionOperationOutcomeUnknown } from './structured-agent-session-replay-outcome'
 import { rewindRefusal } from './structured-rewind-refusal'
+import { recoverStructuredRewind } from './structured-rewind-recovery'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import { conversationCommandInFlight } from './structured-conversation-command-admission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+
+function rewindInDoubt(record: AgentSessionRecord | null | undefined): boolean {
+  const phase = record?.rewind?.phase
+  return phase === 'prepared' || phase === 'provider-succeeded'
+}
 
 /** Why the record refuses any send right now, whoever owns it; null when a send may run. */
 export function structuredAgentSessionSendBlock(
   record: AgentSessionRecord | null
 ): { ok: false; refusal: AgentSessionWireRefusal } | null {
-  const rewind = record?.rewind
-  if (rewind?.phase === 'prepared' || rewind?.phase === 'provider-succeeded') {
+  if (rewindInDoubt(record)) {
     return rewindRefusal('outcome-unknown')
   }
   const command = record?.conversationCommand
@@ -54,17 +63,16 @@ export function structuredAgentSessionSendBlock(
   return null
 }
 
-/** The conversation a send or a Stop writes to, opened when this host holds it closed. */
+/** The conversation a send or a Stop writes to, opened when this host holds it closed. Once it
+ *  answers, every write issued before it has settled, so a mutation reads a whole fold. */
 export async function openConversationForWrite(
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>,
   envelope: AgentSessionMutationEnvelope,
   logger: StructuredAgentSessionLogger
 ): Promise<AgentSessionMutationSessionPreparation> {
+  let session: StructuredAgentSessionHostSession | null
   try {
-    if (await openConversation(envelope.sessionId)) {
-      return { ok: true }
-    }
-    return { ok: false, refusal: AGENT_SESSION_NOT_ATTACHED }
+    session = await openConversation(envelope.sessionId)
   } catch (error) {
     logger.warn('opening the conversation for a write failed', {
       scope: 'open-for-write',
@@ -73,6 +81,21 @@ export async function openConversationForWrite(
     })
     return { ok: false, refusal: journalOpenRefusal(error) }
   }
+  if (!session) {
+    return { ok: false, refusal: AGENT_SESSION_NOT_ATTACHED }
+  }
+  // Writes wait behind a restore's owed import. A failed import settled them too (they failed
+  // with it), so it is reported and never refuses the mutation: its own writes fail as they would.
+  if (session.journal.importPending) {
+    await session.journal.whenImported().catch((error: unknown) => {
+      logger.warn('the import owed before a write failed', {
+        scope: 'open-for-write',
+        sessionId: envelope.sessionId,
+        error
+      })
+    })
+  }
+  return { ok: true }
 }
 
 /** The conversation a write lands in, opened when this host holds it closed. */
@@ -84,11 +107,12 @@ export function openForWrite(
 }
 
 /** For an operation the running child performs, which starts none: the conversation, then any
- *  stop an earlier attempt left owed, so it never reaches a child that takes no input. */
+ *  close a stop began on that child, which it joins, so it never reaches a child that takes no
+ *  input. */
 export function openForProviderWrite(
   context: Pick<
     StructuredAgentSessionMutationContext,
-    'openConversation' | 'finishOwedStop' | 'deps'
+    'openConversation' | 'joinChildClose' | 'deps'
   >,
   envelope: AgentSessionMutationEnvelope
 ): () => Promise<AgentSessionMutationSessionPreparation> {
@@ -98,7 +122,7 @@ export function openForProviderWrite(
       envelope,
       context.deps.logger
     )
-    return opened.ok ? context.finishOwedStop(envelope.sessionId) : opened
+    return opened.ok ? context.joinChildClose(envelope.sessionId) : opened
   }
 }
 
@@ -117,22 +141,82 @@ export function openWithAgent(
   }
 }
 
+/** The recovery an attach runs, for a child already running: no attach comes for it. A recovery
+ *  that stays unknown leaves the record as it was. */
+async function recoverRewindOnLiveChild(
+  context: Pick<StructuredAgentSessionMutationContext, 'deps' | 'sessions' | 'publish' | 'now'>,
+  sessionId: string
+): Promise<void> {
+  const journal = context.sessions.get(sessionId)?.journal
+  if (!journal) {
+    return
+  }
+  try {
+    await recoverStructuredRewind(
+      context.deps,
+      sessionId,
+      journal,
+      structuredAgentSessionConversationFence(context.deps.store, sessionId),
+      context.deps.adapter,
+      context.now
+    )
+  } catch (error) {
+    context.deps.logger.warn('settling a rewind in doubt before a send failed', {
+      scope: 'rewind-recovery',
+      sessionId,
+      error
+    })
+    return
+  }
+  context.publish(sessionId, journal)
+}
+
 /** A rewind still in doubt once the conversation is open is one only its provider can settle —
- *  the open settles every other — so a send starts the agent, whose attach recovers it. */
+ *  the open settles every other — so a send settles it first: an agent at rest is started, whose
+ *  attach recovers it, and a running one is asked as that attach would. One still in doubt refuses
+ *  the send here, before the ledger records it, so a Retry of the same id is decided afresh. A
+ *  resend of a recorded id needs only the conversation, its answer's source: it starts nothing,
+ *  and an open that fails leaves that answer unknown, never refused. `clearInFlight`: a /clear was
+ *  running when this send arrived, which refuses only its first run. `refusesInRun`: the caller's
+ *  own run refuses a rewind in doubt with a settled answer and mints a fresh id per attempt (/clear),
+ *  so preparation leaves that refusal to it. */
 export function sendPreparation(
-  context: Pick<StructuredAgentSessionMutationContext, 'openConversation' | 'ensureAgent' | 'deps'>,
-  envelope: AgentSessionMutationEnvelope
-): () => Promise<AgentSessionMutationSessionPreparation> {
-  return async () => {
+  context: Pick<
+    StructuredAgentSessionMutationContext,
+    'openConversation' | 'ensureAgent' | 'deps' | 'sessions' | 'publish' | 'now'
+  >,
+  envelope: AgentSessionMutationEnvelope,
+  arrival: { clearInFlight?: boolean; refusesInRun?: boolean } = {}
+): (ledger: 'admit' | 'replay') => Promise<AgentSessionMutationSessionPreparation> {
+  return async (ledger) => {
+    if (ledger === 'admit' && arrival.clearInFlight) {
+      return { ok: false, refusal: conversationCommandInFlight() }
+    }
     const opened = await openConversationForWrite(
       context.openConversation,
       envelope,
       context.deps.logger
     )
-    const phase = context.deps.store.getRecord(envelope.sessionId)?.rewind?.phase
-    return opened.ok && (phase === 'prepared' || phase === 'provider-succeeded')
-      ? context.ensureAgent(envelope.sessionId)
-      : opened
+    if (ledger === 'replay') {
+      return opened.ok
+        ? opened
+        : { ok: false, refusal: agentSessionOperationOutcomeUnknown(envelope.clientOperationId) }
+    }
+    const { sessionId } = envelope
+    if (!opened.ok || !rewindInDoubt(context.deps.store.getRecord(sessionId))) {
+      return opened
+    }
+    const running = Boolean(context.sessions.get(sessionId)?.child)
+    const ensured = await context.ensureAgent(sessionId)
+    if (!ensured.ok) {
+      return ensured
+    }
+    if (running) {
+      await recoverRewindOnLiveChild(context, sessionId)
+    }
+    return !arrival.refusesInRun && rewindInDoubt(context.deps.store.getRecord(sessionId))
+      ? rewindRefusal('outcome-unknown')
+      : ensured
   }
 }
 
@@ -144,7 +228,9 @@ export function structuredAgentSessionFailureWordsContext(
 ): AgentSessionFailureWordsContext {
   const command = journal && structuredAgentSessionAwaitedCommand(journal)
   return {
-    ...(record ? { agentName: TUI_AGENT_DISPLAY_NAMES[record.provider] } : {}),
+    ...(record && isTuiAgent(record.provider)
+      ? { agentName: TUI_AGENT_DISPLAY_NAMES[record.provider] }
+      : {}),
     ...(command ? { command } : {})
   }
 }

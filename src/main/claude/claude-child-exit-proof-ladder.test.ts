@@ -1,6 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../codex/codex-app-server-posix-supervisor'
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { spawnProcess } from '../../shared/child-process/run-process'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import type { ClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
+import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
 import { proveClaudeChildExitWithReaper } from './claude-child-exit-proof-ladder'
 
 function fakeTree(): ClaudeChildTreeReaper & { reap: ReturnType<typeof vi.fn> } {
@@ -12,61 +16,65 @@ function fakeTree(): ClaudeChildTreeReaper & { reap: ReturnType<typeof vi.fn> } 
   }
 }
 
-/** A root that leaves only once a SIGTERM has had `stopMs` to act, the way a supervisor does. */
-function rootStoppedBySigterm(stopMs: number) {
-  let exited = false
-  let settle = (): void => {}
-  const exitPromise = new Promise<void>((resolve) => {
-    settle = resolve
+function rootStoppedBySigterm(stopMs: number, platform: NodeJS.Platform) {
+  const child = Object.assign(new EventEmitter(), {
+    pid: 4321,
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    kill: vi.fn((signal?: NodeJS.Signals | number) => {
+      if (signal === 'SIGTERM') {
+        setTimeout(() => child.emit('exit', 0, 'SIGTERM'), stopMs)
+      }
+      return true
+    })
   })
-  const kill = vi.fn((signal?: NodeJS.Signals | number) => {
-    if (signal === 'SIGTERM') {
-      setTimeout(() => {
-        exited = true
-        settle()
-      }, stopMs)
-    }
-    return true
+  const spawner = createClaudeCodeProcessSpawn(() => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies every event, stream and process field used by the spawner and close.
+    return child as unknown as ReturnType<typeof spawnProcess>
+  }, platform)
+  spawner.spawn({
+    command: 'fixture-provider',
+    args: [],
+    env: {},
+    signal: new AbortController().signal
   })
-  const stdin = { end: vi.fn() }
-  return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The ladder reads only pid, kill and stdin.end from its child.
-    child: { pid: 4321, kill, stdin } as unknown as Parameters<
-      typeof proveClaudeChildExitWithReaper
-    >[0]['child'],
-    kill,
-    stdin,
-    exitPromise,
-    exited: () => exited
+  const managed = spawner.managed
+  if (!managed) {
+    throw new Error('Fixture did not retain its managed child')
   }
+  return { child, managed }
 }
+
+afterEach(() => vi.useRealTimers())
 
 describe('Claude child exit proof ladder', () => {
   it('stops a supervised child with SIGTERM and waits out the supervisor stop before forcing', async () => {
-    // Slower than the unsupervised 1.5 s grace, still inside the supervisor's own bound.
-    const root = rootStoppedBySigterm(PROVIDER_SUPERVISOR_MAX_STOP_MS - 500)
+    vi.useFakeTimers()
+    const root = rootStoppedBySigterm(PROVIDER_SUPERVISOR_MAX_STOP_MS - 500, 'darwin')
     const tree = fakeTree()
-
-    await expect(
-      proveClaudeChildExitWithReaper({ ...root, supervised: true, tree }, () => tree)
-    ).resolves.toBe(true)
-
-    expect(root.stdin.end).toHaveBeenCalled()
-    expect(root.kill).toHaveBeenCalledWith('SIGTERM')
-    // Forcing here would SIGKILL the supervisor mid-stop and orphan Claude in its own group.
-    expect(root.kill).not.toHaveBeenCalledWith('SIGKILL')
+    expect(root.managed.rootVerdict).toBe('live')
+    const proof = proveClaudeChildExitWithReaper({ managed: root.managed, tree }, () => tree)
+    await vi.advanceTimersByTimeAsync(PROVIDER_SUPERVISOR_MAX_STOP_MS)
+    await expect(proof).resolves.toBe(true)
+    expect(root.child.stdin.writableEnded).toBe(true)
+    expect(root.child.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM')
+    expect(root.managed.lastCloseResult).toEqual({ root: 'exited', tree: 'exited' })
     expect(tree.reap).not.toHaveBeenCalled()
-  }, 10_000)
+    expect(vi.getTimerCount()).toBe(0)
+  })
 
   it('never signals an unsupervised child for the graceful stop', async () => {
-    const root = rootStoppedBySigterm(0)
+    vi.useFakeTimers()
+    const root = rootStoppedBySigterm(0, 'win32')
     const tree = fakeTree()
-
-    await proveClaudeChildExitWithReaper({ ...root, tree }, () => tree)
-
-    // On Windows a direct SIGTERM is TerminateProcess: stdin end stays the only graceful rung.
-    expect(root.stdin.end).toHaveBeenCalled()
-    expect(root.kill).not.toHaveBeenCalledWith('SIGTERM')
-    expect(tree.reap).toHaveBeenCalled()
-  }, 10_000)
+    const proof = proveClaudeChildExitWithReaper({ managed: root.managed, tree }, () => tree)
+    await vi.advanceTimersByTimeAsync(2_500)
+    await expect(proof).resolves.toBe(false)
+    expect(root.child.stdin.writableEnded).toBe(true)
+    expect(root.child.kill).not.toHaveBeenCalledWith('SIGTERM')
+    expect(tree.reap).toHaveBeenCalledOnce()
+    expect(root.managed.lastCloseResult).toEqual({ root: 'live', tree: 'exited' })
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })

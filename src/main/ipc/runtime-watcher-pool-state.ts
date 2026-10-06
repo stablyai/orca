@@ -1,7 +1,6 @@
 import type { WatcherProcessSupervisor } from './parcel-watcher-process-supervisor'
 
-export type RuntimeWatcherPoolSupervisor = Pick<WatcherProcessSupervisor, 'dispose' | 'subscribe'> &
-  Partial<Pick<WatcherProcessSupervisor, 'disposeAndWait'>>
+export type RuntimeWatcherPoolSupervisor = Pick<WatcherProcessSupervisor, 'dispose' | 'subscribe'>
 
 export type RuntimeWatcherPoolSlot = {
   supervisor: RuntimeWatcherPoolSupervisor
@@ -9,13 +8,6 @@ export type RuntimeWatcherPoolSlot = {
   isolated: boolean
   retired: boolean
   disposed: boolean
-}
-
-export function activeWatcherSlots(
-  slots: ReadonlySet<RuntimeWatcherPoolSlot>,
-  isolated: boolean
-): RuntimeWatcherPoolSlot[] {
-  return [...slots].filter((slot) => slot.isolated === isolated && !slot.retired)
 }
 
 export type RuntimeWatcherPoolAssignment = {

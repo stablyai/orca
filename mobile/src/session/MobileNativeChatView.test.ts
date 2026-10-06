@@ -93,6 +93,9 @@ type Overrides = {
   keyboardInset?: number
   hasMore?: boolean
   onLoadEarlier?: () => void
+  status?: Parameters<typeof MobileNativeChatView>[0]['status']
+  error?: string
+  readFailedFinally?: boolean
 }
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
@@ -213,6 +216,39 @@ describe('MobileNativeChatView', () => {
       })
     })
   }
+
+  // A read no retry gets past takes the whole pane, even over a transcript already on screen: its
+  // words alone, and nothing that could only be refused again.
+  it('leaves only the words of a read that failed for good, over a loaded transcript', async () => {
+    const loaded = [assistantTurn('m1', 'earlier reply')]
+    const words = 'This chat was saved by a newer Orca. Update Orca to open it.'
+    const shown = (text: string) =>
+      renderer!.root.findAll((node) => node.type === 'Text' && node.props.children === text)
+    const composers = () => renderer!.root.findAll((node) => node.type === 'Composer')
+    const lists = () => renderer!.root.findAll((node) => node.type === 'FlatList')
+    const failure = {
+      messages: loaded,
+      folded: loaded,
+      status: 'error' as const,
+      error: words,
+      canStop: true,
+      permission: { title: 'Approve?', options: [{ label: 'Allow', send: '1' }] },
+      // A resend answered unknown says nothing beside the read's words.
+      sendErrorMessage: 'Message unconfirmed — check chat before retrying'
+    }
+    await render({ ...failure, readFailedFinally: true })
+    expect(shown(words)).toHaveLength(1)
+    expect(composers()).toHaveLength(0)
+    expect(lists()).toHaveLength(0)
+    expect(banners()).toHaveLength(0)
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Stop the agent' })).toHaveLength(0)
+
+    // A failure that can clear keeps the transcript and the composer.
+    await update({ ...failure, error: "Orca couldn't open this chat's history right now." })
+    expect(listIds()).toEqual(['m1'])
+    expect(composers()).toHaveLength(1)
+    expect(banners()).toHaveLength(1)
+  })
 
   it('renders the route-reported failure verbatim', async () => {
     await render({ sendErrorMessage: 'Permission reply failed' })

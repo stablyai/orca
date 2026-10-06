@@ -12,6 +12,7 @@ import {
   type TranscriptReplayResize
 } from './agent-transcript-replay-test-harness'
 import { isKnownReadyPromptBody, isQuietReadyScreenBody } from './terminal-wait-detection'
+import { evaluateAgentStateRules } from './agent-state-rules/agent-state-rules-engine'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 export type ScreenRuledFixture = { name: string; cols: number; rows: number; what: string }
@@ -19,7 +20,6 @@ export type ScreenRuledFixture = { name: string; cols: number; rows: number; wha
 export type ScreenRuledAgentSuite = {
   agent: TuiAgent
   foregroundProcess: string
-  rule: (screenLines: readonly string[]) => boolean
   ready: readonly ScreenRuledFixture[]
   notReady: readonly ScreenRuledFixture[]
   /** Ready recordings the text rules or the quiet-process lane settle with no screen. */
@@ -45,8 +45,14 @@ function chunkCount(name: string): number {
   return Math.ceil(readRuntimeFixture(name).length / 64)
 }
 
+/** Whether the agent's own rules read `screenLines` as an idle composer. */
+export function readsIdleComposer(agent: TuiAgent, screenLines: readonly string[]): boolean {
+  return evaluateAgentStateRules(agent, { readScreenLines: () => screenLines })?.state === 'idle'
+}
+
 export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite): void {
-  const { agent, rule } = suite
+  const { agent } = suite
+  const rule = (screenLines: readonly string[]): boolean => readsIdleComposer(agent, screenLines)
   const [firstReady] = suite.ready
   if (!firstReady) {
     throw new Error(`${agent}: a suite needs a ready recording`)

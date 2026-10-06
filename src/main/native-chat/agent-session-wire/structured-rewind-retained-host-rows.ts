@@ -1,10 +1,12 @@
 // Provider preflight returns provider items only. The host's lifecycle rows are its own record, so
 // a rewind that takes the provider list as the new epoch must splice those rows back beside the
-// provider item each one followed. Provider items carry neither turn scope nor producer, so each
-// keeps the ones its retained row held.
+// provider item each one followed; so is an item of a kind a newer Orca wrote, which no provider
+// holds. Provider items carry neither turn scope, producer nor the time the row was first seen, so
+// each keeps the ones its retained row held.
 
 import { parseCodexGoalJournalItemId } from '../../codex/codex-goal-journal-identity'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { AGENT_JOURNAL_ITEM_BODY_KINDS } from '../../../shared/agent-session-journal-schemas'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
@@ -28,7 +30,7 @@ export function isRetainedHostLifecycleRow(item: RetainedRow): boolean {
   )
 }
 
-/** `reference` fixes where each host row sits; provider items are the ordered spine. */
+/** `reference` fixes where each carried row sits; provider items are the ordered spine. */
 export function mergeRetainedHostLifecycleRows(
   reference: readonly RetainedRow[],
   providerItems: readonly RetainedRow[]
@@ -38,9 +40,14 @@ export function mergeRetainedHostLifecycleRows(
   const rowsAfter = new Map<number, RetainedRow[]>()
   let anchor = -1
   for (const item of reference) {
-    if (!isRetainedHostLifecycleRow(item)) {
-      anchor = spineIndex.get(item.itemId) ?? anchor
-    } else if (!spineIndex.has(item.itemId)) {
+    // Any row the provider still holds moves the anchor, carried or not, so a later row follows it.
+    const spine = spineIndex.get(item.itemId)
+    if (spine !== undefined) {
+      anchor = spine
+    } else if (
+      isRetainedHostLifecycleRow(item) ||
+      !AGENT_JOURNAL_ITEM_BODY_KINDS.has(item.body.kind)
+    ) {
       rowsAfter.set(anchor, [...(rowsAfter.get(anchor) ?? []), item])
     }
   }
@@ -85,11 +92,13 @@ export function retainedRowReplacement(row: RetainedRow): AgentJournalProducerLi
   }
 }
 
+/** A provider item the old epoch held keeps that row's scope, producer and first-seen time; only
+ *  its body is the provider's. */
 function withHeldAttribution(item: RetainedRow, held: RetainedRow | undefined): RetainedRow {
   if (!held) {
     return item
   }
-  const { itemId: _itemId, body: _body, observedAt: _observedAt, ...attribution } = held
+  const { itemId: _itemId, body: _body, ...attribution } = held
   return { ...item, ...attribution }
 }
 

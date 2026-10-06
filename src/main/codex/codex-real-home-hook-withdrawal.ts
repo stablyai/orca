@@ -10,6 +10,7 @@ import type { RealHomeCodexHookSlotWrite } from './codex-real-home-hook-entry-pl
 import {
   assertHooksJsonGeneration,
   getRealHomeConfigTomlPath,
+  getRealHomeHookKeySourcePaths,
   getRealHomeHooksJsonPath
 } from './codex-real-home-hooks-json'
 import { readHookTrustEntries } from './config-toml-trust'
@@ -91,7 +92,7 @@ export function withdrawUntrustedRealHomeWrites(
   if (withdrew > 0) {
     // Why: a hook appended after this entry meanwhile moves up a slot; its trust moves with it.
     mutateRealHomeHooksPreservingUserTrust({
-      sourcePath: hooksJsonPath,
+      sourcePaths: getRealHomeHookKeySourcePaths(),
       tomlPath: getRealHomeConfigTomlPath(),
       beforeHooks: config.hooks,
       afterHooks: nextHooks,

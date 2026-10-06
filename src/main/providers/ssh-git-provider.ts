@@ -9,8 +9,47 @@ import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
 import type { IGitProvider } from './types'
 import { isJsonRpcMethodNotFoundError } from './ssh-git-relay-errors'
 import { SshGitWorktreeProvider } from './ssh-git-worktree-provider'
+import { ReviewDraftContextError } from '../../shared/review-draft-context-error'
 
 export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvider {
+  async readReviewDiff(
+    worktreePath: string,
+    mergeBase: string,
+    format: 'name-status' | 'patch',
+    options?: { timeoutMs?: number }
+  ): Promise<{ stdout: string; stderr: string }> {
+    let result: unknown
+    try {
+      result = await requestGitStreamable(
+        this.mux,
+        'git.reviewDiff',
+        { worktreePath, mergeBase, format },
+        options
+      )
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        throw new ReviewDraftContextError(
+          'SSH review draft support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+        )
+      }
+      throw new ReviewDraftContextError(
+        error instanceof Error ? error.message : 'SSH review diff failed.',
+        { cause: error }
+      )
+    }
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      !('stdout' in result) ||
+      !('stderr' in result) ||
+      typeof result.stdout !== 'string' ||
+      typeof result.stderr !== 'string'
+    ) {
+      throw new ReviewDraftContextError('Invalid SSH review diff response.')
+    }
+    return { stdout: result.stdout, stderr: result.stderr }
+  }
+
   async getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null> {
     const branchPromise = this.exec(['branch', '--show-current'], worktreePath).catch(() => ({
       stdout: ''

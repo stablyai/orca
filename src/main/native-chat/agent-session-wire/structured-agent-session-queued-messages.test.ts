@@ -12,6 +12,7 @@ import {
   type AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
+import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import {
@@ -157,18 +158,19 @@ describe('drain', () => {
 
   it('takes no serialized drain step while the session is working, then drains when the work settles', async () => {
     const working = await workingSend()
-    const flush = vi.spyOn(host, 'flushStreamedEvents')
+    // Read only by a drain step, so it marks one.
+    const step = vi.spyOn(JournalQueuedMessages.prototype, 'deliveredByEchoOwed')
     const queued = await send('waits for the turn', 'queue-if-active').result
     await send('and another', 'queue-if-active').result
     if (!queued.ok || !('queued' in queued.value)) {
       throw new Error('expected a queued receipt')
     }
     // Every wake during the turn is answered by the pre-check, not a step.
-    expect(flush).not.toHaveBeenCalled()
+    expect(step).not.toHaveBeenCalled()
     await settleAccepted(working, 'a')
     const draftId = queued.value.queued.messageId
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
-    expect(flush).toHaveBeenCalled()
+    expect(step).toHaveBeenCalled()
   })
 
   it('a refused conversion returns the card with its stored reason, and an idle send overtakes a lone returned card (N1)', async () => {
@@ -633,6 +635,31 @@ describe('/clear', () => {
       ok: true,
       value: { submission: expect.anything() }
     })
+  })
+
+  it('carries who each card is from', async () => {
+    const notice = {
+      message: 'mail-notice',
+      mailbox: 'run:r1',
+      dispatchId: null,
+      messages: []
+    } as const
+    const source: AgentMessageSource = { kind: 'agent', senders: [], orchestration: notice }
+    const working = await workingSend()
+    await send('pointer', 'queue-if-active', { internal: true, source }).result
+    await send('typed', 'queue-if-active').result
+    await stop()
+    await settleAccepted(working, 'a')
+    const cleared = await clear(hostTestOperationId())
+    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
+    if (!replacementId) {
+      throw new Error('expected a replacement session')
+    }
+    const journal = host.collaboratorsForTests().sessions.get(replacementId)?.journal
+    expect(journal?.queuedMessages.list().map((row) => row.source)).toEqual([
+      source,
+      { kind: 'user' }
+    ])
   })
 
   it("the replacement's 'cleared' pause lifts through Resume exactly like a Stop's", async () => {

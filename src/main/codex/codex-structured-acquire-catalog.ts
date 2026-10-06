@@ -11,12 +11,13 @@ import {
   type CodexSessionOptionCatalog
 } from './codex-structured-model-catalog'
 import { agentModelCatalogSessionAccess } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
+import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
 
 export function codexAcquireCatalogAccess(
   deps: Pick<CodexStructuredSessionAdapterDeps, 'modelCatalog'>,
   launch: Pick<CodexStructuredLaunch, 'codexHome'>
 ): CodexSessionCatalogAccess | undefined {
-  return agentModelCatalogSessionAccess(deps.modelCatalog, 'codex', launch.codexHome)
+  return agentModelCatalogSessionAccess(deps.modelCatalog, CODEX_STRUCTURED_AGENT, launch.codexHome)
 }
 
 /** The one catalog read a fast-mode restore needs, store-first. Null degrades

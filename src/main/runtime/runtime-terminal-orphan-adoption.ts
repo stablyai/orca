@@ -20,6 +20,8 @@ type RuntimeTerminalOrphanAdoptionPorts = {
   getPty: (handle: string) => RuntimePtyWorktreeRecord | null
   getLeaves: (ptyId: string) => readonly RuntimeLeafRecord[]
   getLeaf: (tabId: string, leafId: string) => RuntimeLeafRecord | undefined
+  /** The title display surfaces show for the PTY, which an adopted tab persists. */
+  getDisplayTitle: (pty: RuntimePtyWorktreeRecord) => string | null
   /** Replays a binding the session already held: names the pane without claiming the graph holds it. */
   replayPersistedSurface: (pty: RuntimePtyWorktreeRecord, tabId: string, paneKey: string) => void
   /** Names a pane this adoption just wrote, ahead of the graph statement that will carry it. */
@@ -225,7 +227,8 @@ export async function adoptRuntimeTerminalOrphansFromInventory(args: {
     request,
     validated,
     topologyTabsById,
-    topologyGroups
+    topologyGroups,
+    getDisplayTitle: ports.getDisplayTitle
   })
   let staged: WorkspaceSessionState | null = null
   try {

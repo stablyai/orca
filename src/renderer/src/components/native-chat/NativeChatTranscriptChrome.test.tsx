@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
   invalidateLocalImageSrcCacheForTests,
+  loadLocalImageSrc,
   resetLocalImageSrcStateForTests
 } from '@/components/editor/useLocalImageSrc'
+import { chatImageAccess } from '@/lib/local-file-access'
 import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -136,6 +138,88 @@ describe('NativeChatImageAttachments', () => {
     root.unmount()
   })
 
+  it('keeps the shown image when an equal runtime context is rebuilt', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const blocks = [{ type: 'image-ref' as const, path: '/repo/image.png' }]
+
+    await act(async () => {
+      root.render(
+        createElement(NativeChatImageAttachments, {
+          blocks,
+          runtimeContext: runtimeContext('wt-1')
+        })
+      )
+      await flushPromises()
+    })
+    const img = container.querySelector('img')
+    expect(img?.getAttribute('src')).toBe('blob:owner-1')
+
+    for (let update = 0; update < 3; update += 1) {
+      await act(async () => {
+        root.render(
+          createElement(NativeChatImageAttachments, {
+            blocks,
+            runtimeContext: runtimeContext('wt-1')
+          })
+        )
+        await flushPromises()
+      })
+    }
+
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+    expect(window.api.fs.readFile).toHaveBeenCalledOnce()
+    expect(container.querySelector('img')).toBe(img)
+    expect(img?.getAttribute('src')).toBe('blob:owner-1')
+
+    root.unmount()
+  })
+
+  it('keeps an off-screen image cached when an equal runtime context is rebuilt', async () => {
+    class FakeIntersectionObserver {
+      readonly observe = vi.fn()
+      readonly unobserve = vi.fn()
+      readonly disconnect = vi.fn()
+    }
+    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver)
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const blocks = [{ type: 'image-ref' as const, path: '/repo/image.png' }]
+    const renderWith = (context: RuntimeFileOperationArgs): void =>
+      root.render(createElement(NativeChatImageAttachments, { blocks, runtimeContext: context }))
+    const loadSameEntry = (): Promise<string | null> =>
+      loadLocalImageSrc(
+        '/repo/image.png',
+        '/repo/image.png',
+        undefined,
+        runtimeContext('wt-1'),
+        chatImageAccess()
+      )
+
+    try {
+      await act(async () => {
+        renderWith(runtimeContext('wt-1'))
+        await flushPromises()
+      })
+      // Off-screen nothing pins the entry, so only the release effect's deps decide whether it survives.
+      await expect(loadSameEntry()).resolves.toBe('blob:owner-1')
+
+      for (let update = 0; update < 3; update += 1) {
+        await act(async () => {
+          renderWith(runtimeContext('wt-1'))
+          await flushPromises()
+        })
+      }
+
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+      await expect(loadSameEntry()).resolves.toBe('blob:owner-1')
+      expect(window.api.fs.readFile).toHaveBeenCalledOnce()
+    } finally {
+      // The visibility observer is module-wide; a leaked one breaks later tests.
+      root.unmount()
+    }
+  })
+
   it('retries a failed thumbnail after the image cache refreshes', async () => {
     const container = document.createElement('div')
     const root = createRoot(container)
@@ -204,6 +288,29 @@ describe('NativeChatImageAttachments', () => {
     })
 
     expect(container.firstElementChild).toBe(observedElement)
+    root.unmount()
+  })
+
+  it.each([
+    ['a pasted screenshot in the temp folder', '/tmp/orca-paste-1.png'],
+    ['an agent image outside the project', '/Users/me/.codex/generated/plot.png']
+  ])('reads %s as a chat image, whoever sent it', async (_label, path) => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        createElement(NativeChatImageAttachments, {
+          blocks: [{ type: 'image-ref' as const, path }],
+          runtimeContext: runtimeContext('wt-1')
+        })
+      )
+      await flushPromises()
+    })
+
+    expect(vi.mocked(window.api.fs.readFile).mock.calls[0]?.[0]).toMatchObject({
+      filePath: path,
+      access: { kind: 'chat-image' }
+    })
     root.unmount()
   })
 })

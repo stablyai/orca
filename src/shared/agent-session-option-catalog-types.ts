@@ -21,10 +21,7 @@ export type CatalogMidSessionApply =
 
 export type CatalogOptionApply = {
   launchArgs?: (value: SessionOptionValue) => string[]
-  /** Why: later free-form args win, so the launch record must discard any
-   * picker value that those args may have replaced. */
-  agentArgsOverride?: (tokens: readonly string[]) => boolean
-  /** Removes conflicting defaults before a more specific launch choice is inserted. */
+  /** Removes conflicting free-form args, or detects when to omit the pick from launch args and the record. */
   removeAgentArgs?: (tokens: readonly string[]) => string[]
   composedIntoModel?: true
   midSession?: CatalogMidSessionApply
@@ -52,6 +49,8 @@ export type CatalogModel = {
   label: string
   description?: string
   isDefault?: boolean
+  /** Tokens the model's context window holds, where the host's listing states it. */
+  contextWindowTokens?: number
   options: CatalogOption[]
 }
 
@@ -75,8 +74,11 @@ export type AgentSessionOptionCatalog = {
    *
    * Known gap: "no model flag" is unverified. A user `-m` in `agentArgs` launches that
    * model while the picker, which never reads launch args, still names the CLI default.
-   * A real fix means threading `modelApply.agentArgsOverride` through to the surface. */
+   * A real fix means threading `modelApply.removeAgentArgs` through to the surface. */
   defaultModelIsCliDefault?: true
+  /** The host's model listing names the model the account is configured to run, so a new chat
+   *  may run the listed default. Off where the agent's own settings or env may pick another. */
+  hostListingNamesConfiguredModel?: true
   listModels?: {
     command: string
     parse: (stdout: string) => CatalogModel[]

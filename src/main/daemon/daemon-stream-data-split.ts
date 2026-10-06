@@ -5,15 +5,13 @@
  */
 import { resolveSynchronizedOutputSafeSplit } from '../../shared/terminal-synchronized-output-scan'
 import { encodeNdjson } from './ndjson'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export function encodeStreamDataEvent(
   sessionId: string,
   data: string,
   rawLength?: number,
   seq?: number,
-  transformed?: boolean,
-  incarnationId?: PtyIncarnationId
+  transformed?: boolean
 ): string {
   return encodeNdjson({
     type: 'event',
@@ -21,7 +19,6 @@ export function encodeStreamDataEvent(
     sessionId,
     payload: {
       data,
-      ...(incarnationId === undefined ? {} : { incarnationId }),
       ...(seq === undefined ? {} : { seq }),
       ...(rawLength === undefined ? {} : { rawLength }),
       ...(rawLength === undefined ? {} : { sequenceChars: rawLength }),
@@ -30,16 +27,8 @@ export function encodeStreamDataEvent(
   })
 }
 
-function streamDataEventLineBytes(
-  sessionId: string,
-  data: string,
-  rawLength?: number,
-  incarnationId?: PtyIncarnationId
-): number {
-  return Buffer.byteLength(
-    encodeStreamDataEvent(sessionId, data, rawLength, undefined, false, incarnationId),
-    'utf8'
-  )
+function streamDataEventLineBytes(sessionId: string, data: string, rawLength?: number): number {
+  return Buffer.byteLength(encodeStreamDataEvent(sessionId, data, rawLength), 'utf8')
 }
 
 function isHighSurrogate(value: number): boolean {
@@ -90,28 +79,20 @@ export function splitStreamDataForNdjson(
   sessionId: string,
   data: string,
   maxLineBytes: number,
-  sequenceChars?: number,
-  incarnationId?: PtyIncarnationId
+  sequenceChars?: number
 ): string[] {
-  if (streamDataEventLineBytes(sessionId, data, sequenceChars, incarnationId) <= maxLineBytes) {
+  if (streamDataEventLineBytes(sessionId, data, sequenceChars) <= maxLineBytes) {
     return [data]
   }
 
-  return splitOversizedStreamDataForNdjson(
-    sessionId,
-    data,
-    maxLineBytes,
-    sequenceChars,
-    incarnationId
-  )
+  return splitOversizedStreamDataForNdjson(sessionId, data, maxLineBytes, sequenceChars)
 }
 
 function splitOversizedStreamDataForNdjson(
   sessionId: string,
   data: string,
   maxLineBytes: number,
-  sequenceChars?: number,
-  incarnationId?: PtyIncarnationId
+  sequenceChars?: number
 ): string[] {
   const chunks: string[] = []
   let start = 0
@@ -129,8 +110,7 @@ function splitOversizedStreamDataForNdjson(
       }
 
       if (
-        streamDataEventLineBytes(sessionId, data.slice(start, mid), sequenceChars, incarnationId) <=
-        maxLineBytes
+        streamDataEventLineBytes(sessionId, data.slice(start, mid), sequenceChars) <= maxLineBytes
       ) {
         best = mid
         low = rawMid + 1
@@ -154,36 +134,28 @@ export function writeStreamDataEvents(
   maxLineBytes: number,
   rawLength = data.length,
   seq?: number,
-  transformed = false,
-  incarnationId?: PtyIncarnationId
+  transformed = false
 ): void {
   const explicitRawLength = rawLength === data.length ? undefined : rawLength
   if (transformed) {
-    streamSocket.write(encodeStreamDataEvent(sessionId, data, rawLength, seq, true, incarnationId))
+    streamSocket.write(encodeStreamDataEvent(sessionId, data, rawLength, seq, true))
     return
   }
   const carriesMetadata = explicitRawLength !== undefined || seq !== undefined
   let chunks: string[]
   if (!carriesMetadata) {
-    const line = encodeStreamDataEvent(sessionId, data, undefined, undefined, false, incarnationId)
+    const line = encodeStreamDataEvent(sessionId, data)
     if (Buffer.byteLength(line, 'utf8') <= maxLineBytes) {
       streamSocket.write(line)
       return
     }
-    chunks = splitOversizedStreamDataForNdjson(
-      sessionId,
-      data,
-      maxLineBytes,
-      undefined,
-      incarnationId
-    )
+    chunks = splitOversizedStreamDataForNdjson(sessionId, data, maxLineBytes)
   } else {
     chunks = splitStreamDataForNdjson(
       sessionId,
       data,
       Math.max(1, maxLineBytes - 96),
-      explicitRawLength,
-      incarnationId
+      explicitRawLength
     )
   }
   let consumed = 0
@@ -191,8 +163,6 @@ export function writeStreamDataEvents(
     consumed += chunk.length
     const chunkEndSeq = seq === undefined ? undefined : seq - (data.length - consumed)
     const chunkRawLength = explicitRawLength === 0 ? 0 : carriesMetadata ? chunk.length : undefined
-    streamSocket.write(
-      encodeStreamDataEvent(sessionId, chunk, chunkRawLength, chunkEndSeq, false, incarnationId)
-    )
+    streamSocket.write(encodeStreamDataEvent(sessionId, chunk, chunkRawLength, chunkEndSeq))
   }
 }

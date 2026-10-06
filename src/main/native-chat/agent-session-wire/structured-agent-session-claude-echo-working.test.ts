@@ -28,6 +28,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -67,6 +68,7 @@ beforeEach(async () => {
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
@@ -96,7 +98,7 @@ function settled(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 20))
 }
 
-it('reads working at every published frame from the send through the echo that opens its turn', async () => {
+async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   const submissions = new Map<string, AgentJournalSubmission>()
   const turns = new Map<string, string>()
   const working: boolean[] = []
@@ -138,6 +140,20 @@ it('reads working at every published frame from the send through the echo that o
   })
   await settled()
   const connection = claude.current.connections[0]!
+  if (backlog) {
+    // The previous cycle's result in the same read, its write issued just ahead of the echo's.
+    connection.handlers.onMessage?.({
+      type: 'result',
+      subtype: 'success',
+      uuid: 'result-0',
+      session_id: PROVIDER_SESSION_ID,
+      duration_ms: 1,
+      duration_api_ms: 1,
+      num_turns: 1,
+      is_error: false,
+      result: ''
+    })
+  }
   // Claude echoes the written message back, which is what opens its turn.
   connection.handlers.onMessage?.({ ...connection.sent.at(-1)!, uuid: 'echo-uuid' })
   await settled()
@@ -147,4 +163,10 @@ it('reads working at every published frame from the send through the echo that o
   ])
   expect([...turns.values()]).toEqual(['running'])
   expect(working).not.toContain(false)
-})
+}
+
+it('reads working at every published frame from the send through the echo that opens its turn', () =>
+  expectWorkingThroughEcho(false))
+
+it('keeps the settlement behind the turn its echo opens when the previous result arrives in the same read', () =>
+  expectWorkingThroughEcho(true))

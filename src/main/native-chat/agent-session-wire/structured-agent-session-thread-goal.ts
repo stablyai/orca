@@ -47,16 +47,16 @@ export async function performThreadGoalChange(
   ctx: AgentSessionTurnContext,
   input: { clientOperationId: string; change: AgentSessionThreadGoalChange }
 ): Promise<TurnOutcome<AgentSessionThreadGoalResult>> {
-  if (!ctx.adapter.changeThreadGoal || !ctx.adapter.supportsThreadGoal?.(ctx.sessionId)) {
+  if (!ctx.adapter.changeThreadGoal || !ctx.agents.capabilities(ctx.agent)?.threadGoal) {
     return refused('goalsUnsupported', 'Goals are unavailable for this chat session.')
   }
   const { change } = input
   const identity = objectiveIdentity(input.clientOperationId)
   let replacesGoal = false
   if (change.kind === 'set') {
-    // A goal transition the host accepted but has not journaled yet decides this too.
-    await ctx.flushStreamedEvents()
-    // Read before the objective row lands: that row is a message, not a goal transition.
+    // Read before the objective row lands: that row is a message, not a goal transition. A goal
+    // transition the host accepted is already in the fold: it landed at its call, or before the
+    // open's owed import finished.
     replacesGoal = ctx.journal.threadGoal() !== null
   }
   // Journal first: an active goal starts provider work at once, and the objective

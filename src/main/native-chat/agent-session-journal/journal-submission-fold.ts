@@ -25,6 +25,7 @@ export function applyJournalSubmission(
     reason: null,
     submittedAt: row.ts,
     resolvedAt: null,
+    submittedSequence: row.seq,
     ...(row.handoverRecorded ? { handoverRecorded: true, acceptedSequence: row.seq } : {}),
     // A malformed stored link is dropped, never the row.
     ...(typeof row.queuedMessageId === 'string' && row.queuedMessageId.length > 0
@@ -66,6 +67,28 @@ export function placeHandedOverMessage(
     sequence: row.seq,
     observedAt: row.ts,
     turnScope: row.turnScope ?? state.derivedTurnScope.scopeFor(item.body)
+  })
+}
+
+/** A rejected message — queued, handed over, or sent directly — joins the conversation where it was
+ *  rejected, in no turn: what happened before the rejection happened before it, and the newest page
+ *  holds a recent one. Only a rejection: one in doubt may have reached the agent, so it stays. */
+export function placeRejectedMessage(
+  state: JournalReducerState,
+  submission: AgentJournalSubmission,
+  row: Extract<JournalRow, { kind: 'dispatch' }>
+): void {
+  const itemId = agentJournalSubmissionKey(submission.clientMessageId)
+  const item = state.items.get(itemId)
+  if (row.state !== 'rejected' || !item) {
+    return
+  }
+  const { sequenceIndex: _placed, ...rest } = item
+  state.items.set(itemId, {
+    ...rest,
+    sequence: row.seq,
+    observedAt: row.ts,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
 }
 

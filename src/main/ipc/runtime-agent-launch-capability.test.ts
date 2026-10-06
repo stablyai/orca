@@ -6,10 +6,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  AGENT_LAUNCH_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../shared/protocol-version'
+import type { RuntimeCapability } from '../../shared/protocol-version'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
 
 type AdvertisedClient = {
   clientKind?: 'mobile' | 'runtime'

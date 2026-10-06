@@ -9,7 +9,6 @@ import {
   resetPendingSubscribeAttempt,
   takePendingSubscribe
 } from './parcel-watcher-pending-subscribe'
-import { signalWatcherChild } from './parcel-watcher-child-termination'
 import { watcherHostFailure } from './parcel-watcher-process-failure'
 import type { WatcherProcessSubscriptionRecord } from './parcel-watcher-process-subscription'
 
@@ -28,8 +27,6 @@ export function disposeWatcherSupervisor(
   resolvePendingWatcherUnsubscribes(pendingUnsubscribes)
   cancelledSubscribes.completeAll()
   records.clear()
-  if (child) {
-    signalWatcherChild(child)
-  }
+  child?.kill()
   return removeWatcherCanaryDirectory(canaryDir)
 }

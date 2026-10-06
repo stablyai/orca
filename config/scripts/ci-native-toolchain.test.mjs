@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
-const steps = parse(readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8'))
-  .runs.steps
+const steps = parse(readFileSync('.github/actions/prepare-native-runtime/action.yml', 'utf8')).runs
+  .steps
 const toolchain = steps.find((step) => step.name === 'Use external node-gyp')
 
 describe('CI native toolchain preparation', () => {

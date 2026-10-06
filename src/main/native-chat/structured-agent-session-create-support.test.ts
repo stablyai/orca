@@ -80,4 +80,13 @@ describe('resolveStructuredAgentSessionCreateSupport', () => {
       reason
     })
   })
+
+  // A custom launch command applies to terminal launches only; native chat ignores it.
+  it.each([
+    ['claude', 'claude-wrapper'],
+    ['codex', 'codex-nightly']
+  ] as const)('supports %s when this host sets launch command %s', (agent, command) => {
+    const settings = { ...HOST_SELECTED, agentCmdOverrides: { [agent]: command } }
+    expect(support({ agent, getSettings: () => settings })).toEqual({ supported: true })
+  })
 })

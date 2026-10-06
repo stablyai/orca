@@ -23,7 +23,8 @@ import {
   credentialRequestedForTarget,
   invalidateConnectAttempt,
   resetRelayInFlight,
-  runSshTestConnectionProbe
+  testConnectionProbes,
+  testingTargets
 } from './ssh-connect-attempt-registry'
 import { connectTarget } from './ssh-connect-flow'
 import { connectionManager, persistedStore } from './ssh-ipc-context'
@@ -265,16 +266,18 @@ export function registerSshConnectionHandlers(): void {
       }
     }
 
+    testingTargets.add(args.targetId)
     // Why a tracked promise and not just the id: a probe holds a real transport that no session owns,
     // so shutdown has to be able to join it before the final drain disconnects what is left.
-    const probe = runSshTestConnectionProbe(args.targetId, async () => {
+    const probe = (async () => {
       // Why: a probe transport opened after the shutdown drain would outlive orderly teardown.
       assertSshConnectsNotFenced()
       const conn = await connectionManager!.connect(target)
       const state = conn.getState()
       await connectionManager!.disconnect(args.targetId)
       return state
-    })
+    })()
+    testConnectionProbes.add(probe)
     try {
       return { success: true, state: await probe }
     } catch (err) {
@@ -282,6 +285,11 @@ export function registerSshConnectionHandlers(): void {
         success: false,
         error: err instanceof Error ? err.message : String(err)
       }
+    } finally {
+      testConnectionProbes.delete(probe)
+      testingTargets.delete(args.targetId)
+      // Why: clear so a test's credential prompt doesn't leave lastRequiredPassphrase=true and defer this target at startup.
+      credentialRequestedForTarget.delete(args.targetId)
     }
   })
 }

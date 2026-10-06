@@ -21,6 +21,7 @@ import { indexedStatusFeedSession } from '../native-chat/agent-session-wire/stru
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -67,7 +68,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
       workspaceId: WORKSPACE_ID,
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     stateDirectory: join(root, SESSION)
   })

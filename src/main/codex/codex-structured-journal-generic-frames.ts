@@ -167,7 +167,6 @@ export class CodexJournalGenericFrames {
       }
       // A summary across evicted turns names no producer and belongs to no turn.
       const options = {
-        coalescingKey: `provider-frame-suppressed:codex:${bucket}`,
         ...(summary.producer
           ? this.deps.attributionFor(summary.producer.threadId, summary.producer.turnId)
           : { turnScope: AGENT_JOURNAL_THREAD_SCOPE })

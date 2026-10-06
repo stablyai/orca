@@ -16,6 +16,8 @@ import { openTestAttachConversation } from './structured-agent-session-attach-te
 import { performAttach } from './structured-agent-session-attach-flow'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -83,6 +85,7 @@ describe('processless structured session reservation', () => {
 
     await expect(
       performAttach({
+        agents: NO_STRUCTURED_AGENTS,
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter,
@@ -114,13 +117,14 @@ describe('processless structured session reservation', () => {
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(false)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attach reaches only `supportsCreate` and `acquire` on this fake adapter.
     const adapter = {
       supportsCreate,
       acquire: vi.fn(async ({ fence, spawnToken }) => ({
         process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
         link: {
           linkId: 'link-1',
-          handle: { provider: 'codex' as const, threadId: 'thread-1' },
+          handle: codexProviderHandle('thread-1'),
           origin: 'created' as const,
           mintedAtFence: fence,
           observedAt: NOW
@@ -128,6 +132,7 @@ describe('processless structured session reservation', () => {
       }))
     } as unknown as StructuredAgentSessionAdapter
     const input = {
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
@@ -166,6 +171,7 @@ describe('processless structured session reservation', () => {
     const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>()
     const adapter = { supportsCreate, acquire } as unknown as StructuredAgentSessionAdapter
     const input = {
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
@@ -219,6 +225,7 @@ describe('processless structured session reservation', () => {
 
     await expect(
       performAttach({
+        agents: NO_STRUCTURED_AGENTS,
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter,
@@ -263,6 +270,7 @@ describe('processless structured session reservation', () => {
   it('does not rerun a settled pre-spawn failure and admits a fresh operation', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-processless-retry-'))
     const store = await openTestAgentSessionRecordStore(root)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attach reaches only the members this fake adapter defines.
     const adapter = {
       acquire: vi
         .fn<StructuredAgentSessionAdapter['acquire']>()
@@ -276,7 +284,7 @@ describe('processless structured session reservation', () => {
           },
           link: {
             linkId: 'link-1',
-            handle: { provider: 'codex', threadId: 'thread-1' },
+            handle: codexProviderHandle('thread-1'),
             origin: 'created',
             mintedAtFence: fence,
             observedAt: NOW
@@ -285,6 +293,7 @@ describe('processless structured session reservation', () => {
       releaseAcquisition: vi.fn(async () => true)
     } as unknown as StructuredAgentSessionAdapter
     const input = {
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter,

@@ -38,8 +38,8 @@ export type AgentLaunchFingerprintInput = {
    *  that changed them must conflict rather than replay the first answer. `null` is a value here,
    *  not an absence — "explicitly no arguments" differs from "use the settings default". */
   agentArgs?: string | null
-  /** In: it decides both where the agent runs and, through `tui_launch_command`, which surface it
-   *  gets. Two launches differing only in `cwd` are genuinely two operations. */
+  /** In: it decides both where the agent runs and, through the `tui_launch_command` downgrade,
+   *  which surface it gets. Two launches differing only in `cwd` are genuinely two operations. */
   cwd?: string
   /** In: it is baked into the pane's PTY env and names the tab the caller placed, so a retry that
    *  reserved another pane must conflict rather than replay a key its placement cannot find. */

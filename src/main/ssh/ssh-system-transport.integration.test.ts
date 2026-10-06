@@ -1,5 +1,5 @@
 import { mkdtempSync, writeFileSync, mkdirSync, chmodSync, rmSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -59,9 +59,7 @@ function writeFakeRelay(dir: string): void {
   // below — so adding one cannot silently fail the completeness probe here.
   for (const filename of relayArtifactFilenames(false)) {
     if (filename !== 'relay.js') {
-      const artifactPath = join(dir, filename)
-      mkdirSync(dirname(artifactPath), { recursive: true })
-      writeFileSync(artifactPath, '')
+      writeFileSync(join(dir, filename), '')
     }
   }
   writeFileSync(

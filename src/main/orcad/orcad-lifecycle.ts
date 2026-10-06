@@ -1,7 +1,5 @@
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
-import { startOrcadBrowserProvider } from './orcad-browser-startup'
-import { OrcadRuntimeLifetime, type OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
-import type { OrcadManagedStopInstance } from '../../shared/orcad-stop-request'
+import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
 import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
@@ -23,14 +21,11 @@ function createIdempotentOrcadCleanup(cleanup: () => Promise<void>): () => Promi
 
 export const ORCAD_SHUTDOWN_DEADLINE_MS = 15_000
 
-/**
- * A launcher and its child can both receive the same process-group or service stop signal.
- * Returns the trigger stop-request listeners share, so every source runs one bounded stop.
- */
+/** A launcher and its child can both receive the same process-group or service stop signal. */
 export function installOrcadShutdownSignals(
   stop: () => Promise<void>,
   deadlineMs = ORCAD_SHUTDOWN_DEADLINE_MS
-): (reason: string) => void {
+): void {
   let stopping = false
   const shutdown = (signal: string): void => {
     if (stopping) {
@@ -60,26 +55,26 @@ export function installOrcadShutdownSignals(
       shutdown('launcher disconnect')
     }
   }
-  return shutdown
 }
 
 export async function startOrcadWithLifecycle<T extends object>(
-  start: (registerRuntimeCleanup: (cleanup: OrcadRuntimeCleanup) => void) => Promise<T>,
+  start: (registerRuntimeCleanup: (cleanup: () => Promise<void>) => void) => Promise<T>,
   cleanupHost: (runtimeCleanupSucceeded: boolean) => Promise<void>
 ): Promise<T & { stop(): Promise<void> }> {
-  // Runtime resources stop in reverse registration order before any host resource.
-  const runtime = new OrcadRuntimeLifetime()
+  let cleanupRuntime = async (): Promise<void> => {}
   const cleanup = createIdempotentOrcadCleanup(async () => {
     let runtimeCleanupSucceeded = false
     try {
-      await runtime.stop()
+      await cleanupRuntime()
       runtimeCleanupSucceeded = true
     } finally {
       await cleanupHost(runtimeCleanupSucceeded)
     }
   })
   try {
-    const handle = await start((nextCleanup) => runtime.add(nextCleanup))
+    const handle = await start((nextCleanup) => {
+      cleanupRuntime = nextCleanup
+    })
     return { ...handle, stop: cleanup }
   } catch (error) {
     try {
@@ -92,50 +87,51 @@ export async function startOrcadWithLifecycle<T extends object>(
   }
 }
 
-/** Keep profile admission and the instance lock until every runtime writer has stopped. */
+/** Keep profile admission until every runtime writer has stopped. */
 export async function startOrcadWithHost<T extends object>(
   userDataPath: string,
-  start: (registerCleanup: (cleanup: OrcadRuntimeCleanup) => void) => Promise<T>,
+  start: (registerCleanup: (cleanup: () => Promise<void>) => void) => Promise<T>,
   runQuitHandlers: () => void
-): Promise<T & { stop(): Promise<void>; instance: OrcadManagedStopInstance }> {
+): Promise<T & { stop(): Promise<void> }> {
   const instanceLock = acquireOrcadInstanceLock(userDataPath)
-  const { pid, startedAtMs, nonce } = instanceLock.record
-  const instance = { pid, startedAtMs, nonce, lockPath: instanceLock.path }
   let admission: ProfileStateRuntimeAdmission | undefined
-  let browserProvider: ReturnType<typeof startOrcadBrowserProvider> | undefined
+  let browserProvider: Awaited<ReturnType<typeof resolveOrcadBrowserProvider>> | undefined
   return startOrcadWithLifecycle(
     async (registerCleanup) => {
       admission = acquireProfileStateRuntimeAdmission(userDataPath)
-      // Why not awaited: a desktop sidecar's authorization UI must not hold RPC readiness hostage.
-      browserProvider = startOrcadBrowserProvider({ userDataPath })
-      return { ...(await start(registerCleanup)), instance }
+      browserProvider = await resolveOrcadBrowserProvider({ userDataPath })
+      const provider = browserProvider
+      setRuntimeBrowserCommandsFactory(provider?.factory ?? null, {
+        headless: provider !== null,
+        ...(provider ? { isAvailable: () => provider.isAvailable() } : {})
+      })
+      return start(registerCleanup)
     },
     async (runtimeCleanupSucceeded) => {
-      // Failed teardown keeps both fences until the process actually exits.
-      const host = new OrcadRuntimeLifetime(() => {
-        if (runtimeCleanupSucceeded) {
+      try {
+        await browserProvider?.stop()
+      } finally {
+        setRuntimeBrowserCommandsFactory(null)
+        runQuitHandlers()
+        try {
+          // Failed teardown excludes recovery until the process actually exits.
+          if (runtimeCleanupSucceeded) {
+            admission?.release()
+          }
+        } finally {
           instanceLock.release()
         }
-      })
-      host.add(({ failed }) => {
-        if (runtimeCleanupSucceeded && !failed) {
-          admission?.release()
-        }
-      })
-      host.add(() => runQuitHandlers())
-      host.add(() => setRuntimeBrowserCommandsFactory(null))
-      host.add(() => browserProvider?.stop())
-      await host.stop()
+      }
     }
   )
 }
 
 export async function flushOrcadProfileStoreForShutdown(store: {
-  flushFinalOrThrowAsync(options?: { exportJsonCompatibility?: boolean }): Promise<void>
+  flushFinalOrThrowAsync(): Promise<void>
   freezeWritesAsync(): Promise<void>
 }): Promise<void> {
   try {
-    await store.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
+    await store.flushFinalOrThrowAsync()
   } finally {
     await store.freezeWritesAsync()
   }

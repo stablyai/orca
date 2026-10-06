@@ -161,6 +161,10 @@ CREATE TABLE IF NOT EXISTS worker_dispatches (
   updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE INDEX IF NOT EXISTS idx_worker_dispatches_recoverable
+  ON worker_dispatches(dispatch_id)
+  WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown');
+
 CREATE TABLE IF NOT EXISTS worker_terminal_resources (
   id                       TEXT PRIMARY KEY,
   origin_dispatch_id       TEXT NOT NULL,

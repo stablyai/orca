@@ -492,29 +492,6 @@ describe('FsHandler readFileStream', () => {
     await waitFor(() => terminalFrames().length === MAX_CONCURRENT_STREAMS + 2)
   })
 
-  it('holds file stream shutdown until an undelivered terminal frame settles', async () => {
-    const filePath = path.join(tmpDir, 'shutdown-terminal.png')
-    writeFileSync(filePath, Buffer.alloc(STREAM_CHUNK_SIZE, 0x42))
-    dispatcher.holdControlSettlements()
-    const context = { clientId: 4, isStale: () => false }
-    await dispatcher.callRequest('fs.readFileStream', { filePath }, context)
-    await waitFor(() => collectStream(dispatcher).end !== null)
-
-    let drained = false
-    const drain = handler.disposeFileStreams().then(() => {
-      drained = true
-    })
-    await flush(10)
-    expect(drained).toBe(false)
-    await expect(
-      dispatcher.callRequest('fs.readFileStream', { filePath }, context)
-    ).rejects.toThrow('relay_file_stream_shutdown_fenced')
-
-    dispatcher.settleHeldControlFrames()
-    await drain
-    expect(drained).toBe(true)
-  })
-
   it('rejects the 17th concurrent stream with TooManyStreams', async () => {
     const paths: string[] = []
     for (let i = 0; i < 17; i++) {

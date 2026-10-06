@@ -92,7 +92,7 @@ it('only skips the unchanged smoke after a successful diff and dependency analys
   const workflow = parse(
     readFileSync(new URL('../../.github/workflows/pr.yml', import.meta.url), 'utf8')
   )
-  const step = workflow.jobs.static_analysis.steps.find(
+  const step = workflow.jobs.preflight.steps.find(
     (candidate) => candidate.name === 'Boot orcad and round-trip a terminal'
   )
   expect(step.env).toEqual({

@@ -1,5 +1,6 @@
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { MAX_BATCHED_WATCHER_EVENTS } from '../main/ipc/filesystem-watcher-event-batch'
+import { isWatcherProcessFailure } from '../main/ipc/parcel-watcher-process-failure'
 import {
   WATCHER_IGNORE_DIRS,
   buildParcelWatcherIgnoreOptions
@@ -9,7 +10,7 @@ import {
   type RelayWatcherProcessPool
 } from './relay-watcher-process-pool'
 import { emitRelayWatcherEvents, emitRelayWatcherOverflow } from './relay-watcher-event-emitter'
-import { awaitRelayWatcherSetupForClient, startInitialRelayWatch } from './relay-watcher-setup-wait'
+import { awaitRelayWatcherSetup, shouldRetryInitialRelayWatch } from './relay-watcher-setup-wait'
 import {
   RelayWatcherTeardownTracker,
   type RelayWatcherTeardownState
@@ -26,7 +27,6 @@ import { releaseStaleRelayWatches } from './relay-watcher-stale-client-release'
 import { PromiseSettlementWaiters } from '../shared/promise-settlement-waiters'
 import { joinRelayWatcherPendingSetup } from './relay-watcher-pending-setup-join'
 import { createRelayWatcherState } from './relay-watcher-state'
-import { closeRelayWatchesAndWait, disposeRelayWatchesAndWait } from './relay-watcher-shutdown'
 
 const RELAY_WATCH_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
 
@@ -40,7 +40,6 @@ export class RelayFilesystemWatchRegistry {
   )
   private readonly teardownTracker: RelayWatcherTeardownTracker
   private readonly removalFence: RelayWatcherRemovalFence
-  private disposed = false
 
   constructor(
     private readonly dispatcher: RelayDispatcher,
@@ -59,9 +58,6 @@ export class RelayFilesystemWatchRegistry {
   }
 
   watch(rootPath: string, context?: RequestContext, watchId?: number): Promise<void> {
-    if (this.disposed) {
-      return Promise.reject(new Error('relay_watcher_shutdown_fenced'))
-    }
     const rootKey = normalizeRuntimePathForComparison(rootPath)
     if (this.removalFence.isActive(rootKey)) {
       return Promise.reject(new Error('Remote worktree deletion already in progress'))
@@ -75,9 +71,7 @@ export class RelayFilesystemWatchRegistry {
         if (watchId !== undefined) {
           existing.clientWatchIds.set(clientId, watchId)
         }
-        return awaitRelayWatcherSetupForClient(existing, context, () =>
-          this.releaseWatchClient(existing, clientId)
-        )
+        return this.awaitSetupForClient(existing, clientId, context)
       }
       void this.closeWatch(existing).catch(() => {})
     }
@@ -110,9 +104,6 @@ export class RelayFilesystemWatchRegistry {
     if (capacityRelease) {
       await capacityRelease
     }
-    if (this.disposed) {
-      throw new Error('relay_watcher_shutdown_fenced')
-    }
     const clientId = context?.clientId ?? 0
     const isStale = context?.isStale ?? (() => false)
     const existing = this.watches.get(rootKey)
@@ -121,9 +112,7 @@ export class RelayFilesystemWatchRegistry {
       if (watchId !== undefined) {
         existing.clientWatchIds.set(clientId, watchId)
       }
-      await awaitRelayWatcherSetupForClient(existing, context, () =>
-        this.releaseWatchClient(existing, clientId)
-      )
+      await this.awaitSetupForClient(existing, clientId, context)
       return
     }
 
@@ -132,9 +121,7 @@ export class RelayFilesystemWatchRegistry {
     const state = createRelayWatcherState(rootKey, rootPath, clientId, isStale, watchId)
     this.watches.set(rootKey, state)
     state.setupWaiters = new PromiseSettlementWaiters(this.startInitialWatch(state))
-    await awaitRelayWatcherSetupForClient(state, context, () =>
-      this.releaseWatchClient(state, clientId)
-    )
+    await this.awaitSetupForClient(state, clientId, context)
   }
 
   unwatch(rootPath: string, context?: RequestContext): void {
@@ -196,31 +183,27 @@ export class RelayFilesystemWatchRegistry {
   }
 
   dispose(): void {
-    this.disposed = true
     this.watches.forEach((state) => void this.closeWatch(state).catch(() => {}))
     this.watcherPool.dispose()
   }
 
-  closeWatchesAndWait(): Promise<void> {
-    this.disposed = true
-    return closeRelayWatchesAndWait(
-      this.watches,
-      this.pendingSetups,
-      this.teardownTracker,
-      (state) => this.closeWatch(state)
-    )
-  }
-
-  disposeAndWait = (): Promise<void> =>
-    disposeRelayWatchesAndWait(() => this.closeWatchesAndWait(), this.watcherPool)
-
-  private startInitialWatch(state: RelayWatcherTeardownState): Promise<void> {
-    return startInitialRelayWatch(
-      state,
-      () => this.subscribeState(state),
-      () => emitRelayWatcherOverflow(this.dispatcher, state.rootPath, state.closed),
-      () => this.closeWatch(state)
-    )
+  private async startInitialWatch(state: RelayWatcherTeardownState): Promise<void> {
+    try {
+      await this.subscribeState(state)
+    } catch (firstError) {
+      if (!state.closed && shouldRetryInitialRelayWatch(firstError)) {
+        try {
+          await this.subscribeState(state)
+          emitRelayWatcherOverflow(this.dispatcher, state.rootPath, state.closed)
+          return
+        } catch (quarantineError) {
+          void this.closeWatch(state).catch(() => {})
+          throw quarantineError
+        }
+      }
+      void this.closeWatch(state).catch(() => {})
+      throw firstError
+    }
   }
 
   private subscribeState(state: RelayWatcherTeardownState): Promise<void> {
@@ -262,13 +245,7 @@ export class RelayFilesystemWatchRegistry {
           state.generation !== generation ||
           this.watches.get(state.rootKey) !== state
         ) {
-          if (state.closed) {
-            state.subscription = subscription
-          }
           await subscription.unsubscribe()
-          if (state.subscription === subscription) {
-            state.subscription = null
-          }
           return
         }
         state.subscription = subscription
@@ -297,6 +274,30 @@ export class RelayFilesystemWatchRegistry {
         void this.closeWatch(state).catch(() => {})
       }
     })
+  }
+
+  private async awaitSetupForClient(
+    state: RelayWatcherTeardownState,
+    clientId: number,
+    context?: RequestContext
+  ): Promise<void> {
+    try {
+      await awaitRelayWatcherSetup(state.setupWaiters, context?.signal)
+    } catch (error) {
+      this.releaseWatchClient(state, clientId)
+      const expectedAbort =
+        (error instanceof Error && error.name === 'AbortError') ||
+        (isWatcherProcessFailure(error) && error.code === 'subscribe_aborted')
+      if (expectedAbort) {
+        return
+      }
+      const message = error instanceof Error ? error.message : String(error)
+      process.stderr.write(`[relay] File watcher not available for ${state.rootPath}: ${message}\n`)
+      throw error
+    }
+    if (context?.isStale()) {
+      this.releaseWatchClient(state, clientId)
+    }
   }
 
   private releaseClientWatches(clientId: number): void {

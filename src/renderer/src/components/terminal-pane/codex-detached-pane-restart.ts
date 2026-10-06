@@ -16,6 +16,7 @@ import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
+import { buildCodexAccountRestartStartup } from '@/lib/codex-account-restart-startup'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -127,13 +128,10 @@ function locateCodexPane(state: AppState, ptyId: string): LocatedCodexPane | nul
 
 function getWorkspacePath(state: AppState, worktreeId: string): string | null {
   const parsed = parseWorkspaceKey(worktreeId)
-  if (parsed?.type === 'folder') {
-    return (
-      (state.folderWorkspaces ?? []).find((workspace) => workspace.id === parsed.folderWorkspaceId)
-        ?.folderPath ?? null
-    )
-  }
-  return getWorktreeMapFromState(state).get(worktreeId)?.path ?? null
+  return parsed?.type === 'folder'
+    ? (state.folderWorkspaces.find((workspace) => workspace.id === parsed.folderWorkspaceId)
+        ?.folderPath ?? null)
+    : (getWorktreeMapFromState(state).get(worktreeId)?.path ?? null)
 }
 
 function buildPaneIdentityEnv(
@@ -183,6 +181,12 @@ async function executeDetachedCodexPaneRestart(
     return
   }
   const { worktreeId, tab, leafId } = located
+  const startup = buildCodexAccountRestartStartup({
+    worktreeId,
+    tabId: tab.id,
+    leafId,
+    shellOverride: tab.shellOverride
+  })
 
   const workspacePath = getWorkspacePath(state, worktreeId)
   const cwd = tab.startupCwd ?? workspacePath ?? undefined
@@ -214,10 +218,8 @@ async function executeDetachedCodexPaneRestart(
     rows: 24,
     ...(cwd ? { cwd } : {}),
     cwdFallback: 'worktree',
-    env: buildPaneIdentityEnv(state, worktreeId, tab.id, leafId),
-    command: CODEX_ACCOUNT_RESTART_STARTUP.command,
-    startupCommandDelivery: CODEX_ACCOUNT_RESTART_STARTUP.startupCommandDelivery,
-    launchAgent: CODEX_ACCOUNT_RESTART_STARTUP.launchAgent,
+    ...startup,
+    env: { ...startup.env, ...buildPaneIdentityEnv(state, worktreeId, tab.id, leafId) },
     worktreeId,
     tabId: tab.id,
     leafId,

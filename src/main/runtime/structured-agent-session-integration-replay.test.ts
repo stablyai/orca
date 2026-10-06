@@ -7,9 +7,9 @@
 // does and pushes the same notifications and blocking requests back.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CodexStructuredSessionAdapter } from '../codex/codex-structured-session-adapter'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import type * as JournalStoreFactory from '../native-chat/agent-session-journal/journal-store-factory'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
@@ -21,6 +21,33 @@ import {
   TURN,
   type StructuredCodexRpcHarness
 } from './structured-codex-session-rpc-test-harness'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+
+const { journalOpenHold } = vi.hoisted(() => {
+  const journalOpenHold: { next: { entered: () => void; released: Promise<void> } | null } = {
+    next: null
+  }
+  return { journalOpenHold }
+})
+
+// Holds the next journal open midway, so provider events land while the attach binds its journal.
+vi.mock('../native-chat/agent-session-journal/journal-store-factory', async (importOriginal) => {
+  const actual = await importOriginal<typeof JournalStoreFactory>()
+  return {
+    ...actual,
+    openAgentSessionJournal: async (
+      input: Parameters<typeof actual.openAgentSessionJournal>[0]
+    ) => {
+      const hold = journalOpenHold.next
+      journalOpenHold.next = null
+      if (hold) {
+        hold.entered()
+        await hold.released
+      }
+      return actual.openAgentSessionJournal(input)
+    }
+  }
+})
 
 const journals = createTrackedJournalOpener()
 const WORKSPACE = 'workspace-1'
@@ -72,23 +99,16 @@ describe('a structured codex session over agentSession.*', () => {
   })
 
   it('joins an acquired attach through journal bind before draining final rows', async () => {
-    const host = await ensureStructuredAgentSessionHost(harness.hostConfig())
-    const adapter = (host as unknown as { deps: { adapter: CodexStructuredSessionAdapter } }).deps
-      .adapter
-    const historyEntered = Promise.withResolvers<void>()
-    const historyGate = Promise.withResolvers<void>()
-    const originalHistoryFilePath = adapter.historyFilePath.bind(adapter)
-    vi.spyOn(adapter, 'historyFilePath').mockImplementation(async (input) => {
-      historyEntered.resolve()
-      await historyGate.promise
-      return originalHistoryFilePath(input)
-    })
+    await ensureStructuredAgentSessionHost(harness.hostConfig())
+    const openEntered = Promise.withResolvers<void>()
+    const openGate = Promise.withResolvers<void>()
+    journalOpenHold.next = { entered: openEntered.resolve, released: openGate.promise }
 
     const creating = harness.ok<{ fence: number }>(
       'agentSession.create',
       harness.createIntentParams()
     )
-    await historyEntered.promise
+    await openEntered.promise
     harness.codex.notify('turn/started', { threadId: THREAD, turn: { id: TURN } })
     harness.codex.notify('item/started', {
       threadId: THREAD,
@@ -108,7 +128,7 @@ describe('a structured codex session over agentSession.*', () => {
     })
     await new Promise<void>((resolve) => setImmediate(resolve))
     const waitedForJournalBind = !stopped
-    historyGate.resolve()
+    openGate.resolve()
     await creating
     await stopping
     expect(waitedForJournalBind).toBe(true)
@@ -118,7 +138,7 @@ describe('a structured codex session over agentSession.*', () => {
       workspaceId: WORKSPACE,
       hostId: 'local',
       agent: 'codex' as const,
-      providerHandle: { kind: 'codex' as const, threadId: THREAD }
+      providerHandle: codexProviderHandle(THREAD)
     }
     const reopened = await journals.open({
       identity,

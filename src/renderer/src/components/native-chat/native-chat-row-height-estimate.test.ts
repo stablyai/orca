@@ -1,3 +1,4 @@
+import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
@@ -20,6 +21,50 @@ function message(text: string, role: NativeChatMessage['role'] = 'assistant'): N
 }
 
 describe('transcript row height estimate', () => {
+  it('reuses row metrics across a one-pixel resize and refreshes after a substantial resize', () => {
+    const prose = message('x'.repeat(900))
+    const metricsAtWidth = (width: number) => {
+      const style = nativeChatAppearanceStyle({ nativeChatAppearance: { width: 'wide' } }, width)
+      return nativeChatRowContentMetrics(prose, {
+        lineHeightPx: style['--chat-estimated-line-height'],
+        charsPerLine: style['--chat-estimated-chars-per-line']
+      })
+    }
+    const initial = metricsAtWidth(800)
+    expect(metricsAtWidth(801)).toBe(initial)
+    expect(metricsAtWidth(864)).not.toBe(initial)
+  })
+
+  it('adjusts line height and wrapping together for text size and column width', () => {
+    const prose = message('x'.repeat(900))
+    const height = (
+      fontSize: number,
+      width: 'comfortable' | 'wide' | 'full',
+      columnWidth?: number
+    ): number => {
+      const style = nativeChatAppearanceStyle(
+        { nativeChatAppearance: { fontSize, width } },
+        columnWidth
+      )
+      const typography = {
+        lineHeightPx: style['--chat-estimated-line-height'],
+        charsPerLine: style['--chat-estimated-chars-per-line']
+      }
+      return estimateNativeChatRowHeight(
+        nativeChatRowContentMetrics(prose, typography),
+        NO_CHROME,
+        typography
+      )
+    }
+    expect(height(20, 'comfortable')).toBeGreaterThan(height(14, 'comfortable'))
+    expect(height(12, 'comfortable')).toBeLessThan(height(14, 'comfortable'))
+    expect(height(20, 'wide')).toBeLessThan(height(20, 'comfortable'))
+    expect(height(20, 'full', 1200)).toBeLessThan(height(20, 'wide'))
+    expect(height(14, 'comfortable')).toBe(
+      estimateNativeChatRowHeight(nativeChatRowContentMetrics(prose), NO_CHROME)
+    )
+  })
+
   it('counts hard breaks and soft wraps as separate display lines', () => {
     expect(estimateNativeChatTextLines('')).toBe(0)
     expect(estimateNativeChatTextLines('one line')).toBe(1)

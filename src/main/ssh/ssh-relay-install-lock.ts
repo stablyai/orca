@@ -32,16 +32,6 @@ export const INSTALL_LOCK_STALE_MS = 20 * 60_000
 export const INSTALL_LOCK_STALE_SECONDS = INSTALL_LOCK_STALE_MS / 1000
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 
-export class RemoteInstallLockBusyError extends Error {
-  constructor(lockDir: string, timeoutMs: number) {
-    super(
-      `Could not acquire relay install lock at ${lockDir} after ${timeoutMs / 1000}s; ` +
-        'another install is still in progress.'
-    )
-    this.name = 'RemoteInstallLockBusyError'
-  }
-}
-
 function execHostCommand(
   conn: SshConnection,
   host: RemoteHostPlatform,
@@ -87,16 +77,9 @@ export async function acquireInstallLock(
     lockName?: string
     /** False for a lock whose directory is not a relay version dir, so no GC claim can name it. */
     relayGcClaim?: boolean
-    /** False when a held lock is a fence whose age cannot prove its owner's work is finished. */
-    allowStaleTakeover?: boolean
-    waitTimeoutMs?: number
   }
 ): Promise<void> {
   const lockDir = joinRemotePath(host, remoteRelayDir, options?.lockName ?? RELAY_INSTALL_LOCK_NAME)
-  const waitTimeoutMs = options?.waitTimeoutMs ?? INSTALL_LOCK_TIMEOUT_MS
-  if (!Number.isSafeInteger(waitTimeoutMs) || waitTimeoutMs < 0) {
-    throw new Error('Install lock wait timeout must be a non-negative integer.')
-  }
   const relayGcClaim = options?.relayGcClaim ?? true
   const isClaimed = (): Promise<boolean> =>
     relayGcClaim
@@ -147,10 +130,7 @@ export async function acquireInstallLock(
       // A failed mkdir is lock contention; keep the connection-specific error
       // out of the user path until the bounded wait expires.
     }
-    if (
-      options?.allowStaleTakeover !== false &&
-      Date.now() - lastStaleCheckAt >= INSTALL_LOCK_STALE_RECHECK_MS
-    ) {
+    if (Date.now() - lastStaleCheckAt >= INSTALL_LOCK_STALE_RECHECK_MS) {
       lastStaleCheckAt = Date.now()
       // Why: recover an already-stale lock immediately, then keep checking in
       // case a fresh holder crosses the stale threshold while we are waiting.
@@ -190,8 +170,12 @@ export async function acquireInstallLock(
       lastWaitLogAt = Date.now()
       console.info(`[ssh-relay] Waiting for install lock at ${lockDir}`)
     }
-    if (Date.now() - start >= waitTimeoutMs) {
-      throw new RemoteInstallLockBusyError(lockDir, waitTimeoutMs)
+    if (Date.now() - start >= INSTALL_LOCK_TIMEOUT_MS) {
+      throw new Error(
+        `Could not acquire relay install lock at ${lockDir} after ${
+          INSTALL_LOCK_TIMEOUT_MS / 1000
+        }s; another install is still in progress.`
+      )
     }
     await waitForInstallLockPoll(options?.signal)
   }

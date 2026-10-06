@@ -1,13 +1,9 @@
 import type {
-  AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalTurnScope
 } from '../../shared/agent-session-journal-types'
-import { backgroundTaskFallbackText } from '../../shared/native-chat-background-task-row'
-import {
-  isBackgroundTaskBlock,
-  type NativeChatBackgroundTaskBlock
-} from '../../shared/native-chat-types'
+import { backgroundTaskJournalBody } from '../../shared/native-chat-background-task-row'
+import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionLifecycleJournal,
@@ -37,15 +33,7 @@ export function claudeBackgroundTaskIdentity(
   return { provider: 'orca', clientMessageId: key }
 }
 
-export function claudeBackgroundTaskBody(
-  block: NativeChatBackgroundTaskBlock
-): AgentJournalItemBody {
-  return {
-    kind: 'message',
-    role: 'system',
-    blocks: [{ type: 'text', text: backgroundTaskFallbackText(block) }, { ...block }]
-  }
-}
+export const claudeBackgroundTaskBody = backgroundTaskJournalBody
 
 /** Reconcile one queued row against the durable run identity after a rebind. */
 export function resolveClaudeBackgroundTaskIdentity(
@@ -156,12 +144,7 @@ export function writeClaudeBackgroundTaskRow(
   }
   beforeAppend?.()
   const identity = claudeBackgroundTaskIdentity(id, row.generation)
-  // Generation is translator-local and resets when a provider stream is
-  // recreated. Keep unresolved writes from distinct provider runs queued side
-  // by using the provider's parent tool identity as the coalescing discriminator.
-  const coalescingKey = JSON.stringify(['claude-background-task', id, row.toolUseId ?? null])
   const appendOptions = {
-    coalescingKey,
     turnScope: turnScope(),
     ...(lifecycle ? { lifecycle: true } : {})
   }

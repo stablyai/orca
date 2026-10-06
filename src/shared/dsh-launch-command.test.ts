@@ -9,6 +9,14 @@ function tokens(commandLine: string): string[] {
 describe('isDshNonInteractiveCommand', () => {
   it.each([
     'dsh web',
+    'dsh headless "run the tests"',
+    'dsh sdk',
+    'dsh sdk-minimal',
+    'dsh acp',
+    'dsh desktop',
+    'dsh dsh-tui --dump-config',
+    'dsh dsh-tui --dump-default-config',
+    'dsh dsh-tui --dump-config-schema',
     'dsh --profile web',
     'dsh --profile=web --port 8080',
     'dsh --profile headless "run the tests"',
@@ -23,6 +31,14 @@ describe('isDshNonInteractiveCommand', () => {
 
   it.each([
     'dsh --profile dsh-tui',
+    'dsh dsh-tui',
+    'dsh tui --resume web',
+    'dsh tui --patch web --resume sdk',
+    'dsh tui --patch=web --resume sdk',
+    'dsh --profile tui --patch headless --resume sdk',
+    'dsh tui --from-default-profile web --resume sdk',
+    'dsh tui --resume session --dump-config',
+    'dsh --profile tui --resume session --dump-config',
     'dsh --profile=dsh-tui',
     'dsh --profile dsh-tui --resume 9478e2d8-29bc-4009-ab32-657efa2bd763',
     'dsh-tui',
@@ -66,6 +82,14 @@ describe('dsh foreground process recognition', () => {
 
   it.each([
     'dsh web',
+    'dsh headless "summarize the diff"',
+    'dsh sdk',
+    'dsh sdk-minimal',
+    'dsh acp',
+    'node /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js headless "go"',
+    'node /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js sdk',
+    'node --no-warnings /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js sdk',
+    'C:\\Tools\\dsh.cmd headless go',
     'dsh --profile headless "summarize the diff"',
     'node /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js --profile acp'
   ])('does not claim %s as an interactive agent pane', (commandLine) => {

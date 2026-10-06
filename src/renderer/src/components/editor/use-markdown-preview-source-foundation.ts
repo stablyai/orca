@@ -5,6 +5,7 @@ import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { prewarmMarkdownPreviewLocalImages } from './markdown-preview-local-images'
 import type { MarkdownPreviewSearchInstance } from './markdown-preview-search'
 import {
@@ -21,12 +22,14 @@ export function useMarkdownPreviewSourceFoundation({
   filePath,
   sourceFileId,
   sourceWorktreeId,
-  sourceRuntimeEnvironmentId
+  sourceRuntimeEnvironmentId,
+  prewarmImages = true
 }: {
   content: string
   filePath: string
   sourceFileId: string | null
   sourceWorktreeId: string | null
+  prewarmImages?: boolean
   sourceRuntimeEnvironmentId: string | null | undefined
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -149,11 +152,14 @@ export function useMarkdownPreviewSourceFoundation({
   const renderedContent = usePreserveSectionDuringExternalEdit(content, bodyRef)
 
   useEffect(() => {
+    if (!prewarmImages || exceedsMarkdownRichModeSizeLimit(renderedContent)) {
+      return
+    }
     const prewarm = prewarmMarkdownPreviewLocalImages(renderedContent, filePath, {
       runtimeContext: imageRuntimeContext
     })
     return prewarm.cancel
-  }, [renderedContent, filePath, imageRuntimeContext])
+  }, [renderedContent, filePath, imageRuntimeContext, prewarmImages])
 
   return {
     rootRef,

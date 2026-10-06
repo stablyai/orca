@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchZcodeRateLimits } from './zcode-usage-fetcher'
+import { fetchZcodeRateLimits, hasZcodeCliPlanCredentials } from './zcode-usage-fetcher'
 
 let dir: string
 let configPath: string
@@ -288,5 +288,113 @@ describe('fetchZcodeRateLimits', () => {
 
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('parse')
+  })
+
+  it('prefers the Orca-saved plan credential over the ZCode CLI config', async () => {
+    writeConfig()
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            level: 'pro',
+            limits: [
+              { type: 'TOKENS_LIMIT', unit: 3, number: 5, percentage: 30 },
+              { type: 'CREDIT_LIMIT', unit: 6, number: 1, percentage: 60 }
+            ]
+          }
+        })
+      )
+    )
+
+    const result = await fetchZcodeRateLimits({
+      configPath,
+      planCredential: { apiKey: 'orca-saved-key', baseUrl: 'https://api.z.ai' }
+    })
+
+    expect(result.status).toBe('ok')
+    const [url, init] = vi.mocked(fetch).mock.calls[0]
+    expect(String(url)).toBe('https://api.z.ai/api/monitor/usage/quota/limit')
+    expect(new Headers(init?.headers).get('Authorization')).toBe('orca-saved-key')
+    expect(result.usageMetadata?.credentialSource).toBe('orca-plan')
+    expect(JSON.stringify(result)).not.toContain('orca-saved-key')
+  })
+
+  it('uses the BigModel host for the mainland plan site', async () => {
+    writeFileSync(configPath, JSON.stringify({ provider: {} }))
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { limits: [{ type: 'TOKENS_LIMIT', unit: 3, number: 5, percentage: 10 }] }
+        })
+      )
+    )
+
+    const result = await fetchZcodeRateLimits({
+      configPath,
+      planCredential: { apiKey: 'bigmodel-key', baseUrl: 'https://open.bigmodel.cn' }
+    })
+
+    expect(result.status).toBe('ok')
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toBe(
+      'https://open.bigmodel.cn/api/monitor/usage/quota/limit'
+    )
+  })
+
+  it('rejects a plan credential whose base URL is not a supported site', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('{}'))
+
+    const result = await fetchZcodeRateLimits({
+      configPath,
+      planCredential: { apiKey: 'key', baseUrl: 'https://evil.example.com' }
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('The saved GLM Coding Plan API key is unusable')
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('reports an unusable plan credential instead of switching to the CLI config', async () => {
+    writeConfig()
+    vi.mocked(fetch).mockResolvedValue(new Response('{}'))
+
+    const result = await fetchZcodeRateLimits({
+      configPath,
+      planCredential: { apiKey: 'bad\r\nkey', baseUrl: 'https://api.z.ai' }
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('The saved GLM Coding Plan API key is unusable')
+    expect(fetch).not.toHaveBeenCalled()
+    expect(result.usageMetadata?.credentialSource).toBeUndefined()
+  })
+})
+
+describe('hasZcodeCliPlanCredentials', () => {
+  it('detects a usable CLI config', async () => {
+    writeConfig()
+
+    expect(hasZcodeCliPlanCredentials(configPath)).toBe(true)
+  })
+
+  it('reports false without a config file', async () => {
+    expect(hasZcodeCliPlanCredentials(configPath)).toBe(false)
+  })
+})
+
+describe('quota credential privacy', () => {
+  it.each(['network', 'response'])('redacts a credential echoed by a %s error', async (kind) => {
+    writeConfig()
+    if (kind === 'network') {
+      vi.mocked(fetch).mockRejectedValue(new Error('Rejected test-secret'))
+    } else {
+      vi.mocked(fetch).mockResolvedValue(
+        new Response(JSON.stringify({ success: false, msg: 'Rejected test-secret' }))
+      )
+    }
+    const result = await fetchZcodeRateLimits({ configPath })
+    expect(result.error).toBe('Rejected [redacted]')
+    expect(JSON.stringify(result)).not.toContain('test-secret')
   })
 })

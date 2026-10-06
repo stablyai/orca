@@ -286,7 +286,7 @@ describe('SshConnection', () => {
     await expect(outcomePromise).resolves.toBe('AbortError')
   })
 
-  it('removes the abort-grace waiter while retaining physical-close tracking', async () => {
+  it('removes the late-channel close listener when abort grace expires', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
     vi.useFakeTimers()
@@ -302,14 +302,12 @@ describe('SshConnection', () => {
       await vi.advanceTimersByTimeAsync(0)
       controller.abort()
       pendingSftpCallback?.(undefined, lateSftp)
-      expect(lateSftp.listenerCount('close')).toBe(2)
+      expect(lateSftp.listenerCount('close')).toBe(1)
       expect(() => lateSftp.emit('error', new Error('late SFTP teardown'))).not.toThrow()
 
       await vi.advanceTimersByTimeAsync(5_000)
 
       await expect(outcomePromise).resolves.toBe('AbortError')
-      expect(lateSftp.listenerCount('close')).toBe(1)
-      lateSftp.emit('close')
       expect(lateSftp.listenerCount('close')).toBe(0)
     } finally {
       vi.useRealTimers()
@@ -378,7 +376,7 @@ describe('SshConnection', () => {
     expect(lateSftp.end).toHaveBeenCalledTimes(1)
   })
 
-  it('retains SFTP physical-close tracking after the bounded observation expires', async () => {
+  it('removes the late SFTP close listener when the bounded grace expires', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
     ssh2Mock.sftpBehavior = 'pending'
@@ -395,13 +393,11 @@ describe('SshConnection', () => {
       await Promise.resolve()
       controller.abort()
       pendingSftpCallback?.(undefined, lateSftp)
-      expect(lateSftp.listenerCount('close')).toBe(2)
+      expect(lateSftp.listenerCount('close')).toBe(1)
 
       await vi.advanceTimersByTimeAsync(5_000)
 
       await expect(outcomePromise).resolves.toBe('AbortError')
-      expect(lateSftp.listenerCount('close')).toBe(1)
-      lateSftp.emit('close')
       expect(lateSftp.listenerCount('close')).toBe(0)
       expect(lateSftp.end).toHaveBeenCalledTimes(1)
     } finally {

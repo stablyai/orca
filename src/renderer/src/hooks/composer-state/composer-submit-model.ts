@@ -66,7 +66,7 @@ export type QuickSubmitSource = {
 
 export type PreparedQuickSubmit = QuickSubmitSource & {
   effectiveSetupDecision: SetupDecision
-  issueCommand: WorktreeCreationRequest['issueCommand']
+  hookPreparation: WorktreeCreationRequest['hookPreparation']
   linkedLinearIssue: string | undefined
   linkedLinearIssueWorkspaceId: string | undefined
   linkedLinearIssueOrganizationUrlKey: string | undefined

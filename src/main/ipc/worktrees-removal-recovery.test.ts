@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { RedactableSpan } from '../observability/redactor'
 import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
+import { agentHookServer } from '../agent-hooks/server'
+import { makePaneKey } from '../../shared/stable-pane-id'
 import {
   ORIGINAL_PLATFORM,
   setPlatform,
@@ -158,15 +160,35 @@ describe('registerWorktreeHandlers', () => {
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ hostId: 'local' }))
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue({})
-
-    await handlers['worktrees:remove'](null, { worktreeId, hostId: 'local' })
-
-    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
-    expect(advertisedUrlWatcherForgetWorktreeMock).not.toHaveBeenCalled()
-    expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
-    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
-      repoId: 'repo-1'
+    // Both hosts' agents share one tab; only the removed host's pane may be retired.
+    const localPane = makePaneKey('tab-shared', '11111111-1111-4111-8111-111111111111')
+    const sshPane = makePaneKey('tab-shared', '22222222-2222-4222-8222-222222222222')
+    const payload = { state: 'working', prompt: 'stranded', agentType: 'codex' } as const
+    agentHookServer.ingestTerminalStatus({
+      paneKey: localPane,
+      tabId: 'tab-shared',
+      worktreeId,
+      connectionId: null,
+      payload
     })
+    agentHookServer.ingestRemote(
+      { paneKey: sshPane, tabId: 'tab-shared', worktreeId, payload },
+      'conn-1'
+    )
+
+    try {
+      await handlers['worktrees:remove'](null, { worktreeId, hostId: 'local' })
+
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(advertisedUrlWatcherForgetWorktreeMock).not.toHaveBeenCalled()
+      expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+        repoId: 'repo-1'
+      })
+      expect(agentHookServer.getStatusSnapshot().map((row) => row.paneKey)).toEqual([sshPane])
+    } finally {
+      agentHookServer.dropStatusEntriesByTabPrefix('tab-shared')
+    }
   })
 
   it('tombstones a cleanup-batch removal without scheduling singular sidecar writes', async () => {
@@ -697,5 +719,48 @@ describe('registerWorktreeHandlers', () => {
       closeStructuredSessions: true
     })
     expect(getSshPtyProviderMock).not.toHaveBeenCalled()
+  })
+  // A scan the host answered is the only evidence that ever retires an off-host WorktreeMeta row,
+  // so it must retire that worktree's hook-status rows too, or they stay stranded in last-status.json.
+  it("retires the scan-proven host rows from the agent status store, and only that host's", async () => {
+    const worktreeId = 'repo-1::/remote/deleted'
+    store.getRepos.mockReturnValue([
+      {
+        id: 'repo-1',
+        path: '/remote/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'target-a'
+      }
+    ])
+    store.getProjectHostSetups.mockReturnValue([])
+    store.getAllWorktreeMeta.mockReturnValue({
+      [worktreeId]: makeWorktreeMeta({ hostId: 'ssh:target-a' })
+    })
+    const scannedPane = makePaneKey('tab-scan', '33333333-3333-4333-8333-333333333333')
+    const otherHostPane = makePaneKey('tab-scan', '44444444-4444-4444-8444-444444444444')
+    const payload = { state: 'working', prompt: 'stranded', agentType: 'codex' } as const
+    agentHookServer.ingestRemote(
+      { paneKey: scannedPane, tabId: 'tab-scan', worktreeId, payload },
+      'target-a'
+    )
+    agentHookServer.ingestRemote(
+      { paneKey: otherHostPane, tabId: 'tab-scan', worktreeId, payload },
+      'target-b'
+    )
+
+    try {
+      await handlers['worktrees:forgetRemovedForExecutionHost'](null, {
+        repoId: 'repo-1',
+        executionHostId: 'ssh:target-a',
+        worktreeIds: [worktreeId]
+      })
+
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'ssh:target-a')
+      expect(agentHookServer.getStatusSnapshot().map((row) => row.paneKey)).toEqual([otherHostPane])
+    } finally {
+      agentHookServer.dropStatusEntriesByTabPrefix('tab-scan')
+    }
   })
 })

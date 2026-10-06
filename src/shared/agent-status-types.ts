@@ -9,7 +9,7 @@ import { isAgentTurnOutcome } from './agent-turn-outcome'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
-import type { TuiAgent } from './tui-agent'
+import type { TerminalAgent } from './terminal-agent'
 import {
   AGENT_MODEL_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
@@ -53,9 +53,9 @@ export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 export type AgentWorkingMode = 'monitoring'
 
 // Why: agent types aren't a fixed set (custom agents exist); any non-empty string is
-// accepted — the well-known names are the launchable TuiAgent ids plus the 'unknown'
+// accepted — the well-known names are the recognized TerminalAgent ids plus the 'unknown'
 // sentinel (no agent identified yet), a convenience union for pattern-matching.
-export type WellKnownAgentType = TuiAgent | 'unknown'
+export type WellKnownAgentType = TerminalAgent | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 
 export type AgentStatusOrchestrationContext = {
@@ -199,6 +199,8 @@ export type AgentStatusPayload = {
   /** The main agent's own state and last-turn verdict. See AgentMainAgentStatus. Producers publish it
    *  beside the combined `state`; a reader that predates it keeps reading `state`. */
   mainAgent?: AgentMainAgentStatus
+  /** The execution host awaits a launched Claude task’s wake-up or its finishing turn. */
+  claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 }
 
 /**
@@ -237,7 +239,10 @@ export function pickParsedAgentStatusPayload(
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {}),
-    ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {})
+    ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {}),
+    ...(row.claudeTaskWakeupPending !== undefined
+      ? { claudeTaskWakeupPending: row.claudeTaskWakeupPending }
+      : {})
   }
 }
 
@@ -344,7 +349,13 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
     turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeAgentSubagentsField(obj.subagents),
-    mainAgent: normalizeMainAgentStatusField(obj.mainAgent)
+    mainAgent: normalizeMainAgentStatusField(obj.mainAgent),
+    ...(obj.agentType === 'claude' &&
+    state !== 'done' &&
+    (obj.claudeTaskWakeupPending === 'notification' ||
+      obj.claudeTaskWakeupPending === 'finishing-turn')
+      ? { claudeTaskWakeupPending: obj.claudeTaskWakeupPending }
+      : {})
   }
 }
 

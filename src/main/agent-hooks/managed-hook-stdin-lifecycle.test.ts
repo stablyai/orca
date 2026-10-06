@@ -300,6 +300,11 @@ describe('Windows managed hook stdin structure', () => {
         expect(script, `${fileName} no ORCA_* guard may route to the more.com drain`).not.toMatch(
           /ORCA_[A-Z_]+.*goto :?orca_agent_hook_drain_stdin/
         )
+        if (fileName === 'antigravity-hook.cmd') {
+          expect(script).not.toContain('more.com')
+          expect(script).toContain('antigravity-hook-post.cjs')
+          continue
+        }
         // Why: the epilogue stays shared — claude-hook-impl.cmd still jumps to it from the
         // Devin-imports-.claude skip, which now sits below these guards.
         expect(script, `${fileName} drain epilogue`).toContain(

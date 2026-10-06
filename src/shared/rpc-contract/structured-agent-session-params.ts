@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
 import { isAgentSessionId } from '../agent-session-record'
+import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
 import {
   AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES,
@@ -73,6 +74,10 @@ export const ProviderHandle = z.discriminatedUnion('kind', [
     .strict()
 ])
 
+/** Any agent a host may register. The host refuses one it did not register; a client sends one
+ *  beyond Claude and Codex only to a host advertising the registered-agents capability. */
+export const StructuredAgent = z.string().refine(isStructuredAgentId, 'Invalid agent')
+
 export const ExecutionHostId = z
   .string()
   .max(MAX_ID_LENGTH)
@@ -97,6 +102,8 @@ export const AccountHome = z
   })
   .strict()
 
+/** Attaching by a client-supplied handle stays Claude/Codex: only their handles have a wire form, and
+ *  every client creates other agents by intent, which the host resolves. */
 export const AttachParams = z
   .object({
     envelope: MutationEnvelope,
@@ -122,7 +129,7 @@ export const CreateIntentParams = z
   .object({
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.enum(['claude', 'codex']),
+    agent: StructuredAgent,
     resumeFrom: ResumeSource.optional(),
     /**
      * The tab id the client reserved for this chat, so it can place the tab before the reply. The
@@ -141,7 +148,7 @@ export const CreateParams = z.union([AttachParams, CreateIntentParams])
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.enum(['claude', 'codex'])
+    agent: StructuredAgent
   })
   .strict()
 
@@ -291,13 +298,19 @@ export const SetOptionParams = z
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 
+/** `agentSession.agents` takes nothing: the list is the host's, whichever client asks. */
+export const AgentsParams = z.object({}).strict()
+
 /** `sessionId` scopes the catalog to that session's pinned account; without a
  *  session record the host keys it by the account a new launch would pin.
- *  `worktree` names where a new chat runs, whose own config may replace the default. */
+ *  `worktree` names where a new chat runs, whose own config may replace the default.
+ *  `waitForListing` holds the answer until the listing the host reported in progress lands; send
+ *  it only after that report, because a host that predates it refuses the unknown key. */
 export const ModelCatalogParams = z.strictObject({
-  agent: z.enum(['claude', 'codex']),
+  agent: StructuredAgent,
   sessionId: SessionId.optional(),
-  worktree: Identifier('Invalid worktree selector').optional()
+  worktree: Identifier('Invalid worktree selector').optional(),
+  waitForListing: z.boolean().optional()
 })
 
 export const ConversationCommandParams = z

@@ -6,41 +6,49 @@ import type {
   AgentSessionExecutionLocation
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type {
+  StructuredAgentRegistration,
+  StructuredAgentRegistry
+} from './structured-agent-registry'
 
-type RoutedAgent = 'claude' | 'codex'
-type SessionRoute = { adapter: StructuredAgentSessionAdapter; state: 'live' | 'stopped' }
+type SessionRoute = {
+  registration: StructuredAgentRegistration
+  state: 'live' | 'stopped'
+}
 
+/** Routes each session to the adapter its agent is registered with. Adding an agent is one more
+ *  registration; nothing here names one. */
 export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessionAdapter {
   private readonly routes = new Map<string, SessionRoute>()
   private allAdaptersClosed = false
   private closePromise: Promise<void> | null = null
 
   constructor(
-    private readonly adapters: Record<RoutedAgent, StructuredAgentSessionAdapter>,
+    private readonly agents: StructuredAgentRegistry,
     private readonly closeAdapters: () => Promise<void>
   ) {}
 
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean => {
-    const adapter = this.adapterForAgent(agent)
+    const adapter = this.agents.registration(agent)?.adapter
     return adapter ? (adapter.supportsLocation?.(location) ?? false) : false
   }
 
   supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
-    Object.values(this.adapters).some((adapter) => adapter.supportsLocation?.(location) ?? false)
+    this.adapters().some((adapter) => adapter.supportsLocation?.(location) ?? false)
 
-  /** Both adapters already gate their own shutdown, so the router only has to stop UNDOING that:
+  /** Every adapter already gates its own shutdown, so the router only has to stop UNDOING that:
    *  a late acquire must not clear `allAdaptersClosed` and fan a session back out to closed
    *  adapters. Once closed, the router stays closed. */
   async acquire(input: Parameters<StructuredAgentSessionAdapter['acquire']>[0]) {
     if (this.allAdaptersClosed) {
       throw new Error('structured session adapter router is closed')
     }
-    const adapter = this.requireAgent(input.identity)
-    const acquired = await adapter.acquire(input)
+    const registration = this.requireAgent(input.identity)
+    const acquired = await registration.adapter.acquire(input)
     if (this.allAdaptersClosed) {
       throw new Error('structured session adapter router is closed')
     }
-    this.routes.set(input.identity.sessionId, { adapter, state: 'live' })
+    this.routes.set(input.identity.sessionId, { registration, state: 'live' })
     return acquired
   }
 
@@ -48,13 +56,13 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     const route = this.routes.get(input.sessionId)
     if (route) {
       try {
-        return (await route.adapter.releaseAcquisition?.(input)) === true
+        return (await route.registration.adapter.releaseAcquisition?.(input)) === true
       } finally {
         this.routes.delete(input.sessionId)
       }
     }
     let released = false
-    for (const candidate of Object.values(this.adapters)) {
+    for (const candidate of this.adapters()) {
       released = (await candidate.releaseAcquisition?.(input)) === true || released
     }
     return released
@@ -63,11 +71,17 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)
 
-  rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId, agent) =>
-    this.capabilityOwner(sessionId, agent)?.rewindSupport?.(sessionId) ?? {
-      supported: false,
-      reason: 'unsupported'
+  /** The owner's declared rewind, narrowed by its adapter for this session; never widened. */
+  rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (
+    sessionId,
+    agent
+  ) => {
+    const owner = this.capabilityOwner(sessionId, agent)
+    if (!owner?.definition.capabilities.rewind) {
+      return { supported: false, reason: 'unsupported' }
     }
+    return owner.adapter.rewindSupport?.(sessionId) ?? { supported: true }
+  }
 
   rewind: NonNullable<StructuredAgentSessionAdapter['rewind']> = (input) =>
     this.owner(input.sessionId).rewind?.(input) ??
@@ -95,12 +109,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     }
     return change(input)
   }
-
-  supportsThreadGoal = (sessionId: string, agent?: string): boolean =>
-    this.capabilityOwner(sessionId, agent)?.supportsThreadGoal?.(sessionId) ?? false
-
-  recordsContextUsage = (sessionId: string, agent?: string): boolean =>
-    this.capabilityOwner(sessionId, agent)?.recordsContextUsage?.(sessionId) ?? false
 
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input
@@ -132,9 +140,10 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.liveOwnerOrNull(sessionId)?.readCommands?.(sessionId)
 
   atRestCommands: StructuredAgentSessionAtRestCommands = {
-    read: (record) => this.adapters[record.provider].atRestCommands?.read(record),
+    read: (record) =>
+      this.agents.registration(record.provider)?.adapter.atRestCommands?.read(record),
     onChange: (listener) => {
-      const stops = Object.values(this.adapters).flatMap((adapter) =>
+      const stops = this.adapters().flatMap((adapter) =>
         adapter.atRestCommands ? [adapter.atRestCommands.onChange(listener)] : []
       )
       return () => stops.forEach((stop) => stop())
@@ -163,13 +172,12 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   readOptionRestoreFailures = (sessionId: string): readonly string[] =>
     this.owner(sessionId).readOptionRestoreFailures?.(sessionId) ?? []
 
-  historyFilePath = (input: { identity: AgentSessionJournalIdentity }) =>
-    this.requireAgent(input.identity).historyFilePath?.(input) ?? Promise.resolve(null)
-
   providerHistoryWindow = (input: {
     identity: AgentSessionJournalIdentity
     accountHome: AgentSessionAccountHome
-  }) => this.requireAgent(input.identity).providerHistoryWindow?.(input) ?? Promise.resolve(null)
+  }) =>
+    this.requireAgent(input.identity).adapter.providerHistoryWindow?.(input) ??
+    Promise.resolve(null)
 
   closeSession = (sessionId: string): Promise<boolean> =>
     this.stopSession(sessionId, (adapter) => adapter.closeSession)
@@ -196,8 +204,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     if (route.state === 'stopped') {
       return true
     }
-    const stop = selectStop(route.adapter)
-    const stopped = await stop?.call(route.adapter, sessionId)
+    const { adapter } = route.registration
+    const stop = selectStop(adapter)
+    const stopped = await stop?.call(adapter, sessionId)
     if (stopped === true) {
       route.state = 'stopped'
       return true
@@ -243,25 +252,29 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return adapter
   }
 
-  /** The live owner, or for a session at rest the provider it would start under. */
-  private capabilityOwner(sessionId: string, agent?: string): StructuredAgentSessionAdapter | null {
-    return this.liveOwnerOrNull(sessionId) ?? (agent ? this.adapterForAgent(agent) : null)
+  /** The live owner, or for a session at rest the agent it would start under. */
+  private capabilityOwner(sessionId: string, agent?: string): StructuredAgentRegistration | null {
+    const route = this.routes.get(sessionId)
+    if (route?.state === 'live') {
+      return route.registration
+    }
+    return agent ? this.agents.registration(agent) : null
   }
 
   private liveOwnerOrNull(sessionId: string): StructuredAgentSessionAdapter | null {
     const route = this.routes.get(sessionId)
-    return route?.state === 'live' ? route.adapter : null
+    return route?.state === 'live' ? route.registration.adapter : null
   }
 
-  private requireAgent(identity: AgentSessionJournalIdentity): StructuredAgentSessionAdapter {
-    const adapter = this.adapterForAgent(identity.agent)
-    if (!adapter) {
+  private requireAgent(identity: AgentSessionJournalIdentity): StructuredAgentRegistration {
+    const registration = this.agents.registration(identity.agent)
+    if (!registration) {
       throw new Error(`structured sessions do not support ${identity.agent}`)
     }
-    return adapter
+    return registration
   }
 
-  private adapterForAgent(agent: string): StructuredAgentSessionAdapter | null {
-    return agent === 'claude' || agent === 'codex' ? this.adapters[agent] : null
+  private adapters(): StructuredAgentSessionAdapter[] {
+    return this.agents.registrations().map((registration) => registration.adapter)
   }
 }

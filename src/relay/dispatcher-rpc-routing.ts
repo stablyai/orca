@@ -104,7 +104,6 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
     }
     const context: RequestContext = {
       clientId: client.id,
-      transportGeneration: gen,
       isStale: () =>
         client.generation !== gen || !this.clients.has(client.id) || abortController.signal.aborted,
       signal: abortController.signal,
@@ -139,7 +138,17 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
       }
       const message = err instanceof Error ? err.message : String(err)
       const errorCode = (err as { code?: unknown }).code
-      const code = typeof errorCode === 'number' ? errorCode : -32000
+      const capacityCodes: Record<string, number> = {
+        git_grep_record_capacity: RelayErrorCode.GitGrepRecordCapacity,
+        markdown_document_listing_capacity: RelayErrorCode.MarkdownListingCapacity,
+        directory_listing_capacity: RelayErrorCode.DirectoryListingCapacity
+      }
+      const code =
+        typeof errorCode === 'number'
+          ? errorCode
+          : typeof errorCode === 'string'
+            ? (capacityCodes[errorCode] ?? -32000)
+            : -32000
       // Why an allowlist keyed on the error code: error `data` is otherwise dropped, so a
       // handler cannot leak internals by attaching them. Each published shape is validated
       // against its own schema before it crosses.
@@ -180,7 +189,6 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
       const gen = client.generation
       handler(notif.params ?? {}, {
         clientId: client.id,
-        transportGeneration: gen,
         isStale: () => client.generation !== gen || !this.clients.has(client.id),
         sessionIdentity: client.sessionIdentity,
         onResponseSettled: () => {

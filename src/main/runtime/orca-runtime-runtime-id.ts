@@ -4,6 +4,7 @@ import { preserveTerminalRetirementProofs } from './mobile-session-terminal-reti
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from './runtime-client-settings'
 import type { RuntimeAutomationController } from './runtime-automation-controller'
@@ -47,7 +48,7 @@ import { RuntimeTerminalWriter } from './runtime-terminal-writer'
 import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
 import { TerminalIntentionalStops } from './terminal-intentional-stops'
 import { TerminalRunFactsRegister, type TerminalSpawnCommit } from './terminal-run-facts'
-import type { TuiIdleEvidenceSource } from './tui-idle-evidence'
+import type { TuiIdleEvidenceSource } from './tui-idle-evidence-source'
 import { hasTerminalCommandPainted } from './terminal-command-paint'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
@@ -132,16 +133,15 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected sessionTabsInventoryWaiters = new Set<() => void>()
 
+  // Worktrees answered with the unpublished placeholder, owed their real answer once the graph publishes.
+  protected worktreesAwaitingSessionTabsPublication = new Set<string>()
+
   protected readonly clientHostedPageReconciliation = new ClientHostedPageReconciliationWindow(
     Date.now()
   )
 
-  // Why: renderer publication ordering must be judged against the renderer's
-  // own last-accepted (epoch, version) — never against the stored snapshot's
-  // version, which main-local touches bump independently and can push
-  // permanently ahead of the renderer's counter. The renderer reuses one pair
-  // for byte-identical content, so a same-epoch version <= this one is a no-op
-  // resend (or stale) and is skipped without touching the stored entry.
+  // Main-local touches advance stored versions; reject unchanged renderer resends using
+  // the renderer's last accepted epoch/version instead.
   protected acceptedRendererMobileSnapshotByWorktree = new Map<
     string,
     {
@@ -281,7 +281,8 @@ export class OrcaRuntimeWithRuntimeId {
       return null
     }
     const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    const agent = pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    return isTuiAgent(agent) ? agent : null
   }
 
   /** One-shot delivery retries, keyed by leaf. See checkDeliverySettledAndArmRecheck. */
@@ -348,8 +349,11 @@ export class OrcaRuntimeWithRuntimeId {
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
     getFirstPartyAgentStatus: (ptyId) =>
       (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
+    getHookTurn: (ptyId, agent) => this.readTuiIdleHookTurnForPty(ptyId, agent),
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
-    readScreenRuledLines: (ptyId) => this.readScreenRuledLines(ptyId)
+    readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
+    getTitleObservedAtEpochMs: (ptyId) =>
+      (ptyId ? this.ptysById.get(ptyId)?.lastOscTitleEpochMs : null) ?? null
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({

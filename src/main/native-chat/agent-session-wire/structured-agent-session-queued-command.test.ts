@@ -114,8 +114,10 @@ describe('/clear', () => {
     try {
       const cleared = command('clear')
       await eventually(() => expect(committing).toHaveBeenCalledOnce())
-      expect(await rig.send('sent while clearing', 'queue-if-active').result).toEqual(WAIT_REFUSAL)
+      // Judged on arrival, answered on its turn: behind the clear.
+      const sent = rig.send('sent while clearing', 'queue-if-active').result
       release?.()
+      expect(await sent).toEqual(WAIT_REFUSAL)
       const done = await cleared
       const replacementId = done.ok ? done.value.replacementSessionId : undefined
       if (!replacementId) {

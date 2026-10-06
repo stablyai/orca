@@ -2,8 +2,11 @@ import type { HostSectionRow } from './host-section-rows'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { getWorktreeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { PinnedWorktreeDisplayPolicy, WorktreeRow } from './worktree-list/grouping/row-types'
-import { getPreferredWorktreeRows } from './worktree-sidebar-row-preference'
+import type { PinnedWorktreeDisplayPolicy } from './worktree-list/grouping/row-types'
+import {
+  getRenderedWorkspaceRowsInSidebarOrder,
+  type RenderedWorkspaceRow
+} from './worktree-sidebar-row-preference'
 
 /** Host-resolved identity for a cyclable row.
  *
@@ -11,7 +14,7 @@ import { getPreferredWorktreeRows } from './worktree-sidebar-row-preference'
  * `hostId` (`withRepoHostOwnership` leaves it unqualified), but every activation
  * path stores the host it resolved to, so raw and resolved identities never match.
  */
-export function getCyclableRowIdentity(row: Pick<WorktreeRow, 'worktree' | 'repo'>): string {
+export function getCyclableRowIdentity(row: RenderedWorkspaceRow): string {
   return composeWorktreeHostIdentity(
     getWorktreeExecutionHostId(row.worktree, row.repo),
     row.worktree.id
@@ -21,14 +24,13 @@ export function getCyclableRowIdentity(row: Pick<WorktreeRow, 'worktree' | 'repo
 export function getCyclableWorktreeRows(
   rows: readonly HostSectionRow[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
-): WorktreeRow[] {
-  const itemRows = rows.filter((row): row is WorktreeRow => row.type === 'item')
-  return getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy)
+): RenderedWorkspaceRow[] {
+  return getRenderedWorkspaceRowsInSidebarOrder(rows, pinnedDisplayPolicy)
 }
 
 /** Identity that locates the active workspace among the cyclable rows. */
 export function resolveActiveCycleIdentity(args: {
-  rows: readonly WorktreeRow[]
+  rows: readonly RenderedWorkspaceRow[]
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
 }): string | null {
@@ -44,14 +46,12 @@ export function resolveActiveCycleIdentity(args: {
   return row ? getCyclableRowIdentity(row) : null
 }
 
-/** Worktree ids in sidebar order, taken from the rows the sidebar actually
+/** Workspace ids in sidebar order, taken from the rows the sidebar actually
  *  rendered, so collapsed groups and collapsed host sections drop out on their own. */
 export function getCyclableWorktreeIds(
   rows: readonly HostSectionRow[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): string[] {
-  // Why item-only: folder workspaces render as their own row type and are not
-  // activatable through activateAndRevealWorktree, so cycling has never included them.
   const ids: string[] = []
   const seen = new Set<string>()
   for (const row of getCyclableWorktreeRows(rows, pinnedDisplayPolicy)) {

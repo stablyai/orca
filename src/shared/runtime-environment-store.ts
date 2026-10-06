@@ -1,27 +1,40 @@
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
+import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { parsePairingCode, type PairingOffer } from './pairing'
 import { classifyRemotePairingHostname } from './remote-pairing-address'
+import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
+import { hardenExistingSecureFile } from './secure-file'
 import {
   createEnvironmentFromPairingOffer,
   getPreferredPairingOffer,
+  KnownRuntimeEnvironmentSchema,
+  RuntimeEnvironmentStoreSchema,
   type KnownRuntimeEnvironment,
-  type PersistedRuntimeEnvironment,
-  type RuntimeEnvironmentSource
+  type RuntimeEnvironmentSource,
+  type RuntimeEnvironmentStore
 } from './runtime-environments'
-import {
-  readEnvironmentStore,
-  readPersistedEnvironmentStore,
-  RuntimeEnvironmentStoreError,
-  writeEnvironmentStore
-} from './runtime-environment-store-file'
-import { writeRuntimeEnvironmentSidecarEntry } from './runtime-environment-sidecar'
 
-export {
-  getEnvironmentStorePath,
-  MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
-  RuntimeEnvironmentStoreError,
-  type RuntimeEnvironmentStoreErrorCode
-} from './runtime-environment-store-file'
+const ENVIRONMENTS_FILE = 'orca-environments.json'
+export const MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES = 1024 * 1024
+
+export type RuntimeEnvironmentStoreErrorCode = 'invalid_argument' | 'runtime_error'
+
+export class RuntimeEnvironmentStoreError extends Error {
+  readonly code: RuntimeEnvironmentStoreErrorCode
+
+  constructor(code: RuntimeEnvironmentStoreErrorCode, message: string) {
+    super(message)
+    this.name = 'RuntimeEnvironmentStoreError'
+    this.code = code
+  }
+}
+
+export function getEnvironmentStorePath(userDataPath: string): string {
+  return join(userDataPath, ENVIRONMENTS_FILE)
+}
 
 export function listEnvironments(userDataPath: string): KnownRuntimeEnvironment[] {
   return readEnvironmentStore(userDataPath).environments
@@ -44,7 +57,7 @@ export function addEnvironmentFromPairingCode(
       'Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.'
     )
   }
-  const store = readPersistedEnvironmentStore(userDataPath)
+  const store = readEnvironmentStore(userDataPath)
   const now = args.now ?? Date.now()
   const existing = store.environments.find((entry) => entry.name === args.name)
   if (existing) {
@@ -74,14 +87,12 @@ export function addEnvironmentFromPairingCode(
 }
 
 export function removeEnvironment(userDataPath: string, selector: string): KnownRuntimeEnvironment {
-  const environment = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), selector)
-  assertNoIndependentSshAccess(environment)
-  const store = readPersistedEnvironmentStore(userDataPath)
-  const persisted = resolveEnvironmentFromStore(store, environment.id)
-  const remaining = store.environments.filter((entry) => entry.id !== environment.id)
-  writeEnvironmentStore(userDataPath, { version: 1, environments: remaining })
-  // A leftover entry would read as stale anyway; dropping it keeps the sidecar from growing.
-  writeRuntimeEnvironmentSidecarEntry(userDataPath, remaining, persisted, null)
+  const store = readEnvironmentStore(userDataPath)
+  const environment = resolveEnvironmentFromStore(store, selector)
+  writeEnvironmentStore(userDataPath, {
+    version: 1,
+    environments: store.environments.filter((entry) => entry.id !== environment.id)
+  })
   return environment
 }
 
@@ -97,10 +108,7 @@ export function updateEnvironmentFromPairingCode(
       'Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.'
     )
   }
-  assertNoIndependentSshAccess(
-    resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), selector)
-  )
-  const store = readPersistedEnvironmentStore(userDataPath)
+  const store = readEnvironmentStore(userDataPath)
   const existing = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
   const previousPairingRevision = existing.pairingRevision ?? existing.createdAt
@@ -170,7 +178,7 @@ export function markEnvironmentUsed(
   selector: string,
   args: { runtimeId?: string | null; pairedDeviceId?: string; now?: number } = {}
 ): void {
-  const store = readPersistedEnvironmentStore(userDataPath)
+  const store = readEnvironmentStore(userDataPath)
   const environment = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
   const runtimeIdChanged = args.runtimeId != null && args.runtimeId !== environment.runtimeId
@@ -182,15 +190,6 @@ export function markEnvironmentUsed(
     now - environment.lastUsedAt < LAST_USED_PERSIST_INTERVAL_MS
   if (!runtimeIdChanged && !pairedDeviceIdChanged && lastUsedIsFresh) {
     return
-  }
-  if (runtimeIdChanged || pairedDeviceIdChanged) {
-    const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environment.id)
-    if (current.sshAccess || current.pendingSshAccessOperation) {
-      throw new RuntimeEnvironmentStoreError(
-        'invalid_argument',
-        'SSH access operation cannot change the paired runtime identity.'
-      )
-    }
   }
   const next = store.environments.map((entry) =>
     entry.id === environment.id
@@ -206,10 +205,10 @@ export function markEnvironmentUsed(
   writeEnvironmentStore(userDataPath, { version: 1, environments: next })
 }
 
-export function resolveEnvironmentFromStore<T extends PersistedRuntimeEnvironment>(
-  store: { environments: T[] },
+function resolveEnvironmentFromStore(
+  store: RuntimeEnvironmentStore,
   selector: string
-): T {
+): KnownRuntimeEnvironment {
   const byId = store.environments.find((entry) => entry.id === selector)
   if (byId) {
     return byId
@@ -227,17 +226,49 @@ export function resolveEnvironmentFromStore<T extends PersistedRuntimeEnvironmen
   throw new RuntimeEnvironmentStoreError('invalid_argument', `Unknown environment: ${selector}`)
 }
 
-function assertNoIndependentSshAccess(environment: KnownRuntimeEnvironment): void {
-  if (environment.orcadDeployment) {
+function readEnvironmentStore(userDataPath: string): RuntimeEnvironmentStore {
+  const path = getEnvironmentStorePath(userDataPath)
+  if (!existsSync(path)) {
+    return { version: 1, environments: [] }
+  }
+  try {
+    hardenExistingSecureFile(path)
+    const parsed = RuntimeEnvironmentStoreSchema.parse(
+      JSON.parse(
+        readNodeFileSyncWithinLimit(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES).buffer.toString(
+          'utf8'
+        )
+      )
+    )
+    return {
+      version: 1,
+      environments: parsed.environments
+        .map((entry) => KnownRuntimeEnvironmentSchema.parse(entry))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    }
+  } catch {
     throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'This server is managed by Orca over SSH; its pairing cannot be replaced or removed here.'
+      'runtime_error',
+      `Could not read Orca environments at ${path}; the file is invalid.`
     )
   }
-  if (environment.sshAccess || environment.pendingSshAccessOperation) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      "Unlink this server's SSH access before replacing its pairing or removing it."
+}
+
+function writeEnvironmentStore(userDataPath: string, store: RuntimeEnvironmentStore): void {
+  const path = getEnvironmentStorePath(userDataPath)
+  try {
+    writeSecureJsonFileWithinLimit(
+      path,
+      RuntimeEnvironmentStoreSchema.parse(store),
+      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
     )
+  } catch (error) {
+    if (error instanceof JsonStringifyByteLimitError) {
+      throw new RuntimeEnvironmentStoreError(
+        'runtime_error',
+        `Could not write Orca environments at ${path}; the store exceeds its durable capacity.`
+      )
+    }
+    throw error
   }
 }

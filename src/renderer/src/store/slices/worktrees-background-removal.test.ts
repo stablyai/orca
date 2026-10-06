@@ -24,7 +24,7 @@ const hostKey = getWorktreeHostIdentity({ id: worktreeId, hostId: 'local' })
 
 function seedRow(
   store: ReturnType<typeof createTestStore>,
-  overrides: { removing?: true } = {}
+  overrides: { removing?: true; removalError?: string } = {}
 ): void {
   seedStore(store, {
     worktreesByRepo: {
@@ -202,6 +202,63 @@ describe('removing a worktree the host deletes in the background', () => {
       isDeleting: false,
       error: 'The delete did not finish. Try again.'
     })
+  })
+
+  it('shows the host error on a row the host lists as a failed delete, until it leaves', () => {
+    // A window that opened after the delete failed, or a restart after a failed startup finish.
+    seedRow(store, { removalError: 'Operation not permitted' })
+    reconcileHostWorktreeRemovals(store)
+    expect(deleteState(store)).toMatchObject({
+      isDeleting: false,
+      error: 'Operation not permitted',
+      canForceDelete: false
+    })
+
+    // Forgotten, or the checkout deleted outside Orca: the host stops listing it.
+    seedStore(store, { worktreesByRepo: { repo1: [] } })
+    reconcileHostWorktreeRemovals(store)
+    expect(deleteState(store)).toBeUndefined()
+  })
+
+  it('shows Deleting while the host retries a failed delete, and its new error after', () => {
+    seedRow(store, { removalError: 'Operation not permitted' })
+    reconcileHostWorktreeRemovals(store)
+
+    seedRow(store, { removing: true })
+    reconcileHostWorktreeRemovals(store)
+    expect(deleteState(store)).toMatchObject({ isDeleting: true, phase: 'deleting' })
+
+    seedRow(store, { removalError: 'Resource busy' })
+    reconcileHostWorktreeRemovals(store)
+    expect(deleteState(store)).toMatchObject({ isDeleting: false, error: 'Resource busy' })
+  })
+
+  it('shows the error the host lists when a delete it marked Deleting fails', () => {
+    seedRow(store, { removing: true })
+    reconcileHostWorktreeRemovals(store)
+
+    seedRow(store, { removalError: 'Operation not permitted' })
+    reconcileHostWorktreeRemovals(store)
+    expect(deleteState(store)).toMatchObject({
+      isDeleting: false,
+      error: 'Operation not permitted'
+    })
+  })
+
+  it('reports the host error for a lost reply when the host lists the failed delete', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    seedRow(store)
+    const refresh = vi.fn()
+    refresh.mockImplementation(async () => {
+      seedRow(store, { removalError: 'Operation not permitted' })
+      return true
+    })
+    store.setState({ fetchWorktrees: refresh })
+    mockApi.worktrees.remove.mockRejectedValue(new Error('Request timed out: worktree.rm'))
+
+    await expect(
+      store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
+    ).resolves.toEqual({ ok: false, error: 'Operation not permitted' })
   })
 
   it('leaves a delete this renderer started to that flow', () => {

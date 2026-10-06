@@ -56,7 +56,7 @@ export type UiCommandEventApi = {
   consumePendingOpenSettings: () => Promise<boolean>
   onOpenSkillShare: (callback: (shareId: string) => void) => () => void
   consumePendingSkillShare: () => Promise<string | null>
-  /** OS "Open With" markdown paths pushed while a renderer is already listening. */
+  /** OS "Open With" Markdown/CSV/TSV documents; the local IPC name is retained. */
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void) => () => void
   /** Drains the "Open With" paths queued before this renderer's listener attached. */
   consumePendingMarkdownFileOpens: () => Promise<MarkdownDocument[]>

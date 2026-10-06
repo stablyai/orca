@@ -14,6 +14,8 @@ export type StructuredAgentSessionRestartOfferRecords = {
     sessionIds: readonly string[] | undefined
   ) => Promise<AgentSessionResumeMarker[]>
   revealMarkers: (markers: readonly AgentSessionResumeMarker[]) => Promise<void>
+  /** Reveals the chat of every offer and every recorded failure. */
+  revealEvery: () => Promise<void>
   /** A user's newer message ended these offers; delete them rather than re-filter forever.
    *  Advisory: a failed prune must never fail the read that noticed it. */
   retireSuperseded: (superseded: readonly AgentSessionResumeMarker[]) => void
@@ -41,6 +43,13 @@ export function createStructuredAgentSessionRestartOfferRecords(deps: {
       return []
     }
   }
+  const revealMarkers = async (markers: readonly AgentSessionResumeMarker[]): Promise<void> => {
+    for (const marker of markers) {
+      if (!deps.hasSession(marker.sessionId)) {
+        await deps.reveal(marker.sessionId)
+      }
+    }
+  }
   return {
     readMarkers,
     readActionMarkers: async (sessionIds) => {
@@ -54,13 +63,9 @@ export function createStructuredAgentSessionRestartOfferRecords(deps: {
       )
       return [...pending, ...retried]
     },
-    revealMarkers: async (markers) => {
-      for (const marker of markers) {
-        if (!deps.hasSession(marker.sessionId)) {
-          await deps.reveal(marker.sessionId)
-        }
-      }
-    },
+    revealMarkers,
+    revealEvery: async () =>
+      revealMarkers([...(await readMarkers()), ...(await deps.readFailedMarkers())]),
     retireSuperseded: (superseded) => {
       const capsule = deps.capsule
       if (!capsule || superseded.length === 0) {

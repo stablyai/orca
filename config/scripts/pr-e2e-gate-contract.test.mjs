@@ -1,4 +1,5 @@
 import { DEDICATED_E2E_SPECS } from './ci-e2e-job-selection.mjs'
+import { linuxInstallPackageList } from './pr-e2e-linux-packages.test-fixture.mjs'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parse as parseJsonc } from 'jsonc-parser'
@@ -20,6 +21,7 @@ import {
 const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 const e2eWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
+
 const reliabilityManifest = parseJsonc(
   readFileSync(join(projectDir, 'config/reliability-gates.jsonc'), 'utf8')
 )
@@ -43,7 +45,7 @@ const nativeImeSpec = readFileSync(
 const filterStep = prWorkflow.jobs.code_paths.steps.find(
   (step) => step.name === 'Filter changed E2E specs'
 )
-const rollbackStep = prWorkflow.jobs.static_analysis.steps.find(
+const rollbackStep = prWorkflow.jobs.preflight.steps.find(
   (step) => step.name === 'Check VM runtime rollback compatibility'
 )
 const verifyStep = prWorkflow.jobs.verify.steps.find(
@@ -107,8 +109,8 @@ describe('PR E2E gate contract', () => {
     // Why: without this the job could lose its filter and run on every PR — the
     // cost the path filter exists to avoid — while the gate assertions above
     // stay green.
-    expect(prWorkflow.jobs.e2e.needs).toBe('code_paths')
-    expect(prWorkflow.jobs.e2e.if).toBe("needs.code_paths.outputs.e2e_should_run == 'true'")
+    expect(prWorkflow.jobs.e2e.needs).toEqual(['code_paths', 'preflight'])
+    expect(prWorkflow.jobs.e2e.if).toContain("needs.code_paths.outputs.e2e_should_run == 'true'")
     expect(prWorkflow.jobs.code_paths.outputs.e2e_should_run).toBe(
       '${{ steps.e2e_filter.outputs.should_run }}'
     )
@@ -131,7 +133,7 @@ describe('PR E2E gate contract', () => {
     for (const job of prWorkflow.jobs.verify.needs) {
       const envVar = job.replaceAll('-', '_').toUpperCase()
       expect(verifyStep.env[envVar]).toBe(`\${{ needs.${job}.result }}`)
-      if (job === 'code_paths') {
+      if (job === 'code_paths' || job === 'preflight') {
         continue
       }
       expect(successLoop).toContain(`"$${envVar}"`)
@@ -218,7 +220,7 @@ describe('PR E2E gate contract', () => {
       const installStep = e2eWorkflow.jobs[jobName].steps.find((step) =>
         step.name.startsWith('Install native build')
       )
-      expect(installStep.run, jobName).toMatch(/\bzsh\b/)
+      expect(linuxInstallPackageList(installStep, jobName), jobName).toMatch(/(^|\s)zsh(\s|$)/)
     }
   })
 
@@ -305,10 +307,10 @@ describe('PR E2E gate contract', () => {
 
     // Why: this lane can now pay a Docker image build plus serial SSH specs.
     expect(e2eWorkflow.jobs['changed-e2e']['timeout-minutes']).toBeGreaterThanOrEqual(45)
-    const changedInstall = e2eWorkflow.jobs['changed-e2e'].steps.find((step) =>
+    const install = e2eWorkflow.jobs['changed-e2e'].steps.find((step) =>
       step.name.startsWith('Install native build')
     )
-    expect(changedInstall.run).toContain('openssh-client')
+    expect(linuxInstallPackageList(install, 'changed-e2e')).toMatch(/(^|\s)openssh-client(\s|$)/)
   })
 
   it('routes direct-SSH workspace and tab restore from its unnamed source seams', () => {

@@ -572,7 +572,16 @@ describe('getStatus', () => {
     const result = await getStatus('/repo')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M'],
+      [
+        '-c',
+        'core.quotePath=false',
+        '-c',
+        'diff.autoRefreshIndex=false',
+        'diff',
+        '-z',
+        '--numstat',
+        '-M'
+      ],
       expect.objectContaining({
         cwd: '/repo',
         env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' })

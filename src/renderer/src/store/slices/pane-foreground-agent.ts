@@ -1,13 +1,13 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 
 /** 'launch-record': the daemon's launch identity on reattach, which can outlive the process. */
 export type PaneForegroundAgentEvidence = 'process-read' | 'launch-record'
 
 export type PaneForegroundAgentEntry = {
   /** Recognized agent process in the pane's foreground; null when unknown. */
-  agent: TuiAgent | null
+  agent: TerminalAgent | null
   /** Where `agent` came from. Only 'process-read' is a live read; absent counts as unconfirmed,
    *  so a writer that omits it cannot make a sidebar row look process-backed. */
   agentEvidence?: PaneForegroundAgentEvidence

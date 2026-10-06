@@ -8,14 +8,19 @@ import type { AgentChildWorkView } from '../../../shared/agent-status-child-work
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performCancel, type AgentSessionTurnContext } from './structured-agent-session-turns'
+import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 let root: string | null = null
@@ -54,11 +59,12 @@ describe('performCancel', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: { cancelTurn } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
-      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 
@@ -109,11 +115,12 @@ describe('performCancel', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: { cancelTurn } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
-      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 
@@ -155,13 +162,14 @@ describe('performCancel', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: {
         cancelTurn: vi.fn(async () => ({ cancelled: false }))
       } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
-      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 
@@ -190,11 +198,12 @@ describe('performCancel', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: { cancelTurn, stopBackgroundTasks } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
-      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 
@@ -229,11 +238,12 @@ describe('performCancel', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: { cancelTurn, stopBackgroundTasks } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
-      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 
@@ -282,7 +292,7 @@ describe('what a conversation Stop reports when the provider stopped nothing', (
   async function cancelWith(
     outcome: Awaited<ReturnType<StructuredAgentSessionAdapter['cancelTurn']>>,
     input: { turnId?: string; withdrewQueued?: boolean },
-    turnRow: 'none' | 'running' | 'lands-on-flush' = 'none'
+    turnRow: 'none' | 'running' | 'landing' = 'none'
   ) {
     root = await mkdtemp(join(tmpdir(), 'orca-turn-cancel-report-'))
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
@@ -304,11 +314,15 @@ describe('what a conversation Stop reports when the provider stopped nothing', (
     if (turnRow === 'running') {
       await openTurn()
     }
+    // Issued, not yet landed: the Stop's read takes its place behind it in the journal's queue.
+    const landing = turnRow === 'landing' ? openTurn() : null
     const ctx: AgentSessionTurnContext = {
       logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: {
         acquire: vi.fn(),
         dispatch: vi.fn(),
@@ -320,14 +334,15 @@ describe('what a conversation Stop reports when the provider stopped nothing', (
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
-      flushStreamedEvents: async () => {
-        if (turnRow === 'lands-on-flush') {
-          await openTurn()
-        }
-      },
       now: () => 1
     }
-    const result = await performCancel(ctx, { clientOperationId: 'cancel-report-1', ...input })
+    const { withdrewQueued, ...named } = input
+    const result = await performCancel(ctx, {
+      clientOperationId: 'cancel-report-1',
+      ...named,
+      ...(withdrewQueued === undefined ? {} : { withdrewQueued: Promise.resolve(withdrewQueued) })
+    })
+    await landing
     const rows = journal
       .snapshot()
       .items.flatMap((item) =>
@@ -350,12 +365,72 @@ describe('what a conversation Stop reports when the provider stopped nothing', (
     expect(reported.rows).not.toContain('The provider had already finished this turn.')
   })
 
-  it('reads the journal after its streamed rows land: a turn whose send was accepted first is still working', async () => {
+  it('reads the journal behind its streamed rows: a turn whose send was accepted first is still working', async () => {
     const reported = await cancelWith(
       { cancelled: false },
       { turnId: 'turn-0', withdrewQueued: true },
-      'lands-on-flush'
+      'landing'
     )
     expect(reported).toEqual({ cancelled: false, rows: [] })
+  })
+})
+
+describe('the note a Stop writes', () => {
+  it('belongs to the turn whose row was emitted just before the Stop, with no flush', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-turn-cancel-note-scope-'))
+    const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    deferred.bind({ journal, fence: 1, publish: () => {} })
+    const turnIdentity = {
+      provider: 'legacy' as const,
+      agent: 'codex' as const,
+      sessionId: 'session-1',
+      recordId: 'turn-lifecycle:turn-1'
+    }
+    // An earlier streamed row still ahead, then the turn row the Stop names.
+    deferred.sink.appendItem(
+      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-0', ordinal: 0 },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Earlier.' }] },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    deferred.sink.appendItem(
+      turnIdentity,
+      {
+        kind: 'status',
+        text: 'Agent is working…',
+        turnLifecycle: { turnId: 'turn-1', state: 'running' }
+      },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    const ctx: AgentSessionTurnContext = {
+      sessionId: 'session-1',
+      journal,
+      fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
+      adapter: {
+        acquire: vi.fn(),
+        dispatch: vi.fn(),
+        closeSession: vi.fn(),
+        cancelTurn: vi.fn(async () => ({ cancelled: true })),
+        answerPrompt: vi.fn(),
+        setOption: vi.fn()
+      },
+      persistOptions: async () => undefined,
+      resolvedBy: 'client-1',
+      publish: vi.fn(),
+      logger: createStructuredAgentSessionLogger(),
+      now: () => 1
+    }
+
+    await performCancel(ctx, { clientOperationId: 'cancel-scope-1', turnId: 'turn-1' })
+    await deferred.drained()
+
+    const note = journal
+      .snapshot()
+      .items.find(
+        (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'
+      )
+    expect(note?.turnScope).toEqual({ kind: 'turn', turnItemId: agentJournalItemKey(turnIdentity) })
   })
 })

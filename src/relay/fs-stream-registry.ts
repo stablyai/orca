@@ -21,44 +21,11 @@ export class TooManyStreamsError extends Error {
 export class RelayStreamRegistry {
   private streams = new Map<number, StreamEntry>()
   private nextId = 1
-  private disposed = false
-  private closing = new Map<number, Promise<void>>()
-  private closeFailures = new Map<number, unknown>()
-  private operations = new Set<Promise<void>>()
-
-  /** Tracks work that may still open or release a handle; disposeAll waits for it. */
-  beginOperation(): () => void {
-    if (this.disposed) {
-      throw new Error('relay_file_stream_shutdown_fenced')
-    }
-    // Why: no Promise.withResolvers — the relay bundle still targets Node 18 hosts.
-    let resolve!: () => void
-    const pending = new Promise<void>((settle) => {
-      resolve = settle
-    })
-    this.operations.add(pending)
-    return () => {
-      this.operations.delete(pending)
-      resolve()
-    }
-  }
 
   register(handle: FileHandle): number {
-    if (this.disposed) {
-      throw new Error('relay_file_stream_shutdown_fenced')
-    }
     if (this.streams.size >= MAX_CONCURRENT_STREAMS) {
       throw new TooManyStreamsError()
     }
-    return this.retainHandle(handle)
-  }
-
-  /** Closes a handle opened outside a stream; a failed close stays retained for disposal retry. */
-  releaseUnregisteredHandle(handle: FileHandle): Promise<void> {
-    return this.release(this.retainHandle(handle))
-  }
-
-  private retainHandle(handle: FileHandle): number {
     const streamId = this.nextId++
     this.streams.set(streamId, {
       handle,
@@ -138,43 +105,26 @@ export class RelayStreamRegistry {
     }
   }
 
-  /** Concurrent callers share one close; only EBADF counts as already closed. */
-  release(streamId: number): Promise<void> {
-    const pending = this.closing.get(streamId)
-    if (pending) {
-      return pending
-    }
+  async release(streamId: number): Promise<void> {
     const entry = this.streams.get(streamId)
     if (!entry) {
-      return Promise.resolve()
+      return
     }
-    this.abort(streamId)
-    const close = Promise.resolve()
-      .then(() => entry.handle.close())
-      .catch((error: unknown) => {
-        if (!isErrorWithCode(error, 'EBADF')) {
-          this.closeFailures.set(streamId, error)
-          throw error
-        }
-      })
-      .then(() => {
-        this.streams.delete(streamId)
-        this.closeFailures.delete(streamId)
-      })
-      .finally(() => {
-        this.closing.delete(streamId)
-      })
-    this.closing.set(streamId, close)
-    return close
+    this.wakeAckWaiters(entry)
+    this.streams.delete(streamId)
+    try {
+      await entry.handle.close()
+    } catch {
+      // release runs from multiple exit paths (pump, cancel, dispose); a
+      // second close throws EBADF — swallow it.
+    }
   }
 
   size(): number {
     return this.streams.size
   }
 
-  /** Permanently fences new streams; rejects while any handle is still unclosed so a retry can finish. */
   async disposeAll(): Promise<void> {
-    this.disposed = true
     // Why: flag every stream as aborted so any in-flight pump exits its loop
     // cleanly on the next iteration boundary instead of seeing EBADF when
     // release closes the handle out from under an in-flight read.
@@ -182,20 +132,6 @@ export class RelayStreamRegistry {
       this.abort(id)
     }
     const ids = Array.from(this.streams.keys())
-    const results = await Promise.allSettled(ids.map((id) => this.release(id)))
-    await Promise.all(this.operations)
-    const failures = results.filter((result) => result.status === 'rejected')
-    if (failures.length > 0 || this.streams.size > 0) {
-      throw new AggregateError(
-        [
-          ...new Set([...failures.map((failure) => failure.reason), ...this.closeFailures.values()])
-        ],
-        'relay_file_stream_shutdown_incomplete'
-      )
-    }
+    await Promise.all(ids.map((id) => this.release(id)))
   }
-}
-
-function isErrorWithCode(error: unknown, code: string): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === code
 }

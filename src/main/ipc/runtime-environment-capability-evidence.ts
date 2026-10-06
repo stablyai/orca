@@ -64,10 +64,6 @@ export function advanceRuntimeEnvironmentCapabilityIncarnation(environmentId: st
   state.accepted = null
 }
 
-export function getRuntimeEnvironmentCapabilityIncarnation(environmentId: string): number {
-  return stateFor(environmentId).epoch
-}
-
 export function applyRuntimeEnvironmentCapabilityVerdict(args: {
   evidence: RuntimeEnvironmentCapabilityEvidence
   verdict: RuntimeEnvironmentCapabilityVerdict

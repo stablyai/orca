@@ -11,6 +11,7 @@ import {
   startStructuredAgentLaunchCancellationCleanup
 } from '../../lib/structured-agent-session-launch-cancellation'
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 type StructuredSessionInventoryResponse = {
   snapshots?: RuntimeMobileSessionTabsResult[]
@@ -56,7 +57,7 @@ export function refreshLocalStructuredSessionTabs(
   // An explicit authoritative request can start cleanup before IPC. Otherwise wait until the
   // host labels the response authoritative so failed/retrying ordinary refreshes do not churn RPCs.
   if (options.authoritative) {
-    startStructuredAgentLaunchCancellationCleanup((sessionId) =>
+    startStructuredAgentLaunchCancellationCleanup(LOCAL_EXECUTION_HOST_ID, (sessionId) =>
       closeStructuredAgentSession({ kind: 'local' }, sessionId)
     )
   }
@@ -69,7 +70,7 @@ export function refreshLocalStructuredSessionTabs(
       const result = isStructuredSessionInventoryResponse(response.result) ? response.result : {}
       const snapshots = result.snapshots ?? []
       if (options.authoritative === true || result.authoritative === true) {
-        startStructuredAgentLaunchCancellationCleanup((sessionId) =>
+        startStructuredAgentLaunchCancellationCleanup(LOCAL_EXECUTION_HOST_ID, (sessionId) =>
           closeStructuredAgentSession({ kind: 'local' }, sessionId)
         )
       }
