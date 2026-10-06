@@ -205,8 +205,12 @@ export function createOrFocusDashboardPopout(
       return
     }
     lastFollowedZoomLevel = level
-    if (!window.isDestroyed()) {
-      window.webContents.setZoomLevel(level)
+    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+      try {
+        window.webContents.setZoomLevel(level)
+      } catch (error) {
+        console.error('[dashboard-popout] Failed to set zoom level:', error)
+      }
     }
   })
 
