@@ -102,6 +102,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
           env: startupCommand.env,
           envToDelete: startupCommand.envToDelete,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
+          ...(startupCommand.launchFile ? { launchFile: startupCommand.launchFile } : {}),
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
@@ -164,6 +165,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
+          ...(startupCommand.launchFile ? { launchFile: startupCommand.launchFile } : {}),
           source: 'runtime-session',
           activate: opts.activate
         })
@@ -227,6 +229,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
             env: startupCommand.env,
             envToDelete: startupCommand.envToDelete,
             startupCommandDelivery: startupCommand.startupCommandDelivery,
+            ...(startupCommand.launchFile ? { launchFile: startupCommand.launchFile } : {}),
             identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
             launchAgent: startupCommand.launchAgent,
             viewMode: opts.viewMode,

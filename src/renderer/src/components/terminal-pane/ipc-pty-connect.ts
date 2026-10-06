@@ -14,6 +14,8 @@ import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
+import { isLaunchFileUnavailableMessage } from '../../../../shared/launch-prompt-file'
+import { settleRefusedAgentLaunch } from './refused-agent-launch-tab'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
@@ -188,6 +190,15 @@ function handleConnectError(
     return { id: options.sessionId, sessionExpired: true }
   }
   if (message.includes('was explicitly killed')) {
+    return undefined
+  }
+  // Why the transport's prompt: the spawn carries it unless the connect call named its own command.
+  // The host refuses a launch file, or a WSL line it cannot stage, with the same code.
+  const { launchFile, launchPrompt, tabId } = context.transportOptions
+  const refusedPrompt = launchFile?.content ?? launchPrompt
+  if (refusedPrompt && !options.command && isLaunchFileUnavailableMessage(message)) {
+    // The pane gets no shell; the notice holds the only copy of the prompt, and is the only error.
+    settleRefusedAgentLaunch({ tabId, prompt: refusedPrompt })
     return undefined
   }
   if (connectionId && options.sessionId && message.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER)) {

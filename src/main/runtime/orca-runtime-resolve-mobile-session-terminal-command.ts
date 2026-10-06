@@ -5,7 +5,9 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import { planLaunchPrompt } from '../../shared/tui-agent-startup'
+import { probedThisOrcaLaunchHost } from './this-orca-launch-host'
+import { launchPromptNeedsPasteRefusal } from '../../shared/launch-prompt-carry'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 
 export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRuntimeWithRunCreateMobileSessionTerminal {
@@ -28,6 +30,7 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     launchConfig?: SleepingAgentLaunchConfig
     launchAgent?: TuiAgent
+    launchFile?: WorktreeStartupLaunch['launchFile']
   }> {
     if (opts.command || !opts.agent) {
       return {
@@ -46,23 +49,45 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
     if (!isTuiAgentEnabled(opts.agent, settings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
-    const startupPlan = buildAgentStartupPlan({
+    // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
+    const launchPlatform = this.getAgentLaunchPlatformForWorkspace(workspace)
+    const isRemote = Boolean(workspace.connectionId)
+    const planned = planLaunchPrompt({
       ...resolveAgentStartupPlanInputs({
         agent: opts.agent,
         settings,
-        // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
-        platform: this.getAgentLaunchPlatformForWorkspace(workspace),
+        platform: launchPlatform,
         // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
-        isRemote: Boolean(workspace.connectionId)
+        isRemote
       }),
       prompt: opts.agentPrompt ?? '',
-      allowEmptyPromptLaunch: true
+      host: await probedThisOrcaLaunchHost({
+        launchPlatform,
+        isRemote,
+        settings,
+        workspacePath: workspace.path,
+        prompt: opts.agentPrompt
+      }),
+      // Why: a quick command has no paste after ready.
+      paste: 'never'
     })
-    if (!startupPlan) {
+    if (!planned) {
       throw new Error(`Could not build launch command for ${opts.agent}.`)
     }
-    if (opts.agentPrompt && startupPlan.followupPrompt) {
-      throw new Error(`Agent ${opts.agent} does not support startup prompt quick commands.`)
+    let startupPlan
+    let launchFile
+    switch (planned.carry) {
+      case 'none':
+      case 'on-line':
+        startupPlan = planned.plan
+        break
+      case 'launch-file':
+        startupPlan = planned.plan
+        launchFile = planned.launchFile
+        break
+      case 'paste-after-ready':
+        // Why: a quick command has no paste after ready, so the prompt would be dropped.
+        throw new Error(launchPromptNeedsPasteRefusal(opts.agent, 'terminal'))
     }
     return {
       command: startupPlan.launchCommand,
@@ -72,7 +97,8 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
       envToDelete: opts.envToDelete,
       launchConfig: startupPlan.launchConfig,
       launchAgent: opts.agent,
-      startupCommandDelivery: startupPlan.startupCommandDelivery
+      startupCommandDelivery: startupPlan.startupCommandDelivery,
+      ...(launchFile ? { launchFile } : {})
     }
   }
 }

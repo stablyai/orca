@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from './tui-agent-startup'
+import { planLaunchForTest } from './launch-prompt-plan.test-fixture'
+import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
 import { isExpectedAgentProcess, recognizeAgentProcess } from './agent-process-recognition'
 import { pickTuiAgent } from './tui-agent-selection'
 
@@ -8,7 +9,7 @@ describe('Freebuff terminal launches', () => {
     'delivers task text through the interactive terminal on %s',
     (platform) => {
       const prompt = '--help\nFix "quoted" paths and $HOME handling'
-      const plan = buildAgentStartupPlan({
+      const plan = planLaunchForTest({
         agent: 'freebuff',
         prompt,
         cmdOverrides: {},
@@ -17,7 +18,7 @@ describe('Freebuff terminal launches', () => {
       expect(plan).toMatchObject({
         launchCommand: 'freebuff',
         expectedProcess: 'freebuff',
-        followupPrompt: prompt
+        pasteAfterReady: prompt
       })
       expect(
         buildAgentDraftLaunchPlan({
@@ -32,14 +33,14 @@ describe('Freebuff terminal launches', () => {
 
   it('uses the same launch contract on SSH hosts', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'freebuff',
         prompt: 'Inspect this folder',
         cmdOverrides: {},
         platform: 'linux',
         isRemote: true
       })
-    ).toMatchObject({ launchCommand: 'freebuff', followupPrompt: 'Inspect this folder' })
+    ).toMatchObject({ launchCommand: 'freebuff', pasteAfterReady: 'Inspect this folder' })
   })
 
   it.each(['/usr/local/bin/freebuff', 'C:\\tools\\freebuff.exe'])(

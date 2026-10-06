@@ -2,13 +2,14 @@
  * The launch command a terminal create builds when the launch hands it a prompt.
  *
  * This is the argv half of terminal prompt delivery, and the reason it is worth pinning is that
- * its failure mode is silent: `buildAgentStartupPlan` answers a prompt it cannot fold by returning
- * a bare command plus a `followupPrompt`, and this resolver returns options, not a live PTY, so a
- * dropped `followupPrompt` would spawn the agent with no prompt and no error anywhere.
+ * its failure mode is silent: `planLaunchPrompt` answers a prompt it cannot fold with a clean plan
+ * and `paste-after-ready`, and this resolver returns options, not a live PTY, so a dropped paste
+ * would spawn the agent with no prompt and no error anywhere.
  */
 
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { MAX_LINE_PROMPT_BYTES, carryInLaunchFile } from '../../shared/launch-prompt-file'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -17,10 +18,7 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
-// The shell the host names for a local line; bash takes no multi-line line, zsh does.
-function runtimeWithAgentLaunch(
-  options: { terminalDefaultShell?: string; connectionId?: string } = {}
-): {
+function runtimeWithAgentLaunch(): {
   runtime: OrcaRuntimeService
   spawn: ReturnType<typeof vi.fn>
 } {
@@ -30,13 +28,11 @@ function runtimeWithAgentLaunch(
     store: { getSettings: () => Record<string, unknown> }
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
   }
-  internal.store = {
-    getSettings: () => ({ terminalDefaultShell: options.terminalDefaultShell ?? '/bin/bash' })
-  }
+  internal.store = { getSettings: () => ({}) }
   vi.spyOn(internal, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
     id: 'wt-1',
     path: '/repo/app',
-    connectionId: options.connectionId ?? null,
+    connectionId: null,
     repo: null,
     folderWorkspace: null
   })
@@ -57,80 +53,93 @@ function spawnedCommand(spawn: ReturnType<typeof vi.fn>): string {
 }
 
 describe('a terminal create that is handed a launch prompt', () => {
-  it('folds an argv agent’s prompt into the command it spawns, and says it did', async () => {
+  it('puts an argv agent’s prompt on the command it spawns', async () => {
     const { runtime, spawn } = runtimeWithAgentLaunch()
-    const onStartupPromptCarry = vi.fn()
 
     await runtime.createTerminal('id:wt-1', {
       startupAgent: 'claude',
-      startupPrompt: 'summarize the diff',
-      onStartupPromptCarry
+      startupPrompt: 'summarize the diff'
     })
 
     expect(spawnedCommand(spawn)).toContain('summarize the diff')
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ launchAgent: 'claude' }))
-    expect(onStartupPromptCarry).toHaveBeenCalledWith(true)
+    expect(spawn.mock.calls[0]?.[0]?.launchFile).toBeUndefined()
   })
 
-  it('starts clean, and says so, when the typed line cannot carry a multi-line prompt', async () => {
+  it('keeps a multi-line prompt on the command too: the host stages the typed line', async () => {
     const { runtime, spawn } = runtimeWithAgentLaunch()
-    const onStartupPromptCarry = vi.fn()
 
     await runtime.createTerminal('id:wt-1', {
       startupAgent: 'claude',
-      startupPrompt: 'summarize the diff\nthen list the risks',
-      onStartupPromptCarry
-    })
-
-    // Typed into a shell, each newline would be Enter; the caller pastes it once the agent is up.
-    expect(spawnedCommand(spawn)).toContain('claude')
-    expect(spawnedCommand(spawn)).not.toContain('summarize')
-    expect(onStartupPromptCarry).toHaveBeenCalledWith(false)
-  })
-
-  it('carries a short-lined multi-line prompt on a local zsh line, so the agent starts with it', async () => {
-    const { runtime, spawn } = runtimeWithAgentLaunch({ terminalDefaultShell: '/bin/zsh' })
-    const onStartupPromptCarry = vi.fn()
-
-    await runtime.createTerminal('id:wt-1', {
-      startupAgent: 'claude',
-      startupPrompt: 'summarize the diff\nthen list the risks',
-      onStartupPromptCarry
+      startupPrompt: 'summarize the diff\nthen list the risks'
     })
 
     expect(spawnedCommand(spawn)).toContain('summarize the diff\nthen list the risks')
-    expect(onStartupPromptCarry).toHaveBeenCalledWith(true)
   })
 
-  it('starts clean on a remote host, whose shell this host cannot name', async () => {
-    const { runtime, spawn } = runtimeWithAgentLaunch({
-      terminalDefaultShell: '/bin/zsh',
-      connectionId: 'ssh-1'
-    })
-    const onStartupPromptCarry = vi.fn()
+  it('hands a prompt past the argv ceiling to the host as a launch file', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+    const prompt = 'x'.repeat(MAX_LINE_PROMPT_BYTES + 1)
+
+    await runtime.createTerminal('id:wt-1', { startupAgent: 'claude', startupPrompt: prompt })
+
+    const launchFile = spawn.mock.calls[0]?.[0]?.launchFile
+    expect(launchFile).toMatchObject({ content: prompt, quoting: 'posix' })
+    expect(spawnedCommand(spawn)).toContain(launchFile.placeholder)
+    expect(spawnedCommand(spawn)).not.toContain('xxxx')
+  })
+
+  it('tells the host how the line quoted a launch file its caller wrote', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+    const { prompt, launchFile } = carryInLaunchFile('worker brief')
 
     await runtime.createTerminal('id:wt-1', {
       startupAgent: 'claude',
-      startupPrompt: 'summarize the diff\nthen list the risks',
-      onStartupPromptCarry
+      startupPrompt: prompt,
+      launchFile
     })
 
-    expect(spawnedCommand(spawn)).not.toContain('summarize')
-    expect(onStartupPromptCarry).toHaveBeenCalledWith(false)
+    expect(spawn.mock.calls[0]?.[0]?.launchFile).toEqual({ ...launchFile, quoting: 'posix' })
   })
 
-  it('starts Hermes clean instead of refusing when its env budget cannot hold the prompt', async () => {
+  it('starts an agent clean and says so when its prompt needs a file it is not known to read', async () => {
     const { runtime, spawn } = runtimeWithAgentLaunch()
     const onStartupPromptCarry = vi.fn()
 
     await runtime.createTerminal('id:wt-1', {
-      startupAgent: 'hermes',
-      startupPrompt: 'x'.repeat(30_000),
+      startupAgent: 'gemini',
+      startupPrompt: 'x'.repeat(MAX_LINE_PROMPT_BYTES + 1),
       onStartupPromptCarry
     })
 
-    expect(spawn).toHaveBeenCalledTimes(1)
-    expect(onStartupPromptCarry).toHaveBeenCalledWith(false)
+    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(false)
+    expect(spawn.mock.calls[0]?.[0]?.launchFile).toBeUndefined()
+    expect(spawnedCommand(spawn)).not.toContain('x'.repeat(100))
+  })
+
+  it('refuses such a prompt when the caller cannot paste it, rather than dropping it', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+
+    await expect(
+      runtime.createTerminal('id:wt-1', {
+        startupAgent: 'hermes',
+        startupPrompt: 'x'.repeat(30_000)
+      })
+    ).rejects.toThrow(/cannot take this prompt on its command line/)
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('reports a prompt carried once it rides the command or a launch file', async () => {
+    const { runtime } = runtimeWithAgentLaunch()
+    const onStartupPromptCarry = vi.fn()
+
+    await runtime.createTerminal('id:wt-1', {
+      startupAgent: 'claude',
+      startupPrompt: 'y'.repeat(30_000),
+      onStartupPromptCarry
+    })
+
+    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(true)
   })
 
   it('still builds a bare agent launch when no prompt is handed to it', async () => {
@@ -152,7 +161,7 @@ describe('a terminal create that is handed a launch prompt', () => {
         startupAgent: 'aider',
         startupPrompt: 'summarize the diff'
       })
-    ).rejects.toThrow(/does not take a startup prompt/)
+    ).rejects.toThrow(/takes its prompt only after it starts/)
     expect(spawn).not.toHaveBeenCalled()
   })
 })

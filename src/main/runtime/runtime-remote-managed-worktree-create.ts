@@ -112,6 +112,7 @@ export async function createRuntimeRemoteManagedWorktree(
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
+        ...(sequencedStartup.launchFile ? { launchFile: sequencedStartup.launchFile } : {}),
         telemetry: sequencedStartup.telemetry,
         ...ownerSurfacing(shouldActivate)
       })

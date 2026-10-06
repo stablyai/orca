@@ -18,6 +18,8 @@ import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segment
 import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult } from './types'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from './wsl-session-context'
+import { noteLaunchArtifactRefusal } from '../providers/local-launch-artifact-directory'
+import { resolveSpawnWslLaunchDirectory } from '../providers/wsl-launch-directory-resolution'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { resolveUnixShellPath } from '../providers/local-pty-utils'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
@@ -184,6 +186,12 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
 
     await this.ensureConnected()
+    const wslProbe = resolveSpawnWslLaunchDirectory(wslDistro, opts)
+    const wslLaunchDirectory = wslProbe ? await wslProbe : undefined
+    // Pins the daemon's spawn to the distro the daemon writes the line and file into.
+    if (wslLaunchDirectory) {
+      opts = { ...opts, wslLaunchDirectory, terminalWindowsWslDistro: wslLaunchDirectory.distro }
+    }
     // Why before createOrAttach: a preserved daemon may still think this session is backgrounded — from
     // a v19 that thins without a recoverable seq, or (#9993) from a pre-v29 that a previous desktop
     // handed 2031 scan authority to and can never retract it. Clear it before any bytes are attached.
@@ -251,7 +259,13 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       detectColdRestore
     }
     activeSpawnContext = context
-    const result = await this.createOrAttachSpawn(context, context.historySeedSegments)
+    let result
+    try {
+      result = await this.createOrAttachSpawn(context, context.historySeedSegments)
+    } catch (error) {
+      noteLaunchArtifactRefusal({ wslDistro, wslLaunchDirectory }, error)
+      throw error
+    }
     if (result.isNew && !attachOnly) {
       // Not awaited: the app-side read behind it can sit on an unanswered macOS folder prompt.
       void reportDaemonPtyCwdVerdict({

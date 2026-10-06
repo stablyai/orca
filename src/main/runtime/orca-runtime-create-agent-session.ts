@@ -17,7 +17,7 @@ import {
 } from './orca-runtime-core'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { buildExecutionHostAgentStartupPlan } from '../opencode/opencode-model-startup-plan'
+import { planAgentSessionLaunchStartup } from './agent-session-launch-startup'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type {
   AgentSessionCreateOperation,
@@ -159,17 +159,18 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
         ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
       })
-      const startup = await buildExecutionHostAgentStartupPlan({
-        inputs: startupArgs,
-        cwd: startupCwd ?? workspace.path,
-        prompt: request.prompt ?? '',
+      const { startup, launchFile } = await planAgentSessionLaunchStartup({
+        agent: request.agent,
+        prompt: request.prompt,
         promptDelivery: request.promptDelivery,
+        startupArgs,
+        cwd: startupCwd ?? workspace.path,
         hostIdentity: this.runtimeId,
-        signal: caller.signal
+        signal: caller.signal,
+        isRemote: Boolean(workspace.connectionId),
+        settings,
+        workspacePath: workspace.path
       })
-      if (!startup) {
-        throw new Error('agent_session_identity_required')
-      }
       if (caller.signal?.aborted) {
         throw new Error('client_disconnected')
       }
@@ -201,6 +202,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           launchAgent: request.agent,
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
           startupCommandDelivery: startup.startupCommandDelivery,
+          ...(launchFile ? { launchFile } : {}),
           // A fresh agent this host built; the request has no surface field, so it counts as `unknown`.
           telemetry: agentStartedTelemetry(request.agent, undefined),
           cwd: startupCwd,

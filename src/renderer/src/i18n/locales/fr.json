@@ -650,6 +650,33 @@
               "refreshCliRegistration": "Actualisez le statut d'enregistrement du CLI et réessayez."
             }
           }
+        },
+        "launch": {
+          "prompt": {
+            "not": {
+              "delivered": {
+                "notice": {
+                  "message": "L’agent a démarré, mais votre prompt n’a pas été envoyé. Copiez-le et collez-le quand l’agent est prêt.",
+                  "copy": "Copier le prompt"
+                }
+              },
+              "started": {
+                "notice": {
+                  "message": "L’agent n’a pas démarré : Orca n’a pas pu écrire le fichier qui contient votre prompt. Copiez le prompt et relancez."
+                }
+              }
+            },
+            "exited": {
+              "notice": {
+                "message": "L’agent s’est arrêté au démarrage, avant de recevoir votre prompt. Copiez le prompt et relancez l’agent."
+              }
+            },
+            "unconfirmed": {
+              "notice": {
+                "message": "Orca n’a pas pu confirmer que l’agent a reçu votre prompt. Vérifiez l’agent avant de le renvoyer."
+              }
+            }
+          }
         }
       },
       "remotePairingCopy": {

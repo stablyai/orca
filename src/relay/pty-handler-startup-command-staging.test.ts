@@ -1,5 +1,5 @@
 import './mock-descendant-sweep'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -34,6 +34,7 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
 
 import type { PtyHandler } from './pty-handler'
 import { beginPtyHandlerTest, endPtyHandlerTest } from './pty-handler-test-harness'
+import { buildLaunchFilePointer, carryInLaunchFile } from '../shared/launch-prompt-file'
 import type { MockDispatcher } from './pty-handler-test-harness'
 
 const describePosix = process.platform === 'win32' ? describe.skip : describe
@@ -45,7 +46,7 @@ describePosix('relay startup command staging', () => {
   let stagingDir: string
 
   beforeEach(() => {
-    stagingDir = mkdtempSync(join(tmpdir(), 'orca-relay-staging-'))
+    stagingDir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-relay-staging-')))
     vi.stubEnv('TMPDIR', stagingDir)
     ;({ dispatcher, handler, originalPlatform } = beginPtyHandlerTest({
       mockPtySpawn,
@@ -110,5 +111,27 @@ describePosix('relay startup command staging', () => {
       .map((notification) => String(notification.params?.data))
       .join('')
     expect(output).toContain('[orca] Could not stage the launch command (ENOENT')
+  })
+
+  it('writes a launch file before typing the line that names it, and removes it on exit', async () => {
+    const { prompt, launchFile } = carryInLaunchFile('secret brief')
+    await dispatcher.callRequest('pty.spawn', {
+      command: `claude '${prompt}'`,
+      commandDelivery: 'provider',
+      launchFile,
+      env: { SHELL: '/bin/zsh', ORCA_BRIEF: prompt }
+    })
+    const [launchDir] = readdirSync(stagingDir)
+    const path = join(stagingDir, launchDir, 'task-context.md')
+    expect(readFileSync(path, 'utf8')).toBe('secret brief')
+    expect(mockPtySpawn.mock.calls[0]?.[2]?.env).toMatchObject({
+      ORCA_BRIEF: buildLaunchFilePointer(path)
+    })
+    await vi.advanceTimersByTimeAsync(50)
+    expect(mockPtySpawn.mock.results[0]?.value.write).toHaveBeenCalledWith(
+      `claude '${buildLaunchFilePointer(path)}'\r`
+    )
+    mockPtyInstance.onExit.mock.calls.at(-1)?.[0]?.({ exitCode: 0 })
+    expect(existsSync(join(stagingDir, launchDir))).toBe(false)
   })
 })

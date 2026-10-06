@@ -7,7 +7,8 @@ import {
   resolveOpenCodeDirectModelExecutable
 } from './opencode-model-availability'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
-import { buildExecutionHostAgentStartupPlan } from './opencode-model-startup-plan'
+import { planExecutionHostLaunchPrompt } from './opencode-model-startup-plan'
+import { describeLaunchHost } from '../../shared/launch-host'
 
 vi.mock('../managed-data-accounts/launch-environment', () => ({
   applyManagedDataAccountEnvironment: vi.fn()
@@ -41,6 +42,23 @@ function scope() {
     prompt: 'Read only',
     hostIdentity: 'host'
   }
+}
+
+/** The plan a local launch runs, with the prompt on its line. */
+async function buildExecutionHostAgentStartupPlan(
+  options: ReturnType<typeof scope> & { isWsl?: boolean }
+) {
+  const planned = await planExecutionHostLaunchPrompt({
+    ...options,
+    host: describeLaunchHost({
+      launchPlatform: process.platform,
+      isRemote: false,
+      hostPlatform: process.platform,
+      paired: false
+    }),
+    paste: 'never'
+  })
+  return planned && (planned.carry === 'paste-after-ready' ? planned.cleanPlan : planned.plan)
 }
 
 describe('execution-host OpenCode model startup', () => {

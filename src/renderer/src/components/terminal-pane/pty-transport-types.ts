@@ -8,6 +8,7 @@ import type {
   AgentPromptDelivery
 } from '../../../../shared/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { LaunchFile, UnstageableLine } from '../../../../shared/launch-prompt-file'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
@@ -273,6 +274,11 @@ export type IpcPtyTransportOptions = {
   launchToken?: string
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
+  /** Local spawns only: a remote runtime writes no file the renderer names. */
+  launchFile?: LaunchFile
+  /** See `PtyPaneStartup.launchPrompt`. */
+  launchPrompt?: string
+  unstageableLine?: UnstageableLine
   connectionId?: string | null
   executionHostId?: ExecutionHostId | null
   worktreeId?: string

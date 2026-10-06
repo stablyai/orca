@@ -213,6 +213,24 @@ describe('agent-session create operation ledger', () => {
     )
   })
 
+  // Why: main started this agent with the whole prompt on its line; with no paste after ready this
+  // create must not refuse what main started.
+  it('keeps a prompt it cannot paste on the agent’s line, as main did', async () => {
+    const runtime = createRuntime({
+      supportsAgentSessionClaims: () => true,
+      supportsAgentSessionCreateOperations: () => true
+    })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await runtime.createAgentSession(
+      request(operationId(), { agent: 'gemini', prompt: 'x'.repeat(20_000) })
+    )
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:worktree-1',
+      expect.objectContaining({ command: expect.stringContaining('x'.repeat(20_000)) })
+    )
+  })
+
   it('requests exact client legacy fallback before nested SSH side effects', async () => {
     const runtime = createRuntime()
     const internal = runtime as unknown as {

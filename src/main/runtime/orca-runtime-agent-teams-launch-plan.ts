@@ -9,9 +9,10 @@ import {
 } from './orca-runtime-create-terminal-dependencies'
 
 export async function buildRuntimeAgentTeamsLaunchPlan(args: {
-  launchConfig: TerminalCreateOptions['launchConfig']
-  command?: string
-  claudeAgentTeamsSourceCommand?: string
+  launch: Pick<
+    TerminalCreateOptions,
+    'launchConfig' | 'command' | 'claudeAgentTeamsSourceCommand' | 'launchAgent'
+  >
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
   baseEnv: Record<string, string | undefined>
   adoptedBeforeLaunch: boolean
@@ -21,10 +22,11 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   sequencedStartupCommand?: string
   effectiveLaunchConfig: TerminalCreateOptions['launchConfig']
 }> {
+  const { launchConfig, command, launchAgent } = args.launch
   const sourceCommand =
-    args.claudeAgentTeamsSourceCommand?.trim() || args.command?.trim() || undefined
+    args.launch.claudeAgentTeamsSourceCommand?.trim() || command?.trim() || undefined
   const mode = inferCapturedClaudeAgentTeamsMode(
-    args.launchConfig,
+    launchConfig,
     sourceCommand,
     args.claudeAgentTeamsMode
   )
@@ -32,25 +34,24 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
     ? undefined
     : await buildClaudeAgentTeamsLaunchPlan({
         command: sourceCommand,
+        ...(launchAgent ? { launchAgent } : {}),
         mode,
         baseEnv: args.baseEnv,
         createTeamEnv: args.createTeamEnv
       })
   const sequencedStartupCommand =
-    plan && sourceCommand && args.command && sourceCommand !== args.command
-      ? plan.command
-      : undefined
+    plan && sourceCommand && command && sourceCommand !== command ? plan.command : undefined
   const effectiveLaunchConfig =
-    args.launchConfig && plan
+    launchConfig && plan
       ? {
-          ...args.launchConfig,
-          agentCommand: args.launchConfig.agentCommand
+          ...launchConfig,
+          agentCommand: launchConfig.agentCommand
             ? mode === 'in-process' || process.platform === 'win32'
-              ? addClaudeTeammateModeInProcess(args.launchConfig.agentCommand)
-              : addClaudeTeammateModeAuto(args.launchConfig.agentCommand)
+              ? addClaudeTeammateModeInProcess(launchConfig.agentCommand)
+              : addClaudeTeammateModeAuto(launchConfig.agentCommand)
             : plan.command,
-          agentEnv: { ...args.launchConfig.agentEnv, ...plan.env }
+          agentEnv: { ...launchConfig.agentEnv, ...plan.env }
         }
-      : args.launchConfig
+      : launchConfig
   return { plan, sequencedStartupCommand, effectiveLaunchConfig }
 }

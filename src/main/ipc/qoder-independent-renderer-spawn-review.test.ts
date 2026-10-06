@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { planLaunchForTest } from '../../shared/launch-prompt-plan.test-fixture'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
 import { registerPtyHandlers } from './pty'
 import { detectAgentCommandsOnHost } from '../preflight/agent-detection'
-import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import { trackMock } from './pty-ipc-mock-registry'
 
@@ -62,7 +63,7 @@ describe('independent renderer Qoder provider spawn boundary', () => {
     async (mode) => {
       const plan =
         mode === 'start'
-          ? buildAgentStartupPlan({
+          ? planLaunchForTest({
               agent: 'qoder',
               prompt: 'review prompt',
               agentArgs: null,

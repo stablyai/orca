@@ -35,6 +35,13 @@ export type TuiAgentConfig = {
   promptInjectionMode: AgentPromptInjectionMode
   /** Option terminator required before positional prompts that may look like CLI syntax. */
   argvPromptSeparator?: '--'
+  /** Grants the agent reads in the private directory holding its launch file, which sits outside
+   *  the workspace. Always written `--flag=<dir>`: Claude's `--add-dir` is variadic and would take a
+   *  following positional prompt as a second directory. */
+  launchFileDirectoryFlag?: '--add-dir'
+  /** Measured reading its launch file (through `launchFileDirectoryFlag` when set) without asking.
+   *  Any other agent gets the caller's paste for a prompt that would need one, or else the line. */
+  readsLaunchFile?: boolean
   /** Native CLI flag that seeds the input without submitting (e.g. Claude's `--prefill <text>`); preferred over the paste-after-ready path. */
   draftPromptFlag?: string
   /** Startup env var that seeds the input without submitting, for agents with no `--prefill`-style flag (e.g. pi); avoids the paste-after-ready race. */

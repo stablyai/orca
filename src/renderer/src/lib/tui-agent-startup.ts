@@ -3,6 +3,7 @@ export {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   planAgentCliArgsSuffix,
+  planLaunchPrompt,
   isShellProcess,
   quoteStartupArg,
   resolveStartupShell
@@ -10,5 +11,7 @@ export {
 export type {
   AgentCliArgsPlan,
   AgentDraftLaunchPlan,
-  AgentStartupPlan
+  AgentLaunchPromptArgs,
+  AgentStartupPlan,
+  AgentStartupPlanInputs
 } from '../../../shared/tui-agent-startup'

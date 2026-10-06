@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
+import { planLaunchForTest } from '../../shared/launch-prompt-plan.test-fixture'
+import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
 import { buildAiVaultResumeShellCommand } from '../../shared/ai-vault-resume-command'
 import { resolveQoderTerminalCommand } from './qoder-terminal-command-resolution'
 
@@ -9,7 +10,7 @@ describe('execution-host Qoder command selection', () => {
   it.each(['darwin', 'linux', 'win32'] as const)(
     'starts and resumes modern-only and legacy-only installs on %s',
     async (platform) => {
-      const startup = buildAgentStartupPlan({
+      const startup = planLaunchForTest({
         agent: 'qoder',
         prompt: 'qodercli is a prompt word',
         cmdOverrides: {},

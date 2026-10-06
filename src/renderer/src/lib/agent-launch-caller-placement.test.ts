@@ -39,6 +39,9 @@ vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: vi.fn()
 }))
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn(async () => true) }))
+vi.mock('@/lib/agent-launch-prompt-receipt', () => ({
+  waitForLaunchPromptReceipt: vi.fn(async () => 'delivered')
+}))
 vi.mock('@/lib/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: true, reason: 'foreground-match' }))
 }))

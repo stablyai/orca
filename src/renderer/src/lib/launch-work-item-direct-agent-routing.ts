@@ -3,6 +3,7 @@ import type { AppState } from '@/store/types'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { buildDirectWorkItemAgentStartupPlan } from '@/lib/launch-work-item-direct-agent'
+import { clientLaunchHost } from '@/lib/launch-file-host'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
@@ -19,6 +20,7 @@ export function buildDirectWorkItemStartup(args: {
   launchConnectionId: string | null
   worktreePath: string
   repoProjectRuntime?: Parameters<typeof resolveSourceControlLaunchPlatform>[0]['projectRuntime']
+  runtimeEnvironmentId: string | null
 }): ReturnType<typeof buildDirectWorkItemAgentStartupPlan> {
   const launchPlatform =
     args.launchPlatform ??
@@ -38,7 +40,12 @@ export function buildDirectWorkItemStartup(args: {
       args.launchConnectionId
     ),
     // Why: SSH hosts run the plain `orca` shim, so the Linux-only `orca-ide` rename is not applied.
-    isRemote: typeof args.launchConnectionId === 'string'
+    isRemote: typeof args.launchConnectionId === 'string',
+    host: clientLaunchHost({
+      runtimeEnvironmentId: args.runtimeEnvironmentId,
+      launchPlatform,
+      isRemote: typeof args.launchConnectionId === 'string'
+    })
   })
 }
 

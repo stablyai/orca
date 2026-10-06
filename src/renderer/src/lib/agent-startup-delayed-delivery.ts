@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { ComposerAgentStartupPlan } from '@/lib/composer-agent-startup-plan'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   agentStartupDeliveryKey as deliveryKey,
@@ -15,8 +15,8 @@ type PendingAgentStartupDelivery = {
   worktreeId: string
   tabId: string
   launchToken: string
-  startup: AgentStartupPlan
-  deliver: (tabId: string, ptyId: string, startup: AgentStartupPlan) => Promise<void>
+  startup: ComposerAgentStartupPlan
+  deliver: (tabId: string, ptyId: string, startup: ComposerAgentStartupPlan) => Promise<void>
 }
 
 const pendingAgentStartupDeliveries = new Map<string, PendingAgentStartupDelivery>()

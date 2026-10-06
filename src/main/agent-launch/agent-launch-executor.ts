@@ -220,7 +220,7 @@ async function resolveWorkspace(
   startupTerminalHandle: string | undefined
   startupTerminalPaneKey?: string
   warning?: string
-  /** True when this create folded the prompt into the agent's startup command. */
+  /** True when this create put the prompt on the agent's startup command. */
   promptRodeLaunchCommand?: boolean
 }> {
   const { intent } = execution
@@ -257,7 +257,7 @@ export type CreatedSurface = {
   outcome: AgentLaunchResult['outcome']
   warning?: string
   structured?: AgentLaunchStructuredSurface
-  /** True when this create folded the prompt into the agent's launch command. */
+  /** True when this create put the prompt on the agent's launch command. */
   promptRodeLaunchCommand?: boolean
 }
 

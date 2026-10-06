@@ -551,6 +551,33 @@
               "refreshCliRegistration": "请刷新 CLI 注册状态后重试。"
             }
           }
+        },
+        "launch": {
+          "prompt": {
+            "not": {
+              "delivered": {
+                "notice": {
+                  "message": "代理已启动，但你的提示词未发送。请复制提示词，并在代理就绪后粘贴。",
+                  "copy": "复制提示词"
+                }
+              },
+              "started": {
+                "notice": {
+                  "message": "代理未启动：Orca 无法写入承载你的提示词的文件。请复制提示词并重新启动。"
+                }
+              }
+            },
+            "exited": {
+              "notice": {
+                "message": "代理在启动时退出，未收到你的提示词。请复制提示词并重新启动代理。"
+              }
+            },
+            "unconfirmed": {
+              "notice": {
+                "message": "Orca 无法确认代理已收到你的提示词。再次发送前请先检查代理。"
+              }
+            }
+          }
         }
       },
       "remotePairingCopy": {

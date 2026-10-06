@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
+import { planLaunchForTest } from './launch-prompt-plan.test-fixture'
+import { buildAgentResumeStartupPlan } from './tui-agent-startup'
 
 describe('Qoder China launch recipe identity', () => {
   it.each(['darwin', 'linux', 'win32'] as const)(
     'preserves the official China executable on %s',
     (platform) => {
-      const plan = buildAgentStartupPlan({
+      const plan = planLaunchForTest({
         agent: 'qoder-cn',
         prompt: 'fixture',
         cmdOverrides: {},
@@ -28,7 +29,7 @@ describe('Qoder China launch recipe identity', () => {
     'preserves an explicitly configured shared-binary --cn recipe on %s',
     (platform) => {
       const cmdOverrides = { 'qoder-cn': 'qodercli --cn' }
-      const plan = buildAgentStartupPlan({
+      const plan = planLaunchForTest({
         agent: 'qoder-cn',
         prompt: 'fixture',
         cmdOverrides,

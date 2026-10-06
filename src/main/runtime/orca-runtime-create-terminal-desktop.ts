@@ -2,6 +2,7 @@
 import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import type { OrcaRuntimeWithCreateTerminal } from './orca-runtime-create-terminal'
 import type { RuntimeTerminalPresentation } from '../../shared/runtime-types'
+import { isLaunchFileRefusal } from '../../shared/launch-prompt-file'
 import type { Worktree } from '../../shared/worktree/types'
 
 export async function createDesktopTerminal(
@@ -72,6 +73,7 @@ export async function createDesktopTerminal(
       ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
       ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
       startupCommandDelivery: launchOpts.startupCommandDelivery,
+      ...(launchOpts.launchFile ? { launchFile: launchOpts.launchFile } : {}),
       ...(launchOpts.shellOverride ? { shellOverride: launchOpts.shellOverride } : {}),
       title: launchOpts.title,
       activate: presentation === 'focused',
@@ -79,7 +81,18 @@ export async function createDesktopTerminal(
       ...dependencies.ownerSurfacing(opts.surfaceOwner !== false)
     })
   })
-  const handle = await runtime.waitForTerminalHandle(reply.tabId)
+  let handle: string
+  try {
+    handle = await runtime.waitForTerminalHandle(reply.tabId)
+  } catch (error) {
+    if (isLaunchFileRefusal(error)) {
+      // Why: the refused pane never started; closing its tab leaves the launch without effects.
+      await Promise.resolve(
+        runtime.notifier?.closeTerminalTab?.(reply.tabId, { force: true })
+      ).catch((closeError: unknown) => console.error('Could not close a refused tab', closeError))
+    }
+    throw error
+  }
   return {
     handle,
     tabId: reply.tabId,

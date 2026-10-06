@@ -167,14 +167,20 @@ function tmuxSpecialKeyText(token: string): string | null {
 }
 
 export function isDirectClaudeCommand(command: string | undefined): boolean {
-  const trimmed = command?.trim() ?? ''
-  if (!trimmed) {
-    return false
-  }
-  if (/[;&|<>`]/.test(trimmed)) {
-    return false
-  }
-  const first = trimmed.match(/^\S+/)?.[0] ?? ''
+  return !/[;&|<>`]/.test(command ?? '') && startsWithClaudeExecutable(command)
+}
+
+/**
+ * Whether a launch Orca built for Claude can take the teammate flag after its executable. The rest
+ * of the line is Orca's own quoting, so a metacharacter inside the prompt (a launch-file pointer's
+ * backticks, a user's `&`) says nothing about the command; only the first token matters.
+ */
+export function isClaudeLaunchLine(command: string | undefined): boolean {
+  return startsWithClaudeExecutable(command)
+}
+
+function startsWithClaudeExecutable(command: string | undefined): boolean {
+  const first = command?.trim().match(/^\S+/)?.[0] ?? ''
   return first === 'claude' || first.endsWith('/claude')
 }
 

@@ -19,16 +19,21 @@ export function buildWslExecArgs(
   return [...(distro ? ['-d', distro] : []), '--exec', ...shellArgs]
 }
 
+/** Sets `$_orca_wsl_shell` to the shell a WSL pane runs: the account's login shell, else $SHELL. */
+export const RESOLVE_WSL_LOGIN_SHELL: readonly string[] = [
+  '_orca_wsl_shell=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)',
+  'if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then',
+  '  _orca_wsl_shell="${SHELL:-/bin/bash}"',
+  'fi',
+  'if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then',
+  '  _orca_wsl_shell=/bin/sh',
+  'fi'
+]
+
 export function buildWslLoginShellCommand(command: string): string {
   const quotedCommand = quotePosixShell(command)
   return [
-    '_orca_wsl_shell=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)',
-    'if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then',
-    '  _orca_wsl_shell="${SHELL:-/bin/bash}"',
-    'fi',
-    'if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then',
-    '  _orca_wsl_shell=/bin/sh',
-    'fi',
+    ...RESOLVE_WSL_LOGIN_SHELL,
     '_orca_wsl_shell_name=$(basename "$_orca_wsl_shell" | tr "[:upper:]" "[:lower:]")',
     'case "$_orca_wsl_shell_name" in',
     `  sh|dash) exec "$_orca_wsl_shell" -lc ${quotedCommand} ;;`,
@@ -106,13 +111,7 @@ export function buildWslCapturedLoginShellCommand(
 
 export function buildWslInteractiveLoginShellCommand(): string {
   return [
-    '_orca_wsl_shell=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)',
-    'if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then',
-    '  _orca_wsl_shell="${SHELL:-/bin/bash}"',
-    'fi',
-    'if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then',
-    '  _orca_wsl_shell=/bin/sh',
-    'fi',
+    ...RESOLVE_WSL_LOGIN_SHELL,
     '_orca_shell_ready_root=""',
     // Why the explicit root first: the wrapper tree is content-addressed, so its
     // path carries a hash the guest cannot derive. The host publishes the

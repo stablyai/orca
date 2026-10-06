@@ -551,6 +551,33 @@
               "refreshCliRegistration": "CLI 등록 상태를 새로 고친 후 다시 시도하세요."
             }
           }
+        },
+        "launch": {
+          "prompt": {
+            "not": {
+              "delivered": {
+                "notice": {
+                  "message": "에이전트가 시작되었지만 프롬프트는 전송되지 않았습니다. 에이전트가 준비되면 복사해서 붙여 넣으세요.",
+                  "copy": "프롬프트 복사"
+                }
+              },
+              "started": {
+                "notice": {
+                  "message": "에이전트가 시작되지 않았습니다. Orca가 프롬프트를 담을 파일을 쓰지 못했습니다. 프롬프트를 복사한 뒤 다시 시작하세요."
+                }
+              }
+            },
+            "exited": {
+              "notice": {
+                "message": "에이전트가 시작 중에 종료되어 프롬프트를 받지 못했습니다. 프롬프트를 복사한 뒤 에이전트를 다시 시작하세요."
+              }
+            },
+            "unconfirmed": {
+              "notice": {
+                "message": "에이전트가 프롬프트를 받았는지 Orca가 확인하지 못했습니다. 다시 보내기 전에 에이전트를 확인하세요."
+              }
+            }
+          }
         }
       },
       "remotePairingCopy": {

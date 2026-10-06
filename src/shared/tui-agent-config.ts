@@ -28,6 +28,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   claude: {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
+    // Why: default permission mode asks before reading outside the working directories.
+    launchFileDirectoryFlag: '--add-dir',
+    readsLaunchFile: true,
     pasteNeedsTypedRequest: true,
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
     draftPromptFlag: '--prefill',
@@ -64,6 +67,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   codex: {
     detectCmd: 'codex',
     promptInjectionMode: 'argv',
+    // Why no grant: every sandbox policy reads the whole disk.
+    readsLaunchFile: true,
     windowsInputRecordPasteNewline: 'alt-enter',
     preflightTrust: 'codex',
     draftPasteReadySignal: 'codex-composer-prompt',
@@ -342,11 +347,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadySignal: 'zcode-composer-prompt',
     composerReadyCaptures: ['zcode-composer-ready']
   },
-  devin: {
-    detectCmd: 'devin',
-    // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
-    promptInjectionMode: 'stdin-after-start'
-  },
+  // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
+  // prettier-ignore
+  devin: { detectCmd: 'devin', promptInjectionMode: 'stdin-after-start' },
   // prettier-ignore
   jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
 }

@@ -182,6 +182,28 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).not.toHaveBeenCalled()
   })
 
+  // Why: a 9 KB multi-line PowerShell line was measured losing its line breaks; main pasted it.
+  it('pastes a long multi-line AI-button prompt on Windows, as main did, instead of a launch file', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const prompt = `Fix the failing checks.\n${'Then push. '.repeat(900)}Done.`
+
+    launchAgentInNewTab({
+      requestId: 'prompt-carry-190',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt,
+      promptDelivery: 'submit-after-ready',
+      launchPlatform: 'win32'
+    })
+
+    const queued = mockQueueTabStartupCommand.mock.calls[0]?.[1]
+    expect(queued?.launchFile).toBeUndefined()
+    expect(queued?.command).not.toContain('Fix the failing checks')
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-1', content: prompt, agent: 'codex', submit: true })
+    )
+  })
+
   it('uses the explicit startup shell platform when building draft launch commands', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 

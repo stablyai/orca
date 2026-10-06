@@ -1,8 +1,3 @@
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
-} from './agent-session-resume'
-import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
@@ -10,7 +5,7 @@ import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
-import type { TerminalAgent, TuiAgent } from './terminal-agent'
+import type { TerminalAgent } from './terminal-agent'
 
 export type RuntimeTerminalSummary = {
   handle: string
@@ -241,38 +236,6 @@ export type RuntimeTerminalAgentStatus = {
   isRunningAgent: boolean
   status: RuntimeTerminalAgentStatusState
 }
-
-export type RuntimeTerminalPresentation = 'background' | 'focused'
-
-type RuntimeTerminalCreateBaseRequestPayload = {
-  requestId: string
-  worktreeId?: string
-  afterTabId?: string
-  targetGroupId?: string
-  command?: string
-  cwd?: string
-  env?: Record<string, string>
-  envToDelete?: string[]
-  launchConfig?: SleepingAgentLaunchConfig
-  resumeProviderSession?: AgentProviderSessionMetadata
-  launchToken?: string
-  launchAgent?: TuiAgent
-  viewMode?: 'terminal' | 'chat'
-  startupCommandDelivery?: StartupCommandDelivery
-  title?: string
-  activate?: boolean
-  presentation?: RuntimeTerminalPresentation
-  surfaceOwner?: false
-  /** Windows shell the created tab spawns AS, instead of the host default. */
-  shellOverride?: string
-}
-
-export type RuntimeTerminalCreateRequestPayload =
-  | (RuntimeTerminalCreateBaseRequestPayload & { source?: undefined })
-  | (RuntimeTerminalCreateBaseRequestPayload & {
-      worktreeId: string
-      source: 'runtime-session'
-    })
 
 export type RuntimeTerminalCreate = {
   handle: string

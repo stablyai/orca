@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { planLaunchForTest } from './launch-prompt-plan.test-fixture'
 import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import { buildAgentStartupPlan, agentPromptRidesLaunchCommand } from './tui-agent-startup'
+import { agentPromptRidesLaunchCommand } from './tui-agent-startup'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
 import { recognizeAgentProcess } from './agent-process-recognition'
@@ -32,7 +33,7 @@ describe('ZCode orchestration and send-to-agent contract', () => {
   })
 
   it('keeps the prompt out of the launch command and hands it back as a follow-up', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'zcode',
       prompt: 'refactor the parser',
       cmdOverrides: {},
@@ -40,11 +41,11 @@ describe('ZCode orchestration and send-to-agent contract', () => {
     })
     expect(plan?.launchCommand).toBe('zcode')
     expect(plan?.launchCommand).not.toContain('refactor the parser')
-    expect(plan?.followupPrompt).toBe('refactor the parser')
+    expect(plan?.pasteAfterReady).toBe('refactor the parser')
   })
 
   it('carries a mode chosen through agent args onto the launch command', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'zcode',
       prompt: '',
       cmdOverrides: {},

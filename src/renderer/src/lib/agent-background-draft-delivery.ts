@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
-import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
+import { showAgentLaunchPromptNotDeliveredNotice } from '@/lib/agent-launch-prompt-not-delivered-notice'
 
 export function scheduleAgentBackgroundDraft(
   tabId: string,
@@ -12,6 +12,6 @@ export function scheduleAgentBackgroundDraft(
     content,
     agent,
     submit: true,
-    onTimeout: () => showAutomationPromptNotSentToast(agent)
+    onTimeout: () => showAgentLaunchPromptNotDeliveredNotice({ agent, prompt: content })
   })
 }

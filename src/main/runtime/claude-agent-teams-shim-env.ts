@@ -5,9 +5,11 @@ import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import {
   addClaudeTeammateModeAuto,
   addClaudeTeammateModeInProcess,
+  isClaudeLaunchLine,
   isDirectClaudeCommand,
   type ClaudeAgentTeamsMode
 } from '../../shared/claude-agent-teams-tmux-compat'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 import { resolvePathEnvKey } from '../pty/windows-path-segment-merge'
 
@@ -28,12 +30,18 @@ export async function ensureClaudeAgentTeamsShimDir(root = defaultShimRoot()): P
 
 export async function buildClaudeAgentTeamsLaunchPlan(args: {
   command: string | undefined
+  /** The agent Orca launched, when it built the line; decides eligibility over parsing the line. */
+  launchAgent?: TuiAgent
   mode: ClaudeAgentTeamsMode | undefined
   baseEnv: Record<string, string | undefined>
   createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
 }): Promise<ClaudeAgentTeamsLaunchPlan | null> {
   const mode = args.mode ?? 'off'
-  if (!args.command || mode === 'off' || !isDirectClaudeCommand(args.command)) {
+  const eligible =
+    args.launchAgent === undefined
+      ? isDirectClaudeCommand(args.command)
+      : args.launchAgent === 'claude' && isClaudeLaunchLine(args.command)
+  if (!args.command || mode === 'off' || !eligible) {
     return null
   }
   if (mode === 'in-process' || process.platform === 'win32') {

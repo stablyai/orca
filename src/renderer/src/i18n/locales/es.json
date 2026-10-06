@@ -551,6 +551,33 @@
               "refreshCliRegistration": "Actualiza el estado de registro de la CLI e inténtalo de nuevo."
             }
           }
+        },
+        "launch": {
+          "prompt": {
+            "not": {
+              "delivered": {
+                "notice": {
+                  "message": "El agente se inició, pero tu prompt no se envió. Cópialo y pégalo cuando el agente esté listo.",
+                  "copy": "Copiar prompt"
+                }
+              },
+              "started": {
+                "notice": {
+                  "message": "El agente no se inició: Orca no pudo escribir el archivo que contiene tu prompt. Copia el prompt e inícialo de nuevo."
+                }
+              }
+            },
+            "exited": {
+              "notice": {
+                "message": "El agente se cerró al iniciarse, antes de recibir tu prompt. Copia el prompt e inicia el agente de nuevo."
+              }
+            },
+            "unconfirmed": {
+              "notice": {
+                "message": "Orca no pudo confirmar que el agente recibió tu prompt. Revisa el agente antes de enviarlo de nuevo."
+              }
+            }
+          }
         }
       },
       "remotePairingCopy": {

@@ -722,6 +722,33 @@
               "refreshCliRegistration": "Refresh CLI registration status and try again."
             }
           }
+        },
+        "launch": {
+          "prompt": {
+            "not": {
+              "delivered": {
+                "notice": {
+                  "message": "The agent started, but your prompt wasn't sent. Copy it and paste it once the agent is ready.",
+                  "copy": "Copy prompt"
+                }
+              },
+              "started": {
+                "notice": {
+                  "message": "The agent wasn't started: Orca couldn't write the file that carries your prompt. Copy the prompt and launch again."
+                }
+              }
+            },
+            "exited": {
+              "notice": {
+                "message": "The agent exited at startup, before it received your prompt. Copy the prompt and start the agent again."
+              }
+            },
+            "unconfirmed": {
+              "notice": {
+                "message": "Orca couldn't confirm the agent received your prompt. Check the agent before sending it again."
+              }
+            }
+          }
         }
       },
       "remotePairingCopy": {

@@ -153,6 +153,20 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     )
   })
 
+  // Why: past the argv ceiling an automation prompt failed with "Argument list too long".
+  it('hands an automation prompt past the argv ceiling to the SSH host as a launch file', async () => {
+    state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    const prompt = 'z'.repeat(140_055)
+
+    await launchAgentBackgroundSession({ agent: 'claude', worktreeId: 'wt-1', prompt })
+
+    const spawned = mockSpawn.mock.calls[0]?.[0]
+    expect(spawned?.launchFile?.content).toBe(prompt)
+    expect(spawned?.command).toContain(spawned?.launchFile?.placeholder)
+    expect(spawned?.command.length).toBeLessThan(1_000)
+  })
+
   it.each(['claude', 'codex'] as const)(
     'has the relay type the %s launch line instead of writing it from the renderer',
     async (agent) => {
@@ -355,6 +369,108 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
         })
       })
     )
+  })
+
+  // Why: a paired host is sent a command and never a launch file, so a pointer would name nothing.
+  it('pastes a long prompt to an old paired Linux host, which may neither stage it nor read a file', async () => {
+    useRemoteAgentBackgroundRuntime(state)
+    mockGetAgentLaunchPlatformForRepo.mockReturnValue('linux')
+    mockRuntimeEnvironmentTransportCall.mockImplementation((request: { method: string }) => {
+      if (request.method === 'status.get') {
+        return Promise.resolve({
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeId: 'old-runtime',
+            graphStatus: 'ready',
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities: []
+          }
+        })
+      }
+      return Promise.resolve({
+        id: 'create',
+        ok: true,
+        result: { terminal: { handle: 'legacy-terminal-1' } }
+      })
+    })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'fix the build\nthen run the tests'
+    })
+
+    const create = mockRuntimeEnvironmentTransportCall.mock.calls.find(
+      ([request]) => request.method === 'terminal.create'
+    )?.[0]
+    expect(create?.params?.command).not.toContain('orca-launch-file')
+    expect(create?.params?.command).not.toContain('fix the build')
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'fix the build\nthen run the tests', submit: true })
+    )
+  })
+
+  // Why: a Windows host cannot prove the agent is in front to paste into, so the line carries it.
+  it('keeps that prompt on an old paired Windows host’s line, as main typed it', async () => {
+    useRemoteAgentBackgroundRuntime(state)
+    mockGetAgentLaunchPlatformForRepo.mockReturnValue('win32')
+    mockRuntimeEnvironmentTransportCall.mockImplementation((request: { method: string }) => {
+      if (request.method === 'status.get') {
+        return Promise.resolve({
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeId: 'old-runtime',
+            graphStatus: 'ready',
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities: []
+          }
+        })
+      }
+      return Promise.resolve({
+        id: 'create',
+        ok: true,
+        result: { terminal: { handle: 'legacy-terminal-1' } }
+      })
+    })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'fix the build\nthen run the tests'
+    })
+
+    const create = mockRuntimeEnvironmentTransportCall.mock.calls.find(
+      ([request]) => request.method === 'terminal.create'
+    )?.[0]
+    expect(create?.params?.command).not.toContain('orca-launch-file')
+    expect(create?.params?.command).toContain('fix the build')
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+  })
+
+  it('leaves that prompt to a paired host that takes the prompt itself, without a second paste', async () => {
+    useRemoteAgentBackgroundRuntime(state)
+    mockGetAgentLaunchPlatformForRepo.mockReturnValue('linux')
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'fix the build\nthen run the tests'
+    })
+
+    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({ prompt: 'fix the build\nthen run the tests' })
+      })
+    )
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
   })
 
   it('closes a created runtime terminal when its data subscription fails', async () => {

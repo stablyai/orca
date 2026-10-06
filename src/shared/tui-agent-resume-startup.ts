@@ -70,7 +70,6 @@ export function buildAgentResumeStartupPlan(args: {
     agent: args.agent,
     launchCommand,
     expectedProcess: TUI_AGENT_CONFIG[args.agent].expectedProcess,
-    followupPrompt: null,
     launchConfig,
     ...(args.agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
     ...(Object.keys(applied).length > 0 ? { sessionOptions: { ...applied } } : {}),

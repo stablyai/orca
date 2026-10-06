@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import { tuiAgentToAgentKind } from '../../shared/agent-kind'
+import { MAX_LINE_PROMPT_BYTES } from '../../shared/launch-prompt-file'
 
 const mocks = vi.hoisted(() => ({
   detectRemoteAgents: vi.fn(),
@@ -109,37 +110,70 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
 })
 
 describe('buildWorktreeStartupForAgent prompt carry', () => {
-  const build = (onPromptCarry?: (carried: boolean) => void, terminalDefaultShell = '/bin/bash') =>
+  const build = (prompt: string, platform: NodeJS.Platform = 'linux') =>
     buildWorktreeStartupForAgent({
       repo: makeRepo({}),
-      settings: Object.assign({}, settings, { terminalDefaultShell }),
+      settings,
       agent: 'claude',
-      prompt: 'summarize the diff\nthen list the risks',
-      getLaunchPlatform: () => 'linux',
-      toSessionOptions: () => undefined,
-      ...(onPromptCarry ? { onPromptCarry } : {})
+      prompt,
+      getLaunchPlatform: () => platform,
+      toSessionOptions: () => undefined
     })
 
-  it('starts clean and reports it when a caller that pastes offers a prompt the line cannot carry', () => {
-    const onPromptCarry = vi.fn()
-    const result = build(onPromptCarry)
-
-    expect(result.startup.command).not.toContain('summarize')
-    expect(result.followup).toBeUndefined()
-    expect(onPromptCarry).toHaveBeenCalledWith(false)
-  })
-
-  it('carries a short-lined multi-line prompt on a local zsh line, as main typed it', () => {
-    const onPromptCarry = vi.fn()
-    const result = build(onPromptCarry, '/bin/zsh')
-
+  it('carries a multi-line prompt on the startup command, which the host stages', () => {
+    const result = build('summarize the diff\nthen list the risks')
     expect(result.startup.command).toContain('summarize the diff\nthen list the risks')
-    expect(onPromptCarry).toHaveBeenCalledWith(true)
+    expect(result.startup.launchFile).toBeUndefined()
+    expect(result.followup).toBeUndefined()
   })
 
-  it('keeps folding the prompt for a caller that delivers nothing afterwards', () => {
-    // `orca worktree create --prompt` has no post-start paste of its own for an argv agent.
-    expect(build().startup.command).toContain('summarize the diff')
+  it('hands a prompt past the argv ceiling to the host as a launch file', () => {
+    const prompt = 'x'.repeat(MAX_LINE_PROMPT_BYTES + 1)
+    const result = build(prompt)
+    expect(result.startup.launchFile?.content).toBe(prompt)
+    expect(result.startup.command).toContain(result.startup.launchFile?.placeholder)
+    expect(result.startup.command).not.toContain('xxxx')
+  })
+
+  // Why: measured on PowerShell, a short multi-line line arrives and a 9 KB one does not. PowerShell
+  // quotes it onto one physical line (#23672).
+  it('keeps a short multi-line prompt on a Windows line and points a long one at a file', () => {
+    expect(build('summarize the diff\nthen list the risks', 'win32').startup.command).toContain(
+      '"summarize the diff`nthen list the risks"'
+    )
+    const long = Array.from({ length: 20 }, (_, i) => `step ${i} `.padEnd(500, 'x')).join('\n')
+    const result = build(long, 'win32')
+    expect(result.startup.launchFile?.content).toBe(long)
+    expect(result.startup.command).not.toContain('step 1 ')
+  })
+
+  it('leaves a prompt needing a file the agent is not known to read as the follow-up paste', () => {
+    const prompt = 'x'.repeat(MAX_LINE_PROMPT_BYTES + 1)
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'gemini',
+      prompt,
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+    expect(result.startup.launchFile).toBeUndefined()
+    expect(result.followup?.prompt).toBe(prompt)
+  })
+
+  it('reports that prompt uncarried, with no follow-up, to a caller that pastes it itself', () => {
+    const onPromptCarry = vi.fn()
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'gemini',
+      prompt: 'x'.repeat(MAX_LINE_PROMPT_BYTES + 1),
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined,
+      onPromptCarry
+    })
+    expect(onPromptCarry).toHaveBeenCalledExactlyOnceWith(false)
+    expect(result.followup).toBeUndefined()
   })
 })
 

@@ -63,7 +63,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     ) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
-    const agentStartup = resolveWorktreeCreateAgentStartup(args, (...inputs) =>
+    const agentStartup = await resolveWorktreeCreateAgentStartup(args, (...inputs) =>
       this.buildStartupForAgent(repo, ...inputs)
     )
     const draftStartup =

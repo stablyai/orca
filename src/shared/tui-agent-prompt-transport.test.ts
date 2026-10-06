@@ -1,8 +1,8 @@
 /**
  * The two answers to "how does this agent take its prompt" must stay one answer.
  *
- * `buildAgentStartupPlan` decides by building a command and leaving `followupPrompt` null when the
- * text went into it. `agentPromptRidesLaunchCommand` has to give the same verdict BEFORE a command
+ * `planLaunchPrompt` decides by building a command and answering `paste-after-ready` when the text
+ * did not go into it. `agentPromptRidesLaunchCommand` has to give the same verdict BEFORE a command
  * exists, because `agent.launch` picks a delivery while it is still choosing what to create. Two
  * readings of one table is exactly the shape that drifts, so this pins them together across every
  * agent: add an agent, or change its injection mode, and the disagreement fails here rather than
@@ -10,8 +10,9 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { planLaunchForTest } from './launch-prompt-plan.test-fixture'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
-import { agentPromptRidesLaunchCommand, buildAgentStartupPlan } from './tui-agent-startup'
+import { agentPromptRidesLaunchCommand } from './tui-agent-startup'
 import type { TuiAgent } from './tui-agent'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the config is declared as a total record over TuiAgent, so its own keys are that union.
@@ -20,7 +21,7 @@ const ALL_AGENTS = Object.keys(TUI_AGENT_CONFIG) as TuiAgent[]
 const PROMPT = 'summarize the diff'
 
 function planFor(agent: TuiAgent) {
-  return buildAgentStartupPlan({
+  return planLaunchForTest({
     agent,
     prompt: PROMPT,
     cmdOverrides: {},
@@ -39,9 +40,9 @@ describe('the prompt-transport predicate against the plan it predicts', () => {
   it.each(ALL_AGENTS)('agrees with the built plan for %s', (agent) => {
     const plan = planFor(agent)
     expect(plan).not.toBeNull()
-    // `followupPrompt` is the plan saying "the command does NOT carry this"; the predicate must
+    // `paste-after-ready` is the plan saying "the command does NOT carry this"; the predicate must
     // say the same thing, and it is read before any plan is built.
-    expect(plan!.followupPrompt === null).toBe(agentPromptRidesLaunchCommand(agent))
+    expect(plan!.pasteAfterReady === null).toBe(agentPromptRidesLaunchCommand(agent))
   })
 
   it('puts the prompt in the launch command exactly when it says it does', () => {
@@ -50,7 +51,7 @@ describe('the prompt-transport predicate against the plan it predicts', () => {
       if (!agentPromptRidesLaunchCommand(agent)) {
         // The command must not smuggle the text in some other way.
         expect(plan!.launchCommand).not.toContain(PROMPT)
-        expect(plan!.followupPrompt).toBe(PROMPT)
+        expect(plan!.pasteAfterReady).toBe(PROMPT)
         continue
       }
       // Hermes hands long text through an env var, so the command names the variable, not the text.

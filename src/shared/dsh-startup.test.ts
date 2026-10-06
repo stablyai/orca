@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan } from './tui-agent-startup'
+import { planLaunchForTest } from './launch-prompt-plan.test-fixture'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 
 describe('DSH first launch', () => {
   it.each(['darwin', 'linux', 'win32'] as const)(
     'selects the current workspace before pasting the task on %s',
     (platform) => {
-      const plan = buildAgentStartupPlan({
+      const plan = planLaunchForTest({
         agent: 'dsh',
         prompt: 'Review this folder',
         cmdOverrides: {},

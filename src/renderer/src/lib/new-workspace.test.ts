@@ -90,8 +90,8 @@ vi.mock('@/lib/telemetry', () => ({
   track: mockTrack
 }))
 
-vi.mock('@/lib/agent-background-session-timeout-toast', () => ({
-  showAutomationPromptNotSentToast: mockShowAutomationPromptNotSentToast
+vi.mock('@/lib/agent-launch-prompt-not-delivered-notice', () => ({
+  showAgentLaunchPromptNotDeliveredNotice: mockShowAutomationPromptNotSentToast
 }))
 
 import {
@@ -288,7 +288,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'aider',
         launchCommand: 'aider',
         expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner',
+        pastePromptAfterReady: 'fix the spinner',
         launchConfig: { agentArgs: '', agentEnv: {} }
       }
     })
@@ -311,7 +311,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'aider',
         launchCommand: 'aider',
         expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner',
+        pastePromptAfterReady: 'fix the spinner',
         launchConfig: { agentArgs: '', agentEnv: {} }
       }
     })
@@ -333,13 +333,38 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'aider',
         launchCommand: 'aider',
         expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner',
+        pastePromptAfterReady: 'fix the spinner',
         launchConfig: { agentArgs: '', agentEnv: {} }
       }
     })
 
     expect(mockSendRuntimePtyInputVerified).not.toHaveBeenCalled()
-    expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('aider')
+    expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith({
+      agent: 'aider',
+      prompt: 'fix the spinner'
+    })
+  })
+
+  // Why: an argv agent's prompt left for paste (a WSL line, a paired host) was typed raw once the
+  // process name showed, the early write the launch line exists to avoid.
+  it('pastes an argv agent’s left-over prompt once its composer is ready, as one bracketed paste', async () => {
+    mockPasteDraftToAgentPtyWhenReady.mockResolvedValue(true)
+    await ensureAgentStartupInTerminal({
+      worktreeId: 'wt-1',
+      startup: {
+        agent: 'claude',
+        launchCommand: 'claude',
+        expectedProcess: 'claude',
+        pastePromptAfterReady: 'fix the spinner',
+        launchConfig: { agentArgs: '', agentEnv: {} }
+      }
+    })
+
+    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'fix the spinner', submit: true, forcePaste: true })
+    )
+    expect(mockSendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(mockShowAutomationPromptNotSentToast).not.toHaveBeenCalled()
   })
 
   it('does not toast when a follow-up prompt is delivered', async () => {
@@ -349,7 +374,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'aider',
         launchCommand: 'aider',
         expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner',
+        pastePromptAfterReady: 'fix the spinner',
         launchConfig: { agentArgs: '', agentEnv: {} }
       }
     })
@@ -364,7 +389,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'claude',
         launchCommand: 'claude',
         expectedProcess: 'claude',
-        followupPrompt: null,
         launchConfig: { agentArgs: '', agentEnv: {} },
         draftPrompt: 'review this before sending'
       }
@@ -375,7 +399,10 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       | undefined
     expect(call?.onTimeout).toBeTypeOf('function')
     call?.onTimeout?.()
-    expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('claude')
+    expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith({
+      agent: 'claude',
+      prompt: 'review this before sending'
+    })
   })
 
   it('does not track when follow-up prompt delivery rejects', async () => {
@@ -388,7 +415,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
           agent: 'aider',
           launchCommand: 'aider',
           expectedProcess: 'aider',
-          followupPrompt: 'fix the spinner',
+          pastePromptAfterReady: 'fix the spinner',
           launchConfig: { agentArgs: '', agentEnv: {} }
         }
       })
@@ -404,7 +431,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'claude',
         launchCommand: 'claude',
         expectedProcess: 'claude',
-        followupPrompt: null,
         launchConfig: { agentArgs: '', agentEnv: {} },
         draftPrompt: 'review this before sending'
       }
@@ -448,7 +474,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'codex',
         launchCommand: 'codex',
         expectedProcess: 'codex',
-        followupPrompt: null,
         launchConfig: { agentArgs: '', agentEnv: {} },
         draftPrompt: 'Linear context draft'
       }
@@ -478,7 +503,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'codex',
         launchCommand: 'codex',
         expectedProcess: 'codex',
-        followupPrompt: null,
         launchConfig: { agentArgs: '', agentEnv: {} },
         draftPrompt: 'https://github.com/stablyai/orca/pull/2051'
       }
@@ -535,7 +559,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'codex',
         launchCommand: 'codex',
         expectedProcess: 'codex',
-        followupPrompt: null,
         launchConfig: { agentArgs: '', agentEnv: {} },
         draftPrompt: 'linked draft'
       }
@@ -617,7 +640,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'codex',
         launchCommand: 'codex',
         expectedProcess: 'codex',
-        followupPrompt: null,
         launchConfig: { agentArgs: '', agentEnv: {} },
         draftPrompt: 'linked draft'
       }
@@ -656,7 +678,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       agent: 'codex' as const,
       launchCommand: 'codex',
       expectedProcess: 'codex',
-      followupPrompt: null,
       launchConfig: { agentArgs: '', agentEnv: {} },
       draftPrompt: 'linked draft',
       launchToken: 'launch-token-1'
@@ -686,7 +707,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       agent: 'codex' as const,
       launchCommand: 'codex',
       expectedProcess: 'codex',
-      followupPrompt: null,
       launchConfig: { agentArgs: '', agentEnv: {} },
       draftPrompt: 'linked draft',
       launchToken: 'launch-token-1'
@@ -747,7 +767,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'codex',
         launchCommand: 'codex',
         expectedProcess: 'codex',
-        followupPrompt: null,
         launchConfig: { agentArgs: '', agentEnv: {} },
         draftPrompt: 'old linked draft',
         launchToken: 'launch-token-old'
@@ -799,7 +818,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'aider',
         launchCommand: 'aider',
         expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner',
+        pastePromptAfterReady: 'fix the spinner',
         launchConfig: { agentArgs: '', agentEnv: {} }
       }
     })

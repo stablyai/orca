@@ -40,7 +40,6 @@ function makeAgentRequest(): WorktreeCreationRequest {
       agent: 'codex',
       launchCommand: 'codex',
       expectedProcess: 'codex',
-      followupPrompt: null,
       launchConfig: { agentArgs: '', agentEnv: {} }
     },
     quickPrompt: '',

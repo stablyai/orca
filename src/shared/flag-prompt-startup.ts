@@ -36,7 +36,6 @@ export function buildFlagPromptStartupPlan(args: {
     agent: args.agent,
     launchCommand: `${args.launchCommand}${promptSuffix}`,
     expectedProcess: TUI_AGENT_CONFIG[args.agent].expectedProcess,
-    followupPrompt: null,
     launchConfig: args.launchConfig,
     ...appliedSessionOptionProps(args.sessionOptions),
     ...openCodeStartupPromptEnv(

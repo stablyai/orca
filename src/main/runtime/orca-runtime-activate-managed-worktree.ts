@@ -4,6 +4,8 @@ import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { navigationTargetsClients, navigationTargetsHost } from '../../shared/runtime-navigation'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
+import { repoIsRemote } from '../../shared/agent-launch-remote'
+import { probeWslLaunchFolderBeforePlanning } from './this-orca-launch-host'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
@@ -34,9 +36,11 @@ import { provisionWorktreeTerminals } from './runtime-worktree-terminal-provisio
 import { readFreshComposerHold } from './launched-agent-composer-readiness'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import {
-  readLaunchedAgentForeground,
+  asLaunchedAgentForeground,
+  readTerminalForegroundVerdict,
   type LaunchedAgentForeground
 } from './launched-agent-foreground'
+import type { TerminalForegroundVerdict } from './terminal-foreground-group'
 
 export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListManagedWorktrees {
   async activateManagedWorktree(
@@ -143,7 +147,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     })
   }
 
-  protected buildStartupForAgent(
+  protected async buildStartupForAgent(
     repo: Repo,
     agent: TuiAgent,
     prompt: string | undefined,
@@ -153,10 +157,20 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       launchSource?: string
       onPromptCarry?: (carried: boolean) => void
     }
-  ): { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
+  ): Promise<{
+    agent: TuiAgent
+    startup: WorktreeStartupLaunch
+    followup?: WorktreeStartupFollowup
+  }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+    await probeWslLaunchFolderBeforePlanning({
+      launchPlatform: this.getAgentLaunchPlatformForRepo(repo),
+      isRemote: repoIsRemote(repo),
+      workspacePath: repo.path,
+      prompt
+    })
     return buildWorktreeStartupForAgent({
       repo,
       agent,
@@ -251,8 +265,18 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
   }
 
   /** What holds the terminal a launch started its agent in, read fresh from the execution host. */
-  readLaunchedAgentForeground(ptyId: string, agent: TuiAgent): Promise<LaunchedAgentForeground> {
-    return readLaunchedAgentForeground(
+  async readLaunchedAgentForeground(
+    ptyId: string,
+    agent: TuiAgent
+  ): Promise<LaunchedAgentForeground> {
+    return asLaunchedAgentForeground(await this.readTerminalForegroundVerdict(ptyId, agent))
+  }
+
+  readTerminalForegroundVerdict(
+    ptyId: string,
+    agent: TuiAgent
+  ): Promise<TerminalForegroundVerdict> {
+    return readTerminalForegroundVerdict(
       this.ptyController,
       this.launchedAgentHost(ptyId),
       ptyId,

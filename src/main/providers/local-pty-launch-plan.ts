@@ -109,13 +109,7 @@ function createWindowsLocalPtyLaunchPlan(
   getOptions: () => LocalPtyProviderOptions
 ): LocalPtyLaunchPlan | DeferredLocalPtyLaunchPlan {
   const { args, cwd, defaultCwd, worktreeWslContext } = seed
-  // Why: shellOverride opens one tab in a non-default shell without changing the user's setting; it wins over the setting.
-  const requestedShellFamily =
-    args.shellOverride ||
-    getOptions().getWindowsShell?.() ||
-    process.env.COMSPEC ||
-    'powershell.exe'
-  const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
+  const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedWindowsShellFamily(args, getOptions)
   if (!seed.launchWslContext && pathWin32.basename(shellFamily).toLowerCase() === 'wsl.exe') {
     seed.launchWslContext = getWslContextFromPreferredDistro(getDefaultWslDistro())
   }
@@ -188,6 +182,37 @@ function createWindowsLocalPtyLaunchPlan(
   return shouldProbePwsh
     ? new DeferredLocalPtyLaunchPlan(getOptions().pwshAvailable?.() ?? false, finish)
     : finish(false)
+}
+
+function requestedWindowsShellFamily(
+  args: PtySpawnOptions,
+  getOptions: () => LocalPtyProviderOptions
+): string {
+  // Why: shellOverride opens one tab in a non-default shell without changing the user's setting; it wins over the setting.
+  return (
+    args.shellOverride ||
+    getOptions().getWindowsShell?.() ||
+    process.env.COMSPEC ||
+    'powershell.exe'
+  )
+}
+
+/** The distro the plan below launches this spawn's shell in, or undefined when it is not WSL. */
+export function resolveLocalPtyWslDistro(
+  args: PtySpawnOptions,
+  getOptions: () => LocalPtyProviderOptions
+): string | undefined {
+  if (process.platform !== 'win32') {
+    return undefined
+  }
+  const context =
+    getWslContextFromPreferredDistro(parseWslPath(args.cwd || getDefaultCwd())?.distro) ??
+    getWslContextFromWorktreeId(args.worktreeId) ??
+    (pathWin32.basename(requestedWindowsShellFamily(args, getOptions)).toLowerCase() === 'wsl.exe'
+      ? (getWslContextFromPreferredDistro(args.terminalWindowsWslDistro) ??
+        getWslContextFromPreferredDistro(getDefaultWslDistro()))
+      : undefined)
+  return context?.distro
 }
 
 export function createLocalPtyLaunchPlan(

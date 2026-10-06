@@ -1,10 +1,12 @@
 import type { AgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import {
   buildAgentDraftLaunchPlan,
-  buildAgentStartupPlan,
+  planLaunchPrompt,
   type AgentStartupPlan
 } from '../../shared/tui-agent-startup'
-import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
+import type { LaunchPromptPaste, LaunchPromptPlan } from '../../shared/launch-prompt-carry'
+import type { LaunchFile } from '../../shared/launch-prompt-file'
+import type { LaunchHost } from '../../shared/launch-host'
 import { buildSleepingAgentLaunchConfig } from '../../shared/sleeping-agent-launch-config'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -142,45 +144,38 @@ export async function prepareOpenCodeModelStartupInputs(
   }
 }
 
-export async function buildExecutionHostAgentStartupPlan(
-  options: StartupScope & {
-    prompt: string
-    promptDelivery?: 'auto-submit' | 'draft'
-  }
-) {
+/** A draft launch on the execution host; a one-time model preference cannot ride a draft. */
+export async function buildExecutionHostDraftLaunchPlan(options: StartupScope & { draft: string }) {
   const prepared = await prepareOpenCodeModelStartupInputs(options)
-  if (prepared.launchConfig && options.promptDelivery === 'draft') {
+  if (prepared.launchConfig) {
     refuseModel()
   }
-  const plan =
-    options.promptDelivery === 'draft'
-      ? buildAgentDraftLaunchPlan({ ...prepared.inputs, draft: options.prompt })
-      : buildAgentStartupPlan({
-          ...prepared.inputs,
-          prompt: options.prompt,
-          allowEmptyPromptLaunch: true
-        })
-  if (plan && prepared.launchConfig) {
+  return buildAgentDraftLaunchPlan({ ...prepared.inputs, draft: options.draft })
+}
+
+/** `planLaunchPrompt` on the execution host, after OpenCode's one-time model preparation. */
+export async function planExecutionHostLaunchPrompt(
+  options: StartupScope & {
+    prompt: string
+    launchFile?: LaunchFile
+    host: LaunchHost
+    paste: LaunchPromptPaste
+  }
+): Promise<LaunchPromptPlan<AgentStartupPlan> | null> {
+  const prepared = await prepareOpenCodeModelStartupInputs(options)
+  const planned = planLaunchPrompt({
+    ...prepared.inputs,
+    prompt: options.prompt,
+    ...(options.launchFile ? { launchFile: options.launchFile } : {}),
+    host: options.host,
+    paste: options.paste
+  })
+  if (planned && prepared.launchConfig) {
+    const plan = planned.carry === 'paste-after-ready' ? planned.cleanPlan : planned.plan
     plan.launchConfig = prepared.launchConfig
     plan.sessionOptions = { ...options.inputs.sessionOptions }
   }
-  return plan
-}
-
-/** `buildExecutionHostAgentStartupPlan` for a caller that delivers an uncarried prompt itself. */
-export async function planExecutionHostStartupWithPromptCandidate(
-  options: StartupScope & {
-    prompt: string
-    host: { shellName?: string; provesAgentInFront: boolean }
-  }
-): Promise<{ plan: AgentStartupPlan | null; promptCarried: boolean }> {
-  const prepared = await prepareOpenCodeModelStartupInputs(options)
-  const offered = planStartupWithPromptCandidate(prepared.inputs, options.prompt, options.host)
-  if (offered.plan && prepared.launchConfig) {
-    offered.plan.launchConfig = prepared.launchConfig
-    offered.plan.sessionOptions = { ...options.inputs.sessionOptions }
-  }
-  return offered
+  return planned
 }
 
 export function assertOpenCodeModelLaunchPreferencesAbsent(

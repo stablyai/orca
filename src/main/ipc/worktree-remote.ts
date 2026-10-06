@@ -174,6 +174,7 @@ import { createRetiredNameLookup } from '../../shared/worktree/retired-name-regi
 import { toLocalBaseRefRefreshResult } from '../../shared/worktree/local-base-branch-fast-forward'
 import { isSshRequestOutcomeUnverifiable } from '../ssh/ssh-channel-multiplexer'
 import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import { parseLaunchFile } from '../../shared/launch-prompt-file'
 
 const SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS = 30_000
 const SSH_WORKTREE_CREATE_FETCH_CACHE_MAX = 512
@@ -414,6 +415,8 @@ async function spawnLocalStartupAndSetupTerminals(args: {
 
   try {
     // Why: only after `git worktree add` + metadata registration is the path safe for a runtime PTY to boot the agent while setup runs alongside.
+    // Renderer-built: keep only a launch file whose placeholder Orca minted.
+    const launchFile = parseLaunchFile(sequencedStartup.launchFile)
     const terminal = await runtime.createTerminal(
       `id:${worktree.id}`,
       {
@@ -424,6 +427,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         ...(isTuiAgent(createdWithAgent) ? { launchAgent: createdWithAgent } : {}),
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
+        ...(launchFile ? { launchFile } : {}),
         telemetry: sequencedStartup.telemetry,
         // Why: the submitting renderer decides whether to open the workspace; activating here yanked users who moved on (#9944).
         surfaceOwner: false

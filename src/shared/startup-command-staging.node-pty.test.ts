@@ -22,6 +22,12 @@ import { join } from 'node:path'
 import * as pty from 'node-pty'
 import { afterAll, describe, expect, it } from 'vitest'
 import { resolveFishBinary } from './fish-binary-requirement'
+import { writeLaunchFile, type WrittenLaunchFile } from './launch-file-writing'
+import {
+  MAX_LINE_PROMPT_BYTES,
+  buildLaunchFilePointer,
+  carryInLaunchFile
+} from './launch-prompt-file'
 import { stageStartupCommand } from './startup-command-staging'
 import { buildStartupCommandSubmission } from './startup-command-submission'
 import { quoteStartupArg } from './tui-agent-startup-shell'
@@ -61,13 +67,26 @@ const SANDBOX = mkdtempSync(join(tmpdir(), 'orca-staging-pty-'))
 const AGENT = join(SANDBOX, 'agent')
 writeFileSync(
   AGENT,
-  `#!/bin/sh\nps -o pgid=,tpgid= -p $$ > "$ORCA_TEST_CAPTURE.job"\nfor arg in "$@"; do printf '%s\\0' "$arg"; done > "$ORCA_TEST_CAPTURE"\n`
+  // Why the rename: the capture appears only once whole, however long a large argv takes to write.
+  `#!/bin/sh\nps -o pgid=,tpgid= -p $$ > "$ORCA_TEST_CAPTURE.job"\nfor arg in "$@"; do printf '%s\\0' "$arg"; done > "$ORCA_TEST_CAPTURE.part"\nmv "$ORCA_TEST_CAPTURE.part" "$ORCA_TEST_CAPTURE"\n`
 )
 chmodSync(AGENT, 0o755)
 
 afterAll(() => {
   rmSync(SANDBOX, { recursive: true, force: true })
 })
+
+/** Exactly `bytes` of UTF-8: the hostile characters, line breaks, and two-, three- and four-byte
+ *  characters. */
+function utf8PromptOfBytes(bytes: number): string {
+  const encoder = new TextEncoder()
+  const unit = `${HOSTILE}\nčé 日本語 🙂\n`
+  let prompt = ''
+  while (encoder.encode(prompt + unit).byteLength <= bytes) {
+    prompt += unit
+  }
+  return prompt + 'x'.repeat(bytes - encoder.encode(prompt).byteLength)
+}
 
 const HOSTILE = `it's "quoted" $HOME \`id\` $(id) \\\\server\\share %PATH% !! #`
 
@@ -77,15 +96,21 @@ const PROMPTS: [string, string][] = [
   ['a 5 KB prompt', `${HOSTILE} ${'y'.repeat(5000)}`],
   ['a multi-line prompt with a trailing newline', `first line\n${HOSTILE}\n\nlast line\n`],
   // Why: typed raw, a line editor reads the TAB as completion and mangles the argument.
-  ['a prompt with a tab', 'before\tafter']
+  ['a prompt with a tab', 'before\tafter'],
+  // Why: the most a launch line carries before its prompt moves to a launch file or the paste.
+  ['a 100,000-byte multi-line UTF-8 prompt', utf8PromptOfBytes(MAX_LINE_PROMPT_BYTES)]
 ]
 
 type AgentRun = { argv: string; pgid: number; foregroundPgid: number; shellPid: number }
 
-async function launchInRealShell(shell: LiveShell, prompt: string): Promise<AgentRun | null> {
+async function launchInRealShell(
+  shell: LiveShell,
+  prompt: string,
+  prepare: (command: string) => string = (command) => command
+): Promise<AgentRun | null> {
   const caseDir = mkdtempSync(join(SANDBOX, `${shell.name}-`))
   const capture = join(caseDir, 'argv')
-  const command = `${quoteStartupArg(AGENT, 'posix')} ${quoteStartupArg(prompt, 'posix')}`
+  const command = prepare(`${quoteStartupArg(AGENT, 'posix')} ${quoteStartupArg(prompt, 'posix')}`)
   const staging = stageStartupCommand({
     command,
     shellPath: shell.path,
@@ -129,8 +154,6 @@ async function launchInRealShell(shell: LiveShell, prompt: string): Promise<Agen
     const deadline = Date.now() + 10_000
     while (Date.now() < deadline) {
       if (existsSync(capture)) {
-        // Why a beat: the agent's redirect creates the file before printf fills it.
-        await new Promise((resolve) => setTimeout(resolve, 100))
         const [pgid, foregroundPgid] = readFileSync(`${capture}.job`, 'utf8').trim().split(/\s+/)
         return {
           argv: readFileSync(capture, 'utf8'),
@@ -166,5 +189,25 @@ describeShells('a staged launch line in a real shell', () => {
       },
       20_000
     )
+  }
+})
+
+describeShells('a launch file named on a real command line', () => {
+  for (const shell of SHELLS) {
+    it(`hands ${shell.name}'s agent a pointer to the full prompt`, async () => {
+      const prompt = `${HOSTILE}\n${'z'.repeat(20_000)}\n`
+      const planned = carryInLaunchFile(prompt)
+      let written: WrittenLaunchFile | undefined
+      const run = await launchInRealShell(shell, planned.prompt, (command) => {
+        written = writeLaunchFile({
+          launchFile: planned.launchFile!,
+          command,
+          baseDirectory: SANDBOX
+        })
+        return written.command!
+      })
+      expect(run?.argv).toBe(`${buildLaunchFilePointer(written!.path)}\0`)
+      expect(readFileSync(written!.path, 'utf8')).toBe(prompt)
+    }, 20_000)
   }
 })

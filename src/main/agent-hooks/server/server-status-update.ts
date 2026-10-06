@@ -19,6 +19,7 @@ import {
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
+import { launchPromptShownForPane } from '../launch-file-prompt-by-pane'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected applyNormalizedStatus(
@@ -28,6 +29,12 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
+    // Why here: every status row (local, relayed, replayed) passes through, so no reader of the
+    // prompt (status row, dashboard, mobile) shows a launch file's pointer instead of the prompt.
+    const prompt = launchPromptShownForPane(incoming.paneKey, incoming.payload.prompt)
+    if (prompt !== incoming.payload.prompt) {
+      incoming = { ...incoming, payload: { ...incoming.payload, prompt } }
+    }
     const transitioned = transitionHookPresence(
       incoming,
       this.state.lastStatusByPaneKey.get(incoming.paneKey)

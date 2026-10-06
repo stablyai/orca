@@ -13,6 +13,10 @@ import {
   AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE
 } from '../../../../shared/agent-launch-session-already-exists'
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
+import {
+  isLaunchFileRefusal,
+  LAUNCH_FILE_UNAVAILABLE_CODE
+} from '../../../../shared/launch-prompt-file'
 
 /** Long enough for every code this path raises, with room for one a later guard adds. */
 const LAUNCH_FAILURE_CODE_MAX_LENGTH = 128
@@ -54,6 +58,12 @@ export function launchFailureWithoutEffectsCode(
   }
   if (terminalSpawn.failedBeforeDispatch(error) && targetKind === 'existing') {
     return agentLaunchFailureCode(error)
+  }
+  // Why without effects: every host refuses before it spawns anything, and a desktop window closes
+  // the refused pane's tab before the error reaches here (`createDesktopTerminal`). The code, not
+  // the sentence: the sentence carries a reason long enough to lose its code to the bound.
+  if (isLaunchFileRefusal(error) && targetKind === 'existing') {
+    return LAUNCH_FILE_UNAVAILABLE_CODE
   }
   return null
 }

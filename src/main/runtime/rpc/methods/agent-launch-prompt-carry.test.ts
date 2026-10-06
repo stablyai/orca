@@ -1,7 +1,7 @@
 /**
- * Whether `agent.launch` pastes an argv agent's prompt is the runtime's report about the line it
- * typed, not the executor's guess: a carried prompt must not be pasted a second time, and an
- * uncarried one must not be left undelivered.
+ * `agent.launch` puts an argv agent's prompt on the command that starts it and never pastes it into
+ * the running agent, however long or multi-line; only an agent that takes its text after start is
+ * pasted into.
  */
 
 import { describe, expect, it, vi } from 'vitest'
@@ -47,67 +47,39 @@ async function launch(params: unknown, runtime: AgentLaunchRuntimeStub) {
   return AGENT_LAUNCH.handler(parsed.data, rpcContext(runtime, CAPABLE_CLIENT))
 }
 
-describe('an argv agent’s launch prompt, by what the runtime reports about its typed line', () => {
+describe('a launch prompt reaches the agent on its command line', () => {
   const EXISTING = { agent: 'claude', target: { kind: 'existing', worktree: 'id:wt-7' } }
+  const CREATE = { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
 
-  it('pastes it once the agent is ready when the line could not carry it', async () => {
-    const { runtime, sendTerminalAgentPrompt } = withPromptWriter(
-      runtimeStub({ settings: {}, lineCarriesPrompt: false })
-    )
+  it('hands a multi-line prompt to the terminal create and never pastes it', async () => {
+    const { runtime, sendTerminalAgentPrompt } = withPromptWriter(runtimeStub({ settings: {} }))
 
     const result = await launch({ ...EXISTING, prompt: SUBMIT }, runtime)
 
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(runtime.createTerminal.mock.calls[0]?.[1]).toMatchObject({ startupPrompt: SUBMIT.text })
+    expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('hands it to an agent-first create’s startup terminal and never pastes it', async () => {
+    const { runtime, sendTerminalAgentPrompt } = withPromptWriter(runtimeStub({ settings: {} }))
+
+    const result = await launch({ agent: 'claude', target: CREATE, prompt: SUBMIT }, runtime)
+
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(runtime.createManagedWorktree.mock.calls[0]?.[0]).toMatchObject({
+      startupPrompt: SUBMIT.text
+    })
+    expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('still pastes for an agent that takes its text only after start', async () => {
+    const { runtime, sendTerminalAgentPrompt } = withPromptWriter(runtimeStub({ settings: {} }))
+
+    const result = await launch({ ...EXISTING, agent: 'aider', prompt: SUBMIT }, runtime)
+
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(runtime.createTerminal.mock.calls[0]?.[1]?.startupPrompt).toBeUndefined()
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith('term_1', SUBMIT.text, expect.anything())
-  })
-
-  it('does not paste a prompt the line already carried', async () => {
-    const { runtime, sendTerminalAgentPrompt } = withPromptWriter(
-      runtimeStub({ settings: {}, lineCarriesPrompt: true })
-    )
-
-    const result = await launch({ ...EXISTING, prompt: SUBMIT }, runtime)
-
-    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
-    expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
-  })
-
-  it('pastes into an agent-first create’s startup terminal when its line could not carry it', async () => {
-    const { runtime, sendTerminalAgentPrompt } = withPromptWriter(
-      runtimeStub({ settings: {}, lineCarriesPrompt: false })
-    )
-
-    const result = await launch(
-      {
-        agent: 'claude',
-        target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } },
-        prompt: SUBMIT
-      },
-      runtime
-    )
-
-    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
-    expect(sendTerminalAgentPrompt).toHaveBeenCalledWith(
-      'term_agent_first',
-      SUBMIT.text,
-      expect.anything()
-    )
-  })
-
-  it('does not paste into an agent-first create’s startup terminal whose line carried it', async () => {
-    const { runtime, sendTerminalAgentPrompt } = withPromptWriter(
-      runtimeStub({ settings: {}, lineCarriesPrompt: true })
-    )
-
-    await launch(
-      {
-        agent: 'claude',
-        target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } },
-        prompt: SUBMIT
-      },
-      runtime
-    )
-
-    expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 })

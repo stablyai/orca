@@ -37,6 +37,8 @@ vi.mock('fs', () => ({
   accessSync: accessSyncMock,
   mkdirSync: mkdirSyncMock,
   writeFileSync: writeFileSyncMock,
+  mkdtempSync: vi.fn((prefix: string) => `${prefix}abc123`),
+  realpathSync: vi.fn((path: string) => path),
   chmodSync: vi.fn(),
   renameSync: vi.fn(),
   rmSync: vi.fn(),
@@ -116,6 +118,7 @@ vi.mock('../shell-prompt-readiness-probe', () => ({
 
 import { LocalPtyProvider } from './local-pty-provider'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
+import { buildLaunchFilePointer, carryInLaunchFile } from '../../shared/launch-prompt-file'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -261,6 +264,27 @@ describe('LocalPtyProvider', () => {
         )
         await vi.advanceTimersByTimeAsync(200)
         expect(mockProc.write).toHaveBeenCalledWith(`${command}\r`)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('writes a launch file before the line that names it is typed', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/sh'
+        const { prompt, launchFile } = carryInLaunchFile('secret brief')
+
+        await provider.spawn({ cols: 80, rows: 24, command: `claude '${prompt}'`, launchFile })
+
+        const written = writeFileSyncMock.mock.calls.find(([path]) =>
+          String(path).endsWith('task-context.md')
+        )
+        expect(written?.[1]).toBe('secret brief')
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).toHaveBeenCalledWith(
+          `claude '${buildLaunchFilePointer(String(written?.[0]))}'\r`
+        )
       } finally {
         vi.useRealTimers()
       }

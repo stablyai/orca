@@ -72,7 +72,13 @@ export class SshPlainShellPtyProvider implements IPtyProvider {
     if (this.disposed) {
       throw new Error('SSH connection is not active')
     }
-    if (opts.agentSessionEnsure || opts.agentSessionCreateOperationId || opts.launchAgent) {
+    // Why launchFile too: no host here writes it, so the line would name a file that is not there.
+    if (
+      opts.agentSessionEnsure ||
+      opts.agentSessionCreateOperationId ||
+      opts.launchAgent ||
+      opts.launchFile
+    ) {
       throw new PlainSshUnsupportedError('Launching agents', this.mode)
     }
     if (opts.attachOnly) {

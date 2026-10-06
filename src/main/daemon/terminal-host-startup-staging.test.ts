@@ -1,5 +1,5 @@
 import './mock-descendant-sweep'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -97,6 +97,54 @@ describePosix('daemon startup command staging', () => {
       streamClient: { onData: vi.fn(), onExit: vi.fn() }
     })
     expect(sub.write).not.toHaveBeenCalled()
+  })
+
+  // Why (stack QA P8-2): typed in full, a long agent line left the shell at a quote prompt, the
+  // prompt lost while agent.launch reported success; refusing hands the user the prompt instead.
+  // A temp folder that looks writable and still fails the write is that race.
+  it('refuses an agent launch whose staging write failed in a usable-looking folder', async () => {
+    const notAFolder = join(tempDir, 'file')
+    writeFileSync(notAFolder, '')
+    vi.stubEnv('TMPDIR', notAFolder)
+    const sub = mockSubprocess('/bin/zsh')
+    vi.mocked(sub.forceKill).mockImplementation(() => exitSubprocess?.(1))
+    vi.mocked(sub.kill).mockImplementation(() => exitSubprocess?.(1))
+    const host = new TerminalHost({ spawnSubprocess: () => sub })
+    await expect(
+      host.createOrAttach({
+        sessionId: 's-agent-stage-failed',
+        cols: 80,
+        rows: 24,
+        command: `claude '${'x'.repeat(600)}'`,
+        launchAgent: 'claude',
+        shellReadySupported: false,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+    ).rejects.toThrow(/launch_file_unavailable/)
+    expect(sub.write).not.toHaveBeenCalled()
+    expect(host.listSessions().map((session) => session.sessionId)).not.toContain(
+      's-agent-stage-failed'
+    )
+  })
+
+  // Why (stack QA 2a): main's delivery for an unusable folder is the line typed as is; refusing it
+  // made a 5-line prompt worse than main.
+  it('types an agent line as is when the temp folder is unusable', async () => {
+    vi.stubEnv('TMPDIR', join(tempDir, 'missing'))
+    const command = `claude 'one\ntwo'`
+    const sub = mockSubprocess('/bin/zsh')
+    const host = new TerminalHost({ spawnSubprocess: () => sub })
+    const result = await host.createOrAttach({
+      sessionId: 's-agent-folder-unusable',
+      cols: 80,
+      rows: 24,
+      command,
+      launchAgent: 'claude',
+      shellReadySupported: false,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+    expect(result.isNew).toBe(true)
+    expect(sub.write).toHaveBeenCalledWith(`claude 'one\rtwo'\r`)
   })
 
   it('prints a notice in the terminal when it types a line it could not stage', async () => {

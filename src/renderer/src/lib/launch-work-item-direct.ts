@@ -1,9 +1,5 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import {
-  deliverLaunchPromptToAgentTab,
-  seedNativeChatLaunchDraftForAgentTab
-} from '@/lib/agent-launch-prompt-delivery'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
@@ -23,7 +19,7 @@ import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import type { buildDirectWorkItemAgentStartupPlan } from '@/lib/launch-work-item-direct-agent'
 import {
   buildDirectWorkItemStartupOpts,
-  notifyDirectWorkItemAgentStartTimeout
+  deliverDirectWorkItemPrompt
 } from '@/lib/launch-work-item-direct-agent'
 import { getDirectWorkItemDraftContent } from '@/lib/launch-work-item-direct-draft'
 import {
@@ -164,7 +160,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let primaryTabId: string | null
   let startupPlan = null as ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan']
   let effectiveAgent: TuiAgent | null = null
-  let draftLaunchedNatively = false
+  let promptOnLaunchCommand = false,
+    promptInLaunchFile = false
   let plan: AgentSessionLaunchPlan | null = null
   let structuredLaunchCompleted = false
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
@@ -228,7 +225,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     }
     effectiveAgent = launchPreparation.effectiveAgent
     startupPlan = launchPreparation.startupPlan
-    draftLaunchedNatively = launchPreparation.draftLaunchedNatively
+    promptOnLaunchCommand = launchPreparation.promptOnLaunchCommand
+    promptInLaunchFile = Boolean(launchPreparation.launchFile)
     startupPlanFailed = launchPreparation.startupPlanFailed
     plan = launchPreparation.plan
 
@@ -246,7 +244,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
               effectiveAgent,
               startupPlan,
               launchSource,
-              promptDelivery === 'draft' ? draftContent : undefined
+              promptDelivery === 'draft' ? draftContent : undefined,
+              launchPreparation
             ))
       })
       return activationHolder.value !== false
@@ -292,30 +291,15 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return false
   }
 
-  if (primaryTabId && effectiveAgent && promptDelivery === 'draft') {
-    // Why: the draft rides in on argv or the startup payload, so no paste runs
-    // below; mirror it into chat the way the new-tab launcher does.
-    seedNativeChatLaunchDraftForAgentTab({
+  if (primaryTabId) {
+    deliverDirectWorkItemPrompt({
       tabId: primaryTabId,
       agent: effectiveAgent,
-      text: draftContent
-    })
-  }
-  if (
-    primaryTabId &&
-    startupPlan &&
-    !draftLaunchedNatively &&
-    !(promptDelivery === 'draft' && startupPlan.draftPrompt)
-  ) {
-    const submit = promptDelivery === 'submit-after-ready'
-    const agent = startupPlan.agent
-    void deliverLaunchPromptToAgentTab({
-      tabId: primaryTabId,
-      agent,
+      startupPlan,
+      promptDelivery,
       content: draftContent,
-      submit,
-      forcePaste: submit,
-      onTimeout: () => notifyDirectWorkItemAgentStartTimeout(agent, submit)
+      promptOnLaunchCommand,
+      promptInLaunchFile
     })
   }
   return true

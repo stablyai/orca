@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { MAX_LINE_PROMPT_BYTES } from '../../../shared/launch-prompt-file'
 
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
@@ -15,8 +15,7 @@ const mockMarkNativeChatLaunchPromptFailed = vi.fn()
 const mockTrack = vi.fn()
 const mockToastMessage = vi.fn()
 const mockWaitForAgentReady = vi.fn()
-
-const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const mockWaitForLaunchPromptReceipt = vi.fn()
 
 const store = {
   activeRepoId: 'repo-1',
@@ -120,6 +119,10 @@ vi.mock('@/lib/agent-ready-wait', () => ({
   waitForAgentReady: mockWaitForAgentReady
 }))
 
+vi.mock('@/lib/agent-launch-prompt-receipt', () => ({
+  waitForLaunchPromptReceipt: mockWaitForLaunchPromptReceipt
+}))
+
 vi.mock('@/lib/telemetry', () => ({
   track: mockTrack,
   tuiAgentToAgentKind: (agent: string) => agent
@@ -144,9 +147,15 @@ const COMMAND_CODE_CLICK = {
   worktreeId: 'wt-1'
 } as const
 
+/** One click that launches Amp in wt-1, which takes its prompt only after it starts. */
+const AMP_CLICK = { requestId: 'amp-click', agent: 'amp', worktreeId: 'wt-1' } as const
+const CODEX_CLICK = { requestId: 'codex-click', agent: 'codex', worktreeId: 'wt-1' } as const
+const CLAUDE_CLICK = { requestId: 'claude-click', agent: 'claude', worktreeId: 'wt-1' } as const
+
 describe('launchAgentInNewTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockWaitForLaunchPromptReceipt.mockResolvedValue('delivered')
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
     mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
     mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({ status: 'created' })
@@ -249,12 +258,14 @@ describe('launchAgentInNewTab', () => {
       launchAgent: 'codex',
       viewMode: 'chat'
     })
+    // The launch line submits the prompt; the chat still shows it from the start.
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: expect.not.stringContaining('large generated prompt')
+        command: expect.stringContaining('large generated prompt')
       })
     )
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
     expect(mockSeedNativeChatLaunchPrompt).toHaveBeenCalledWith({
       tabId: 'tab-1',
       agent: 'codex',
@@ -295,6 +306,28 @@ describe('launchAgentInNewTab', () => {
       text: 'large generated prompt',
       createdAt: expect.any(Number)
     })
+  })
+
+  it('seeds no chat copy of a prompt that rides a launch file, which only its pointer would match', async () => {
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null,
+      experimentalNativeChat: true,
+      experimentalStructuredNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      ...CODEX_CLICK,
+      prompt: 'y'.repeat(MAX_LINE_PROMPT_BYTES + 1),
+      promptDelivery: 'auto-submit'
+    })
+
+    expect(mockQueueTabStartupCommand.mock.calls[0]?.[1]?.launchFile).toBeDefined()
+    expect(mockSeedNativeChatLaunchPrompt).not.toHaveBeenCalled()
   })
 
   it('keeps Model-A SSH Grok launches in terminal mode', async () => {
@@ -679,8 +712,7 @@ describe('launchAgentInNewTab', () => {
     }
   })
 
-  it('seeds working after Command Code submit-after-ready prompt delivery', async () => {
-    store.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
+  it('submits Command Code’s generated prompt on its launch line and seeds working from it', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -688,100 +720,48 @@ describe('launchAgentInNewTab', () => {
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
-    store.terminalLayoutsByTabId = {
-      'tab-1': {
-        activeLeafId: LEAF_ID,
-        ptyIdsByLeafId: { [LEAF_ID]: toAppSshPtyId('ssh-a', 'pty-1') }
-      }
-    }
-    store.ptyIdsByTabId = { 'tab-1': [toAppSshPtyId('ssh-a', 'pty-1')] }
+
+    // Why: the launch line carried it, so delivery is the agent's receipt, never the tab existing.
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: true,
       failureNotified: false
     })
-    await Promise.resolve()
-    await Promise.resolve()
-
+    expect(mockWaitForLaunchPromptReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-1', agent: 'command-code' })
+    )
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+    // Why: Command Code has no prompt-submit hook, so the spawn seeds working from this prompt.
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "command-code --trust '--yolo'"
+        command: "command-code --trust '--yolo' 'large generated prompt'",
+        initialAgentStatus: { agent: 'command-code', prompt: 'large generated prompt' }
       })
     )
-    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tabId: 'tab-1',
-        content: 'large generated prompt',
-        agent: 'command-code',
-        submit: true,
-        forcePaste: true
-      })
-    )
-    expect(mockSetAgentStatus).toHaveBeenCalledWith(
-      `tab-1:${LEAF_ID}`,
-      {
-        state: 'working',
-        prompt: 'large generated prompt',
-        agentType: 'command-code',
-        // Why: seeded from Orca's own prompt delivery, not a provider hook (STA-4293).
-        observation: expect.objectContaining({ origin: 'process', kind: 'transition' })
-      },
-      undefined,
-      undefined,
-      { connectionId: 'ssh-a' }
-    )
-    expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
 
-  it('does not recreate SSH status when clear arrives before disconnect state', async () => {
-    let finishDelivery: ((delivered: boolean) => void) | undefined
-    mockPasteDraftWhenAgentReady.mockReturnValue(
-      new Promise<boolean>((resolve) => {
-        finishDelivery = resolve
-      })
-    )
-    store.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
-    const ptyId = toAppSshPtyId('ssh-a', 'pty-1')
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      ...COMMAND_CODE_CLICK,
-      prompt: 'pending prompt',
-      promptDelivery: 'submit-after-ready'
-    })
-    store.terminalLayoutsByTabId = {
-      'tab-1': { activeLeafId: LEAF_ID, ptyIdsByLeafId: { [LEAF_ID]: ptyId } }
-    }
-    store.ptyIdsByTabId = { 'tab-1': [ptyId] }
-
-    // Why: explicit disconnect sends the transient clear before its state
-    // event, while the old connection can still appear connected and bound.
-    store.transientClearedAgentStatusConnectionIds = { 'ssh-a': true }
-    finishDelivery?.(true)
-    await expect(result?.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-
-    expect(mockSetAgentStatus).not.toHaveBeenCalled()
-  })
-
-  it('does not track prompt-sent when submit-after-ready delivery fails', async () => {
+  // Why: a paste that fails without reaching the readiness-timeout branch was silent (live on WSL:
+  // an empty composer, delivered false, nothing shown).
+  it('tells the user, with the prompt to copy, when a paste fails outside the timeout branch', async () => {
     mockPasteDraftWhenAgentReady.mockResolvedValue(false)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
-      ...COMMAND_CODE_CLICK,
+      ...AMP_CLICK,
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,
-      failureNotified: false
+      failureNotified: true
     })
     await Promise.resolve()
 
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+    expect(mockToastMessage).toHaveBeenCalledWith(
+      expect.stringContaining("wasn't sent"),
+      expect.objectContaining({ action: expect.objectContaining({ label: 'Copy prompt' }) })
+    )
   })
 
   it('marks failed submit-after-ready delivery as notified after readiness timeout toast', async () => {
@@ -793,7 +773,7 @@ describe('launchAgentInNewTab', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
-      ...COMMAND_CODE_CLICK,
+      ...AMP_CLICK,
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
@@ -803,7 +783,8 @@ describe('launchAgentInNewTab', () => {
       failureNotified: true
     })
     expect(mockToastMessage).toHaveBeenCalledWith(
-      "Your prompt wasn't sent — paste it once the agent is ready."
+      "The agent started, but your prompt wasn't sent. Copy it and paste it once the agent is ready.",
+      expect.objectContaining({ action: expect.objectContaining({ label: 'Copy prompt' }) })
     )
   })
 
@@ -817,7 +798,7 @@ describe('launchAgentInNewTab', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
-      ...COMMAND_CODE_CLICK,
+      ...AMP_CLICK,
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
@@ -838,7 +819,7 @@ describe('launchAgentInNewTab', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
-      ...COMMAND_CODE_CLICK,
+      ...AMP_CLICK,
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
@@ -859,7 +840,7 @@ describe('launchAgentInNewTab', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
-      ...COMMAND_CODE_CLICK,
+      ...AMP_CLICK,
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
@@ -871,7 +852,42 @@ describe('launchAgentInNewTab', () => {
     expect(mockToastMessage).not.toHaveBeenCalled()
   })
 
-  it('queues per-launch CLI arguments without putting generated prompts in argv', async () => {
+  it('hands a typed prompt past the argv ceiling to the host as a launch file the command points at', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const prompt = `Session context:\n${'x'.repeat(MAX_LINE_PROMPT_BYTES)}`
+
+    launchAgentInNewTab({
+      ...CODEX_CLICK,
+      prompt,
+      promptDelivery: 'auto-submit'
+    })
+
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+    const queued = mockQueueTabStartupCommand.mock.calls[0]?.[1]
+    // Handed back to copy if the host refuses to write the file.
+    expect(queued?.launchPrompt).toBe(prompt)
+    expect(queued?.launchFile).toMatchObject({ content: prompt })
+    expect(queued?.command).toContain(queued?.launchFile?.placeholder)
+    expect(queued?.command).not.toContain('xxxx')
+  })
+
+  it('reports a carried prompt undelivered when the agent never received it', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    mockWaitForLaunchPromptReceipt.mockResolvedValue('not-delivered')
+    const onPromptDelivered = vi.fn()
+
+    const result = launchAgentInNewTab({
+      ...CLAUDE_CLICK,
+      prompt: 'resolve these threads',
+      promptDelivery: 'submit-after-ready',
+      onPromptDelivered
+    })
+
+    await expect(result?.promptDeliveryResult).resolves.toMatchObject({ delivered: false })
+    expect(onPromptDelivered).not.toHaveBeenCalled()
+  })
+
+  it('queues per-launch CLI arguments ahead of the generated prompt on argv', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
@@ -886,7 +902,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "codex '--model' 'gpt-5.5'"
+        command: "codex '--model' 'gpt-5.5' 'large generated prompt'"
       })
     )
   })

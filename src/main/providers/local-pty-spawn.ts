@@ -7,7 +7,11 @@ import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
 import { finalizeLocalPtySpawnEnvironment } from './local-pty-finalize-environment'
 import { normalizeLocalCallerSessionId } from './local-pty-launch-helpers'
-import { createLocalPtyLaunchPlan, DeferredLocalPtyLaunchPlan } from './local-pty-launch-plan'
+import {
+  createLocalPtyLaunchPlan,
+  DeferredLocalPtyLaunchPlan,
+  resolveLocalPtyWslDistro
+} from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import { allocatePtyId, ptyShutdownOperations } from './local-pty-provider-state'
 import { activateLocalPtySession } from './local-pty-session-activation'
@@ -24,12 +28,24 @@ import { loadLocalPtyRuntimeSpawn } from './local-pty-runtime-spawn'
 import { destroyPtyProcess } from './local-pty-termination'
 import { updateHistoryEnvForFallback } from '../terminal-history'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
+import {
+  removeLaunchFile,
+  writeSpawnLaunchFile,
+  type WrittenLaunchFile
+} from '../../shared/launch-file-writing'
+import { resolveSpawnWslLaunchDirectory } from './wsl-launch-directory-resolution'
+import { noteLaunchArtifactRefusal } from './local-launch-artifact-directory'
 
 export async function spawnLocalPty(
   args: PtySpawnOptions,
   getOptions: () => LocalPtyProviderOptions
 ): Promise<PtySpawnResult> {
   const reattachId = normalizeLocalCallerSessionId(args.sessionId, args.attachOnly === true)
+  const wslDistro =
+    args.command && !args.attachOnly ? resolveLocalPtyWslDistro(args, getOptions) : undefined
+  // Why before the shutdown check: no await may sit between it and this spawn's registration.
+  const wslProbe = resolveSpawnWslLaunchDirectory(wslDistro, args)
+  const wslLaunchDirectory = wslProbe ? await wslProbe : undefined
   if (reattachId) {
     const pendingShutdown = ptyShutdownOperations.get(reattachId)
     if (pendingShutdown) {
@@ -58,6 +74,42 @@ export async function spawnLocalPty(
       delete args.env?.[JCODE_RUNTIME_DIR_ENV_KEY]
     }
   }
+  let launchFile: WrittenLaunchFile | undefined
+  try {
+    launchFile = writeSpawnLaunchFile({
+      launchFile: args.launchFile,
+      command: args.command,
+      env: args.env,
+      wslDistro,
+      wslDirectory: wslLaunchDirectory
+    })
+  } catch (error) {
+    noteLaunchArtifactRefusal({ wslDistro, wslLaunchDirectory }, error)
+    throw error
+  }
+  args = {
+    ...args,
+    ...(launchFile ? { command: launchFile.command, env: launchFile.env } : {}),
+    // Pins the plan to the distro the file was written into.
+    ...(wslLaunchDirectory
+      ? { wslLaunchDirectory, terminalWindowsWslDistro: wslLaunchDirectory.distro }
+      : {})
+  }
+  try {
+    return await spawnFreshLocalPty(args, getOptions, reattachId, launchFile)
+  } catch (error) {
+    removeLaunchFile(launchFile)
+    noteLaunchArtifactRefusal({ wslDistro, wslLaunchDirectory }, error)
+    throw error
+  }
+}
+
+async function spawnFreshLocalPty(
+  args: PtySpawnOptions,
+  getOptions: () => LocalPtyProviderOptions,
+  reattachId: string | null,
+  launchFile: WrittenLaunchFile | undefined
+): Promise<PtySpawnResult> {
   const id = allocatePtyId(reattachId ?? undefined)
   return runCancelableLocalPtySpawn(id, async (throwIfCanceled, cancellation) => {
     const incarnationId = randomUUID()
@@ -169,7 +221,8 @@ export async function spawnLocalPty(
         env: finalEnv,
         proc,
         reportsChildExitStatus: spawnResult.reportsChildExitStatus !== false,
-        spawnedWslDistro
+        spawnedWslDistro,
+        launchFile
       })
     })
   })

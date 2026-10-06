@@ -43,7 +43,7 @@ export const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_M
 // hasn't appeared in 8s means the launch itself failed — waiting the (longer)
 // composer budget on top would only delay that verdict. Keeping them distinct
 // also stops one slow step from spending the other's budget (STA-3367).
-const PTY_SPAWN_TIMEOUT_MS = 8000
+export const PTY_SPAWN_TIMEOUT_MS = 8000
 
 export function getSettingsForAgentTabRuntimeOwner(
   tabId: string
@@ -134,15 +134,23 @@ export async function pasteDraftWhenAgentReady(args: {
     onUnconfirmedDelivery?.()
   }
 
-  return await sendBracketedPasteToAgent({
-    settings,
-    ptyId,
-    content,
-    submit: submit === true,
-    agent,
-    // Why launch: this delivers the prompt or draft an agent is started with.
-    inputKind: 'launch'
-  })
+  return await sendLaunchPaste(
+    { settings, ptyId, content, submit: submit === true, agent },
+    onTimeout
+  )
+}
+
+/** Why launch: this delivers the prompt or draft an agent is started with. A write that never
+ *  landed drops the text as surely as a readiness timeout. */
+async function sendLaunchPaste(
+  args: Omit<Parameters<typeof sendBracketedPasteToAgent>[0], 'inputKind'>,
+  onTimeout: (() => void) | undefined
+): Promise<boolean> {
+  const sent = await sendBracketedPasteToAgent({ ...args, inputKind: 'launch' })
+  if (!sent) {
+    onTimeout?.()
+  }
+  return sent
 }
 
 export async function pasteDraftToAgentPtyWhenReady(args: {
@@ -188,15 +196,10 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
     onUnconfirmedDelivery?.()
   }
 
-  return await sendBracketedPasteToAgent({
-    settings,
-    ptyId,
-    content,
-    submit: submit === true,
-    agent,
-    // Why launch: this delivers the prompt or draft an agent is started with.
-    inputKind: 'launch'
-  })
+  return await sendLaunchPaste(
+    { settings, ptyId, content, submit: submit === true, agent },
+    onTimeout
+  )
 }
 
 export async function submitPromptToAgentPty(args: {

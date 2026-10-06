@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import { planLaunchForTest } from './launch-prompt-plan.test-fixture'
 import { buildAgentStartupPlan, buildAgentDraftLaunchPlan } from './tui-agent-startup'
 import {
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,
@@ -10,7 +11,7 @@ import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 
 describe('native OpenCode startup submission intent', () => {
   it('binds the exact trimmed native prompt to host-selectable transport', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'opencode',
       prompt: '  task\nwith unicode é  ',
       cmdOverrides: {},
@@ -27,7 +28,7 @@ describe('native OpenCode startup submission intent', () => {
   })
 
   it('preserves explicit run commands without a submission intent', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'opencode',
       prompt: 'task',
       cmdOverrides: { opencode: 'opencode --log-level debug run' },
@@ -42,7 +43,7 @@ describe('native OpenCode startup submission intent', () => {
     (shell) => {
       for (const agent of ['opencode', 'opencode2'] as const) {
         const prompt = '--literal task with unicode é'
-        const plan = buildAgentStartupPlan({
+        const plan = planLaunchForTest({
           agent,
           prompt,
           cmdOverrides: { [agent]: 'opencode --log-level debug run --standalone' },
@@ -66,7 +67,7 @@ describe('native OpenCode startup submission intent', () => {
           prompt
         ])
         expect(plan?.env).toEqual({ CUSTOM_CONFIG: 'kept' })
-        expect(plan?.followupPrompt).toBeNull()
+        expect(plan?.pasteAfterReady).toBeNull()
       }
     }
   )
@@ -74,7 +75,7 @@ describe('native OpenCode startup submission intent', () => {
   it.each(['posix', 'powershell', 'cmd'] as const)(
     'reuses an existing run message separator in %s',
     (shell) => {
-      const plan = buildAgentStartupPlan({
+      const plan = planLaunchForTest({
         agent: 'opencode',
         prompt: '--literal task',
         cmdOverrides: { opencode: 'opencode run --standalone --' },
@@ -117,7 +118,7 @@ describe('wrapped OpenCode run startup', () => {
         'env -- CUSTOM_CONFIG=private opencode run --standalone --',
         'env CUSTOM_CONFIG=private opencode run --title "--"'
       ]) {
-        const plan = buildAgentStartupPlan({
+        const plan = planLaunchForTest({
           agent,
           prompt: '--literal task',
           cmdOverrides: { [agent]: command },
@@ -130,7 +131,7 @@ describe('wrapped OpenCode run startup', () => {
           command.endsWith(' --') ? `${command} '--literal task'` : `${command} -- '--literal task'`
         )
         expect(plan?.env).toEqual({ CUSTOM_CONFIG: 'kept' })
-        expect(plan?.followupPrompt).toBeNull()
+        expect(plan?.pasteAfterReady).toBeNull()
       }
     }
   )
@@ -140,7 +141,7 @@ describe('wrapped OpenCode run startup', () => {
     (agent) => {
       for (const separator of ['', ' --']) {
         const command = `& "C:\\Program Files\\opencode\\opencode.exe" --log-level debug run --standalone${separator}`
-        const plan = buildAgentStartupPlan({
+        const plan = planLaunchForTest({
           agent,
           prompt: "--task's é",
           cmdOverrides: { [agent]: command },
@@ -150,7 +151,7 @@ describe('wrapped OpenCode run startup', () => {
         })
         expect(plan?.launchCommand).toBe(`${command}${separator ? ' ' : ' -- '}'--task''s é'`)
         expect(plan?.env).toEqual({ CUSTOM_CONFIG: 'kept' })
-        expect(plan?.followupPrompt).toBeNull()
+        expect(plan?.pasteAfterReady).toBeNull()
       }
     }
   )

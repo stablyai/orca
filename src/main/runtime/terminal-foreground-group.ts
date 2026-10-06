@@ -73,6 +73,13 @@ function isShellCommand(command: string): boolean {
 }
 
 /**
+ * What holds a terminal: `launched-agent` when a member names the launched agent on its command
+ * line, `other` when a member is not a shell (an agent behind a wrapper that did not `exec` it, an
+ * unrecognized command override, or a startup file's own command), `shell` when every member is.
+ */
+export type TerminalForegroundVerdict = 'launched-agent' | 'other' | 'shell' | 'unknown'
+
+/**
  * The terminal's foreground process group decides. The launched agent among its members, or any
  * member that is not a shell, is the agent: that finds it behind a wrapper that did not `exec` it,
  * whose own shell name leads the group. A group of shells alone is the shell, whether the pane's
@@ -83,7 +90,7 @@ export function judgeTerminalForeground(
   rows: readonly ProcessTableRow[],
   rootPid: number,
   agent: TuiAgent
-): 'agent' | 'shell' | 'unknown' {
+): TerminalForegroundVerdict {
   const root = rows.find((row) => row.pid === rootPid)
   const foregroundGroup = root?.tpgid
   if (foregroundGroup === undefined || foregroundGroup <= 0) {
@@ -93,11 +100,8 @@ export function judgeTerminalForeground(
   if (front.length === 0) {
     return 'unknown'
   }
-  return front.some(
-    (row) =>
-      recognizeAgentProcessFromCommandLine(row.command)?.agent === agent ||
-      !isShellCommand(row.command)
-  )
-    ? 'agent'
-    : 'shell'
+  if (front.some((row) => recognizeAgentProcessFromCommandLine(row.command)?.agent === agent)) {
+    return 'launched-agent'
+  }
+  return front.some((row) => !isShellCommand(row.command)) ? 'other' : 'shell'
 }

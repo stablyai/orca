@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { planLaunchForTest } from './launch-prompt-plan.test-fixture'
 import {
   recognizeAgentProcessFromCommandLine,
   isExpectedAgentProcess
@@ -11,7 +12,7 @@ import {
   normalizeTerminalTitle,
   detectAgentStatusFromTitle
 } from './agent-detection'
-import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
+import { buildAgentResumeStartupPlan } from './tui-agent-startup'
 import { getAgentResumeArgv } from './agent-session-resume'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
 import { normalizeAndAccept } from './agent-hook-listener-test-harness'
@@ -159,14 +160,14 @@ it('replays captured unauthenticated startup, prompt, idle and resume hooks', ()
 it.each(['darwin', 'linux', 'win32'] as const)(
   'launches a Qoder prompt safely on %s',
   (platform) => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'qoder',
       prompt: "fix Bob's branch; echo $HOME",
       cmdOverrides: {},
       platform
     })
     expect(plan?.expectedProcess).toBe('qodercli')
-    expect(plan?.followupPrompt).toBeNull()
+    expect(plan?.pasteAfterReady).toBeNull()
     expect(plan?.launchCommand).toBe(
       platform === 'win32'
         ? "qodercli --prompt-interactive 'fix Bob''s branch; echo $HOME'"
@@ -185,7 +186,7 @@ it('does not rewrite DSH titles containing a pipe as Qoder', () => {
 it.each(['darwin', 'linux', 'win32'] as const)(
   'starts and resumes a configured modern Qoder entry on %s',
   (platform) => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'qoder',
       prompt: 'proof',
       cmdOverrides: { qoder: 'qoder' },

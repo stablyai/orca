@@ -1,5 +1,7 @@
 import { useAppStore } from '@/store'
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { clientLaunchHost } from '@/lib/launch-file-host'
+import { planLaunchPrompt, type AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { LaunchFile } from '../../../shared/launch-prompt-file'
 import type {
   LaunchAgentBackgroundSessionArgs,
   LaunchAgentBackgroundSessionResult
@@ -68,24 +70,49 @@ export async function launchAgentBackgroundSession(
     terminalWindowsShell: store.settings?.terminalWindowsShell
   })
   const trimmedPrompt = prompt?.trim() ?? ''
-  const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = requireTuiAgentConfig(agent).promptInjectionMode === 'stdin-after-start'
 
-  const pasteDraftAfterLaunch = hasPrompt && isFollowupPath ? trimmedPrompt : null
-  const startupPlan = buildAgentStartupPlan({
+  // Route by the worktree's owner host, not the focused runtime.
+  const ownerSettings = getSettingsForWorktreeRuntimeOwner(store, worktreeId)
+  const runtimeTarget = getActiveRuntimeTarget(ownerSettings)
+  const planned = planLaunchPrompt({
     agent,
-    prompt: hasPrompt && !isFollowupPath ? trimmedPrompt : '',
+    prompt: trimmedPrompt,
     cmdOverrides,
     agentArgs,
     agentEnv,
     platform: launchPlatform,
     shell: startupShell,
     isRemote,
-    allowEmptyPromptLaunch: !hasPrompt || isFollowupPath
+    host: clientLaunchHost({
+      runtimeEnvironmentId: ownerSettings?.activeRuntimeEnvironmentId,
+      launchPlatform,
+      isRemote
+    }),
+    paste: 'when-host-proves-agent'
   })
-  if (!startupPlan) {
+  if (!planned) {
     return null
   }
+  let startupPlan: AgentStartupPlan
+  let launchFile: LaunchFile | undefined
+  // An argv agent's prompt the line could not carry waits for the paste, as a stdin agent's does.
+  let promptLeftForPaste: string | null = null
+  switch (planned.carry) {
+    case 'none':
+    case 'on-line':
+      startupPlan = planned.plan
+      break
+    case 'launch-file':
+      startupPlan = planned.plan
+      launchFile = planned.launchFile
+      break
+    case 'paste-after-ready':
+      startupPlan = planned.cleanPlan
+      promptLeftForPaste = isFollowupPath ? null : planned.text
+      break
+  }
+  let pasteDraftAfterLaunch = trimmedPrompt && isFollowupPath ? trimmedPrompt : promptLeftForPaste
 
   // A hidden run tab must never be store-visible without its PTY (#2989).
   const { reservedTabId, leafId, launchToken, launchRegistration, paneEnv } =
@@ -98,10 +125,6 @@ export async function launchAgentBackgroundSession(
     })
   let paneKey = makePaneKey(reservedTabId, leafId)
   const sshConnectionId = launchHost.connectionId
-  // Route by the worktree's owner host, not the focused runtime.
-  const runtimeTarget = getActiveRuntimeTarget(
-    getSettingsForWorktreeRuntimeOwner(store, worktreeId)
-  )
   let ptyId = '',
     runtimeTerminalHandle: string | null = null
   // What the local spawn answered and later steps still need: which lifetime of `ptyId` this launch
@@ -155,7 +178,7 @@ export async function launchAgentBackgroundSession(
         tabId: reservedTabId,
         leafId,
         agent,
-        ...(hasPrompt && !isFollowupPath ? { prompt: trimmedPrompt } : {}),
+        ...(trimmedPrompt && !isFollowupPath ? { prompt: trimmedPrompt } : {}),
         ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
         legacy: {
           command: startupPlan.launchCommand,
@@ -165,9 +188,14 @@ export async function launchAgentBackgroundSession(
             : {}),
           launchConfig: startupPlan.launchConfig,
           launchToken,
-          ...(title ? { title } : {})
+          ...(title ? { title } : {}),
+          ...(promptLeftForPaste !== null ? { promptLeftForPaste: true } : {})
         }
       })
+      if (promptLeftForPaste !== null && !created.promptLeftForPaste) {
+        // The host was sent the prompt itself and delivered it.
+        pasteDraftAfterLaunch = null
+      }
       runtimeTerminalHandle = created.terminal.handle
       ptyId = toRemoteRuntimePtyId(runtimeTerminalHandle, runtimeTarget.environmentId)
     } else {
@@ -184,6 +212,7 @@ export async function launchAgentBackgroundSession(
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
             : {}),
         env: paneEnv,
+        ...(launchFile ? { launchFile } : {}),
         launchConfig: startupPlan.launchConfig,
         launchToken,
         launchAgent: agent,
@@ -222,7 +251,7 @@ export async function launchAgentBackgroundSession(
     tab = adopted.tab
     paneKey = adopted.paneKey
     terminalOwnership = adopted.terminalOwnership
-    if (agent === 'command-code' && hasPrompt && !isFollowupPath) {
+    if (agent === 'command-code' && trimmedPrompt && !isFollowupPath) {
       // Why: Command Code does not expose a prompt-start hook; seed working for
       // hidden prompt launches so sidebar/activity surfaces do not stay idle.
       const routing = agentStatusConsumer.resolveRouting()

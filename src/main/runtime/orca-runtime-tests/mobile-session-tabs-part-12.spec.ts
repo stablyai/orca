@@ -34,8 +34,31 @@ describe('OrcaRuntimeService', () => {
         agent: 'aider',
         agentPrompt: 'Review this diff'
       })
-    ).rejects.toThrow('does not support startup prompt quick commands')
+    ).rejects.toThrow('aider takes its prompt only after it starts')
     expect(spawn).not.toHaveBeenCalled()
+  })
+
+  // Why: main started this agent with the prompt on its line; a quick command has no paste after
+  // ready, so it keeps the line rather than refuse what main started.
+  it('starts an agent with a prompt it cannot paste on its line, as main did', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-long-prompt' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      agent: 'gemini',
+      agentPrompt: 'g'.repeat(20_000)
+    })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ command: expect.stringContaining('g'.repeat(20_000)) })
+    )
   })
 
   it('uses portable Unix quoting for mobile agent launch commands in WSL project runtimes', async () => {

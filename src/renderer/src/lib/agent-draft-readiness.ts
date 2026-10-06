@@ -7,6 +7,15 @@ import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-strea
 import { createDraftPasteReadyScanner } from '../../../shared/draft-paste-ready-scanner'
 
 const BRACKETED_PASTE_QUIET_MS = 1500
+const BRACKETED_PASTE_ON = '\x1b[?2004h'
+const BRACKETED_PASTE_OFF = '\x1b[?2004l'
+
+/** Whether bracketed paste is on after `data`, from the last toggle in it; `previous` if none. */
+export function bracketedPasteStateAfter(previous: boolean, data: string): boolean {
+  const on = data.lastIndexOf(BRACKETED_PASTE_ON)
+  const off = data.lastIndexOf(BRACKETED_PASTE_OFF)
+  return on === -1 && off === -1 ? previous : on > off
+}
 
 /**
  * Tap the PTY data stream as a side-channel observer (does NOT take over
@@ -22,7 +31,10 @@ export function waitForAgentDraftInputReady(
   ptyId: string,
   timeoutMs: number,
   readySignal: DraftPasteReadySignal,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  /** A quiet window counts only while bracketed paste is still on: a shell running the launch
+   *  line turns it off (`2004l`), so its earlier prompt no longer reads as the agent ready. */
+  options: { revokeOnBracketedPasteOff?: boolean } = {}
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     let settled = false
@@ -57,11 +69,22 @@ export function waitForAgentDraftInputReady(
       quietTimer = window.setTimeout(() => finish(true), BRACKETED_PASTE_QUIET_MS)
     }
 
+    let toggleCarry = ''
+    let bracketedPasteOn = true
     const observeData = (data: string): void => {
       const { ready, armQuietTimer: shouldArm, readyAfterMs } = scanner.observe(data)
       if (ready) {
         finish(true)
         return
+      }
+      if (options.revokeOnBracketedPasteOff) {
+        const recent = toggleCarry + data
+        toggleCarry = recent.slice(-(BRACKETED_PASTE_OFF.length - 1))
+        bracketedPasteOn = bracketedPasteStateAfter(bracketedPasteOn, recent)
+        if (!bracketedPasteOn && quietTimer !== null) {
+          window.clearTimeout(quietTimer)
+          quietTimer = null
+        }
       }
       if (readyAfterMs === null && graceTimer !== null) {
         window.clearTimeout(graceTimer)
@@ -69,7 +92,7 @@ export function waitForAgentDraftInputReady(
       } else if (typeof readyAfterMs === 'number' && graceTimer === null) {
         graceTimer = window.setTimeout(() => finish(true), readyAfterMs)
       }
-      if (shouldArm) {
+      if (shouldArm && bracketedPasteOn) {
         armQuietTimer()
       }
     }

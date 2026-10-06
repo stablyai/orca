@@ -4,6 +4,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { MAX_LINE_PROMPT_BYTES } from '../../../shared/launch-prompt-file'
 import {
   callerProfileCases,
   type AgentLaunchCallerProfile
@@ -48,6 +49,10 @@ vi.mock('@/lib/agent-paste-draft', () => ({
 vi.mock('@/lib/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: true, reason: 'foreground-match' }))
 }))
+const mockWaitForLaunchPromptReceipt = vi.fn(async () => 'delivered')
+vi.mock('@/lib/agent-launch-prompt-receipt', () => ({
+  waitForLaunchPromptReceipt: mockWaitForLaunchPromptReceipt
+}))
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => []
 }))
@@ -69,11 +74,12 @@ const TRANSPORT_TABLE: readonly {
 }[] = [
   { agent: 'codex', mode: 'argv', promptDelivery: 'auto-submit', transport: 'argv', submits: true },
   { agent: 'codex', mode: 'argv', promptDelivery: 'draft', transport: 'paste', submits: false },
+  // Waiting for readiness is only for an agent that cannot take the prompt at launch.
   {
     agent: 'codex',
     mode: 'argv',
     promptDelivery: 'submit-after-ready',
-    transport: 'paste',
+    transport: 'argv',
     submits: true
   },
   // Claude is the argv agent with a native draft flag, so its draft rides argv instead of pasting.
@@ -141,7 +147,7 @@ describe('agent launch caller prompt transport', () => {
 
   it.each(cases)(
     'carries the prompt %s sends on the transport its mode picks',
-    async (id, profile) => {
+    async (_id, profile) => {
       const result = await launch(profile)
 
       if (profile.args.prompt === undefined) {
@@ -150,30 +156,24 @@ describe('agent launch caller prompt transport', () => {
         expect(queuedStartupCommand(store)).not.toContain(PROMPT)
         return
       }
-      // quick-command is the only prompt-carrying call site that names no delivery mode, so its text
-      // rides argv; every other one asks for draft or submit-after-ready and pastes.
-      const ridesArgv = id === 'quick-command'
+      // Codex takes its prompt on argv, so only a draft, which it cannot prefill, is pasted.
+      const ridesArgv = profile.args.promptDelivery !== 'draft'
       expect(result?.pasteDraftAfterLaunch).toBe(!ridesArgv)
       expect(queuedStartupCommand(store)?.includes(PROMPT)).toBe(ridesArgv)
     }
   )
 
   it.each(cases)(
-    'exposes a delivery promise to %s only for submit-after-ready',
+    'exposes a delivery result to %s only for a prompt it waits to see submitted',
     async (_id, profile) => {
       const result = await launch(profile)
 
-      // Why: three call sites branch on this promise being present; a draft launch must NOT get one,
-      // because the composer owns the text until the user sends it.
-      const expectsPromise =
+      // Why: call sites branch on this result being present. A draft launch must NOT get one,
+      // because the composer owns the text until the user sends it; a submit-after-ready prompt the
+      // launch command carries still waits on the agent's receipt before the caller acts.
+      const waitsForSubmit =
         profile.args.prompt !== undefined && profile.args.promptDelivery === 'submit-after-ready'
-      expect(result?.promptDeliveryResult !== undefined).toBe(expectsPromise)
-      if (expectsPromise) {
-        await expect(result?.promptDeliveryResult).resolves.toEqual({
-          delivered: true,
-          failureNotified: false
-        })
-      }
+      expect(result?.promptDeliveryResult !== undefined).toBe(waitsForSubmit)
     }
   )
 
@@ -227,6 +227,83 @@ describe('agent launch caller prompt transport', () => {
     }
   })
 
+  // The bug class the explicit carry outcome removes: a plan that exists but does not carry the
+  // prompt was treated as delivered, and the prompt was dropped. Why Claude and Codex too: main
+  // pastes an AI button's prompt, so the agent gets the user's text, never a launch-file pointer.
+  it.each([
+    ['past the argv ceiling', 'gemini', 'x'.repeat(MAX_LINE_PROMPT_BYTES + 1), 'darwin'],
+    ['a Windows-damaged prompt', 'gemini', 'say "hi"', 'win32'],
+    ['past the argv ceiling', 'claude', 'x'.repeat(MAX_LINE_PROMPT_BYTES + 1), 'darwin'],
+    ['a 9 KB multi-line Windows prompt', 'codex', `Fix the checks.\n${'x'.repeat(9_100)}`, 'win32']
+  ] as const)(
+    'pastes %s for %s, and waits for that paste',
+    async (_label, agent, prompt, launchPlatform) => {
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+      const result = launchAgentInNewTab({
+        requestId: 'prompt-carry-243',
+        agent,
+        worktreeId: 'wt-1',
+        prompt,
+        promptDelivery: 'submit-after-ready',
+        launchPlatform
+      })
+
+      await expect(result?.promptDeliveryResult).resolves.toEqual({
+        delivered: true,
+        failureNotified: false
+      })
+      expect(mockPasteDraftWhenAgentReady.mock.calls[0]?.[0]).toMatchObject({
+        content: prompt,
+        submit: true
+      })
+      expect(mockWaitForLaunchPromptReceipt).not.toHaveBeenCalled()
+      expect(queuedStartupCommand(store)).not.toContain(prompt.slice(0, 8))
+      expect(queuedStartupPayload(store)?.launchFile).toBeUndefined()
+    }
+  )
+
+  it('stages a 20 KB AI-button prompt on the agent’s own line on a POSIX host', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const prompt = `Session context:\n${'w'.repeat(20_000)}`
+
+    launchAgentInNewTab({
+      requestId: 'prompt-carry-269',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt,
+      promptDelivery: 'submit-after-ready',
+      launchPlatform: 'darwin'
+    })
+
+    expect(queuedStartupCommand(store)).toContain('w'.repeat(100))
+    expect(queuedStartupPayload(store)?.launchFile).toBeUndefined()
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+  })
+
+  // Why (stack QA 2a follow-up): main pasted these prompts, so a host that cannot stage the line
+  // refuses it with the prompt to copy instead of typing it raw; other callers keep main's line.
+  it.each<['submit-after-ready' | 'auto-submit', 'refuse' | undefined]>([
+    ['submit-after-ready', 'refuse'],
+    ['auto-submit', undefined]
+  ])(
+    'asks the host to refuse an unstageable line only for %s',
+    async (promptDelivery, expected) => {
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+      launchAgentInNewTab({
+        requestId: 'prompt-carry-292',
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: `Session context:\n${'w'.repeat(20_000)}`,
+        promptDelivery,
+        launchPlatform: 'darwin'
+      })
+
+      expect(queuedStartupPayload(store)?.unstageableLine).toBe(expected)
+    }
+  )
+
   it('mirrors an argv-carried draft into the chat composer', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -263,9 +340,10 @@ describe('agent launch caller prompt transport', () => {
     const onPromptDelivered = vi.fn()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
+    // Amp takes its text only after start, so it is the agent a submit-after-ready launch pastes into.
     const result = launchAgentInNewTab({
       requestId: 'request-6',
-      agent: 'codex',
+      agent: 'amp',
       worktreeId: 'wt-1',
       prompt: PROMPT,
       promptDelivery: 'submit-after-ready',

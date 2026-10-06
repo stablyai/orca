@@ -8,12 +8,14 @@ import { getRepoSshConnectionId } from '../../shared/execution-host'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
-import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
 import {
-  launchHostProvesAgentInFront,
-  nameLocalTypedLineShell
-} from './agent-launch-typed-line-shell'
+  buildAgentDraftLaunchPlan,
+  buildAgentStartupPlan,
+  planLaunchPrompt,
+  type AgentStartupPlan
+} from '../../shared/tui-agent-startup'
+import type { LaunchFile } from '../../shared/launch-prompt-file'
+import { thisOrcaLaunchHost } from './this-orca-launch-host'
 import {
   detectInstalledAgentsWithShellPathHydration,
   detectRemoteAgents
@@ -133,8 +135,8 @@ export function buildWorktreeStartupForAgent(
     toSessionOptions: (
       preferences?: AgentLaunchPreferences
     ) => Parameters<typeof buildAgentStartupPlan>[0]['sessionOptions'] | undefined
-    /** Set by a caller that delivers an uncarried prompt itself: the prompt then rides only a typed
-     *  line that can carry it, and this reports whether it did. Absent keeps the CLI's fold. */
+    /** Set by a caller that pastes an uncarried prompt itself; reports whether it rode the command,
+     *  and no follow-up is returned for it to paste twice. */
     onPromptCarry?: (carried: boolean) => void
   }
 ): {
@@ -154,30 +156,42 @@ export function buildWorktreeStartupForAgent(
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
     sessionOptions: environment.toSessionOptions(environment.launchPreferences)
   })
-  const prompt = environment.prompt ?? ''
-  let startupPlan: ReturnType<typeof buildAgentStartupPlan>
-  if (environment.onPromptCarry) {
-    const offered = planStartupWithPromptCandidate(planInputs, prompt, {
-      shellName: nameLocalTypedLineShell({
-        isRemote: repoIsRemote(repo),
-        ...(settings.terminalDefaultShell
-          ? { defaultShellSetting: settings.terminalDefaultShell }
-          : {})
-      }),
-      provesAgentInFront: launchHostProvesAgentInFront({
-        isRemote: repoIsRemote(repo),
-        launchPlatform: environment.getLaunchPlatform()
-      })
-    })
-    startupPlan = offered.plan
-    if (startupPlan && prompt.trim()) {
-      environment.onPromptCarry(offered.promptCarried)
-    }
-  } else {
-    startupPlan = buildAgentStartupPlan({ ...planInputs, prompt, allowEmptyPromptLaunch: true })
-  }
-  if (!startupPlan) {
+  const planned = planLaunchPrompt({
+    ...planInputs,
+    prompt: environment.prompt ?? '',
+    host: thisOrcaLaunchHost({
+      isRemote: repoIsRemote(repo),
+      launchPlatform: environment.getLaunchPlatform(),
+      settings,
+      workspacePath: repo.path
+    }),
+    // The caller, or else the host's follow-up, pastes what the line leaves once the agent runs.
+    paste: 'when-host-proves-agent'
+  })
+  if (!planned) {
     throw new Error(`Could not build launch command for ${agent}.`)
+  }
+  let startupPlan: AgentStartupPlan
+  let launchFile: LaunchFile | undefined
+  let followup: WorktreeStartupFollowup | undefined
+  switch (planned.carry) {
+    case 'none':
+      startupPlan = planned.plan
+      break
+    case 'on-line':
+    case 'launch-file':
+      startupPlan = planned.plan
+      launchFile = planned.carry === 'launch-file' ? planned.launchFile : undefined
+      environment.onPromptCarry?.(true)
+      break
+    case 'paste-after-ready':
+      startupPlan = planned.cleanPlan
+      if (environment.onPromptCarry) {
+        environment.onPromptCarry(false)
+      } else {
+        followup = { expectedProcess: startupPlan.expectedProcess, prompt: planned.text }
+      }
+      break
   }
   return {
     agent,
@@ -188,16 +202,10 @@ export function buildWorktreeStartupForAgent(
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
+      ...(launchFile ? { launchFile } : {}),
       telemetry: agentStartedTelemetry(agent, environment.launchSource)
     },
-    ...(startupPlan.followupPrompt
-      ? {
-          followup: {
-            expectedProcess: startupPlan.expectedProcess,
-            prompt: startupPlan.followupPrompt
-          }
-        }
-      : {})
+    ...(followup ? { followup } : {})
   }
 }
 
@@ -212,7 +220,11 @@ export function resolveWorktreeCreateAgentStartup(
       launchSource?: string
       onPromptCarry?: (carried: boolean) => void
     }
-  ) => { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup }
+  ) => Promise<{
+    agent: TuiAgent
+    startup: WorktreeStartupLaunch
+    followup?: WorktreeStartupFollowup
+  }>
 ) {
   if (args.startup || !args.startupAgent) {
     return null

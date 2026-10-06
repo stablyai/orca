@@ -27,7 +27,7 @@ function harness(options: {
   structuredCreateError?: Error
   deliveredMessageId?: string | null
   terminalPromptDelivered?: boolean
-  /** Whether the surface reports that its typed line took the offered prompt. */
+  /** Whether the surface reports the offered prompt rode the launch command. */
   lineCarriesPrompt?: boolean
 }) {
   const calls: string[] = []
@@ -355,7 +355,17 @@ describe('delivering a launch prompt to a terminal agent', () => {
     expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
   })
 
-  it('pastes an argv agent’s prompt after start when the surface reports its typed line could not carry it', async () => {
+  it('never pastes an argv agent’s prompt, however long: its launch command carries it', async () => {
+    const h = harness({ createSupport: { supported: false, reason: 'wsl' } })
+    const long = { delivery: 'submit' as const, text: `line one\n${'x'.repeat(20_000)}` }
+    const result = await h.run({ ...CREATE_INTENT, prompt: long })
+
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({ startupPrompt: long.text })
+    expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
+  })
+
+  it('pastes after start when the surface reports the prompt needed a file the agent cannot read', async () => {
     const h = harness({
       createSupport: { supported: false, reason: 'wsl' },
       lineCarriesPrompt: false
@@ -375,7 +385,7 @@ describe('delivering a launch prompt to a terminal agent', () => {
     })
   })
 
-  it('pastes into an agent-first create’s startup terminal when its typed line could not carry the prompt', async () => {
+  it('pastes into an agent-first create’s startup terminal that did not take the prompt', async () => {
     const h = harness({ settings: null, lineCarriesPrompt: false })
     const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
 
@@ -386,6 +396,14 @@ describe('delivering a launch prompt to a terminal agent', () => {
       freshLaunch: true,
       prompt: SUBMIT
     })
+  })
+
+  it('never pastes into an agent-first create’s startup terminal that took the prompt', async () => {
+    const h = harness({ settings: null })
+    const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
+
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
   })
 
   it('writes into a reused terminal, whose process started before the launch existed', async () => {

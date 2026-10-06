@@ -12,7 +12,7 @@ import type {
   WorkspaceLinkedItem,
   WorkspaceStatus
 } from '../../../shared/worktree/types'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { ComposerAgentStartupPlan } from '@/lib/composer-agent-startup-plan'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
@@ -112,7 +112,7 @@ export type WorktreeCreationRequest = {
   note: string
   /** Renderer-side launch plan used to seed the first terminal when the backend
    *  did not already spawn it. Null for blank-shell creates. */
-  startupPlan: AgentStartupPlan | null
+  startupPlan: ComposerAgentStartupPlan | null
   quickPrompt: string
   /** Launch context delivered only as an unsent TUI-input draft (argv prefill or
    *  startup paste); completion seeds the chat-composer copy from it. */

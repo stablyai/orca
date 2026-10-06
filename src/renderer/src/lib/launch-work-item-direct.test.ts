@@ -103,7 +103,8 @@ vi.mock('@/lib/tui-agent-startup', async () => {
   return {
     ...actual,
     buildAgentDraftLaunchPlan: vi.fn(actual.buildAgentDraftLaunchPlan),
-    buildAgentStartupPlan: vi.fn(actual.buildAgentStartupPlan)
+    buildAgentStartupPlan: vi.fn(actual.buildAgentStartupPlan),
+    planLaunchPrompt: vi.fn(actual.planLaunchPrompt)
   }
 })
 
@@ -130,7 +131,11 @@ vi.mock('@/lib/launch-work-item-direct-agent-routing', async () => {
 import { launchWorkItemDirect } from './launch-work-item-direct'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { beginDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-direct-agent-routing'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import {
+  buildAgentDraftLaunchPlan,
+  buildAgentStartupPlan,
+  planLaunchPrompt
+} from '@/lib/tui-agent-startup'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
 
 const mockApi = {
@@ -414,26 +419,13 @@ describe('launchWorkItemDirect', () => {
       platform: 'win32',
       isRemote: false
     })
-    expect(buildAgentStartupPlan).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'claude',
-        prompt: '',
-        allowEmptyPromptLaunch: true
-      })
-    )
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
-      'repo-1::/repo/worktree',
-      expect.objectContaining({
-        startup: expect.objectContaining({
-          command: expect.stringContaining('Linked Linear issue: ENG-42')
-        })
-      })
-    )
-    const startupCommand = mocks.activateAndRevealWorktree.mock.calls[0]?.[1]?.startup?.command
-    expect(startupCommand).toContain('https://linear.app/acme/issue/ENG-42/ship-linear-parity')
-    expect(startupCommand).not.toContain('The distinctive Linear body text is here.')
-    expect(startupCommand).not.toContain('--- BEGIN LINKED WORK ITEM CONTEXT ---')
-    expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
+    // Why (final review P3-2): a short multi-line draft was measured exact on PowerShell's line, so
+    // it is prefilled there, as main typed it; only a measured damage pastes it.
+    const startup = mocks.activateAndRevealWorktree.mock.calls[0]?.[1]?.startup
+    expect(startup?.command).toContain('Linked Linear issue: ENG-42')
+    expect(startup?.command).not.toContain('The distinctive Linear body text is here.')
+    expect(startup?.command).not.toContain('--- BEGIN LINKED WORK ITEM CONTEXT ---')
+    expect(startup?.draftPrompt).toBeUndefined()
   })
 
   it('seeds the chat-composer launch draft for a GitHub issue draft launch', async () => {
@@ -530,16 +522,20 @@ describe('launchWorkItemDirect', () => {
     ).resolves.toBe(true)
 
     expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
+    // Why (final review P1-1): on a Windows host nothing can confirm a prompt the line carried, so
+    // a work item's submit-after-ready prompt is pasted once the agent runs, as main did.
     expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith(
       expect.objectContaining({
         tabId: 'tab-1',
         content: 'Use this explicit user prompt.',
         agent: 'claude',
         submit: true,
-        forcePaste: true,
-        onTimeout: expect.any(Function)
+        forcePaste: true
       })
     )
+    const startup = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]?.startup
+    expect(startup?.command).not.toContain('Use this explicit user prompt.')
+    expect(startup?.command).not.toContain('generated Linear source')
     expect(mocks.seedNativeChatLaunchPrompt).toHaveBeenCalledWith({
       tabId: 'tab-1',
       agent: 'claude',
@@ -644,7 +640,6 @@ describe('launchWorkItemDirect', () => {
       agent: 'cursor',
       launchCommand: 'cursor-agent',
       expectedProcess: 'cursor-agent',
-      followupPrompt: null,
       launchConfig: { agentArgs: '', agentEnv: {} }
     })
     mocks.store.createWorktree.mockResolvedValue({
@@ -857,10 +852,11 @@ describe('launchWorkItemDirect', () => {
       })
     ).resolves.toBe(true)
 
-    expect(buildAgentStartupPlan).toHaveBeenCalledWith(
+    expect(planLaunchPrompt).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: 'codex',
-        platform: 'linux'
+        platform: 'linux',
+        prompt: 'Fix the failing checks.'
       })
     )
   })

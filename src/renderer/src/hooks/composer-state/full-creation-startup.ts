@@ -1,9 +1,9 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { ComposerAgentStartupPlan } from '@/lib/composer-agent-startup-plan'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 
 export function buildFullCreationStartup(args: {
-  startupPlan: AgentStartupPlan | null
+  startupPlan: ComposerAgentStartupPlan | null
   backendSpawnedStartup: boolean
   agent: TuiAgent
   shouldSeedInitialAgentStatus: boolean
@@ -23,6 +23,9 @@ export function buildFullCreationStartup(args: {
     ...(args.startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: args.startupPlan.startupCommandDelivery }
       : {}),
+    // Why: the command points at this file; without it the agent is told to read nothing.
+    ...(args.startupPlan.launchFile ? { launchFile: args.startupPlan.launchFile } : {}),
+    ...(args.startupPlan.launchPrompt ? { launchPrompt: args.startupPlan.launchPrompt } : {}),
     ...(args.shouldSeedInitialAgentStatus
       ? { initialAgentStatus: { agent: args.agent, prompt: args.prompt.trim() } }
       : {}),

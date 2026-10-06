@@ -13,6 +13,9 @@ export type AiVaultSessionTitleRequest = {
   agent: AiVaultSessionTitle['agent']
   sessionId: string
   transcriptPath?: string
+  /** The pane showing this session, so the host that spawned it titles a launch file's session
+   *  with the prompt, not the pointer the transcript holds. */
+  paneKey?: string
 }
 
 export type AiVaultSessionTitlesArgs = {

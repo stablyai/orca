@@ -4,12 +4,9 @@ import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-termi
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
-import { planExecutionHostStartupWithPromptCandidate } from '../opencode/opencode-model-startup-plan'
-import { agentPromptRidesLaunchCommand } from '../../shared/tui-agent-startup'
-import {
-  launchHostProvesAgentInFront,
-  nameLocalTypedLineShell
-} from './agent-launch-typed-line-shell'
+import { planExecutionHostLaunchPrompt } from '../opencode/opencode-model-startup-plan'
+import { launchPromptNeedsPasteRefusal } from '../../shared/launch-prompt-carry'
+import { probedThisOrcaLaunchHost } from './this-orca-launch-host'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
@@ -40,12 +37,9 @@ export async function buildRuntimeAgentTerminalStartupOptions(
     return opts
   }
 
-  // A prompt this launch command cannot carry has nowhere to go from here — the create returns
-  // options, not a live PTY — so refuse rather than spawn the agent and drop the text.
-  if (opts.startupPrompt && !agentPromptRidesLaunchCommand(agent)) {
-    throw new Error(`Agent ${agent} does not take a startup prompt on its launch command.`)
-  }
-  const { plan: startupPlan, promptCarried } = await planExecutionHostStartupWithPromptCandidate({
+  const startupCwd = resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path
+  // A caller that wrote its own launch file already passes the pointer to it as the prompt.
+  const planned = await planExecutionHostLaunchPrompt({
     inputs: resolveAgentStartupPlanInputs({
       agent,
       settings,
@@ -56,21 +50,22 @@ export async function buildRuntimeAgentTerminalStartupOptions(
       windowsShellOverride: opts.shellOverride,
       sessionOptions: sessionOptions
     }),
-    prompt: opts.startupPrompt ?? '',
-    cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
+    cwd: startupCwd,
     hostIdentity,
-    host: {
-      shellName: nameLocalTypedLineShell({
-        isRemote,
-        ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
-        ...(settings.terminalDefaultShell
-          ? { defaultShellSetting: settings.terminalDefaultShell }
-          : {})
-      }),
-      provesAgentInFront: launchHostProvesAgentInFront({ isRemote, launchPlatform: platform })
-    }
+    prompt: opts.startupPrompt ?? '',
+    ...(opts.launchFile ? { launchFile: opts.launchFile } : {}),
+    host: await probedThisOrcaLaunchHost({
+      launchPlatform: platform,
+      isRemote,
+      settings,
+      windowsShellOverride: opts.shellOverride,
+      workspacePath: workspace.path,
+      // A caller's own launch file already carries the prompt, so no line needs staging.
+      ...(opts.launchFile ? {} : { prompt: opts.startupPrompt })
+    }),
+    paste: opts.onStartupPromptCarry ? 'when-host-proves-agent' : 'never'
   })
-  if (!startupPlan) {
+  if (!planned) {
     // Why: an explicit agent that yields no plan would otherwise spawn a bare
     // shell that never reaches agent readiness.
     if (opts.startupAgent) {
@@ -78,8 +73,29 @@ export async function buildRuntimeAgentTerminalStartupOptions(
     }
     return opts
   }
-  if (opts.startupPrompt) {
-    opts.onStartupPromptCarry?.(promptCarried)
+  let startupPlan
+  let launchFile
+  switch (planned.carry) {
+    case 'none':
+      startupPlan = planned.plan
+      break
+    case 'on-line':
+      startupPlan = planned.plan
+      opts.onStartupPromptCarry?.(true)
+      break
+    case 'launch-file':
+      startupPlan = planned.plan
+      launchFile = planned.launchFile
+      opts.onStartupPromptCarry?.(true)
+      break
+    case 'paste-after-ready':
+      if (!opts.onStartupPromptCarry) {
+        // Why: this create returns options, not a live PTY, so the prompt would be dropped.
+        throw new Error(launchPromptNeedsPasteRefusal(agent, 'terminal'))
+      }
+      startupPlan = planned.cleanPlan
+      opts.onStartupPromptCarry(false)
+      break
   }
 
   return {
@@ -89,6 +105,7 @@ export async function buildRuntimeAgentTerminalStartupOptions(
     launchConfig: startupPlan.launchConfig,
     launchAgent: agent,
     startupCommandDelivery: startupPlan.startupCommandDelivery,
+    ...(launchFile ? { launchFile } : {}),
     // A bare command the user typed stays out of launch accounting, as before.
     ...(opts.startupAgent ? { telemetry: agentStartedTelemetry(agent, opts.launchSource) } : {})
   }

@@ -2,9 +2,11 @@ import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   planAgentCliArgsSuffix,
+  planLaunchPrompt,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { clientLaunchHost } from '@/lib/launch-file-host'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -14,6 +16,7 @@ import type { SessionOptionValue } from '../../../shared/native-chat-session-opt
 
 export type SourceControlLaunchPlanDelivery =
   | 'argv'
+  | 'argv-launch-file'
   | 'draft-native'
   | 'draft-paste'
   | 'paste-submit'
@@ -43,6 +46,8 @@ export function planSourceControlAgentActionLaunch(args: {
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must not be applied for remote launches. */
   isRemote?: boolean
+  /** The runtime environment the launch targets, for its host facts (`clientLaunchHost`). */
+  runtimeEnvironmentId?: string | null
 }): SourceControlLaunchPlanResult {
   const agent = args.agent
   if (!agent) {
@@ -100,20 +105,7 @@ export function planSourceControlAgentActionLaunch(args: {
   let startupPlan: AgentStartupPlan | null = null
   let delivery: SourceControlLaunchPlanDelivery
 
-  if (args.promptDelivery === 'submit-after-ready') {
-    startupPlan = buildAgentStartupPlan({
-      agent,
-      prompt: '',
-      cmdOverrides,
-      platform,
-      shell,
-      isRemote,
-      agentArgs: args.agentArgs,
-      sessionOptions: args.sessionOptions,
-      allowEmptyPromptLaunch: true
-    })
-    delivery = 'paste-submit'
-  } else if (args.promptDelivery === 'draft') {
+  if (args.promptDelivery === 'draft') {
     const draftLaunchPlan = buildAgentDraftLaunchPlan({
       agent,
       draft: trimmedInput,
@@ -129,7 +121,6 @@ export function planSourceControlAgentActionLaunch(args: {
         agent: draftLaunchPlan.agent,
         launchCommand: draftLaunchPlan.launchCommand,
         expectedProcess: draftLaunchPlan.expectedProcess,
-        followupPrompt: null,
         launchConfig: draftLaunchPlan.launchConfig,
         ...(draftLaunchPlan.sessionOptions
           ? { sessionOptions: draftLaunchPlan.sessionOptions }
@@ -154,21 +145,8 @@ export function planSourceControlAgentActionLaunch(args: {
       })
       delivery = 'draft-paste'
     }
-  } else if (TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start') {
-    startupPlan = buildAgentStartupPlan({
-      agent,
-      prompt: '',
-      cmdOverrides,
-      platform,
-      shell,
-      isRemote,
-      agentArgs: args.agentArgs,
-      sessionOptions: args.sessionOptions,
-      allowEmptyPromptLaunch: true
-    })
-    delivery = 'draft-paste'
   } else {
-    startupPlan = buildAgentStartupPlan({
+    const planned = planLaunchPrompt({
       agent,
       prompt: trimmedInput,
       cmdOverrides,
@@ -177,9 +155,37 @@ export function planSourceControlAgentActionLaunch(args: {
       isRemote,
       agentArgs: args.agentArgs,
       sessionOptions: args.sessionOptions,
-      allowEmptyPromptLaunch: false
+      host: clientLaunchHost({
+        runtimeEnvironmentId: args.runtimeEnvironmentId,
+        launchPlatform: platform,
+        isRemote
+      }),
+      paste:
+        args.promptDelivery === 'submit-after-ready' ? 'once-agent-runs' : 'when-host-proves-agent'
     })
-    delivery = 'argv'
+    switch (planned?.carry) {
+      case undefined:
+        delivery = 'argv'
+        break
+      case 'none':
+      case 'on-line':
+        startupPlan = planned.plan
+        delivery = 'argv'
+        break
+      case 'launch-file':
+        startupPlan = planned.plan
+        delivery = 'argv-launch-file'
+        break
+      case 'paste-after-ready':
+        startupPlan = planned.cleanPlan
+        // An agent that takes text only after start keeps an auto-submit prompt as a draft.
+        delivery =
+          TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start' &&
+          args.promptDelivery !== 'submit-after-ready'
+            ? 'draft-paste'
+            : 'paste-submit'
+        break
+    }
   }
 
   if (!startupPlan) {
@@ -199,7 +205,9 @@ export function planSourceControlAgentActionLaunch(args: {
         ? 'The command input is prefilled as an editable draft by the agent launch command.'
         : delivery === 'draft-paste'
           ? 'The agent starts with no prompt, then Orca pastes the command input as an editable draft after the TUI is ready.'
-          : 'The command input is included in the launch command and submitted as the first turn.'
+          : delivery === 'argv-launch-file'
+            ? 'The command input goes in a private file the host writes; the launch command tells the agent to read it, submitted as the first turn.'
+            : 'The command input is included in the launch command and submitted as the first turn.'
 
   return {
     ok: true,

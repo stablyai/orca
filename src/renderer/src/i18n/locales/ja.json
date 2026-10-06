@@ -551,6 +551,33 @@
               "refreshCliRegistration": "CLI の登録状態を更新してから、もう一度お試しください。"
             }
           }
+        },
+        "launch": {
+          "prompt": {
+            "not": {
+              "delivered": {
+                "notice": {
+                  "message": "Agent は起動しましたが、プロンプトは送信されませんでした。Agent の準備ができたらコピーして貼り付けてください。",
+                  "copy": "プロンプトをコピー"
+                }
+              },
+              "started": {
+                "notice": {
+                  "message": "Agent は起動しませんでした。プロンプトを渡すファイルを Orca が書き込めませんでした。プロンプトをコピーして、もう一度起動してください。"
+                }
+              }
+            },
+            "exited": {
+              "notice": {
+                "message": "Agent は起動時に終了したため、プロンプトを受け取っていません。プロンプトをコピーして、Agent をもう一度起動してください。"
+              }
+            },
+            "unconfirmed": {
+              "notice": {
+                "message": "Agent がプロンプトを受け取ったことを Orca で確認できませんでした。再送する前に Agent を確認してください。"
+              }
+            }
+          }
         }
       },
       "remotePairingCopy": {

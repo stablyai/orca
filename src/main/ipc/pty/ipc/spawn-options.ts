@@ -1,3 +1,4 @@
+import { rememberLaunchFilePrompt } from '../../../agent-hooks/launch-file-prompt-by-pane'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -26,6 +27,7 @@ import { resolveConfiguredTerminalShellArgs } from '../configured-terminal-shell
 import { withCodexTerminalServerIsolationEnv } from '../../../../shared/codex-terminal-server-isolation'
 import { planCodexNoDaemonLaunch } from '../../../pty/codex-no-daemon-launch-command'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { parseLaunchFile, parseUnstageableLine } from '../../../../shared/launch-prompt-file'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 
@@ -114,6 +116,24 @@ export async function buildPtyIpcSpawnOptions(
   }
   if (args.startupCommandDelivery !== undefined) {
     ctx.spawnOptions.startupCommandDelivery = args.startupCommandDelivery
+  }
+  // Only the renderer's own command names the file; a resume or adopted pane types another line.
+  const launchFile =
+    ctx.launchCommand !== undefined && ctx.launchCommand === args.command
+      ? parseLaunchFile(args.launchFile)
+      : undefined
+  const unstageableLine =
+    ctx.launchCommand !== undefined && ctx.launchCommand === args.command
+      ? parseUnstageableLine(args.unstageableLine)
+      : undefined
+  if (unstageableLine) {
+    ctx.spawnOptions.unstageableLine = unstageableLine
+  }
+  if (launchFile) {
+    ctx.spawnOptions.launchFile = launchFile
+    if (ctx.reservationPaneKey) {
+      rememberLaunchFilePrompt(ctx.reservationPaneKey, launchFile)
+    }
   }
   if (isTuiAgent(args.launchAgent)) {
     ctx.spawnOptions.launchAgent = args.launchAgent

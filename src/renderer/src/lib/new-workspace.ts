@@ -1,11 +1,13 @@
+import { agentPromptRidesLaunchCommand } from '../../../shared/tui-agent-startup'
 import { useAppStore } from '@/store'
 import {
   getSettingsForAgentTabRuntimeOwner,
   pasteDraftToAgentPtyWhenReady
 } from '@/lib/agent-paste-draft'
 import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-followup-delivery'
-import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
+import { showAgentLaunchPromptNotDeliveredNotice } from '@/lib/agent-launch-prompt-not-delivered-notice'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { ComposerAgentStartupPlan } from '@/lib/composer-agent-startup-plan'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import {
   beginAgentStartupDeliveryAttempt,
@@ -227,11 +229,11 @@ export function getWorkspaceSeedName(args: {
 export async function ensureAgentStartupInTerminal(args: {
   worktreeId: string
   primaryTabId?: string | null
-  startup: AgentStartupPlan
+  startup: ComposerAgentStartupPlan
 }): Promise<void> {
   const { worktreeId, primaryTabId, startup } = args
   const draftPrompt = startup.draftPrompt ?? null
-  if (startup.followupPrompt === null && draftPrompt === null) {
+  if (!startup.pastePromptAfterReady && draftPrompt === null) {
     return
   }
   const launchToken = ensureStartupLaunchToken(startup)
@@ -279,24 +281,34 @@ export async function ensureAgentStartupInTerminal(args: {
 async function deliverAgentStartupToTerminal(
   tabId: string,
   ptyId: string,
-  startup: AgentStartupPlan
+  startup: ComposerAgentStartupPlan
 ): Promise<void> {
   const draftPrompt = startup.draftPrompt ?? null
   const runtimeSettings = getSettingsForAgentTabRuntimeOwner(tabId)
-  // Why: followupPrompt is the legacy path for stdin-after-start agents
-  // (aider, goose, etc.) that need their initial prompt typed into the live
-  // session and submitted. Wait until the agent owns the PTY before writing.
-  if (startup.followupPrompt) {
-    const delivered = await sendFollowupPromptWhenAgentReady({
-      ptyId,
-      expectedProcess: startup.expectedProcess,
-      prompt: startup.followupPrompt,
-      settings: runtimeSettings
-    })
-    // Why: a dropped follow-up is otherwise silent — surface the same toast the
-    // draft path uses so the user knows to open the workspace and paste it.
+  // Why: a stdin-after-start agent (aider, goose, etc.) needs its initial prompt typed into the
+  // live session and submitted. Wait until the agent owns the PTY before writing.
+  if (startup.pastePromptAfterReady) {
+    const prompt = startup.pastePromptAfterReady
+    // Why: an argv agent's prompt left for paste (a paired host's line past its typed budget) waits
+    // for the agent's composer and lands as one bracketed paste, not raw keys once the process shows.
+    const delivered = agentPromptRidesLaunchCommand(startup.agent)
+      ? await pasteDraftToAgentPtyWhenReady({
+          tabId,
+          ptyId,
+          content: prompt,
+          agent: startup.agent,
+          submit: true,
+          forcePaste: true
+        })
+      : await sendFollowupPromptWhenAgentReady({
+          ptyId,
+          expectedProcess: startup.expectedProcess,
+          prompt,
+          settings: runtimeSettings
+        })
+    // Why: a dropped follow-up is otherwise silent; the notice hands the prompt back.
     if (!delivered) {
-      showAutomationPromptNotSentToast(startup.agent)
+      showAgentLaunchPromptNotDeliveredNotice({ agent: startup.agent, prompt })
     }
   }
 
@@ -313,7 +325,8 @@ async function deliverAgentStartupToTerminal(
       // planning is unavailable, so this paste is the first delivery attempt.
       forcePaste: true,
       // Why: surface a dropped draft instead of silently losing it.
-      onTimeout: () => showAutomationPromptNotSentToast(startup.agent)
+      onTimeout: () =>
+        showAgentLaunchPromptNotDeliveredNotice({ agent: startup.agent, prompt: draftPrompt })
     })
   }
 }

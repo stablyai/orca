@@ -62,7 +62,6 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
       agent: draftLaunchPlan.agent,
       launchCommand: draftLaunchPlan.launchCommand,
       expectedProcess: draftLaunchPlan.expectedProcess,
-      followupPrompt: null,
       launchConfig: draftLaunchPlan.launchConfig,
       ...(draftLaunchPlan.sessionOptions ? { sessionOptions: draftLaunchPlan.sessionOptions } : {}),
       ...(draftLaunchPlan.startupCommandDelivery

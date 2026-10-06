@@ -9,6 +9,15 @@ import {
   resolveStartupShell,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
+import type { LaunchFile } from './launch-prompt-file'
+import type { LaunchHost } from './launch-host'
+import {
+  carryLaunchPrompt,
+  launchFileDirectoryGrant,
+  type LaunchPromptPaste,
+  type LaunchPromptPlan
+} from './launch-prompt-carry'
+import { windowsLaunchLineVerdict } from './windows-launch-line'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
@@ -25,7 +34,6 @@ export type AgentStartupPlan = {
   agent: TuiAgent
   launchCommand: string
   expectedProcess: string
-  followupPrompt: string | null
   launchConfig: SleepingAgentLaunchConfig
   launchToken?: string
   draftPrompt?: string | null
@@ -36,13 +44,11 @@ export type AgentStartupPlan = {
   sessionOptions?: Record<string, SessionOptionValue>
 }
 
-export function buildAgentStartupPlan(args: {
+export type AgentStartupPlanInputs = {
   agent: TuiAgent
-  prompt: string
   cmdOverrides: Partial<Record<TuiAgent, string>>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
-  allowEmptyPromptLaunch?: boolean
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
@@ -50,8 +56,42 @@ export function buildAgentStartupPlan(args: {
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must be skipped for remote launches. */
   isRemote?: boolean
-}): AgentStartupPlan | null {
-  const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
+}
+
+/** An agent launch with no prompt; a launch that offers one is planned by `planLaunchPrompt`. */
+export function buildAgentStartupPlan(
+  args: AgentStartupPlanInputs & { prompt?: ''; allowEmptyPromptLaunch?: boolean }
+): AgentStartupPlan | null {
+  return args.allowEmptyPromptLaunch === true
+    ? buildPlanWithPromptOnLine({ ...args, prompt: '' })
+    : null
+}
+
+export type AgentLaunchPromptArgs = AgentStartupPlanInputs & {
+  prompt: string
+  /** The file `prompt` already points at, when the caller wrote its own. */
+  launchFile?: LaunchFile
+  /** See `CarriedPlanArgs`. */
+  host: LaunchHost
+  /** See `CarriedPlanArgs`. */
+  paste: LaunchPromptPaste
+}
+
+/**
+ * A launch that offers a prompt: where it rides (`carryLaunchPrompt`) and the plan to launch. Every
+ * launch path plans its prompt here, and must switch on the outcome to reach the plan.
+ */
+export function planLaunchPrompt(
+  args: AgentLaunchPromptArgs
+): LaunchPromptPlan<AgentStartupPlan> | null {
+  return carryLaunchPrompt(args, buildPlanWithPromptOnLine)
+}
+
+/** Builds the line with `prompt` on it; the carry rule decides whether it should. */
+function buildPlanWithPromptOnLine(
+  args: AgentStartupPlanInputs & { prompt: string; launchFile?: LaunchFile }
+): AgentStartupPlan | null {
+  const { agent, prompt, cmdOverrides, platform } = args
   const shell = resolveStartupShell(platform, args.shell)
   const trimmedPrompt = prompt.trim()
   const config = TUI_AGENT_CONFIG[agent]
@@ -79,14 +119,10 @@ export function buildAgentStartupPlan(args: {
   })
 
   if (!trimmedPrompt) {
-    if (!allowEmptyPromptLaunch) {
-      return null
-    }
     return {
       agent,
       launchCommand,
       expectedProcess: config.expectedProcess,
-      followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
@@ -94,6 +130,7 @@ export function buildAgentStartupPlan(args: {
   }
 
   const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
+  const grant = launchFileDirectoryGrant(agent, args.launchFile, shell)
 
   if (config.promptInjectionMode === 'argv') {
     const promptSeparator = config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''
@@ -101,10 +138,13 @@ export function buildAgentStartupPlan(args: {
       agent,
       launchCommand:
         agent === 'omp'
-          ? withFreshOmpLaunch(baseCommand.command, shell, `${promptSeparator} ${quotedPrompt}`)
-          : `${launchCommand}${promptSeparator} ${quotedPrompt}`,
+          ? withFreshOmpLaunch(
+              baseCommand.command,
+              shell,
+              `${grant}${promptSeparator} ${quotedPrompt}`
+            )
+          : `${launchCommand}${grant}${promptSeparator} ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
-      followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
@@ -115,7 +155,7 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'flag-prompt') {
     return buildFlagPromptStartupPlan({
       agent,
-      launchCommand,
+      launchCommand: `${launchCommand}${grant}`,
       quotedPrompt,
       prompt: trimmedPrompt,
       shell,
@@ -144,7 +184,6 @@ export function buildAgentStartupPlan(args: {
       // only bounds and quotes the native invocation before starting the TUI.
       launchCommand: queryPlan.command,
       expectedProcess: config.expectedProcess,
-      followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(queryPlan.env ? { env: queryPlan.env } : {})
@@ -154,9 +193,8 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'flag-prompt-interactive') {
     return {
       agent,
-      launchCommand: `${launchCommand} --prompt-interactive ${quotedPrompt}`,
+      launchCommand: `${launchCommand}${grant} --prompt-interactive ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
-      followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
@@ -166,34 +204,28 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'flag-interactive') {
     return {
       agent,
-      launchCommand: `${launchCommand} -i ${quotedPrompt}`,
+      launchCommand: `${launchCommand}${grant} -i ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
-      followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
 
-  return {
-    agent,
-    launchCommand,
-    expectedProcess: config.expectedProcess,
-    followupPrompt: trimmedPrompt,
-    launchConfig,
-    ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-  }
+  // `stdin-after-start`: no line carries its prompt; `carryLaunchPrompt` pastes it instead.
+  return null
 }
 
 /**
  * Whether this agent's prompt rides the launch command rather than the live PTY.
  *
- * The same question `buildAgentStartupPlan` answers by returning `followupPrompt: null`, asked
- * before a command exists — a caller deciding how to deliver a prompt has to know which half it is
- * getting while it is still choosing what to create. Derived from the one injection table rather
- * than restating it, and pinned against the builder for every agent by
- * `tui-agent-prompt-transport.test.ts`, so the two cannot answer differently.
+ * Whether the agent's CLI can take its prompt on argv at all, asked before a command exists: a
+ * caller deciding how to deliver a prompt has to know which half it may get while it is still
+ * choosing what to create. Derived from the one injection table rather than restating it, and pinned
+ * against the builder for every agent by `tui-agent-prompt-transport.test.ts`. `planLaunchPrompt`
+ * can still leave such a prompt for the paste (a file the agent is not known to read, a host that
+ * cannot write its staging folder, a caller whose paste main used on a Windows host); a `false`
+ * here is always the paste.
  *
  * Every mode but `stdin-after-start` folds the prompt into argv — that is what argv is FOR, so
  * multi-line and special-character text reaches the CLI as one argument instead of keystrokes.
@@ -254,10 +286,19 @@ export function buildAgentDraftLaunchPlan(args: {
   })
   let plan: AgentDraftLaunchPlan | null = null
   if (config.draftPromptFlag) {
-    const quoted = quoteStartupArg(trimmed, shell)
+    const draftLine = `${launchCommand} ${config.draftPromptFlag} ${quoteStartupArg(trimmed, shell)}`
+    // Why: a line the Windows shell was measured to damage is no draft to edit, and a pointer
+    // sentence is none either, so callers paste it into the agent; an unmeasured line is typed as
+    // main typed it. The pane's PowerShell is not known here.
+    if (
+      platform === 'win32' &&
+      windowsLaunchLineVerdict(trimmed, draftLine, shell, null) === 'damaged'
+    ) {
+      return null
+    }
     plan = {
       agent,
-      launchCommand: `${launchCommand} ${config.draftPromptFlag} ${quoted}`,
+      launchCommand: draftLine,
       expectedProcess: config.expectedProcess,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),

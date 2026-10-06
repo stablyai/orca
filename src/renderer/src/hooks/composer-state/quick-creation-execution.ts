@@ -39,6 +39,7 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { useAppStore } from '@/store'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { clientLaunchHost } from '@/lib/launch-file-host'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import { translate } from '@/i18n/i18n'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
@@ -138,6 +139,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         platform: selectedRepoAgentLaunchPlatform,
         shell: selectedRepoStartupShell,
         isRemote: selectedRepoIsRemote,
+        host: clientLaunchHost({
+          runtimeEnvironmentId: selectedRepoSettings?.activeRuntimeEnvironmentId,
+          launchPlatform: selectedRepoAgentLaunchPlatform,
+          isRemote: selectedRepoIsRemote
+        }),
         telemetrySource
       })
 

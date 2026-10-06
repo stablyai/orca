@@ -15,6 +15,8 @@ import type { TerminalHistorySeedTransferRegistry } from './terminal-history-see
 import type { CreateOrAttachOptions, CreateOrAttachResult, TerminalHost } from './terminal-host'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import { parseLaunchFile, parseUnstageableLine } from '../../shared/launch-prompt-file'
+import { parseWslLaunchDirectory } from '../../shared/wsl-launch-directory'
 import {
   isAgentSessionExecutionClaim,
   isAgentSessionSurfaceBinding
@@ -102,6 +104,9 @@ export class DaemonTerminalAdmission {
         envToDelete: payload.envToDelete,
         command: payload.command,
         startupCommandDelivery: payload.startupCommandDelivery,
+        launchFile: parseLaunchFile(payload.launchFile),
+        unstageableLine: parseUnstageableLine(payload.unstageableLine),
+        wslLaunchDirectory: parseWslLaunchDirectory(payload.wslLaunchDirectory),
         ...(attachOnly ? { attachOnly: true } : {}),
         ...(isTuiAgent(payload.launchAgent) ? { launchAgent: payload.launchAgent } : {}),
         shellOverride: payload.shellOverride,

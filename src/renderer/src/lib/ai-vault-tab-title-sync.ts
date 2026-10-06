@@ -94,6 +94,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
       requests: requests.map((request) => ({
         agent: request.agent,
         sessionId: request.providerSession.id,
+        paneKey: request.paneKey,
         ...(request.providerSession.transcriptPath
           ? { transcriptPath: request.providerSession.transcriptPath }
           : {})
