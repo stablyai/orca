@@ -4,9 +4,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { IPty } from 'node-pty'
 import { runProcess } from '../../shared/child-process/run-process'
+import { readWindowsProcessCreationTime } from './windows-process-table'
 import {
   isPtyJobOwnershipAvailable,
   listPtyJobProcessIds,
+  readPtyRootCreationTimeMs,
   terminatePtyJob
 } from './windows-pty-job'
 
@@ -101,6 +103,24 @@ describeOnWindows('ConPTY job ownership', () => {
     // A node-pty rebuilt from unpatched sources would silently fall back to the
     // old probe, so every assertion below would pass vacuously.
     expect(isPtyJobOwnershipAvailable()).toBe(true)
+  })
+
+  it('reads the original shell creation time and refuses after its native handle closes', async () => {
+    const nodePty = await import('node-pty')
+    const proc = nodePty.spawn('cmd.exe', [], {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 24,
+      useConptyDll: true
+    })
+    spawned.push(proc)
+    const baseline = readPtyRootCreationTimeMs(proc)
+    expect(baseline).toBeGreaterThan(0)
+    expect(baseline).toBe(readWindowsProcessCreationTime(proc.pid))
+    const exited = new Promise<void>((resolve) => proc.onExit(() => resolve()))
+    proc.write('exit\r')
+    await exited
+    expect(readPtyRootCreationTimeMs(proc)).toBeUndefined()
   })
 
   it('keeps the native table intact while shell cleanup overlaps new terminals', async () => {

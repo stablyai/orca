@@ -46,6 +46,26 @@ describe('terminateWindowsProcessTree', () => {
     ).resolves.toBeUndefined()
   })
 
+  it('forwards cancellation to execFile and refuses an already-expired request', async () => {
+    const controller = new AbortController()
+    const execFileImpl = vi.fn((_cmd, _args, options, callback) => {
+      expect(options.signal).toBe(controller.signal)
+      callback(null)
+    })
+    await terminateWindowsProcessTree(1234, {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This mock implements the execFile callback overload used by the runner.
+      execFileImpl: execFileImpl as never,
+      signal: controller.signal
+    })
+    controller.abort()
+    await terminateWindowsProcessTree(1234, {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This mock implements the execFile callback overload used by the runner.
+      execFileImpl: execFileImpl as never,
+      signal: controller.signal
+    })
+    expect(execFileImpl).toHaveBeenCalledOnce()
+  })
+
   it('skips taskkill for invalid pids', async () => {
     const execFileImpl = vi.fn()
     await terminateWindowsProcessTree(0, { execFileImpl: execFileImpl as never })

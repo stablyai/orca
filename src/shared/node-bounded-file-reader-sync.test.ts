@@ -1,4 +1,12 @@
-import { closeSync, ftruncateSync, mkdtempSync, openSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  ftruncateSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -34,5 +42,12 @@ describe('readNodeFileSyncWithinLimit', () => {
     closeSync(descriptor)
 
     expect(() => readNodeFileSyncWithinLimit(path, 1024)).toThrow(NodeFileReadTooLargeError)
+  })
+  it('rejects directories when the caller requires a regular file', () => {
+    const path = `${createTempFile('')}-directory`
+    mkdirSync(path)
+    expect(() => readNodeFileSyncWithinLimit(path, 1024, { requireRegularFile: true })).toThrow(
+      /regular file/
+    )
   })
 })

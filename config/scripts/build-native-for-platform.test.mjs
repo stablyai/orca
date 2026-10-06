@@ -37,6 +37,10 @@ function startBuild(mode, options = {}) {
     "console.log('windows launcher only')"
   )
   writeFileSync(
+    join(directory, 'config', 'scripts', 'build-guest-tree-kill.mjs'),
+    "console.log('guest helpers built')"
+  )
+  writeFileSync(
     cli,
     `
     import { appendFileSync, existsSync } from 'node:fs'
@@ -356,7 +360,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     expect(build.events()).toEqual([])
     expect(result.output).toContain(
       platform === 'win32'
-        ? 'windows launcher only'
+        ? 'guest helpers built\nwindows launcher only'
         : 'no macOS native computer build required on linux'
     )
   })

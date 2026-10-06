@@ -9,11 +9,13 @@ import {
   ORCAD_NODE_PTY_JS_ARTIFACTS,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_RIPGREP_ARTIFACTS,
+  ORCAD_WINDOWS_GUEST_TREE_KILL_ARTIFACTS,
   ORCAD_RIPGREP_LICENSE_ARTIFACTS,
   orcadArtifactFilenames,
   orcadBunRuntimeFilename,
   orcadNodeRuntimeRelativePath,
-  orcadTemplateCommonFilenames
+  orcadTemplateCommonFilenames,
+  orcadTemplateTargetFilenames
 } from './orcad-artifacts'
 
 describe('standalone runtime artifacts', () => {
@@ -39,6 +41,16 @@ describe('standalone runtime artifacts', () => {
     expect(shipped).toEqual([
       `ripgrep/${platform}-${arch}/${bundledRipgrepBinaryName(`${platform}-${arch}`)}`
     ])
+  })
+
+  it.each(SERVER_TARGETS)('keeps guest cleanup artifacts in the correct %s slot', (target) => {
+    const expected = target.startsWith('win32-') ? [...ORCAD_WINDOWS_GUEST_TREE_KILL_ARTIFACTS] : []
+    const guestArtifacts = (filenames: string[]): string[] =>
+      filenames.filter((filename) => filename.startsWith('guest-tree-kill/'))
+
+    expect(guestArtifacts(orcadArtifactFilenames(target))).toEqual(expected)
+    expect(guestArtifacts(orcadTemplateTargetFilenames(target))).toEqual(expected)
+    expect(guestArtifacts(orcadTemplateCommonFilenames())).toEqual([])
   })
 
   it('ships the binary redistribution notices with every install', () => {

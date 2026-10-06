@@ -330,9 +330,25 @@ module.exports = {
   },
   // electron-builder calls this with the context alone. The second parameter is the bundle root,
   // so a test can point the guard at a scratch bundle instead of needing the repo's out/ built.
-  beforePack: (context, mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR) => {
+  beforePack: (
+    context,
+    mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
+    guestHelperDir = join(__dirname, '../resources/guest-tree-kill')
+  ) => {
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
+    if (context.electronPlatformName === 'win32') {
+      execFileSync(
+        process.execPath,
+        [
+          join(__dirname, 'scripts/build-guest-tree-kill.mjs'),
+          '--check',
+          '--artifact-root',
+          guestHelperDir
+        ],
+        { stdio: 'inherit' }
+      )
+    }
     assertOrcadTemplateBuilt()
     assertMobileWebBundleBuilt(mobileWebBundleDir)
   },
@@ -397,6 +413,16 @@ module.exports = {
     const hostArchEnum = archEnumByNodeArch[process.arch]
     const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
     if (context.electronPlatformName === 'win32') {
+      execFileSync(
+        process.execPath,
+        [
+          join(__dirname, 'scripts/build-guest-tree-kill.mjs'),
+          '--check',
+          '--artifact-root',
+          join(resourcesDir, 'guest-tree-kill')
+        ],
+        { stdio: 'inherit' }
+      )
       verifyPackagedWindowsNodePty(resourcesDir, context.arch, { canExecuteTargetArch })
     }
     verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
@@ -477,6 +503,7 @@ module.exports = {
     ...(isWinDevChannel ? { verifyUpdateCodeSignature: false } : {}),
     extraResources: [
       ...commonExtraResources,
+      { from: 'resources/guest-tree-kill', to: 'guest-tree-kill' },
       ...windowsRuntimeResources,
       winSpeechNativeResource,
       {

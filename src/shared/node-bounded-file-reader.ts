@@ -108,15 +108,23 @@ export async function readNodeFileHandleWithinLimit(
 
 export function readNodeFileSyncWithinLimit(
   filePath: string,
-  maxBytes: number
+  maxBytes: number,
+  options: { requireRegularFile?: boolean } = {}
 ): BoundedNodeFileRead {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
     throw new RangeError('File read limit must be a non-negative safe integer')
   }
 
-  const descriptor = openSync(filePath, 'r')
+  // Nonblocking open lets a regular-file-only caller reject a substituted FIFO before it can wait.
+  const descriptor = openSync(
+    filePath,
+    options.requireRegularFile ? constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) : 'r'
+  )
   try {
     const stats = fstatSync(descriptor)
+    if (options.requireRegularFile && !stats.isFile()) {
+      throw new Error('Expected a regular file')
+    }
     validateSize(stats.size, maxBytes)
 
     let buffer = Buffer.allocUnsafe(stats.size)

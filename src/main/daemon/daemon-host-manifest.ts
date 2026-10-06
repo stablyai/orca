@@ -1,5 +1,6 @@
 import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, join, win32 as winPath } from 'node:path'
+import { GUEST_TREE_KILL_RESOURCE_DIR } from '../../shared/guest-tree-kill-artifacts'
 
 // What the relocated host is made of: which files are mirrored, where each lands,
 // and which of a package's files are runtime rather than bulk. The lifecycle
@@ -137,6 +138,12 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
     filter: isRuntimeNodePtyPath
   })
 
+  const guestHelperDir = join(resourcesPath, GUEST_TREE_KILL_RESOURCE_DIR)
+  ops.push({
+    sourcePath: guestHelperDir,
+    destRel: toPosixRelative(appDir, guestHelperDir),
+    kind: 'dir'
+  })
   return ops
 }
 

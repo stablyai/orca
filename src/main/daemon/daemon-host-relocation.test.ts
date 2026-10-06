@@ -17,6 +17,8 @@ import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
+import { writeGuestTreeKillArtifactsFixture } from '../../shared/guest-tree-kill-artifacts-test-fixture'
+import { assertGuestTreeKillArtifacts } from '../../shared/guest-tree-kill-artifacts'
 
 // Mutable host stub. Relocation now reads the AppEnvironment port rather than electron's
 // `app`, so orcad's daemon launch path can resolve without Electron in the graph.
@@ -66,6 +68,7 @@ function setProcessProp(key: string, value: unknown): void {
 // node-pty under resources, mirroring the packaged layout the copy expects.
 function buildInstallFixture(root: string): void {
   mkdirSync(root, { recursive: true })
+  writeGuestTreeKillArtifactsFixture(join(root, 'resources', 'guest-tree-kill'))
   writeFileSync(join(root, 'Orca.exe'), 'exe-bytes')
   for (const name of ['icudtl.dat', 'snapshot_blob.bin', 'v8_context_snapshot.bin']) {
     writeFileSync(join(root, name), name)
@@ -161,6 +164,39 @@ afterEach(() => {
 })
 
 describe('buildDaemonHostManifest', () => {
+  it('keeps both verified guest helpers in the relocated tree after the old install is removed', () => {
+    const host = materializeRelocatedDaemonHost()
+    expect(host).not.toBeNull()
+    const root = join(dirname(host!.execPath), 'resources', 'guest-tree-kill')
+    rmSync(join(installDir, 'resources', 'guest-tree-kill'), { recursive: true })
+    expect(() => assertGuestTreeKillArtifacts(root)).not.toThrow()
+  })
+
+  it.each(['linux-x64', 'linux-arm64'])(
+    'refuses an incomplete or altered relocated %s helper',
+    (platform) => {
+      const host = materializeRelocatedDaemonHost()
+      expect(host).not.toBeNull()
+      const path = join(
+        dirname(host!.execPath),
+        'resources',
+        'guest-tree-kill',
+        platform,
+        'orca-guest-tree-kill'
+      )
+      writeFileSync(path, 'corrupt helper')
+      expect(getRelocatedDaemonHost()).toBeNull()
+      expect(materializeRelocatedDaemonHost()).not.toBeNull()
+      rmSync(path)
+      expect(getRelocatedDaemonHost()).toBeNull()
+    }
+  )
+
+  it('does not start copying a runtime whose source helpers are missing', () => {
+    rmSync(join(installDir, 'resources', 'guest-tree-kill'), { recursive: true })
+    expect(materializeRelocatedDaemonHost()).toBeNull()
+  })
+
   it('mirrors the win-unpacked layout: exe + data blobs + resources tree, no GPU DLLs', () => {
     const appDir = 'C:\\app'
     const ops = buildDaemonHostManifest({

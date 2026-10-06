@@ -975,7 +975,7 @@ index 7b286d3d64..5239ba4e40 100644
      HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
      bool fLoadedDll = hLibrary != nullptr;
      if (fLoadedDll)
-@@ -544,29 +668,215 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -544,29 +668,244 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
    int id = info[0].As<Napi::Number>().Int32Value();
    const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
  
@@ -1074,6 +1074,35 @@ index 7b286d3d64..5239ba4e40 100644
 +static bool ownsShell(const pty_baton* handle, DWORD expectedShellPid) {
 +  return handle != nullptr && handle->hJob != nullptr && expectedShellPid != 0 &&
 +         handle->shellPid == expectedShellPid;
++}
++
++// Orca: read identity through the held shell handle, never by reopening its PID.
++static Napi::Value PtyGetShellCreationTime(const Napi::CallbackInfo& info) {
++  Napi::Env env(info.Env());
++  Napi::HandleScope scope(env);
++  if (info.Length() != 2 || !info[0].IsNumber() || !info[1].IsNumber()) {
++    throw Napi::Error::New(env, "Usage: pty.getShellCreationTime(id, shellPid)");
++  }
++  std::lock_guard<std::mutex> guard(ptyJobMutex);
++  const pty_baton* handle = get_pty_baton_locked(info[0].As<Napi::Number>().Int32Value());
++  const DWORD expectedShellPid = info[1].As<Napi::Number>().Uint32Value();
++  if (handle == nullptr || handle->hShell == nullptr || expectedShellPid == 0 ||
++      handle->shellPid != expectedShellPid) {
++    return env.Undefined();
++  }
++  FILETIME creationTime, exitTime, kernelTime, userTime;
++  if (!GetProcessTimes(handle->hShell, &creationTime, &exitTime, &kernelTime, &userTime)) {
++    return env.Undefined();
++  }
++  ULARGE_INTEGER timestamp;
++  timestamp.LowPart = creationTime.dwLowDateTime;
++  timestamp.HighPart = creationTime.dwHighDateTime;
++  constexpr ULONGLONG WINDOWS_EPOCH_OFFSET_100NS = 116444736000000000ULL;
++  if (timestamp.QuadPart < WINDOWS_EPOCH_OFFSET_100NS) {
++    return env.Undefined();
++  }
++  const ULONGLONG creationTimeMs = (timestamp.QuadPart - WINDOWS_EPOCH_OFFSET_100NS) / 10000ULL;
++  return Napi::Number::New(env, static_cast<double>(creationTimeMs));
 +}
 +
 +/**
@@ -1205,10 +1234,11 @@ index 7b286d3d64..5239ba4e40 100644
  /**
  * Init
  */
-@@ -577,6 +887,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -577,6 +916,10 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
++  exports.Set("getShellCreationTime", Napi::Function::New(env, PtyGetShellCreationTime));
 +  exports.Set("terminateJob", Napi::Function::New(env, PtyTerminateJob));
 +  exports.Set("listJobProcessIds", Napi::Function::New(env, PtyListJobProcessIds));
 +  exports.Set("assignCurrentProcessToJob", Napi::Function::New(env, PtyAssignCurrentProcessToJob));

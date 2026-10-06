@@ -379,7 +379,8 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
     module: {
       listJobProcessIds: () => [],
       terminateJob: () => true,
-      assignCurrentProcessToJob: () => true
+      assignCurrentProcessToJob: () => true,
+      getShellCreationTime: () => 1234
     }
   }
 }

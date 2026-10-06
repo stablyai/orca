@@ -85,6 +85,49 @@ describe('readNodeFileWithinLimit', () => {
     expect(handle.close).toHaveBeenCalledOnce()
   })
 
+  it('does not open a file when the read has already been cancelled', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      readNodeFileWithinLimit('/workspace/cancelled.txt', 64, { signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(openMock).not.toHaveBeenCalled()
+  })
+
+  it('closes its descriptor without reading when cancelled during stat', async () => {
+    const controller = new AbortController()
+    const handle = createFileHandle({ content: Buffer.from('data') })
+    handle.stat.mockImplementationOnce(async () => {
+      controller.abort()
+      return { size: 4 }
+    })
+    openMock.mockResolvedValue(handle)
+
+    await expect(
+      readNodeFileWithinLimit('/workspace/cancelled.txt', 64, { signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(handle.read).not.toHaveBeenCalled()
+    expect(handle.close).toHaveBeenCalledOnce()
+  })
+
+  it('closes its descriptor instead of returning bytes when cancelled during read', async () => {
+    const controller = new AbortController()
+    const handle = createFileHandle({ content: Buffer.from('data') })
+    handle.read.mockImplementationOnce(async (buffer) => {
+      buffer.write('data')
+      controller.abort()
+      return { bytesRead: 4, buffer }
+    })
+    openMock.mockResolvedValue(handle)
+
+    await expect(
+      readNodeFileWithinLimit('/workspace/cancelled.txt', 64, { signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(handle.read).toHaveBeenCalledOnce()
+    expect(handle.close).toHaveBeenCalledOnce()
+  })
+
   it.each([
     { label: 'stat', options: { content: Buffer.alloc(0), statError: new Error('stat failed') } },
     {

@@ -13,6 +13,13 @@ export const ORCAD_BUN_RUNTIME_FILENAME = 'bun-runtime'
 export const ORCAD_WINDOWS_BUN_RUNTIME_FILENAME = 'bun-runtime.exe'
 export const ORCAD_BUILD_TARGET_FILENAME = '.build-target'
 export const ORCAD_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
+export const ORCAD_WINDOWS_GUEST_TREE_KILL_ARTIFACTS = [
+  'guest-tree-kill/manifest.json',
+  'guest-tree-kill/linux-x64/orca-guest-tree-kill',
+  'guest-tree-kill/linux-arm64/orca-guest-tree-kill',
+  'guest-tree-kill/licenses/musl-COPYRIGHT',
+  'guest-tree-kill/licenses/zig-LICENSE'
+] as const
 
 export function orcadBunRuntimeFilename(target: string): string {
   return isWindowsTarget(target) ? ORCAD_WINDOWS_BUN_RUNTIME_FILENAME : ORCAD_BUN_RUNTIME_FILENAME
@@ -184,7 +191,7 @@ export function orcadArtifactFilenames(target: string): string[] {
   )
   filenames.push(...orcadNodePtyNativeArtifacts(target), orcadRipgrepArtifact(target))
   if (isWindowsTarget(target)) {
-    filenames.push(ORCAD_WINDOWS_PROCESS_TREE_FILENAME)
+    filenames.push(ORCAD_WINDOWS_PROCESS_TREE_FILENAME, ...ORCAD_WINDOWS_GUEST_TREE_KILL_ARTIFACTS)
   }
   return filenames
 }
