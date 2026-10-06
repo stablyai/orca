@@ -221,8 +221,21 @@ export type StructuredAgentSessionStartedEvent = {
   restoreSkippedOptions: readonly string[]
 }
 
+/** The adapter no longer serves this child, and its stop could not prove the root gone: it may
+ *  still be running. The adapter keeps it for a retry, and its exit, whenever seen, is `ended`. */
+export type StructuredAgentSessionEndUnprovenEvent = {
+  type: 'end-unproven'
+  sessionId: string
+  /** Log text only. */
+  reason: string
+  failure?: SubmissionRejectionFact
+  fence: number
+  acquisitionGeneration: string
+}
+
 export type StructuredAgentSessionLifecycleEvent =
   | StructuredAgentSessionEndedEvent
+  | StructuredAgentSessionEndUnprovenEvent
   | StructuredAgentSessionStartedEvent
 
 /** Whether the provider child behind an acquisition has proven its start. A publish-first

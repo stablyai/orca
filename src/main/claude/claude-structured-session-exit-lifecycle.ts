@@ -1,11 +1,19 @@
-import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf,
+  type SubmissionRejectionFact
+} from '../../shared/agent-session-failure'
 import {
   providerExitObserved,
   providerStartupFailureFact
 } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { claudeDispatchRejection } from './claude-structured-dispatch-content'
+import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 import {
   claudeRootExitObserved,
+  finishClaudeCloseAfterExit,
   settleClaudeExitedSession
 } from './claude-structured-session-close'
 import { failClaudeStartup } from './claude-structured-session-startup-state'
@@ -17,12 +25,15 @@ import type {
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 
+export type ClaudeSettledExit = { error: Error; failure: SubmissionRejectionFact }
+
 export type ClaudeExitLifecycle = {
   sessions: Map<string, ClaudeSession>
   exits: Map<string, ClaudeSessionExit>
-  /** A settled exit's diagnostic, kept for a send admitted before the host heard of the exit. */
-  settledExitErrors: Map<string, Error>
-  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistHandle' | 'now'>
+  /** A settled exit's diagnostic and why it ended, kept for a send admitted before the host heard
+   *  of the exit. */
+  settledExits: Map<string, ClaudeSettledExit>
+  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistHandle' | 'now' | 'onEvent' | 'logger'>
   emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
 }
 
@@ -34,6 +45,7 @@ export function observeClaudeSessionExit(
 ): void {
   const session = lifecycle.sessions.get(sessionId)
   if (!session || session.connection !== attempt.connection) {
+    settleRetainedClaudeRootExit(lifecycle, sessionId, attempt.connection)
     return
   }
   lifecycle.sessions.delete(sessionId)
@@ -55,11 +67,79 @@ export function observeClaudeSessionExit(
     .then((proven) => {
       // A first-hand root exit is final like a proven one: the owner releases the lease on it.
       if (!proven && !claudeRootExitObserved(session.connection)) {
+        reportClaudeUnprovenEnd(lifecycle, sessionId, exit)
         return undefined
       }
       return settleClaudeUnexpectedExit(lifecycle, sessionId, exit)
     })
     .catch(() => undefined)
+}
+
+/** The root exited after a close began: that close settles it, or one the adapter began after
+ *  letting the session go ends the exit it kept. */
+export function finishClaudeExitedClose(
+  lifecycle: ClaudeExitLifecycle,
+  sessionId: string,
+  connection: ClaudeStreamJsonConnection | null,
+  afterClose: (close: () => Promise<boolean>) => Promise<boolean>
+): void {
+  settleRetainedClaudeRootExit(lifecycle, sessionId, connection)
+  finishClaudeCloseAfterExit({
+    sessions: lifecycle.sessions,
+    sessionId,
+    connection,
+    deps: lifecycle.deps,
+    afterClose
+  })
+}
+
+/** The root of an exit whose close could not prove it gone has now exited: the end it reported
+ *  unproven is final. Only the retained exit's own connection reports it, and only once that
+ *  exit's first close has answered, which publishes the end itself when it saw the root go. */
+function settleRetainedClaudeRootExit(
+  lifecycle: ClaudeExitLifecycle,
+  sessionId: string,
+  connection: ClaudeStreamJsonConnection | null
+): void {
+  const exit = lifecycle.exits.get(sessionId)
+  if (!exit || exit.connection !== connection) {
+    return
+  }
+  const published = exit.publication ?? Promise.resolve()
+  exit.publication = published.then(() =>
+    lifecycle.exits.get(sessionId) === exit && claudeRootExitObserved(exit.connection)
+      ? settleClaudeUnexpectedExit(lifecycle, sessionId, exit).catch(() => undefined)
+      : undefined
+  )
+}
+
+/** Never silence: the host keeps the child on record, closing, until its exit is proven or seen. */
+function reportClaudeUnprovenEnd(
+  lifecycle: ClaudeExitLifecycle,
+  sessionId: string,
+  exit: ClaudeSessionExit
+): void {
+  if (lifecycle.exits.get(sessionId) !== exit) {
+    return
+  }
+  lifecycle.deps.onEvent?.({
+    type: 'end-unproven',
+    sessionId,
+    reason: exit.error.message,
+    failure: claudeExitFailure(exit),
+    fence: exit.session.fence,
+    acquisitionGeneration: exit.session.acquisitionGeneration
+  })
+}
+
+/** A start that never landed says why it failed. After it landed, only the child's own exit blames
+ *  the provider; an Orca fault that closed it is Orca's. */
+function claudeExitFailure(exit: Pick<ClaudeSessionExit, 'session' | 'error'>) {
+  return exit.session.startup.state !== 'proven'
+    ? providerStartupFailureFact(exit.session.startup.failure ?? exit.error)
+    : providerExitObserved(exit.error)
+      ? agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(exit.error) })
+      : agentSessionFailureFact('hostFault')
 }
 
 /** Lifecycle recovery is published only after the close ladder ran and proved the tree gone or
@@ -87,21 +167,12 @@ export function settleClaudeUnexpectedExit(
       return
     }
     exits.delete(sessionId)
-    lifecycle.settledExitErrors.set(sessionId, exit.error)
+    lifecycle.settledExits.set(sessionId, { error: exit.error, failure: claudeExitFailure(exit) })
     const ended: ClaudeStructuredSessionEvent = {
       type: 'ended',
       sessionId,
       reason: exit.error.message,
-      // A start that never landed says why it failed. After it landed, only the child's own exit
-      // blames the provider; an Orca fault that closed it is Orca's.
-      failure:
-        exit.session.startup.state !== 'proven'
-          ? providerStartupFailureFact(exit.session.startup.failure ?? exit.error)
-          : providerExitObserved(exit.error)
-            ? agentSessionFailureFact('providerExited', {
-                detail: providerDiagnosticOf(exit.error)
-              })
-            : agentSessionFailureFact('hostFault'),
+      failure: claudeExitFailure(exit),
       cause: 'unexpected-exit',
       fence: exit.session.fence,
       acquisitionGeneration: exit.session.acquisitionGeneration,
@@ -115,6 +186,29 @@ export function settleClaudeUnexpectedExit(
     }
   })()
   return exit.settlementPromise
+}
+
+/** A message for a child this adapter no longer serves was never written, so it is rejected with
+ *  why that child ended, never left in doubt. */
+function rejectClaudeDetachedDispatch(
+  lifecycle: Pick<ClaudeExitLifecycle, 'exits' | 'settledExits'>,
+  sessionId: string
+): AgentSessionDispatchOutcome {
+  const exit = lifecycle.exits.get(sessionId)
+  const failure = exit
+    ? claudeExitFailure(exit)
+    : (lifecycle.settledExits.get(sessionId)?.failure ?? agentSessionFailureFact('providerExited'))
+  return { state: 'rejected', ...claudeDispatchRejection(failure) }
+}
+
+/** Runs `run` on the live session, or rejects what was meant for a child this adapter let go of. */
+export async function withClaudeSessionOrRejected<T>(
+  lifecycle: Pick<ClaudeExitLifecycle, 'sessions' | 'exits' | 'settledExits'>,
+  sessionId: string,
+  run: (session: ClaudeSession) => Promise<T>
+): Promise<T | AgentSessionDispatchOutcome> {
+  const session = lifecycle.sessions.get(sessionId)
+  return session ? run(session) : rejectClaudeDetachedDispatch(lifecycle, sessionId)
 }
 
 /** Wait for each first-hand exit's publication, including exits observed while waiting. */

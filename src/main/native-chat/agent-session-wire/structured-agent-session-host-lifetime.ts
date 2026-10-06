@@ -93,7 +93,9 @@ export async function holdClosedStructuredAgentSessionSends(
  * already begun, and waits for the exit's proof as long as a caller may. Still unproven, it throws
  * and the close keeps running: a later proof, or the next asker's attempt, ends the record.
  * `ending` is how the child's end is told: a user's Stop, the host stopping it for a cause (with
- * its text), or an eviction the conversation's close follows. The first stop's ending decides.
+ * its text), or an eviction the conversation's close follows. The first stop's ending decides; a
+ * fault's unproven end is no one's stop, so the first stop after it takes over that close with its
+ * own cause, keeping the fault's details and writing no event.
  */
 export async function stopStructuredAgentSessionAgentUnderSerialize(
   context: StructuredAgentSessionLifetimeContext,
@@ -106,17 +108,22 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     return
   }
   const cause = 'recorded' in ending ? ending.recorded : ending.cause
-  if (!child.close) {
+  // An end the adapter reported unproven began no one's stop: the first stop asked since decides.
+  const reported = child.close?.cause === 'host-stop' ? child.close.reported : undefined
+  if (!child.close || (reported && cause !== 'host-stop')) {
     // Judged before the kill: a stop that ends nothing writes nothing. Its event is issued before
-    // the kill and never awaited by it; the journal writes rows in order.
-    const recorded = (await stopEndsWork(context, sessionId, session, ending))
-      ? recordStopEvent(context, sessionId, session, ending)
-      : Promise.resolve(null)
+    // the kill and never awaited by it; the journal writes rows in order. The fault already ended
+    // the work a reported end's taker would name, so like any stop that joins a close it writes none.
+    const recorded =
+      !reported && (await stopEndsWork(context, sessionId, session, ending))
+        ? recordStopEvent(context, sessionId, session, ending)
+        : Promise.resolve(null)
     child.close = {
       cause,
       reason: ('reason' in ending ? ending.reason : undefined) ?? null,
       recorded,
-      requestedAt: session.journal.cursor()
+      requestedAt: session.journal.cursor(),
+      ...(reported ? { reported } : {})
     }
   } else if (child.close.cause === cause) {
     // The same stop asked again, such as a second close of the chat, closes what came since, and

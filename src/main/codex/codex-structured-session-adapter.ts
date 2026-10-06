@@ -208,6 +208,10 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     requestedAt?: number
     beforeDispatch?: () => Promise<void>
   }): Promise<AgentSessionDispatchOutcome> {
+    const detached = this.detachedRejection(input.sessionId)
+    if (detached) {
+      return detached
+    }
     const session = this.session(input.sessionId)
     session.dispatchPending = true
     try {
@@ -215,6 +219,20 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       return await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
     } finally {
       session.dispatchPending = false
+    }
+  }
+
+  /** A closed connection writes nothing, so what was meant for it was never sent: rejected, not
+   *  doubt. Only a seen end says Codex stopped; a closing or broken connection may still have it. */
+  private detachedRejection(sessionId: string): AgentSessionDispatchOutcome | null {
+    const session = this.sessions.get(sessionId)
+    if (session && !session.ended && !session.connection.closed) {
+      return null
+    }
+    const gone = !session || session.ended
+    return {
+      state: 'rejected',
+      ...codexDispatchRejection(agentSessionFailureFact(gone ? 'providerExited' : 'writeFailed'))
     }
   }
 
@@ -238,6 +256,10 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   /** The ack is Codex's receipt; the translator ends the command's turn from the turn it opens. */
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = async (input) => {
+    const detached = this.detachedRejection(input.sessionId)
+    if (detached) {
+      return detached
+    }
     const session = this.session(input.sessionId)
     session.translator?.beginCommand(input.command)
     try {

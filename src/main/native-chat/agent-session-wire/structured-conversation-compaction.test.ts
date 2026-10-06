@@ -368,6 +368,31 @@ it('refuses the command for an agent that does not declare compaction, whatever 
   expect(await commandTurn(params.envelope.clientOperationId)).toBeUndefined()
 })
 
+it('keeps the reason when the agent the compaction was meant for had already gone', async () => {
+  await attach()
+  // As the adapter answers for a child it let go after a fault Orca could not prove ended.
+  compact.mockResolvedValue({
+    state: 'rejected',
+    ...agentSessionFailureWords(agentSessionFailureFact('hostFault'), { surface: 'rejection' })
+  })
+  await state.host.conversationCommand(CALLER, compactParams())
+
+  await vi.waitFor(async () =>
+    expect(
+      (await journal()).items
+        .filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
+        .map((item) => item.body)
+    ).toEqual([
+      {
+        kind: 'status',
+        text: "Orca ran into a problem, so this didn't go through. Try again.",
+        failure: { kind: 'hostFault' },
+        tone: 'error'
+      }
+    ])
+  )
+})
+
 it('refuses the command at handover when the provider opened a turn meanwhile (B3)', async () => {
   await attach()
   const events = state.acquire.mock.calls.at(-1)?.[0].events

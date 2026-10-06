@@ -59,6 +59,17 @@ export type StructuredAgentSessionChildClose = {
   /** Where the journal stood when that stop was asked for: the child's end is ordered there, so a
    *  message accepted while the exit was being proven came after it. A repeated ask moves it. */
   requestedAt: AgentJournalCursor
+  /** Set when no stop began this close: the child ended (a fault, an exit) and its own close could
+   *  not prove it gone. The exit that ends the record is settled as this end. In memory only. */
+  readonly reported?: StructuredAgentSessionReportedEnd
+}
+
+/** An end the adapter reported but could not prove, kept until its exit is seen or proven. */
+export type StructuredAgentSessionReportedEnd = {
+  reason: string
+  failure?: SubmissionRejectionFact
+  /** Work was in flight when the end was reported, so its settlement shows why it stopped. */
+  interruptedWork: boolean
 }
 
 /** The provider process behind a conversation. Written only in

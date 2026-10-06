@@ -15,6 +15,10 @@ import {
   type StructuredAgentSessionChildExitContext
 } from './structured-agent-session-child-exit'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import {
+  recordUnprovenStructuredAgentSessionEnd,
+  recordUnprovenStructuredAgentSessionEndUnderSerialize
+} from './structured-agent-session-unproven-end'
 
 export class StructuredAgentSessionEventRecovery {
   private readonly sinkFailures = new Set<string>()
@@ -64,16 +68,32 @@ export class StructuredAgentSessionEventRecovery {
         const child = this.context.sessions.get(sessionId)?.child
         const stop =
           this.context.deps.adapter.forceCloseSession ?? this.context.deps.adapter.closeSession
-        if (!child || !stop || !(await stopAgentSessionProviderRoot(() => stop(sessionId)))) {
+        if (!child || !stop) {
+          return
+        }
+        // Orca stopped the provider because its own journal failed.
+        const end = {
+          reason: `journal sink failure: ${error instanceof Error ? error.message : String(error)}`,
+          failure: agentSessionFailureFact('hostFault')
+        }
+        const stopped = await stopAgentSessionProviderRoot(() => stop(sessionId)).catch(
+          (stopError: unknown) => {
+            this.context.deps.logger.warn('stopping a provider after its journal failed', {
+              scope: 'sink-failure-recovery',
+              sessionId,
+              error: stopError
+            })
+            return false
+          }
+        )
+        if (!stopped) {
+          // Never silent: the child stays on record, closing, and its exit is settled as this end.
+          recordUnprovenStructuredAgentSessionEndUnderSerialize(this.context, sessionId, child, end)
           return
         }
         // Ended in the same step as the stop, so no report of that close can end it first as a
-        // quiet rest: Orca stopped the provider because its own journal failed.
-        await this.endExitedChildUnderSerialize(sessionId, child, {
-          expected: false,
-          reason: `journal sink failure: ${error instanceof Error ? error.message : String(error)}`,
-          failure: agentSessionFailureFact('hostFault')
-        })
+        // quiet rest.
+        await this.endExitedChildUnderSerialize(sessionId, child, { expected: false, ...end })
       })
       .catch((error: unknown) =>
         this.context.deps.logger.warn(
@@ -94,6 +114,9 @@ export class StructuredAgentSessionEventRecovery {
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {
     if (event.type === 'started') {
       return settleStructuredAgentSessionProviderStarted(this.context, event)
+    }
+    if (event.type === 'end-unproven') {
+      return recordUnprovenStructuredAgentSessionEnd(this.context, event)
     }
     await settleStructuredAgentSessionChildExit(this.exitContext, event)
   }

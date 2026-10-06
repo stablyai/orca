@@ -3,6 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { structuredAgentSessionCommandTurn } from '../native-chat/agent-session-wire/structured-agent-session-command-turn'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'
 import {
   adapterFor,
@@ -62,5 +63,42 @@ describe('what a started Claude session says ended it', () => {
       failure: { kind: 'hostFault' }
     })
     expect(connection.closeCount).toBeGreaterThanOrEqual(1)
+  })
+
+  it('rejects a message or a compaction for a child it no longer holds, with why it ended', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude, {}, [])
+    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const connection = claude.connections[0]
+    // The close cannot prove the child gone, so the adapter lets go of it and keeps its exit.
+    connection.close = async () => false
+    connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): killed'))
+    await adapter.drainObservedExits()
+
+    const rejected = {
+      state: 'rejected',
+      rejection: { kind: 'providerExited' }
+    }
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'client-1',
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
+        fence: 7
+      })
+    ).resolves.toMatchObject(rejected)
+    const turn = structuredAgentSessionCommandTurn('client-2')
+    await expect(
+      adapter.compact({
+        sessionId: 'session-1',
+        fence: 7,
+        command: {
+          clientMessageId: 'client-2',
+          ...turn,
+          running: { kind: 'turn', turnId: turn.turnId, state: 'running' }
+        }
+      })
+    ).resolves.toMatchObject(rejected)
+    expect(connection.sent).toEqual([])
   })
 })

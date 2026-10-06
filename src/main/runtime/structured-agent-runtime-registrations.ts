@@ -21,6 +21,7 @@ import type { createStructuredAgentSessionDispatchFollowUps } from './structured
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
 import type { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
+import { structuredCodexLifecycleEvent } from './structured-codex-lifecycle-event'
 import {
   resolveStructuredClaudeAccountHomePath,
   resolveStructuredCodexAccountHomePath,
@@ -100,9 +101,9 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
     onPrimaryThreadStoppedRunning: followUps.releaseUnansweredDispatches,
     logger: deps.logger,
     onEvent: (event) => {
-      // Every exit, expected or not: the host ends that child's record.
-      if (event.type === 'ended' && 'cause' in event) {
-        context.deliverLifecycle(event)
+      const lifecycleEvent = structuredCodexLifecycleEvent(event)
+      if (lifecycleEvent) {
+        context.deliverLifecycle(lifecycleEvent)
       }
     }
   })

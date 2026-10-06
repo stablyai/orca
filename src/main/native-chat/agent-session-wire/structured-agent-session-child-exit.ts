@@ -9,6 +9,7 @@ import { structuredAgentSessionFailureWordsContext } from './structured-agent-se
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 import type {
+  StructuredAgentSessionEndedChild,
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
@@ -99,8 +100,11 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   if (!session || session.child !== child) {
     return
   }
-  const { expected } = exit
   const close = child.close
+  // An end the adapter reported but could not prove is settled as that end, however its exit came.
+  const reported = close?.reported
+  const expected = exit.expected && !reported
+  const failure = reported ? reported.failure : exit.failure
   // Receipt of the exit is the one end time the host may record for a running turn.
   const observedAt = exit.observedAt ?? context.now()
   // The host's own phase decides, so a provider that omits the flag still gets a start that
@@ -110,14 +114,15 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     endProviderChild(session, {
       generation: child.generation,
       fence: child.fence,
-      // A close keeps the cause of the stop that asked for it, and ends where it was asked.
-      cause: expected ? (close?.cause ?? 'evict') : 'exit',
-      reason: expected ? (close?.reason ?? null) : exit.reason,
-      ...(!expected && exit.failure ? { failure: exit.failure } : {}),
+      // A close keeps the cause of the stop that asked for it, and ends where it was asked. A
+      // reported end keeps a Stop or close asked since; none asked, it was the child's own end.
+      cause: expected ? (close?.cause ?? 'evict') : reported ? reportedEndCause(close) : 'exit',
+      reason: expected ? (close?.reason ?? null) : (reported?.reason ?? exit.reason),
+      ...(!expected && failure ? { failure } : {}),
       duringStartup: exitedDuringStartup,
       // The adapter publishes an exit only once it saw the root go, first-hand or proven.
       rootGone: true,
-      ...(expected && close ? { endedAt: close.requestedAt } : {})
+      ...((expected || reported) && close ? { endedAt: close.requestedAt } : {})
     })
     context.publishStatus?.(sessionId)
   }
@@ -158,12 +163,14 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       showUnexpectedExitOutcome:
         !expected &&
         (exitedDuringStartup ||
-          unfinishedStructuredAgentSessionWorkWasInterrupted(
-            unfinishedWork,
-            session.journal,
-            observedAt
-          )),
-      ...(!expected && exit.failure ? { exitFailure: exit.failure } : {}),
+          (reported
+            ? reported.interruptedWork
+            : unfinishedStructuredAgentSessionWorkWasInterrupted(
+                unfinishedWork,
+                session.journal,
+                observedAt
+              ))),
+      ...(!expected && failure ? { exitFailure: failure } : {}),
       ...(!expected && exitedDuringStartup && child.generation
         ? { exitedDuringStartup: { generation: child.generation } }
         : {})
@@ -207,6 +214,14 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     }
     context.wakeDelivery?.(sessionId)
   }
+}
+
+/** A Stop, close or quit asked for since an unproven end keeps its cause; with none, the end was
+ *  the child's own. */
+function reportedEndCause(
+  close: StructuredAgentSessionProviderChild['close']
+): StructuredAgentSessionEndedChild['cause'] {
+  return close && close.cause !== 'host-stop' ? close.cause : 'exit'
 }
 
 function logExitFailure(

@@ -28,6 +28,7 @@ import {
   type AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
+import { classifyDispatchRejection } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
@@ -226,12 +227,18 @@ export async function handOverStructuredAgentSessionCommand(
     return
   }
   if (admission.state === 'rejected') {
-    // The provider refused the compaction itself: its row reads as the compaction failing.
+    // A child that was already gone, or never started, keeps its own reason (the adapter had let
+    // it go); any other refusal reads as the compaction failing.
+    const { category, kind } = classifyDispatchRejection(admission)
+    const agentGone =
+      category === 'undelivered' || category === 'startFailed' || kind === 'hostFault'
     await settleUnsentCommand(
       ctx,
       clientMessageId,
       admission,
-      agentSessionFailureFact('compactionFailed', { detail: admission.rejection.detail })
+      agentGone
+        ? undefined
+        : agentSessionFailureFact('compactionFailed', { detail: admission.rejection.detail })
     )
   } else if (admission.state !== 'admitted') {
     // An unknown write leaves the turn to the provider's end or the child's: it may have run.

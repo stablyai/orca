@@ -188,10 +188,27 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).rejects.toThrow('no live codex app-server')
+      // Never written to a child it no longer serves: rejected, never left in doubt.
+    ).resolves.toMatchObject({ state: 'rejected', rejection: { kind: 'providerExited' } })
     expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
     await expect(adapter.closeSession('session-1')).resolves.toBe(false)
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
+  })
+
+  it('rejects a message for a connection that broke while the child may still run, without saying Codex stopped', async () => {
+    const codex = fakeCodex()
+    const adapter = await acquired(codex)
+    codex.connections[0].closed = true
+
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'client-1',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'rejected', rejection: { kind: 'writeFailed' } })
+    expect(codex.connections[0].calls.some((call) => call.method === 'turn/start')).toBe(false)
   })
 
   it('keeps the live session when a child it already replaced dies', async () => {

@@ -368,7 +368,8 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).rejects.toThrow('no live codex app-server')
+      // Never written to a child it no longer serves: rejected, never left in doubt.
+    ).resolves.toMatchObject({ state: 'rejected', rejection: { kind: 'providerExited' } })
   })
 
   it('classifies launch validation failure as pre-spawn without opening a child', async () => {
