@@ -35,22 +35,33 @@ const turn = (turnId: string, userItemId: string): AgentJournalItemBody => ({
   state: 'completed',
   userItemId
 })
+const runningTurn = (turnId: string, userItemId: string): AgentJournalItemBody => ({
+  kind: 'turn',
+  turnId,
+  state: 'running',
+  userItemId
+})
 
 function Harness({
   messages,
   turnJournal,
   settledKey = 'u1',
+  isWorking = false,
+  thinking = false,
   scopeKey = 'host\0worktree\0tab-a'
 }: {
   messages: readonly NativeChatMessage[]
   turnJournal: NativeChatTurnJournal
   settledKey?: string
+  isWorking?: boolean
+  thinking?: boolean
   scopeKey?: string
 }): React.JSX.Element {
   const disclosure = useMobileNativeChatTurnDisclosure({
     messages,
     enabled: true,
-    isWorking: false,
+    isWorking,
+    thinking,
     settledTurns: new Map([[settledKey, { startedAt: 1, workedSeconds: 2 }]]),
     turnJournal,
     scopeKey
@@ -108,6 +119,62 @@ describe('useMobileNativeChatTurnDisclosure settled folding', () => {
     expect(ids()).toEqual(['u1', 'reasoning', 'answer'])
     act(() => disclosure.onToggleTurn('u1'))
     expect(ids()).toEqual(['u1', 'answer'])
+  })
+
+  it('keeps a running reasoning turn visible beside a folded completed turn', () => {
+    const messages = [
+      message('u1', 'user', [{ type: 'text', text: 'first' }]),
+      message('old-reasoning', 'reasoning', [{ type: 'text', text: 'finished work' }]),
+      message('answer', 'assistant', [{ type: 'text', text: 'done' }]),
+      message('u2', 'user', [{ type: 'text', text: 'second' }]),
+      message('live-reasoning', 'reasoning', [{ type: 'text', text: 'currently thinking' }])
+    ]
+    const turnJournal = journal([
+      ['u1', said('user'), null],
+      ['t1', turn('t1', 'u1'), null],
+      ['old-reasoning', said('assistant'), 't1'],
+      ['answer', said('assistant'), 't1'],
+      ['u2', said('user'), null],
+      ['t2', runningTurn('t2', 'u2'), null],
+      ['live-reasoning', said('reasoning'), 't2']
+    ])
+    act(() => {
+      renderer = create(
+        createElement(Harness, { messages, turnJournal, isWorking: true, thinking: true })
+      )
+    })
+    let disclosure = renderer!.root.findByType(Host).props.disclosure
+    expect(disclosure.listMessages.map((item: NativeChatMessage) => item.id)).toEqual([
+      'u1',
+      'answer',
+      'u2',
+      'live-reasoning'
+    ])
+    expect(disclosure.liveLine).toMatchObject({
+      reasoning: { message: { id: 'live-reasoning' } },
+      reasoningExpanded: false
+    })
+
+    act(() => disclosure.onToggleReasoning('reasoning:live-reasoning'))
+    disclosure = renderer!.root.findByType(Host).props.disclosure
+    expect(disclosure.liveLine.reasoningExpanded).toBe(true)
+    expect(disclosure.listMessages.map((item: NativeChatMessage) => item.id)).toEqual([
+      'u1',
+      'answer',
+      'u2',
+      'live-reasoning'
+    ])
+
+    act(() => disclosure.onToggleTurn('u1'))
+    disclosure = renderer!.root.findByType(Host).props.disclosure
+    expect(disclosure.listMessages.map((item: NativeChatMessage) => item.id)).toEqual([
+      'u1',
+      'old-reasoning',
+      'answer',
+      'u2',
+      'live-reasoning'
+    ])
+    expect(disclosure.liveLine.reasoningExpanded).toBe(true)
   })
 
   it('keeps failure and compaction reports while folding tool work', () => {
