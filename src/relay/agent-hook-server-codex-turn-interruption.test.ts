@@ -56,6 +56,22 @@ it('forwards host-confirmed Codex interruption without requiring a local rollout
     expect(sideResponse.status).toBe(204)
     expect(forward).toHaveBeenCalledTimes(1)
 
+    const baseline = desktop.getStatusSnapshot()[0]
+    for (const inputCount of [1, 2]) {
+      expect(
+        desktop.inferInterrupt({
+          paneKey: PANE_KEY,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: baseline.prompt,
+          baselineAgentType: 'codex',
+          intent: 'plain-escape',
+          inputCount
+        })
+      ).toBe(false)
+      expect(desktop.getStatusSnapshot()[0]).toEqual(baseline)
+    }
+
     appendFileSync(
       transcriptPath,
       line({ type: 'turn_aborted', turn_id: 'turn-1', reason: 'interrupted' })
