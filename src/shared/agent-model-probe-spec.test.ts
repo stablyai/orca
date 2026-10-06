@@ -11,7 +11,7 @@ describe('getAgentModelProbeSpec', () => {
       binary: 'grok',
       modelSource: 'dynamic',
       models: [],
-      defaultModelId: 'grok-4.6'
+      defaultModelId: 'grok-4.7'
     })
     expect(spec?.modelDiscovery).toMatchObject({ binary: 'grok', args: ['models'] })
   })
@@ -27,7 +27,7 @@ describe('getAgentModelProbeSpec', () => {
 
   it('keeps the grok probe default in step with the catalog seed', () => {
     expect(getAgentModelProbeSpec('grok')!.defaultModelId).toBe(
-      GROK_SESSION_OPTION_CATALOG.models[0].id
+      GROK_SESSION_OPTION_CATALOG.models.find((model) => model.isDefault)?.id
     )
   })
 

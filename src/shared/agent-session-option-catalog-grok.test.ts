@@ -10,7 +10,7 @@ import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import { parseBuiltSessionOptionCommand } from './native-chat-session-option-commands'
 
-function grokEffortOption(modelId = 'grok-4.6'): CatalogOption {
+function grokEffortOption(modelId = 'grok-4.7'): CatalogOption {
   const model = GROK_SESSION_OPTION_CATALOG.models.find((candidate) => candidate.id === modelId)!
   return model.options.find((option) => option.id === 'effort')!
 }
@@ -24,7 +24,7 @@ describe('grok session option catalog', () => {
     expect(getAgentSessionOptionCatalog('grok')).toBe(GROK_SESSION_OPTION_CATALOG)
   })
 
-  it('seeds only the verified models, defaulting to the newest', () => {
+  it('seeds supported models while preserving the CLI default', () => {
     expect(
       GROK_SESSION_OPTION_CATALOG.models.map(({ id, label, isDefault }) => ({
         id,
@@ -32,7 +32,8 @@ describe('grok session option catalog', () => {
         isDefault
       }))
     ).toEqual([
-      { id: 'grok-4.6', label: 'Grok 4.6', isDefault: true },
+      { id: 'grok-4.7', label: 'Grok 4.7', isDefault: true },
+      { id: 'grok-4.6', label: 'Grok 4.6', isDefault: undefined },
       { id: 'grok-4.5', label: 'Grok 4.5', isDefault: undefined }
     ])
   })
@@ -45,11 +46,13 @@ describe('grok session option catalog', () => {
     expect(effort.category).toBe('thought_level')
     // `high` is each model's own reported default, so an untouched picker never escalates.
     expect(effort.kind).toMatchObject({ type: 'select', defaultValue: 'high' })
+    expect(grokEffortOption('grok-4.6').kind).toMatchObject({ defaultValue: 'high' })
     expect(grokEffortOption('grok-4.5').kind).toMatchObject({ defaultValue: 'high' })
   })
 
   it('offers each model only the tiers its own grok menu advertises', () => {
     // grok warns and ignores a tier the active model lacks, so 4.5 must not list xhigh.
+    expect(effortValues(grokEffortOption('grok-4.7'))).toEqual(['low', 'medium', 'high', 'xhigh'])
     expect(effortValues(grokEffortOption('grok-4.6'))).toEqual(['low', 'medium', 'high', 'xhigh'])
     expect(effortValues(grokEffortOption('grok-4.5'))).toEqual(['low', 'medium', 'high'])
   })
@@ -86,13 +89,21 @@ describe('grok launch args', () => {
     })
   })
 
-  it('carries the xhigh tier through to argv on a model that advertises it', () => {
-    expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.6', effort: 'xhigh' })).toEqual(
-      {
-        args: ['-m', 'grok-4.6', '--reasoning-effort', 'xhigh'],
-        appliedValues: { model: 'grok-4.6', effort: 'xhigh' }
-      }
-    )
+  it.each(['grok-4.7', 'grok-4.6'])(
+    'carries the xhigh tier through to argv for %s',
+    (model: string) => {
+      expect(resolveAgentSessionOptionLaunch('grok', { model, effort: 'xhigh' })).toEqual({
+        args: ['-m', model, '--reasoning-effort', 'xhigh'],
+        appliedValues: { model, effort: 'xhigh' }
+      })
+    }
+  )
+
+  it('uses high effort by default when launching Grok 4.7', () => {
+    expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.7' })).toEqual({
+      args: ['-m', 'grok-4.7', '--reasoning-effort', 'high'],
+      appliedValues: { model: 'grok-4.7', effort: 'high' }
+    })
   })
 
   it('emits exactly the two model tokens', () => {
@@ -286,7 +297,7 @@ describe('mergeDiscoveredAuthoritativeModels', () => {
   })
 
   it('takes the default flag from the probe and drops the seed’s stale one', () => {
-    // The seed marks grok-4.5; once the account's listing marks another row, the
+    // The seed marks grok-4.7; once the account's listing marks another row, the
     // picker must follow it or it names a model an unflagged launch will not run.
     const merged = mergeDiscoveredAuthoritativeModels(seed, [
       { id: 'grok-4.5', label: 'Grok 4.5', options: [] },
@@ -307,7 +318,7 @@ describe('mergeDiscoveredAuthoritativeModels', () => {
 
   it('gives a matched seed row its own menu, not the default row’s', () => {
     const multiSeed: CatalogModel[] = [
-      { id: 'grok-4.6', label: 'Grok 4.6', isDefault: true, options: seed[0].options },
+      { id: 'grok-4.7', label: 'Grok 4.7', isDefault: true, options: seed[0].options },
       { id: 'grok-lite', label: 'Grok Lite', options: [] }
     ]
     const merged = mergeDiscoveredAuthoritativeModels(multiSeed, discovered('grok-lite'))
@@ -332,7 +343,7 @@ describe('mergeDiscoveredAuthoritativeModels', () => {
   it('takes the inherited options from the default seed row, not the first one', () => {
     const multiSeed: CatalogModel[] = [
       { id: 'legacy', label: 'Legacy', options: [] },
-      { id: 'grok-4.6', label: 'Grok 4.6', isDefault: true, options: seed[0].options }
+      { id: 'grok-4.7', label: 'Grok 4.7', isDefault: true, options: seed[0].options }
     ]
     const merged = mergeDiscoveredAuthoritativeModels(multiSeed, discovered('grok-build'))
     expect(merged[0].options.map(({ id }) => id)).toEqual(['effort'])
@@ -356,6 +367,7 @@ describe('mergeDiscoveredAuthoritativeModels', () => {
 
   it('drops the unmatched seed row the additive merge would have kept', () => {
     expect(mergeCatalogModels(seed, discovered('grok-build')).map(({ id }) => id)).toEqual([
+      'grok-4.7',
       'grok-4.6',
       'grok-4.5',
       'grok-build'
