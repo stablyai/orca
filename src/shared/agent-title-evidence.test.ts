@@ -6,11 +6,36 @@ import {
   GEMINI_WORKING
 } from './agent-title-core'
 import { collectAgentTitleEvidence } from './agent-title-evidence'
+import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
+import { resolvePublishedPaneAgentIdentity } from './published-pane-agent-identity'
 
 const agentFor = (title: string) => collectAgentTitleEvidence(title).agent
 const reasonFor = (title: string) => collectAgentTitleEvidence(title).reason
 
 describe('collectAgentTitleEvidence', () => {
+  it.each([
+    ['✦ Review Codex - DeepSeek Build', 'gemini'],
+    ['⏲ Review Codex - DeepSeek Build', 'gemini'],
+    ['◇ Review Codex - DeepSeek Build', 'gemini'],
+    ['✋ Review Codex - DeepSeek Build', 'gemini'],
+    ['✳ Review Codex - DeepSeek Build', 'claude'],
+    ['. Review Codex - DeepSeek Build', 'claude'],
+    ['* Review Codex - DeepSeek Build', 'claude'],
+    ['Wrapper | ✦ Review Codex - DeepSeek Build', 'gemini'],
+    ['Wrapper | ✳ Review Codex - DeepSeek Build', 'claude'],
+    ['OC | Review Codex - DeepSeek Build', 'opencode'],
+    ['Wrapper | OC | Review Codex - DeepSeek Build', 'opencode'],
+    ['⠋ - Review Codex - DeepSeek Build', 'dsb'],
+    ['DeepSeek Build', 'dsb']
+  ] as const)(
+    'preserves the native owner of %j through canonical and published identity',
+    (title, agent) => {
+      expect(collectAgentTitleEvidence(title).agent).toBe(agent)
+      expect(resolveCanonicalPaneAgentIdentity({ title }).agent).toBe(agent)
+      expect(resolvePublishedPaneAgentIdentity({ title })).toBe(agent)
+    }
+  )
+
   describe('an anchored name outranks a name in task text', () => {
     // Minimized from real recorded titles that resolve to the wrong agent on the ordered chain:
     // the pane owner is named by Orca's `- <agent>` suffix, the competitor only by task text.

@@ -28,6 +28,18 @@ export function relayAiVaultError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
 
+export function armRelayAiVaultCallTimeout(
+  call: RelayAiVaultServiceCall,
+  onExpired: (timeout: number) => void
+): void {
+  const timeout =
+    call.request.operation === 'list'
+      ? RELAY_AI_VAULT_SCAN_TIMEOUT_MS
+      : RELAY_AI_VAULT_TITLE_TIMEOUT_MS
+  call.timer = setTimeout(() => onExpired(timeout), timeout)
+  call.timer.unref?.()
+}
+
 export function armRelayAiVaultCancellationTimeout(
   call: RelayAiVaultServiceCall,
   onExpired: () => void
@@ -53,7 +65,8 @@ export function createRelayAiVaultServiceCall(args: {
     onAbort: null,
     settled: false,
     sent: false,
-    startRetried: false
+    startRetried: false,
+    startAttempt: 0
   }
 }
 
@@ -110,6 +123,7 @@ export type RelayAiVaultServiceCall = {
   /** Whether the sidecar received the request; an unsent call gets no reply. */
   sent: boolean
   startRetried: boolean
+  startAttempt: number
 }
 
 export type RelayAiVaultServiceApi = {

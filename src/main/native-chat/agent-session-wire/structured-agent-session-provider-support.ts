@@ -12,10 +12,8 @@ export function adapterSupportsCreate(
   if (adapter.supportsCreate) {
     return adapter.supportsCreate(location, agent)
   }
-  if (agent !== 'codex') {
-    return false
-  }
-  // Older Codex adapters exposed only location support; absence still fails closed here.
+  // An adapter with no per-agent gate serves the one agent it was built for, so only its location
+  // support can refuse; absence still fails closed here.
   return adapter.supportsLocation?.(location) ?? false
 }
 
@@ -38,6 +36,6 @@ export function adapterSupportsRecord(
   if (adapter.supportsCreate) {
     return adapter.supportsCreate(record.location, record.provider)
   }
-  // Old Codex records stay readable unless the adapter explicitly rejects their location.
-  return record.provider === 'codex' && (adapter.supportsLocation?.(record.location) ?? true)
+  // A record stays readable unless the adapter explicitly rejects its location.
+  return adapter.supportsLocation?.(record.location) ?? true
 }

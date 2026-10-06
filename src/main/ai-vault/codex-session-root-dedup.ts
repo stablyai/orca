@@ -223,85 +223,7 @@ export async function dedupeCodexRolloutCopyAliases<T>(
   return candidates.filter((candidate) => !aliasesToDrop.has(candidate))
 }
 
-/**
- * Collapses parsed Codex sessions that share a rollout name and session id on
- * one execution host, keeping the canonical root's row. Requiring both the
- * parsed id and rollout name preserves id collisions and same-name files whose
- * parsed ids differ.
- */
-export function dedupeCodexSessionsBySessionId(
-  sessions: readonly AiVaultSession[]
-): AiVaultSession[] {
-  const bestByKey = new Map<string, AiVaultSession>()
-  for (const session of sessions) {
-    const key = codexSessionAliasKey(session)
-    if (!key) {
-      continue
-    }
-    const best = bestByKey.get(key)
-    if (!best || codexSessionAliasBeats(session, best)) {
-      bestByKey.set(key, session)
-    }
-  }
-  return sessions.filter((session) => {
-    const key = codexSessionAliasKey(session)
-    if (!key) {
-      return true
-    }
-    return bestByKey.get(key) === session
-  })
-}
-
-/** Scan-local accumulation; parsed rows must not be mutated after admission. */
-export class CodexSessionCollection {
-  private readonly sessions = new Map<number, AiVaultSession>()
-  private readonly bestByKey = new Map<
-    string,
-    { session: AiVaultSession; indices: number | number[] }
-  >()
-  private nextIndex = 0
-
-  get size(): number {
-    return this.sessions.size
-  }
-
-  values(): IterableIterator<AiVaultSession> {
-    return this.sessions.values()
-  }
-
-  add(session: AiVaultSession): void {
-    const key = codexSessionAliasKey(session)
-    const index = this.nextIndex++
-    if (key) {
-      const best = this.bestByKey.get(key)
-      if (best?.session === session) {
-        // The batch filter retains every occurrence of the winning object.
-        if (typeof best.indices === 'number') {
-          best.indices = [best.indices, index]
-        } else {
-          best.indices.push(index)
-        }
-      } else {
-        if (best) {
-          if (!codexSessionAliasBeats(session, best.session)) {
-            return
-          }
-          if (typeof best.indices === 'number') {
-            this.sessions.delete(best.indices)
-          } else {
-            for (const previousIndex of best.indices) {
-              this.sessions.delete(previousIndex)
-            }
-          }
-        }
-        this.bestByKey.set(key, { session, indices: index })
-      }
-    }
-    this.sessions.set(index, session)
-  }
-}
-
-function codexSessionAliasKey(session: AiVaultSession): string | null {
+export function codexSessionAliasKey(session: AiVaultSession): string | null {
   if (session.agent !== 'codex') {
     return null
   }
@@ -312,7 +234,7 @@ function codexSessionAliasKey(session: AiVaultSession): string | null {
   return `${session.executionHostId}\0${codexPathExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
 }
 
-function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
+export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
   const candidateRank = codexSessionRootRank(candidate.codexHome)
   const bestRank = codexSessionRootRank(best.codexHome)
   if (candidateRank !== bestRank) {

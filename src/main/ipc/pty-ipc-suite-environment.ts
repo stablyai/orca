@@ -22,6 +22,7 @@ import {
   loginPreflightExecFileMock,
   spawnMock,
   openCodeBuildPtyEnvMock,
+  openCode2BuildPtyEnvMock,
   mimoCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
   buildAgentHookEnvMock,
@@ -57,6 +58,7 @@ import { _resetWslCachesForTests } from '../wsl'
 
 /** The mocked webContents each suite asserts sends against. */
 export type PtyIpcTestWebContents = {
+  id: number
   on: Mock
   send: Mock
   removeListener: Mock
@@ -91,6 +93,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     isVisible: () => true,
     isMinimized: () => false,
     webContents: {
+      id: 1,
       on: vi.fn(),
       send: vi.fn(),
       removeListener: vi.fn(),
@@ -100,6 +103,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
   const foreignWindowIpcEvent = {
     sender: {
+      id: 2,
       on: vi.fn(),
       send: vi.fn(),
       removeListener: vi.fn(),
@@ -149,6 +153,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     loginPreflightExecFileMock.mockReset()
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
+    openCode2BuildPtyEnvMock.mockReset()
     mimoCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
@@ -217,6 +222,14 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
       OPENCODE_CONFIG_DIR: existingConfigDir
         ? '/tmp/orca-opencode-overlay'
         : '/tmp/orca-opencode-config'
+    }))
+    openCode2BuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
+      ORCA_OPENCODE_HOOK_PORT: '4567',
+      ORCA_OPENCODE_HOOK_TOKEN: 'opencode2-token',
+      ORCA_OPENCODE_PTY_ID: 'test-pty',
+      OPENCODE_CONFIG_DIR: existingConfigDir
+        ? '/tmp/orca-opencode2-overlay'
+        : '/tmp/orca-opencode2-config'
     }))
     mimoCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingHome?: string) => ({
       MIMOCODE_HOME: existingHome ? '/tmp/orca-mimocode-overlay' : '/tmp/orca-mimocode-shared'

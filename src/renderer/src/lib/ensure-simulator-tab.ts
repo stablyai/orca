@@ -115,7 +115,7 @@ export function ensureSimulatorTab(
     if (shouldSurface && store.activeWorktreeId === worktreeId) {
       store.activateTab(existing.id)
       store.focusGroup(worktreeId, existing.groupId)
-      store.setActiveTabType('simulator')
+      store.setActiveTabType('simulator', worktreeId)
     }
     return existing.id
   }
@@ -133,7 +133,7 @@ export function ensureSimulatorTab(
         ...(executionHostId ? { executionHostId } : {})
       })
       store.activateTab(tab.id)
-      store.setActiveTabType('simulator')
+      store.setActiveTabType('simulator', worktreeId)
       store.focusGroup(worktreeId, tab.groupId)
       return tab.id
     }
@@ -166,7 +166,7 @@ export function ensureSimulatorTab(
   })
   if (shouldSurface) {
     store.activateTab(tab.id)
-    store.setActiveTabType('simulator')
+    store.setActiveTabType('simulator', worktreeId)
     store.focusGroup(worktreeId, tab.groupId)
   }
   return tab.id

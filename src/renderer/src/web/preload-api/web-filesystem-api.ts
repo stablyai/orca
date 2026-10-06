@@ -22,6 +22,15 @@ import { noopUnsubscribe } from './web-storage'
 
 export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
   return {
+    readFileChunk: async ({ filePath, offset, length }) => {
+      const file = await resolveRuntimeFilePath(filePath)
+      return callRuntimeResult('files.readChunk', {
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
+        relativePath: file.relativePath,
+        offset,
+        length
+      })
+    },
     readDir: async ({ dirPath }) => {
       const file = await resolveRuntimeFilePath(dirPath)
       return callRuntimeResult<DirEntry[]>('files.readDir', {
@@ -74,7 +83,6 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     ...createWebFileMutationMethods({
       captureSession: captureWebFileMutationSession
     }),
-    authorizeExternalPath: () => Promise.resolve(),
     stat: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.stat', {
@@ -126,6 +134,11 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     },
     importExternalPaths: async () => ({ results: [] }),
     stageExternalPathsForRuntimeUpload: async () => ({ sources: [] }),
+    // Why: the web client has no local filesystem to stream from, so staging
+    // never yields a source for this to upload.
+    uploadExternalFileToRuntime: async () => {
+      throw new Error('Uploading local files is not supported in the web client')
+    },
     resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
     watchWorktree: () => Promise.resolve(),
     unwatchWorktree: () => Promise.resolve(),

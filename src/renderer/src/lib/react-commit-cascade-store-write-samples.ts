@@ -33,6 +33,9 @@ export const MAX_REPORTED_CHANGED_KEYS = 12
 
 type SampledWrite = { stack?: string }
 
+/** The wrapping `set` function: V8 elides it and every frame above it, so only identity matters. */
+export type ReactCommitCascadeWriteBoundary = (...args: never[]) => unknown
+
 let storeWrites = 0
 let samples: SampledWrite[] = []
 let changedKeys: Set<string> | null = null
@@ -58,10 +61,12 @@ export function resetReactCommitCascadeWriteSamples(): void {
 
 /**
  * Call only while armed. `boundary` is the wrapping `set` function, so V8 elides
- * our own frames and the first captured frame is the real caller. Typed as
- * `object` because zustand's `set` is an overload set, not a plain signature.
+ * our own frames and the first captured frame is the real caller.
  */
-export function noteReactCommitCascadeStoreWrite(boundary: object, partial: unknown): void {
+export function noteReactCommitCascadeStoreWrite(
+  boundary: ReactCommitCascadeWriteBoundary,
+  partial: unknown
+): void {
   storeWrites += 1
   // Why the write count and not samples.length: samples only grows where
   // Error.captureStackTrace exists, so that cap would never engage without it and
@@ -76,23 +81,20 @@ export function noteReactCommitCascadeStoreWrite(boundary: object, partial: unkn
       changedKeys.add(key)
     }
   }
-  const capture = Error as ErrorConstructor & {
-    captureStackTrace?: (target: object, constructorOpt?: unknown) => void
-    stackTraceLimit?: number
-  }
-  if (typeof capture.captureStackTrace !== 'function') {
+  // Only V8 has it; a non-V8 host gets no samples rather than a synthesized stack.
+  if (typeof Error.captureStackTrace !== 'function') {
     return
   }
-  const previousLimit = capture.stackTraceLimit
+  const previousLimit = Error.stackTraceLimit
   const sample: SampledWrite = {}
   try {
-    capture.stackTraceLimit = CAPTURE_STACK_FRAME_LIMIT
-    capture.captureStackTrace(sample, boundary)
+    Error.stackTraceLimit = CAPTURE_STACK_FRAME_LIMIT
+    Error.captureStackTrace(sample, boundary)
     samples.push(sample)
   } catch {
     // Best-effort crash evidence only.
   } finally {
-    capture.stackTraceLimit = previousLimit
+    Error.stackTraceLimit = previousLimit
   }
 }
 

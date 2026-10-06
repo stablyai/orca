@@ -1,3 +1,7 @@
+import {
+  readPersistedProfileState,
+  mutateStoppedProfileState
+} from './helpers/persisted-profile-state'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -21,7 +25,6 @@ import {
   LEGACY_CONTRACT_VERSION,
   LEGACY_RUN_ID
 } from '../../src/main/runtime/orchestration/db'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import { listAllOrchestrationRuns } from './orchestration-run-pages'
 import {
@@ -29,6 +32,7 @@ import {
   FAKE_AGENT_WINDOWS_SHELL
 } from './helpers/fake-agent-command-override'
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
+import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
 
 const PROVIDER_SESSION_ID = 'e2e-legacy-orchestration-worker'
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-legacy-worker-'))
@@ -86,10 +90,7 @@ async function emitAuthorityHook(hookEventName) {
     })
   }
 }
-if (process.argv.slice(2).includes('app-server')) {
-  process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
-  process.exit(2)
-}
+${FAKE_CODEX_LAUNCH_PROBES_SOURCE}
 appendLedger('ORCA_E2E_SPAWN_LEDGER', { event: 'spawn', argv: process.argv.slice(2) })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 const sessionStartHook = emitAuthorityHook('SessionStart')
@@ -231,12 +232,9 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-function persistedDataPath(userDataDir: string): string {
-  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
-}
-
 function readPersistedData(userDataDir: string): PersistedData {
-  return JSON.parse(readFileSync(persistedDataPath(userDataDir), 'utf8')) as PersistedData
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+  return readPersistedProfileState(userDataDir) as PersistedData
 }
 
 function hasPersistedResumeRecord(userDataDir: string, paneKey: string): boolean {
@@ -273,42 +271,44 @@ function stripLegacyWorkerRendererBinding(
     workerPaneKey: string
   }
 ): void {
-  const data = readPersistedData(userDataDir)
-  const session = data.workspaceSession
-  if (!session) {
-    throw new Error('Expected a persisted workspace session')
-  }
-  const sleeping = session.sleepingAgentSessionsByPaneKey?.[input.workerPaneKey]
-  if (sleeping?.providerSession?.id !== PROVIDER_SESSION_ID) {
-    throw new Error('Expected the legacy worker resume record before removing its tab binding')
-  }
-  session.tabsByWorktree = {
-    ...session.tabsByWorktree,
-    [input.worktreeId]: (session.tabsByWorktree?.[input.worktreeId] ?? []).filter(
-      (tab) => tab.id !== input.workerTabId
-    )
-  }
-  delete session.terminalLayoutsByTabId?.[input.workerTabId]
-  if (session.unifiedTabs?.[input.worktreeId]) {
-    session.unifiedTabs[input.worktreeId] = session.unifiedTabs[input.worktreeId].filter(
-      (tab) => tab.id !== input.workerTabId && tab.entityId !== input.workerTabId
-    )
-  }
-  for (const group of session.tabGroups?.[input.worktreeId] ?? []) {
-    group.tabOrder = group.tabOrder.filter((tabId) => tabId !== input.workerTabId)
-    group.recentTabIds = group.recentTabIds?.filter((tabId) => tabId !== input.workerTabId)
-    if (group.activeTabId === input.workerTabId) {
-      group.activeTabId = input.coordinatorTabId
+  return mutateStoppedProfileState(userDataDir, (state) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const data = state as PersistedData
+    const session = data.workspaceSession
+    if (!session) {
+      throw new Error('Expected a persisted workspace session')
     }
-  }
-  session.activeTabId = input.coordinatorTabId
-  session.activeTabIdByWorktree = {
-    ...session.activeTabIdByWorktree,
-    [input.worktreeId]: input.coordinatorTabId
-  }
-  delete session.terminalPtyIncarnationsByPaneKey?.[input.workerPaneKey]
-  delete session.terminalSurfaceTombstonesByPaneKey?.[input.workerPaneKey]
-  writeFileSync(persistedDataPath(userDataDir), `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+    const sleeping = session.sleepingAgentSessionsByPaneKey?.[input.workerPaneKey]
+    if (sleeping?.providerSession?.id !== PROVIDER_SESSION_ID) {
+      throw new Error('Expected the legacy worker resume record before removing its tab binding')
+    }
+    session.tabsByWorktree = {
+      ...session.tabsByWorktree,
+      [input.worktreeId]: (session.tabsByWorktree?.[input.worktreeId] ?? []).filter(
+        (tab) => tab.id !== input.workerTabId
+      )
+    }
+    delete session.terminalLayoutsByTabId?.[input.workerTabId]
+    if (session.unifiedTabs?.[input.worktreeId]) {
+      session.unifiedTabs[input.worktreeId] = session.unifiedTabs[input.worktreeId].filter(
+        (tab) => tab.id !== input.workerTabId && tab.entityId !== input.workerTabId
+      )
+    }
+    for (const group of session.tabGroups?.[input.worktreeId] ?? []) {
+      group.tabOrder = group.tabOrder.filter((tabId) => tabId !== input.workerTabId)
+      group.recentTabIds = group.recentTabIds?.filter((tabId) => tabId !== input.workerTabId)
+      if (group.activeTabId === input.workerTabId) {
+        group.activeTabId = input.coordinatorTabId
+      }
+    }
+    session.activeTabId = input.coordinatorTabId
+    session.activeTabIdByWorktree = {
+      ...session.activeTabIdByWorktree,
+      [input.worktreeId]: input.coordinatorTabId
+    }
+    delete session.terminalPtyIncarnationsByPaneKey?.[input.workerPaneKey]
+    delete session.terminalSurfaceTombstonesByPaneKey?.[input.workerPaneKey]
+  })
 }
 
 function assertDispatchRemainsCurrent(
@@ -326,7 +326,7 @@ function assertDispatchRemainsCurrent(
     const authority = db
       .prepare(
         `SELECT dc.status AS dispatch_status, dc.assignee_handle, dc.assignee_pane_key,
-                dc.process_incarnation, dc.contract_version, dc.capability_hash,
+                dc.process_incarnation, dc.contract_version,
                 wd.state AS worker_state, wd.worktree_id, wd.agent_terminal_handle
          FROM dispatch_contexts dc
          INNER JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
@@ -339,7 +339,6 @@ function assertDispatchRemainsCurrent(
       assignee_pane_key: input.paneKey,
       process_incarnation: input.processIncarnation,
       contract_version: CURRENT_CONTRACT_VERSION,
-      capability_hash: expect.any(String),
       worker_state: 'ready',
       worktree_id: input.worktreeId,
       agent_terminal_handle: input.terminalHandle

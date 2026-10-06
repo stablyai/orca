@@ -1,56 +1,14 @@
 import type { TuiAgent } from './tui-agent'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
+import type { TuiAgentConfig } from './tui-agent-config-types'
 
-export type AgentPromptInjectionMode =
-  | 'argv'
-  | 'flag-prompt'
-  | 'flag-prompt-interactive'
-  | 'flag-interactive'
-  | 'hermes-query'
-  | 'stdin-after-start'
-
-export type DraftPasteReadySignal =
-  | 'render-quiet-after-bracketed-paste'
-  | 'codex-composer-prompt'
-  | 'render-cursor-after-bracketed-paste'
-  | 'grok-composer-prompt'
-
-export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
-
-export type TuiAgentConfig = {
-  detectCmd: string
-  /** Additional executable names that identify the same agent on PATH. */
-  detectCmdAliases?: readonly string[]
-  /** Other commands that must also be present before this agent counts as installed. */
-  detectRequiredCommands?: readonly string[]
-  /** Detection runtimes where this launch mode is not available as a detected agent. */
-  detectUnsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
-  launchCmd: string
-  /** Platform-specific launch command when the public binary name differs. */
-  launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
-  expectedProcess: string
-  promptInjectionMode: AgentPromptInjectionMode
-  /** Option terminator required before positional prompts that may look like CLI syntax. */
-  argvPromptSeparator?: '--'
-  /** Native CLI flag that seeds the input without submitting (e.g. Claude's `--prefill <text>`); preferred over the paste-after-ready path. */
-  draftPromptFlag?: string
-  /** Startup env var that seeds the input without submitting, for agents with no `--prefill`-style flag (e.g. pi); avoids the paste-after-ready race. */
-  draftPromptEnvVar?: string
-  /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
-  preflightTrust?: 'cursor' | 'copilot' | 'codex'
-  /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
-  draftPasteReadySignal?: DraftPasteReadySignal
-  /** Hard deadline for the agent's composer readiness signal. */
-  draftPasteReadyTimeoutMs?: number
-  /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
-  submitRetryDelayMs?: number
-  /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
-  windowsShiftEnterEncoding?: 'csi-u'
-  /** Paste newlines for TUIs that read Windows console input records instead of VT paste frames. */
-  windowsInputRecordPasteNewline?: 'alt-enter' | 'csi-u'
-  /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
-  ctrlEnterEncoding?: 'csi-u'
-}
+export type {
+  AgentPromptInjectionMode,
+  DraftPasteMarkerSignal,
+  DraftPasteReadySignal,
+  TuiAgentConfig,
+  TuiAgentDetectionRuntime
+} from './tui-agent-config-types'
 
 /** Authoring form: `launchCmd` and `expectedProcess` default to `detectCmd` (true for most agents). */
 type TuiAgentConfigSource = Omit<TuiAgentConfig, 'launchCmd' | 'expectedProcess'> & {
@@ -70,8 +28,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   claude: {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
+    pasteNeedsTypedRequest: true,
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
-    draftPromptFlag: '--prefill'
+    draftPromptFlag: '--prefill',
+    preflightTrust: 'claude'
   },
   'claude-agent-teams': {
     // Why: an Orca-provided launch mode, not a separate binary; detection follows the Orca CLI.
@@ -87,7 +47,14 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
       win32: `${getOrcaCliCommandNameForPlatform('win32')} claude-teams`
     },
     expectedProcess: 'claude',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    pasteNeedsTypedRequest: true,
+    preflightTrust: 'claude'
+  },
+  codebuddy: {
+    detectCmd: 'codebuddy',
+    detectCmdAliases: ['cbc'],
+    promptInjectionMode: 'argv'
   },
   openclaude: {
     detectCmd: 'openclaude',
@@ -126,7 +93,39 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'opencode',
     promptInjectionMode: 'flag-prompt',
     // Why: opencode enables bracketed paste before its composer mounts; wait for the post-\x1b[?2004h show-cursor so paste lands.
-    draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
+    // Why: OpenCode 2 draws its input box before its agent list loads and drops an Enter sent
+    // in between; the agent/model row under the box is the first moment it can submit.
+    submitPasteReadySignal: 'opencode-agent-row',
+    // Why 20s: measured on two Windows hosts (ConPTY dll backend, as pinned by
+    // local-pty-utils), opencode does not enable bracketed paste until ~4.8s and its
+    // composer is not ready until ~10s — so the 8s default expired first and the draft
+    // was pasted blind, mid-startup (#22479). The signal itself fired every time in
+    // those runs, so the budget was the problem, not a dropped escape.
+    draftPasteReadyTimeoutMs: 20_000,
+    composerReadyCaptures: [
+      'opencode-1-18-32-timed-boot-slow',
+      'opencode-1-18-32-timed-boot-hidden-pane',
+      'opencode-1-18-32-timed-first-launch',
+      'opencode-cmd-2-0-21-timed-warm-server'
+    ]
+  },
+  // Why: opencode2 installs as a separate binary and uses the same prompt flags and paste signals.
+  opencode2: {
+    detectCmd: 'opencode2',
+    // The private server inherits this pane's hook endpoint and identity.
+    launchCmd: 'opencode2 --standalone',
+    promptInjectionMode: 'flag-prompt',
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
+    submitPasteReadySignal: 'opencode-agent-row',
+    draftPasteReadyTimeoutMs: 20_000,
+    composerReadyCaptures: [
+      'opencode-2-0-18-timed-boot-hidden-pane',
+      'opencode-2-0-21-timed-cold-standalone',
+      'opencode-2-0-21-timed-cold-standalone-hidden-pane',
+      'opencode-2-0-21-timed-natural-load-enter-dropped',
+      'opencode-2-0-14-timed-cold-standalone'
+    ]
   },
   'mimo-code': {
     detectCmd: 'mimo',
@@ -159,13 +158,34 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: Prime Agent embeds Pi's TUI and decodes CSI-u the same way (see pi above).
     windowsShiftEnterEncoding: 'csi-u'
   },
+  qoder: {
+    detectCmd: 'qodercli',
+    // The documented `qoder` dispatcher still launches the legacy CLI binary.
+    detectCmdAliases: ['qoder'],
+    promptInjectionMode: 'flag-prompt-interactive',
+    preflightTrust: 'qoder'
+  },
+  'qoder-cn': {
+    detectCmd: 'qoderclicn',
+    detectCmdAliases: ['qodercn'],
+    promptInjectionMode: 'flag-prompt-interactive',
+    preflightTrust: 'qoder-cn'
+  },
   gemini: {
     detectCmd: 'gemini',
     promptInjectionMode: 'flag-prompt-interactive'
   },
   antigravity: {
     detectCmd: 'agy',
-    promptInjectionMode: 'flag-prompt-interactive'
+    promptInjectionMode: 'flag-prompt-interactive',
+    // Why: agy's first-launch trust menu consumes the bracketed paste, and its trust is
+    // exact-path rather than inherited, so every freshly created child worktree raises it
+    // again — a supervised worker would otherwise always fail at agent_readiness
+    // (agent-trust-presets.ts).
+    preflightTrust: 'antigravity',
+    // Why: agy 1.2.x collapses long paste as "↑ N more lines" and expands it over seconds; byte
+    // ingest alone (~500 ms on macOS) finishes before the composer is submit-ready.
+    submitLineSettleMsPerLine: 45
   },
   aider: {
     detectCmd: 'aider',
@@ -201,6 +221,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   cline: {
     detectCmd: 'cline',
+    promptInjectionMode: 'stdin-after-start'
+  },
+  freebuff: {
+    detectCmd: 'freebuff',
     promptInjectionMode: 'stdin-after-start'
   },
   codebuff: {
@@ -248,7 +272,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   'qwen-code': {
     // Why: package is qwen-code but its installed CLI binary on PATH is `qwen`.
     detectCmd: 'qwen',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: on Windows (and Node < 20) Qwen ignores Enter until 500 ms after a paste (0.24.7
+    // `pasteWorkaround`), so the Enter 50 ms after it is dropped; on an empty composer it is a no-op.
+    submitRetryDelayMs: 1200
   },
   rovo: {
     detectCmd: 'rovo',
@@ -284,15 +311,48 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadySignal: 'grok-composer-prompt',
     ctrlEnterEncoding: 'csi-u'
   },
+  muse: {
+    detectCmd: 'muse',
+    launchCmd: 'muse --trust-workspace',
+    // Muse 1.3 treats subcommand-shaped prompts as commands even after `--`.
+    promptInjectionMode: 'stdin-after-start'
+  },
+  dsh: {
+    detectCmd: 'dsh-tui',
+    detectCmdAliases: ['dst'],
+    detectRequiredCommands: ['dsh'],
+    // A first bare launch opens the session browser instead of the composer.
+    launchCmd: 'dsh-tui .',
+    expectedProcess: 'dsh',
+    promptInjectionMode: 'stdin-after-start',
+    // The whale intro keeps repainting behind the ready composer.
+    draftPasteReadySignal: 'dsh-composer-prompt'
+  },
+  zcode: {
+    detectCmd: 'zcode',
+    // Why: ZCode's entrypoint sets `process.title = 'zcode-cli'` (its `process-name.ts`
+    // exports CLI_COMMAND_NAME 'zcode' / CLI_PROCESS_NAME 'zcode-cli'), so the foreground
+    // name never equals the launch command and dispatch would refuse with no_agent_detected.
+    expectedProcess: 'zcode-cli',
+    // Why: ZCode reads `positionals[0]` as a subcommand name (apps/zcode-cli/packages/cli/src/run.ts),
+    // so an argv prompt exits with "Unknown command"; `-p` is headless-only and quits after the turn.
+    promptInjectionMode: 'stdin-after-start',
+    // Why: ZCode repaints an animated ASCII banner indefinitely, so the default quiet-render
+    // window never settles; its composer box corner is the real "input is live" signal.
+    draftPasteReadySignal: 'zcode-composer-prompt',
+    composerReadyCaptures: ['zcode-composer-ready']
+  },
   devin: {
     detectCmd: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
   },
+  // prettier-ignore
+  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' },
   openinterpreter: {
     // Why: OpenInterpreter's documented terminal entry point is the generic
-    // `interpreter` binary. Keep it last in auto-pick order to avoid claiming
-    // an unrelated executable with the same name.
+    // `interpreter` binary. Keep it last in auto-pick order; unrelated executables
+    // may still appear as a false-positive install in the agent picker.
     detectCmd: 'interpreter',
     launchCmd: 'interpreter',
     expectedProcess: 'interpreter',

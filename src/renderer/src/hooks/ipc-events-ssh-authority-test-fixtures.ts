@@ -1,19 +1,29 @@
 import { vi } from 'vitest'
 import { buildStoreState } from './ipc-events-agent-status-store-test-fixtures'
-import {
-  buildWindowApi,
-  stubReactSyncEffect,
-  stubAuxiliaryModules
-} from './ipc-events-agent-status-window-test-fixtures'
+import type { StoreLike } from './ipc-events-agent-status-store-test-fixtures'
+import { buildWindowApi } from './ipc-events-agent-status-window-test-fixtures'
 
+export type DirectSshReconnectCoordinatorDouble = {
+  requestReconnect: ReturnType<typeof vi.fn>
+  replaceAuthority: ReturnType<typeof vi.fn>
+  prepareOnly: ReturnType<typeof vi.fn>
+  correctUnboundTerminals: ReturnType<typeof vi.fn>
+  finalizeHydratedTerminals: ReturnType<typeof vi.fn>
+  invalidate: ReturnType<typeof vi.fn>
+  stop: ReturnType<typeof vi.fn>
+}
+
+/** Store/coordinator doubles for the partial-authority reconciliation path; the spec wires them. */
 export function buildSshAuthorityReconciliationHarness(args: {
   partialAuthority: { providerEpoch?: string; connectionGeneration?: number }
   latestAuthority: { providerEpoch: string; connectionGeneration: number }
 }): {
+  coordinator: DirectSshReconnectCoordinatorDouble
   emitPartialState: () => void
   getState: ReturnType<typeof vi.fn>
   requestReconnect: ReturnType<typeof vi.fn>
   setSshConnectionState: ReturnType<typeof vi.fn>
+  storeState: StoreLike
   storedState: () => Record<string, unknown> | undefined
 } {
   const targetId = 'target-reconciliation'
@@ -55,37 +65,6 @@ export function buildSshAuthorityReconciliationHarness(args: {
     stop: vi.fn()
   }
 
-  stubReactSyncEffect()
-  stubAuxiliaryModules()
-  vi.doMock('../store', () => ({
-    useAppStore: {
-      subscribe: vi.fn(() => () => {}),
-      getState: () => storeState
-    }
-  }))
-  vi.doMock('./direct-ssh-reconnect-rollout', () => ({
-    isDirectSshReconnectCoordinatorRoutingEnabled: () => true
-  }))
-  vi.doMock('./direct-ssh-worktree-refresh-scheduler', () => ({
-    createDirectSshWorktreeRefreshScheduler: () => ({
-      stop: vi.fn(),
-      disposeProvider: vi.fn()
-    })
-  }))
-  vi.doMock('./direct-ssh-host-hydration', () => ({
-    createDirectSshHostHydration: () => ({
-      capturePreparationInput: vi.fn(),
-      readHostScopedLineage: vi.fn(),
-      isPreparationTokenCurrent: vi.fn(() => true),
-      stop: vi.fn()
-    })
-  }))
-  vi.doMock('./direct-ssh-reconnect-coordinator', () => ({
-    createDirectSshReconnectCoordinator: () => coordinator
-  }))
-  vi.doMock('@/lib/direct-ssh-reconnect-product-telemetry', () => ({
-    createDirectSshReconnectProductTelemetryAdapter: vi.fn()
-  }))
   vi.stubGlobal(
     'window',
     buildWindowApi({
@@ -101,6 +80,7 @@ export function buildSshAuthorityReconciliationHarness(args: {
   )
 
   return {
+    coordinator,
     emitPartialState: () => {
       if (!sshStateListener) {
         throw new Error('Expected SSH state listener')
@@ -110,6 +90,7 @@ export function buildSshAuthorityReconciliationHarness(args: {
     getState,
     requestReconnect,
     setSshConnectionState,
+    storeState,
     storedState: () => sshConnectionStates.get(targetId)
   }
 }

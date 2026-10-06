@@ -1,7 +1,8 @@
 import { defaultSchema } from 'rehype-sanitize'
+import { normalizeDetailsOpeningTag } from './details-markdown-html'
 import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
 import { extractFrontMatter } from './markdown-frontmatter'
-import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
+import { canRenderMarkdownAtSize } from './markdown-rich-size-limit'
 import { translate } from '@/i18n/i18n'
 
 export type MarkdownRichModeUnsupportedReason =
@@ -140,7 +141,7 @@ export function getMarkdownRichModeEligibilityDecision({
   sizeOverridden: boolean
 }): MarkdownRichModeEligibilityDecision {
   return {
-    exceedsSizeLimit: !sizeOverridden && exceedsMarkdownRichModeSizeLimit(content),
+    exceedsSizeLimit: !canRenderMarkdownAtSize(content, sizeOverridden),
     unsupportedReason: getMarkdownRichModeUnsupportedReason(content)
   }
 }
@@ -215,11 +216,18 @@ function stripMarkdownCode(content: string): string {
 function preservesEmbeddedHtml(contentWithoutCode: string, roundTripOutput: string): boolean {
   let searchIndex = 0
   return forEachEmbeddedHtmlFragment(contentWithoutCode, (fragment) => {
-    const foundIndex = roundTripOutput.indexOf(fragment, searchIndex)
+    const normalized = normalizeDetailsOpeningTag(fragment)
+    const exactIndex = roundTripOutput.indexOf(fragment, searchIndex)
+    // Details serialization adds Orca's class and canonicalizes supported attributes.
+    const normalizedIndex =
+      normalized === fragment ? -1 : roundTripOutput.indexOf(normalized, searchIndex)
+    const useNormalized =
+      normalizedIndex !== -1 && (exactIndex === -1 || normalizedIndex < exactIndex)
+    const foundIndex = useNormalized ? normalizedIndex : exactIndex
     if (foundIndex === -1) {
       return false
     }
-    searchIndex = foundIndex + fragment.length
+    searchIndex = foundIndex + (useNormalized ? normalized.length : fragment.length)
     return true
   })
 }

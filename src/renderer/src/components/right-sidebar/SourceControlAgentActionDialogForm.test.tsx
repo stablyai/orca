@@ -51,6 +51,7 @@ function renderForm(
       detecting: false,
       statusCopy: null,
       agentArgs: '',
+      agentArgsApply: true,
       commandTemplate: '{basePrompt}',
       savedCommandInputTemplate: '{basePrompt}',
       saveLaunchRecipe: true,
@@ -158,5 +159,23 @@ describe('SourceControlAgentActionDialogForm', () => {
     })
 
     expect(markup).not.toContain('overrides your global default')
+  })
+})
+
+describe('CLI arguments field applicability', () => {
+  it('offers the field when the launch would apply the arguments', () => {
+    const markup = renderForm({ agentArgsApply: true })
+
+    expect(markup).toContain('source-control-agent-cli-args')
+    expect(markup).toContain('CLI arguments')
+  })
+
+  // Why: absent, not disabled — a structured native chat session reads no CLI arguments,
+  // so the dialog must not show a control that launch would drop.
+  it('leaves the field out entirely when they would not apply', () => {
+    const markup = renderForm({ agentArgsApply: false })
+
+    expect(markup).not.toContain('source-control-agent-cli-args')
+    expect(markup).not.toContain('CLI arguments')
   })
 })

@@ -64,7 +64,7 @@ describe('orchestration check command spec', () => {
 
     expect(checkSpec?.notes).toEqual(
       expect.arrayContaining([
-        '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Only --peek and --all filter their rows.'
+        '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows.'
       ])
     )
   })

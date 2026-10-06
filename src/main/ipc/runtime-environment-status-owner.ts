@@ -1,14 +1,12 @@
 import { BrowserWindow } from 'electron'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
-import {
-  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
-} from '../../shared/protocol-version'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
-import { markEnvironmentUsed } from '../../shared/runtime-environment-store'
+import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import { RuntimeHostStatusOwner } from '../../shared/runtime-host-status-owner'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
@@ -61,7 +59,7 @@ export function createRuntimeEnvironmentStatusOwner(
         runtimeId: response._meta.runtimeId
       })
       if (accepted && active && !isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-        markEnvironmentUsed(userDataPath, environment.id, {
+        recordRuntimeEnvironmentUsage(userDataPath, environment.id, {
           runtimeId: response._meta.runtimeId,
           pairedDeviceId: response.result.pairedDeviceId
         })

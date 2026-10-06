@@ -95,7 +95,7 @@ describe('gitlab client — MR operations', () => {
         if (this[0] === 'gitlab.com' && this.every((value) => typeof value === 'string')) {
           knownHostCacheScans += 1
         }
-        return Reflect.apply(originalMap, this, [callback, thisArg])
+        return originalMap.call(this, callback, thisArg)
       })
 
       try {

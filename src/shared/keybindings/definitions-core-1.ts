@@ -18,7 +18,8 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'settings', 'preferences'],
-    defaultBindings: platformBindings(['Mod+Comma']),
+    // Leave Cmd/Ctrl+, to terminal apps such as Codex unless the user opts in.
+    defaultBindings: platformBindings([]),
     conflictGroup: 'menu'
   },
   {

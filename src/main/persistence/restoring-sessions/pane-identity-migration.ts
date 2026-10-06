@@ -1,8 +1,8 @@
+import type { ProfileStateStartupPaneAlias } from '../loading-store/profile-state-authority'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import { agentHookServer } from '../../agent-hooks/server'
 import { collectLayoutLeafIdsInOrder, firstLayoutLeafId } from './terminal-layout-normalization'
 
 export function findWorktreeIdForTab(
@@ -67,47 +67,49 @@ export function createLazyTerminalTabLookup(session: WorkspaceSessionState): Ter
   }
 }
 
-/** Bridges a tab's legacy numeric pane keys to stable ones; returns the alias rows worth persisting. */
-export function registerLegacyPaneKeyAliasesForTab(args: {
+export type PaneAliasNormalizationOptions = {
+  registerAliases?: boolean
+  collectUnboundPaneAlias?: (entry: ProfileStateStartupPaneAlias) => void
+}
+
+type LegacyPaneKeyAlias = Omit<LegacyPaneKeyAliasEntry, 'ptyId'> & { ptyId?: string }
+
+/** Includes unbound aliases needed by the live hook server, even though they are not persisted. */
+export function collectLegacyPaneKeyAliasesForTab(args: {
   tabId: string
   tab: TerminalTab | undefined
   inputLayout: TerminalLayoutSnapshot
   normalizedLayout: TerminalLayoutSnapshot
   leafIdByInputLeafId: Map<string, string>
-}): LegacyPaneKeyAliasEntry[] {
-  const legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[] = []
+}): LegacyPaneKeyAlias[] {
+  const legacyPaneKeyAliasEntries: LegacyPaneKeyAlias[] = []
   const registeredLegacyPaneKeys = new Set<string>()
   const hasLeafPtyBindings = Object.keys(args.inputLayout.ptyIdsByLeafId ?? {}).length > 0
   const fallbackPtyId =
     !hasLeafPtyBindings && typeof args.tab?.ptyId === 'string' ? args.tab.ptyId : undefined
-  const registerLegacyAlias = (inputLeafId: string, leafId: string, ptyId?: string): boolean => {
+  const collectLegacyAlias = (inputLeafId: string, leafId: string, ptyId?: string): void => {
     if (!isTerminalLeafId(leafId)) {
-      return false
+      return
     }
     let paneKey: string
     try {
       paneKey = makePaneKey(args.tabId, leafId)
     } catch {
-      return false
+      return
     }
     const numeric = /^(?:pane:)?(\d+)$/.exec(inputLeafId)?.[1]
     if (!numeric) {
-      return false
+      return
     }
     // Why: PaneManager ids are 1-based; a zero-based alias in split layouts makes tab:1 ambiguous and misroutes panes.
     const legacyPaneKey = `${args.tabId}:${numeric}`
-    agentHookServer.registerPaneKeyAlias(legacyPaneKey, paneKey, ptyId)
     registeredLegacyPaneKeys.add(legacyPaneKey)
-    if (ptyId) {
-      legacyPaneKeyAliasEntries.push({
-        ptyId,
-        legacyPaneKey,
-        stablePaneKey: paneKey,
-        updatedAt: Date.now()
-      })
-      return true
-    }
-    return false
+    legacyPaneKeyAliasEntries.push({
+      ptyId,
+      legacyPaneKey,
+      stablePaneKey: paneKey,
+      updatedAt: Date.now()
+    })
   }
   const inputLeafIds = new Set([
     ...collectLayoutLeafIdsInOrder(args.inputLayout.root),
@@ -119,7 +121,7 @@ export function registerLegacyPaneKeyAliasesForTab(args: {
     }
     const leafId = args.leafIdByInputLeafId.get(inputLeafId)
     if (leafId) {
-      registerLegacyAlias(
+      collectLegacyAlias(
         inputLeafId,
         leafId,
         args.inputLayout.ptyIdsByLeafId?.[inputLeafId] ?? fallbackPtyId
@@ -142,7 +144,6 @@ export function registerLegacyPaneKeyAliasesForTab(args: {
         if (registeredLegacyPaneKeys.has(legacyPaneKey)) {
           continue
         }
-        agentHookServer.registerPaneKeyAlias(legacyPaneKey, paneKey, args.tab.ptyId)
         legacyPaneKeyAliasEntries.push({
           ptyId: args.tab.ptyId,
           legacyPaneKey,

@@ -1,3 +1,12 @@
+import {
+  AiVaultSearchRequestSchema,
+  AiVaultSearchStatusRequestSchema,
+  AiVaultSetSearchEnabledParamsSchema
+} from '../../../../shared/ai-vault-search-contract'
+import {
+  searchSessionService,
+  sessionSearchServiceStatus
+} from '../../../ai-vault-search/session-search-service-registry'
 import { defineMethod } from '../core'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../../shared/ai-vault-resume-preparation'
@@ -8,6 +17,7 @@ import {
   assertLegacyAiVaultResumeAllowed,
   projectStructuredAiVaultSessions
 } from '../../../ai-vault/structured-session-ownership'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../../structured-agent-session-host-refusal'
 import {
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams,
@@ -16,6 +26,37 @@ import {
 export { AiVaultListSessionsParams, AiVaultPrepareSessionResumeParams, AiVaultSessionTitlesParams }
 
 export const AI_VAULT_METHODS = [
+  defineMethod({
+    name: 'aiVault.searchSessions',
+    params: AiVaultSearchRequestSchema,
+    handler: (params, { clientKind }) =>
+      searchSessionService(params, clientKind ? 'relay' : 'runtime')
+  }),
+  defineMethod({
+    name: 'aiVault.searchStatus',
+    params: AiVaultSearchStatusRequestSchema,
+    handler: (params, { clientKind }) =>
+      sessionSearchServiceStatus(params, clientKind ? 'relay' : 'runtime')
+  }),
+  defineMethod({
+    name: 'aiVault.setSearchEnabled',
+    params: AiVaultSetSearchEnabledParamsSchema,
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
+      // Paired clients only: an in-process caller writes this host's own settings directly,
+      // and admitting one here would let any unauthenticated local path flip consent.
+      if (!pairedDeviceId) {
+        throw Object.assign(
+          new Error('Session search consent can only be changed by a paired client.'),
+          { code: 'forbidden' }
+        )
+      }
+      await runtime.setSessionSearchEnabled(params.enabled)
+      console.warn(
+        `[ai-vault-search] device ${pairedDeviceId} set indexing enabled=${params.enabled}`
+      )
+      return sessionSearchServiceStatus({}, clientKind ? 'relay' : 'runtime')
+    }
+  }),
   defineMethod({
     name: 'aiVault.resolveSessionTitles',
     params: AiVaultSessionTitlesParams,
@@ -26,14 +67,17 @@ export const AI_VAULT_METHODS = [
     name: 'aiVault.listSessions',
     params: AiVaultListSessionsParams,
     handler: async (params, { runtime, clientKind, clientCapabilities }) => {
-      await runtime.ensureStructuredAgentSessionHost()
+      await ensureStructuredAgentSessionHostUnlessRefused(() =>
+        runtime.ensureStructuredAgentSessionHost()
+      )
       let result
       try {
         result = await runtime.listAiVaultSessions({
           limit: params.unlimited ? undefined : params.limit,
           unlimited: params.unlimited,
           force: params.force,
-          scopePaths: params.scopePaths
+          scopePaths: params.scopePaths,
+          includeAntigravityIdeSessions: params.includeAntigravityIdeSessions
         })
       } catch (error) {
         if (error instanceof Error) {
@@ -67,7 +111,9 @@ export const AI_VAULT_METHODS = [
         // client-provided runtime/SSH stamp escape that host boundary.
         executionHostId: LOCAL_EXECUTION_HOST_ID
       }
-      await runtime.ensureStructuredAgentSessionHost()
+      await ensureStructuredAgentSessionHostUnlessRefused(() =>
+        runtime.ensureStructuredAgentSessionHost()
+      )
       assertLegacyAiVaultResumeAllowed(args)
       return runtime.prepareAiVaultSessionResume(args)
     }

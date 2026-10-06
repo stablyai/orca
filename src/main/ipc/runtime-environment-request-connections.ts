@@ -4,7 +4,7 @@ import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import type { RuntimeHostStatusOwner } from '../../shared/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse

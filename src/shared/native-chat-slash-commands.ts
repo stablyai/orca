@@ -7,6 +7,12 @@
 import type { AgentSessionSlashCommand } from './agent-session-wire'
 import type { AgentType } from './agent-status-types'
 
+/** Where the chat finds a command's reply when the agent runs in a terminal.
+ *  `composer`: the chat answers from state it holds and never sends the command.
+ *  `transcript`: the agent writes its reply as a transcript row the chat shows.
+ *  Absent: the agent answers in its own terminal, or the effect is the answer. */
+export type NativeChatCommandReply = 'composer' | 'transcript'
+
 export type SlashCommandSuggestion = {
   /** The command token without its leading slash, e.g. `clear`. */
   name: string
@@ -15,6 +21,8 @@ export type SlashCommandSuggestion = {
   /** Provider-authored argument sketch, e.g. `<objective>`. */
   argumentHint?: string
   kindUnspecified?: true
+  /** Declared only on curated rows; a surface that cannot show the reply drops the row. */
+  reply?: NativeChatCommandReply
 }
 
 // Best-effort, curated per-agent catalogs. The CLIs ship no machine-readable
@@ -32,6 +40,12 @@ const CLAUDE_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'init', description: 'Initialize a CLAUDE.md' },
   { name: 'review', description: 'Review the current changes' },
   { name: 'help', description: 'Show available commands' }
+]
+
+// Why: OpenClaude writes its `/context` report to the transcript; Claude's TUI does not.
+const OPENCLAUDE_COMMANDS: readonly SlashCommandSuggestion[] = [
+  ...CLAUDE_COMMANDS,
+  { name: 'context', description: 'Show context usage', reply: 'transcript' }
 ]
 
 const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
@@ -82,10 +96,41 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'subagents', description: 'Switch the active agent thread' }
 ]
 
+// OMP built-in registry; interactive commands still execute in its terminal.
+const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'model', description: 'Open the model selector in Terminal' },
+  {
+    name: 'switch',
+    description: 'Open the temporary model selector in Terminal'
+  },
+  { name: 'plan', description: 'Toggle plan mode' },
+  { name: 'compact', description: 'Compact conversation context' },
+  { name: 'clear', description: 'Clear context while keeping the session' },
+  { name: 'new', description: 'Start a new session' },
+  { name: 'resume', description: 'Resume a session; without arguments, choose in Terminal' },
+  { name: 'fork', description: 'Fork from a previous message in Terminal' },
+  { name: 'branch', description: 'Rewind to a previous message in Terminal' },
+  { name: 'tree', description: 'Browse the session tree in Terminal' },
+  { name: 'session', description: 'Show session information and controls' },
+  { name: 'rename', description: 'Rename the session' },
+  // Why: OMP paints this in its TUI and records nothing the chat could show.
+  { name: 'context', description: 'Show estimated context usage', reply: 'composer' },
+  { name: 'usage', description: 'Show provider usage and limits' },
+  { name: 'fast', description: 'Toggle priority service tier' },
+  { name: 'tools', description: 'Show tools visible to the agent' },
+  { name: 'jobs', description: 'Show background jobs' },
+  { name: 'git', description: 'Open the Git viewer in Terminal' },
+  { name: 'export', description: 'Export the session to HTML' },
+  { name: 'settings', description: 'Open settings in Terminal' },
+  { name: 'extensions', description: 'Open the extension dashboard in Terminal' },
+  { name: 'hotkeys', description: 'Show keyboard shortcuts in Terminal' }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
-  openclaude: CLAUDE_COMMANDS,
-  codex: CODEX_COMMANDS
+  openclaude: OPENCLAUDE_COMMANDS,
+  codex: CODEX_COMMANDS,
+  omp: OMP_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the

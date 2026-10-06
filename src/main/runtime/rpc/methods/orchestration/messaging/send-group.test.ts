@@ -69,7 +69,7 @@ describe('orchestration.send group addresses', () => {
       return terminal ? `${terminal.tabId}:${terminal.leafId}` : null
     })
     vi.spyOn(runtime, 'getAgentStatusForHandle').mockImplementation(
-      (handle: string) => agentStatuses?.[handle] ?? null
+      async (handle: string) => agentStatuses?.[handle] ?? null
     )
   }
 

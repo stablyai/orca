@@ -34,6 +34,10 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
+vi.mock('../codex/codex-hook-trust-grant', () => ({
+  grantManagedCodexHookTrust: async () => ({ lane: 'fallback', reason: 'unsupported' })
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: () => '/tmp/orca-user-data'
@@ -64,6 +68,8 @@ import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import {
+  POSIX_HOOK_JSON_STDIN_PRELUDE,
+  POSIX_HOOK_JSON_STDIN_READER,
   POSIX_HOOK_STDIN_READER,
   WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
 } from './hook-stdin-contract'
@@ -294,7 +300,12 @@ describe('Windows managed hook stdin structure', () => {
         expect(script, `${fileName} no ORCA_* guard may route to the more.com drain`).not.toMatch(
           /ORCA_[A-Z_]+.*goto :?orca_agent_hook_drain_stdin/
         )
-        // Why: the epilogue stays shared — claude-hook.cmd still jumps to it from the
+        if (fileName === 'antigravity-hook.cmd') {
+          expect(script).not.toContain('more.com')
+          expect(script).toContain('antigravity-hook-post.cjs')
+          continue
+        }
+        // Why: the epilogue stays shared — claude-hook-impl.cmd still jumps to it from the
         // Devin-imports-.claude skip, which now sits below these guards.
         expect(script, `${fileName} drain epilogue`).toContain(
           [
@@ -308,7 +319,7 @@ describe('Windows managed hook stdin structure', () => {
       // Why (#11549): the Devin skip is the only remaining in-script jump to more.com, so it
       // must sit below the env guards — otherwise a Devin session outside an Orca pane still
       // parks there and strands the hook exactly like the pre-fix guards did.
-      const claude = readFileSync(join(hooksDir, 'claude-hook.cmd'), 'utf8')
+      const claude = readFileSync(join(hooksDir, 'claude-hook-impl.cmd'), 'utf8')
       expect(claude, 'claude devin guard present').toContain(
         'if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin'
       )
@@ -522,7 +533,7 @@ describe('Windows managed hook stdin structure', () => {
             // Why: the encoded launcher resolves %USERPROFILE% at run time, so redirecting it is
             // what makes the script vanish for that shape. The direct launcher (#18875) carries
             // an absolute path, so here it asserts only that a bogus profile changes nothing; its
-            // missing-script fallback is covered live in windows-direct-cmd-hook-command.test.ts.
+            // missing-entry failure (never exit 2) is covered live in windows-direct-cmd-hook-command.test.ts.
             name: 'missing managed script',
             env: hookEnvironment({ USERPROFILE: absentProfile })
           }
@@ -561,10 +572,22 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('captures stdin before every possible whole-script success exit', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const captureIndex = script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
+      const captureIndex = Math.max(
+        script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
+        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
+      )
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
       expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)
+      // Why: the JSON reader dereferences a variable the prelude sets, so a script
+      // that carries the reader must carry its prelude above the capture line.
+      if (script.includes(POSIX_HOOK_JSON_STDIN_READER)) {
+        const prelude = POSIX_HOOK_JSON_STDIN_PRELUDE.join('\n')
+        expect(script.indexOf(prelude), `${agent} JSON reader prelude`).toBeGreaterThanOrEqual(0)
+        expect(script.indexOf(prelude), `${agent} prelude before capture`).toBeLessThan(
+          captureIndex
+        )
+      }
     }
   })
 

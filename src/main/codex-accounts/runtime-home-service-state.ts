@@ -15,7 +15,6 @@ import type {
   CodexSystemDefaultSnapshot
 } from './runtime-home-service-types'
 import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
-import type { CodexPaneHomeRoute } from '../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 import type { LegacyWslRuntimeAuthDestination } from './legacy-wsl-runtime-auth-drain'
 import type { WslCodexAuthRead } from './wsl-codex-auth-batch-reader'
@@ -92,7 +91,6 @@ export abstract class CodexRuntimeHomeState {
   abstract resolveCodexManagedAccountHomeForInactiveFetch(
     account: CodexManagedAccount
   ): { kind: 'ready'; homePath: string } | { kind: 'skip' }
-  abstract getSelectedHostCodexHomeRoute(): CodexPaneHomeRoute
   abstract getRetainedHostCodexHookHomePaths(ptyIds: readonly string[]): string[]
   abstract setRealHomeLaneGate(gate: () => boolean): void
   abstract isHostSystemDefaultRealHomeSelected(launchEnv?: NodeJS.ProcessEnv): boolean
@@ -214,7 +212,10 @@ export abstract class CodexRuntimeHomeState {
   protected abstract syncRuntimeAuthWithSystemDefault(): void
   protected abstract syncLegacySharedSystemDefaultAuthForRetainedPanes(): void
   protected abstract restoreSystemDefaultSnapshot(options: { detectExternalLogin: boolean }): void
-  protected abstract writeSystemDefaultAuth(contents: string): void
+  protected abstract writeSystemDefaultAuth(
+    contents: string,
+    options?: { expectedContents: string | null }
+  ): boolean
   protected abstract clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath: string): void
   protected abstract readSystemDefaultAuth(): string | null
   protected abstract writeRuntimeAuth(

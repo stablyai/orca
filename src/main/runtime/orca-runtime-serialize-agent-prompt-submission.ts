@@ -3,6 +3,7 @@ import { selectFreshExplicitAgentStatus } from './runtime-hook-agent-row-selecti
 import { OrcaRuntimeWithControllerKnowsPtyIsLive } from './orca-runtime-controller-knows-pty-is-live'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
 import type { RuntimeTerminalAgentStatusSnapshot } from './runtime-terminal-agent-status-query'
+import { getDisplayPromptLifecycle } from './runtime-worktree-status-projection'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { hasCompatibleAgentTitleIdentity } from '../../shared/agent-title-owner'
 import type { PtyForegroundProcessRead } from './runtime-terminal-contracts'
@@ -70,7 +71,82 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     return this.ptyForegroundAgent.read(ptyId, afterTitleObservation)
   }
 
+  protected async recheckHookAgentPresenceForPty(
+    ptyId: string
+  ): Promise<'live' | 'unverifiable' | 'exited' | null> {
+    if (!this.checkHookAgentPresenceFn) {
+      return null
+    }
+    const verdicts = await Promise.all(
+      Array.from(this.collectAgentStatusPaneKeysForPty(ptyId), (paneKey) =>
+        this.checkHookAgentPresenceFn(paneKey)
+      )
+    )
+    if (verdicts.includes('live')) {
+      return 'live'
+    }
+    if (verdicts.includes('unverifiable')) {
+      return 'unverifiable'
+    }
+    return verdicts.includes('exited') ? 'exited' : null
+  }
+
   protected confirmPtyAgentExit(ptyId: string, recoverCompletedHook = false): void {
+    const current = this.ptysById.get(ptyId)
+    const incarnation = current?.incarnationId
+    void this.recheckHookAgentPresenceForPty(ptyId).then((verdict) => {
+      if (this.ptysById.get(ptyId) !== current || current?.incarnationId !== incarnation) {
+        return
+      }
+      // Why: without an identified owner (null) the foreground read keeps today's rules; with one
+      // whose process cannot be checked right now, silence from that read is never an exit.
+      if (verdict === null || verdict === 'unverifiable') {
+        this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict === 'unverifiable')
+      } else if (verdict === 'exited' && !recoverCompletedHook) {
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+      } else if (verdict === 'live') {
+        this.restoreDisprovedAgentExit(ptyId)
+      } else {
+        this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
+      }
+    })
+  }
+
+  private restoreDisprovedAgentExit(ptyId: string, confirmedStatus?: 'idle'): void {
+    const current = this.ptysById.get(ptyId)
+    const restoredStatus = this.ptyTitleTrackersByPtyId
+      .get(ptyId)
+      ?.tracker.restoreLastAgentExit(confirmedStatus)
+    if (!current || restoredStatus === null || restoredStatus === undefined) {
+      return
+    }
+    current.lastAgentStatus = restoredStatus
+    if (restoredStatus === 'idle') {
+      this.resolvePtyTuiIdleWaiters(current, ptyId)
+    }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      // Why the clear too: a stale-working clear leaves the native status, not the neutral one.
+      if (leaf.lastAgentStatus !== null && !current.titleDisplayClear) {
+        continue
+      }
+      // Why: the live agent disproved the neutral title's exit signal; keep runtime delivery state aligned with the restored tracker.
+      leaf.lastAgentStatus = restoredStatus
+      if (restoredStatus === 'idle') {
+        this.resolveTuiIdleWaiters(leaf)
+        // Why gated like every other delivery edge: a neutral-title restoration can
+        // reinstate `idle` from a name-only title, which is not evidence a turn ended.
+        if (this.checkDeliverySettledAndArmRecheck(leaf)) {
+          this.deliverPendingMessagesForLeaf(leaf)
+        }
+      }
+    }
+  }
+
+  private confirmLegacyPtyAgentExit(
+    ptyId: string,
+    recoverCompletedHook: boolean,
+    keepOnSilence: boolean
+  ): void {
     const pty = this.ptysById.get(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (
@@ -84,7 +160,9 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     const titleObservedAt = pty?.lastOscTitleAt ?? null
     const foregroundRead = this.readPtyForegroundProcessFromController(ptyId, titleObservedAt ?? 0)
     if (!pty?.connected || !foregroundRead) {
-      if (!recoverCompletedHook) {
+      if (keepOnSilence) {
+        this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
+      } else if (!recoverCompletedHook) {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
       }
       return
@@ -123,30 +201,19 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
           recoverCompletedHook && recognizeAgentProcess(result.process)?.agent === 'codex'
             ? 'idle'
             : undefined
-        const restoredStatus = this.ptyTitleTrackersByPtyId
-          .get(ptyId)
-          ?.tracker.restoreLastAgentExit(confirmedStatus)
-        if (restoredStatus !== null && restoredStatus !== undefined) {
-          current.lastAgentStatus = restoredStatus
-          if (restoredStatus === 'idle') {
-            this.resolvePtyTuiIdleWaiters(current, ptyId)
-          }
-          for (const leaf of this.getLeavesForPty(ptyId)) {
-            if (leaf.lastAgentStatus !== null) {
-              continue
-            }
-            // Why: the foreground agent disproved the neutral title's exit signal; keep runtime delivery state aligned with the restored tracker.
-            leaf.lastAgentStatus = restoredStatus
-            if (restoredStatus === 'idle') {
-              this.resolveTuiIdleWaiters(leaf)
-              this.deliverPendingMessagesForLeaf(leaf)
-            }
-          }
-        }
+        this.restoreDisprovedAgentExit(ptyId, confirmedStatus)
         return
       }
-      if (!recoverCompletedHook) {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+      const answered =
+        result.controller === this.ptyController &&
+        result.available &&
+        typeof result.process === 'string'
+      if (!keepOnSilence || answered) {
+        if (!recoverCompletedHook) {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+        }
+      } else {
+        this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
       }
     })
   }
@@ -198,7 +265,12 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     const outputSequence = this.getPtyOutputSequence(ptyId)
     const explicit = this.getFreshExplicitAgentStatusForPty(handle, ptyId)
     const explicitFloor = this.agentPromptExplicitStatusFloorByPtyId.get(ptyId)
-    const lifecycle = this.agentPromptLifecycleByPtyId.get(ptyId)
+    const nativeLifecycle = this.agentPromptLifecycleByPtyId.get(ptyId)
+    // Why projected: verification compares against main's baseline, which held a stale-working clear.
+    const lifecycle = getDisplayPromptLifecycle(
+      nativeLifecycle,
+      this.getPtyTitleDisplayClear(ptyId)
+    )
     const ptyStatus =
       lifecycle || explicitFloor === undefined
         ? (this.ptysById.get(ptyId)?.lastAgentStatus ?? null)
@@ -215,8 +287,12 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
           () => this.getTerminalAgentStatusSnapshot(handle, ptyId).waitText
         )
       : undefined
-    const terminal = this.getTerminalAgentStatusSnapshot(handle, ptyId, waitText)
-    const status = this.hasAuthoritativeTerminalWaitPermission(terminal, explicit, lifecycle)
+    const waitInputs = this.getTerminalWaitPermissionInputs(handle, ptyId, waitText)
+    const status = this.hasAuthoritativeTerminalWaitPermission(
+      waitInputs.terminal,
+      explicit,
+      waitInputs.lifecycle
+    )
       ? 'permission'
       : lifecycleIsNewer
         ? lifecycle.status
@@ -224,7 +300,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     return {
       generation: this.getPtyLifecycleGeneration(ptyId),
       permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0,
-      workingSequence: lifecycle?.workingSequence ?? 0,
+      workingSequence: nativeLifecycle?.workingSequence ?? 0,
       explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
       outputSequence,
       status

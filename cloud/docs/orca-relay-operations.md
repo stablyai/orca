@@ -2,6 +2,21 @@
 
 This runbook applies to the stable Cloud Run director and the production-shaped GCE cells in both environments. It does not authorize a full Terraform apply: staging and production contain unrelated drift, so inspect a saved targeted plan and its destroy count before every apply.
 
+## PostgreSQL statement statistics
+
+Relay schema startup exposes `pg_stat_statements` when the server already preloads
+that collector and the schema identity can install its extension. Servers without
+the collector or the required privileges continue normally. Installation does not
+change preload settings, reset collected counters, or require a database restart;
+concurrent startups yield to one installer. An existing extension is left in place.
+
+For SQL incidents, inspect bounded aggregates of `calls`, `total_exec_time`,
+`shared_blks_read`, `shared_blks_dirtied`, and `wal_bytes`, scoped to the relay
+database and identified query IDs. Compare counter deltas over the same interval
+as fleet runtime metrics; retain the statistics reset timestamp. Do not export
+query text, identities, credentials, or invoke `pg_stat_statements_reset()` during
+an investigation. Treat an unavailable view as missing evidence, not zero work.
+
 The relay is automatically active for entitled signed-in desktops. There is no rollout flag, cohort, or user toggle. The emergency product kill switch is the auth plane refusing relay-token exchange; use cell drains only to move or terminate existing data-plane work.
 
 ## Safety rules
@@ -477,9 +492,61 @@ image, not only instance-template configuration, before rollout or enablement.
 Incompatible cells are excluded from correction selection; enabling the cohort
 cannot override this check. Director and cell deployments are separate operations.
 
+The idle-rehome commit runs on the source cell, so from an Asia cell every
+statement is a cross-region round trip to the database. It takes no fleet-wide
+lock. It locks the global rehome control and worker rows NOWAIT, then the host's
+own rows, and reads the cell inventory, runtime, capability and safety tables
+unlocked. Its only cell lock is the target cell row, taken NOWAIT by the last
+statement before COMMIT. That statement re-checks that the target is enabled, in
+general admission and has request capacity. The target row is held for about one
+round trip, roughly 175 ms from Asia, and no other cell row is held at all. If
+the target changed admission, filled up, or is locked by another writer such as
+an admission change, the commit rolls back whole and answers `deferred` with
+reason `candidate-ineligible`. The cell logs
+`orca_relay_idle_rehome_target_deferred` with the cause, and the director moves
+to its next candidate. Runtime metrics report the hold as
+`rehomeTargetRowHoldMsMax` and `rehomeTargetRowHolds`. The same hold also feeds
+`cellInventoryHoldMsMax`, and `cellInventoryHoldMaxSite` names the lock that
+produced that max. An Asia-sourced commit still holds the global rehome control
+row for its whole length, roughly 6.5 s at 175 ms per statement. An operator
+pause through `applyRegionalRehomeControl` waits 1 s for that row, 3 attempts,
+so it can fail during one commit: retry a pause that fails once, and do not
+treat that as a fault.
+
+Each hold site also reports its own p99: `inventoryHoldMsP99`,
+`rehomeTargetRowHoldMsP99` and `isolatedReplacementHoldMsP99`, the last being
+the regional target rows a drain return locks; a site with no holds in the
+interval reports 0, so read these filtered to values above 0. Directors also
+report lane slot times (`stickyServiceMsP50/P99`, `drainReturnServiceMsP50/P95`,
+omitted when the lane served nothing; a sticky slot held only for a drain-return
+or unverified host's verification read counts too, so its p50 moves with that
+share), every `/v1/assign` 503 by cause in
+`assign503sByCauseDelta`, and `assignNonDrain503sDelta`, which leaves out the
+scheduled `drain-return-deferred` answers a fast drain produces by design.
+Every 5 s each director samples `pg_stat_activity` for relay backends waiting
+on a lock, keyed by waiter role, table and holder role
+(`dbLockWaitersByKeyDelta`). The holder is the root of the wait chain, and the
+table is the first relay table the waiting statement names. The sample runs
+on the director's own 3-connection pool, so when every connection is waiting on
+a lock it queues behind them and undercounts director waiters; a dedicated
+sampler connection would fix that. Summed waiters divided by `dbLockWaitSamplesDelta`
+is the mean number waiting, i.e. lock-wait seconds per second; directors and
+cells share one database user, so Query Insights cannot make this split.
+Reconciliation logs `orca_relay_reservation_drift` for each cell whose
+`reserved_requests` it corrected.
+
 `host-cooldown-ms` is the minimum gap between two rehomes of one host. It bounds the damage from
 a desktop whose region probe flips: without it the host would be dragged back across the ocean on
 every flip, since the preference age never expires while the host keeps reconnecting.
+
+Rehome is currently inflow-only into Asia. The director only picks source cells in its own region,
+which is the database's region (US): hosts move from US cells to Asia cells, and a host already on
+an Asia cell stays there. Asia cells remain valid targets. The source cell runs the rehome commit,
+and an Asia source pays a cross-ocean round trip per statement while holding row locks every cell
+needs, which stalled the fleet's database. The preview reports those hosts as
+`source-outside-director-region`, and the poll summary line reports the skipped Asia cells as
+`skippedOffRegionSourceCells`. This is a temporary stopgap: it is removed once the rehome commit
+no longer holds those locks across round trips. Deploy or remove it only while rehome is paused.
 
 ## Game-day matrix
 

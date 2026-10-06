@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type {
   AgentSessionHistoryPage,
@@ -23,9 +23,13 @@ import {
 beforeEach(installStructuredHostStub)
 afterEach(clearStructuredHostStub)
 
+// A turn the host watched finish that the provider nonetheless failed: the arm
+// and the verdict disagree on purpose, which is the shape this surface has to
+// carry in both directions.
 const TURN = {
   turnId: 'turn-1',
   state: 'completed' as const,
+  outcome: 'failure' as const,
   userItemId: 'user-1',
   startedAt: 10,
   completedAt: 42,
@@ -83,7 +87,6 @@ describe('turn item capability at the RPC boundary', () => {
   it.each(['snapshot', 'batch', 'reset'] as const)(
     'downgrades the %s stream only for a legacy reader',
     async (type) => {
-      hostCalls.hold = vi.fn(async () => undefined)
       hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
         const base = { sessionId: SESSION, fence: 1 }
         if (type === 'batch') {
@@ -132,6 +135,12 @@ describe('turn item projection', () => {
   it('publishes the status form with the lifecycle intact to a legacy reader', () => {
     const projected = projectTurnItemHistory(history, STRUCTURED_CLIENT)
     expect(projected.page.items).toEqual([USER_ITEM, LEGACY_STATUS_ITEM])
+    // The downgrade is the only carrier an old client gets, so the verdict has to
+    // ride inside `turnLifecycle` rather than being dropped with the item kind.
+    expect(projected.page.items[1]?.body).toMatchObject({
+      kind: 'status',
+      turnLifecycle: { state: 'completed', outcome: 'failure' }
+    })
     // Untouched rows keep their identity; the journal's own body is never mutated.
     expect(projected.page.items[0]).toBe(USER_ITEM)
     expect(TURN_ITEM.body.kind).toBe('turn')

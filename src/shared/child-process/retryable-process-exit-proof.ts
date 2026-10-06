@@ -1,15 +1,17 @@
-export class RetryableProcessExitProof {
-  private inFlight: Promise<boolean> | null = null
+export class RetryableProcessExitProof<Result> {
+  private inFlight: Promise<Result> | null = null
 
-  run(proveExit: () => Promise<boolean>): Promise<boolean> {
+  constructor(private readonly isProven: (result: Result) => boolean) {}
+
+  run(proveExit: () => Promise<Result>): Promise<Result> {
     if (this.inFlight) {
       return this.inFlight
     }
     const attempt = proveExit()
     this.inFlight = attempt
     void attempt.then(
-      (proven) => {
-        if (!proven) {
+      (result) => {
+        if (!this.isProven(result)) {
           this.clear(attempt)
         }
       },
@@ -18,7 +20,7 @@ export class RetryableProcessExitProof {
     return attempt
   }
 
-  private clear(attempt: Promise<boolean>): void {
+  private clear(attempt: Promise<Result>): void {
     if (this.inFlight === attempt) {
       this.inFlight = null
     }

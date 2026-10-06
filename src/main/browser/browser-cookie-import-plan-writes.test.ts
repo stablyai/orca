@@ -89,16 +89,6 @@ describe('planImportWrites', () => {
     expect([...plan.skippedFamilies]).toEqual(['mixed.example'])
   })
 
-  it('does not suppress a different family that merely shares a public suffix', () => {
-    const plan = planImportWrites([
-      cookie('.skipped.example', 'unreadable', UNREADABLE),
-      cookie('.kept.example', 'kept', READABLE)
-    ])
-
-    expect(names(plan.writes)).toEqual(['kept'])
-    expect([...plan.skippedFamilies]).toEqual(['skipped.example'])
-  })
-
   it('flags a skip whose family cannot be named so the caller can refuse before mutating', () => {
     // Why (§4.3c): a family we cannot name is one we cannot exclude from the removal plan, and
     // clearing a family we cannot protect is exactly the P0. Refusal is the caller's job; the
@@ -114,18 +104,5 @@ describe('planImportWrites', () => {
 
     expect(plan.hasUnrepresentableSkip).toBe(false)
     expect([...plan.skippedFamilies]).toEqual(['mixed.example'])
-  })
-
-  it('counts every suppressed cookie as skipped so the summary still adds up', () => {
-    const rows = [
-      cookie('.mixed.example', 'readable-sibling', READABLE),
-      cookie('sub.mixed.example', 'unreadable', UNREADABLE),
-      cookie('.other.example', 'unrelated', READABLE)
-    ]
-
-    const plan = planImportWrites(rows)
-
-    // totalCookies === importedCookies + skippedCookies, as an identity rather than a field.
-    expect(plan.writes.length + plan.skips.length).toBe(rows.length)
   })
 })

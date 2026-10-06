@@ -39,6 +39,8 @@ export type AgentSendPopoverTargetMode = {
   sendingPaneKey?: string
   error?: string
   onPromptDelivered?: () => void
+  /** Told the send's own result the moment the prompt is handed to an agent. */
+  onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
 
 export type OpenAgentSendPopoverTargetModeArgs = {
@@ -49,6 +51,7 @@ export type OpenAgentSendPopoverTargetModeArgs = {
   label: string
   launchSource: LaunchSource
   onPromptDelivered?: () => void
+  onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
 
 export type TaskPageData = {
@@ -99,6 +102,9 @@ export type NewWorkspaceDraft = {
   linkedGitLabMR?: number | null
   // Why: repo-scoped start ref from the "Start from" picker; absent means "use the repo's effective base ref".
   baseBranch?: string
+  // Why: false when `baseBranch` came from the base-ref picker rather than a branch pick, so restoring the
+  // draft doesn't turn it back into a name-field pill. Absent on pre-flag drafts, which restore as a pick.
+  baseBranchNamesWorkspace?: boolean
   // Why: review worktrees start from a head ref/SHA while Source Control compares against the provider target branch.
   compareBaseRef?: string
 }

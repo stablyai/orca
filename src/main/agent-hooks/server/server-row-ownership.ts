@@ -4,6 +4,7 @@ import {
 } from '../../../shared/wsl-hook-relay-contract'
 import { splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../../shared/worktree/id'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { structuralValuesEqualIgnoringUndefined } from '../../../shared/structural-value-equality'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
   AgentHookStatusRowIdentity,
@@ -27,10 +28,7 @@ function toMutationIdentity(
   }
 }
 
-function semanticRowJson(row: EnrichedAgentHookEventPayload | null | undefined): string | null {
-  if (!row) {
-    return null
-  }
+function semanticRow(row: EnrichedAgentHookEventPayload): Record<string, unknown> {
   const {
     receivedAt: _receivedAt,
     evidenceObservedAt: _evidenceObservedAt,
@@ -39,7 +37,22 @@ function semanticRowJson(row: EnrichedAgentHookEventPayload | null | undefined):
     promptInteractionKey: _promptInteractionKey,
     ...semantic
   } = toAgentStatusIpcPayload(row)
-  return JSON.stringify(semantic)
+  return semantic
+}
+
+// Why: runs on every status write; a structural walk exits on the first difference and skips
+// shared leaves (e.g. an unchanged 8 KB lastAssistantMessage) instead of serializing both rows.
+function semanticRowsEqual(
+  before: EnrichedAgentHookEventPayload | null | undefined,
+  after: EnrichedAgentHookEventPayload | null | undefined
+): boolean {
+  if (before === after || (!before && !after)) {
+    return true
+  }
+  if (!before || !after) {
+    return false
+  }
+  return structuralValuesEqualIgnoringUndefined(semanticRow(before), semanticRow(after))
 }
 
 function wslDistroForWorktree(worktreeId: string | undefined): string | null {
@@ -66,7 +79,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
   }
 
   protected sameTerminalOwner(
-    previous: EnrichedAgentHookEventPayload,
+    previous: Pick<AgentHookEventPayload, 'connectionId' | 'worktreeId'>,
     incoming: Pick<AgentHookEventPayload, 'connectionId' | 'worktreeId'>
   ): boolean {
     if (
@@ -99,6 +112,20 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     )
   }
 
+  protected retainedOwnerLaunchTokenHash(
+    paneKey: string,
+    incoming: Pick<AgentHookEventPayload, 'connectionId' | 'worktreeId'>
+  ): string | undefined {
+    const fence = this.restartedStatusLaunchTokenHashByPaneKey.get(paneKey)
+    const authority = this.persistedAuthorityCommitmentsByPaneKey.get(paneKey)
+    return fence?.allowRetainedOwner &&
+      authority?.worktreeId &&
+      incoming.worktreeId &&
+      this.sameTerminalOwner(authority, incoming)
+      ? authority.launchTokenHash
+      : undefined
+  }
+
   protected commitStatusRowMutation(
     before: EnrichedAgentHookEventPayload | null | undefined,
     after: EnrichedAgentHookEventPayload | null | undefined,
@@ -113,7 +140,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     if (after?.terminalHandle) {
       this.paneKeyByTerminalHandle.set(after.terminalHandle, after.paneKey)
     }
-    if (!emit || semanticRowJson(before) === semanticRowJson(after)) {
+    if (!emit || semanticRowsEqual(before, after)) {
       return false
     }
     const mutation: AgentHookStatusRowMutation = {

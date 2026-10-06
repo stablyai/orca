@@ -21,6 +21,30 @@ export async function getWorkItem(
   localGitOptions: LocalGitExecOptions = {},
   preference?: IssueSourcePreference
 ): Promise<MainWorkItem | null> {
+  const { item } = await getWorkItemWithRepository(
+    repoPath,
+    number,
+    type,
+    connectionId,
+    localGitOptions,
+    preference
+  )
+  return item
+}
+
+export type WorkItemRepositoryLookup = {
+  item: MainWorkItem | null
+  repository: GitHubApiRepository | null
+}
+
+export async function getWorkItemWithRepository(
+  repoPath: string,
+  number: number,
+  type?: 'issue' | 'pr',
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference
+): Promise<WorkItemRepositoryLookup> {
   await acquire()
   try {
     // Why: listWorkItems uses resolveIssueGitHubApiRepositorySource; open-by-number
@@ -35,18 +59,24 @@ export async function getWorkItem(
       // Why: explicit origin with no origin identity must not bare-lookup ambient gh
       // (same fail-closed rule as origin-pinned PR candidate resolution).
       if (!source && preference === 'origin') {
-        return null
+        return { item: null, repository: null }
       }
-      return await fetchIssueWorkItem(repoPath, source, number, connectionId, localGitOptions)
+      return {
+        item: await fetchIssueWorkItem(repoPath, source, number, connectionId, localGitOptions),
+        repository: source
+      }
     }
     if (type === 'pr') {
-      return await fetchPullRequestWorkItemFromCandidates(
-        repoPath,
-        number,
-        connectionId,
-        localGitOptions,
-        preference
-      )
+      return {
+        item: await fetchPullRequestWorkItemFromCandidates(
+          repoPath,
+          number,
+          connectionId,
+          localGitOptions,
+          preference
+        ),
+        repository: null
+      }
     }
 
     try {
@@ -65,7 +95,7 @@ export async function getWorkItem(
           localGitOptions
         )
         if (issue) {
-          return issue
+          return { item: issue, repository: source }
         }
       }
     } catch (err) {
@@ -75,15 +105,18 @@ export async function getWorkItem(
         throw err
       }
     }
-    return await fetchPullRequestWorkItemFromCandidates(
-      repoPath,
-      number,
-      connectionId,
-      localGitOptions,
-      preference
-    )
+    return {
+      item: await fetchPullRequestWorkItemFromCandidates(
+        repoPath,
+        number,
+        connectionId,
+        localGitOptions,
+        preference
+      ),
+      repository: null
+    }
   } catch {
-    return null
+    return { item: null, repository: null }
   } finally {
     release()
   }

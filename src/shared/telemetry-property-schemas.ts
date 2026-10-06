@@ -10,14 +10,18 @@ import type { GlobalSettings } from './global-settings-types'
 export const AGENT_KIND_VALUES = [
   'claude-code',
   'claude-agent-teams',
+  'codebuddy',
   'openclaude',
   'codex',
   'autohand',
   'opencode',
+  'opencode2',
   'mimo-code',
   'pi',
   'omp',
   'prime-agent',
+  'qoder',
+  'qoder-cn',
   'gemini',
   'antigravity',
   'aider',
@@ -29,6 +33,7 @@ export const AGENT_KIND_VALUES = [
   'aug',
   'cline',
   'codebuff',
+  'freebuff',
   'command-code',
   'continue',
   'cursor',
@@ -43,7 +48,11 @@ export const AGENT_KIND_VALUES = [
   'grok',
   'devin',
   'ante',
+  'jcode',
   'trae',
+  'muse',
+  'dsh',
+  'zcode',
   'openinterpreter',
   'other'
 ] as const
@@ -135,6 +144,11 @@ export const launchSourceSchema = z.enum([
   'conflict_resolution',
   'source_control_recovery',
   'terminal_context_menu',
+  'explain_commit',
+  // Launches the host performs for a caller outside the desktop app.
+  'cli',
+  'mobile',
+  'orchestration',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>

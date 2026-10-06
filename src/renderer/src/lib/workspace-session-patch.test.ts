@@ -219,6 +219,7 @@ describe('buildWorkspaceSessionPatch', () => {
         // otherwise a crash between patches strands a stale target on disk.
         'activeConnectionIdsAtShutdown',
         'activeWorktreeIdsOnShutdown',
+        'localOnlyScrollbackByTabId',
         'remoteSessionIdsByTabId',
         'tabsByWorktree',
         'terminalLayoutsByTabId'
@@ -230,6 +231,60 @@ describe('buildWorkspaceSessionPatch', () => {
     expect('recovery' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
     expect(patch.terminalLayoutsByTabId?.['tab-local'].buffersByLeafId).toBeUndefined()
     expect(patch.terminalLayoutsByTabId?.['tab-local'].scrollbackRefsByLeafId).toBeUndefined()
+  })
+
+  it('patches the local-only scrollback home on its own, pruned like the shared one', () => {
+    const remoteWorktreeId = 'repo-ssh::/remote/worktree'
+    const localWorktreeId = 'repo-1::/local/worktree'
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        tabsByWorktree: {
+          [remoteWorktreeId]: [
+            {
+              id: 'tab-remote',
+              title: 'shell',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'pty-r',
+              worktreeId: remoteWorktreeId
+            }
+          ],
+          [localWorktreeId]: [
+            {
+              id: 'tab-local',
+              title: 'shell',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'pty-l',
+              worktreeId: localWorktreeId
+            }
+          ]
+        },
+        localOnlyScrollbackByTabId: {
+          'tab-remote': { 'pane:1': 'remote-park' },
+          'tab-local': { 'pane:1': 'local-park' }
+        },
+        repos: [createRepo('repo-1', null), createRepo('repo-ssh', 'conn-1')]
+      }),
+      ['localOnlyScrollbackByTabId']
+    )
+
+    // Why not terminalLayoutsByTabId: the two homes change independently; a park that only wrote
+    // the local-only home must not re-send every layout.
+    expect(Object.keys(patch)).toEqual(['localOnlyScrollbackByTabId'])
+    expect(patch.localOnlyScrollbackByTabId).toEqual({ 'tab-remote': { 'pane:1': 'remote-park' } })
+  })
+
+  it('writes an emptied local-only scrollback home as an empty map so the clear sticks', () => {
+    const patch = buildWorkspaceSessionPatch(createSnapshot({ localOnlyScrollbackByTabId: {} }), [
+      'localOnlyScrollbackByTabId'
+    ])
+
+    expect(patch).toEqual({ localOnlyScrollbackByTabId: {} })
   })
 
   it('keeps optional clearing keys in patches', () => {

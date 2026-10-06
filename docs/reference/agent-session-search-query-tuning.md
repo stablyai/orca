@@ -215,5 +215,15 @@ first page without a cursor. The caller can retry from page one. No long-lived
 read transaction is needed, and a mixed page is never returned as a valid snapshot.
 
 Repository/path operators are applied before a phrase or AND route is accepted.
-Candidate truncation remains explicit, including when an earlier route reached
-its cap but had no eligible sessions.
+Candidate truncation is reported by the rung that answered, not by every rung
+tried. Each rung of the ladder matches a superset of the one before it, so a
+rung that reached its cap with no eligible sessions is always followed by one
+that reaches it too: a full candidate set stays explicit either way.
+
+The phrase and AND rungs run for prose as well as for literal-looking input,
+over the query's tokens as typed rather than the stop-word-stripped OR body. A
+sentence pasted out of a transcript is ordinary words in order; over OR its
+common words fill the candidate limit with recent sessions and the old session
+holding the sentence never reaches ranking. The cost is two FTS queries that
+usually miss, which on the corpus above sits inside this harness's run-to-run
+noise. A one-token query still takes the rung only when it looked literal.

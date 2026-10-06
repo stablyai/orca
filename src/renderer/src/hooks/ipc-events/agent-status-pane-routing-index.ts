@@ -58,8 +58,12 @@ export function resetAgentStatusPaneRoutingIndexCounters(): void {
 const leafIdsByRoot = new WeakMap<TerminalPaneLayoutNode, Set<string>>()
 const tabsByIdCache = new WeakMap<AppState['tabsByWorktree'], Map<string, IndexedAgentStatusTab>>()
 const unifiedLabelIndexCache = new WeakMap<object, Map<string, Map<string, string | undefined>>>()
-const routingIndexCache = new WeakMap<AppState['tabsByWorktree'], AgentStatusPaneRoutingIndex>()
+const routingIndexCache = new WeakMap<
+  AppState['tabsByWorktree'],
+  WeakMap<object, AgentStatusPaneRoutingIndex>
+>()
 const NO_UNIFIED_TABS = {}
+const NO_LAYOUTS = {}
 
 function createUnifiedTerminalLabelIndex(
   entries: AppState['unifiedTabsByWorktree'][string] | undefined
@@ -134,7 +138,9 @@ function resolveUnifiedLabel(
 export function createAgentStatusPaneRoutingIndex(store: AppState): AgentStatusPaneRoutingIndex {
   const worktreesById = getWorktreeMapFromState(store)
   const reposById = getRepoMapFromState(store)
-  const cached = routingIndexCache.get(store.tabsByWorktree)
+  const layoutsKey = store.terminalLayoutsByTabId ?? NO_LAYOUTS
+  let indexesByLayout = routingIndexCache.get(store.tabsByWorktree)
+  const cached = indexesByLayout?.get(layoutsKey)
   if (
     cached &&
     cached.unifiedTabsByWorktree === store.unifiedTabsByWorktree &&
@@ -154,7 +160,11 @@ export function createAgentStatusPaneRoutingIndex(store: AppState): AgentStatusP
     worktreesById,
     reposById
   }
-  routingIndexCache.set(store.tabsByWorktree, index)
+  if (!indexesByLayout) {
+    indexesByLayout = new WeakMap()
+    routingIndexCache.set(store.tabsByWorktree, indexesByLayout)
+  }
+  indexesByLayout.set(layoutsKey, index)
   return index
 }
 

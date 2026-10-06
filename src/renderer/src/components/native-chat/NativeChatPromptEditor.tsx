@@ -2,6 +2,7 @@ import {
   readNativeChatDraftDocument,
   writeNativeChatDraftDocument
 } from './native-chat-draft-cache'
+import { hasUnsavedNativeChatComposerDraftChange } from './native-chat-composer-draft-store'
 import { closeHistory } from '@tiptap/pm/history'
 import { Slice } from '@tiptap/pm/model'
 import {
@@ -104,7 +105,15 @@ export function NativeChatPromptEditor({
           )
       },
       onTransaction: ({ editor: current, transaction }) => {
-        if (scopeKey && transaction.docChanged) {
+        // Why: a value set from the store with no change of this window behind it (another
+        // window's draft, a late load) is already saved; saving it back would make it one. A
+        // value this window just set keeps its document, skill chips included.
+        if (
+          scopeKey &&
+          transaction.docChanged &&
+          (!transaction.getMeta('preventUpdate') ||
+            hasUnsavedNativeChatComposerDraftChange(scopeKey))
+        ) {
           writeNativeChatDraftDocument(
             scopeKey,
             promptTextMap(current.state.doc).text,
@@ -134,12 +143,24 @@ export function NativeChatPromptEditor({
     () =>
       editor
         ? {
+            insertText: (text) => {
+              const content = editor.schema.nodeFromJSON(promptTextContent(text))
+              editor.view.dispatch(
+                editor.state.tr.replaceSelection(new Slice(content.content, 1, 1))
+              )
+            },
             get value() {
               return promptTextMap(editor.state.doc).text
             },
             set value(value: string) {
               const old = promptTextMap(editor.state.doc)
               if (old.text === value) {
+                return
+              }
+              // A draft loaded or adopted whole keeps its skill chips: its stored document wins.
+              const stored = scopeKey ? readNativeChatDraftDocument(scopeKey, value) : undefined
+              if (stored) {
+                editor.commands.setContent(stored, { emitUpdate: false })
                 return
               }
               if (!value) {
@@ -225,7 +246,7 @@ export function NativeChatPromptEditor({
             }
           }
         : null,
-    [editor]
+    [editor, scopeKey]
   )
   useImperativeHandle(inputRef, () => input!, [input])
 

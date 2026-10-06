@@ -1,4 +1,5 @@
 import type SyncDatabase from '../sqlite/sync-database'
+import { asRecord } from '../ai-vault/session-scanner-record-value'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../ai-vault/session-transcript-consumers'
 import type {
@@ -41,8 +42,22 @@ export type SessionSearchFileRow = {
   failedMtimeMs: number | null
 }
 
-/** How many rows are in each state; the whole of the indexer's progress report. */
-export type SessionSearchStateCounts = { current: number; due: number; failed: number }
+/** How many rows are in each state, sessions per agent, and the indexed message total; the whole of the indexer's progress report. */
+export type SessionSearchStateCounts = {
+  current: number
+  due: number
+  failed: number
+  /**
+   * Indexed sessions per agent.
+   *
+   * The one number that distinguishes an agent the index has read from one it
+   * has only listed: OpenCode's 606 rows in `files` with nothing in `sessions`
+   * was the shape of a whole source being silently unsearchable, and no
+   * file-state count could show it.
+   */
+  sessionsByAgent: Record<string, number>
+  messages: number
+}
 
 /**
  * Owns the index database. PR 2 scope: the write half only — the transcript
@@ -198,28 +213,33 @@ export class SessionSearchStore {
    */
   files(): SessionSearchFileRow[] {
     return (
-      this.db
-        .prepare(
-          `SELECT path, dev, ino, mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The files schema and SELECT aliases define this row; REAL casts return numeric IDs or null.
+      (
+        this.db
+          .prepare(
+            // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
+            `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
+                  mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
                   state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
            FROM files`
-        )
-        .all() as (Omit<SessionSearchFileRow, 'identity'> & {
-        dev: number | null
-        ino: number | null
-      })[]
-    ).map((row) => ({
-      path: row.path,
-      identity:
-        typeof row.dev === 'number' && typeof row.ino === 'number'
-          ? { dev: row.dev, ino: row.ino }
-          : null,
-      mtimeMs: row.mtimeMs,
-      sizeBytes: row.sizeBytes,
-      state: row.state,
-      failCount: row.failCount,
-      failedMtimeMs: row.failedMtimeMs
-    }))
+          )
+          .all() as (Omit<SessionSearchFileRow, 'identity'> & {
+          dev: number | null
+          ino: number | null
+        })[]
+      ).map((row) => ({
+        path: row.path,
+        identity:
+          typeof row.dev === 'number' && typeof row.ino === 'number'
+            ? { dev: row.dev, ino: row.ino }
+            : null,
+        mtimeMs: row.mtimeMs,
+        sizeBytes: row.sizeBytes,
+        state: row.state,
+        failCount: row.failCount,
+        failedMtimeMs: row.failedMtimeMs
+      }))
+    )
   }
 
   /**
@@ -261,17 +281,49 @@ export class SessionSearchStore {
     }
   }
 
-  /** Rows per state. The status is this query and the pass's own degraded roots. */
+  /** Rows per state and indexed messages. The status is these queries and the pass's own degraded roots. */
   stateCounts(): SessionSearchStateCounts {
     const rows = this.db.prepare('SELECT state, count(*) AS n FROM files GROUP BY state').all() as {
       state: SessionSearchFileState
       n: number
     }[]
-    const counts: SessionSearchStateCounts = { current: 0, due: 0, failed: 0 }
+    const counts: SessionSearchStateCounts = {
+      current: 0,
+      due: 0,
+      failed: 0,
+      sessionsByAgent: this.sessionsByAgent(),
+      messages: 0
+    }
     for (const row of rows) {
       counts[row.state] = Number(row.n)
     }
+    counts.messages = this.messageCount()
     return counts
+  }
+
+  // Grouped on `sessions_agent`, over one row per indexed session. Deliberately
+  // not the message count beside it: that would scan every indexed row on a call
+  // the panel polls, and it answers the same question one table later.
+  private sessionsByAgent(): Record<string, number> {
+    const rows = this.db.prepare('SELECT agent, count(*) AS n FROM sessions GROUP BY agent').all()
+    const counts: Record<string, number> = {}
+    for (const row of rows) {
+      const agent = asRecord(row)?.agent
+      const total = asRecord(row)?.n
+      if (typeof agent === 'string' && typeof total === 'number') {
+        counts[agent] = total
+      }
+    }
+    return counts
+  }
+
+  /** Messages the index holds. Read with the file states so both describe one moment. */
+  private messageCount(): number {
+    const row: unknown = this.db.prepare('SELECT count(*) AS n FROM messages').get()
+    if (row && typeof row === 'object' && 'n' in row && typeof row.n === 'number') {
+      return row.n
+    }
+    return 0
   }
 
   /**
@@ -309,6 +361,7 @@ export class SessionSearchStore {
       return
     }
     this.closed = true
+    this.writer.close()
     this.db.close()
   }
 }

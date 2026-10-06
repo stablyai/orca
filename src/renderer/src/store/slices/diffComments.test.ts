@@ -580,6 +580,43 @@ describe('bulk clear diff comments', () => {
     })
   })
 
+  it('keeps markdown notes when asked, so a hidden markdown note survives a clear', async () => {
+    const store = createTestStore()
+    seed(store, [
+      makeComment({ id: 'diff', filePath: 'README.md' }),
+      makeComment({ id: 'md', filePath: 'README.md', source: 'markdown' }),
+      makeComment({ id: 'other', filePath: 'src/foo.ts' })
+    ])
+
+    await store.getState().clearDiffCommentsForFile(WT, 'README.md', { keepMarkdownNotes: true })
+    expect(
+      store
+        .getState()
+        .getDiffComments(WT)
+        .map((c) => c.id)
+    ).toEqual(['md', 'other'])
+
+    await store.getState().clearDiffComments(WT, { keepMarkdownNotes: true })
+    expect(
+      store
+        .getState()
+        .getDiffComments(WT)
+        .map((c) => c.id)
+    ).toEqual(['md'])
+  })
+
+  it('does not persist a keep-markdown clear that removes nothing', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'md', filePath: 'README.md', source: 'markdown' })]
+    seed(store, comments)
+
+    const ok = await store.getState().clearDiffComments(WT, { keepMarkdownNotes: true })
+
+    expect(ok).toBe(true)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    expect(updateMeta).not.toHaveBeenCalled()
+  })
+
   it('returns success without persisting when no file notes match', async () => {
     const store = createTestStore()
     const comments = [makeComment({ id: 'c1', filePath: 'src/foo.ts' })]

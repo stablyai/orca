@@ -226,9 +226,11 @@ export class RuntimeBrowserPageRegistry {
   }
 }
 
-const registries = new WeakMap<object, RuntimeBrowserPageRegistry>()
+/** Keyed by runtime identity alone; this module never reads from the runtime, and the callers'
+ *  declared host types share no member. */
+const registries = new WeakMap<WeakKey, RuntimeBrowserPageRegistry>()
 
-export function getRuntimeBrowserPageRegistry(runtime: object): RuntimeBrowserPageRegistry {
+export function getRuntimeBrowserPageRegistry(runtime: WeakKey): RuntimeBrowserPageRegistry {
   let registry = registries.get(runtime)
   if (!registry) {
     registry = new RuntimeBrowserPageRegistry()

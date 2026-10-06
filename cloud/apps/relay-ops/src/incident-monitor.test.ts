@@ -273,16 +273,19 @@ describe('incident monitor evaluator', () => {
     )
   })
 
-  it('allows at most three unexpected director errors per five minutes without relaxing other gates', () => {
-    for (const errors of [1, 2, 3]) {
+  // Why: measured non-503 5xx per rolling five minutes over the 24 h to 2026-09-17
+  // was p90 3 / p95 5 / p99 9 / max 52, so the old bar of 3 sat on the p90 and froze
+  // 29% of 15-minute gates on chronic director 500 bursts.
+  it('tolerates the measured chronic director error rate without relaxing other gates', () => {
+    for (const errors of [1, 3, 5, 9, 15]) {
       const sample = healthySample()
       sample.sources['cloud-monitoring']!.signals['director.errors'] = signal(errors)
       expect(evaluateIncidentSample(sample, startedAt).status).toBe('green')
     }
     const excess = healthySample()
-    excess.sources['cloud-monitoring']!.signals['director.errors'] = signal(4)
+    excess.sources['cloud-monitoring']!.signals['director.errors'] = signal(16)
     expect(evaluateIncidentSample(excess, startedAt).failures).toContainEqual(
-      expect.objectContaining({ signal: 'director.errors', observed: 4, threshold: 3 })
+      expect.objectContaining({ signal: 'director.errors', observed: 16, threshold: 15 })
     )
     const auth = healthySample()
     auth.sources['cloud-monitoring']!.signals['auth.errors'] = signal(1)
@@ -358,17 +361,20 @@ describe('incident monitor evaluator', () => {
     })
   })
 
+  // Why: measured latest-sum over the 24 h to 2026-09-17 was p95 212 / p99 262 /
+  // max 282, so the old bar of 250 sat under the observed peak and froze 21.8% of
+  // 15-minute gates. 320 still fires at 65% of the 490 usable connections.
   it('bounds Cloud SQL backends above measured healthy peaks', () => {
     const sample = healthySample()
-    sample.sources['cloud-monitoring']!.signals['cloud_sql.backends'] = signal(250)
+    sample.sources['cloud-monitoring']!.signals['cloud_sql.backends'] = signal(282)
     expect(evaluateIncidentSample(sample, startedAt).status).toBe('green')
-    sample.sources['cloud-monitoring']!.signals['cloud_sql.backends'] = signal(251)
+    sample.sources['cloud-monitoring']!.signals['cloud_sql.backends'] = signal(321)
     expect(evaluateIncidentSample(sample, startedAt).failures).toContainEqual({
       code: 'threshold_max',
       source: 'cloud-monitoring',
       signal: 'cloud_sql.backends',
-      observed: 251,
-      threshold: 250
+      observed: 321,
+      threshold: 320
     })
   })
 
@@ -807,6 +813,150 @@ describe('incident monitor lifecycle', () => {
     expect(preDrainDryRunPassed(result)).toBe(true)
   })
 
+  // Why: dry-run 35258662628 read a healthy fleet clean for 13 minutes, then one
+  // unreadable Cloud Monitoring sample restarted the window and the restart blew
+  // the lineage cap, so a green fleet produced no verdict.
+  it('carries a 15-minute window through a single collector failure', async () => {
+    let now = startedAt
+    const warnings: string[] = []
+    const state = initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+    const result = await runIncidentMonitor(state, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        if (now === startedAt + 10 * 60_000) {
+          throw new Error('cloud monitoring read failed')
+        }
+        return healthySample(now)
+      },
+      persist: async () => {},
+      checkpoint: async () => {},
+      warn: (message) => {
+        warnings.push(message)
+      }
+    })
+    expect(result.windowSequence).toBe(0)
+    expect(result.windowStartedAt).toBe(new Date(startedAt).toISOString())
+    expect(result.completedAt).toBe(new Date(startedAt + 15 * 60_000).toISOString())
+    expect(result.sampleCount).toBe(16)
+    expect(result.frozenAt).toBeNull()
+    expect(result.failures).toEqual([])
+    expect(result.continuityEvents).toEqual([{
+      recordedAt: new Date(startedAt + 10 * 60_000).toISOString(),
+      windowSequence: 0,
+      tolerated: true,
+      failures: [{ code: 'collector_failed', source: 'cloud-monitoring' }]
+    }])
+    expect(warnings).toEqual([
+      'incident monitor collector failed: cloud monitoring read failed'
+    ])
+    expect(preDrainDryRunPassed(result)).toBe(true)
+  })
+
+  it('restarts the window after three consecutive collector failures', async () => {
+    let now = startedAt
+    let failures = INCIDENT_FRESHNESS_TOLERANCE_SAMPLES + 1
+    const state = initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+    const result = await runIncidentMonitor(state, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        if (failures > 0 && now >= startedAt + 10 * 60_000) {
+          failures--
+          throw new Error('cloud monitoring read failed')
+        }
+        return healthySample(now)
+      },
+      persist: async () => {},
+      checkpoint: async () => {},
+      warn: () => {}
+    })
+    const restartMinute = 10 + INCIDENT_FRESHNESS_TOLERANCE_SAMPLES + 1
+    expect(result.windowSequence).toBe(1)
+    expect(result.windowStartedAt).toBe(
+      new Date(startedAt + restartMinute * 60_000).toISOString()
+    )
+    expect(result.completedAt).toBe(
+      new Date(startedAt + (restartMinute + 15) * 60_000).toISOString()
+    )
+    expect(result.sampleCount).toBe(16)
+    expect(result.continuityEvents.map((event) => event.tolerated)).toEqual([
+      ...Array<boolean>(INCIDENT_FRESHNESS_TOLERANCE_SAMPLES).fill(true),
+      false
+    ])
+    expect(result.continuityEvents.at(-1)!.failures).toEqual([
+      { code: 'collector_failed', source: 'cloud-monitoring' }
+    ])
+    expect(result.frozenAt).toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(true)
+  })
+
+  it('still reaches a dry-run verdict after a restart on the last sample', async () => {
+    let now = startedAt
+    let failures = INCIDENT_FRESHNESS_TOLERANCE_SAMPLES + 1
+    const state = initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+    const result = await runIncidentMonitor(state, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        if (failures > 0 && now >= startedAt + 13 * 60_000) {
+          failures--
+          throw new Error('cloud monitoring read failed')
+        }
+        return healthySample(now)
+      },
+      persist: async () => {},
+      checkpoint: async () => {},
+      warn: () => {}
+    })
+    expect(result.windowSequence).toBe(1)
+    expect(result.windowStartedAt).toBe(new Date(startedAt + 16 * 60_000).toISOString())
+    expect(result.completedAt).toBe(new Date(startedAt + 31 * 60_000).toISOString())
+    expect(result.sampleCount).toBe(16)
+    expect(result.frozenAt).toBeNull()
+    expect(result.failures).toEqual([])
+    expect(preDrainDryRunPassed(result)).toBe(true)
+  })
+
   it('gives a signal a fresh budget only after it reads fresh again', async () => {
     let now = startedAt
     const staleMinutes = new Set([3, 5, 6, 9, 10])
@@ -971,7 +1121,7 @@ describe('incident monitor lifecycle', () => {
     expect(result.sampleCount).toBe(16)
   })
 
-  it('fails a dry run after 25 total minutes of continuity resets', async () => {
+  it('fails a dry run after 35 total minutes of continuity resets', async () => {
     let now = startedAt
     const state = initialIncidentMonitorState({
       incidentId: 'incident-1',
@@ -985,15 +1135,16 @@ describe('incident monitor lifecycle', () => {
       durationMinutes: 15,
       intervalMs: 60_000
     })
-    let staleSamples = INCIDENT_FRESHNESS_TOLERANCE_SAMPLES + 1
+    // Two restarts: the first on the window's last sample, the second far enough
+    // into the replacement window that no third window can finish in the lineage.
+    const staleMinutes = new Set([13, 14, 15, 24, 25, 26])
     const result = await runIncidentMonitor(state, {
       now: () => now,
       wait: async (ms) => {
         now += ms
       },
       collect: async () => {
-        if (staleSamples > 0 && now >= startedAt + 10 * 60_000) {
-          staleSamples--
+        if (staleMinutes.has((now - startedAt) / 60_000)) {
           return healthySample(
             now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs - 1
           )
@@ -1008,8 +1159,8 @@ describe('incident monitor lifecycle', () => {
       new Date(startedAt + INCIDENT_PRE_DRAIN_MAX_LINEAGE_MS).toISOString()
     )
     expect(result.frozenAt).not.toBeNull()
-    expect(result.windowSequence).toBe(1)
-    expect(result.sampleCount).toBe(13)
+    expect(result.windowSequence).toBe(2)
+    expect(result.sampleCount).toBe(9)
     expect(result.failures).toContainEqual({
       code: 'continuity_deadline_exceeded',
       source: 'active-probe',
@@ -1114,3 +1265,371 @@ describe('incident monitor lifecycle', () => {
     expect(waits[0]).toBe(45_000)
   })
 })
+
+// Why: the asia-east2 cells' readiness probe runs SELECT 1 against Cloud SQL in
+// us-central1 behind a 2 s timeout, so a saturated pool makes the load balancer
+// answer "no healthy upstream" for about 30 s. Every one of 39 pre-roll gates froze
+// on that, and 7 of the last 14 froze on this signal alone.
+describe('incident monitor cell probe tolerance', () => {
+  const dryRunState = () =>
+    initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+
+  // Returns the finished state of a 15-minute dry-run whose cell probe reads
+  // health=0 and ready=0 on the sample indexes in `badSamples`.
+  const runWithCellProbeGaps = async (badSamples: Set<number>) => {
+    let now = startedAt
+    let index = -1
+    return await runIncidentMonitor(dryRunState(), {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        index++
+        const sample = healthySample(now)
+        if (badSamples.has(index)) {
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.health'] =
+            signal(0, now)
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.ready'] =
+            signal(0, now)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+  }
+
+  it('passes a dry-run through a probe outage no longer than the tolerance', async () => {
+    const tolerance = INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+    const result = await runWithCellProbeGaps(
+      new Set(Array.from({ length: tolerance }, (_, offset) => 3 + offset))
+    )
+    expect(result.frozenAt).toBeNull()
+    expect(result.failures).toEqual([])
+    expect(preDrainDryRunPassed(result)).toBe(true)
+    // The blip is absorbed, not hidden: the sealed state still carries it.
+    expect(result.toleratedProbeEvents).toHaveLength(tolerance)
+    expect(result.toleratedProbeEvents[0]!.failures).toContainEqual(
+      expect.objectContaining({
+        source: 'active-probe',
+        signal: 'cell.production-gce-c1.health',
+        observed: 0,
+        threshold: 1
+      })
+    )
+    // A recovered probe hands back the full budget rather than a partial one.
+    expect(result.probeStreaks).toEqual({})
+  })
+
+  it('freezes once a cell probe fails past the tolerance', async () => {
+    const tolerance = INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+    const result = await runWithCellProbeGaps(
+      new Set(Array.from({ length: tolerance + 1 }, (_, offset) => 3 + offset))
+    )
+    expect(result.frozenAt).not.toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(false)
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({
+        source: 'active-probe',
+        signal: 'cell.production-gce-c1.health',
+        observed: 0,
+        threshold: 1
+      })
+    )
+    // Only the samples past the tolerance freeze; the first two are still absorbed.
+    expect(result.toleratedProbeEvents).toHaveLength(tolerance)
+  })
+
+  it('does not accumulate a streak across a recovered sample', async () => {
+    const tolerance = INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+    // Repeated single-sample outages, each separated by a healthy sample, never
+    // reach the tolerance however many times they recur.
+    const spaced = new Set([2, 4, 6, 8, 10])
+    expect(spaced.size).toBeGreaterThan(tolerance)
+    const result = await runWithCellProbeGaps(spaced)
+    expect(result.frozenAt).toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(true)
+  })
+
+  // Why: health, ready and latency_ms all describe the same round trip, so the streak
+  // is keyed by cell. Keyed per signal, this cell holds every individual streak at one
+  // and never reaches the tolerance, yet it is unhealthy without a break from sample 2.
+  it('freezes on a cell that alternates between slow and unanswered', async () => {
+    let now = startedAt
+    let index = -1
+    const result = await runIncidentMonitor(dryRunState(), {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        index++
+        const sample = healthySample(now)
+        if (index < 2) return sample
+        // Two samples slow, then two samples down, repeating: never the same signal
+        // twice in a row beyond the tolerance, but never healthy either.
+        if (Math.floor((index - 2) / 2) % 2 === 0) {
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.latency_ms'] =
+            signal(9_000, now)
+        } else {
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.health'] =
+            signal(0, now)
+          sample.sources['active-probe']!.signals['cell.production-gce-c1.ready'] =
+            signal(0, now)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.frozenAt).not.toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(false)
+  })
+
+  // Why: the streak lives in the state file, so a resumed run must not hand a cell
+  // that was already failing a fresh budget.
+  it('freezes immediately when a resumed state carries a full streak', async () => {
+    let now = startedAt
+    const resumed = {
+      ...dryRunState(),
+      lastSampleAt: new Date(startedAt).toISOString(),
+      probeStreaks: {
+        'active-probe/cell.production-gce-c1':
+          INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+      }
+    }
+    const result = await runIncidentMonitor(resumed, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        const sample = healthySample(now)
+        sample.sources['active-probe']!.signals['cell.production-gce-c1.health'] =
+          signal(0, now)
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.frozenAt).toBe(new Date(startedAt).toISOString())
+    expect(result.toleratedProbeEvents).toEqual([])
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({
+        source: 'active-probe',
+        signal: 'cell.production-gce-c1.health'
+      })
+    )
+  })
+
+  it('gives the director and auth probes no tolerance', async () => {
+    let now = startedAt
+    let index = -1
+    const result = await runIncidentMonitor(dryRunState(), {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        index++
+        const sample = healthySample(now)
+        if (index === 3) {
+          sample.sources['active-probe']!.signals['director.health'] = signal(0, now)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.frozenAt).not.toBeNull()
+    expect(result.toleratedProbeEvents).toEqual([])
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({ source: 'active-probe', signal: 'director.health' })
+    )
+  })
+})
+
+// Why: Cloud Run replaces director instances in place, so the count leaves the
+// [5, 6] band for about one sample roughly twice a day, and a deploy overlap
+// raises it the same way. Neither is an unhealthy fleet, and freezing on it
+// blocks the roll that fixes the measured condition.
+describe('incident monitor director instance tolerance', () => {
+  const dryRunState = () =>
+    initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+
+  // Finished state of a 15-minute dry run whose director instance count reads
+  // `counts[index]` on the sample indexes that map has, and 5 everywhere else.
+  const runWithInstanceCounts = async (
+    counts: Map<number, number>,
+    state = dryRunState()
+  ) => {
+    let now = startedAt
+    let index = -1
+    return await runIncidentMonitor(state, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        index++
+        const sample = healthySample(now)
+        const count = counts.get(index)
+        if (count !== undefined) {
+          sample.sources['cloud-monitoring']!.signals['director.instances'] =
+            signal(count, now)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+  }
+
+  it('passes a dry run through an instance dip no longer than the tolerance', async () => {
+    const tolerance = INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+    const result = await runWithInstanceCounts(
+      new Map(Array.from({ length: tolerance }, (_, offset) => [3 + offset, 2]))
+    )
+    expect(result.frozenAt).toBeNull()
+    expect(result.failures).toEqual([])
+    expect(preDrainDryRunPassed(result)).toBe(true)
+    // Absorbed, not hidden: the sealed state still carries the dip.
+    expect(result.toleratedProbeEvents).toHaveLength(tolerance)
+    expect(result.toleratedProbeEvents[0]!.failures).toContainEqual(
+      expect.objectContaining({
+        code: 'threshold_min',
+        source: 'cloud-monitoring',
+        signal: 'director.instances',
+        observed: 2,
+        threshold: INCIDENT_MONITOR_THRESHOLDS.directorInstancesMin
+      })
+    )
+    expect(result.probeStreaks).toEqual({})
+  })
+
+  it('passes a dry run through a deploy-overlap overshoot within the tolerance', async () => {
+    const tolerance = INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+    const result = await runWithInstanceCounts(
+      new Map(Array.from({ length: tolerance }, (_, offset) => [3 + offset, 9]))
+    )
+    expect(result.frozenAt).toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(true)
+    expect(result.toleratedProbeEvents[0]!.failures).toContainEqual(
+      expect.objectContaining({
+        code: 'threshold_max',
+        signal: 'director.instances',
+        observed: 9,
+        threshold: INCIDENT_MONITOR_THRESHOLDS.directorInstancesMax
+      })
+    )
+  })
+
+  it('freezes once the instance count stays out of band past the tolerance', async () => {
+    const tolerance = INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+    const result = await runWithInstanceCounts(
+      new Map(Array.from({ length: tolerance + 1 }, (_, offset) => [3 + offset, 2]))
+    )
+    expect(result.frozenAt).not.toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(false)
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({
+        code: 'threshold_min',
+        source: 'cloud-monitoring',
+        signal: 'director.instances',
+        observed: 2
+      })
+    )
+    expect(result.toleratedProbeEvents).toHaveLength(tolerance)
+  })
+
+  it('does not accumulate a streak across a recovered sample', async () => {
+    const spaced = new Map([2, 4, 6, 8, 10].map((index) => [index, 2] as const))
+    expect(spaced.size).toBeGreaterThan(
+      INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+    )
+    const result = await runWithInstanceCounts(new Map(spaced))
+    expect(result.frozenAt).toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(true)
+  })
+
+  // Why min and max share one streak: a count that alternates above and below
+  // the band would otherwise hold each streak at one and never freeze, yet the
+  // director is never at its configured size.
+  it('freezes on a count that alternates above and below the band', async () => {
+    const counts = new Map<number, number>()
+    for (let index = 2; index < 12; index += 1) {
+      counts.set(index, index % 2 === 0 ? 2 : 9)
+    }
+    const result = await runWithInstanceCounts(counts)
+    expect(result.frozenAt).not.toBeNull()
+    expect(preDrainDryRunPassed(result)).toBe(false)
+  })
+
+  // Why: the streak lives in the state file, so a resumed run must not hand a
+  // director that was already out of band a fresh budget.
+  it('freezes immediately when a resumed state carries a full streak', async () => {
+    const result = await runWithInstanceCounts(new Map([[0, 2]]), {
+      ...dryRunState(),
+      lastSampleAt: new Date(startedAt).toISOString(),
+      probeStreaks: {
+        'cloud-monitoring/director.instances':
+          INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+      }
+    })
+    expect(result.frozenAt).toBe(new Date(startedAt).toISOString())
+    expect(result.toleratedProbeEvents).toEqual([])
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({ signal: 'director.instances' })
+    )
+  })
+
+  it('keeps every other cloud-monitoring signal at zero tolerance', async () => {
+    let now = startedAt
+    let index = -1
+    const result = await runIncidentMonitor(dryRunState(), {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        index++
+        const sample = healthySample(now)
+        if (index === 3) {
+          sample.sources['cloud-monitoring']!.signals['cloud_sql.cpu'] = signal(0.99, now)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.frozenAt).not.toBeNull()
+    expect(result.toleratedProbeEvents).toEqual([])
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({ source: 'cloud-monitoring', signal: 'cloud_sql.cpu' })
+    )
+  })
+})
+

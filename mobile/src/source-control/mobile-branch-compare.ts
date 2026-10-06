@@ -1,12 +1,13 @@
 import type {
-  GitBranchChangeEntry,
-  GitBranchCompareResult,
-  GitBranchCompareSummary
-} from '../../../src/shared/git-diff-compare-types'
+  MobileGitBranchChangeEntry,
+  MobileGitBranchCompareReply,
+  MobileGitBranchCompareSummary
+} from './git-compare-reply-schema'
 
-export type MobileGitBranchChangeEntry = GitBranchChangeEntry
-export type MobileGitBranchCompareSummary = GitBranchCompareSummary
-export type MobileGitBranchCompareResult = GitBranchCompareResult
+// The shapes mobile reads off the compare replies are the reply schemas' outputs, not the desktop
+// aggregates: a member with no reader in mobile/ is stripped rather than re-declared here.
+export type { MobileGitBranchChangeEntry, MobileGitBranchCompareSummary }
+export type MobileGitBranchCompareResult = MobileGitBranchCompareReply
 
 export type MobileBranchCompareSection<
   TEntry extends MobileGitBranchChangeEntry = MobileGitBranchChangeEntry

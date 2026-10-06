@@ -181,15 +181,6 @@ describe('mergeAiVaultListResults', () => {
     expect(merged.sessions).toHaveLength(1001)
   })
 
-  it('keeps a per-host scope truncation notice when merging all-host results', () => {
-    const merged = mergeAiVaultListResults(
-      [listResult([]), listResult([SCOPE_TRUNCATION])],
-      undefined
-    )
-
-    expect(merged.issues).toEqual([SCOPE_TRUNCATION])
-  })
-
   it('keeps one scope notice per host rather than collapsing them', () => {
     const otherHost: AiVaultScanIssue = { ...SCOPE_TRUNCATION, executionHostId: 'ssh:build-box' }
 

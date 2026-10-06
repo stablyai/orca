@@ -1,8 +1,10 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithLinearCommands } from './orca-runtime-linear-commands'
+import type { ExecutionHostScope } from '../../shared/execution-host'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { StatsCollector } from '../stats/collector'
 import type { IPtyProvider } from '../providers/types'
+import type { PrepareClaudeAuth } from '../ipc/pty/host-env/types'
 import type { RuntimeTerminalAgentStatusEvent } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
@@ -28,6 +30,10 @@ import {
 } from './runtime-skill-command-surface'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
+import {
+  RuntimeSessionSearchSettingsController,
+  type SessionSearchSettingsApply
+} from './runtime-session-search-settings'
 import { RuntimeAutomationController } from './runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from './runtime-orchestration-federation'
 import { configureAiVaultSessionSources } from '../ai-vault/cached-session-list'
@@ -35,14 +41,22 @@ import { configureHostReadableTranscriptPathSources } from '../native-chat/host-
 import { createEphemeralAgentSessionClaimSigner } from './agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from './terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from './terminal-view-attribute-store'
+import { RuntimeMachineName } from './runtime-machine-name'
 
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
+  protected readonly prepareClaudeAuth?: PrepareClaudeAuth
+
+  protected readonly machineName = new RuntimeMachineName(
+    () => this.store?.getSettings?.().machineName
+  )
+
   constructor(
     store: RuntimeStore | null = null,
     stats?: StatsCollector,
     deps?: {
       getLocalProvider?: () => IPtyProvider
       getSshProvider?: (connectionId: string) => IPtyProvider | undefined
+      prepareClaudeAuth?: PrepareClaudeAuth
       onPtyStopped?: (ptyId: string) => void
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
       onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
@@ -69,7 +83,11 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         terminalProvenance: 'current_runtime' | 'restored'
       }) => AgentHookAuthorityAttestation | null
       retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
+      checkHookAgentPresence?: (
+        paneKey: string
+      ) => Promise<'live' | 'unverifiable' | 'exited' | null>
       reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
+      dropAgentStatusForRemovedWorktree?: (worktreeId: string, host?: ExecutionHostScope) => void
       canRecoverPersistentLocalPtys?: () => boolean
       // Why: the device registry lives on the RPC server, which is constructed with this runtime;
       // a closure defers the lookup past that ordering instead of inverting ownership.
@@ -83,23 +101,29 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         args: AiVaultPrepareSessionResumeArgs
       ) => Promise<AiVaultPrepareSessionResumeResult>
       prepareCodexStructuredLaunch?: (input: {
-        workspacePath: string
+        launchEnv: NodeJS.ProcessEnv
+      }) => string | null | Promise<string | null>
+      // Why a sibling of prepare: record-less catalog reads must resolve the
+      // same launch home with none of launch prep's side effects (no sync, no
+      // bridge, no cleared selection).
+      resolveCodexStructuredLaunchHome?: (input: {
         launchEnv: NodeJS.ProcessEnv
       }) => string | null | Promise<string | null>
       buildAgentHookPtyEnv?: () => Record<string, string>
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
       skillTransactionRecovery?: Promise<unknown>
+      // Why a host hook and not a direct call: the process that owns this runtime's index
+      // differs per host (scanner child on the desktop, in-process on orcad), and on orcad
+      // it is installed after construction, so the closure has to resolve it at call time.
+      applySessionSearchSettings?: SessionSearchSettingsApply
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
     }
   ) {
     super()
     this.store = store
-    store?.onSettingsChanged?.((updates) => {
-      if ('experimentalStructuredNativeChat' in updates) {
-        this.notifyMobileSessionTabsChanged()
-      }
-    })
+    this.machineName.start()
+    this.prepareClaudeAuth = deps?.prepareClaudeAuth
     const runtime = this as RuntimeCommandSurfaceHost<this>
     installRuntimeFileCommandSurface(runtime, this.fileCommands)
     installRuntimeGitCommandSurface(runtime, this.gitCommands)
@@ -128,6 +152,10 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     })
     installRuntimeServiceCommandSurface(runtime, {
       aiVault: this.aiVault,
+      sessionSearchSettings: new RuntimeSessionSearchSettingsController(
+        store,
+        deps?.applySessionSearchSettings ?? null
+      ),
       clientEvents: this.clientEvents,
       nativeChatDraftResolutions: this.nativeChatDraftResolutions,
       subscriptions: this.subscriptions,
@@ -202,7 +230,9 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       deps?.attestAgentHookCompatibilityAuthority ?? null
     this.retireAgentHookCompatibilityAuthorityFn =
       deps?.retireAgentHookCompatibilityAuthority ?? null
+    this.checkHookAgentPresenceFn = deps?.checkHookAgentPresence ?? null
     this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
+    this.dropAgentStatusForRemovedWorktreeFn = deps?.dropAgentStatusForRemovedWorktree ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable
@@ -230,6 +260,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
     this.prepareAiVaultSessionResumeFn = deps?.prepareAiVaultSessionResume ?? null
     this.prepareCodexStructuredLaunchFn = deps?.prepareCodexStructuredLaunch ?? null
+    this.resolveCodexStructuredLaunchHomeFn = deps?.resolveCodexStructuredLaunchHome ?? null
     this.agentSessionClaimSigner =
       deps?.agentSessionClaimSigner ?? createEphemeralAgentSessionClaimSigner(this.runtimeId)
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null

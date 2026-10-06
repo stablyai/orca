@@ -1,7 +1,7 @@
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { Automation } from '../../../../shared/automations-types'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 
@@ -20,10 +20,7 @@ export function getRepoBackedAutomationSourceContext(
 
 export function getRuntimeSourceHostAvailability(
   context: TaskSourceContext,
-  runtimeStatusByEnvironmentId: ReadonlyMap<
-    string,
-    { status: RuntimeStatus | null; checkedAt: number }
-  >
+  runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
 ): TaskSourceHostAvailability | null {
   const parsed = parseExecutionHostId(context.hostId)
   if (parsed?.kind !== 'runtime') {

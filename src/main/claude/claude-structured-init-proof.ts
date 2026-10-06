@@ -46,25 +46,39 @@ export function readClaudeModels(initialization: unknown): unknown[] {
     : []
 }
 
-/** CLI capabilities advertised on the initialize result or the yielded system/init frame. */
+/**
+ * The capabilities this CLI advertises: the first report given that names any, else `observed`.
+ * A SessionStart proof and the 2.1.280 initialize result name none, so only a turn's system/init
+ * may say what the binary supports, and a report naming none never retracts that.
+ */
 export function readClaudeCapabilities(
-  init: ClaudeInitObservation,
-  initialization: unknown
-): string[] {
-  const fromResult = isRecord(initialization) ? initialization.capabilities : undefined
-  const fromFrame = init.message.capabilities
-  const source = Array.isArray(fromResult) ? fromResult : Array.isArray(fromFrame) ? fromFrame : []
-  return source.filter((value): value is string => typeof value === 'string')
+  observed: readonly string[],
+  ...reports: unknown[]
+): readonly string[] {
+  for (const report of reports) {
+    const advertised = isRecord(report) ? report.capabilities : undefined
+    const capabilities = Array.isArray(advertised)
+      ? advertised.filter((value): value is string => typeof value === 'string')
+      : []
+    if (capabilities.length > 0) {
+      return capabilities
+    }
+  }
+  return observed
 }
 
 export function claudeInitializationAuthError(
   initialization: unknown
 ): AgentSessionAcquisitionRefusal | null {
   const account =
-    isRecord(initialization) && isRecord(initialization.account) ? initialization.account : null
-  return readClaudeFrameString(account ?? {}, 'tokenSource') === 'none'
+    isRecord(initialization) && isRecord(initialization.account) ? initialization.account : {}
+  // An API key (ANTHROPIC_API_KEY or a Console /login key) reports tokenSource "none".
+  const apiKeySource = readClaudeFrameString(account, 'apiKeySource')
+  return readClaudeFrameString(account, 'tokenSource') === 'none' &&
+    (apiKeySource === null || apiKeySource === 'none')
     ? new AgentSessionAcquisitionRefusal(
-        'Claude is not signed in for the selected account. Sign in with the Claude CLI for this CLAUDE_CONFIG_DIR, then retry.'
+        'Claude is not signed in for the selected account. Sign in with the Claude CLI for this CLAUDE_CONFIG_DIR, then retry.',
+        'notSignedIn'
       )
     : null
 }

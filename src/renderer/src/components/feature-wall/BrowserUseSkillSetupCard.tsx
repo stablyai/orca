@@ -4,19 +4,11 @@ import {
   ORCA_CLI_SKILL_NAME,
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
-} from '@/lib/agent-skill-cli-prerequisite'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
-import {
-  buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest
-} from '@/components/settings/CliSkillRuntimeSetup'
+import { buildSkillCommandForRuntime } from '@/components/settings/CliSkillRuntimeSetup'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 
@@ -34,11 +26,8 @@ export function BrowserUseSkillSetupCard(props: {
     ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
     : ORCA_CLI_SKILL_UPDATE_COMMAND
 
-  const handleBeforeOpenTerminal = async (): Promise<void> => {
+  const handleBeforeOpenTerminal = (): void => {
     useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
-    await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-      ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-      : ensureOrcaCliAvailableForAgentSkillTerminal())
     localStorage.setItem(BROWSER_USE_ENABLED_STORAGE_KEY, '1')
   }
 
@@ -65,14 +54,6 @@ export function BrowserUseSkillSetupCard(props: {
       error={activeSkillRuntime.installDisabledReason ?? skill.error}
       installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
       terminalHeightPx={terminalHeightPx}
-      preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-      getPrerequisiteStatus={() =>
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-          ? window.api.cli.getWslInstallStatus(
-              getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
-            )
-          : window.api.cli.getInstallStatus()
-      }
       onBeforeOpenTerminal={handleBeforeOpenTerminal}
       showRecheckWhenInstalled={false}
       onRecheck={skill.refresh}

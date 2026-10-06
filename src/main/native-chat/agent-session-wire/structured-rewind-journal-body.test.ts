@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { AgentSessionRewindRecordSchema } from '../../../shared/agent-session-rewind'
 import { restoreRewindJournalBody } from './structured-rewind-journal-body'
 
+/** A row this build cannot place: still a row, never its stored JSON, and not a failure — a
+ *  hostFault's "Try again" would be false for a placeholder. */
+const UNPLACEABLE = {
+  kind: 'status',
+  text: 'Orca could not show this item after the rewind.'
+}
+
 describe('rewind recovery of newer durable records', () => {
   it('keeps an unknown message role and block readable without discarding the row', () => {
     expect(
@@ -16,6 +23,42 @@ describe('rewind recovery of newer durable records', () => {
       blocks: [{ type: 'text', text: '{"type":"future-block"}' }]
     })
   })
+
+  // Retained by its place, never by its kind, so an updated Orca still has it after the rewind.
+  it('carries an item of a kind this build does not know as it was, and records it', () => {
+    const body = { kind: 'plan-card', title: 'by a newer build' }
+    expect(restoreRewindJournalBody(body)).toBe(body)
+    expect(
+      AgentSessionRewindRecordSchema.safeParse({
+        operationId: 'op-1',
+        callerKey: 'caller-1',
+        itemId: 'codex:thread-1:turn-1:3',
+        expectedEpoch: 'epoch-1',
+        phase: 'prepared',
+        retained: [{ itemId: 'codex:thread-1:turn-1:1', body, observedAt: 1 }]
+      }).success
+    ).toBe(true)
+  })
+
+  it('preserves background-task blocks across rewind recovery', () => {
+    const body = {
+      kind: 'message' as const,
+      role: 'system',
+      blocks: [
+        { type: 'text' as const, text: 'Started background command "sleep 20"' },
+        {
+          type: 'background-task' as const,
+          taskId: 'task-1',
+          kind: 'command',
+          label: 'sleep 20',
+          state: 'working'
+        }
+      ]
+    }
+
+    expect(restoreRewindJournalBody(body)).toEqual(body)
+  })
+
   it('preserves unknown state as evidence rather than inventing success or pending work', () => {
     const body = {
       kind: 'tool-call' as const,
@@ -23,16 +66,13 @@ describe('rewind recovery of newer durable records', () => {
       input: { path: 'file' },
       state: 'paused-by-provider'
     }
-    expect(restoreRewindJournalBody(body)).toEqual({ kind: 'status', text: JSON.stringify(body) })
+    expect(restoreRewindJournalBody(body)).toEqual(UNPLACEABLE)
     const status = {
       kind: 'status' as const,
       text: 'state',
       turnLifecycle: { turnId: 'turn', state: 'future-state' }
     }
-    expect(restoreRewindJournalBody(status)).toEqual({
-      kind: 'status',
-      text: JSON.stringify(status)
-    })
+    expect(restoreRewindJournalBody(status)).toEqual(UNPLACEABLE)
   })
   it.each(['interrupted', 'unverifiable'] as const)(
     'keeps a %s turn and its recorded endpoints',
@@ -62,11 +102,62 @@ describe('rewind recovery of newer durable records', () => {
     }
     expect(restoreRewindJournalBody(turn)).toEqual(turn)
     const unknown = { ...turn, state: 'future-state' }
-    expect(restoreRewindJournalBody(unknown)).toEqual({
+    expect(restoreRewindJournalBody(unknown)).toEqual(UNPLACEABLE)
+  })
+  it('keeps a known turn outcome across rewind recovery in both journal shapes', () => {
+    const turn = {
+      kind: 'turn' as const,
+      turnId: 'turn',
+      state: 'completed',
+      outcome: 'failure',
+      userItemId: 'codex:thread:turn:0',
+      startedAt: 10,
+      completedAt: 20
+    }
+    expect(restoreRewindJournalBody(turn)).toEqual(turn)
+    const status = {
+      kind: 'status' as const,
+      text: 'Claude turn completed',
+      turnLifecycle: { turnId: 'turn', state: 'interrupted', outcome: 'cancellation' }
+    }
+    expect(restoreRewindJournalBody(status)).toEqual(status)
+  })
+
+  it('drops a turn outcome from a later vocabulary but keeps the turn and its endpoints', () => {
+    // An unknown outcome costs nothing to discard, because absent already means
+    // unknown. Falling back to a status row the way an unknown STATE does would
+    // take the turn's endpoints with it, and every timing surface reads those.
+    expect(
+      restoreRewindJournalBody({
+        kind: 'turn',
+        turnId: 'turn',
+        state: 'completed',
+        outcome: 'partially-refused',
+        userItemId: 'codex:thread:turn:0',
+        startedAt: 10,
+        completedAt: 20
+      })
+    ).toEqual({
+      kind: 'turn',
+      turnId: 'turn',
+      state: 'completed',
+      userItemId: 'codex:thread:turn:0',
+      startedAt: 10,
+      completedAt: 20
+    })
+    expect(
+      restoreRewindJournalBody({
+        kind: 'status',
+        text: 'Codex turn completed',
+        turnLifecycle: { turnId: 'turn', state: 'completed', outcome: 'partially-refused' }
+      })
+    ).toEqual({
       kind: 'status',
-      text: JSON.stringify(unknown)
+      text: 'Codex turn completed',
+      turnLifecycle: { turnId: 'turn', state: 'completed' }
     })
   })
+
   it('does not reject a saved recovery prefix over a newer refusal reason', () => {
     expect(
       AgentSessionRewindRecordSchema.safeParse({

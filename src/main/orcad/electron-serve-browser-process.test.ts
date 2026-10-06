@@ -136,6 +136,14 @@ describe('ElectronServeBrowserProcess start-up', () => {
       vi.stubEnv(key, `leaked-${key}`)
     }
     vi.stubEnv('ORCA_HARNESS_UNRELATED', 'preserved')
+    for (const key of ['ORCA_E2E_USER_DATA_DIR', 'ORCA_USER_DATA', 'ORCA_USER_DATA_PATH']) {
+      vi.stubEnv(key, harnessRoot)
+    }
+    const isolatedHome = join(harnessRoot, 'home')
+    vi.stubEnv('ORCA_E2E_HOME_DIR', isolatedHome)
+    vi.stubEnv('HOME', isolatedHome)
+    vi.stubEnv('XDG_DATA_HOME', join(isolatedHome, 'data'))
+    vi.stubEnv('XDG_STATE_HOME', join(isolatedHome, 'state'))
 
     const processHandle = await startProvider()
 
@@ -153,6 +161,15 @@ describe('ElectronServeBrowserProcess start-up', () => {
       expect(spec.env).not.toHaveProperty(key)
     }
     expect(spec.env?.ORCA_HARNESS_UNRELATED).toBe('preserved')
+    for (const key of ['ORCA_USER_DATA', 'ORCA_USER_DATA_PATH']) {
+      expect(spec.env).not.toHaveProperty(key)
+    }
+    expect(spec.env?.ORCA_E2E_USER_DATA_DIR).toBe(userDataArg?.slice('--user-data-dir='.length))
+    expect(spec.env?.ORCA_E2E_HOME_DIR).toBe(isolatedHome)
+    expect(spec.env?.HOME).toBe(isolatedHome)
+    expect(spec.env?.XDG_DATA_HOME).toBe(join(isolatedHome, 'data'))
+    expect(spec.env?.XDG_STATE_HOME).toBe(join(isolatedHome, 'state'))
+    expect(args).toEqual(expect.arrayContaining(['--password-store=basic', '--use-mock-keychain']))
     expect(processHandle.isAvailable()).toBe(true)
   })
 

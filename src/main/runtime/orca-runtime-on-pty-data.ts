@@ -4,6 +4,7 @@ import type { TerminalOutputSourceRange } from '../../shared/terminal-output-sou
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
 import { normalizeTerminalChunk } from './terminal-ansi-normalization'
+import { observeTerminalCommandPaint } from './terminal-command-paint'
 import {
   appendCompletedTerminalTranscript,
   buildPreview,
@@ -16,6 +17,14 @@ import {
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 
 export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
+  /** Arrival-order mode scan: the settled tracker plus any in-flight snapshot capture's. */
+  protected scanProviderModeTrackers(ptyId: string, data: string): void {
+    this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
+    for (const tracker of this.providerModeSnapshotScansByPtyId.get(ptyId) ?? []) {
+      tracker.scan(data)
+    }
+  }
+
   onPtyData(
     ptyId: string,
     data: string,
@@ -27,10 +36,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
   ): number {
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
-    this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
-    for (const tracker of this.providerModeSnapshotScansByPtyId.get(ptyId) ?? []) {
-      tracker.scan(data)
-    }
+    this.scanProviderModeTrackers(ptyId, data)
     const osc7Metadata = this.recordOsc7MetadataForPty(ptyId, data)
     const cwd = osc7Metadata.cwd
     const cwdChanged = osc7Metadata.cwdChanged
@@ -86,6 +92,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       pty.lastOutputAt = at
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       pty.tailPendingAnsi = normalized.pendingAnsi
+      observeTerminalCommandPaint(pty, data, normalized.text)
       const nextTail = appendNormalizedToTailBuffer(
         pty.tailBuffer,
         pty.tailPartialLine,
@@ -116,7 +123,8 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
         lastOutputAt: pty?.lastOutputAt ?? at,
         preview: pty?.preview ?? leaf.preview,
         tabId: leaf.tabId,
-        paneKey: this.makeRuntimePaneKey(leaf)
+        paneKey: this.makeRuntimePaneKey(leaf),
+        surfaceRecordedAtGraphSequence: this.graphSequence
       })
       leaf.connected = true
       leaf.writable = this.graphStatus === 'ready'
@@ -214,6 +222,20 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     try {
       for (const payload of agentStatusChunk.payloads) {
         titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
+      }
+      // Why on the PTY record: the retained status snapshots are keyed by paneKey, which a
+      // background CLI-created PTY may never have. `terminal wait --for tui-idle` still needs
+      // the agent's own account of itself, and ptyId is the only identity that path always holds.
+      const latestAgentStatus = agentStatusChunk.payloads.at(-1)
+      if (latestAgentStatus) {
+        const ptyRecord = this.ptysById.get(ptyId)
+        if (ptyRecord) {
+          ptyRecord.lastExplicitAgentStatus = {
+            state: latestAgentStatus.state,
+            updatedAt: Date.now(),
+            sessionBoundary: latestAgentStatus.sessionBoundary
+          }
+        }
       }
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
         titleScanData: titleInput

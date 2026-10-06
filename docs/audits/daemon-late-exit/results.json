@@ -1,0 +1,236 @@
+{
+  "sourceSha256": "8da1df8409b4e1555894546df9e2fd41351b4f5620340310c2373d22bb56a0b6",
+  "baselineTransform": "Restore duplicate suppression before provider/runtime cleanup only; keep current incarnation-fenced markers.",
+  "phases": [
+    {
+      "phase": "before",
+      "samples": [
+        {
+          "scenario": "queued-data",
+          "beforeDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "unknown",
+              "reason": "stop_unverified"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": null
+          },
+          "afterDrain": {
+            "connected": true,
+            "exitCause": {
+              "kind": "unknown",
+              "reason": "stop_unverified"
+            },
+            "headlessModelRetained": true,
+            "titleTrackerRetained": true,
+            "liveness": null,
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": ["final output\r\n"],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        },
+        {
+          "scenario": "verified-stop",
+          "beforeDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited"
+          },
+          "afterDrain": {
+            "connected": true,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": true,
+            "titleTrackerRetained": true,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": ["final output\r\n"],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        },
+        {
+          "scenario": "no-queued-data",
+          "beforeDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "unknown",
+              "reason": "stop_unverified"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": null
+          },
+          "afterDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "unknown",
+              "reason": "stop_unverified"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": null,
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        },
+        {
+          "scenario": "natural-exit",
+          "beforeDrain": {
+            "connected": true,
+            "exitCause": null,
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": null
+          },
+          "afterDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": ["final output\r\n"],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        }
+      ]
+    },
+    {
+      "phase": "after",
+      "samples": [
+        {
+          "scenario": "queued-data",
+          "beforeDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "unknown",
+              "reason": "stop_unverified"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": null
+          },
+          "afterDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": ["final output\r\n"],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        },
+        {
+          "scenario": "verified-stop",
+          "beforeDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited"
+          },
+          "afterDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": ["final output\r\n"],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        },
+        {
+          "scenario": "no-queued-data",
+          "beforeDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "unknown",
+              "reason": "stop_unverified"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": null
+          },
+          "afterDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        },
+        {
+          "scenario": "natural-exit",
+          "beforeDrain": {
+            "connected": true,
+            "exitCause": null,
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": null
+          },
+          "afterDrain": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": ["final output\r\n"],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        }
+      ]
+    }
+  ]
+}

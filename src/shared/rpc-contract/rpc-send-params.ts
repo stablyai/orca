@@ -21,15 +21,15 @@ type Prettify<T> = { [K in keyof T]: T[K] } & {}
 /** zod's own input-side key-optionality rule, copied from $InferObjectInput. */
 type SendOptionalSchema = { _zod: { optin: 'optional' | 'defaulted' } }
 
-type SendShape<Shape> = Prettify<
+type SendFields<Fields> = Prettify<
   {
-    -readonly [K in keyof Shape as Shape[K] extends SendOptionalSchema ? never : K]: RpcSendInput<
-      Shape[K]
+    -readonly [K in keyof Fields as Fields[K] extends SendOptionalSchema ? never : K]: RpcSendInput<
+      Fields[K]
     >
   } & {
-    -readonly [K in keyof Shape as Shape[K] extends SendOptionalSchema ? K : never]?: RpcSendInput<
-      Shape[K]
-    >
+    -readonly [
+      K in keyof Fields as Fields[K] extends SendOptionalSchema ? K : never
+    ]?: RpcSendInput<Fields[K]>
   }
 >
 
@@ -50,11 +50,11 @@ export type RpcSendInput<Schema> =
             ? RpcSendInput<Element>[]
             : // ZodObject is the only schema carrying a `shape`, and matching on it keeps
               // .strict()/.extend()/.superRefine() results in this branch.
-              Schema extends { shape: infer Shape }
-              ? keyof Shape extends never
+              Schema extends { shape: infer Fields }
+              ? keyof Fields extends never
                 ? // Mirrors $InferObjectOutput: a no-field object admits no properties.
                   Record<string, never>
-                : SendShape<Shape>
+                : SendFields<Fields>
               : // ZodDiscriminatedUnion extends ZodUnion, so both land here.
                 Schema extends z.ZodUnion<infer Options>
                 ? RpcSendInput<Options[number]>

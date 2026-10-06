@@ -10,20 +10,21 @@
     "dev": "tsx watch src/index.ts",
     "incident:monitor": "tsx src/incident-monitor-cli.ts",
     "incident:preflight": "tsx src/incident-live-preflight-cli.ts",
+    "incident:pre-drain-sample": "tsx src/pre-drain-sample-cli.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/index.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.17",
-    "hono": "^4.13.7",
+    "@hono/node-server": "^2.1.2",
+    "hono": "^4.13.10",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^24.10.0",
-    "tsx": "^4.21.0",
+    "@types/node": "^24.19.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.8"
+    "vitest": "^4.1.11"
   }
 }

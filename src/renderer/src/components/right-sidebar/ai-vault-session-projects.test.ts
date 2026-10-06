@@ -5,10 +5,10 @@ import type { Project, ProjectHostSetup } from '../../../../shared/project-types
 import * as paths from '../../../../shared/cross-platform-path'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
 import {
   buildAiVaultProjectContext,
-  buildAiVaultSessionProjectById,
-  toAiVaultProjectKey
+  buildAiVaultSessionProjectById
 } from './ai-vault-session-projects'
 import { groupAiVaultSessions } from '../../../../shared/ai-vault-session-filters'
 

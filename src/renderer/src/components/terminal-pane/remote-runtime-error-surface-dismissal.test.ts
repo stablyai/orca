@@ -48,18 +48,18 @@ describe('remote runtime error surface dismissal', () => {
     const onError = vi.fn()
     const transport = await attachTransportWithFatalSends(onError)
 
-    expect(await transport.sendInputAccepted?.('a')).toBe(false)
-    expect(await transport.sendInputAccepted?.('b')).toBe(false)
+    expect(await transport.sendInputAccepted?.('a', 'driving')).toBe(false)
+    expect(await transport.sendInputAccepted?.('b', 'driving')).toBe(false)
     // Contract preserved: one continuous outage still surfaces the repeated error once.
     expect(onError.mock.calls).toEqual([[FATAL_ERROR]])
 
     transport.notifyErrorSurfaceDismissed?.()
 
-    expect(await transport.sendInputAccepted?.('c')).toBe(false)
+    expect(await transport.sendInputAccepted?.('c', 'driving')).toBe(false)
     expect(onError.mock.calls).toEqual([[FATAL_ERROR], [FATAL_ERROR]])
 
     // The memory re-arms: repeats after the re-surfaced error are suppressed again until the next dismissal.
-    expect(await transport.sendInputAccepted?.('d')).toBe(false)
+    expect(await transport.sendInputAccepted?.('d', 'driving')).toBe(false)
     expect(onError).toHaveBeenCalledTimes(2)
     transport.destroy?.()
   })
@@ -68,9 +68,9 @@ describe('remote runtime error surface dismissal', () => {
     const onError = vi.fn()
     const transport = await attachTransportWithFatalSends(onError)
 
-    expect(await transport.sendInputAccepted?.('a')).toBe(false)
-    expect(await transport.sendInputAccepted?.('b')).toBe(false)
-    expect(await transport.sendInputAccepted?.('c')).toBe(false)
+    expect(await transport.sendInputAccepted?.('a', 'driving')).toBe(false)
+    expect(await transport.sendInputAccepted?.('b', 'driving')).toBe(false)
+    expect(await transport.sendInputAccepted?.('c', 'driving')).toBe(false)
 
     expect(onError).toHaveBeenCalledTimes(1)
     transport.destroy?.()

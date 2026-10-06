@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { enqueueStructuredAgentSessionLaunchPrompt } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import {
+  enqueueStructuredAgentSessionLaunchPrompt,
+  mutateStructuredAgentSessionLaunchPrompt
+} from '@/components/native-chat/structured-agent-session-outbox-storage'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
@@ -46,6 +49,7 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     await expect(
       settleStructuredAgentLaunchPrompt({
         launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+        target: { kind: 'local' },
         options: { prompt: 'review this', onPromptDelivered },
         stagedEntry
       })
@@ -56,5 +60,34 @@ describe('settleStructuredAgentLaunchPrompt', () => {
       state: string
     }[]
     expect(persisted).toMatchObject([{ state: 'dispatching' }])
+  })
+
+  it('drops the previous attempt failure when the launch path sends the message again', async () => {
+    const stagedEntry = enqueueStructuredAgentSessionLaunchPrompt('session-1', 'review this')
+    mutateStructuredAgentSessionLaunchPrompt(
+      'session-1',
+      stagedEntry!.clientMessageId,
+      (entry) => ({
+        ...entry,
+        lastFailure: { kind: 'refused', code: 'agent_session_operation_capacity' }
+      })
+    )
+    mocks.call.mockResolvedValue({
+      ok: false,
+      refusal: { code: 'agent_session_checkpoint_stale', message: 'stale' }
+    })
+
+    await settleStructuredAgentLaunchPrompt({
+      launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+      target: { kind: 'local' },
+      options: { prompt: 'review this' },
+      stagedEntry
+    })
+
+    const persisted: unknown = JSON.parse(localStorage.getItem(localStorage.key(0)!) ?? '[]')
+    expect(persisted).toHaveLength(1)
+    expect(persisted).not.toContainEqual(
+      expect.objectContaining({ lastFailure: expect.anything() })
+    )
   })
 })

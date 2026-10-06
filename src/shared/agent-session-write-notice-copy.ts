@@ -1,0 +1,99 @@
+// The sentences a chat notice is made of, each whole so desktop can translate it on its own.
+
+import type { AgentSessionFailureFact } from './agent-session-failure'
+import {
+  QUIT_TERMINAL_AGENT,
+  START_NEW_CHAT,
+  TERMINAL_AGENT_HOLDS_CHAT
+} from './agent-session-failure-copy'
+import type {
+  AgentSessionFailureSurface,
+  AgentSessionFailureWordsContext
+} from './agent-session-failure-words'
+
+/** Every sentence a notice is made of. Desktop translates each whole sentence with this as its
+ *  fallback; mobile shows it as is. */
+export const AGENT_SESSION_WRITE_NOTICE_COPY = {
+  notDoneReadHistory: "This chat's history couldn't be loaded.",
+  notDoneSend: 'Your message was not sent.',
+  tryAgainComposerSend: 'Send it again.',
+  messageNotSaved: "Couldn't save your message.",
+  notDoneStop: "The agent wasn't stopped.",
+  notDoneStopTask: "The background task wasn't stopped.",
+  notDoneStopTasks: "The background tasks weren't stopped.",
+  notDoneAnswer: 'Your answer was not sent.',
+  notDoneOption: "The setting wasn't changed.",
+  notDoneCommand: "The command didn't run.",
+  notDoneGoal: "The goal wasn't changed.",
+  restartFailed: "The agent couldn't restart.",
+  capacity: 'Orca has received too many requests in the last day.',
+  outcomeUnknown: "Orca couldn't confirm what happened. Check the chat.",
+  sendOutcomeLost:
+    "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
+  questionChanged: 'This question was already answered or has changed.',
+  historyUnreadable: "Orca couldn't read this chat's saved history.",
+  historyUnusable: 'Unable to load this chat.',
+  historyUnavailable: "Orca couldn't open this chat's history right now.",
+  savedByNewerOrca: 'Chats were saved by a newer Orca.',
+  updateOrcaToKeepUsing: 'Update Orca to keep using them.',
+  chatSavedByNewerOrca: 'This chat was saved by a newer Orca.',
+  updateOrcaToOpenChat: 'Update Orca to open it.',
+  unsupported:
+    'This needs a newer Orca on the computer running this chat. Update Orca there, then try again.',
+  notAvailable: "This isn't available in this chat.",
+  unreachable: "Orca couldn't reach the agent.",
+  recordFailed: "Orca couldn't save this to the chat's history.",
+  conversationCleared: 'This conversation has been cleared.',
+  openCurrentConversation: 'Open the current conversation to continue.',
+  clearUnfinished: "The last /clear didn't finish.",
+  commandRunning: 'A /compact or /clear is still running.',
+  waitForCommand: 'Wait for the /compact or /clear to finish.',
+  agentStarting: 'The agent is still starting.',
+  waitForStart: 'Wait for the agent to finish starting.',
+  turnActive: 'The agent is still responding.',
+  waitForTurn: 'Wait for the agent to finish responding, or stop it.',
+  promptPending: 'The agent is waiting for an answer to a question or approval.',
+  answerFirst: 'Answer the question or approval first.',
+  backgroundTasksRunning: 'Background tasks are still running.',
+  waitForBackgroundTasks: 'Wait for the background tasks to finish.',
+  messagesUnsettled: "A message you sent earlier isn't confirmed yet.",
+  settleEarlierMessage: 'Wait for your earlier message to go through, or retry it.',
+  optionRejected: "The agent didn't accept this setting.",
+  goalsUnsupported: "This agent doesn't support goals.",
+  agentRefused: 'The agent turned this down.',
+  ownerUnproven: 'The previous agent in this chat may still be running.',
+  reopenChat: 'Reopen the chat to check again.',
+  terminalAgentHoldsChat: TERMINAL_AGENT_HOLDS_CHAT,
+  quitTerminalAgent: QUIT_TERMINAL_AGENT,
+  hostReconciling: 'Orca is still checking on this chat after restarting.',
+  waitMoment: 'Wait a moment.',
+  recordUnreadable: "Orca couldn't read this chat's saved state.",
+  chatNotFound: "Orca can't find this chat.",
+  startNewChat: START_NEW_CHAT,
+  tryAgain: 'Try again.'
+} as const
+
+export type AgentSessionWriteNoticeSentence = keyof typeof AGENT_SESSION_WRITE_NOTICE_COPY
+/** A failure fact, worded where it is shown so desktop can say it in the reader's language. */
+export type AgentSessionWriteNoticeFailurePart = {
+  failure: AgentSessionFailureFact
+  surface: AgentSessionFailureSurface
+  context: AgentSessionFailureWordsContext
+}
+/** A notice as whole sentences, each translated on its own; `text` is words someone else wrote: a
+ *  provider's, or a host's sentence with no fact beside it. */
+export type AgentSessionWriteNoticePart =
+  | AgentSessionWriteNoticeSentence
+  | { text: string }
+  | AgentSessionWriteNoticeFailurePart
+
+/** Causes that already say the history can't be read here, so no sentence after them says it
+ *  again. */
+export const AGENT_SESSION_HISTORY_UNREAD_CAUSES: ReadonlySet<AgentSessionWriteNoticeSentence> =
+  new Set([
+    'historyUnusable',
+    'historyUnavailable',
+    'historyUnreadable',
+    'savedByNewerOrca',
+    'chatSavedByNewerOrca'
+  ])

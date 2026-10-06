@@ -1,6 +1,8 @@
 import type { ExecutionHostId } from './execution-host'
+import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
+import type { AiVaultSearchSettings } from './ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
@@ -25,6 +27,7 @@ import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
+import type { ZcodePlanSite } from './zcode-plan-sites'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
@@ -129,6 +132,11 @@ export type GlobalSettings = {
    *  - `'on'` / `'off'`: explicit override. Never changes when the user
    *    switches fonts, so "off" always stays off. */
   terminalLigatures: 'auto' | 'on' | 'off'
+  /** Whether inline terminal images are rendered via `@xterm/addon-image`
+   *  (SIXEL, iTerm2 IIP, and Kitty graphics). The addon is lazy-loaded and its
+   *  canvas layers are only created once a pane actually receives an image, so
+   *  idle panes retain parser/decoder setup but no decoded image storage. */
+  terminalInlineImages: boolean
   terminalCursorStyle: 'bar' | 'block' | 'underline'
   /** One-shot migration guard for moving inherited cursor defaults to block. */
   terminalCursorStyleDefaultedToBlock?: boolean
@@ -166,6 +174,10 @@ export type GlobalSettings = {
   terminalRightClickToPasteDefaultedForPlatform?: boolean
   /** Windows-only: COMSPEC always points to cmd.exe, so this explicit shell (default 'powershell.exe') overrides it. */
   terminalWindowsShell: string
+  /** Optional shell executable for new terminals on macOS and Linux. */
+  terminalDefaultShell?: string
+  /** Optional argv passed to the configured Unix shell for ordinary interactive panes. */
+  terminalDefaultShellArgs?: string[]
   /** Pins the WSL distro for terminals/agent scans instead of WSL's current global default. */
   terminalWindowsWslDistro?: string | null
   /** Account/auth location; auto follows the global Windows runtime while host/wsl pin it. */
@@ -183,6 +195,8 @@ export type GlobalSettings = {
   terminalFocusFollowsMouse: boolean
   /** X11/gnome-terminal "copy on select": selecting text auto-copies to the clipboard; default off. */
   terminalClipboardOnSelect: boolean
+  /** Drops the left gutter agent CLIs paint their output behind when copying a terminal selection; default on. */
+  terminalCopyTrimsGutter: boolean
   /** Enables OSC 52 clipboard writes for TUIs (tmux/Zellij/nvim, incl. over SSH); default on. Clipboard *queries* stay blocked and payload size is capped, so this is write-only exposure. */
   terminalAllowOsc52Clipboard: boolean
   /** One-shot stamp: profiles saved under the old off default get flipped on once, after which an explicit opt-out sticks. */
@@ -208,12 +222,27 @@ export type GlobalSettings = {
   openLinksInAppModifierInverts?: boolean
   /** Show link actions on plain click in the terminal and chat; off restores modifier-click-only terminal links. */
   terminalLinkActionPopoverEnabled?: boolean
+  /** Plain-click behavior for terminal links; optional for profiles saved before this setting existed. */
+  terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
+  /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
+  terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
   /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
   openAgentTabsInChatByDefault?: boolean
   /** Experimental native chat surface for Claude/Codex sessions; off by default. */
   experimentalNativeChat?: boolean
   /** Opt-in updated structured runtime; off keeps the existing PTY-backed native chat path. */
   experimentalStructuredNativeChat?: boolean
+  /** Opt-in: resume working structured chats automatically on the next launch. Off still offers
+   *  the list, so the user sees exactly what would run before anything spends tokens. */
+  nativeChatResumeWorkOnRestart?: boolean
+  /** Chat-wide: hold a mid-turn send as an editable queued draft that goes when the turn ends
+   *  (capable hosts only). Absent = on; off keeps mid-turn sends immediate. */
+  nativeChatQueueFollowUps?: boolean
+  /** Structured chat only: Codex/Claude children inherit the whole login-shell environment.
+   *  Off passes only `nativeChatShellEnvironmentVariables` (plus a PATH/locale baseline). */
+  nativeChatInheritShellEnvironment?: boolean
+  /** Login-shell variable names structured chat inherits while the whole environment is off. */
+  nativeChatShellEnvironmentVariables?: string[]
   /** Last explicit native-chat model + option selections; live panes need an applied/dispatched record before showing a value. */
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
@@ -280,6 +309,8 @@ export type GlobalSettings = {
   diffDefaultView: 'inline' | 'side-by-side'
   diffWordWrap: boolean
   diffShowWhitespace: boolean
+  /** Opt-in: single-file diffs collapse unchanged regions, as the combined diff view already does; optional for legacy settings. */
+  diffCollapseUnchangedRegions?: boolean
   combinedDiffFileTreeVisibleByDefault: boolean
   /** Bot-marked comment-author logins (stored lowercased); escape hatch for review bots on regular accounts that defeat provider metadata/heuristics. */
   prBotAuthorOverrides: string[]
@@ -369,6 +400,8 @@ export type GlobalSettings = {
   minimaxUsageModels: string
   /** MiniMax account region; defaults to overseas for existing users. */
   minimaxEndpoint: MiniMaxEndpoint
+  /** GLM Coding Plan site whose API key is saved in AI Provider Accounts; defaults to the international Z.AI console. */
+  zcodePlanSite?: ZcodePlanSite
   /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
@@ -389,12 +422,26 @@ export type GlobalSettings = {
   agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */
   agentStatusHooksEnabled: boolean
+  /** A local agent-state-rules.json that replaces downloaded and bundled rules, for testing a rule
+   *  change. */
+  agentStateRulesPath?: string | null
+  /** Off: rules are never downloaded and a cached download is ignored, so the bundled rules (or a
+   *  local override) apply. Absent reads as on. */
+  agentStateRulesLiveUpdates?: boolean
+  /** Pre-trust the worktree or folder Orca starts an agent in, so its "trust this folder?" prompt is skipped. Defaults on. */
+  agentWorkspaceTrustEnabled: boolean
+  /** Why: Codex's shared server runs every tab's hooks with the first tab's env; off opts new terminals back into it. Absent reads as on. */
+  codexTerminalServerIsolation?: boolean
+  /** Off hides the banner on a typed `codex` that joined Codex's shared server. Absent reads as on. */
+  codexSharedServerWarning?: boolean
   /** Dismissed freshness tuples: no write authority, just suppress re-nudging the same official placement/revision. */
   dismissedSkillFreshnessNudges?: string[]
   /** Why: generated tab titles are subjective, so they stay opt-in and manual renames win. */
   tabAutoGenerateTitle: boolean
   /** Why: pinned tabs can still be closed via keyboard/native-menu; this gates that behind a confirmation. Defaults on. */
   confirmClosePinnedTab: boolean
+  /** Why: preview tabs reuse one slot per group, so browsing replaces the open file; off makes every open its own tab. Defaults on. */
+  editorPreviewTabsEnabled: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
   /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */
@@ -427,6 +474,8 @@ export type GlobalSettings = {
   mobilePairingCustomAddress?: string | null
   /** Saved custom addresses available in both mobile pairing pickers. */
   mobilePairingCustomAddresses?: string[]
+  /** Name this runtime reports to paired clients; empty uses the host's detected name. */
+  machineName: string
   /** Experimental: floating animated pet in the bottom-right corner. Opt-in cosmetic;
    *  off never mounts the overlay, and toggling takes effect instantly (renderer-side). */
   experimentalPet: boolean
@@ -486,18 +535,11 @@ export type GlobalSettings = {
   tabSwitchKeybindingSeed?: 'pending' | 'done'
   /** Local voice/dictation config. Optional for pre-voice profiles; getDefaultSettings() hydrates defaults via the persistence merge. */
   voice?: VoiceSettings
+  /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
+  aiVaultSearch?: AiVaultSearchSettings
 }
 
-export type OrcaWorkspaceLayout = {
-  path: string
-  nestWorkspaces: boolean
-}
-
-export type GhosttyImportPreview = {
-  found: boolean
-  configPath?: string
-  configPaths?: string[]
-  diff: Partial<GlobalSettings>
-  unsupportedKeys: string[]
-  error?: string
-}
+// Re-exported so existing importers keep one entry point; the shape lives in its
+// own file because this one is at the max-lines ceiling.
+export type { GhosttyImportPreview } from './ghostty-import-preview'
+export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

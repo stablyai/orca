@@ -16,6 +16,7 @@ import {
 } from '../../worktree-manual-order'
 import { buildWorkspaceKanbanSidebarDropUpdates } from '../../workspace-kanban-sidebar-drop'
 import type { SortBy } from '../../smart-sort'
+import { switchSortToManualAfterDrop } from '../../manual-sort-switch-toast'
 import type { WorktreeStatusDropAtIndexArgs } from './drop-commit-context'
 import type { WorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'
 
@@ -29,7 +30,6 @@ export function useWorktreeStatusMutations(args: {
   const { manualOrderCatalog, worktreeMap, workspaceStatuses, sortBy } = args
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
-  const setSortBy = useAppStore((s) => s.setSortBy)
   const setWorktreesPinnedAndReveal = useAppStore((s) => s.setWorktreesPinnedAndReveal)
 
   const moveWorktreeToStatus = useCallback(
@@ -111,11 +111,11 @@ export function useWorktreeStatusMutations(args: {
       }
       // Why: the insertion line promises exact placement, so persist manual order on a cross-status drop.
       if (order.changed) {
-        setSortBy('manual')
+        switchSortToManualAfterDrop()
       }
       void updateWorktreesMeta([...updates.values()])
     },
-    [manualOrderCatalog, setSortBy, updateWorktreesMeta, worktreeMap, workspaceStatuses]
+    [manualOrderCatalog, updateWorktreesMeta, worktreeMap, workspaceStatuses]
   )
 
   const pinWorktree = useCallback(
@@ -146,7 +146,7 @@ export function useWorktreeStatusMutations(args: {
         allWorktreeIds: manualOrderCatalog.orderedIds
       })
       if (result.changed) {
-        setSortBy('manual')
+        switchSortToManualAfterDrop()
       }
       void updateWorktreesMeta(
         [...result.updates].map(([worktreeId, updates]) => ({
@@ -156,7 +156,7 @@ export function useWorktreeStatusMutations(args: {
         }))
       )
     },
-    [manualOrderCatalog, setSortBy, updateWorktreesMeta, worktreeMap]
+    [manualOrderCatalog, updateWorktreesMeta, worktreeMap]
   )
 
   const shouldShowWorkspaceBoardDropIndicator = useCallback(
@@ -190,12 +190,12 @@ export function useWorktreeStatusMutations(args: {
       }
       // Why: switch to Manual when the drop changes order so the placement stays visible.
       if (result.shouldSwitchToManual) {
-        setSortBy('manual')
+        switchSortToManualAfterDrop()
       }
       useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
       void updateWorktreesMeta(result.updates)
     },
-    [manualOrderCatalog, setSortBy, sortBy, updateWorktreesMeta, worktreeMap, workspaceStatuses]
+    [manualOrderCatalog, sortBy, updateWorktreesMeta, worktreeMap, workspaceStatuses]
   )
 
   return {

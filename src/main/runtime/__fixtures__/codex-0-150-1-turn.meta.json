@@ -1,0 +1,16 @@
+{
+  "capturedAt": "2026-09-29T01:35:32.695Z",
+  "platform": "darwin",
+  "command": [
+    "codex",
+    "-c",
+    "check_for_update_on_startup=false",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "-m",
+    "gpt-5.6-sol"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.150.1: launch, one short turn, settled idle after it. STA-8834.",
+  "exitCode": 0
+}

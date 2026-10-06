@@ -92,9 +92,7 @@ describe('resolveStructuredLaunchSeedOptions', () => {
     ).toEqual({ model: 'gpt-5.6-sol', effort: 'medium' })
   })
 
-  it('drops ids the providers only accept mid-session', () => {
-    // `fastMode` is a boolean and `personality` is settable only mid-session;
-    // neither belongs in the reservation's Record<string, string>.
+  it('encodes Fast mode while dropping ids the providers only accept mid-session', () => {
     expect(
       resolveStructuredLaunchSeedOptions(
         persistedCodex({
@@ -102,7 +100,7 @@ describe('resolveStructuredLaunchSeedOptions', () => {
         }),
         'codex'
       )
-    ).toEqual({ model: 'gpt-5.6-sol', effort: 'high' })
+    ).toEqual({ model: 'gpt-5.6-sol', effort: 'high', fastMode: 'true' })
   })
 
   it('drops a seeded id whose persisted value is not a usable string', () => {
@@ -142,6 +140,18 @@ describe('resolveStructuredLaunchSeedOptions', () => {
 
 describe('narrowStructuredLaunchSeedOptions', () => {
   it('keeps the seedable ids an explicit selection names', () => {
+    expect(
+      narrowStructuredLaunchSeedOptions({ model: 'opus', effort: 'high', fastMode: false })
+    ).toEqual({
+      model: 'opus',
+      effort: 'high',
+      fastMode: 'false'
+    })
+  })
+
+  // A never-picked Fast preference must stay absent, not default on: seeding `true`
+  // would silently move a user onto the faster tier they never chose.
+  it('seeds no fastMode at all when the user never picked one', () => {
     expect(narrowStructuredLaunchSeedOptions({ model: 'opus', effort: 'high' })).toEqual({
       model: 'opus',
       effort: 'high'
@@ -149,9 +159,9 @@ describe('narrowStructuredLaunchSeedOptions', () => {
   })
 
   it('drops ids no structured create may seed', () => {
-    expect(
-      narrowStructuredLaunchSeedOptions({ model: 'opus', mode: 'plan', fastMode: true })
-    ).toEqual({ model: 'opus' })
+    expect(narrowStructuredLaunchSeedOptions({ model: 'opus', mode: 'plan' })).toEqual({
+      model: 'opus'
+    })
   })
 
   it.each([

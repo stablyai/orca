@@ -32,8 +32,7 @@ export function getOrCreateRunDelivery(
     mailboxHandle: `run:${params.runId}`,
     consumerGeneration: params.consumerGeneration,
     limit: params.limit,
-    wakeTypes: params.wakeTypes,
-    requireCurrentRunConsumer: true
+    wakeTypes: params.wakeTypes
   })
 }
 
@@ -49,8 +48,7 @@ export function acknowledgeRunDelivery(
     runId: params.runId,
     mailboxHandle: `run:${params.runId}`,
     consumerGeneration: params.consumerGeneration,
-    deliveryId: params.deliveryId,
-    requireCurrentRunConsumer: true
+    deliveryId: params.deliveryId
   })
 }
 

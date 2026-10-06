@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '../../shared/child-process/run-process'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
@@ -10,12 +11,12 @@ const START_MARKER = '__ORCA_LOGIN_SHELL_ENV_START__'
 const END_MARKER = '__ORCA_LOGIN_SHELL_ENV_END__'
 const SPAWN_TIMEOUT_MS = 5000
 
-let cached: Promise<NodeJS.ProcessEnv> | null = null
-let cachedShellKey: string | null = null
+const environmentCache = new Map<string, Promise<NodeJS.ProcessEnv>>()
+const MAX_CACHED_ENVIRONMENTS = 8
 
-function processEnvironment(): NodeJS.ProcessEnv {
+function processEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)
+    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)
   )
 }
 
@@ -78,7 +79,10 @@ function parsePowerShellEnvironment(output: Buffer): NodeJS.ProcessEnv | null {
   }
 }
 
-function spawnShellAndReadEnvironment(shell: string): Promise<NodeJS.ProcessEnv | null> {
+function spawnShellAndReadEnvironment(
+  shell: string,
+  env: NodeJS.ProcessEnv
+): Promise<NodeJS.ProcessEnv | null> {
   const args = shellProbe(shell)
   if (!args) {
     return Promise.resolve(null)
@@ -86,7 +90,7 @@ function spawnShellAndReadEnvironment(shell: string): Promise<NodeJS.ProcessEnv 
   return new Promise((resolve) => {
     let settled = false
     const chunks: Buffer[] = []
-    const child = spawnProcess({ program: shell, args, env: process.env })
+    const child = spawnProcess({ program: shell, args, env })
     const finish = (value: NodeJS.ProcessEnv | null): void => {
       if (settled) {
         return
@@ -124,7 +128,8 @@ function spawnShellAndReadEnvironment(shell: string): Promise<NodeJS.ProcessEnv 
 export type ResolveLoginShellEnvironmentOptions = {
   force?: boolean
   shellOverride?: string | null
-  spawner?: (shell: string) => Promise<NodeJS.ProcessEnv | null>
+  env?: NodeJS.ProcessEnv
+  spawner?: (shell: string, env: NodeJS.ProcessEnv) => Promise<NodeJS.ProcessEnv | null>
 }
 
 /** Resolves the environment seen by commands launched from Orca's profile-loading terminal shell. */
@@ -134,27 +139,42 @@ export function resolveLoginShellEnvironment(
   const shell =
     options.shellOverride !== undefined ? options.shellOverride : resolveProfileLoadingShell()
   const fallback = options.shellOverride === undefined ? resolveProfileLoadingFallbackShell() : null
-  const shellKey = `${shell ?? ''}\0${fallback ?? ''}`
-  if (cached && cachedShellKey === shellKey && !options.force) {
+  const env = processEnvironment(options.env)
+  const envKey =
+    options.env === undefined
+      ? ''
+      : createHash('sha256')
+          .update(JSON.stringify(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))))
+          .digest('hex')
+  const shellKey = `${shell ?? ''}\0${fallback ?? ''}\0${envKey}`
+  const cached = environmentCache.get(shellKey)
+  if (cached && !options.force) {
     return cached
   }
   if (!shell) {
-    return Promise.resolve(processEnvironment())
+    return Promise.resolve(env)
   }
   const spawner = options.spawner ?? spawnShellAndReadEnvironment
-  cachedShellKey = shellKey
-  cached = spawner(shell)
+  const pending = spawner(shell, env)
     .then(async (environment) => {
       if (environment) {
         return environment
       }
-      return fallback ? ((await spawner(fallback)) ?? processEnvironment()) : processEnvironment()
+      return fallback ? ((await spawner(fallback, env)) ?? env) : env
     })
-    .catch(() => processEnvironment())
-  return cached
+    .catch(() => env)
+  environmentCache.delete(shellKey)
+  while (environmentCache.size >= MAX_CACHED_ENVIRONMENTS) {
+    const oldest = environmentCache.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    environmentCache.delete(oldest)
+  }
+  environmentCache.set(shellKey, pending)
+  return pending
 }
 
 export function resetLoginShellEnvironmentCacheForTests(): void {
-  cached = null
-  cachedShellKey = null
+  environmentCache.clear()
 }

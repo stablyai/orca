@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -34,11 +35,7 @@ import {
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
 import { WorktreeReviewLinkField } from './WorktreeReviewLinkField'
-
-function resizeCommentTextarea(textarea: HTMLTextAreaElement): void {
-  textarea.style.height = 'auto'
-  textarea.style.height = `${textarea.scrollHeight}px`
-}
+import { resizeCommentTextarea } from './worktree-comment-textarea-sizing'
 
 /** Only read before the first open, when nothing can be saved yet. */
 const EMPTY_SNAPSHOT: WorktreeMetaSnapshot = {
@@ -54,10 +51,8 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const submitShortcutLabel = getScreenSubmitShortcutLabel()
 
-  const isEditMeta = activeModal === 'edit-meta'
-  const isOpen = isEditMeta
+  const isOpen = activeModal === 'edit-meta'
 
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
   const executionHostId =
@@ -172,11 +167,11 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const setCommentTextareaRef = useCallback(
     (textarea: HTMLTextAreaElement | null) => {
       textareaRef.current = textarea
-      if (textarea && isEditMeta) {
+      if (textarea && isOpen) {
         resizeCommentTextarea(textarea)
       }
     },
-    [isEditMeta]
+    [isOpen]
   )
 
   const handleCommentChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -386,7 +381,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
             <label className="text-[11px] font-medium text-muted-foreground">
               {translate('auto.components.sidebar.WorktreeMetaDialog.9c1d1e9b71', 'Comment')}
             </label>
-            <textarea
+            <ImeTextarea
               ref={setCommentTextareaRef}
               value={commentInput}
               onChange={handleCommentChange}
@@ -403,7 +398,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
                 'auto.components.sidebar.WorktreeMetaDialog.7f0be5e9a6',
                 'Supports **markdown** — bold, lists, `code`, links. Press Enter or'
               )}{' '}
-              {submitShortcutLabel}{' '}
+              {getScreenSubmitShortcutLabel()}{' '}
               {translate(
                 'auto.components.sidebar.WorktreeMetaDialog.b48c271d39',
                 'to save, Shift+Enter for a new line.'

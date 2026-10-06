@@ -100,21 +100,47 @@ export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanoni
           if (!route.provider) {
             throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
           }
-          // Why: the RPC layer already threads AbortSignal for local watches; SSH must cancel the remote fs.watch, not wait it out.
-          const close = await route.provider.watch(target.path, callback, {
-            signal,
-            onTerminalError
-          })
-          const rearm = armSshFileExplorerWatchRearm({
-            runtimeId: this.host.getRuntimeId(),
-            connectionId: route.connectionId,
-            rootPath: target.path,
-            callback,
-            onTerminalError,
-            signal,
-            initialUnwatch: close
-          })
-          return { unsubscribe: rearm.unsubscribe, rootPaths: [target.path] }
+          const provider = route.provider
+          const isCurrentInitialProvider = (): boolean =>
+            !signal?.aborted && provider === getSshFilesystemProvider(route.connectionId)
+          let initialCallbacks = {
+            callback: (events: FsChangeEvent[]) => {
+              if (isCurrentInitialProvider()) {
+                callback(events)
+              }
+            },
+            onTerminalError: (error: Error) => {
+              if (isCurrentInitialProvider()) {
+                onTerminalError(error)
+              }
+            }
+          }
+          try {
+            // Initial callbacks join the rearm generation after setup succeeds.
+            const close = await provider.watch(
+              target.path,
+              (events) => initialCallbacks.callback(events),
+              { signal, onTerminalError: (error) => initialCallbacks.onTerminalError(error) }
+            )
+            const rearm = armSshFileExplorerWatchRearm({
+              runtimeId: this.host.getRuntimeId(),
+              connectionId: route.connectionId,
+              rootPath: target.path,
+              callback,
+              onTerminalError,
+              signal,
+              initialUnwatch: close,
+              initialProvider: provider
+            })
+            initialCallbacks = rearm.initialCallbacks
+            return { unsubscribe: rearm.unsubscribe, rootPaths: [target.path] }
+          } catch (error) {
+            initialCallbacks = {
+              callback: () => undefined,
+              onTerminalError: () => undefined
+            }
+            throw error
+          }
         }
 
         const rootPath = await resolveAuthorizedPath(target.path, this.host.requireStore())

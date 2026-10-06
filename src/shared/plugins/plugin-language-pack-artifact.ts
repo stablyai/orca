@@ -37,7 +37,7 @@ export function isPluginLanguagePackRegistration(
     pack.resourceLanguage === pluginLanguageResourceId(pack.id as `plugin:${string}`) &&
     typeof pack.pluginKey === 'string' &&
     typeof pack.locale === 'string' &&
-    validatePluginLanguagePackCatalogShape(pack.catalog).ok
+    checkPluginLanguagePackCatalog(pack.catalog).ok
   )
 }
 
@@ -119,7 +119,7 @@ export function validatePluginLanguagePackCatalog(source: unknown): PluginLangua
   return { ok: true, catalog: result.catalog!, entries: result.entries }
 }
 
-export function validatePluginLanguagePackCatalogShape(
+export function checkPluginLanguagePackCatalog(
   source: unknown
 ): PluginLanguagePackValidationResult {
   const result = walkPluginLanguagePackCatalog(source, false)

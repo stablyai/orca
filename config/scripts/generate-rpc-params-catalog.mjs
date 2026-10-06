@@ -40,8 +40,12 @@ const repoPath = (absolute) => posix(path.relative(REPO_ROOT, absolute))
 // Every module the catalog may import from: the extracted params modules plus the
 // pre-existing src/shared schemas the RPC methods already bind directly.
 function indexableModules() {
+  // Tests are excluded here for the same reason as the RPC_DIR walk below: bundling one pulls
+  // vitest into the CJS catalog build, which throws on require().
   const modules = new Set(
-    globSync('*.ts', { cwd: CONTRACT_DIR }).map((name) => path.join(CONTRACT_DIR, name))
+    globSync('*.ts', { cwd: CONTRACT_DIR })
+      .filter((name) => !name.endsWith('.test.ts'))
+      .map((name) => path.join(CONTRACT_DIR, name))
   )
   modules.delete(OUTPUT_PATH)
   for (const file of globSync('**/*.ts', { cwd: RPC_DIR })) {
@@ -51,7 +55,14 @@ function indexableModules() {
     const source = readFileSync(path.join(RPC_DIR, file), 'utf8')
     for (const [, specifier] of source.matchAll(/from\s+'(\.[^']+)'/g)) {
       const resolved = `${path.resolve(path.dirname(path.join(RPC_DIR, file)), specifier)}.ts`
-      if (resolved.startsWith(`${SHARED_DIR}${path.sep}`) && existsSync(resolved)) {
+      // Never re-add the generator's own output: a module under RPC_DIR may import the
+      // catalog for a type-only contract, and bundling a stale catalog makes regeneration
+      // crash in exactly the state that requires regenerating.
+      if (
+        resolved !== OUTPUT_PATH &&
+        resolved.startsWith(`${SHARED_DIR}${path.sep}`) &&
+        existsSync(resolved)
+      ) {
         modules.add(resolved)
       }
     }

@@ -42,19 +42,15 @@ function handleJiraCollectionReadError(
   mutationGeneration: number,
   set: JiraSliceSet,
   get: JiraSliceGet,
-  options?: { abortable?: boolean }
+  options: { abortable?: boolean; currentRequest: boolean }
 ): JiraIssue[] {
-  if (
-    isIntegrationCredentialDecryptionError(error) &&
-    canWriteCollectionResult(scope, mutationGeneration, get)
-  ) {
+  const canWrite =
+    options.currentRequest && canWriteCollectionResult(scope, mutationGeneration, get)
+  if (isIntegrationCredentialDecryptionError(error) && canWrite) {
     if (!shouldRefreshJiraStatusAfterRead(siteId, get().jiraStatus, options)) {
       void get().checkJiraConnection()
     }
-  } else if (
-    looksLikeJiraAuthError(error) &&
-    canWriteCollectionResult(scope, mutationGeneration, get)
-  ) {
+  } else if (looksLikeJiraAuthError(error) && canWrite) {
     markJiraConnectionLost(set, scope)
   }
   if (isIntegrationCredentialDecryptionError(error) || looksLikeJiraAuthError(error)) {
@@ -74,7 +70,7 @@ export function createJiraCollectionReadActions(
         options && 'siteId' in options ? options.siteId : getSelectedJiraSiteId(get().jiraStatus)
       const cacheKey = scopedJiraCacheKey(scope, `${siteId ?? 'default'}::${jql}::${limit}`)
       const cached = get().jiraSearchCache[cacheKey]
-      if (isFreshJiraCacheEntry(cached)) {
+      if (!options?.force && isFreshJiraCacheEntry(cached)) {
         return cached.data ?? []
       }
       const inflight = inflightSearchRequests.get(cacheKey)
@@ -82,6 +78,7 @@ export function createJiraCollectionReadActions(
       const requestMutationGeneration = currentJiraMutationGeneration()
       if (
         !abortable &&
+        !options?.force &&
         inflight &&
         inflight.contextKey === scope.contextKey &&
         inflight.mutationGeneration === requestMutationGeneration
@@ -119,7 +116,10 @@ export function createJiraCollectionReadActions(
             requestMutationGeneration,
             set,
             get,
-            { abortable }
+            {
+              abortable,
+              currentRequest: abortable || inflightSearchRequests.get(cacheKey) === entry
+            }
           )
         })
         .finally(() => {
@@ -153,12 +153,13 @@ export function createJiraCollectionReadActions(
         `${siteId ?? 'default'}::list::${filter}::${limit}`
       )
       const cached = get().jiraSearchCache[cacheKey]
-      if (isFreshJiraCacheEntry(cached)) {
+      if (!options?.force && isFreshJiraCacheEntry(cached)) {
         return cached.data ?? []
       }
       const inflight = inflightListRequests.get(cacheKey)
       const requestMutationGeneration = currentJiraMutationGeneration()
       if (
+        !options?.force &&
         inflight &&
         inflight.contextKey === scope.contextKey &&
         inflight.mutationGeneration === requestMutationGeneration
@@ -189,7 +190,8 @@ export function createJiraCollectionReadActions(
             siteId,
             requestMutationGeneration,
             set,
-            get
+            get,
+            { currentRequest: inflightListRequests.get(cacheKey) === entry }
           )
         })
         .finally(() => {

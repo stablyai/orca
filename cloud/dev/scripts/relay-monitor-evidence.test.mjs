@@ -207,20 +207,13 @@ test('requires fresh green evidence and rechecks the live selector', async () =>
   }
 })
 
-test('later same-cap waves accept evidence aged by predecessor cell rolls', async () => {
+test('dry-run authority holds evidence to five minutes on its own clock', async () => {
   const directory = await evidenceDirectory()
   try {
     const statePath = join(directory, 'relay-123.state.json')
     const state = JSON.parse(await readFile(statePath, 'utf8'))
-    const authorityAt = (...waveArgs) => verifyDryRunAuthority(
-      [
-        '--directory',
-        directory,
-        ...provenance,
-        '--required-migration-policy',
-        'strict',
-        ...waveArgs.flatMap((waveIndex) => ['--wave-index', waveIndex])
-      ],
+    const authority = () => verifyDryRunAuthority(
+      ['--directory', directory, ...provenance, '--required-migration-policy', 'strict'],
       () => now
     )
     const ageState = async (ageMs) => {
@@ -231,34 +224,10 @@ test('later same-cap waves accept evidence aged by predecessor cell rolls', asyn
       await writeFile(statePath, `${JSON.stringify(state)}\n`)
       await createEvidenceManifest(['--directory', directory, ...provenance])
     }
-    // The wave-0 bound in isolation: exactly 5 minutes, flag or no flag.
     await ageState(5 * 60_000)
-    await assert.doesNotReject(authorityAt())
-    await assert.doesNotReject(authorityAt('0'))
+    await assert.doesNotReject(authority())
     await ageState(5 * 60_000 + 1)
-    await assert.rejects(authorityAt(), /authority is incomplete or stale/)
-    await assert.rejects(authorityAt('0'), /authority is incomplete or stale/)
-    // One predecessor cell roll (~16 min) exceeds wave 0 but fits wave 1.
-    await ageState(17 * 60_000)
-    await assert.rejects(authorityAt('0'), /authority is incomplete or stale/)
-    await assert.doesNotReject(authorityAt('1'))
-    await assert.rejects(authorityAt('4'), /wave index is invalid/)
-    await assert.rejects(authorityAt('x'), /wave index is invalid/)
-    // Both edges of one predecessor job timeout: 5min + 75min exactly.
-    await ageState(80 * 60_000)
-    await assert.doesNotReject(authorityAt('1'))
-    await ageState(80 * 60_000 + 1)
-    await assert.rejects(authorityAt('1'), /authority is incomplete or stale/)
-    await assert.doesNotReject(authorityAt('2'))
-    // Wave 2 and wave 3 edges: 5min + 2 * 75min and 5min + 3 * 75min exactly.
-    await ageState(155 * 60_000)
-    await assert.doesNotReject(authorityAt('2'))
-    await ageState(155 * 60_000 + 1)
-    await assert.rejects(authorityAt('2'), /authority is incomplete or stale/)
-    await ageState(230 * 60_000)
-    await assert.doesNotReject(authorityAt('3'))
-    await ageState(230 * 60_000 + 1)
-    await assert.rejects(authorityAt('3'), /authority is incomplete or stale/)
+    await assert.rejects(authority(), /authority is incomplete or stale/)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
@@ -451,19 +420,14 @@ test('workflow reruns restore the prior attempt into one stable incident', async
   assert.match(dispatchWorkflow, /capacity-cell-id: \$\{\{ inputs\.capacity-cell-id \}\}/)
 })
 
-test('same-cap and rehome mutations require complete strict dry-run authority', async () => {
-  for (const name of [
-    'deploy-relay-production-same-cap-job.yml',
-    'operate-relay-production-rehome-job.yml'
-  ]) {
-    const workflow = await readFile(
-      relayWorkflowUrl(name),
-      'utf8'
-    )
-    assert.match(workflow, /relay-monitor-evidence\.mjs verify-authority/)
-    assert.match(workflow, /--required-migration-policy strict/)
-    assert.doesNotMatch(workflow, /relay-monitor-evidence\.mjs verify-restore/)
-  }
+test('rehome enable requires complete strict dry-run authority', async () => {
+  const workflow = await readFile(
+    relayWorkflowUrl('operate-relay-production-rehome-job.yml'),
+    'utf8'
+  )
+  assert.match(workflow, /relay-monitor-evidence\.mjs verify-authority/)
+  assert.match(workflow, /--required-migration-policy strict/)
+  assert.doesNotMatch(workflow, /relay-monitor-evidence\.mjs verify-restore/)
 })
 
 test('production mutation workflows consume and live-recheck dry-run evidence', async () => {

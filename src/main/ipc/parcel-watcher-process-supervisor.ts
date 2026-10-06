@@ -44,7 +44,7 @@ export class WatcherProcessSupervisor {
   private child: ChildProcess | null = null
   private nextSubscriptionId = 1
   private readonly crashFuse = new WatcherProcessCrashFuse()
-  private shutdownRequested = false
+  private shutdown = { requested: false, disposalRevision: 0 }
   private canaryDir: string | null = null
   private terminatingChild: ChildProcess | null = null
   private readonly terminationQueue = new termination.WatcherTerminationQueue()
@@ -71,7 +71,7 @@ export class WatcherProcessSupervisor {
         callback,
         opts,
         hooks,
-        shutdownRequested: this.shutdownRequested,
+        shutdownRequested: this.shutdown.requested,
         entryPath: this.options.entryPath ?? getWatcherProcessEntryPath(),
         useInProcessVitestFallback: this.options.useInProcessVitestFallback ?? true,
         allocateId: () => this.nextSubscriptionId++,
@@ -92,7 +92,8 @@ export class WatcherProcessSupervisor {
   }
 
   dispose(): void {
-    this.shutdownRequested = true
+    this.shutdown.requested = true
+    this.shutdown.disposalRevision++
     this.capacityWait.dispose()
     const proc = this.child
     this.child = null
@@ -107,7 +108,7 @@ export class WatcherProcessSupervisor {
 
   resetForTest(): void {
     this.dispose()
-    this.shutdownRequested = false
+    this.shutdown.requested = false
     this.terminatingChild = null
     this.terminationQueue.resetForTest()
     this.crashFuse.reset()
@@ -117,7 +118,7 @@ export class WatcherProcessSupervisor {
   private ensureWatcherProcess(
     entryPath = this.options.entryPath ?? getWatcherProcessEntryPath()
   ): ChildProcess | null {
-    if (this.shutdownRequested || this.terminatingChild) {
+    if (this.shutdown.requested || this.terminatingChild) {
       return null
     }
     if (this.child?.connected) {
@@ -151,6 +152,7 @@ export class WatcherProcessSupervisor {
 
   private handleChildMessage(message: WatcherToHostMessage): void {
     const child = this.child
+    const disposalRevision = this.shutdown.disposalRevision
     handleWatcherSupervisorMessage(message, {
       records: this.records,
       pendingUnsubscribes: this.pendingUnsubscribes,
@@ -171,6 +173,7 @@ export class WatcherProcessSupervisor {
           this.terminateUnavailableChild(child)
         }
       },
+      shouldReportTerminalError: () => this.shutdown.disposalRevision === disposalRevision,
       killWatcherChildIfIdle: () =>
         termination.ignoreWatcherTermination(this.killWatcherChildIfIdle())
     })
@@ -194,7 +197,7 @@ export class WatcherProcessSupervisor {
     recoverWatcherRecordsAfterChildGone(
       this.records,
       this.crashFuse,
-      this.shutdownRequested,
+      this.shutdown.requested,
       () => this.ensureWatcherProcess(),
       sendWatcherSubscribe,
       () => {
@@ -227,9 +230,9 @@ export class WatcherProcessSupervisor {
         (exited) => {
           this.terminatingChild = null
           if (!exited) {
-            this.shutdownRequested = true
+            this.shutdown.requested = true
           }
-          return !this.shutdownRequested
+          return !this.shutdown.requested
         },
         () => this.ensureWatcherProcess(),
         sendWatcherSubscribe,
@@ -299,9 +302,9 @@ export class WatcherProcessSupervisor {
         (exited) => {
           this.terminatingChild = null
           if (!exited) {
-            this.shutdownRequested = true
+            this.shutdown.requested = true
           }
-          return !this.shutdownRequested
+          return !this.shutdown.requested
         },
         () => this.ensureWatcherProcess(),
         sendWatcherSubscribe,

@@ -14,14 +14,16 @@ it('keeps a multiline commit body intact without materializing every message lin
     '',
     message
   ].join('\n')
-  const original = String.prototype.split
+  // Method-shaped type: a call-signature capture would reject `split`'s splitter-object overload.
+  const original: { split(separator: unknown, limit?: number): string[] }['split'] =
+    String.prototype.split
   let allocatedFields = 0
   const spy = vi.spyOn(String.prototype, 'split').mockImplementation(function (
     this: string,
-    separator: string | RegExp | { [Symbol.split](value: string, limit?: number): string[] },
+    separator: unknown,
     limit?: number
   ) {
-    const result = Reflect.apply(original, this, [separator, limit]) as string[]
+    const result = original.call(this, separator, limit)
     if (separator === '\n' && String(this).includes('body line')) {
       allocatedFields += result.length
     }

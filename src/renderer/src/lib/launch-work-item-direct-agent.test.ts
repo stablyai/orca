@@ -134,3 +134,42 @@ describe('notifyDirectWorkItemAgentStartTimeout', () => {
     )
   })
 })
+
+// Why: the Source Control AI dialogs hide the CLI arguments field on launches that cannot apply
+// it, and then send nothing. Only `undefined` reaches the global Agents arguments here — an
+// empty string is an explicit "no arguments" that would silently suppress the user's setting.
+describe('buildDirectWorkItemAgentStartupPlan global arguments fallback', () => {
+  const withGlobalArgs = {
+    ...settings,
+    openAgentTabsInChatByDefault: false,
+    agentDefaultArgs: { codex: '--sandbox danger-full-access' }
+  }
+
+  it('resolves the global Agents arguments when the launch names none', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      draftContent: 'Fix the broken checks',
+      promptDelivery: 'draft',
+      settings: withGlobalArgs,
+      launchPlatform: 'darwin',
+      nativeChatTranscriptIsLocalReadable: true
+    })
+
+    expect(result.startupPlan?.launchCommand).toContain("'--sandbox' 'danger-full-access'")
+  })
+
+  it('lets an explicit per-action value win over the global one', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      agentArgs: '--model gpt-5',
+      draftContent: 'Fix the broken checks',
+      promptDelivery: 'draft',
+      settings: withGlobalArgs,
+      launchPlatform: 'darwin',
+      nativeChatTranscriptIsLocalReadable: true
+    })
+
+    expect(result.startupPlan?.launchCommand).toContain("'--model' 'gpt-5'")
+    expect(result.startupPlan?.launchCommand).not.toContain('danger-full-access')
+  })
+})

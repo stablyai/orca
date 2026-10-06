@@ -4,7 +4,6 @@ import {
   getStructuredAgentSessionHost,
   setStructuredAgentSessionHost
 } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 
 const { isWindowsProcessStartTimeAvailable } = vi.hoisted(() => ({
   isWindowsProcessStartTimeAvailable: vi.fn(() => true)
@@ -23,21 +22,15 @@ function setPlatform(platform: NodeJS.Platform): void {
 
 type InstallEffects = {
   storeOpened: boolean
-  writeGateAttached: boolean
-  reaperStarted: boolean
 }
 
-/** Stands in for `install()` by performing the three effects it performs, so a probe that
+/** Stands in for `install()` by performing the effect it performs, so a probe that
  *  reinstalls the host is caught by what the install *does*, not by a call count alone. */
 function stubStructuredHostInstall(runtime: OrcaRuntimeService): {
   effects: InstallEffects
   ensure: ReturnType<typeof vi.fn>
 } {
-  const effects: InstallEffects = {
-    storeOpened: false,
-    writeGateAttached: false,
-    reaperStarted: false
-  }
+  const effects: InstallEffects = { storeOpened: false }
   // `supportsCreate` answers as the real Codex adapter would, so a probe that reinstalls the host
   // still returns the right answer and fails on the install effects alone.
   const host = {
@@ -47,9 +40,6 @@ function stubStructuredHostInstall(runtime: OrcaRuntimeService): {
   }
   const ensure = vi.fn(async () => {
     effects.storeOpened = true
-    effects.reaperStarted = true
-    agentSessionPtyWriteGate.attachRecordLookup(() => null)
-    effects.writeGateAttached = true
     setStructuredAgentSessionHost(host as never)
   })
   vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockImplementation(ensure)
@@ -99,11 +89,7 @@ async function expectSupportWithoutInstall(input: {
 
   expect(answers).toEqual(Array(input.repetitions ?? 1).fill(input.expected))
   expect(ensure).not.toHaveBeenCalled()
-  expect(effects).toEqual({
-    storeOpened: false,
-    writeGateAttached: false,
-    reaperStarted: false
-  })
+  expect(effects).toEqual({ storeOpened: false })
   expect(getStructuredAgentSessionHost()).toBeNull()
 }
 
@@ -113,7 +99,6 @@ describe('structured agent-session create-support probe', () => {
     isWindowsProcessStartTimeAvailable.mockReset()
     isWindowsProcessStartTimeAvailable.mockReturnValue(true)
     setStructuredAgentSessionHost(null)
-    agentSessionPtyWriteGate.detachRecordLookup()
     vi.restoreAllMocks()
   })
 
@@ -200,11 +185,7 @@ describe('structured agent-session create-support probe', () => {
     await runtime.prepareStructuredAgentSessionStartupRestoration()
 
     expect(ensure).toHaveBeenCalledTimes(1)
-    expect(effects).toEqual({
-      storeOpened: true,
-      writeGateAttached: true,
-      reaperStarted: true
-    })
+    expect(effects).toEqual({ storeOpened: true })
     expect(
       (getStructuredAgentSessionHost() as unknown as { reconcileRestartLeases: () => void })
         .reconcileRestartLeases

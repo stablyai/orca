@@ -55,7 +55,7 @@ export function createRemountTerminalTabForRecovery(
           const { admitted: _admitted, ...decline } = admission
           result = { remounted: false, ...decline }
         }
-        return {}
+        return s
       }
       const { worktreeId, index, tab } = location
       const nextTabs = s.tabsByWorktree[worktreeId].slice()
@@ -110,12 +110,12 @@ export function createSettleTerminalTabRecovery(
     set((s) => {
       const location = locateTerminalTab(s.tabsByWorktree, tabId)
       if (!location) {
-        return {}
+        return s
       }
       const { worktreeId, index, tab } = location
       const recovery = settledTerminalRecoveryLedger(tab, generation, outcome)
       if (!recovery) {
-        return {}
+        return s
       }
       const nextTabs = s.tabsByWorktree[worktreeId].slice()
       nextTabs[index] = { ...tab, recovery }

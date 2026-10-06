@@ -114,6 +114,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         timeoutMs?: number
         subscriptionId?: string
         expectedEnvironmentPairingRevision?: number
+        expectedEnvironmentRuntimeId?: string
       }
     ): Promise<{ subscriptionId: string; requestId: string }> => {
       const subscriptionId =
@@ -133,6 +134,12 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         pairingRevision !== args.expectedEnvironmentPairingRevision
       ) {
         throw new Error('Runtime environment pairing changed; refresh and try again')
+      }
+      if (
+        args.expectedEnvironmentRuntimeId !== undefined &&
+        environment.runtimeId !== args.expectedEnvironmentRuntimeId
+      ) {
+        throw new Error('Runtime environment identity changed; refresh and try again')
       }
       const transportGeneration = getRuntimeEnvironmentTransportGeneration(environment.id)
       const transportIsCurrent = (): boolean =>

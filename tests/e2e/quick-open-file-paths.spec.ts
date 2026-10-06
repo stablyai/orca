@@ -45,12 +45,20 @@ test('cmd+p quick open prioritizes the filename and reveals the full path on hov
   const tooltip = orcaPage
     .locator('[data-slot="tooltip-content"]')
     .filter({ hasText: relativeFilePath })
-  // Streaming results can remount the row under a stationary pointer.
+  // Streaming results can remount the row under a stationary pointer, and a
+  // tooltip left open from a prior attempt can swallow the next hover.
   await expect(async () => {
-    await row.hover({ position: { x: 20, y: 12 }, timeout: 1_000 })
-    await row.hover({ position: { x: 40, y: 12 }, timeout: 1_000 })
-    await expect(tooltip).toBeVisible({ timeout: 1_000 })
-  }).toPass({ timeout: 10_000, intervals: [100, 250, 500] })
+    await orcaPage.mouse.move(8, 8)
+    const currentRow = dialog.getByRole('option').filter({ hasText: 'QuickOpenTarget.tsx' }).first()
+    await expect(currentRow).toBeVisible()
+    const currentBox = await currentRow.boundingBox()
+    if (!currentBox) {
+      throw new Error('Quick Open result remounted before hover')
+    }
+    await orcaPage.mouse.move(currentBox.x + 20, currentBox.y + 12)
+    await orcaPage.mouse.move(currentBox.x + 40, currentBox.y + 12)
+    await expect(tooltip).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 15_000, intervals: [100, 250, 500] })
 
   // Exact cursor placement is arithmetic, unit-tested via cursorTooltipOffsets.
   // Asserting it here measures the app mid-reflow and is flaky; what E2E is

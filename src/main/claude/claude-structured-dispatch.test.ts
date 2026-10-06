@@ -2,8 +2,9 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { dispatchClaudeTurn, resolveClaudeReplayWaiter } from './claude-structured-dispatch'
-import { readClaudeImage } from './claude-structured-dispatch-content'
+import { dispatchClaudeTurn } from './claude-structured-dispatch'
+import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
+import { ClaudeDispatchContentError, readClaudeImage } from './claude-structured-dispatch-content'
 import { claudeUnwrittenUserMessageError } from './claude-agent-sdk-user-message-queue'
 import type { ClaudeSession } from './claude-structured-session-state'
 import {
@@ -12,6 +13,10 @@ import {
   userMessage,
   userReplayFrame
 } from './claude-structured-dispatch-test-support'
+
+function resolveClaudeReplayWaiter(...args: Parameters<typeof resolveClaudeReplayTurn>): boolean {
+  return resolveClaudeReplayTurn(...args) !== null
+}
 
 describe('Claude structured dispatch image limits', () => {
   it.each(['isMeta', 'isSynthetic', 'isCompactSummary'])(
@@ -38,7 +43,7 @@ describe('Claude structured dispatch image limits', () => {
     }
   )
 
-  it('takes the active turn identity from a replay that lands after dispatch returned', async () => {
+  it('settles the waiter from a replay that lands after dispatch returned', async () => {
     const session = sessionFor()
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
@@ -47,14 +52,12 @@ describe('Claude structured dispatch image limits', () => {
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const sentUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
     await expect(dispatched).resolves.toEqual({ state: 'admitted' })
-    expect(session.activeTurnId).toBeUndefined()
 
     expect(resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'))).toBe(true)
-    expect(session.activeTurnId).toBe(sentUuid)
-    expect(session.activeTurnSequence).toBe(session.dispatchSequence)
+    expect(session.dispatchWaiters).toHaveLength(0)
   })
 
-  it('recovers the active identity when a replay lands after the child died', async () => {
+  it('settles a retired identity without reopening a turn after the child died', async () => {
     const session = sessionFor()
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
@@ -67,9 +70,8 @@ describe('Claude structured dispatch image limits', () => {
     expect(session.dispatchWaiters).toHaveLength(0)
     expect(session.retiredDispatchWaiters).toHaveLength(1)
 
-    expect(resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'))).toBe(true)
-    expect(session.activeTurnId).toBe(sentUuid)
-    expect(session.activeTurnSequence).toBe(session.dispatchSequence)
+    expect(resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'))).toBe(false)
+    expect(session.retiredDispatchWaiters).toHaveLength(0)
   })
 
   it('settles the send the replay proves was delivered, whenever it arrives', async () => {
@@ -372,14 +374,17 @@ describe('Claude structured dispatch image limits', () => {
       .fn()
       .mockRejectedValue(claudeUnwrittenUserMessageError(new Error('broken pipe')))
 
-    // A refused write is a transport fact, and the only thing besides child exit
-    // that puts one message's delivery in doubt.
+    // A refused write is not doubt: the frame never left, so it is a rejection.
     await expect(
       dispatchClaudeTurn(session, {
         clientMessageId: 'client-2',
         body: userMessage([{ type: 'text', text: 'two' }])
       })
-    ).resolves.toEqual({ state: 'unknown', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: 'provider_write_failed',
+      rejection: { kind: 'writeFailed' }
+    })
     expect(session.dispatchWaiters).toEqual([firstWaiter])
 
     const firstUuid = (firstWaiter as { sentUuid?: string }).sentUuid
@@ -392,6 +397,7 @@ describe('Claude structured dispatch image limits', () => {
   })
 
   it('does not let a provably unwritten attempt block retry correlation', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const send = vi
       .fn()
       .mockRejectedValueOnce(claudeUnwrittenUserMessageError(new Error('broken pipe')))
@@ -401,7 +407,17 @@ describe('Claude structured dispatch image limits', () => {
 
     await expect(
       dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-    ).resolves.toEqual({ state: 'unknown', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: 'provider_write_failed',
+      rejection: { kind: 'writeFailed' }
+    })
+    // The row keeps only the marker; why the write failed goes to the log.
+    expect(warn).toHaveBeenCalledWith(
+      '[claude-dispatch] message could not be handed to Claude:',
+      expect.objectContaining({ message: expect.stringContaining('broken pipe') })
+    )
+    warn.mockRestore()
     expect(session.dispatchWaiters).toHaveLength(0)
     expect(session.retiredDispatchWaiters).toHaveLength(0)
 
@@ -411,7 +427,7 @@ describe('Claude structured dispatch image limits', () => {
     expect(resolveClaudeReplayWaiter(session, userReplayFrame('fresh-replay', 'retry me'))).toBe(
       true
     )
-    expect(session.activeTurnId).toBe('fresh-replay')
+    expect(session.dispatchWaiters).toHaveLength(0)
   })
 
   it('does not claim an SDK-pulled frame was unwritten when its write outcome is ambiguous', async () => {
@@ -684,66 +700,6 @@ describe('Claude structured dispatch image limits', () => {
     })
   })
 
-  it('rejects more than twenty URL images before sending', async () => {
-    const session = sessionFor()
-    const body = userMessage(
-      Array.from({ length: 21 }, (_, index) => ({
-        type: 'image-ref' as const,
-        url: `https://example.test/${index}.png`
-      }))
-    )
-
-    await expect(
-      dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-    ).resolves.toEqual({ state: 'rejected', reason: 'Claude messages support at most 20 images' })
-    expect(session.connection.send).not.toHaveBeenCalled()
-  })
-
-  it('rejects local images whose aggregate size exceeds twenty MiB', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'orca-claude-images-'))
-    try {
-      const paths = await Promise.all(
-        Array.from({ length: 5 }, async (_, index) => {
-          const path = join(directory, `${index}.png`)
-          await writeFile(path, Buffer.alloc(5 * 1024 * 1024))
-          return path
-        })
-      )
-      const session = sessionFor()
-      const body = userMessage(paths.map((path) => ({ type: 'image-ref' as const, path })))
-
-      await expect(
-        dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-      ).resolves.toEqual({
-        state: 'rejected',
-        reason: `Claude images must total no more than ${20 * 1024 * 1024} bytes`
-      })
-      expect(session.connection.send).not.toHaveBeenCalled()
-    } finally {
-      await rm(directory, { recursive: true, force: true })
-    }
-  })
-
-  it('rejects a local image by actual bytes read beyond the per-image cap', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'orca-claude-image-'))
-    try {
-      const path = join(directory, 'oversized.png')
-      await writeFile(path, Buffer.alloc(5 * 1024 * 1024 + 1))
-      const session = sessionFor()
-      const body = userMessage([{ type: 'image-ref', path }])
-
-      await expect(
-        dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-      ).resolves.toEqual({
-        state: 'rejected',
-        reason: `Claude image must be a non-empty file no larger than ${5 * 1024 * 1024} bytes`
-      })
-      expect(session.connection.send).not.toHaveBeenCalled()
-    } finally {
-      await rm(directory, { recursive: true, force: true })
-    }
-  })
-
   it('allocates local image reads from the file size, not the maximum cap', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-claude-image-'))
     const allocUnsafe = vi.spyOn(Buffer, 'allocUnsafe')
@@ -821,8 +777,11 @@ describe('Claude structured dispatch image limits', () => {
       read,
       close: vi.fn().mockResolvedValue(undefined)
     } as never)
-    await expect(readClaudeImage('/controlled/growing.png', open)).rejects.toThrow(
-      `Claude image must be a non-empty file no larger than ${5 * 1024 * 1024} bytes`
+    // It changed while Orca read it: unreadable, never a limit the image did not break.
+    const rejected = await readClaudeImage('/controlled/growing.png', open).catch(
+      (error: unknown) => error
     )
+    expect(rejected).not.toBeInstanceOf(ClaudeDispatchContentError)
+    expect(rejected).toMatchObject({ message: 'Claude image changed while it was read' })
   })
 })

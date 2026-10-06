@@ -73,6 +73,7 @@ describe('terminal tab owner index', () => {
           if (typeof property === 'string' && property.startsWith('wt-')) {
             bucketVisits += 1
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
           return Reflect.get(target, property, receiver)
         }
       })

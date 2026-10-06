@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/hosted-review'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { AppState } from '../types'
+import { nextLookupGeneration } from '../lookup-generation-sequence'
 import {
   getHostedReviewCacheKey,
   linkedReviewHintKey,
@@ -186,7 +187,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
 
     const inflightRequest = inflightHostedReviewRequests.get(requestKey)
     const startRequest = (): Promise<HostedReviewInfo | null> => {
-      const generation = (requestGenerations.get(cacheKey) ?? 0) + 1
+      const generation = nextLookupGeneration()
       const requestStartedAt = Date.now()
       const requestStartedEntry = get().hostedReviewCache[cacheKey]
       requestGenerations.set(cacheKey, generation)
@@ -234,7 +235,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   requestStartedEntry
                 )
               ) {
-                return {}
+                return state
               }
               const currentPRCache = state.prCache ?? {}
               const prCache = clearHostedReviewConflictingPrCache({

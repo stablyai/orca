@@ -69,9 +69,9 @@ describe('SearchSubprocessLineAccumulator', () => {
     }
 
     expect(accepted).toBe(true)
-    expect(Reflect.get(parser, 'buffer')).toBeInstanceOf(Buffer)
+    expect(parser.retainedCapacityBytes()).toBeGreaterThanOrEqual(200_000)
     expect(parser.finish()).toBe('x'.repeat(200_000))
-    expect(Reflect.get(parser, 'buffer')).toBeNull()
+    expect(parser.retainedCapacityBytes()).toBeNull()
   })
 
   it('rejects invalid byte limits', () => {

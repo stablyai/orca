@@ -59,7 +59,9 @@ export function createBrowserPageConversionActions(
         const nextRemoteBrowserPageHandlesByPageId = { ...s.remoteBrowserPageHandlesByPageId }
         delete nextRemoteBrowserPageHandlesByPageId[plan.oldPage.id]
         const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+        const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
         delete nextBrowserAnnotationsByPageId[plan.oldPage.id]
+        delete nextBrowserAnnotationMarkerIdsByPageId[plan.oldPage.id]
         const nextBrowserCertificateFailuresByPageId = { ...s.browserCertificateFailuresByPageId }
         delete nextBrowserCertificateFailuresByPageId[plan.oldPage.id]
         return {
@@ -85,7 +87,8 @@ export function createBrowserPageConversionActions(
           ),
           remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
           browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
-          browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
+          browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
+          browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
         }
       })
       // Why the casts: the assignments happen inside set()'s callback, which TS's flow analysis does

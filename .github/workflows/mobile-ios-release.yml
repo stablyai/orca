@@ -22,6 +22,14 @@ on:
         description: 'Optional TestFlight external tester changelog'
         required: false
         type: string
+      shell:
+        description: 'Which shell the binary mounts: native screens, or the web page delivered over the air. Default native; `ota` is the only value that changes it.'
+        required: false
+        default: native
+        type: choice
+        options:
+          - native
+          - ota
 
 jobs:
   ios-build:
@@ -141,7 +149,13 @@ jobs:
           # Keep fastlane non-interactive and quiet about analytics in CI.
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_HIDE_CHANGELOG: '1'
-        run: bundle exec fastlane ios build_and_upload
+          # The one build-time constant that decides whether this binary mounts the web page or
+          # the native screens. A tag push and a schedule carry no inputs, so both read native.
+          EXPO_PUBLIC_MOBILE_SHELL: ${{ inputs.shell || 'native' }}
+        run: |
+          set -euo pipefail
+          echo "Mobile shell: $EXPO_PUBLIC_MOBILE_SHELL"
+          bundle exec fastlane ios build_and_upload
 
       - name: Upload .ipa artifact
         if: always()

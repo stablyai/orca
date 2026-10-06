@@ -19,6 +19,7 @@ type DevOrgRoster = {
 }
 
 const devRostersByOrg = new Map<string, DevOrgRoster>()
+const MAX_DEV_ORG_ROSTERS = 64
 
 function cleanEnvString(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim()
@@ -58,6 +59,13 @@ function getDevRoster(orgId: string): DevOrgRoster {
   }
   const seeded = seedDevRoster()
   devRostersByOrg.set(orgId, seeded)
+  while (devRostersByOrg.size > MAX_DEV_ORG_ROSTERS) {
+    const oldest = devRostersByOrg.keys().next()
+    if (oldest.done) {
+      break
+    }
+    devRostersByOrg.delete(oldest.value)
+  }
   return seeded
 }
 

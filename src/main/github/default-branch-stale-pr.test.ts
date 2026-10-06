@@ -136,23 +136,15 @@ import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-de
 const DEFAULT_BRANCH_REF = 'refs/remotes/origin/master'
 
 /**
- * Answer the real resolveDefaultBaseRefViaExec probes (origin/HEAD
- * symbolic-ref + rev-parse verification), the merged-at-head `rev-parse HEAD`
- * probe, and the tracked-upstream `for-each-ref` snapshot.
+ * Answer the default-base and tracked-upstream snapshots and merged-at-head probe.
  */
 function primeGitExecForDefaultBranch({
   defaultRef = DEFAULT_BRANCH_REF,
   headOid = 'checkout-head-oid'
 }: { defaultRef?: string; headOid?: string } = {}): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-    if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
-      return { stdout: `${defaultRef}\n`, stderr: '' }
-    }
-    if (args[0] === 'rev-parse' && args[1] === '--verify') {
-      if (args.includes(defaultRef)) {
-        return { stdout: 'default-branch-oid\n', stderr: '' }
-      }
-      throw new Error(`fatal: Needed a single revision: ${args.join(' ')}`)
+    if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+      return { stdout: `refs/remotes/origin/HEAD\0${defaultRef}\n`, stderr: '' }
     }
     if (args[0] === 'rev-parse' && args[1] === 'HEAD') {
       return { stdout: `${headOid}\n`, stderr: '' }
@@ -164,7 +156,7 @@ function primeGitExecForDefaultBranch({
   })
 }
 
-type RestPRShape = {
+type RestPROverrides = {
   number?: number
   state?: string
   merged_at?: string | null
@@ -178,7 +170,7 @@ function restPR({
   merged_at = null,
   head_ref = 'master',
   head_sha = 'stale-master-oid'
-}: RestPRShape = {}): Record<string, unknown> {
+}: RestPROverrides = {}): Record<string, unknown> {
   return {
     number,
     title: 'Historical PR',
@@ -278,7 +270,13 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     expect(pr?.number).toBe(8)
     expect(pr?.state).toBe('open')
     // Open results never consult git for the default branch (lazy resolution).
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    // Remote-name listing is a separate concern from default-branch resolution,
+    // so allow it and keep every other git command forbidden here.
+    expect(
+      gitExecFileAsyncMock.mock.calls
+        .map(([args]) => args[0])
+        .filter((command) => command !== 'remote')
+    ).toEqual([])
   })
 
   it('keeps a CLOSED PR on a feature branch visible (behavior preserved)', async () => {

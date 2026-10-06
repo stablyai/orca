@@ -102,9 +102,10 @@ export class LoadedStateAdaptationOperations {
         if (!group) {
           continue
         }
-        const nextOrder = nextOrderByGroupId.get(group.id) ?? 0
-        nextOrderByGroupId.set(group.id, nextOrder + 1)
-        if (repo.projectGroupId !== group.id || repo.projectGroupOrder !== nextOrder) {
+        // Why: only repos that migrate into a new child group get assigned to it and re-indexed.
+        if (repo.projectGroupId !== group.id) {
+          const nextOrder = nextOrderByGroupId.get(group.id) ?? 0
+          nextOrderByGroupId.set(group.id, nextOrder + 1)
           repo.projectGroupId = group.id
           repo.projectGroupOrder = nextOrder
           changed = true

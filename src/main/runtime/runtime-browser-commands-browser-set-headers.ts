@@ -1,6 +1,11 @@
 // @ts-nocheck -- mechanically split class members.
 import { RuntimeBrowserCommandsWithBrowserNetworkLog } from './runtime-browser-commands-browser-network-log'
 import type { BrowserCommandTargetParams } from './runtime-browser-commands-browser-command-target-params'
+import {
+  browserDialogSettledResult,
+  settleBrowserDialogOnLiveScreencast,
+  type BrowserDialogResult
+} from './browser-dialog-settlement'
 
 export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserCommandsWithBrowserNetworkLog {
   async browserSetHeaders(
@@ -66,18 +71,37 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
 
   async browserDialogAccept(
     params: { text?: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
+  ): Promise<BrowserDialogResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().dialogAccept(
-      params.text,
-      target.worktreeId,
-      target.browserPageId
-    )
+    if (
+      !(await settleBrowserDialogOnLiveScreencast(
+        this.activeScreencastsByPageId,
+        target.browserPageId,
+        true,
+        params.text
+      ))
+    ) {
+      await this.requireAgentBrowserBridge().dialogAccept(
+        params.text,
+        target.worktreeId,
+        target.browserPageId
+      )
+    }
+    return browserDialogSettledResult(true)
   }
 
-  async browserDialogDismiss(params: BrowserCommandTargetParams): Promise<unknown> {
+  async browserDialogDismiss(params: BrowserCommandTargetParams): Promise<BrowserDialogResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().dialogDismiss(target.worktreeId, target.browserPageId)
+    if (
+      !(await settleBrowserDialogOnLiveScreencast(
+        this.activeScreencastsByPageId,
+        target.browserPageId,
+        false
+      ))
+    ) {
+      await this.requireAgentBrowserBridge().dialogDismiss(target.worktreeId, target.browserPageId)
+    }
+    return browserDialogSettledResult(false)
   }
 
   // ── Storage commands ──

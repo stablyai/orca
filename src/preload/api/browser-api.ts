@@ -1,5 +1,10 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type {
+  BrowserIdentityModeSetResult,
+  BrowserIdentityModeStatus,
+  BrowserUserAgentMode
+} from '../../shared/browser-user-agent-mode'
+import type {
   BrowserClientPageMetadataParams,
   BrowserClientPageMetadataPublishOutcome
 } from '../../shared/browser-client-page-metadata-protocol'
@@ -16,7 +21,8 @@ import type {
   BrowserCaptureSelectionScreenshotArgs,
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
-  BrowserExtractHoverResult
+  BrowserExtractHoverResult,
+  GrabIntent
 } from '../../shared/browser-grab-types'
 import type {
   BrowserContextMenuDismissedEvent,
@@ -33,7 +39,6 @@ import type {
   BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
-  BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
   BrowserViewportOverride,
@@ -115,6 +120,9 @@ export type BrowserApi = {
   onActivateView: (
     callback: (data: { worktreeId?: string; browserPageId?: string }) => void
   ) => () => void
+  onCapturePaintHold: (
+    callback: (data: { browserPageId: string; held: boolean }) => void
+  ) => () => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
@@ -129,7 +137,7 @@ export type BrowserApi = {
     args: BrowserCaptureSelectionScreenshotArgs
   ) => Promise<BrowserCaptureSelectionScreenshotResult>
   extractHoverPayload: (args: BrowserExtractHoverArgs) => Promise<BrowserExtractHoverResult>
-  onGrabModeToggle: (callback: (browserPageId: string) => void) => () => void
+  onGrabModeToggle: (callback: (browserPageId: string, intent: GrabIntent) => void) => () => void
   onGrabActionShortcut: (
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
@@ -140,12 +148,12 @@ export type BrowserApi = {
     browserProfileId?: string
     skipProbe?: boolean
   }) => Promise<{ partition: string }>
-  sessionCreateProfile: (
-    args: {
-      scope: BrowserSessionProfileScope
-      label: string
-    } & BrowserSessionProfileCreateOptions
-  ) => Promise<BrowserSessionProfile | null>
+  sessionCreateProfile: (args: {
+    scope: BrowserSessionProfileScope
+    label: string
+  }) => Promise<BrowserSessionProfile | null>
+  identityGet: () => Promise<BrowserIdentityModeStatus | null>
+  identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
   sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>

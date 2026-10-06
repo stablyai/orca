@@ -59,7 +59,7 @@ export type TerminalHttpLinkActionDestinations = HttpLinkActionDestinations
 export type TerminalLinkRoutingPreferenceRequester = HttpLinkRoutingPreferenceRequester
 
 function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
-  if (event.defaultPrevented || event.button !== 0) {
+  if (event.defaultPrevented || (event.button !== 0 && event.button !== 1)) {
     return false
   }
   // Why: Shift-only, Alt, and non-primary clicks remain available to the terminal or child TUI.
@@ -111,7 +111,7 @@ export function findHttpLinkAtTerminalMouseEvent(
   terminal: Terminal,
   event: MouseEvent
 ): string | null {
-  if (event.button !== 0 || !isTerminalOwnedLinkGesture(event)) {
+  if ((event.button !== 0 && event.button !== 1) || !isTerminalOwnedLinkGesture(event)) {
     return null
   }
   const position = getTerminalBufferPositionForMouseEvent(terminal, event)

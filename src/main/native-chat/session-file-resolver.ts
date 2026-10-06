@@ -8,7 +8,7 @@ import {
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
-import { normalizeAgentSessionsDir } from '../ai-vault/session-scanner-values'
+import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
@@ -21,7 +21,6 @@ import {
 } from './host-readable-transcript-path'
 import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
-import { proveClaudeTranscriptBranch } from '../claude/claude-transcript-branch-proof'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
 // run in the main process against the runtime's own home directory; over SSH
@@ -65,15 +64,6 @@ function grokSessionsDir(): string {
   return resolveGrokSessionsDir(process.env, homedir())
 }
 
-/** Mirrors the AI Vault scanner so an OMP_CODING_AGENT_DIR override resolves the
- *  same root for both, rather than leaving native chat pointed at the default. */
-function ompSessionsDir(): string {
-  return normalizeAgentSessionsDir(
-    process.env.OMP_CODING_AGENT_DIR?.trim() || join(homedir(), '.omp', 'agent', 'sessions'),
-    '.omp'
-  )
-}
-
 export type ResolveSessionFileOptions = {
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
@@ -111,7 +101,7 @@ export async function resolveSessionFilePath(
 ): Promise<string | null> {
   signal?.throwIfAborted()
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  if (!transcriptAgent) {
+  if (!transcriptAgent || transcriptAgent === 'opencode') {
     return null
   }
   // Why: the hook's transcript_path is the exact file the agent is writing, so it
@@ -164,27 +154,15 @@ export async function resolveSessionFilePath(
   return resolved
 }
 
-/** Read and validate Claude's authoritative transcript branch marker. */
-export async function readClaudeTranscriptLeafUuid(
-  transcriptPath: string,
-  providerSessionId: string,
-  previousLeafUuid: string | null = null
-): Promise<string> {
-  return (
-    await proveClaudeTranscriptBranch({
-      transcriptPath,
-      providerSessionId,
-      previousLeafUuid
-    })
-  ).leafUuid
-}
-
 async function resolveSessionFileById(
   transcriptAgent: NativeChatTranscriptAgent,
   sessionId: string,
   options: ResolveSessionFileOptions,
   signal?: AbortSignal
 ): Promise<string | null> {
+  if (transcriptAgent === 'opencode') {
+    return null
+  }
   const trimmedId = sessionId.trim()
   if (!trimmedId) {
     return null
@@ -214,7 +192,11 @@ async function resolveSessionFileById(
     return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir(), signal)
   }
   if (transcriptAgent === 'omp') {
-    return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir(), signal)
+    return resolveOmpSessionFile(
+      trimmedId,
+      resolveOmpSessionsDir({ sessionsDir: options.ompSessionsDir }),
+      signal
+    )
   }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
@@ -333,6 +315,9 @@ async function resolveOmpSessionFile(
   sessionsDir: string,
   signal?: AbortSignal
 ): Promise<string | null> {
+  if (!sessionsDir) {
+    return null
+  }
   const files = await walkSessionFiles(sessionsDir, 'omp', [], {
     extensions: new Set(['.jsonl']),
     // Why: a session's task-subagent transcripts live in its same-named

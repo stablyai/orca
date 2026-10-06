@@ -61,6 +61,14 @@ function newIndexer(
   return indexer
 }
 
+/** What the index holds, counted the way `status()` counts it. */
+function indexedMessageCount(): number {
+  const row = harness.read((db: SyncDatabase) =>
+    db.prepare('SELECT count(*) AS n FROM messages').get()
+  )
+  return row && typeof row === 'object' && 'n' in row && typeof row.n === 'number' ? row.n : -1
+}
+
 /** Sessions a published-view read returns for one term, the only legal shape. */
 function sessionsMatching(term: string): string[] {
   return harness.read((db: SyncDatabase) =>
@@ -256,6 +264,9 @@ it('resumes after close and reopen without re-reading what it already indexed', 
   // `filesIndexed` is the count of rows the index holds at their current stat,
   // so it stays 2. That nothing was opened again is the read loop's own test.
   expect(reopened.status()).toMatchObject({ filesIndexed: 2, filesDue: 0 })
+  // The same number the pane shows as "messages searchable", read from the rows rather than counted as they land.
+  expect(indexedMessageCount()).toBeGreaterThan(0)
+  expect(reopened.status().messagesIndexed).toBe(indexedMessageCount())
   expect(
     harness.read((db: SyncDatabase) => db.prepare('SELECT count(*) AS n FROM messages').get())
   ).toEqual(indexedRows)
@@ -329,7 +340,9 @@ it('reads what one pass has time for and finishes the rest on the next', async (
     )
   }
   await indexer?.reconcile()
-  expect(indexer?.status()).toMatchObject({ filesIndexed: 3, filesDue: 0 })
+  // Two of the four went unread, and neither has a row, so the count it hands
+  // back is the only thing that can say the index is not done.
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 3, filesDue: 2, phase: 'indexing' })
 
   await indexer?.reconcile()
   expect(sessionsMatching('deadlined')).toHaveLength(4)
@@ -926,14 +939,24 @@ it('stops the opening sweep at its deadline and drains the rest over the passes 
     await writeClaudeTranscript(transcriptPath(session), [`backlogged session ${index}`], session)
   }
   await newIndexer(readsPerPass(2)).start()
-  expect(indexer?.status().filesIndexed).toBe(2)
+  // A sweep that ran out of time did not sweep the machine: it says so rather
+  // than stamping itself complete and reporting the three it never opened as
+  // nothing at all.
+  expect(indexer?.status()).toMatchObject({
+    filesIndexed: 2,
+    filesDue: 3,
+    phase: 'indexing',
+    lastSweepCompletedAt: null
+  })
 
   await nextCycle()
-  expect(indexer?.status().filesIndexed).toBe(4)
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 4, filesDue: 1, phase: 'indexing' })
+  expect(indexer?.status().lastSweepCompletedAt).toBeNull()
 
   await nextCycle()
   expect(sessionsMatching('backlogged')).toHaveLength(5)
-  expect(indexer?.status()).toMatchObject({ filesIndexed: 5, filesDue: 0 })
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 5, filesDue: 0, phase: 'current' })
+  expect(indexer?.status().lastSweepCompletedAt).not.toBeNull()
 })
 
 // The sweep cadence, with nobody asking for it: a file outside the recency

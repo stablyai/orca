@@ -129,6 +129,16 @@ export function createGitHubApi(): WebGitHubApi {
     starOrca: () => Promise.resolve(false),
     rateLimit: (args) =>
       route<WebGitHubResult<'rateLimit'>>(GITHUB_WEB_RPC_METHODS.rateLimit, args),
+    listBindableAccounts: (args) =>
+      route<WebGitHubResult<'listBindableAccounts'>>(
+        GITHUB_WEB_RPC_METHODS.listBindableAccounts,
+        args
+      ),
+    validateAccountBinding: (args) =>
+      route<WebGitHubResult<'validateAccountBinding'>>(
+        GITHUB_WEB_RPC_METHODS.validateAccountBinding,
+        args
+      ),
     diagnoseAuth: () =>
       Promise.resolve({
         ok: false,

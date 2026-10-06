@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { insertHistoryRowsBelowFileMatches } from './tab-create-entry-history-placement'
 import type { BrowserHistoryOmniboxRow } from './tab-create-entry-active-option'
 import type { TabEntryOption } from './tab-create-entry-action'
+import type { ExistingFileMatch } from './tab-create-entry-file-matches'
 
 function fileOption(
   relativePath: string,
-  matchKind: 'exact-path' | 'exact-basename' | 'fuzzy'
+  matchKind: ExistingFileMatch['matchKind']
 ): TabEntryOption {
   return {
     id: `existing-file:${relativePath}`,
@@ -40,7 +41,7 @@ describe('tab create entry history placement', () => {
     const placed = insertHistoryRowsBelowFileMatches(
       [
         fileOption('README.md', 'exact-basename'),
-        fileOption('docs/readme-notes.md', 'fuzzy'),
+        fileOption('docs/readme-notes.md', 'literal-basename'),
         newFileOption,
         searchOption
       ],
@@ -53,9 +54,9 @@ describe('tab create entry history placement', () => {
     expect(placed[3]).toMatchObject({ option: { id: 'new-file:readme' } })
   })
 
-  it('stays below a fuzzy match that is the only file row', () => {
+  it.each(['literal-basename', 'fuzzy'] as const)('stays below a lone %s file row', (matchKind) => {
     const placed = insertHistoryRowsBelowFileMatches(
-      [fileOption('docs/readme-notes.md', 'fuzzy'), searchOption],
+      [fileOption('docs/readme-notes.md', matchKind), searchOption],
       rows
     )
 

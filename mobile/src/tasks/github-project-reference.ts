@@ -1,3 +1,7 @@
+import {
+  GITHUB_OWNER_NUMBER_SHORTHAND_RE,
+  GITHUB_OWNER_SLUG_RE
+} from '../../../src/shared/github/owner-slug'
 import type { GitHubProjectIdentity } from '../../../src/shared/github/project-identity'
 
 export type GitHubProjectOwnerType = GitHubProjectIdentity['ownerType']
@@ -29,7 +33,7 @@ export type ParsedGitHubProjectInput = {
   viewNumber?: number
 }
 
-const OWNER_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/
+const OWNER_RE = GITHUB_OWNER_SLUG_RE
 
 function positiveInteger(value: string | undefined): number | null {
   if (!value || !/^\d+$/.test(value)) {
@@ -41,7 +45,7 @@ function positiveInteger(value: string | undefined): number | null {
 
 export function parseGitHubProjectInput(input: string): ParsedGitHubProjectInput | null {
   const trimmed = input.trim()
-  const short = /^([A-Za-z0-9][A-Za-z0-9-]*)\/(\d+)$/.exec(trimmed)
+  const short = GITHUB_OWNER_NUMBER_SHORTHAND_RE.exec(trimmed)
   if (short) {
     const number = positiveInteger(short[2])
     return number ? { owner: short[1]!, number } : null

@@ -3,7 +3,7 @@ import type { RequestContext } from './dispatcher'
 import { GitHandlerOperationContext } from './git-handler-operation-context'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, runPullWithDivergenceFallback } from '../shared/git-remote-error'
-import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
+import { assertValidGitPushTarget } from '../shared/git-push-target-validation'
 import type { GitCommandRunner } from '../shared/git-publish-target-status'
 import type { GitPushTarget } from '../shared/worktree/types'
 import { resolveEffectiveGitUpstream } from '../shared/git-effective-upstream'
@@ -63,7 +63,7 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
     const worktreePath = params.worktreePath as string
     const runPull = async (effectiveArgs: string[]): Promise<void> => {
       if (params.pushTarget !== undefined) {
-        assertGitPushTargetShape(params.pushTarget)
+        assertValidGitPushTarget(params.pushTarget)
         const pushTarget = params.pushTarget as GitPushTarget
         await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
         await this.git(

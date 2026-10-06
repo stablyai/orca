@@ -19,8 +19,7 @@ export function killPtyFromRuntimeController(
     rememberSyntheticKillExit,
     sendPtyExitToRenderer,
     finishPtyShutdown,
-    retiredRejectedPtyIds,
-    reversibleStopOwnersByPtyId
+    retiredRejectedPtyIds
   } = deps
   runtime?.markPtyStopRequested?.(ptyId)
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
@@ -31,7 +30,7 @@ export function killPtyFromRuntimeController(
       store,
       ptyId,
       connectionId,
-      reversible: reversibleStopOwnersByPtyId.has(ptyId),
+      reversible: runtime?.intentionalPtyStops?.isReversibleStopInFlight(ptyId) ?? false,
       incarnationId
     })
   }
@@ -48,7 +47,7 @@ export function killPtyFromRuntimeController(
         // The relay was never asked, so the remote shell is still running. Keep the order.
         recordUndelivered(incarnationId)
         runtime?.onPtyExit(ptyId, -1, incarnationId)
-        rememberSyntheticKillExit(ptyId)
+        rememberSyntheticKillExit(ptyId, incarnationId)
         sendPtyExitToRenderer({
           id: ptyId,
           code: -1,
@@ -66,7 +65,7 @@ export function killPtyFromRuntimeController(
         const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
         if (!providerExitObserved && !retired) {
           runtime?.onPtyExit(ptyId, -1, incarnationId)
-          rememberSyntheticKillExit(ptyId)
+          rememberSyntheticKillExit(ptyId, incarnationId)
           sendPtyExitToRenderer({
             id: ptyId,
             code: -1,
@@ -80,7 +79,7 @@ export function killPtyFromRuntimeController(
           const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
           if (!retired) {
             runtime?.onPtyExit(ptyId, -1, incarnationId)
-            rememberSyntheticKillExit(ptyId)
+            rememberSyntheticKillExit(ptyId, incarnationId)
             sendPtyExitToRenderer({
               id: ptyId,
               code: -1,
@@ -154,8 +153,9 @@ export function retireRejectedPtyFromRuntimeController(
     if (!ptyOwnership.has(ptyId)) {
       return
     }
-    runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
-    rememberSyntheticKillExit(ptyId)
+    const incarnationId = ptyIncarnationById.get(ptyId)
+    runtime?.onPtyExit(ptyId, -1, incarnationId)
+    rememberSyntheticKillExit(ptyId, incarnationId)
     sendPtyExitToRenderer({
       id: ptyId,
       code: -1,
@@ -175,37 +175,12 @@ export function retireRejectedPtyFromRuntimeController(
   connectionId ??= parsedSshId?.connectionId
   const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
   runtime?.onPtyExit(ptyId, 0, incarnationId)
-  rememberSyntheticKillExit(ptyId)
+  rememberSyntheticKillExit(ptyId, incarnationId)
   sendPtyExitToRenderer({
     id: ptyId,
     code: 0,
     ...(incarnationId ? { incarnationId } : {})
   })
-}
-
-export function markReversibleStopsFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  ptyIds: readonly string[]
-): () => void {
-  const { reversibleStopOwnersByPtyId } = deps
-  for (const ptyId of ptyIds) {
-    reversibleStopOwnersByPtyId.set(ptyId, (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) + 1)
-  }
-  let released = false
-  return () => {
-    if (released) {
-      return
-    }
-    released = true
-    for (const ptyId of ptyIds) {
-      const owners = (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) - 1
-      if (owners > 0) {
-        reversibleStopOwnersByPtyId.set(ptyId, owners)
-      } else {
-        reversibleStopOwnersByPtyId.delete(ptyId)
-      }
-    }
-  }
 }
 
 /**
@@ -270,7 +245,7 @@ export async function stopAndWaitPtyFromRuntimeController(
       // await, but the relay lease must still be tombstoned.
       const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
       runtime?.onPtyExit(ptyId, -1, incarnationId)
-      rememberSyntheticKillExit(ptyId)
+      rememberSyntheticKillExit(ptyId, incarnationId)
       sendPtyExitToRenderer({
         id: ptyId,
         code: -1,
@@ -325,7 +300,7 @@ export async function stopAndWaitPtyFromRuntimeController(
     // The owning provider's fresh inventory observed absence, so this is a
     // death certificate even when its exit event was missed.
     runtime?.onPtyExit(ptyId, 0, incarnationId)
-    rememberSyntheticKillExit(ptyId)
+    rememberSyntheticKillExit(ptyId, incarnationId)
     sendPtyExitToRenderer({
       id: ptyId,
       code: 0,

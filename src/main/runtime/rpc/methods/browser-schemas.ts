@@ -26,7 +26,6 @@ export {
   MouseButton,
   MouseWheel,
   MouseXY,
-  ProfileCreate,
   ProfileDelete,
   ProfileImportFromBrowser,
   Screencast,
@@ -53,3 +52,7 @@ export {
   Viewport,
   Wait
 } from '../../../../shared/rpc-contract/browser-params'
+export {
+  BrowserIdentitySet,
+  ProfileCreate
+} from '../../../../shared/rpc-contract/browser-identity-params'

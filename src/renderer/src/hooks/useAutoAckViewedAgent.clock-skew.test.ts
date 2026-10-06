@@ -106,7 +106,7 @@ describe('useAutoAckViewedAgent — clock-skewed execution host', () => {
     renderHook(() => useAutoAckViewedAgent(false))
 
     const calls = instrumentAcknowledgeAgents()
-    useAppStore.getState().markTerminalTabUnread('tab-unrelated')
+    useAppStore.getState().markTerminalTabUnread('tab-unrelated', 'terminal-bell')
 
     expect(calls).toEqual([])
   })

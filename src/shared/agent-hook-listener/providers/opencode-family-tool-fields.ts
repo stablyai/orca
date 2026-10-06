@@ -63,10 +63,13 @@ export function extractOpenCodeToolFields(
           (pattern): pattern is string => typeof pattern === 'string' && pattern.length > 0
         )
       : []
+    const toolName = readString(hookPayload, 'permission')
+    const toolInput = metadataInput ?? (patterns.length > 0 ? patterns.join(', ') : undefined)
     return toolUpdate(
       {
-        toolName: readString(hookPayload, 'permission'),
-        toolInput: metadataInput ?? (patterns.length > 0 ? patterns.join(', ') : undefined)
+        toolName,
+        toolInput,
+        interactivePrompt: deriveInteractivePrompt(toolName, { command: toolInput }, eventName)
       },
       { hasToolInputField: hasAnyOwnField(hookPayload, ['metadata', 'patterns']) }
     )

@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
 import { hasLiveClaudePtys } from '../claude-accounts/live-pty-gate'
@@ -19,6 +20,9 @@ import { createClaudeJournalTranslator } from './claude-structured-journal-trans
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 // These drive the real SDK against the scripted fake CLI, so every assertion is
 // about the environment, argv and frames a real child actually saw.
@@ -106,6 +110,18 @@ async function open(
   return connection
 }
 
+function launchedArgv(spec: ProcessSpec | undefined): string[] {
+  const supervised = spec?.env?.ORCA_PROVIDER_SUPERVISOR_SPEC
+  if (!supervised) {
+    return [spec?.program ?? '', ...(spec?.args ?? [])]
+  }
+  const launch: unknown = JSON.parse(Buffer.from(supervised, 'base64').toString())
+  if (!launch || typeof launch !== 'object' || !('command' in launch) || !('args' in launch)) {
+    return []
+  }
+  return [String(launch.command), ...(Array.isArray(launch.args) ? launch.args.map(String) : [])]
+}
+
 function childEnv(): Record<string, string | undefined> {
   return (spawned.at(-1)?.env ?? {}) as Record<string, string | undefined>
 }
@@ -163,9 +179,12 @@ describe('Claude stream-json connection', () => {
     // An inherited value wins over the SDK's default, so clear it to pin the default.
     vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', undefined)
     vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
+    // An Orca launched inside another structured session inherits that session's id.
+    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'a0b1c2d3-0000-4000-8000-00000000abcd')
     const scenario = scriptScenario([HOLD_OPEN])
     const connection = await open(
       launchFor(scenario, {
+        ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666',
         CLAUDE_CONFIG_DIR: '/accounts/managed/home',
         ANTHROPIC_AUTH_TOKEN: 'configured-token',
         ORCA_AGENT_SESSION_SPAWN_TOKEN: 'spawn-9',
@@ -184,6 +203,8 @@ describe('Claude stream-json connection', () => {
     expect(env.ANTHROPIC_AUTH_TOKEN).toBe('configured-token')
     expect(env.ORCA_AGENT_SESSION_SPAWN_TOKEN).toBe('spawn-9')
     expect(env.ORCA_CONNECTION_MARKER).toBe('inherited')
+    // The session's own id reaches the spawned child over the inherited one.
+    expect(env.ORCA_AGENT_SESSION_ID).toBe('f7a1c0de-1111-4222-8333-444455556666')
     expect(env.ANTHROPIC_API_KEY).toBeUndefined()
     expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
     expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined()
@@ -195,8 +216,9 @@ describe('Claude stream-json connection', () => {
     const report = await until(() => readReportSafely(scenario), 'the scripted CLI report')
     expect(report.argv[0]).toBe(FAKE_CLI)
     // The .mjs fixture makes the SDK run it under node; a real CLI path is the program
-    // itself. Either way the resolved path is what Orca's spawner is asked to execute.
-    expect([spawned.at(-1)?.program, ...(spawned.at(-1)?.args ?? [])]).toContain(FAKE_CLI)
+    // itself. Either way the resolved path is what Orca's spawner is asked to execute,
+    // through the POSIX supervisor's spec where there is one.
+    expect(launchedArgv(spawned.at(-1))).toContain(FAKE_CLI)
     expect(report.argv).toContain('--replay-user-messages')
     expect(report.argv).toContain(`--session-id=${SESSION_ID}`)
   })
@@ -207,6 +229,20 @@ describe('Claude stream-json connection', () => {
 
     await until(() => readReportSafely(scenario), 'the scripted CLI report')
     expect(childEnv().CLAUDE_CONFIG_DIR).toBeUndefined()
+  })
+
+  it("drops a CLAUDE_CONFIG_DIR from Orca's own process env: only the launch may name a home", async () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '/orca/process/claude')
+    vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
+    const scenario = scriptScenario([HOLD_OPEN])
+    await open(launchFor(scenario))
+
+    await until(() => readReportSafely(scenario), 'the scripted CLI report')
+    expect(childEnv().CLAUDE_CONFIG_DIR).toBeUndefined()
+    expect(childEnv().ORCA_CONNECTION_MARKER).toBe('inherited')
+
+    await open(launchFor(scenario, { CLAUDE_CONFIG_DIR: '/accounts/managed/home' }))
+    expect(childEnv().CLAUDE_CONFIG_DIR).toBe('/accounts/managed/home')
   })
 
   it('settles a send only once the frame reached the child, and replays reach onMessage', async () => {
@@ -345,13 +381,13 @@ describe('Claude stream-json connection', () => {
         workspaceId: 'workspace-1',
         hostId: 'host-1',
         agent: 'claude',
-        providerHandle: { kind: 'claude', sessionId: SESSION_ID, leafUuid: 'leaf-1' }
+        providerHandle: claudeProviderHandle(SESSION_ID, 'leaf-1')
       },
-      journalDir: join(scenario.cwd, 'journal'),
+      database: openTestJournalHostDatabase(join(scenario.cwd, 'journal')),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({ journal, fence: 1, publish: vi.fn() })
     const translator = createClaudeJournalTranslator({ sink: deferred.sink })
     let settled = false
@@ -501,10 +537,12 @@ describe('Claude stream-json connection', () => {
       }
     })
     const connection = await open(launchFor(scenario))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every session member the option paths under test read.
     const session = {
       connection,
       options: new Map<string, string>(),
-      reportedOptions: {}
+      reportedOptions: {},
+      startup: { state: 'proven' }
     } as unknown as ClaudeSession
 
     const options = await readClaudeStructuredSessionOptions(session, 5_000)
@@ -553,17 +591,15 @@ describe('Claude stream-json connection', () => {
     expect(JSON.stringify(diagnostic)).not.toContain('secret')
   })
 
-  it('reports an unauthenticated start through the init deadline instead of hanging', async () => {
-    // The scripted CLI never answers, which is the shape of a silently unauthenticated CLI.
-    const scenario = scriptScenario([HOLD_OPEN])
+  it('settles an unanswered initialize when the child exits, with no timer of its own', async () => {
+    // The scripted CLI never answers, then leaves: only its exit can settle the request.
+    const scenario = scriptScenario([{ stderr: 'claude: not signed in\n' }, { exit: 1 }])
     const connection = await open({
       ...launchFor(scenario),
       env: { ...launchFor(scenario).env, ORCA_SDK_CONTRACT_IGNORE_CONTROL_REQUESTS: '1' }
     })
 
-    await expect(connection.initializationResult({ timeoutMs: 200 })).rejects.toThrow(
-      'claude initialize request timed out'
-    )
+    await expect(connection.initializationResult()).rejects.toThrow()
   })
 
   it('reports a self-exit with its status, stderr, and observed tree verdict', async () => {
@@ -578,6 +614,11 @@ describe('Claude stream-json connection', () => {
     await until(() => exit, 'the exit error')
     // The status and stderr are the only diagnostic a refused start leaves behind.
     expect((exit as unknown as Error).message).toMatch(/exited \(code 1\): claude: not signed in/)
+    // Kept apart from Orca's wording where it is composed, and marked as log text.
+    expect(providerDiagnosticOf(exit)).toEqual({
+      text: expect.stringMatching(/^\(code 1\)\n.*claude: not signed in/s),
+      audience: 'log'
+    })
     expect(connection.closed).toBe(true)
     // Stderr-triggered capture can win or lose the race with this real child's exit.
     const closed = await connection.close()
@@ -622,37 +663,63 @@ describe('Claude stream-json connection', () => {
     20_000
   )
 
-  it('settles a spawn error followed by close as processless and closes idempotently', async () => {
-    const scenario = scriptScenario([HOLD_OPEN])
-    const missingCli = join(scenario.cwd, 'claude-that-does-not-exist')
-    let fault: Error | null = null
-    let exit: Error | null = null
-    const connection = await open(
-      { ...launchFor(scenario), pathToClaudeCodeExecutable: missingCli },
-      {
-        onFault: (error) => {
-          fault = error
-        },
-        onExit: (error) => {
-          exit = error
+  it.skipIf(process.platform === 'win32')(
+    'reports a missing CLI under the supervisor as a root exit that names the spawn error',
+    async () => {
+      const scenario = scriptScenario([HOLD_OPEN])
+      const missingCli = join(scenario.cwd, 'claude-that-does-not-exist')
+      let exit: Error | null = null
+      const connection = await open(
+        { ...launchFor(scenario), pathToClaudeCodeExecutable: missingCli },
+        {
+          onExit: (error) => {
+            exit = error
+          }
         }
-      }
-    )
+      )
 
-    await until(
-      () => (connection.exitVerdict.root === 'processless' ? connection.exitVerdict : null),
-      'the processless spawn settlement'
-    )
-    expect(connection.pid).toBeUndefined()
-    expect(fault).toBeInstanceOf(Error)
-    expect(exit).toBeNull()
-    await expect(Promise.all([connection.close(), connection.close()])).resolves.toEqual([
-      true,
-      true
-    ])
-    await expect(connection.close()).resolves.toBe(true)
-    expect(connection.exitVerdict).toEqual({ root: 'processless', tree: 'exited' })
-  })
+      const reported = await until(() => exit, 'the supervised spawn failure')
+      // The supervisor spawned, so this is its exit; only its stderr can say why.
+      expect(reported.message).toMatch(/\(code 127\).*ENOENT/s)
+      // A first-hand root exit, which releases the lease like a processless start did.
+      expect(connection.exitVerdict.root).toBe('exited')
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'settles a spawn error followed by close as processless and closes idempotently',
+    async () => {
+      const scenario = scriptScenario([HOLD_OPEN])
+      const missingCli = join(scenario.cwd, 'claude-that-does-not-exist')
+      let fault: Error | null = null
+      let exit: Error | null = null
+      const connection = await open(
+        { ...launchFor(scenario), pathToClaudeCodeExecutable: missingCli },
+        {
+          onFault: (error) => {
+            fault = error
+          },
+          onExit: (error) => {
+            exit = error
+          }
+        }
+      )
+
+      await until(
+        () => (connection.exitVerdict.processless === true ? connection.exitVerdict : null),
+        'the processless spawn settlement'
+      )
+      expect(connection.pid).toBeUndefined()
+      expect(fault).toBeInstanceOf(Error)
+      expect(exit).toBeNull()
+      await expect(Promise.all([connection.close(), connection.close()])).resolves.toEqual([
+        true,
+        true
+      ])
+      await expect(connection.close()).resolves.toBe(true)
+      expect(connection.exitVerdict).toEqual({ root: 'exited', tree: 'exited', processless: true })
+    }
+  )
 
   it('does not treat a child error event as first-hand root exit proof', async () => {
     const scenario = scriptScenario([HOLD_OPEN])

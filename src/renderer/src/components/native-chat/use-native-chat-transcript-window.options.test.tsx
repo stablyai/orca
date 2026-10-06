@@ -3,7 +3,7 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import type { NativeChatMessageSlot } from './native-chat-transcript-slots'
 
 type VirtualizerOptionsCapture = {
   current:
@@ -14,29 +14,36 @@ type VirtualizerOptionsCapture = {
     | null
 }
 
-const virtualizerMock = vi.hoisted(() => ({
-  options: { current: null } as VirtualizerOptionsCapture,
-  getTotalSize: vi.fn(() => 0),
-  getVirtualItems: vi.fn(() => []),
-  measureElement: vi.fn(),
-  measure: vi.fn(),
-  resizeItem: vi.fn(),
-  scrollToOffset: vi.fn(),
-  takeSnapshot: vi.fn<() => VirtualItem[]>(() => [])
-}))
+const virtualizerMock = vi.hoisted(() => {
+  const scrollElement: { current: HTMLElement | null } = { current: null }
+  return {
+    options: { current: null } as VirtualizerOptionsCapture,
+    getTotalSize: vi.fn(() => 0),
+    getVirtualItems: vi.fn(() => []),
+    measureElement: vi.fn(),
+    measure: vi.fn(),
+    resizeItem: vi.fn(),
+    scrollElement,
+    scrollToEnd: vi.fn(),
+    scrollToOffset: vi.fn(),
+    takeSnapshot: vi.fn<() => VirtualItem[]>(() => [])
+  }
+})
 
 vi.mock('@tanstack/react-virtual', () => ({
+  elementScroll: vi.fn(),
   useVirtualizer: (options: VirtualizerOptionsCapture['current']) => {
     virtualizerMock.options.current = options
-    return { ...virtualizerMock, scrollElement: null }
+    return { ...virtualizerMock, scrollElement: virtualizerMock.scrollElement.current }
   }
 }))
 
 const { MAX_RETIRED_NATIVE_CHAT_MEASUREMENTS, useNativeChatTranscriptWindow } =
   await import('./use-native-chat-transcript-window')
 
-function slot(id: string): NativeChatTranscriptSlot {
+function slot(id: string): NativeChatMessageSlot {
   return {
+    kind: 'message',
     message: {
       id,
       role: 'assistant',
@@ -46,9 +53,14 @@ function slot(id: string): NativeChatTranscriptSlot {
     },
     turnKey: undefined,
     activeTurnIsWorking: false,
+    trailingRun: false,
     receipt: undefined,
     status: undefined,
+    folded: false,
+    turnFolds: false,
     turnDiff: undefined,
+    subagentRoster: undefined,
+    depth: 0,
     estimatedHeight: 48
   }
 }
@@ -56,23 +68,35 @@ function slot(id: string): NativeChatTranscriptSlot {
 afterEach(() => {
   cleanup()
   virtualizerMock.options.current = null
+  virtualizerMock.scrollElement.current = null
   vi.clearAllMocks()
 })
 
 describe('native chat transcript virtualizer contract', () => {
-  it('configures prepend anchoring and matching bottom-follow behavior', () => {
-    renderHook(() =>
-      useNativeChatTranscriptWindow({
-        scrollRef: { current: null },
-        slots: [],
-        revealIndex: -1
-      })
+  it('retains prepend anchoring without geometry-driven end following', () => {
+    const { rerender } = renderHook(
+      ({ isVisible }) =>
+        useNativeChatTranscriptWindow({
+          scrollRef: { current: null },
+          slots: [],
+          isVisible,
+          revealIndex: -1
+        }),
+      { initialProps: { isVisible: false } }
     )
 
     expect(virtualizerMock.options.current).toMatchObject({
       anchorTo: 'end',
-      followOnAppend: true,
-      scrollEndThreshold: 48
+      followOnAppend: false,
+      scrollEndThreshold: -1
+    })
+
+    rerender({ isVisible: true })
+
+    expect(virtualizerMock.options.current).toMatchObject({
+      anchorTo: 'end',
+      followOnAppend: false,
+      scrollEndThreshold: -1
     })
   })
 
@@ -88,6 +112,7 @@ describe('native chat transcript virtualizer contract', () => {
         useNativeChatTranscriptWindow({
           scrollRef: { current: scrollElement },
           slots: [slot(id)],
+          isVisible: true,
           revealIndex: -1
         }),
       { initialProps: { id: 'message-0' } }
@@ -108,7 +133,12 @@ describe('native chat transcript virtualizer contract', () => {
       ({ text }) => {
         const current = slot('message-0')
         current.message.blocks = [{ type: 'text', text }]
-        return useNativeChatTranscriptWindow({ scrollRef, slots: [current], revealIndex: -1 })
+        return useNativeChatTranscriptWindow({
+          scrollRef,
+          slots: [current],
+          isVisible: true,
+          revealIndex: -1
+        })
       },
       { initialProps: { text: 'first' } }
     )
@@ -117,5 +147,103 @@ describe('native chat transcript virtualizer contract', () => {
     rerender({ text: 'streamed revision' })
 
     expect(virtualizerMock.options.current?.getItemKey).toBe(getItemKey)
+  })
+
+  it('attributes a clamped fallback landing after content grows before its echo', () => {
+    const scrollElement = document.createElement('div')
+    let scrollHeight = 1_000
+    let scrollTop = 0
+    Object.defineProperties(scrollElement, {
+      clientHeight: { configurable: true, get: () => 100 },
+      scrollHeight: { configurable: true, get: () => scrollHeight },
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = Math.max(0, Math.min(value, scrollHeight - 100))
+        }
+      }
+    })
+    const { result } = renderHook(() =>
+      useNativeChatTranscriptWindow({
+        scrollRef: { current: scrollElement },
+        slots: [slot('message-0')],
+        isVisible: true,
+        revealIndex: -1
+      })
+    )
+
+    result.current.scrollToEnd()
+    expect(scrollTop).toBe(900)
+    scrollHeight = 1_400
+
+    expect(result.current.consumeProgrammaticScroll(new Event('scroll'))).toBe(true)
+  })
+
+  it('restores a detached offset through the virtualizer', () => {
+    const scrollElement = document.createElement('div')
+    virtualizerMock.scrollElement.current = scrollElement
+    const { result } = renderHook(() =>
+      useNativeChatTranscriptWindow({
+        scrollRef: { current: scrollElement },
+        slots: [slot('message-0')],
+        isVisible: true,
+        revealIndex: -1
+      })
+    )
+
+    result.current.restoreScrollOffset(320)
+
+    expect(virtualizerMock.scrollToOffset).toHaveBeenCalledExactlyOnceWith(320, {
+      behavior: 'auto'
+    })
+  })
+
+  it('lets an explicit reveal supersede a pending reader takeover', () => {
+    const scrollElement = document.createElement('div')
+    const target = document.createElement('div')
+    scrollElement.append(target)
+    virtualizerMock.scrollElement.current = scrollElement
+    const { result } = renderHook(() =>
+      useNativeChatTranscriptWindow({
+        scrollRef: { current: scrollElement },
+        slots: [slot('message-0')],
+        isVisible: true,
+        revealIndex: -1
+      })
+    )
+
+    result.current.reconcileReaderScroll(true)
+    result.current.alignToViewportTop(target)
+    virtualizerMock.scrollToOffset.mockClear()
+    result.current.reconcileReaderScroll(false)
+
+    expect(virtualizerMock.scrollToOffset).not.toHaveBeenCalled()
+  })
+
+  // Rows drawn after the window (a message shown as not sent) still fill the container.
+  it('follows the bottom of the container when no row is windowed', () => {
+    const container = document.createElement('div')
+    Object.defineProperty(container, 'scrollHeight', { configurable: true, value: 2000 })
+    virtualizerMock.scrollElement.current = container
+    const noSlots: NativeChatMessageSlot[] = []
+    const { result, rerender } = renderHook(
+      ({ slots }) =>
+        useNativeChatTranscriptWindow({
+          scrollRef: { current: container },
+          slots,
+          isVisible: true,
+          revealIndex: -1
+        }),
+      { initialProps: { slots: noSlots } }
+    )
+
+    result.current.scrollToEnd()
+    expect(virtualizerMock.scrollToEnd).not.toHaveBeenCalled()
+    expect(container.scrollTop).toBe(2000)
+
+    rerender({ slots: [slot('a')] })
+    result.current.scrollToEnd()
+    expect(virtualizerMock.scrollToEnd).toHaveBeenCalledOnce()
   })
 })

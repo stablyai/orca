@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render as renderWithProviders, screen } from '@testing-library/react'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage } from '../../../../shared/browser-workspace-types'
 
@@ -53,6 +54,10 @@ import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { requestBrowserFocus } from './host-guest/browser-focus'
 import { installClientHostedPaneApi } from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
+
+function render(ui: React.ReactElement) {
+  return renderWithProviders(ui, { wrapper: TooltipProvider })
+}
 
 describe('ClientHostedBrowserPagePane', () => {
   beforeEach(() => {

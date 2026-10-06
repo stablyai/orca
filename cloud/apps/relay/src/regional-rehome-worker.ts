@@ -1,4 +1,7 @@
-import { IdleRegionalRehomeResponseSchema } from '@orca-cloud/relay-contract'
+import {
+  IdleRegionalRehomeResponseSchema,
+  isGlobalIdleRegionalRehomeDeferral
+} from '@orca-cloud/relay-contract'
 import type { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { googleMetadataIdentityToken } from './google-metadata-identity-token.js'
@@ -48,8 +51,13 @@ export function startRegionalRehomeWorker(
       const candidates = await assignments.selectIdleRegionalRehomeCandidates(safetySnapshot())
       if (candidates.length === 0) return
       const token = await tokenProvider(audience)
+      const outcomes: Record<string, number> = {}
+      const tally = (key: string) => {
+        outcomes[key] = (outcomes[key] ?? 0) + 1
+      }
+      let stoppedBy: string | null = null
       for (const candidate of candidates) {
-        if (stopped) return
+        if (stopped) break
         const { sourceCellUrl, ...request } = candidate
         try {
           const response = await fetchImpl(new URL('/v1/admin/host-idle-rehome', sourceCellUrl), {
@@ -64,6 +72,7 @@ export function startRegionalRehomeWorker(
           })
           if (!response.ok) throw new Error(`regional_rehome_source_${response.status}`)
           const body = IdleRegionalRehomeResponseSchema.parse(await response.json())
+          tally(body.reason ? `${body.outcome}:${body.reason}` : body.outcome)
           if (body.outcome === 'committed') {
             console.warn(
               JSON.stringify({
@@ -72,9 +81,18 @@ export function startRegionalRehomeWorker(
                 targetCellId: candidate.targetCellId
               })
             )
-            return
+            stoppedBy = 'committed'
+            break
+          }
+          // Every remaining candidate would re-read the same durable row and
+          // answer the same way, so the rest of this page is wasted POSTs.
+          // A source on an older image sends no reason and keeps the old walk.
+          if (body.outcome === 'deferred' && isGlobalIdleRegionalRehomeDeferral(body.reason)) {
+            stoppedBy = body.reason
+            break
           }
         } catch (error) {
+          tally('failed')
           // The source may have committed; its durable outcome owns recovery.
           console.warn(
             JSON.stringify({
@@ -84,6 +102,17 @@ export function startRegionalRehomeWorker(
           )
         }
       }
+      // One line per poll that dispatched: silence used to be the only signal
+      // that 100+ candidates all came back deferred.
+      console.warn(
+        JSON.stringify({
+          event: 'orca_relay_idle_rehome_dispatch_summary',
+          candidates: candidates.length,
+          dispatched: Object.values(outcomes).reduce((total, count) => total + count, 0),
+          stoppedBy,
+          outcomes
+        })
+      )
     } catch (error) {
       console.warn(
         JSON.stringify({

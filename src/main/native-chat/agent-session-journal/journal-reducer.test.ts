@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import {
   agentJournalItemKey,
@@ -112,6 +113,39 @@ describe('ordering', () => {
       { kind: 'item', itemId: 'earlier', revision: 1, body: text('earlier'), ...base(3) }
     ])
     expect(renderJournalState(state).items.map((item) => item.itemId)).toEqual(['earlier', 'later'])
+  })
+
+  it("places a batch's writes by their order in it, and keeps that place on revision", () => {
+    // One Codex ask writes all its questions in one batch; their ids are not their order.
+    const state = fold([
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'ask',
+        mutations: [
+          { kind: 'item', itemId: 'scope', revision: 1, body: text('first') },
+          { kind: 'item', itemId: 'priority', revision: 1, body: text('second') },
+          { kind: 'item', itemId: 'deadline', revision: 1, body: text('third') }
+        ],
+        ...base(1)
+      },
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'answer',
+        mutations: [{ kind: 'item', itemId: 'deadline', revision: 2, body: text('answered') }],
+        ...base(2)
+      }
+    ])
+    expect(
+      renderJournalState(state).items.map(({ itemId, sequence, sequenceIndex }) => ({
+        itemId,
+        sequence,
+        sequenceIndex
+      }))
+    ).toEqual([
+      { itemId: 'scope', sequence: 1, sequenceIndex: undefined },
+      { itemId: 'priority', sequence: 1, sequenceIndex: 1 },
+      { itemId: 'deadline', sequence: 1, sequenceIndex: 2 }
+    ])
   })
 
   it('orders by sequence even when the observed timestamp runs backwards', () => {
@@ -251,7 +285,7 @@ describe('submission and dispatch state machine', () => {
       {
         kind: 'dispatch',
         clientMessageId: 'cm_1',
-        state: 'unknown',
+        state: 'rejected',
         providerItemId: null,
         reason: 'provider_write_failed: closed before enqueue',
         ...base(2)
@@ -272,13 +306,46 @@ describe('submission and dispatch state machine', () => {
       }
     ])
 
-    expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('rejected')
     expect(state.submissions.get('cm_2')).toMatchObject({
       dispatchState: 'accepted',
       providerItemId: 'claude:session-1:user-1'
     })
     expect(state.receipts.has('cm_1')).toBe(false)
     expect(state.receipts.get('cm_2')?.providerItemId).toBe('claude:session-1:user-1')
+  })
+
+  it('does not give a newer identical echo to a legacy unknown write failure', () => {
+    const body = userText('same message')
+    const state = fold([
+      { ...submission, body, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'unknown',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        ...submission,
+        clientMessageId: 'cm_2',
+        body,
+        payloadFingerprint: sendFingerprint(body),
+        ...base(3)
+      },
+      { kind: 'item', itemId: 'claude:session-1:user-1', revision: 1, body, ...base(4) }
+    ])
+
+    // A journal written before a refused write became `rejected` still holds it as
+    // `unknown`. Replay must not let that row claim the echo of a later send that
+    // genuinely landed, which would attach the delivery to the wrong message.
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
+    expect(state.submissions.get('cm_2')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1'
+    })
+    expect(state.receipts.has('cm_1')).toBe(false)
   })
 
   it('does not accept a submission from a stale provider item behind its tombstone', () => {
@@ -484,13 +551,13 @@ describe('submission and dispatch state machine', () => {
     expect(state.receipts.get('cm_1')).toBeTruthy()
   })
 
-  it('returns a proven retry to pending without moving its original submission', () => {
+  it('keeps a refused write rejected, at its rejection, whatever comes after', () => {
     const state = fold([
       submission,
       {
         kind: 'dispatch',
         clientMessageId: 'cm_1',
-        state: 'unknown',
+        state: 'rejected',
         providerItemId: null,
         reason: 'provider_write_failed: closed before enqueue',
         ...base(2)
@@ -505,13 +572,15 @@ describe('submission and dispatch state machine', () => {
       }
     ])
 
+    // `rejected` is terminal, so nothing can put this id back on the wire; the
+    // user's Retry sends a new message under a new id instead.
     expect(state.submissions.get('cm_1')).toMatchObject({
-      dispatchState: 'pending',
+      dispatchState: 'rejected',
       submittedAt: submission.ts,
-      reason: null,
-      resolvedAt: null
+      reason: 'provider_write_failed: closed before enqueue'
     })
-    expect(renderJournalState(state).items[0]?.sequence).toBe(submission.seq)
+    // It sits where it was rejected; the late `pending` moves nothing.
+    expect(renderJournalState(state).items[0]?.sequence).toBe(2)
   })
 
   it('ignores a dispatch for a submission this epoch never saw', () => {
@@ -586,7 +655,15 @@ describe('re-adding a tombstoned row', () => {
     const state = createJournalReducerState('session-1', EPOCH)
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('first'), seq: 1, fence: 1, ts: 1_001 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('first'),
+        seq: 1,
+        fence: 1,
+        ts: 1_001,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
     expect(renderJournalState(state).items).toEqual([])
@@ -595,7 +672,15 @@ describe('re-adding a tombstoned row', () => {
     // `items` would restart at 1 and lose to the tombstone forever.
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('second'), seq: 3, fence: 1, ts: 1_003 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('second'),
+        seq: 3,
+        fence: 1,
+        ts: 1_003,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     expect(renderJournalState(state).items.map((item) => item.body)).toEqual([text('second')])
   })
@@ -611,12 +696,28 @@ describe('re-adding a tombstoned row', () => {
     const state = createJournalReducerState('session-1', EPOCH)
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('first'), seq: 1, fence: 1, ts: 1_001 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('first'),
+        seq: 1,
+        fence: 1,
+        ts: 1_001,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('second'), seq: 3, fence: 1, ts: 1_003 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('second'),
+        seq: 3,
+        fence: 1,
+        ts: 1_003,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     expect(state.tombstones.get(itemId)).toBeUndefined()
 

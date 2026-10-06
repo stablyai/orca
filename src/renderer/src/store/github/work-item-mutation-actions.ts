@@ -3,6 +3,8 @@ import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import { toast } from 'sonner'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
@@ -24,6 +26,7 @@ export const createWorkItemMutationActions = (
         options?.sourceContext?.provider === 'github'
           ? getTaskSourceCacheScope(options.sourceContext)
           : null
+      const repositoryKey = options?.ownerRepo ? githubRepoIdentityKey(options.ownerRepo) : null
       for (const key of Object.keys(nextCache)) {
         // Why: don't patch another host/account's visually identical issue/PR cache entry.
         if (sourceScope && key !== sourceScope && !key.startsWith(`${sourceScope}::`)) {
@@ -34,9 +37,18 @@ export const createWorkItemMutationActions = (
           continue
         }
         // Why: issue/PR ids are only unique within a repo; cross-repo views can share `pr:42`.
-        const idx = entry.data.findIndex(
-          (item) => item.id === itemId && (!repoId || item.repoId === repoId)
-        )
+        const idx = entry.data.findIndex((item) => {
+          if (item.id !== itemId || (repoId && item.repoId !== repoId)) {
+            return false
+          }
+          if (!repositoryKey) {
+            return true
+          }
+          const itemRepository = parseGitHubIssueOrPRLink(item.url)?.slug
+          return (
+            itemRepository !== undefined && githubRepoIdentityKey(itemRepository) === repositoryKey
+          )
+        })
         if (idx === -1) {
           continue
         }
@@ -45,7 +57,7 @@ export const createWorkItemMutationActions = (
         nextCache[key] = { ...entry, data: updatedItems }
         changed = true
       }
-      return changed ? { workItemsCache: nextCache } : {}
+      return changed ? { workItemsCache: nextCache } : s
     })
   },
 

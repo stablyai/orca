@@ -45,11 +45,15 @@ describe('sweep schedule jitter', () => {
     expect(timers).toEqual([6_600])
   })
 
-  // Why: index.ts boots a server on import, so its wiring can only be read.
-  it('jitters the director assignment cleanup tick', () => {
+  // A census, not a list of the timers that happen to be gated today: an ungated sweep runs in
+  // every cell as well as the director, which multiplies one table scan by the fleet size.
+  it('gates every periodic sweep in index.ts on the maintenance role', () => {
     const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
-    const cleanup = /runAssignmentCleanup\(assignments\)\s*\},\s*([^\n]*?)\)\n/.exec(source)
+    const timers = source.match(/setInterval\(/g) ?? []
+    const gated =
+      source.match(/roleOwnsAssignmentMaintenance\(config\.role\)\s*\?\s*setInterval\(/g) ?? []
 
-    expect(cleanup?.[1]).toBe('jitteredSweepIntervalMs(30_000)')
+    expect(timers.length).toBeGreaterThan(0)
+    expect(gated.length).toBe(timers.length)
   })
 })

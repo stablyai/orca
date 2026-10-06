@@ -68,4 +68,61 @@ describe('structured agent session event coalescer', () => {
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({ activity: null })
   })
+
+  it('preserves a queued-message list when later coalesced frames omit it', () => {
+    const events: AgentSessionSubscribeEvent[] = []
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
+    const list = [
+      {
+        messageId: 'draft-1',
+        position: 1,
+        body: { kind: 'message' as const, role: 'user' as const, blocks: [] },
+        state: 'waiting' as const
+      }
+    ]
+
+    coalescer.push({ ...batch(1), queuedMessages: list })
+    coalescer.push(batch(2))
+    coalescer.flush()
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ queuedMessages: list })
+  })
+
+  it('keeps the latest queued-message list, an emptied one included', () => {
+    const events: AgentSessionSubscribeEvent[] = []
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
+
+    coalescer.push({
+      ...batch(1),
+      queuedMessages: [
+        {
+          messageId: 'draft-1',
+          position: 1,
+          body: { kind: 'message' as const, role: 'user' as const, blocks: [] },
+          state: 'waiting' as const
+        }
+      ]
+    })
+    coalescer.push({ ...batch(2), queuedMessages: [] })
+    coalescer.flush()
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ queuedMessages: [] })
+  })
+
+  it('keeps the queue pause with the list it was published with', () => {
+    const events: AgentSessionSubscribeEvent[] = []
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
+
+    coalescer.push({ ...batch(1), queuedMessages: [], queuePause: { reason: 'restarted' } })
+    coalescer.push(batch(2))
+    coalescer.flush()
+    expect(events[0]).toMatchObject({ queuedMessages: [], queuePause: { reason: 'restarted' } })
+
+    coalescer.push({ ...batch(3), queuedMessages: [], queuePause: null })
+    coalescer.push({ ...batch(4), queuedMessages: [], queuePause: { reason: 'stopped' } })
+    coalescer.flush()
+    expect(events[1]).toMatchObject({ queuePause: { reason: 'stopped' } })
+  })
 })

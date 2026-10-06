@@ -2,7 +2,7 @@ import React, { useCallback, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
-import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
+import { useVisibleWorktreeDiffComments } from '../../diff-comments/use-visible-worktree-diff-comments'
 import type { OpenFile } from '@/store/slices/editor'
 import '@/lib/monaco-setup'
 import type { DiffSection } from '../diff-section-types'
@@ -38,6 +38,7 @@ import {
 import { useCombinedDiffNotesActions } from './review-controls/use-combined-diff-notes-actions'
 import { useCombinedDiffSectionActions } from './review-controls/use-combined-diff-section-actions'
 import { useCombinedDiffViewPreferences } from './review-controls/use-combined-diff-view-preferences'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 export default function CombinedDiffViewer({
   file,
@@ -59,14 +60,11 @@ export default function CombinedDiffViewer({
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
-  const diffCommentsForWorktree = useAppStore((s) =>
-    selectWorktreeDiffCommentsOrEmpty(s, file.worktreeId)
-  )
+  const { comments: diffCommentsForWorktree, markdownReviewNotesEnabled } =
+    useVisibleWorktreeDiffComments(file.worktreeId)
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
   const canOpenWorkspaceFileBrowserForPath = useWorkspaceFileBrowserActionPredicate(file.worktreeId)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const isDark = useDocumentDarkTheme()
 
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
@@ -86,6 +84,7 @@ export default function CombinedDiffViewer({
   const notes = useCombinedDiffNotesActions({
     clearDiffComments,
     diffCommentsForWorktree,
+    markdownReviewNotesEnabled,
     worktreeId: file.worktreeId
   })
   const preferences = useCombinedDiffViewPreferences({
@@ -348,6 +347,7 @@ export default function CombinedDiffViewer({
           <CombinedDiffFileTree
             mode={entrySet.treeMode}
             worktreePath={file.filePath}
+            sourceWorkspaceId={file.worktreeId}
             entries={entrySet.entries}
             sectionIndexByKey={treeNavigation.sectionIndexByKey}
             activeSectionKey={treeNavigation.activeTreeSectionKey}

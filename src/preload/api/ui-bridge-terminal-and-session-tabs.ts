@@ -6,6 +6,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeTerminalCreateRequestPayload,
@@ -154,11 +155,16 @@ export const uiTerminalAndSessionTabsApi = {
     return () => ipcRenderer.removeListener('ui:focusTerminal', listener)
   },
   onFocusEditorTab: (
-    callback: (data: { tabId: string; worktreeId: string }) => void
+    callback: (data: {
+      tabId: string
+      worktreeId: string
+      /** The user clicked a notification, so revealing the tab is navigation and not a courtesy. */
+      userInitiated?: boolean
+    }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { tabId: string; worktreeId: string }
+      data: { tabId: string; worktreeId: string; userInitiated?: boolean }
     ) => callback(data)
     ipcRenderer.on('ui:focusEditorTab', listener)
     return () => ipcRenderer.removeListener('ui:focusEditorTab', listener)
@@ -198,6 +204,7 @@ export const uiTerminalAndSessionTabsApi = {
       filePath: string
       relativePath: string
       runtimeEnvironmentId?: string
+      navigation?: RuntimeNavigationTarget
     }) => void
   ): (() => void) => {
     const listener = (
@@ -207,6 +214,7 @@ export const uiTerminalAndSessionTabsApi = {
         filePath: string
         relativePath: string
         runtimeEnvironmentId?: string
+        navigation?: RuntimeNavigationTarget
       }
     ) => callback(data)
     ipcRenderer.on('ui:openFileFromMobile', listener)

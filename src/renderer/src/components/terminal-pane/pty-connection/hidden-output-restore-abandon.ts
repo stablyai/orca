@@ -1,4 +1,3 @@
-import { RESET_AFTER_BYTE_GAP } from '../../../../../shared/terminal-mode-reset-profiles'
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -62,7 +61,7 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
     // session.rearmRemoteHiddenOutputRestoreInsteadOfWarning. Only the quiet
     // flood-abandon reaches neither, and it still drains chunks below.
     else if (!rearmedRemoteRestore) {
-      session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
+      session.writeAbandonedRestoreGap()
     }
     if (hadPendingOverflow) {
       return

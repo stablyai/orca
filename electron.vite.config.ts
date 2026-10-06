@@ -1,16 +1,24 @@
+import { markdownParserAliases } from './config/build-plugins/markdown-parser-exports'
 import { isBuiltin } from 'node:module'
 import { resolve } from 'node:path'
 import { defineConfig, type UserConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
-import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
+import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
+import {
+  CLI_MAIN_ENTRY_NAMES,
+  createPlainNodeEntryGuardPlugin
+} from './config/build-plugins/plain-node-entry-guard'
 import packageJson from './package.json' with { type: 'json' }
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
+  'stream-json',
+  'stream-chain',
   '@xterm/headless',
   '@xterm/addon-serialize',
   'tldts',
+  'smol-toml',
   // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
   // not race the later resources/node_modules copy.
   'zod'
@@ -191,13 +199,20 @@ function createMainBootstrapPlugin() {
   }
 }
 
+/**
+ * Diagnostic escape hatch: an unminified main bundle so a V8 CPU profile of the
+ * main process attributes self time to real function names. Release builds never
+ * set this, and `pnpm build` does not read it.
+ */
+const MAIN_MINIFY: 'oxc' | false = process.env.ORCA_UNMINIFIED_MAIN === '1' ? false : 'oxc'
+
 export const electronViteConfig: UserConfig = {
   main: {
     build: {
       // Why: 'esbuild' makes rolldown disable its own minifier and re-print every
       // chunk through esbuild, which is undeclared here and only resolves via
       // pnpm hoisting. 'oxc' is rolldown's in-process minifier.
-      minify: 'oxc',
+      minify: MAIN_MINIFY,
       // Why: 'hidden' emits .js.map with no sourceMappingURL, so the shipped
       // bundle never references maps that packaging strips out. Release CI
       // uploads them so minified crash traces stay decodable.
@@ -223,11 +238,8 @@ export const electronViteConfig: UserConfig = {
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
           'stt-worker': resolve('src/main/speech/stt-worker.ts'),
           'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
-          'session-scanner-opencode-sqlite-worker-entry': resolve(
-            'src/main/ai-vault/session-scanner-opencode-sqlite-worker-entry.ts'
-          ),
-          'session-scanner-worker-entry': resolve(
-            'src/main/ai-vault/session-scanner-worker-entry.ts'
+          'foreign-sqlite-reader-entry': resolve(
+            'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'
           ),
           'session-scanner-service-entry': resolve(
             'src/main/ai-vault/session-scanner-service-entry.ts'
@@ -240,6 +252,16 @@ export const electronViteConfig: UserConfig = {
           'port-scan-command-worker-entry': resolve(
             'src/main/ports/port-scan-command-worker-entry.ts'
           ),
+          // Why: the Claude/Codex/OpenCode usage scans walk whole history
+          // corpora and read SQLite synchronously; a worker thread keeps that
+          // off the main-process event loop.
+          'usage-scan-worker-entry': resolve('src/main/usage/usage-scan-worker-entry.ts'),
+          'profile-state-backup-worker-entry': resolve(
+            'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts'
+          ),
+          'profile-state-writer-worker-entry': resolve(
+            'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts'
+          ),
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
@@ -248,16 +270,9 @@ export const electronViteConfig: UserConfig = {
           'main-thread-hang-watchdog-entry': resolve(
             'src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts'
           ),
-          // Why: electron-vite cleans out/main in dev. The dev CLI imports
-          // this path for `orca agent hooks ...`, so it must survive rebuilds.
-          'agent-hooks/managed-agent-hook-controls': resolve(
-            'src/main/agent-hooks/managed-agent-hook-controls.ts'
-          ),
-          'codex/managed-home-shell-preflight': resolve(
-            'src/main/codex/managed-home-shell-preflight.ts'
-          ),
-          // Why: account import mutates the user's macOS Keychain from the CLI.
-          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')
+          ...Object.fromEntries(
+            CLI_MAIN_ENTRY_NAMES.map((module) => [module, resolve(`src/main/${module}.ts`)])
+          )
         },
         // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
         // consume these stable CommonJS paths.
@@ -298,11 +313,12 @@ export const electronViteConfig: UserConfig = {
   renderer: {
     resolve: {
       alias: {
+        ...markdownParserAliases,
         '@renderer': resolve('src/renderer/src'),
         '@': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), createPdfjsViewerAssetsPlugin()],
     worker: {
       format: 'es'
     },

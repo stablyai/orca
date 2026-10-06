@@ -1,6 +1,5 @@
 import type { AgentJournalQuestion } from '../../../src/shared/agent-session-journal-types'
 import {
-  encodeAgentSessionQuestionAnswers,
   isValidAgentSessionQuestionAnswers,
   type AgentSessionQuestionAnswer
 } from '../../../src/shared/agent-session-question-answer'
@@ -11,7 +10,7 @@ import type { MobileChatQuestion } from './mobile-native-chat-question'
  * prompt. The host then leaves the flat `question.options` EMPTY and puts the real content in
  * `questions`, so a client that reads only the flat shape renders an unanswerable card and the turn
  * stalls. The phone has room for one question at a time, so the group is answered as steps and
- * submitted once — the host accepts the whole group as one encoded option id.
+ * submitted once as one set of answers.
  */
 export type GroupedQuestionDraft = {
   /** Identifies the exact prompt revision these answers belong to; a revised prompt discards them. */
@@ -21,7 +20,7 @@ export type GroupedQuestionDraft = {
 
 export type GroupedQuestionAdvance =
   | { kind: 'advance'; draft: GroupedQuestionDraft }
-  | { kind: 'submit'; optionId: string }
+  | { kind: 'submit'; answers: AgentSessionQuestionAnswer[] }
 
 const GROUPED_TOKEN_PREFIX = 'structured-grouped-question:'
 
@@ -105,7 +104,8 @@ function answersFor(
 export function projectGroupedQuestion(
   questions: readonly AgentJournalQuestion[],
   draft: GroupedQuestionDraft | null,
-  promptKey: string
+  promptKey: string,
+  promptIdentity?: { itemId: string; expectedRevision: number }
 ): MobileChatQuestion | null {
   const answered = answersFor(draft, promptKey).length
   const question = questions[answered]
@@ -117,6 +117,7 @@ export function projectGroupedQuestion(
   return {
     question:
       questions.length > 1 ? `${heading} (${answered + 1} of ${questions.length})` : heading,
+    ...(promptIdentity ? { prompt: promptIdentity } : {}),
     options: question.options.map((option) => option.label),
     ...(optionDescriptions.some(Boolean) ? { optionDescriptions } : {}),
     multiSelect: question.multiSelect,
@@ -193,7 +194,7 @@ function answerFromResponse(
 
 /**
  * Fold one answer into the draft. Returns `advance` while questions remain and `submit` with the
- * encoded group once the last one lands; null when the response does not answer this prompt step.
+ * whole group once the last one lands; null when the response does not answer this prompt step.
  */
 export function advanceGroupedQuestion(args: {
   response: string
@@ -216,6 +217,6 @@ export function advanceGroupedQuestion(args: {
   }
   // Never send a group the host would refuse — the user would see a silent failure with no way back.
   return isValidAgentSessionQuestionAnswers(args.questions, answers)
-    ? { kind: 'submit', optionId: encodeAgentSessionQuestionAnswers(answers) }
+    ? { kind: 'submit', answers }
     : null
 }

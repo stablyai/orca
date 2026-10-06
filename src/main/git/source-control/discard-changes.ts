@@ -3,11 +3,13 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../../shared/git-discard-path-safety'
+import { partitionTrackedPathSpecs } from '../../../shared/git-tracked-pathspecs'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
-import { bulkPathspecCommands, isTrackedPathSpec, literalPathspec } from './git-pathspec'
+import { bulkPathspecCommands, literalPathspec } from './git-pathspec'
+import { encodeGitPathspecs } from '../../../shared/git-pathspec-stdin'
 
 /**
  * Discard working tree changes for a file.
@@ -39,12 +41,9 @@ export async function discardChanges(
     }
 
     if (tracked) {
-      await gitExecFileAsync(
-        ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath, options)],
-        {
-          ...gitOptionsForWorktree(worktreePath, options)
-        }
-      )
+      await gitExecFileAsync(['restore', '--worktree', '--', literalPathspec(filePath, options)], {
+        ...gitOptionsForWorktree(worktreePath, options)
+      })
       return
     }
 
@@ -117,28 +116,24 @@ export async function bulkDiscardChanges(
     }
 
     const trackedPathSpecs = await listTrackedPathSpecs(worktreePath, filePaths, options)
-    const trackedPaths: string[] = []
-    const untrackedPaths: string[] = []
-    filePaths.forEach((filePath) => {
-      const targetPaths = isTrackedPathSpec(filePath, trackedPathSpecs)
-        ? trackedPaths
-        : untrackedPaths
-      targetPaths.push(filePath)
-    })
+    const { trackedPaths, untrackedPaths } = partitionTrackedPathSpecs(filePaths, trackedPathSpecs)
     await removeSafeUntrackedDiscardTargets(
       worktreePath,
       untrackedPaths,
       (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths, options),
       async () => {
-        const commands = bulkPathspecCommands(
-          ['restore', '--worktree', '--source=HEAD', '--'],
-          trackedPaths,
-          worktreePath,
-          options
-        )
-        for (const args of commands) {
-          await gitExecFileAsync(args, { ...gitOptionsForWorktree(worktreePath, options) })
+        if (trackedPaths.length === 0) {
+          return
         }
+        await gitExecFileAsync(
+          ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
+          {
+            ...gitOptionsForWorktree(worktreePath, options),
+            stdin: encodeGitPathspecs(
+              trackedPaths.map((filePath) => literalPathspec(filePath, options))
+            )
+          }
+        )
       }
     )
   } finally {

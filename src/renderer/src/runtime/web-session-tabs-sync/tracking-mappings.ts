@@ -56,3 +56,37 @@ export function resolveHostSessionTabIdForWebSessionTab(
     })
   )
 }
+
+/** Enumerate only this publishing host's workspace mappings. */
+export function hostSessionTabIdsByLocalTabForWorktree(
+  environmentId: string,
+  worktreeId: string
+): Map<string, string> {
+  const prefix = hostSessionTabMappingKey({ environmentId, worktreeId, tabId: '' })
+  const keys = hostSessionTabMappingKeysByEnvironmentAndWorktree.get(environmentId)?.get(worktreeId)
+  const entries = new Map<string, string>()
+  for (const key of keys ?? []) {
+    const hostTabId = hostSessionTabIdByLocalKey.get(key)
+    if (hostTabId !== undefined) {
+      entries.set(key.slice(prefix.length), hostTabId)
+    }
+  }
+  return entries
+}
+
+/** The local tab mirroring a host tab, or null when no mirrored tab claims it. */
+export function resolveLocalTabIdForHostSessionTab(args: {
+  environmentId: string
+  worktreeId: string
+  hostTabId: string
+}): string | null {
+  for (const [tabId, hostTabId] of hostSessionTabIdsByLocalTabForWorktree(
+    args.environmentId,
+    args.worktreeId
+  )) {
+    if (hostTabId === args.hostTabId) {
+      return tabId
+    }
+  }
+  return null
+}

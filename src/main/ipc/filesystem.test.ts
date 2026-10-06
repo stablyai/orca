@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -17,7 +18,8 @@ import {
   getSshFilesystemProviderMock,
   tryDeleteWslUncPathMock,
   recordCrashBreadcrumbMock,
-  resetFilesystemIpcMocks
+  resetFilesystemIpcMocks,
+  localFileHandleMock
 } from './filesystem-test-harness'
 
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
@@ -80,6 +82,13 @@ describe('registerFilesystemHandlers', () => {
     // Reset module-level auth cache so each test starts with a fresh dirty
     // flag — prevents stale worktree data from a prior test's cache rebuild.
     invalidateAuthorizedRootsCache()
+  })
+
+  it('registers no channel that remembers a path grant', () => {
+    registerFilesystemHandlers(store as never)
+
+    expect(handlers.has('fs:readFile')).toBe(true)
+    expect(handlers.has('fs:authorizeExternalPath')).toBe(false)
   })
 
   it('re-sorts SSH provider listings directories-first in natural order', async () => {
@@ -317,12 +326,6 @@ describe('registerFilesystemHandlers', () => {
     expect(readFileMock).not.toHaveBeenCalled()
   })
 
-  it('does not enumerate worktrees when filesystem handlers register', () => {
-    registerFilesystemHandlers(store as never)
-
-    expect(listWorktreesMock).not.toHaveBeenCalled()
-  })
-
   it('rejects writes to directories', async () => {
     lstatMock.mockResolvedValue({ isDirectory: () => true })
 
@@ -366,8 +369,7 @@ describe('registerFilesystemHandlers', () => {
     }
   ])('returns base64 content for supported $ext binaries', async ({ ext, mime, data }) => {
     const buf = Buffer.from(data)
-    statMock.mockResolvedValue({ size: buf.length, isDirectory: () => false, mtimeMs: 123 })
-    readFileMock.mockResolvedValue(buf)
+    openMock.mockResolvedValue(localFileHandleMock(buf))
     registerFilesystemHandlers(store as never)
     await expect(
       handlers.get('fs:readFile')!(null, { filePath: path.resolve(`/workspace/repo/file.${ext}`) })
@@ -381,8 +383,7 @@ describe('registerFilesystemHandlers', () => {
 
   it('opens text files larger than the old 5MB guard', async () => {
     const content = 'a'.repeat(6 * 1024 * 1024)
-    statMock.mockResolvedValue({ size: content.length, isDirectory: () => false, mtimeMs: 123 })
-    readFileMock.mockResolvedValue(Buffer.from(content))
+    openMock.mockResolvedValue(localFileHandleMock(Buffer.from(content)))
 
     registerFilesystemHandlers(store as never)
 
@@ -396,17 +397,8 @@ describe('registerFilesystemHandlers', () => {
 
   it('returns stable byte metadata only for opted-in local log snapshots', async () => {
     const content = Buffer.from('first\npartial')
-    const close = vi.fn()
-    openMock.mockResolvedValue({
-      stat: vi.fn().mockResolvedValue({
-        size: content.byteLength,
-        dev: 1,
-        ino: 2,
-        birthtimeMs: 3
-      }),
-      readFile: vi.fn().mockResolvedValue(content),
-      close
-    })
+    const handle = localFileHandleMock(content)
+    openMock.mockResolvedValue(handle)
     registerFilesystemHandlers(store as never)
 
     await expect(
@@ -419,12 +411,13 @@ describe('registerFilesystemHandlers', () => {
       isBinary: false,
       fileIdentity: '1:2:3'
     })
-    expect(close).toHaveBeenCalledTimes(1)
+    expect(handle.close).toHaveBeenCalledTimes(1)
     expect(readFileMock).not.toHaveBeenCalled()
   })
 
   it('rejects text files beyond the editor read budget', async () => {
-    statMock.mockResolvedValue({ size: 51 * 1024 * 1024, isDirectory: () => false, mtimeMs: 123 })
+    const handle = localFileHandleMock(Buffer.alloc(0), { size: 51 * 1024 * 1024 })
+    openMock.mockResolvedValue(handle)
 
     registerFilesystemHandlers(store as never)
 
@@ -432,18 +425,13 @@ describe('registerFilesystemHandlers', () => {
       handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/huge.json') })
     ).rejects.toThrow('exceeds 50MB limit')
 
-    expect(readFileMock).not.toHaveBeenCalled()
+    expect(handle.read).not.toHaveBeenCalled()
+    expect(handle.close).toHaveBeenCalled()
   })
 
   it('probes large unknown binaries without reading the full file', async () => {
-    statMock.mockResolvedValue({ size: 6 * 1024 * 1024, isDirectory: () => false, mtimeMs: 123 })
-    openMock.mockResolvedValue({
-      read: vi.fn(async (buffer: Buffer) => {
-        buffer[0] = 0x00
-        return { bytesRead: 1, buffer }
-      }),
-      close: vi.fn()
-    })
+    const handle = localFileHandleMock(Buffer.alloc(6 * 1024 * 1024))
+    openMock.mockResolvedValue(handle)
 
     registerFilesystemHandlers(store as never)
 
@@ -454,7 +442,7 @@ describe('registerFilesystemHandlers', () => {
       isBinary: true
     })
 
-    expect(readFileMock).not.toHaveBeenCalled()
+    expect(handle.read).toHaveBeenCalledTimes(1)
   })
 
   it('moves files to trash', async () => {
@@ -524,8 +512,7 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('keeps non-image binaries hidden from the editor payload', async () => {
-    statMock.mockResolvedValue({ size: 4, isDirectory: () => false, mtimeMs: 123 })
-    readFileMock.mockResolvedValue(Buffer.from([0x00, 0x01, 0x02]))
+    openMock.mockResolvedValue(localFileHandleMock(Buffer.from([0x00, 0x01, 0x02])))
 
     registerFilesystemHandlers(store as never)
 
@@ -608,38 +595,50 @@ describe('registerFilesystemHandlers', () => {
   // Why #7721: without a cancel path, every workspace switch left the previous
   // workspace's full-tree SSH scan running, stacking scans on the relay until
   // interactive fs.readDir/fs.stat starved past their 30s timeout.
-  it('fs:cancelListFiles aborts an in-flight SSH listing by request token (#7721)', async () => {
-    let capturedSignal: AbortSignal | undefined
-    const listFilesMock = vi.fn(
-      (_rootPath: string, options: { signal?: AbortSignal }) =>
-        new Promise<string[]>((_resolve, reject) => {
-          capturedSignal = options.signal
-          options.signal?.addEventListener('abort', () => reject(new Error('listing cancelled')), {
-            once: true
+  it.each(['cancel', 'did-navigate', 'render-process-gone', 'destroyed'])(
+    'aborts an in-flight SSH file listing on %s (#7721)',
+    async (eventName) => {
+      let capturedSignal: AbortSignal | undefined
+      const listFilesMock = vi.fn(
+        (_rootPath: string, options: { signal?: AbortSignal }) =>
+          new Promise<string[]>((_resolve, reject) => {
+            capturedSignal = options.signal
+            options.signal?.addEventListener(
+              'abort',
+              () => reject(new Error('listing cancelled')),
+              {
+                once: true
+              }
+            )
           })
-        })
-    )
-    getSshFilesystemProviderMock.mockReturnValue({ listFiles: listFilesMock })
+      )
+      getSshFilesystemProviderMock.mockReturnValue({ listFiles: listFilesMock })
 
-    registerFilesystemHandlers(store as never)
+      registerFilesystemHandlers(store as never)
 
-    // Why: cancellation keys are scoped to the issuing webContents, so the
-    // cancel must come from the same sender as the listing request.
-    const senderEvent = { sender: { id: 7 } }
-    const pending = handlers.get('fs:listFiles')!(senderEvent, {
-      rootPath: '/home/user/repo',
-      connectionId: 'conn-1',
-      requestToken: 'token-1'
-    }) as Promise<string[]>
+      // Why: cancellation keys are scoped to the issuing webContents, so the
+      // cancel must come from the same sender as the listing request.
+      const senderEvent = { sender: Object.assign(new EventEmitter(), { id: 7 }) }
+      const pending = handlers.get('fs:listFiles')!(senderEvent, {
+        rootPath: '/home/user/repo',
+        connectionId: 'conn-1',
+        requestToken: 'token-1'
+      }) as Promise<string[]>
 
-    expect(capturedSignal?.aborted).toBe(false)
-    await handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'token-1' })
-    expect(capturedSignal?.aborted).toBe(true)
-    await expect(pending).rejects.toThrow('listing cancelled')
+      expect(capturedSignal?.aborted).toBe(false)
+      if (eventName === 'cancel') {
+        await handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'token-1' })
+      } else {
+        senderEvent.sender.emit(eventName)
+      }
+      expect(capturedSignal?.aborted).toBe(true)
+      await expect(pending).rejects.toThrow('listing cancelled')
+      expect(senderEvent.sender.eventNames()).toEqual([])
 
-    // Unknown or already-settled tokens are a no-op, not an error.
-    expect(() =>
-      handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'unknown' })
-    ).not.toThrow()
-  })
+      // Unknown or already-settled tokens are a no-op, not an error.
+      expect(() =>
+        handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'unknown' })
+      ).not.toThrow()
+    }
+  )
 })

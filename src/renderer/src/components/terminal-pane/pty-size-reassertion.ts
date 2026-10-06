@@ -37,7 +37,7 @@ export function createPtySizeReassertion(options: PtySizeReassertionOptions): Pt
     if (disposed || options.isDisposed() || !ptyId) {
       return false
     }
-    return !options.isRemotePtyId(ptyId) && !options.shouldSuppressDesktopResize()
+    return !options.shouldSuppressDesktopResize()
   }
 
   const run = (shouldFit: boolean): void => {
@@ -51,6 +51,12 @@ export function createPtySizeReassertion(options: PtySizeReassertionOptions): Pt
     }
     const target = options.getTerminalDimensions()
     if (!dimensionsAreUsable(target)) {
+      return
+    }
+    if (options.isRemotePtyId(ptyId)) {
+      // Remote hosts have no applied-size readback, but a visibility resume still
+      // needs one forced resize when the local grid did not change.
+      options.forwardResize(target.cols, target.rows)
       return
     }
     inFlight = true

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type RefObject } from 'react'
+import { useCallback, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   closestCenter,
   pointerWithin,
@@ -131,9 +131,13 @@ export function useTabDragSplit({
   // useSensors(ptr) / useSensors(), because dnd-kit internally spreads
   // the sensors array into a useEffect dependency list — changing its
   // length between renders violates React's rules of hooks.
-  const pointerSensor = useSensor(TabDragPointerSensor, {
-    activationConstraint: { distance: getTabDragActivationDistance(enabled) }
-  })
+  const activationDistance = getTabDragActivationDistance(enabled)
+  // Why memoized: fresh options rebuild every tab's drag listeners and wake every tab through dnd-kit's context.
+  const pointerSensorOptions = useMemo(
+    () => ({ activationConstraint: { distance: activationDistance } }),
+    [activationDistance]
+  )
+  const pointerSensor = useSensor(TabDragPointerSensor, pointerSensorOptions)
   const sensors = useSensors(pointerSensor)
 
   const clearDragState = useCallback(() => {
@@ -209,6 +213,10 @@ export function useTabDragSplit({
 
   const onDragMove = useCallback(
     (event: DragMoveEvent) => {
+      // A missed-end cleanup can run before dnd-kit delivers its last move.
+      if (!tabDragActiveRef.current) {
+        return
+      }
       handleDragUpdate(event)
     },
     [handleDragUpdate]
@@ -221,6 +229,10 @@ export function useTabDragSplit({
 
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
+      if (!tabDragActiveRef.current) {
+        finishDrag(true)
+        return
+      }
       commitTabDragDrop({
         event,
         worktreeId,

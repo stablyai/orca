@@ -10,13 +10,13 @@
  * The only defensible default is the one that varies per layout. This
  * module fingerprints the active layout from Chromium's
  * navigator.keyboard.getLayoutMap() (ships in Chrome 69+, so every Electron
- * we could run). We match Ghostty's taxonomy: US / US-International map to
- * `true`; everything else — including Dvorak, Colemak, UK, every
- * international layout — maps to `false`.
+ * we could run). The base layer cannot separate standard ABC/US from
+ * US-International, so every US-shaped layout maps to `true` here and
+ * `input-source-id.ts` narrows that to ABC and US using the native input source ID.
+ * Everything else — Dvorak, Colemak, UK, every international layout — maps
+ * to `false`. Missing native identity on macOS also stays conservative:
+ * an IME can expose a US-shaped backing layout without identifying itself.
  *
- * Reference implementation in Ghostty:
- *   ~/projects/ghostty/src/input/keyboard.zig:25-57 (Layout enum + detectOptionAsAlt)
- *   ~/projects/ghostty/macos/Sources/Helpers/KeyboardLayout.swift (Carbon probe)
  */
 
 /** Minimal shape of the `KeyboardLayoutMap` we consume, so callers can stub
@@ -27,14 +27,13 @@ export type LayoutMapLike = {
 }
 
 export type DetectedLayoutCategory =
-  /** US Standard or US-International. Default → `'true'` (Option = Alt). */
+  /** US-shaped base layer; a native input-source override may still require composition. */
   | 'us'
   /** Any other recognized layout (UK, German, Turkish, French, Dvorak, etc.).
    *  Default → `'false'` (Option composes layout characters). */
   | 'non-us'
   /** API unavailable, empty map, or fingerprint incomplete. Default →
-   *  `'false'` — the conservative safe choice, matching Ghostty's
-   *  `.unknown => .false`. */
+   *  `'false'` so Option remains available for composition. */
   | 'unknown'
 
 /**
@@ -60,8 +59,8 @@ export type DetectedLayoutCategory =
  * Colemak passes KeyQ/W/A/Z/Quote/Backquote/BracketLeft/BracketRight but fails
  * Semicolon (`o` vs `;`). Dvorak fails KeyQ immediately. Both get classified
  * as `non-us` and default to `'false'`; users who want `'true'` flip the
- * explicit override. Matches Ghostty (Ghostty only whitelists
- * com.apple.keylayout.US and com.apple.keylayout.USInternational).
+ * explicit override. The native input-source classifier distinguishes
+ * standard ABC/US from US-shaped international composition layouts.
  */
 const US_FINGERPRINT: Record<string, string> = {
   KeyQ: 'q',

@@ -3,7 +3,6 @@ import {
   AGENT_PICKER_QUERY_MAX_BYTES,
   agentPickerBlankTerminalMatches,
   getAgentPickerCommandValue,
-  isAgentPickerQueryTooLarge,
   searchAgentPickerEntries
 } from './agent-picker-search'
 import { AGENT_CATALOG, type AgentCatalogEntry } from './agent-catalog'
@@ -25,6 +24,15 @@ afterEach(() => {
 })
 
 describe('agent picker search', () => {
+  it.each(['oh-my-pi', 'oh my pi', 'OH-MY-PI'])('finds OMP by its project name: %s', (query) => {
+    expect(searchAgentPickerEntries(AGENT_CATALOG, query).map((agent) => agent.id)).toEqual(['omp'])
+  })
+
+  it('does not offer unavailable OMP through a search alias', () => {
+    const available = AGENT_CATALOG.filter((agent) => agent.id !== 'omp')
+    expect(searchAgentPickerEntries(available, 'oh-my-pi')).toEqual([])
+  })
+
   it('keeps catalog order for an empty query', () => {
     expect(searchAgentPickerEntries(agents, '').map((agent) => agent.id)).toEqual(
       agents.map((agent) => agent.id)
@@ -58,10 +66,41 @@ describe('agent picker search', () => {
     expect(replaceSpy).not.toHaveBeenCalled()
   })
 
-  it('resolves every catalog command alias to its agent first', () => {
+  it('resolves catalog commands to the first entry owning that command', () => {
     for (const agent of AGENT_CATALOG) {
-      expect(searchAgentPickerEntries(AGENT_CATALOG, agent.cmd)[0]?.id).toBe(agent.id)
+      const owner = AGENT_CATALOG.find((candidate) => candidate.cmd === agent.cmd)
+      expect(searchAgentPickerEntries(AGENT_CATALOG, agent.cmd)[0]?.id).toBe(owner?.id)
     }
+  })
+
+  it.each([
+    ['qoder', 'qoder'],
+    ['qodercli', 'qoder'],
+    ['qoder-cn', 'qoder-cn'],
+    ['qoderclicn', 'qoder-cn'],
+    ['Qoder CLI China', 'qoder-cn'],
+    ['qwen', 'qwen-code']
+  ] as const)('resolves explicit identity or command %s to %s', (query, expected) => {
+    expect(searchAgentPickerEntries(AGENT_CATALOG, query)[0]?.id).toBe(expected)
+  })
+
+  it('keeps a stable default for a shared binary while explicit CN remains selectable', () => {
+    const shared = [
+      entry('qoder', 'Qoder CLI', 'qodercli'),
+      entry('qoder-cn', 'Qoder CLI China', 'qodercli')
+    ]
+    expect(searchAgentPickerEntries(shared, 'qodercli').map((agent) => agent.id)).toEqual([
+      'qoder',
+      'qoder-cn'
+    ])
+    expect(searchAgentPickerEntries(shared, 'qoder-cn')[0]?.id).toBe('qoder-cn')
+    expect(searchAgentPickerEntries(shared, 'Qoder CLI China')[0]?.id).toBe('qoder-cn')
+    expect(
+      searchAgentPickerEntries(
+        shared.filter((agent) => agent.id !== 'qoder'),
+        'qodercli'
+      )[0]?.id
+    ).toBe('qoder-cn')
   })
 
   it('returns no entries for unrelated text', () => {
@@ -85,7 +124,6 @@ describe('agent picker search', () => {
       }
     ] as AgentCatalogEntry[]
 
-    expect(isAgentPickerQueryTooLarge(oversizedQuery)).toBe(true)
     expect(searchAgentPickerEntries(throwingAgents, oversizedQuery)).toEqual([])
     expect(agentPickerBlankTerminalMatches(oversizedQuery)).toBe(false)
     expect(

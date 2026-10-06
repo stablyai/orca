@@ -5,7 +5,7 @@ import { afterEach, expect, it } from 'vitest'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type SyncDatabase from '../sqlite/sync-database'
 import { SessionSearchEngine } from './session-search-engine'
-import { readIndexGeneration } from './session-search-index-generation'
+import { readIndexGeneration, readIndexIncarnation } from './session-search-index-generation'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
@@ -225,12 +225,15 @@ it('keeps the generation across a reopen, because the bump rides its own commit'
     throw error
   })
   await indexOneTranscript(root, first)
-  const indexed = readIndexGeneration(reader(path))
+  const firstReader = reader(path)
+  const indexed = readIndexGeneration(firstReader)
+  const incarnation = readIndexIncarnation(firstReader)
   first.close()
 
   const second = new SessionSearchStore(path)
   try {
     expect(readIndexGeneration(reader(path))).toBe(indexed)
+    expect(readIndexIncarnation(reader(path))).toBe(incarnation)
   } finally {
     second.close()
   }

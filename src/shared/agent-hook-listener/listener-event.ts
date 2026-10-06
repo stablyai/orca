@@ -1,9 +1,11 @@
+import type { AgentProcessPresence } from '../agent-process-presence'
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { AgentProviderSessionMetadata } from '../agent-session-resume'
 
 export type AgentHookEventPayload = {
   paneKey: string
+  agentPresence?: AgentProcessPresence
   /** Authenticated hook route that produced this event. */
   source?: AgentHookSource
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
@@ -21,8 +23,10 @@ export type AgentHookEventPayload = {
   promptInteractionKey?: string
   /** Raw agent hook event name, used by main-process transition guards. */
   hookEventName?: string
-  /** Claude's provider-owned user-prompt UUID. */
+  /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */
   providerPromptId?: string
+  /** This row belongs to an observed Grok prompt boundary even when its opaque id is absent. */
+  grokPromptBoundary?: true
   /** Active Claude compact generation, keyed by provider prompt identity. */
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool-use identifier when the hook source exposes one. */
@@ -48,6 +52,8 @@ export type AgentHookEventPayload = {
    *  Lets a reader rejoin the row to its terminal after the pane key moved. Never persisted:
    *  a handle belongs to the runtime that issued it. */
   terminalHandle?: string
+  /** Execution-host clock retained for age-preserving projection replay; never sent verbatim. */
+  hostEvidenceObservedAt?: number
   payload: ParsedAgentStatusPayload
 }
 

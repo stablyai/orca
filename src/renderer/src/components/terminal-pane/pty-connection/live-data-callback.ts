@@ -1,5 +1,4 @@
 import { useAppStore } from '@/store'
-import { containsStatefulRendererQuery } from '../../../../../shared/terminal-reply-query-extraction'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'
 import { observeTerminalBracketedPasteModeOutput } from '../terminal-bracketed-paste'
@@ -47,6 +46,12 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       } else {
         // Why: main dropped buffered output at the pending cap, so the stream has a gap; repaint from the main-owned snapshot instead of writing on.
         session.markHiddenOutputRestoreNeeded()
+        // Why the synthesized \x1b[?2026l is not written here: this branch discards
+        // `data` deliberately, and the grounded snapshot replay
+        // (REPLAY_BASELINE_TERMINAL_RESET) releases the latch instead. Writing it
+        // through writePtyOutputToXterm perturbs the hidden-output-restore state
+        // machine (it consumes the pending snapshot), so the release rides the
+        // restore. Residual gap: a pane whose restore never arrives.
         if (data) {
           // The sentinel can carry query bytes carved from the bulk drop (extractDroppedPtyQueryBytes in main); replies must still flow.
           session.salvageRendererQueriesFromDiscardedRestoreData(data)
@@ -140,14 +145,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     const restoreAppliesToCurrentPty =
       session.hiddenOutputRestorePtyId !== null &&
       session.transport.getPtyId() === session.hiddenOutputRestorePtyId
-    const skipBackgroundAlternateScreenFrame =
-      meta?.background === true &&
-      shouldWritePtyOutputForeground(session.deps.isVisibleRef.current) &&
-      session.pane.terminal.buffer.active.type === 'alternate' &&
-      !containsStatefulRendererQuery(orderedRendererData)
-    if (skipBackgroundAlternateScreenFrame) {
-      session.skipBackgroundAlternateScreenOutput(orderedRendererData)
-    } else if (session.shouldSkipHiddenRendererOutput(foreground, orderedRendererData)) {
+    if (session.shouldSkipHiddenRendererOutput(foreground, orderedRendererData)) {
       session.skipHiddenRendererOutput(orderedRendererData)
     } else if (
       (session.hiddenOutputRestoreNeeded || session.hiddenOutputRestoreInFlight) &&
@@ -171,7 +169,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
           hiddenStartupRendererQuery: true
         })
       }
-      session.writePtyOutputToXterm(orderedRendererData, foreground)
+      session.writePtyOutputToXterm(orderedRendererData, foreground, { liveStartupBatch: true })
       if (foreground) {
         session.recordRendererOrderedSeq(rendererMeta)
       }

@@ -4,8 +4,11 @@ import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'
 import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { OpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 
 export type PtySpawnResult = {
+  /** Execution-host probe; absent on older hosts and reattachments. */
+  openCodeCapabilities?: OpenCodeCliCapabilities
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   /** App-facing PTY id. Remote providers must return globally routable ids,
    *  not relay-local handles, because renderer/runtime IPC routes by this key. */
@@ -52,8 +55,8 @@ export type PtySpawnResult = {
   }
   /** Kitty keyboard flags persisted in the daemon snapshot, threaded so the
    *  re-seeded runtime emulator answers hidden `CSI ? u` with the real flags
-   *  (terminal-query-authority.md §kitty). Never replayed into a renderer
-   *  xterm — POST_REPLAY_REATTACH_RESET's kitty reset stays authoritative. */
+   *  (terminal-query-authority.md §kitty). Renderers re-assert them in their
+   *  replay epilogue, after the payload's screen switches. */
   snapshotKittyKeyboardFlags?: number
   /** Renderer-domain sequence main reconciled for the attach boundary those
    *  flags describe. Set by main, not the provider. */

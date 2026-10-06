@@ -26,7 +26,17 @@ describe('createIpcPtyTransport', () => {
     restorePtySpecWindow(originalWindow)
   })
 
-  it.each([0, 420])(
+  it('exposes explicit local or direct SSH ownership without inferring it from the workspace', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    for (const connectionId of [undefined, 'qa']) {
+      const transport = createIpcPtyTransport({ connectionId })
+      expect(transport.getExecutionHostId?.()).toBe(connectionId ? 'ssh:qa' : 'local')
+      expect(transport.getRuntimeEnvironmentId?.()).toBeNull()
+      transport.destroy?.()
+    }
+  })
+
+  it.each([0, 1, 420])(
     'preserves snapshot sequence and keyboard proof %s across IPC reattach',
     async (seq) => {
       const { createIpcPtyTransport } = await import('./pty-transport')
@@ -66,6 +76,22 @@ describe('createIpcPtyTransport', () => {
     ).resolves.toBeUndefined()
 
     expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('keeps the recovery hint and raw diagnostic from a wrapped spawn error', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    vi.mocked(window.api.pty.spawn).mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'pty:spawn': Error: Close unused terminals, then try again.\nnode-pty: open_slave failed: EMFILE (errno 24)"
+      )
+    )
+    const onError = vi.fn()
+
+    await createIpcPtyTransport({}).connect({ url: '', callbacks: { onError } })
+
+    expect(onError).toHaveBeenCalledWith(
+      'Close unused terminals, then try again.\nnode-pty: open_slave failed: EMFILE (errno 24)'
+    )
   })
 
   it('threads provider command ownership through the spawn IPC', async () => {

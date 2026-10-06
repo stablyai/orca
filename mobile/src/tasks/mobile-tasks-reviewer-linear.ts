@@ -139,7 +139,21 @@ export function groupLinearIssues(
   groupBy: LinearGroupBy,
   orderBy: LinearOrderBy
 ): LinearIssueSection[] {
-  const sorted = sortLinearIssues(issues, orderBy)
+  return groupOrderedLinearIssues(sortLinearIssues(issues, orderBy), groupBy)
+}
+
+/** The caller must sort issues by its selected order before grouping. */
+export function groupSortedLinearIssues(
+  issues: readonly LinearIssue[],
+  groupBy: LinearGroupBy
+): LinearIssueSection[] {
+  return groupOrderedLinearIssues([...issues], groupBy)
+}
+
+function groupOrderedLinearIssues(
+  sorted: LinearIssue[],
+  groupBy: LinearGroupBy
+): LinearIssueSection[] {
   if (groupBy === 'none') {
     return [{ key: 'all', label: 'Issues', color: colors.accentBlue, issues: sorted }]
   }
@@ -182,11 +196,10 @@ export function linearIssueSecondaryParts(
   return parts
 }
 
-export function reconcileTeamSelection(
-  teams: LinearTeam[],
-  saved: string[] | null | undefined
-): Set<string> {
-  if (!saved) {
+// Why `unknown`: a host predating the desktop fix for 0a2b6e7f projects its
+// raw store value, which can be a string; that must read as sticky-all.
+export function reconcileTeamSelection(teams: LinearTeam[], saved: unknown): Set<string> {
+  if (!Array.isArray(saved)) {
     return new Set(teams.map((team) => team.id))
   }
   const available = new Set(teams.map((team) => team.id))

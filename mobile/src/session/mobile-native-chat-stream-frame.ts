@@ -78,6 +78,10 @@ export function applyMobileNativeChatStreamFrame(args: {
   if (frame.type === 'error') {
     return { kind: 'error', error: frame.message ?? frame.error ?? 'Transcript stream failed' }
   }
+  // Why: a feed's token is its own, so an end that reaches here was not asked for; the feed is dead.
+  if (frame.type === 'end') {
+    return { kind: 'error', error: 'Transcript stream ended' }
+  }
   if (frame.type !== 'snapshot' && frame.type !== 'replacement' && frame.type !== 'appended') {
     return { kind: 'ignored' }
   }

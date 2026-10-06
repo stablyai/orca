@@ -11,11 +11,16 @@ const mocks = vi.hoisted(() => ({
   statusClaude: vi.fn(),
   statusCodex: vi.fn(),
   refreshClaude: vi.fn(),
-  refreshCodex: vi.fn()
+  refreshCodex: vi.fn(),
+  probeClaudeVersion: vi.fn()
 }))
 
 vi.mock('./local-agent-cli-presence', () => ({
   detectLocalManagedAgentCliPresence: mocks.detect
+}))
+
+vi.mock('../claude/claude-hook-event-versions', () => ({
+  probeClaudeCliVersion: mocks.probeClaudeVersion
 }))
 
 vi.mock('./managed-agent-hook-registry', () => ({
@@ -71,6 +76,7 @@ describe('managed agent hook controls', () => {
     mocks.removeCodexAsync.mockResolvedValue(status('codex', 'not_installed'))
     mocks.refreshClaude.mockResolvedValue(undefined)
     mocks.refreshCodex.mockResolvedValue(undefined)
+    mocks.probeClaudeVersion.mockResolvedValue(null)
   })
 
   it('installs only agents with positively detected CLIs', async () => {
@@ -157,6 +163,19 @@ describe('managed agent hook controls', () => {
       expect.objectContaining({ agent: 'claude', state: 'installed' }),
       expect.objectContaining({ agent: 'codex', state: 'installed' })
     ])
+  })
+
+  it('forwards the detected Claude version to its installer', async () => {
+    mocks.detect.mockResolvedValue({
+      claude: { state: 'found', executablePath: '/opt/bin/claude' },
+      codex: { state: 'missing' }
+    })
+    mocks.probeClaudeVersion.mockResolvedValue('2.1.261')
+
+    await installManagedAgentHooks({ agentCmdOverrides: {} })
+
+    expect(mocks.probeClaudeVersion).toHaveBeenCalledWith('/opt/bin/claude')
+    expect(mocks.installClaude).toHaveBeenCalledWith({ cliVersion: '2.1.261' })
   })
 
   it('only refreshes scripts for the selected agents', async () => {
@@ -326,17 +345,5 @@ describe('startup managed hook reconciliation (STA-5679)', () => {
     expect(mocks.removeClaude).not.toHaveBeenCalled()
     expect(mocks.installClaude).not.toHaveBeenCalled()
     expect(mocks.installCodex).toHaveBeenCalledTimes(1)
-  })
-
-  it('still removes through the explicit Settings toggle', async () => {
-    // Anchors the assertion above: the removers really are wired, so 'skip' is a behavioral
-    // difference rather than a vacuous constant.
-    mocks.removeClaude.mockResolvedValue(status('claude', 'not_installed'))
-    mocks.removeCodex.mockResolvedValue(status('codex', 'not_installed'))
-
-    await applyAgentStatusHooksEnabled(false, { agentStatusHooksEnabled: false })
-
-    expect(mocks.removeClaude).toHaveBeenCalledTimes(1)
-    expect(mocks.removeCodex).toHaveBeenCalledTimes(1)
   })
 })

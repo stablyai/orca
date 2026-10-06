@@ -1,0 +1,18 @@
+--- a/src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts
++++ b/src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts
+@@ -6 +6 @@
+-  entries: (T | undefined)[]
++  entries: T[]
+@@ -23 +22,0 @@
+-  queue.entries[queue.head] = undefined
+@@ -25,5 +24,2 @@
+-  if (
+-    queue.head === queue.entries.length ||
+-    (queue.head >= 1024 && queue.head * 2 >= queue.entries.length)
+-  ) {
+-    queue.entries = queue.entries.slice(queue.head)
++  if (queue.head === queue.entries.length) {
++    queue.entries.length = 0
+@@ -36 +32 @@
+-  const entries = queue.entries.slice(queue.head).filter((entry): entry is T => entry !== undefined)
++  const entries = queue.entries.slice(queue.head)

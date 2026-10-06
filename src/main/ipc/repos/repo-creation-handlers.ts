@@ -10,6 +10,7 @@ import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../share
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
+import { probeGitAvailability } from '../../git/git-availability'
 import { gitExecFileAsync } from '../../git/runner'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
@@ -22,16 +23,12 @@ import { createRemoteRepo } from './remote-repo-creation'
 
 const GIT_AVAILABILITY_TIMEOUT_MS = 1500
 
-async function isGitAvailable(): Promise<boolean> {
-  try {
-    await gitExecFileAsync(['--version'], {
-      cwd: process.cwd(),
-      timeout: GIT_AVAILABILITY_TIMEOUT_MS
-    })
-    return true
-  } catch {
-    return false
-  }
+// Only ENOENT proves Git absent; rejecting other failures preserves the renderer's unknown state.
+export async function probeLocalGitAvailability(): Promise<boolean> {
+  return probeGitAvailability(gitExecFileAsync, {
+    cwd: process.cwd(),
+    timeout: GIT_AVAILABILITY_TIMEOUT_MS
+  })
 }
 
 /**
@@ -63,7 +60,7 @@ function getDefaultCreateProjectParent(store: Store): string {
 }
 
 export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: Store): void {
-  ipcMain.handle('repos:isGitAvailable', () => isGitAvailable())
+  ipcMain.handle('repos:isGitAvailable', () => probeLocalGitAvailability())
   ipcMain.handle('repos:getDefaultCreateProjectParent', () => getDefaultCreateProjectParent(store))
 
   ipcMain.handle(

@@ -1,9 +1,9 @@
-import { hasFlag } from './agent-cli-flag-detection'
 import type {
   AgentSessionOptionCatalog,
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
+import { removeAgentArgOption } from './agent-session-option-agent-args'
 import { parseGrokModelList } from './grok-model-list-probe'
 
 // The offered slice of grok's canonical ladder, low to high. Its `none` tier is
@@ -35,7 +35,9 @@ function grokEffort(ceiling: 'high' | 'xhigh'): CatalogOption {
     },
     apply: {
       launchArgs: (value) => ['--reasoning-effort', String(value)],
-      agentArgsOverride: (tokens) => hasFlag(tokens, ['--effort', '--reasoning-effort']),
+      // Why: grok reads both spellings.
+      removeAgentArgs: (tokens) =>
+        removeAgentArgOption('grok', tokens, ['--effort', '--reasoning-effort']),
       midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
     }
   }
@@ -67,7 +69,7 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   ],
   modelApply: {
     launchArgs: (value) => ['-m', String(value)],
-    agentArgsOverride: (tokens) => hasFlag(tokens, ['-m', '--model']),
+    removeAgentArgs: (tokens) => removeAgentArgOption('grok', tokens, ['-m', '--model']),
     // Why: `agent-picker` would replace the whole model list with "Choose in
     // agent picker…" and never persist a model, so `-m` would never be emitted.
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }

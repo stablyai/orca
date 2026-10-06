@@ -54,6 +54,37 @@ function hydrationPage(
 }
 
 describe('structured agent session reducer', () => {
+  it("orders one journal write's items by their place in it, whatever order they arrive in", () => {
+    const at = (id: string, sequence: number, sequenceIndex: number): AgentJournalRenderItem => ({
+      ...item(id, sequence),
+      ...(sequenceIndex > 0 ? { sequenceIndex } : {})
+    })
+    const paged = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'history-page',
+      page: hydrationPage([
+        item('before', 4),
+        at('third', 5, 2),
+        at('first', 5, 0),
+        at('second', 5, 1)
+      ])
+    })
+    expect(paged.items.map(({ itemId }) => itemId)).toEqual(['before', 'first', 'second', 'third'])
+    const live = reduceStructuredAgentSession(paged, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 6 },
+          items: [at('next-b', 6, 1), at('next-a', 6, 0)],
+          removedItemIds: [],
+          submissions: []
+        }
+      }
+    })
+    expect(live.items.map(({ itemId }) => itemId).slice(-2)).toEqual(['next-a', 'next-b'])
+  })
+
   it('applies an additive targeted-stop capability update without journal churn', () => {
     const backgroundTasks = {
       state: 'monitoring' as const,
@@ -127,6 +158,90 @@ describe('structured agent session reducer', () => {
     ])
   })
 
+  it('decodes child rows once as they arrive: a malformed row is dropped, and a repeat keeps identity', () => {
+    const view = {
+      id: 'child-1',
+      providerId: 'task-1',
+      kind: 'agent',
+      state: 'working',
+      membership: 'live',
+      firstObservedAt: 1,
+      observedAt: 2,
+      stoppable: true,
+      invocation: { invocationId: 'spawn-1', generation: 1 }
+    }
+    // A row a newer host shapes differently: no invocation, which equality would dereference.
+    const { invocation: _invocation, ...malformed } = { ...view, id: 'child-2' }
+    const roster = { state: 'monitoring', tasks: [], children: [view, malformed] }
+    const batch = (backgroundTasks: unknown, sequence: number) =>
+      reduceStructuredAgentSession(state, {
+        type: 'event',
+        event: {
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: {
+            cursor: { epoch: 'epoch-a', sequence },
+            items: sequence > 0 ? [item(`item-${sequence}`, sequence)] : [],
+            removedItemIds: [],
+            submissions: []
+          },
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a wire frame as it arrives, before the client decodes it.
+          backgroundTasks: structuredClone(backgroundTasks) as never
+        }
+      })
+    let state = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: { type: 'snapshot', sessionId: 'session-a', fence: 1, page: hydrationPage([]) }
+    })
+    state = batch(roster, 0)
+    expect(state.backgroundTasks?.children).toEqual([view])
+    const kept = state.backgroundTasks
+    // The same roster again, beside a journal change: the roster keeps its identity.
+    state = batch(roster, 1)
+    expect(state.items.map(({ itemId }) => itemId)).toEqual(['item-1'])
+    expect(state.backgroundTasks).toBe(kept)
+  })
+
+  it("keeps a failed read's refusal beside its text until the read recovers", () => {
+    const refusal = {
+      code: 'agent_session_journal_unreadable',
+      details: { reason: 'journalCorrupt' }
+    } as const
+    const failed = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'error',
+      message: 'agent_session_journal_unreadable',
+      refusal
+    })
+    expect(failed).toMatchObject({ status: 'error', readRefusal: refusal })
+
+    expect(reduceStructuredAgentSession(failed, { type: 'loading' }).readRefusal).toBeUndefined()
+    const live = reduceStructuredAgentSession(
+      reduceStructuredAgentSession(failed, {
+        type: 'history-page',
+        page: hydrationPage([item('a', 1)])
+      }),
+      { type: 'error', message: 'transport died' }
+    )
+    expect(live.readRefusal).toBeUndefined()
+    const recovered = reduceStructuredAgentSession(
+      { ...live, readRefusal: refusal },
+      {
+        type: 'event',
+        event: {
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: {
+            cursor: { epoch: 'epoch-a', sequence: 2 },
+            items: [item('b', 2)],
+            removedItemIds: [],
+            submissions: []
+          }
+        }
+      }
+    )
+    expect(recovered).toMatchObject({ status: 'ready', error: undefined, readRefusal: undefined })
+  })
+
   it('uses the bounded hydration page pagination boundary', () => {
     const restored = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',
@@ -142,186 +257,6 @@ describe('structured agent session reducer', () => {
 
     expect(restored.items).toHaveLength(84)
     expect(restored.hasOlder).toBe(false)
-  })
-
-  it('does not let a stale focus refresh replace newer streamed state', () => {
-    const streamed = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('streamed', 50)])
-      }
-    })
-    const afterRefresh = reduceStructuredAgentSession(streamed, {
-      type: 'tail-page',
-      page: {
-        sessionId: 'session-a',
-        epoch: 'epoch-a',
-        direction: 'tail',
-        items: [item('stale', 40)],
-        removedItemIds: [],
-        submissions: [],
-        window: {
-          oldest: { epoch: 'epoch-a', sequence: 40 },
-          newest: { epoch: 'epoch-a', sequence: 40 },
-          nextCursor: { epoch: 'epoch-a', sequence: 40 }
-        },
-        liveCursor: { epoch: 'epoch-a', sequence: 40 },
-        hasOlder: true,
-        hasNewer: false
-      }
-    })
-
-    expect(afterRefresh).toBe(streamed)
-  })
-
-  it('keeps paged-in older items when a focus refresh carries nothing new', () => {
-    const snapshot = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('newest', 50)])
-      }
-    })
-    const withOlder = reduceStructuredAgentSession(snapshot, {
-      type: 'older-page',
-      requestedCursor: { epoch: 'epoch-a', sequence: 50 },
-      page: {
-        sessionId: 'session-a',
-        epoch: 'epoch-a',
-        direction: 'before',
-        items: [item('older', 10)],
-        removedItemIds: [],
-        submissions: [],
-        window: {
-          oldest: { epoch: 'epoch-a', sequence: 10 },
-          newest: { epoch: 'epoch-a', sequence: 10 },
-          nextCursor: { epoch: 'epoch-a', sequence: 10 }
-        },
-        hasOlder: false,
-        hasNewer: true
-      }
-    })
-    const afterRefresh = reduceStructuredAgentSession(withOlder, {
-      type: 'tail-page',
-      page: {
-        sessionId: 'session-a',
-        epoch: 'epoch-a',
-        direction: 'tail',
-        items: [item('newest', 50)],
-        removedItemIds: [],
-        submissions: [],
-        window: {
-          oldest: { epoch: 'epoch-a', sequence: 50 },
-          newest: { epoch: 'epoch-a', sequence: 50 },
-          nextCursor: { epoch: 'epoch-a', sequence: 50 }
-        },
-        liveCursor: { epoch: 'epoch-a', sequence: 50 },
-        hasOlder: true,
-        hasNewer: false
-      }
-    })
-
-    expect(afterRefresh).toBe(withOlder)
-    expect(afterRefresh.items.map((entry) => entry.itemId)).toEqual(['older', 'newest'])
-  })
-
-  it('accepts a newer fence from an equal-cursor tail refresh', () => {
-    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('newest', 50)])
-      }
-    })
-    const page = { ...hydrationPage([item('newest', 50)]), fence: 2 }
-
-    const refreshed = reduceStructuredAgentSession(initial, { type: 'tail-page', page })
-
-    expect(refreshed.fence).toBe(2)
-    expect(refreshed.items).toBe(initial.items)
-  })
-
-  it('keeps rapid-send submissions when a newer tail refresh contains only the last one', () => {
-    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage(
-          [item('first', 10)],
-          Array.from({ length: 8 }, (_, index) => submission(index))
-        )
-      }
-    })
-    const refreshed = reduceStructuredAgentSession(initial, {
-      type: 'tail-page',
-      page: {
-        sessionId: 'session-a',
-        epoch: 'epoch-a',
-        direction: 'tail',
-        items: [item('latest', 11)],
-        removedItemIds: [],
-        submissions: [submission(7)],
-        window: {
-          oldest: { epoch: 'epoch-a', sequence: 11 },
-          newest: { epoch: 'epoch-a', sequence: 11 },
-          nextCursor: { epoch: 'epoch-a', sequence: 11 }
-        },
-        liveCursor: { epoch: 'epoch-a', sequence: 11 },
-        hasOlder: true,
-        hasNewer: false
-      }
-    })
-
-    expect(refreshed.submissions.map((entry) => entry.clientMessageId)).toEqual(
-      Array.from({ length: 8 }, (_, index) => `client-${index}`)
-    )
-  })
-
-  it('bounds retained submission identities across repeated tail refreshes', () => {
-    let state = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('first', 1)])
-      }
-    })
-
-    for (let index = 0; index < 300; index += 1) {
-      state = reduceStructuredAgentSession(state, {
-        type: 'tail-page',
-        page: {
-          sessionId: 'session-a',
-          epoch: 'epoch-a',
-          direction: 'tail',
-          items: [item(`item-${index}`, index + 2)],
-          removedItemIds: [],
-          submissions: [submission(index)],
-          window: {
-            oldest: { epoch: 'epoch-a', sequence: index + 2 },
-            newest: { epoch: 'epoch-a', sequence: index + 2 },
-            nextCursor: { epoch: 'epoch-a', sequence: index + 2 }
-          },
-          liveCursor: { epoch: 'epoch-a', sequence: index + 2 },
-          hasOlder: true,
-          hasNewer: false
-        }
-      })
-    }
-
-    expect(state.submissions).toHaveLength(256)
-    expect(state.submissions[0]?.clientMessageId).toBe('client-44')
-    expect(state.submissions.at(-1)?.clientMessageId).toBe('client-299')
   })
 
   it('projects additive background task state without changing transcript identity', () => {
@@ -625,38 +560,6 @@ describe('structured agent session reducer', () => {
       9_800
     )
     expect(unstamped.hostClock).toEqual({ hostNow: 5_400, receivedAt: 9_400 })
-
-    const paged = reduceStructuredAgentSession(
-      unstamped,
-      { type: 'tail-page', page: { ...hydrationPage([item('fourth', 4)]), hostNow: 6_000 } },
-      10_000
-    )
-    expect(paged.hostClock).toEqual({ hostNow: 6_000, receivedAt: 10_000 })
-    expect(
-      reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-        type: 'tail-page',
-        page: hydrationPage([item('first', 1)])
-      }).hostClock
-    ).toBeUndefined()
-  })
-
-  it('retains same-epoch activity across a newer journal tail refresh', () => {
-    const active = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('first', 1)]),
-        activity: { turnId: 'turn-1', text: 'Checking the renderer' }
-      }
-    })
-    const refreshed = reduceStructuredAgentSession(active, {
-      type: 'tail-page',
-      page: hydrationPage([item('latest', 2)])
-    })
-
-    expect(refreshed.activity).toEqual({ turnId: 'turn-1', text: 'Checking the renderer' })
   })
 })
 

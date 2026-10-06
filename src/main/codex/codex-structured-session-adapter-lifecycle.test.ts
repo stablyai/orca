@@ -14,9 +14,9 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch,
-  type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 
@@ -26,7 +26,7 @@ function identityFor(sessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'ws-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD_ID }
+    providerHandle: codexProviderHandle(THREAD_ID)
   }
 }
 
@@ -99,10 +99,7 @@ function fakeCodex(routes: Record<string, Route> = {}): {
 function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},
-  events: CodexStructuredSessionEvent[] = [],
-  processControl: Partial<
-    Pick<CodexStructuredSessionAdapterDeps, 'captureTurnProcesses' | 'terminateTurnProcesses'>
-  > = {}
+  events: CodexStructuredSessionEvent[] = []
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
   return new CodexStructuredSessionAdapter({
@@ -117,11 +114,8 @@ function adapterFor(
     onEvent: (event) => events.push(event),
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
-    captureTurnProcesses: async () => ({ platform: 'win32', identities: new Map() }),
-    terminateTurnProcesses: async () => true,
     now: () => 1_700_000_000_500,
-    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
-    ...processControl
+    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`
   })
 }
 
@@ -152,8 +146,9 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
         sessionId: 'session-2',
         itemId: 'codex-item-1',
         kind: 'approval',
-        optionId: 'accept',
-        fence: 1
+        response: { kind: 'option', optionId: 'accept' },
+        fence: 1,
+        commit: async () => undefined
       })
     ).rejects.toThrow('no longer waiting on')
 
@@ -180,6 +175,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
       type: 'ended',
       sessionId: 'session-1',
       reason: 'codex app-server connection ended',
+      failure: { kind: 'providerExited' },
       cause: 'unexpected-exit',
       fence: 7,
       acquisitionGeneration: 'generation-1',
@@ -193,9 +189,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
         fence: 7
       })
     ).rejects.toThrow('no live codex app-server')
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
-    )
+    expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
     await expect(adapter.closeSession('session-1')).resolves.toBe(false)
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
   })
@@ -210,9 +204,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
     codex.connections[0].handlers.onExit?.(new Error('the superseded child died'))
 
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(endedBeforeStaleExit)
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
-    )
+    expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
   })
 
   it('ignores Codex traffic that arrives after the session is gone', async () => {

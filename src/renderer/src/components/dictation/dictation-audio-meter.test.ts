@@ -2,19 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   analyzeDictationAudioChunk,
   createDictationMeterAnalyzerState,
-  measureDictationAudioChunk,
   toPublicDictationMeterState
 } from './dictation-audio-meter'
 
 describe('dictation audio meter', () => {
-  it('measures RMS and clamps peaks from copied audio samples', () => {
-    expect(measureDictationAudioChunk(new Float32Array([0.5, -0.5]))).toEqual({
-      rms: 0.5,
-      peak: 0.5
-    })
-    expect(measureDictationAudioChunk(new Float32Array([2]))).toEqual({ rms: 2, peak: 1 })
-  })
-
   it('uses a fast attack and slower release for a stable voice envelope', () => {
     const initial = createDictationMeterAnalyzerState()
     const loud = analyzeDictationAudioChunk(new Float32Array(128).fill(0.3), 100, initial)

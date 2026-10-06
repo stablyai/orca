@@ -77,12 +77,13 @@ describe('planCommitMessageGeneration', () => {
           '--agent',
           'build',
           '--format',
-          'default',
+          'json',
           '--variant',
           'high'
         ],
         stdinPayload: 'PROMPT',
-        label: 'OpenCode'
+        label: 'OpenCode',
+        outputFormat: 'opencode-json'
       }
     })
   })
@@ -109,10 +110,11 @@ describe('planCommitMessageGeneration', () => {
           '--agent',
           'build',
           '--format',
-          'default'
+          'json'
         ],
         stdinPayload: 'PROMPT',
-        label: 'OpenCode'
+        label: 'OpenCode',
+        outputFormat: 'opencode-json'
       }
     })
   })
@@ -143,6 +145,37 @@ describe('planCommitMessageGeneration', () => {
         ],
         stdinPayload: 'PROMPT',
         label: 'Amp'
+      }
+    })
+  })
+
+  it('plans Jcode run generation with an argv prompt', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'jcode',
+        model: 'default'
+      },
+      'name this branch'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'jcode',
+        // --tool-profile none: the prompt is a staged patch, and jcode's default
+        // profile would expose shell/read/write/MCP to it.
+        args: [
+          '--no-update',
+          '--quiet',
+          '--no-selfdev',
+          '--tool-profile',
+          'none',
+          'run',
+          '--json',
+          'name this branch'
+        ],
+        stdinPayload: null,
+        label: 'Jcode'
       }
     })
   })
@@ -318,6 +351,31 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans Muse exec with a positional prompt and no workspace side effects', () => {
+    const result = planCommitMessageGeneration({ agentId: 'muse', model: 'default' }, 'PROMPT')
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'muse',
+        args: [
+          'exec',
+          '--no-session-log',
+          '--approval-mode',
+          'never',
+          '--disable-sandbox',
+          '--disable-shell',
+          '--disable-write',
+          '--disable-web-tools',
+          '--',
+          'PROMPT'
+        ],
+        stdinPayload: null,
+        label: 'Muse'
+      }
+    })
+  })
+
   it('uses preset agent command overrides as the spawn command prefix', () => {
     const result = planCommitMessageGeneration(
       {
@@ -456,7 +514,7 @@ describe('planCommitMessageGeneration', () => {
     expect(result).toMatchObject({
       ok: true,
       plan: {
-        args: ['run', '--model', 'opencode/gpt-5.5', '--agent', 'build', '--format', 'default'],
+        args: ['run', '--model', 'opencode/gpt-5.5', '--agent', 'build', '--format', 'json'],
         stdinPayload: 'PROMPT'
       }
     })
@@ -471,7 +529,7 @@ describe('planCommitMessageGeneration', () => {
     expect(result).toMatchObject({
       ok: true,
       plan: {
-        args: ['run', '-m', 'opencode/gpt-5.5', '--agent', 'build', '--format', 'default']
+        args: ['run', '-m', 'opencode/gpt-5.5', '--agent', 'build', '--format', 'json']
       }
     })
   })
@@ -521,7 +579,7 @@ describe('planCommitMessageGeneration', () => {
           '--agent',
           'build',
           '--format',
-          'default',
+          'json',
           '--share'
         ],
         stdinPayload: 'PROMPT'
@@ -542,7 +600,7 @@ describe('planCommitMessageGeneration', () => {
     expect(result).toMatchObject({
       ok: true,
       plan: {
-        args: ['run', '--model', 'opencode/first', '--agent', 'build', '--format', 'default']
+        args: ['run', '--model', 'opencode/first', '--agent', 'build', '--format', 'json']
       }
     })
   })
@@ -585,7 +643,7 @@ describe('planCommitMessageGeneration', () => {
           '--agent',
           'build',
           '--format',
-          'default'
+          'json'
         ]
       }
     })
@@ -616,7 +674,7 @@ describe('planCommitMessageGeneration', () => {
           '--agent',
           'build',
           '--format',
-          'default'
+          'json'
         ]
       }
     })
@@ -637,7 +695,7 @@ describe('planCommitMessageGeneration', () => {
       ok: true,
       plan: {
         binary: 'opencode',
-        args: ['run', '--model', 'opencode/from-recipe', '--agent', 'build', '--format', 'default']
+        args: ['run', '--model', 'opencode/from-recipe', '--agent', 'build', '--format', 'json']
       }
     })
   })
@@ -758,5 +816,59 @@ describe('backslash mode reaches every command the user can type (#11375)', () =
     )
 
     expect(plan.ok && plan.plan.args).toContain('/my dir')
+  })
+})
+
+describe('OpenCode format metadata respects option terminators', () => {
+  it.each(['opencode', 'opencode2'] as const)(
+    'ignores literal recipe format values for %s',
+    (agentId) => {
+      const result = planCommitMessageGeneration(
+        {
+          agentId,
+          model: 'opencode/gpt-5.4-mini',
+          agentArgs: '--format default -- --format json'
+        },
+        'PROMPT'
+      )
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        throw new Error(result.error)
+      }
+      expect(result.plan.args).toContain('--')
+      expect(result.plan.outputFormat).toBeUndefined()
+    }
+  )
+
+  it('ignores literal equals-form flags after a command override terminator', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode',
+        model: 'opencode/gpt-5.4-mini',
+        agentCommandOverride: 'opencode --format default -- --format=json'
+      },
+      'PROMPT'
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.plan.outputFormat).toBeUndefined()
+  })
+
+  it('retains JSON metadata for the active option before a literal default value', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode',
+        model: 'opencode/gpt-5.4-mini',
+        agentArgs: '--format=json -- --format default'
+      },
+      'PROMPT'
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.plan.outputFormat).toBe('opencode-json')
   })
 })

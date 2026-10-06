@@ -2,19 +2,25 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ResumableSessionParseState } from './session-scanner-types'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { TranscriptMessageChannel } from './session-transcript-channel'
+import type { SkippedTranscriptRecord } from './session-transcript-record-budget'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
-const MAX_CACHE_ENTRIES = 4096
+export const MAX_CACHE_ENTRIES = 4096
 
 export type SessionParseResumePoint = {
   state: ResumableSessionParseState
+  mtimeMs: number
+  sizeBytes: number | undefined
   // Byte offset just past the last complete ('\n'-terminated) line consumed;
   // a trailing unterminated line is deliberately left before this point.
   byteOffset: number
   // Bound to the cached state, which keeps the reference its parsers were built
   // with; a resumed read re-points this channel instead of replacing it.
   channel: TranscriptMessageChannel
+  // Records this fold dropped for exceeding the per-record budget, accumulated
+  // across resumes. Lives with the fold, so a whole-file re-read starts clean.
+  skippedRecords: SkippedTranscriptRecord[]
 }
 
 export type SessionParseCacheEntry = {
@@ -71,17 +77,26 @@ export function snapshotSessionParseCacheForPersistence(): [
 export function seedSessionParseCache(
   entries: Iterable<[string, PersistedSessionParseCacheEntry]>
 ): void {
-  const list = [...entries]
-  // Snapshot order is oldest→newest (LRU); an over-cap list keeps the newest
-  // tail rather than seeding the oldest entries and dropping the tail.
-  for (const [path, entry] of list.slice(Math.max(0, list.length - MAX_CACHE_ENTRIES))) {
-    if (cache.size >= MAX_CACHE_ENTRIES) {
-      return
-    }
-    // In-process entries are always fresher than persisted ones; never clobber.
+  const newest = new Map<string, PersistedSessionParseCacheEntry>()
+  for (const [path, entry] of entries) {
     if (cache.has(path)) {
       continue
     }
+    newest.delete(path)
+    newest.set(path, entry)
+    if (newest.size > MAX_CACHE_ENTRIES) {
+      const oldest = newest.keys().next()
+      if (!oldest.done) {
+        newest.delete(oldest.value)
+      }
+    }
+  }
+  const available = MAX_CACHE_ENTRIES - cache.size
+  if (available <= 0) {
+    return
+  }
+  // In-process entries win; among persisted duplicates the newest row wins.
+  for (const [path, entry] of [...newest].slice(-available)) {
     cache.set(path, {
       mtimeMs: entry.mtimeMs,
       sizeBytes: entry.sizeBytes,

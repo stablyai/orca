@@ -4,7 +4,7 @@ import { RetryableProcessExitProof } from './retryable-process-exit-proof'
 
 describe('RetryableProcessExitProof', () => {
   it('shares a concurrent attempt and retains proven exit', async () => {
-    const proof = new RetryableProcessExitProof()
+    const proof = new RetryableProcessExitProof((result: boolean) => result)
     const proveExit = vi.fn(async () => true)
 
     const first = proof.run(proveExit)
@@ -16,7 +16,7 @@ describe('RetryableProcessExitProof', () => {
   })
 
   it('permits another attempt after exit was not proven', async () => {
-    const proof = new RetryableProcessExitProof()
+    const proof = new RetryableProcessExitProof((result: boolean) => result)
     const proveExit = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
 
     await expect(proof.run(proveExit)).resolves.toBe(false)
@@ -25,7 +25,7 @@ describe('RetryableProcessExitProof', () => {
   })
 
   it('permits another attempt after proof rejects', async () => {
-    const proof = new RetryableProcessExitProof()
+    const proof = new RetryableProcessExitProof((result: boolean) => result)
     const proveExit = vi
       .fn()
       .mockRejectedValueOnce(new Error('probe failed'))

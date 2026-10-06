@@ -1,11 +1,52 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildStoreState } from './ipc-events-agent-status-store-test-fixtures'
+import type { StoreLike } from './ipc-events-agent-status-store-test-fixtures'
 import {
   buildWindowApi,
   stubReactSyncEffect,
   stubAuxiliaryModules
 } from './ipc-events-agent-status-window-test-fixtures'
 import { buildSshAuthorityReconciliationHarness } from './ipc-events-ssh-authority-test-fixtures'
+import type { DirectSshReconnectCoordinatorDouble } from './ipc-events-ssh-authority-test-fixtures'
+
+function stubDirectSshModules(args: {
+  storeState: StoreLike
+  coordinator: DirectSshReconnectCoordinatorDouble
+  coordinatorRoutingEnabled?: boolean
+  capturePreparationInput?: ReturnType<typeof vi.fn>
+}): void {
+  stubReactSyncEffect()
+  stubAuxiliaryModules()
+  vi.doMock('../store', () => ({
+    useAppStore: {
+      subscribe: vi.fn(() => () => {}),
+      getState: () => args.storeState
+    }
+  }))
+  vi.doMock('./direct-ssh-reconnect-rollout', () => ({
+    isDirectSshReconnectCoordinatorRoutingEnabled: () => args.coordinatorRoutingEnabled ?? true
+  }))
+  vi.doMock('./direct-ssh-worktree-refresh-scheduler', () => ({
+    createDirectSshWorktreeRefreshScheduler: () => ({
+      stop: vi.fn(),
+      disposeProvider: vi.fn()
+    })
+  }))
+  vi.doMock('./direct-ssh-host-hydration', () => ({
+    createDirectSshHostHydration: () => ({
+      capturePreparationInput: args.capturePreparationInput ?? vi.fn(),
+      readHostScopedLineage: vi.fn(),
+      isPreparationTokenCurrent: vi.fn(() => true),
+      stop: vi.fn()
+    })
+  }))
+  vi.doMock('./direct-ssh-reconnect-coordinator', () => ({
+    createDirectSshReconnectCoordinator: () => args.coordinator
+  }))
+  vi.doMock('@/lib/direct-ssh-reconnect-product-telemetry', () => ({
+    createDirectSshReconnectProductTelemetryAdapter: vi.fn()
+  }))
+}
 
 // Why: end-to-end exercise of startup agent-status restoration through
 // useIpcEvents itself. The main process owns the durable cache; the renderer
@@ -71,6 +112,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           connectionGeneration: 7
         }
       })
+      stubDirectSshModules({ storeState: harness.storeState, coordinator: harness.coordinator })
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
 
@@ -105,6 +147,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           connectionGeneration: 7
         }
       })
+      stubDirectSshModules({ storeState: harness.storeState, coordinator: harness.coordinator })
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
 
@@ -198,37 +241,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       })
 
-      stubReactSyncEffect()
-      stubAuxiliaryModules()
-      vi.doMock('../store', () => ({
-        useAppStore: {
-          subscribe: vi.fn(() => () => {}),
-          getState: () => storeState
-        }
-      }))
-      vi.doMock('./direct-ssh-reconnect-rollout', () => ({
-        isDirectSshReconnectCoordinatorRoutingEnabled: () => enabled
-      }))
-      vi.doMock('./direct-ssh-worktree-refresh-scheduler', () => ({
-        createDirectSshWorktreeRefreshScheduler: () => ({
-          stop: vi.fn(),
-          disposeProvider: vi.fn()
-        })
-      }))
-      vi.doMock('./direct-ssh-host-hydration', () => ({
-        createDirectSshHostHydration: () => ({
-          capturePreparationInput,
-          readHostScopedLineage: vi.fn(),
-          isPreparationTokenCurrent: vi.fn(() => true),
-          stop: vi.fn()
-        })
-      }))
-      vi.doMock('./direct-ssh-reconnect-coordinator', () => ({
-        createDirectSshReconnectCoordinator: () => coordinator
-      }))
-      vi.doMock('@/lib/direct-ssh-reconnect-product-telemetry', () => ({
-        createDirectSshReconnectProductTelemetryAdapter: vi.fn()
-      }))
+      stubDirectSshModules({
+        storeState,
+        coordinator,
+        coordinatorRoutingEnabled: enabled,
+        capturePreparationInput
+      })
       vi.stubGlobal(
         'window',
         buildWindowApi({
@@ -429,37 +447,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     }
     let partialTargetStateCalls = 0
 
-    stubReactSyncEffect()
-    stubAuxiliaryModules()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState
-      }
-    }))
-    vi.doMock('./direct-ssh-reconnect-rollout', () => ({
-      isDirectSshReconnectCoordinatorRoutingEnabled: () => true
-    }))
-    vi.doMock('./direct-ssh-worktree-refresh-scheduler', () => ({
-      createDirectSshWorktreeRefreshScheduler: () => ({
-        stop: vi.fn(),
-        disposeProvider: vi.fn()
-      })
-    }))
-    vi.doMock('./direct-ssh-host-hydration', () => ({
-      createDirectSshHostHydration: () => ({
-        capturePreparationInput: vi.fn(),
-        readHostScopedLineage: vi.fn(),
-        isPreparationTokenCurrent: vi.fn(() => true),
-        stop: vi.fn()
-      })
-    }))
-    vi.doMock('./direct-ssh-reconnect-coordinator', () => ({
-      createDirectSshReconnectCoordinator: () => coordinator
-    }))
-    vi.doMock('@/lib/direct-ssh-reconnect-product-telemetry', () => ({
-      createDirectSshReconnectProductTelemetryAdapter: vi.fn()
-    }))
+    stubDirectSshModules({ storeState, coordinator })
     vi.stubGlobal(
       'window',
       buildWindowApi({

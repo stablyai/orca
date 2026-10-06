@@ -1,16 +1,18 @@
+import type { GitFileStatus, GitStagingArea } from '../../../src/shared/git-status-types'
+import type { RpcResponse } from '../transport/types'
 import type {
-  GitFileStatus,
-  GitStagingArea,
-  GitStatusEntry,
-  GitStatusResult,
-  GitUpstreamStatus
-} from '../../../src/shared/git-status-types'
+  MobileGitStatusEntry,
+  MobileGitStatusHostPayload,
+  MobileGitUpstreamStatus
+} from './git-status-reply-schema'
 
 export type MobileGitFileStatus = GitFileStatus
 export type MobileGitStagingArea = GitStagingArea
-export type MobileGitStatusEntry = GitStatusEntry
-export type MobileGitUpstreamStatus = GitUpstreamStatus
-export type MobileGitStatusResult = GitStatusResult
+export type { MobileGitStatusEntry, MobileGitUpstreamStatus }
+
+// The shape mobile reads off `git.status`, which is the reply schema's output, not the desktop
+// aggregate: every member mobile does not read is stripped rather than re-declared here.
+export type MobileGitStatusResult = MobileGitStatusHostPayload
 
 export type MobileSourceControlSection<TEntry extends MobileGitStatusEntry = MobileGitStatusEntry> =
   {
@@ -97,6 +99,25 @@ export function isMobileGitDiscardableEntry(entry: MobileGitStatusEntry): boolea
 // git.diff still returns the pre-delete side (text or image via modifiedDeleted).
 export function canOpenMobileGitStatusEntry(entry: MobileGitStatusEntry): boolean {
   return entry.conflictStatus !== 'unresolved'
+}
+
+/**
+ * The refusal behind a reply, or null when the host accepted it.
+ *
+ * Four source-control loads route on the refusal itself rather than on acceptance: two degrade to
+ * a capability-missing screen, one retries a not-yet-visible selector, and one falls back to a
+ * different method. No acceptance policy carries `code` and `message` through, so those call sites
+ * read the refusal here — in one place, before they hand the reply to the operation's policy.
+ */
+export function readMobileGitRefusal(
+  response: RpcResponse
+): { code: string | undefined; message: string | undefined } | null {
+  return response.ok ? null : { code: response.error?.code, message: response.error?.message }
+}
+
+export function isMobileGitUnavailableReply(response: RpcResponse): boolean {
+  const refusal = readMobileGitRefusal(response)
+  return refusal !== null && isMobileGitUnavailable(refusal.code, refusal.message)
 }
 
 export function isMobileGitUnavailable(code: string | undefined, message: string | undefined) {

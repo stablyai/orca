@@ -31,3 +31,18 @@ export function isStreamingOpenerReply(
 ): response is RpcSuccess & { streaming: true } {
   return response.ok && response.streaming === true
 }
+
+/** New-tab errors historically show the host message without its diagnostic code. */
+export function requireRpcResultOrThrowMessage(response: RpcResponse): unknown {
+  if (!response.ok) {
+    throw new Error(response.error.message)
+  }
+  return response.result
+}
+
+/** An accepted null result still commits; a refused reply leaves existing state alone. */
+export function rpcSuccessResultOrSkip(
+  response: RpcResponse
+): { accepted: false } | { accepted: true; value: unknown } {
+  return response.ok ? { accepted: true, value: response.result } : { accepted: false }
+}

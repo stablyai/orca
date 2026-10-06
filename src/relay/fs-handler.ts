@@ -1,3 +1,4 @@
+import { pathsExistOnRelay } from './fs-path-existence'
 import { tmpdir } from 'node:os'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
@@ -89,6 +90,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => writeRelayFile(p))
     this.dispatcher.onRequest('fs.writeTerminalArtifact', (p) => this.writeTerminalArtifact(p))
+    this.dispatcher.onRequest('fs.pathsExist', pathsExistOnRelay)
     this.dispatcher.onRequest('fs.stat', (p) => statRelayPath(p))
     this.dispatcher.onRequest('fs.lstat', (p) => lstatRelayPath(p))
     this.dispatcher.onRequest('fs.deletePath', (p) => deleteRelayPath(p, this.watchRegistry))
@@ -99,10 +101,11 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.renameNoClobber', (p) => renameRelayPathNoClobber(p))
     this.dispatcher.onRequest('fs.copy', (p) => copyRelayPath(p))
     this.dispatcher.onRequest('fs.realpath', (p) => realpathRelayPath(p))
-    this.dispatcher.onRequest('fs.search', (p) => this.search(p))
+    this.dispatcher.onRequest('fs.search', (p, context) => this.search(p, context))
     this.dispatcher.onRequest('fs.getCapabilities', async () => ({
       quickOpenSearchVersion: 1,
-      rangedReadVersion: 1
+      rangedReadVersion: 1,
+      pathExistenceBatchVersion: 1
     }))
     this.dispatcher.onRequest('fs.listFiles', (p, c) => this.listFiles(p, c))
     this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
@@ -182,7 +185,7 @@ export class FsHandler {
     })
   }
 
-  private async search(params: Record<string, unknown>) {
+  private async search(params: Record<string, unknown>, context?: RequestContext) {
     const query = params.query as string
     const rootPath = expandTilde(params.rootPath as string)
     const caseSensitive = params.caseSensitive as boolean | undefined
@@ -201,7 +204,8 @@ export class FsHandler {
       useRegex,
       includePattern,
       excludePattern,
-      maxResults
+      maxResults,
+      signal: context?.signal
     }
     try {
       return await searchWithRg(rootPath, query, options)

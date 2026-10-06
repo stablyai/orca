@@ -8,7 +8,7 @@ import type { SFTPWrapper } from 'ssh2'
 import type { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import {
   buildManagedHookDetectionCommands,
-  detectedManagedHookAgents,
+  readManagedHookDetectionResult,
   type ManagedHookDetectionSettings
 } from './managed-hook-detection-commands'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
@@ -30,11 +30,15 @@ export async function installWslGuestHooks(options: {
   const { mux, guestHome, codexHomePath, distro, installHooks, settings, warn, installCodex } =
     options
   let agents
+  let claudeVersion: string | null = null
   try {
-    const detected = (await mux.request('preflight.detectAgents', {
-      commands: buildManagedHookDetectionCommands(settings, 'linux')
-    })) as { agents?: unknown }
-    agents = detectedManagedHookAgents(detected?.agents)
+    const detected = readManagedHookDetectionResult(
+      await mux.request('preflight.detectAgents', {
+        commands: buildManagedHookDetectionCommands(settings, 'linux')
+      })
+    )
+    agents = detected.agents
+    claudeVersion = detected.claudeVersion
   } catch (error) {
     warn(
       `[agent-hooks] WSL agent detection for '${distro}' failed: ${
@@ -64,7 +68,8 @@ export async function installWslGuestHooks(options: {
   // runtime-host writer above; the relay adapter owns all other agents.
   const remoteAgents = agents.filter((agent) => agent !== 'codex')
   const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
-    agents: remoteAgents
+    agents: remoteAgents,
+    ...(claudeVersion ? { claudeVersion } : {})
   })
   const failed = results.filter((r) => r.state === 'error').length
   if (failed > 0) {

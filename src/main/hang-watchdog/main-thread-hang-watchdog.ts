@@ -73,11 +73,15 @@ export function installMainThreadHangWatchdog(options: {
       return
     }
     stopped = true
+    // Drop the app-level callback as soon as this watchdog is retired so a
+    // closed worker cannot keep its closure (and worker handle) alive.
+    app.off('will-quit', stop)
     clearInterval(heartbeatTimer)
     postMessage({ type: 'shutdown' })
   }
   worker.once('exit', () => {
     stopped = true
+    app.off('will-quit', stop)
     clearInterval(heartbeatTimer)
   })
   worker.unref()

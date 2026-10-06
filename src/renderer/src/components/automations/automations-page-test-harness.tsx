@@ -1,3 +1,6 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 10 AutomationsPage specs, not shipped code, and it falls outside
+   the *.test / *.spec / tests glob set. Inlining these 13 stubs would duplicate them into all 10 specs and push the largest
+   past the max-lines ratchet. */
 /**
  * The mount rig for AutomationsPage tests: child stand-ins, the preload API
  * double, and the per-test store reset.

@@ -9,31 +9,17 @@ export {
   type NotificationPermissionState
 } from './notification-permissions'
 
-type SubscribeResult = {
-  type: 'ready'
-  subscriptionId: string
-}
-
 export function subscribeToDesktopNotifications(client: RpcClient, hostId: string): () => void {
-  let subscriptionId: string | null = null
   let disposed = false
 
-  function unsubscribeServer(id: string) {
-    if (client.getState() === 'connected') {
-      client.sendRequest('notifications.unsubscribe', { subscriptionId: id }).catch(() => {})
-    }
-  }
-
   const params = { includeDesktopSuppressed: true }
+  // The transport releases the host registration with the id from the current `ready`.
   const unsubscribeStream = client.subscribe('notifications.subscribe', params, (data: unknown) => {
-    const event = data as DismissNotificationEvent | SubscribeResult | { type: string }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every frame a shipped host or the transport sends is an object with a string `type`: the host's `ready`, `end`, notification and dismiss events, or the transport's `error`.
+    const event = data as DismissNotificationEvent | { type: string }
+    // No dispose-before-ready arm: every transport detaches this listener inside
+    // `unsubscribeStream()`, so a callback that runs at all runs before disposal.
     if (event.type === 'ready') {
-      subscriptionId = (event as SubscribeResult).subscriptionId
-      if (disposed) {
-        unsubscribeServer(subscriptionId)
-        unsubscribeStream()
-        return
-      }
       // A max watermark asks only which delivered pushes are stale; socket history
       // never becomes a second OS-notification delivery route.
       void requestNotificationCatchup(client, hostId, () => disposed).catch(() => {})
@@ -47,8 +33,5 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   return () => {
     disposed = true
     unsubscribeStream()
-    if (subscriptionId) {
-      unsubscribeServer(subscriptionId)
-    }
   }
 }

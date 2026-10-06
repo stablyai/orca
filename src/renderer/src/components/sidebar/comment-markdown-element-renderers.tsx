@@ -15,6 +15,19 @@ export type CommentMarkdownLinkClickHandler = (
   href: string | undefined
 ) => void
 
+export type DocumentCodeBlockRenderer = (props: {
+  children?: React.ReactNode
+  language?: string
+}) => React.JSX.Element
+
+function extractCodeFenceLanguage(children: React.ReactNode): string | undefined {
+  const child = React.Children.toArray(children)[0]
+  if (!React.isValidElement<{ className?: string }>(child)) {
+    return undefined
+  }
+  return child.props.className?.match(/(?:^|\s)language-([^\s]+)/)?.[1]
+}
+
 export function isTrustedCompactImageSrc(src: string | undefined): src is string {
   if (!src) {
     return false
@@ -107,7 +120,11 @@ export function createCompactCommentMarkdownComponents(
     ),
     // Compact lists
     ul: ({ children }) => <ul className="my-0.5 ml-3 list-disc space-y-0">{children}</ul>,
-    ol: ({ children }) => <ol className="my-0.5 ml-3 list-decimal space-y-0">{children}</ol>,
+    ol: ({ children, start }) => (
+      <ol start={start} className="my-0.5 ml-3 list-decimal space-y-0">
+        {children}
+      </ol>
+    ),
     // Why: GFM task list checkboxes are non-functional in a read-only comment
     // card (clicking them would just open the edit modal via the parent's
     // onClick). Rendering them disabled avoids a misleading interactive
@@ -223,7 +240,8 @@ export function createCompactCommentMarkdownComponents(
 }
 
 export function createDocumentCommentMarkdownComponents(
-  onLinkClick?: CommentMarkdownLinkClickHandler
+  onLinkClick?: CommentMarkdownLinkClickHandler,
+  renderCodeBlock?: DocumentCodeBlockRenderer
 ): Components {
   return {
     p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
@@ -259,13 +277,19 @@ export function createDocumentCommentMarkdownComponents(
     pre: ({ children }) =>
       isMermaidPre(children) ? (
         <>{children}</>
+      ) : renderCodeBlock ? (
+        renderCodeBlock({ children, language: extractCodeFenceLanguage(children) })
       ) : (
         <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
           {children}
         </pre>
       ),
     ul: ({ children }) => <ul className="my-2 ml-5 list-disc space-y-1">{children}</ul>,
-    ol: ({ children }) => <ol className="my-2 ml-5 list-decimal space-y-1">{children}</ol>,
+    ol: ({ children, start }) => (
+      <ol start={start} className="my-2 ml-5 list-decimal space-y-1">
+        {children}
+      </ol>
+    ),
     li: ({ children }) => (
       <li className="leading-relaxed [&>input]:pointer-events-none">{children}</li>
     ),

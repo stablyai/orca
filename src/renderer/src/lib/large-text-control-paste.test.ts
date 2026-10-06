@@ -3,7 +3,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   addLargeTextControlPasteListener,
-  findLargeTextControlPasteTarget,
   handleLargeTextControlPasteEvent
 } from './large-text-control-paste'
 
@@ -211,14 +210,6 @@ describe('large text control paste', () => {
       })
     )
     expect(pasteResult.mock.calls[0]?.[0].redactedDiagnostic).not.toContain('😀')
-  })
-
-  it('requires the event target to be the focused text control', () => {
-    const focused = appendTextarea()
-    const unfocused = appendTextarea()
-    focused.focus()
-
-    expect(findLargeTextControlPasteTarget(unfocused)).toBeNull()
   })
 
   it('installs a capture-phase listener that claims large paste before target handlers', async () => {

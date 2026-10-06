@@ -1,3 +1,10 @@
+import {
+  applySessionSearchSettingsChange,
+  installChildSessionSearchService
+} from '../ai-vault-search/session-search-enablement'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { sessionSearchScopeCatalogFromStore } from '../ai-vault-search/session-search-store-scope-catalog'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { app } from 'electron'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider, getSshPtyProvider, clearProviderPtyState } from '../ipc/pty'
@@ -25,6 +32,8 @@ import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
 } from '../runtime/agent-status-observed-pane-identity'
+import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -67,6 +76,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // `orca serve`, which never opens one, and the fleet path runs there too.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
+    prepareClaudeAuth: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
       getProfileUserDataPath()
@@ -90,8 +100,11 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Why: structured chats have no hooks, so the host writes their projections here itself; the
     // snapshot above then lists them for the CLI and mobile without a second store.
     structuredAgentStatusSink: {
-      publish: (summary) => agentHookServer.ingestStructuredStatus(summary),
-      forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
+      publish: (summary, subject) => agentHookServer.ingestStructuredStatus(summary, subject),
+      forget: (subject) => agentHookServer.dropStructuredStatus(subject),
+      publishChildWork: (subject, evidence, provider) =>
+        agentHookServer.ingestStructuredChildWork(subject, evidence, provider),
+      readChildWork: (subject) => agentHookServer.getStructuredChildWorkViews(subject)
     },
     // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
     // read, so a row observed under one process otherwise acquires whatever the pane owns now.
@@ -106,8 +119,11 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       agentHookServer.attestCompatibilityAuthority(candidate),
     retireAgentHookCompatibilityAuthority: (paneKey) =>
       agentHookServer.retirePaneAuthority(paneKey),
+    checkHookAgentPresence: (paneKey) => agentHookServer.checkAgentPresence(paneKey),
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
+    dropAgentStatusForRemovedWorktree: (worktreeId, host) =>
+      agentHookServer.dropStatusEntriesForRemovedWorktree(worktreeId, host),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
     // Why: evaluated per call, not captured — the RPC server that owns the device registry is
     // constructed with this runtime and does not exist yet at this point.
@@ -121,16 +137,39 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         runtimeHome: state.codexRuntimeHome,
         systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings())
       }),
-    prepareCodexStructuredLaunch: ({ workspacePath, launchEnv }) =>
-      prepareCodexRuntimeHomeForLaunch(undefined, launchEnv, {
-        launchAgent: 'codex',
-        workspacePath
-      }),
+    prepareCodexStructuredLaunch: ({ launchEnv }) =>
+      prepareCodexRuntimeHomeForLaunch(undefined, launchEnv),
+    // Why throw like prepare does: a null from an uninitialized service would
+    // map to the system home and key a catalog read to the wrong account.
+    resolveCodexStructuredLaunchHome: ({ launchEnv }) => {
+      const runtimeHome = state.codexRuntimeHome
+      if (!runtimeHome) {
+        throw new Error('Codex runtime home service is not initialized')
+      }
+      return runtimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv)
+    },
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(state.store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     orchestrationEnvironmentTransport,
+    // Why the same function the settings IPC handler calls: a paired client's write and a
+    // local one must reconcile the scanner child through one path, or they can disagree.
+    applySessionSearchSettings: applySessionSearchSettingsChange,
     skillTransactionRecovery: state.skillTransactionRecovery
   })
+  // Both desktop and headless serve own a host-local search service.
+  const sessionSearch = installChildSessionSearchService({
+    dataRoot: getCanonicalUserDataPath(),
+    getSettings: () => store.getSettings(),
+    // Why read per request rather than snapshot: a repo added or a workspace
+    // renamed between two searches has to be in scope for the second one.
+    // This process answers for its own host, so the catalog is bound to it here.
+    getScopeCatalog: () => sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID)
+  })
+  app.once('will-quit', () => sessionSearch?.dispose())
+  // Why here: this runs for the desktop and headless `orca serve`, and each evaluates its own panes.
+  startAgentStateRulesLiveUpdates(store, (rules) =>
+    recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
+  )
   state.runtime = runtime
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)

@@ -5,9 +5,9 @@
 
 export type MarkupToolKind = 'pen' | 'highlight' | 'arrow' | 'rect' | 'ellipse' | 'text'
 
-// Toolbar selection. Draw-only: markup is a throwaway scribble the user copies
-// once, so there is no select/move/restyle cursor.
-export type MarkupTool = MarkupToolKind
+// Toolbar selection. Marks can be drawn or erased whole: markup is a throwaway
+// scribble the user copies once, so there is no select/move/restyle cursor.
+export type MarkupTool = MarkupToolKind | 'eraser'
 
 export type MarkupPoint = { x: number; y: number }
 
@@ -210,4 +210,14 @@ export function arrowHeadGeometry(
 
 export function highlightWidth(width: number): number {
   return width * HIGHLIGHT_WIDTH_MULTIPLIER
+}
+
+// Radius of the dot a single-point stroke (a tap) leaves.
+export function strokeDotRadius(width: number): number {
+  return Math.max(width / 2, 1)
+}
+
+// Line width of the contrasting halo stroked around text.
+export function textHaloWidth(fontSize: number): number {
+  return Math.max(fontSize / 6, 2)
 }

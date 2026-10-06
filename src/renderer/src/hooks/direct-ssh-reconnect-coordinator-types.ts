@@ -113,7 +113,7 @@ export type DirectSshCoordinatorTelemetry = {
   damped: boolean
 }
 
-export type DirectSshReconnectTimer = unknown
+export type DirectSshReconnectTimer = ReturnType<typeof setTimeout>
 
 export type DirectSshReconnectCoordinatorDeps = {
   scheduler: DirectSshWorktreeRefreshScheduler

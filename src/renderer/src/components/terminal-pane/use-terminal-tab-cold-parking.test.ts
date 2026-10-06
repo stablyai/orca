@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
     runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
     settings: {} as Record<string, unknown>,
     terminalLayoutsByTabId: {} as Record<string, { ptyIdsByLeafId?: Record<string, string> }>,
+    // Why empty: no case here exercises the park capture's repo gate, and an empty catalog makes
+    // shouldPreserveTerminalScrollbackBuffers fail open — the safe direction for a park.
+    repos: [],
     sleepingAgentSessionsByPaneKey: {} as Record<
       string,
       { paneKey: string; tabId?: string; worktreeId: string }
@@ -25,7 +28,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) => selector(mocks.storeState)
+  useAppStore: Object.assign(
+    (selector: (state: unknown) => unknown) => selector(mocks.storeState),
+    { getState: () => mocks.storeState }
+  )
 }))
 
 vi.mock('./terminal-hidden-view-parking', async (importOriginal) => {

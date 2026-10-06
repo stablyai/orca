@@ -157,6 +157,7 @@ export function shouldUseMacOptionComposedCaptureFallback(
   }
   return (
     (physicalToken.length === 1 && physicalToken >= 'A' && physicalToken <= 'Z') ||
+    (physicalToken.length === 1 && physicalToken >= '0' && physicalToken <= '9') ||
     isPunctuationKeyToken(physicalToken)
   )
 }

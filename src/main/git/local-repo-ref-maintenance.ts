@@ -12,6 +12,11 @@ import {
 import { isWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { withSpan } from '../observability/tracer'
 import { PackRefsLockOwnership } from './pack-refs-lock-ownership'
+import {
+  clearRepoPackIndexMaintenanceCache,
+  isUnsetGitConfigError,
+  maintainRepoPackIndex
+} from './repo-pack-index-maintenance'
 import { gitExecFileAsync } from './runner'
 import { readRepoCommonDirFromGit } from './worktree-list-reader'
 
@@ -96,6 +101,7 @@ export function disposeLocalRepoRefMaintenance(): Promise<void> {
   shared?.dispose()
   shared = null
   repoBusyProbes.clear()
+  clearRepoPackIndexMaintenanceCache()
   return settling
 }
 
@@ -149,6 +155,7 @@ export function _resetLocalRepoRefMaintenanceForTests(
   shared = overrides ? new RepoRefMaintenance({ ...localMaintenanceOptions(), ...overrides }) : null
   activityProbe = null
   repoBusyProbes.clear()
+  clearRepoPackIndexMaintenanceCache()
 }
 
 /**
@@ -174,8 +181,11 @@ function refsDirectoryForMainProcess(commonDir: string, wslDistro: string | unde
 export function isGitAutoMaintenanceDisabled(configOutput: string): boolean {
   return configOutput
     .split('\n')
-    .map((line) => line.trim())
-    .some((line) => line === 'maintenance.auto false' || line === 'gc.auto 0')
+    .some(
+      (line) =>
+        /^\s*maintenance\.auto\s+(?:false|no|off|0)?\s*$/i.test(line) ||
+        /^\s*gc\.auto\s+[+-]?0+(?:[kmg])?\s*$/i.test(line)
+    )
 }
 
 /**
@@ -237,12 +247,33 @@ export function createLocalRepoRefMaintenanceTarget(
           { cwd: args.repoPath, ...gitOptions, admissionTier: 'background', signal }
         )
         return isGitAutoMaintenanceDisabled(stdout)
-      } catch {
-        // Neither key set is the common case and exits non-zero; that is consent.
-        return false
+      } catch (error) {
+        if (isUnsetGitConfigError(error)) {
+          return false
+        }
+        // A failed probe blocks writers and retries without claiming a user opt-out.
+        throw error
       }
     },
-    async packRefs(lock: PackedRefsLockReporter) {
+    async maintainPackIndex(signal, span, canWrite) {
+      const resolved = await resolveCommonDir(signal)
+      if (resolved) {
+        return maintainRepoPackIndex({
+          repoPath: args.repoPath,
+          commonDir: gitCommonDirForMainProcess(resolved, args.wslDistro),
+          ...gitOptions,
+          signal,
+          span,
+          canWrite
+        })
+      }
+      return 'failed'
+    },
+    async packRefs(
+      lock: PackedRefsLockReporter,
+      admissionSignal?: AbortSignal,
+      canStart?: () => boolean
+    ) {
       const resolved = await resolveCommonDir()
       const owner = resolved
         ? new PackRefsLockOwnership(gitCommonDirForMainProcess(resolved, args.wslDistro))
@@ -251,7 +282,7 @@ export function createLocalRepoRefMaintenanceTarget(
       if (!claim.ok) {
         throw new RefMaintenanceRepoLocked(claim.reason)
       }
-      // Report the rewrite window rather than accepting a signal. A pack that is
+      // Only admission is cancellable. A pack that is
       // killed mid-prune strands a `refs/**` lock about one time in five, and
       // Git never clears those; waiting out the window costs at most ~1.4s.
       const watch = owner?.watchLock((held) => lock.setHeld(held))
@@ -260,7 +291,9 @@ export function createLocalRepoRefMaintenanceTarget(
           cwd: args.repoPath,
           ...gitOptions,
           admissionTier: 'background',
-          timeout: PACK_REFS_TIMEOUT_MS
+          timeout: PACK_REFS_TIMEOUT_MS,
+          admissionSignal,
+          canStart
         })
       } finally {
         watch?.stop()

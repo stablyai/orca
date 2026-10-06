@@ -1,33 +1,41 @@
-import type { UnvalidatedRpcRequestPort, SendRequestOptions } from './unvalidated-rpc-request-port'
-import type { RpcMethodName, RpcSendParams } from './rpc-params-contract'
-import type { RpcResponse } from './types'
 import {
   isMethodNotFoundRefusal,
   isStreamingOpenerReply,
   requireRpcResultOrThrowCodedError,
-  rpcObjectResultOrNull
+  requireRpcResultOrThrowMessage,
+  rpcSuccessResultOrSkip
 } from './rpc-acceptance-policies'
 import { RpcIncompatibleReplyError } from './rpc-incompatible-reply-error'
+import type { UnvalidatedRpcRequestPort, SendRequestOptions } from './unvalidated-rpc-request-port'
+import type { RpcMethodName, RpcSendParams } from './rpc-params-contract'
+import { classifyRpcReply } from './rpc-operation-reply'
+import { sendSingleFlightRequest } from './request-single-flight'
+import type { RpcClient } from './rpc-client'
+import type { RpcResponse } from './types'
 import type {
   AnyRpcOperation,
   CapabilityProbeRpcDefinition,
   ObjectResultRpcDefinition,
   RpcAcceptanceName,
   RpcCompatibleReader,
-  RpcDecodeIssue,
   RpcInterpretationBarrier,
   RpcOperation,
   RpcOperationSettlement,
   RpcRequestOutcome,
-  RpcSalvageReport,
   RequireResultRpcDefinition,
   StreamOpenerRpcDefinition,
-  RpcVerdict
+  RpcVerdict,
+  LegacyResultRpcDefinition
 } from './rpc-operation-contract'
 
-const NOTHING_SALVAGED: RpcSalvageReport = { droppedPaths: [], droppedCount: 0 }
-
 type RpcOperationDefinitionInput =
+  | LegacyResultRpcDefinition<
+      RpcMethodName,
+      'success-result-or-skip' | 'require-result-or-throw-message',
+      string,
+      unknown,
+      RpcInterpretationBarrier
+    >
   | RequireResultRpcDefinition<RpcMethodName, string, unknown, RpcInterpretationBarrier>
   | ObjectResultRpcDefinition<RpcMethodName, string, unknown, RpcInterpretationBarrier>
   | CapabilityProbeRpcDefinition<RpcMethodName, RpcInterpretationBarrier>
@@ -61,6 +69,15 @@ export function defineRpcOperation<
 >(
   definition: StreamOpenerRpcDefinition<Method, Barrier>
 ): RpcOperation<Method, 'streaming-opener', 'stream-opened', unknown, Barrier>
+export function defineRpcOperation<
+  Method extends RpcMethodName,
+  Acceptance extends 'success-result-or-skip' | 'require-result-or-throw-message',
+  Variant extends string,
+  Value,
+  Barrier extends RpcInterpretationBarrier
+>(
+  definition: LegacyResultRpcDefinition<Method, Acceptance, Variant, Value, Barrier>
+): RpcOperation<Method, Acceptance, Variant, Value, Barrier>
 export function defineRpcOperation(definition: RpcOperationDefinitionInput): AnyRpcOperation {
   // Why: frozen so no call site can swap the policy or the barrier on a shared descriptor.
   return Object.freeze({
@@ -68,7 +85,7 @@ export function defineRpcOperation(definition: RpcOperationDefinitionInput): Any
     method: definition.method,
     acceptance: definition.acceptance,
     barrier: definition.barrier,
-    // Why: classifyReply only ever hands a reader the payload its own policy admitted, so
+    // Why: classifyRpcReply only ever hands a reader the payload its own policy admitted, so
     // the object policy's narrower parameter is sound to store as unknown.
     read: definition.read as RpcCompatibleReader<unknown, string, unknown> | undefined
   })
@@ -86,89 +103,37 @@ async function request(
   // and an always-settled send would make Promise.all wait for a peer where today the group
   // fails immediately, letting a later policy surface a different error.
   const response = await client.sendRequest(operation.method, params, options)
-  return classifyReply(operation, response)
-}
-
-type AdmittedPayload =
-  | { readonly admitted: true; readonly value: unknown }
-  | { readonly admitted: false; readonly issues: readonly RpcDecodeIssue[] }
-
-// The payload the operation's own acceptance policy admits from a fulfilled success.
-function admitPayload(operation: AnyRpcOperation, response: RpcResponse): AdmittedPayload {
-  switch (operation.acceptance) {
-    case 'object-result-or-null': {
-      const object = rpcObjectResultOrNull(response)
-      return object === null
-        ? { admitted: false, issues: [{ path: 'result', message: 'not a non-null object' }] }
-        : { admitted: true, value: object }
-    }
-    case 'streaming-opener':
-      return isStreamingOpenerReply(response)
-        ? { admitted: true, value: response }
-        : { admitted: false, issues: [{ path: 'streaming', message: 'reply opened no stream' }] }
-    default:
-      // Reuses the policy rather than reading `.result` again; a success never throws here.
-      return { admitted: true, value: requireRpcResultOrThrowCodedError(response) }
-  }
-}
-
-const READERLESS_VARIANTS: Record<string, string> = {
-  'method-not-found-refusal': 'accepted',
-  'streaming-opener': 'stream-opened'
-}
-
-function classifyReply(
-  operation: AnyRpcOperation,
-  response: RpcResponse
-): RpcRequestOutcome<string, unknown> {
-  if (!response.ok) {
-    return { kind: 'outer-refused', error: response.error, raw: response }
-  }
-  const payload = admitPayload(operation, response)
-  if (!payload.admitted) {
-    return { kind: 'incompatible', raw: response, issues: payload.issues }
-  }
-  const read = operation.read
-  if (!read) {
-    return {
-      kind: 'decoded',
-      variant: READERLESS_VARIANTS[operation.acceptance] ?? 'accepted',
-      value: payload.value,
-      raw: response,
-      salvage: NOTHING_SALVAGED
-    }
-  }
-  let result: ReturnType<typeof read>
-  try {
-    result = read(payload.value)
-  } catch (error) {
-    // A reader that throws is an incompatible reply, never a transport failure.
-    return {
-      kind: 'incompatible',
-      raw: response,
-      issues: [{ path: '', message: error instanceof Error ? error.message : String(error) }]
-    }
-  }
-  if (!result.compatible) {
-    return { kind: 'incompatible', raw: response, issues: result.issues }
-  }
-  return {
-    kind: 'decoded',
-    variant: result.variant,
-    value: result.value,
-    raw: response,
-    salvage: result.salvage
-  }
+  return classifyRpcReply(operation, response)
 }
 
 // Applies the operation's declared acceptance policy. Private on purpose: there is no
 // free-standing callOrThrow, so no call site can pick a different rule for the same reply.
-function interpret(
+function interpretRpcOutcome(
   operation: AnyRpcOperation,
   settled: RpcRequestOutcome<string, unknown>
 ): unknown {
   const acceptance: RpcAcceptanceName = operation.acceptance
   switch (acceptance) {
+    case 'success-result-or-skip': {
+      const accepted = rpcSuccessResultOrSkip(settled.raw)
+      if (!accepted.accepted) {
+        return accepted
+      }
+      if (settled.kind === 'incompatible') {
+        throw new RpcIncompatibleReplyError(operation.name, operation.method, settled.issues)
+      }
+      return settled.kind === 'decoded'
+        ? { accepted: true, value: settled.value }
+        : { accepted: false }
+    }
+    case 'require-result-or-throw-message':
+      if (settled.kind === 'outer-refused') {
+        return requireRpcResultOrThrowMessage(settled.raw)
+      }
+      if (settled.kind === 'incompatible') {
+        throw new RpcIncompatibleReplyError(operation.name, operation.method, settled.issues)
+      }
+      return settled.value
     case 'require-result-or-throw':
       if (settled.kind === 'outer-refused') {
         // Reuses the policy so the thrown `code: message` text cannot drift from main's.
@@ -196,7 +161,7 @@ function interpretSettlement(
     // isLogicalClientCutoverError matches class or exact message; a wrapper loses both.
     throw settlement.error
   }
-  return interpret(operation, settlement.outcome)
+  return interpretRpcOutcome(operation, settlement.outcome)
 }
 
 /** Sends and interprets at the operation's own barrier. Only for barrier 'on-settle'. */
@@ -208,11 +173,15 @@ export async function runRpcOperation<
 >(
   client: UnvalidatedRpcRequestPort,
   operation: RpcOperation<Method, Acceptance, Variant, Value, 'on-settle'>,
-  params: RpcSendParams<Method>,
-  options?: SendRequestOptions
+  // Shares the deferred sender's tuple so the two cannot disagree about what a params-less
+  // method may be called with: the catalog types those `void`, and an explicit `null` is the
+  // frame three of them go out with today (`notifications.testPush`,
+  // `notifications.unregisterPush`, `speech.models.list`), all through the deferred entry point.
+  ...args: RpcSendArguments<Method>
 ): Promise<RpcVerdict<Acceptance, Value>> {
-  const outcome = await request(client, operation, params, options)
-  return interpret(operation, outcome) as RpcVerdict<Acceptance, Value>
+  const outcome = await request(client, operation, args[0], args[1])
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  return interpretRpcOutcome(operation, outcome) as RpcVerdict<Acceptance, Value>
 }
 
 /** The named opt-in to all-settled semantics. Yields an outcome, never a verdict: the
@@ -222,7 +191,7 @@ export async function captureRpcOperationSettlement<
   Acceptance extends RpcAcceptanceName,
   Variant extends string,
   Value,
-  Barrier extends RpcInterpretationBarrier
+  Barrier extends Exclude<RpcInterpretationBarrier, 'after-caller-barrier'>
 >(
   client: UnvalidatedRpcRequestPort,
   operation: RpcOperation<Method, Acceptance, Variant, Value, Barrier>,
@@ -279,4 +248,62 @@ export async function interpretAtRpcBarrier<
   return pending.map((entry, index) =>
     interpretSettlement(entry.operation, settlements[index])
   ) as RpcBarrierVerdicts<Pending>
+}
+
+/**
+ * Whether a sender may omit the params argument entirely.
+ *
+ * A params type with no required field may be omitted as well as `void`, because the raw port
+ * always allowed it and several hosts' schemas are entirely optional (`preflight.check`). Forcing
+ * `{}` there would put a new object on the wire where main sent no params at all. Shared by both
+ * send helpers, so single-flight and direct sends cannot disagree about which methods that covers.
+ */
+type RpcParamsOmittable<Method extends RpcMethodName> =
+  void extends RpcSendParams<Method>
+    ? true
+    : Record<never, never> extends RpcSendParams<Method>
+      ? true
+      : false
+
+/**
+ * Preserves omitted sender arguments as well as explicit undefined and explicit null.
+ *
+ * `null` is admitted only where the catalog declares no params at all: several shipped senders put
+ * an explicit `null` on the wire for those methods, and a JSON frame carrying `params: null` is not
+ * the frame that omits the key. Narrowing them to omission would silently rewrite those bytes.
+ */
+type RpcSendArguments<Method extends RpcMethodName> =
+  void extends RpcSendParams<Method>
+    ? [params?: RpcSendParams<Method> | null, options?: SendRequestOptions]
+    : RpcParamsOmittable<Method> extends true
+      ? [params?: RpcSendParams<Method>, options?: SendRequestOptions]
+      : [params: RpcSendParams<Method>, options?: SendRequestOptions]
+
+/** Binds sending and interpretation while preserving the transport promise identity. */
+export function bindDeferredRpcOperation<
+  Method extends RpcMethodName,
+  Acceptance extends RpcAcceptanceName,
+  Variant extends string,
+  Value
+>(operation: RpcOperation<Method, Acceptance, Variant, Value, 'after-caller-barrier'>) {
+  type Verdict = RpcVerdict<Acceptance, Value>
+  return Object.freeze({
+    operation,
+    request(client: UnvalidatedRpcRequestPort, ...args: RpcSendArguments<Method>) {
+      return client.sendRequest(operation.method, ...args)
+    },
+    requestSingleFlight(
+      client: RpcClient,
+      hostId: string,
+      ...args: RpcParamsOmittable<Method> extends true
+        ? [params?: RpcSendParams<Method>]
+        : [params: RpcSendParams<Method>]
+    ) {
+      return sendSingleFlightRequest(client, hostId, operation.method, args[0])
+    },
+    interpret(response: RpcResponse): Verdict {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+      return interpretRpcOutcome(operation, classifyRpcReply(operation, response)) as Verdict
+    }
+  })
 }

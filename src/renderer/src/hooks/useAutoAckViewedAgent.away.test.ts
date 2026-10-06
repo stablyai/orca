@@ -39,7 +39,7 @@ beforeEach(() => {
   useAppStore
     .getState()
     .setAgentStatus(pane, { state: 'done', prompt: 'away test', agentType: 'codex' })
-  useAppStore.getState().markAgentCompletionPaneUnread(pane)
+  useAppStore.getState().markAgentCompletionPaneUnread(pane, 'agent-completion')
 })
 afterEach(() => {
   cleanup()
@@ -53,7 +53,7 @@ it('leaves the focused pane unread while desktop is away, then acknowledges on u
   await act(async () => {
     await Promise.resolve()
   })
-  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe(true)
+  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe('agent-completion')
   expect(dismiss).not.toHaveBeenCalled()
   readAway.mockResolvedValue(false)
   const input = new Event('pointerdown')
@@ -78,13 +78,13 @@ it('does not acknowledge when the presence query fails or the hook unmounts', as
   await act(async () => {
     resolve(false)
   })
-  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe(true)
+  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe('agent-completion')
   readAway.mockRejectedValue(new Error('unavailable'))
   renderHook(() => useAutoAckViewedAgent(false))
   await act(async () => {
     await Promise.resolve()
   })
-  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe(true)
+  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe('agent-completion')
   expect(dismiss).not.toHaveBeenCalled()
 })
 
@@ -104,7 +104,7 @@ it('keeps native unknown presence conservative', async () => {
   await act(async () => {})
   act(() => window.dispatchEvent(new Event('focus')))
   await act(async () => {})
-  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe(true)
+  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe('agent-completion')
   expect(dismiss).not.toHaveBeenCalled()
 })
 
@@ -115,7 +115,7 @@ it.each(['focus', 'visibilitychange'])('rescans pending web attention on %s', as
   const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
   renderHook(() => useAutoAckViewedAgent(false))
   await act(async () => {})
-  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe(true)
+  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe('agent-completion')
   expect(dismiss).not.toHaveBeenCalled()
   focus.mockReturnValue(true)
   visibility.mockReturnValue('visible')
@@ -138,6 +138,7 @@ it('ignores unrelated writes while away but queries for a new completion', async
     useAppStore.setState({ unreadAgentCompletionPanes: { [pane]: true } })
   })
   expect(readAway).toHaveBeenCalledTimes(2)
+  // An unclassified legacy boolean marker still drives the away query and the ack.
   expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe(true)
   readAway.mockResolvedValue(false)
   await act(async () => window.dispatchEvent(new Event('focus')))
@@ -163,7 +164,7 @@ it('rechecks focus after a pending presence query resolves', async () => {
   renderHook(() => useAutoAckViewedAgent(false))
   vi.mocked(document.hasFocus).mockReturnValue(false)
   await act(async () => resolve(false))
-  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe(true)
+  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe('agent-completion')
   expect(dismiss).not.toHaveBeenCalled()
   vi.mocked(document.hasFocus).mockReturnValue(true)
   readAway.mockResolvedValue(false)
@@ -183,7 +184,7 @@ it('rechecks the selected pane after a coalesced presence query resolves', async
   act(() => useAppStore.setState({ activeTabId: 'other-tab' }))
   expect(readAway).toHaveBeenCalledTimes(1)
   await act(async () => resolve(false))
-  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe(true)
+  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe('agent-completion')
   expect(dismiss).not.toHaveBeenCalled()
   readAway.mockResolvedValue(false)
   await act(async () => useAppStore.setState({ activeTabId: 'away-tab' }))

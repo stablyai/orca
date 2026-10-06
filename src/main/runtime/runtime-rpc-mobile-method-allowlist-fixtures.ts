@@ -119,6 +119,7 @@ export function createMobileRpcSurfaceRuntime() {
   const runtime = {
     configureNotificationDismissalStore: () => {},
     getRuntimeId: () => 'test-runtime',
+    machineNameReady: async () => undefined,
     getStatus,
     pushRuntimeGit,
     selectClaudeAccount,

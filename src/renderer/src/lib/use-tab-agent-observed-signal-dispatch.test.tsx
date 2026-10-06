@@ -22,7 +22,7 @@ import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { useTabAgent } from './use-tab-agent'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -79,7 +79,7 @@ function publishRuntimeTitle(revision: number): void {
 }
 
 let probeRenders = 0
-let latestAgent: TuiAgent | null = null
+let latestAgent: TerminalAgent | null = null
 
 /** Stands in for SortableTab, useTabAgent's only production caller. */
 function TabAgentProbe(): null {

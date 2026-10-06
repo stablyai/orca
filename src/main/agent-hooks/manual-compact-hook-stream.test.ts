@@ -4,8 +4,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { RelayAgentHookServer } from '../../relay/agent-hook-server'
+import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
 import { seedClaudeSubagentRosterFromSnapshots } from '../../shared/agent-hook-listener/providers/claude-roster-state'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
+import type { AgentSubagentSnapshot } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 
@@ -71,8 +74,10 @@ function legacyRelayCompactEnvelope(
  *  the turn had spawned — restored from disk, so proof of nothing. */
 function seedHydratedStuckPane(server: AgentHookServer, receivedAt: number) {
   const state = server._getStateForTests()
-  const subagents = [{ id: 'child-1', state: 'working', startedAt: 0, agentType: 'general' }]
-  state.lastStatusByPaneKey.set(PANE_KEY, {
+  const subagents: AgentSubagentSnapshot[] = [
+    { id: 'child-1', state: 'working', startedAt: 0, agentType: 'general' }
+  ]
+  const status = {
     paneKey: PANE_KEY,
     source: 'claude',
     connectionId: null,
@@ -82,8 +87,9 @@ function seedHydratedStuckPane(server: AgentHookServer, receivedAt: number) {
     restoredUnconfirmed: true,
     receivedAt,
     payload: { state: 'working', prompt: 'work before the restart', agentType: 'claude', subagents }
-  } as never)
-  seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, subagents as never)
+  } satisfies AgentHookEventPayload & { receivedAt: number }
+  seedLegacyAgentStatusForTests(state, status)
+  seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, subagents)
 }
 
 describe('manual Claude compact hook stream', () => {

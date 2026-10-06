@@ -377,18 +377,34 @@ describe('removeWorktree cascade', () => {
     })
   })
 
-  it('offers force delete for Electron-wrapped local dirty preflight errors', async () => {
+  // Why a table (#19334): these three differ only in the wrapped message and the classification it
+  // earns. The shared body is what matters — the IPC wrapper is stripped for display while
+  // classification still reads the wrapped input.
+  it.each([
+    [
+      'offers force delete for Electron-wrapped local dirty preflight errors',
+      "Error invoking remote method 'worktrees:remove': Error: Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt",
+      'Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt',
+      { canForceDelete: true, forceDeleteReason: 'dirty' }
+    ],
+    [
+      'offers force delete when Git already removed an unregistered worktree',
+      "Error invoking remote method 'worktrees:remove': Error: Worktree is no longer registered with Git and its directory is already gone.",
+      'Worktree is no longer registered with Git and its directory is already gone.',
+      { canForceDelete: true, forceDeleteReason: 'missing-registration' }
+    ],
+    [
+      'does not offer force delete when Electron wraps SSH filesystem provider failures',
+      "Error invoking remote method 'worktrees:remove': Error: SSH filesystem provider unavailable",
+      'SSH filesystem provider unavailable',
+      { canForceDelete: false, forceDeleteReason: null }
+    ]
+  ])('%s', async (_title, wrapped, displayed, classification) => {
     const store = createTestStore()
     const worktreeId = 'repo1::/workspace/feature-wt'
-    const error =
-      "Error invoking remote method 'worktrees:remove': Error: Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt"
-
-    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
-
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(wrapped))
     seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
-      },
+      worktreesByRepo: { repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })] },
       tabsByWorktree: {},
       ptyIdsByTabId: {},
       terminalLayoutsByTabId: {}
@@ -396,12 +412,11 @@ describe('removeWorktree cascade', () => {
 
     const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
-    expect(result).toEqual({ ok: false, error })
+    expect(result).toEqual({ ok: false, error: displayed })
     expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
       isDeleting: false,
-      error,
-      canForceDelete: true,
-      forceDeleteReason: 'dirty'
+      error: displayed,
+      ...classification
     })
   })
 
@@ -459,34 +474,6 @@ describe('removeWorktree cascade', () => {
       canForceDelete: false,
       forceDeleteReason: null,
       lockReason: null
-    })
-  })
-
-  it('offers force delete when Git already removed an unregistered worktree', async () => {
-    const store = createTestStore()
-    const worktreeId = 'repo1::/workspace/deleted-wt'
-    const error =
-      "Error invoking remote method 'worktrees:remove': Error: Worktree is no longer registered with Git and its directory is already gone."
-
-    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
-      },
-      tabsByWorktree: {},
-      ptyIdsByTabId: {},
-      terminalLayoutsByTabId: {}
-    })
-
-    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-
-    expect(result).toEqual({ ok: false, error })
-    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
-      isDeleting: false,
-      error,
-      canForceDelete: true,
-      forceDeleteReason: 'missing-registration'
     })
   })
 
@@ -579,34 +566,6 @@ describe('removeWorktree cascade', () => {
     expect(store.getState().deleteStateByWorktreeId[worktreeId]?.canForceDelete).toBe(false)
   })
 
-  it('does not offer force delete when Electron wraps SSH filesystem provider failures', async () => {
-    const store = createTestStore()
-    const worktreeId = 'repo1::/path/wt1'
-    const error =
-      "Error invoking remote method 'worktrees:remove': Error: SSH filesystem provider unavailable"
-
-    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
-      },
-      tabsByWorktree: {},
-      ptyIdsByTabId: {},
-      terminalLayoutsByTabId: {}
-    })
-
-    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-
-    expect(result).toEqual({ ok: false, error })
-    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
-      isDeleting: false,
-      error,
-      canForceDelete: false,
-      forceDeleteReason: null
-    })
-  })
-
   it.each([
     'Could not connect to the remote Orca runtime.',
     'Remote Orca runtime closed the connection.',
@@ -617,6 +576,8 @@ describe('removeWorktree cascade', () => {
       const store = createTestStore()
       const worktreeId = 'repo1::/path/wt1'
       const error = `Error invoking remote method 'runtime-environments:call': Error: ${runtimeFailure}`
+      // The wrapper is stripped for display; the runtime failure text is what the user sees.
+      const displayed = runtimeFailure
 
       mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
         const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(args)
@@ -648,10 +609,10 @@ describe('removeWorktree cascade', () => {
         .getState()
         .removeWorktree({ id: worktreeId, executionHostId: null })
 
-      expect(result).toEqual({ ok: false, error })
+      expect(result).toEqual({ ok: false, error: displayed })
       expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
         isDeleting: false,
-        error,
+        error: displayed,
         canForceDelete: false,
         forceDeleteReason: null
       })

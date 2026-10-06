@@ -29,7 +29,7 @@ function resolveSubmoduleStatusArea(
 
 export class GitHandlerReadOperations extends GitHandlerOperationContext {
   async getStatus(params: Record<string, unknown>, context: RequestContext) {
-    this.gitDiffReadDedupe.clear()
+    this.gitDiffReadDedupe.invalidate()
     return getStatusOp(this.git.bind(this), streamRelayGitStdout, params, {
       signal: context.signal
     })
@@ -86,16 +86,24 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
     return workingResult
   }
 
-  async checkIgnored(params: Record<string, unknown>) {
-    return checkIgnoredPathsOp(this.git.bind(this), params)
+  async checkIgnored(params: Record<string, unknown>, context?: RequestContext) {
+    const result = await checkIgnoredPathsOp(this.gitForSignal(context?.signal), params)
+    context?.signal?.throwIfAborted()
+    return result
   }
 
-  async history(params: Record<string, unknown>) {
+  async history(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
-    return loadGitHistoryFromExecutor(this.git.bind(this), worktreePath, {
-      limit: typeof params.limit === 'number' ? params.limit : undefined,
-      baseRef: typeof params.baseRef === 'string' ? params.baseRef : null
-    })
+    const result = await loadGitHistoryFromExecutor(
+      this.gitForSignal(context?.signal),
+      worktreePath,
+      {
+        limit: typeof params.limit === 'number' ? params.limit : undefined,
+        baseRef: typeof params.baseRef === 'string' ? params.baseRef : null
+      }
+    )
+    context?.signal?.throwIfAborted()
+    return result
   }
 
   async getDiff(params: Record<string, unknown>, context?: RequestContext) {
@@ -110,12 +118,13 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
     const staged = params.staged as boolean
     const compareAgainstHead = params.compareAgainstHead as boolean | undefined
     // Why: register dedupe before awaiting so identical reads coalesce.
-    const result = await this.gitDiffReadDedupe.run(
+    const result = await this.gitDiffReadDedupe.lease(
       stableInFlightKey(['diff', worktreePath, filePath, staged, compareAgainstHead]),
-      async () => {
+      context?.signal,
+      async (signal) => {
         // Why: route gitlink roots to pointer diffs and inner files to their submodule worktree.
         const submodulePaths = await listSubmodulePathsCached(
-          this.git.bind(this),
+          this.gitForSignal(signal),
           worktreePath,
           this.submodulePathsCache
         )
@@ -125,7 +134,7 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
             const normalizedFilePath = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
             if (normalizedFilePath === matchedSubmodule) {
               return computeSubmodulePointerDiff(
-                this.git.bind(this),
+                this.gitForSignal(signal),
                 worktreePath,
                 matchedSubmodule,
                 staged,
@@ -138,7 +147,7 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
             )
             const innerPath = normalizedFilePath.slice(matchedSubmodule.length + 1)
             const { fromOid, toOid } = await resolveSubmoduleCommitRange(
-              this.git.bind(this),
+              this.gitForSignal(signal),
               worktreePath,
               matchedSubmodule,
               staged
@@ -146,7 +155,7 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
             // Why: a moved gitlink (clean worktree) keeps inner changes in committed history, so diff the two commits; otherwise read the working-tree blob.
             if (fromOid && toOid && fromOid !== toOid) {
               return buildSubmoduleInnerCommitRangeDiff(
-                this.gitBuffer.bind(this),
+                this.gitBufferForSignal(signal),
                 submoduleWorktreePath,
                 innerPath,
                 fromOid,
@@ -154,7 +163,7 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
               )
             }
             return computeDiff(
-              this.gitBuffer.bind(this),
+              this.gitBufferForSignal(signal),
               submoduleWorktreePath,
               innerPath,
               staged,
@@ -163,7 +172,7 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
           }
         }
         return computeDiff(
-          this.gitBuffer.bind(this),
+          this.gitBufferForSignal(signal),
           worktreePath,
           filePath,
           staged,

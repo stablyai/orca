@@ -1,0 +1,13 @@
+{
+  "description": "codex recording at 120x40 replayed on the unknown pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-168: now=pending:open edge=pending:open quiet=pending:open wait=ready@poll",
+      "169-171: now=blocked:codex-model-migration-prompt edge=blocked:codex-model-migration-prompt quiet=blocked:codex-model-migration-prompt wait=blocked:codex-model-migration-prompt@start"
+    ],
+    "clockless": [
+      "0-168: verdict=pending:open wait=ready@poll",
+      "169-171: verdict=blocked:codex-model-migration-prompt wait=blocked:codex-model-migration-prompt@start"
+    ]
+  }
+}

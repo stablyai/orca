@@ -11,7 +11,7 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
 } from '../../../shared/structured-agent-session-reducer'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import {
   adapterFor,
@@ -60,7 +60,7 @@ it('delivers catalog changes through existing frames without resending them on o
     state = reduceStructuredAgentSession(state, { type: 'event', event })
   })
   try {
-    const journal = await journals.open({ identity: identityFor(), journalDir: root })
+    const journal = await journals.open({ identity: identityFor(), stateDirectory: root })
     const sessionId = identityFor().sessionId
     let commands: AgentSessionSlashCommand[] | undefined = [
       { name: 'loaded', kind: 'command', kindUnspecified: true }
@@ -75,25 +75,13 @@ it('delivers catalog changes through existing frames without resending them on o
     })
     expect(state.commands).toEqual(commands)
     for (let i = 0; i < 25; i++) {
-      subscribers.handoff(sessionId, 7, {
-        owner: 'none',
-        direction: null,
-        phase: 'idle',
-        stage: null,
-        operationId: null
-      })
+      subscribers.backgroundTasks(sessionId, null, 7)
     }
     coalescer.flush()
     expect(events.filter((event) => 'commands' in event)).toHaveLength(1)
     commands = []
     subscribers.publish(sessionId, journal)
-    subscribers.handoff(sessionId, 7, {
-      owner: 'none',
-      direction: null,
-      phase: 'idle',
-      stage: null,
-      operationId: null
-    })
+    subscribers.backgroundTasks(sessionId, null, 7)
     coalescer.flush()
     expect(state.commands).toEqual([])
     expect(events.filter((event) => 'commands' in event)).toHaveLength(2)
@@ -113,7 +101,7 @@ it('delivers catalog changes through existing frames without resending them on o
     })
     coalescer.flush()
     expect(state.commands).toEqual(commands)
-    subscribers.reset(sessionId, journal, 'epoch_changed', 8)
+    subscribers.snapshot(sessionId, journal, 8)
     expect(state.commands).toEqual(commands)
     commands = undefined
     subscribers.open({

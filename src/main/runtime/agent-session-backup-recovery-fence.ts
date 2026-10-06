@@ -1,15 +1,14 @@
-// Recovering the agent-session store from its backup, without minting a second writer.
+// Importing the records file's backup, without minting a second writer. Only the one-time import
+// into the chat database (agent-session-legacy-record-import.ts) applies this now.
 //
 // The backup is the previous committed generation. The commit that never landed may have granted a
-// fence one higher than anything the backup records show, and `isAgentSessionFenceCurrent` compares
-// with STRICT EQUALITY — so a next-fence of `recordFence + 1` would *equal* that lost grant and
-// accept a writer holding it. `+2` strictly dominates it.
+// fence chosen by `nextAgentSessionFence` from the backup lease, and
+// `isAgentSessionFenceCurrent` compares with STRICT EQUALITY. That choice may already be above
+// `runtimeFence + 1` after an earlier recovery; the new floor must strictly dominate it.
 //
-// The bound "one lost commit can advance a session's fence by at most 1" is what makes +2 enough.
-// It holds because every mint site routes through `nextAgentSessionFence` and each performs one
-// transition per transaction, and because the save path aborts rather than letting the primary
-// advance past a stale backup. A batching refactor would break it silently, so it is pinned by a
-// test.
+// The bound is one lost mint per backup generation: each mint site used `nextAgentSessionFence`
+// once per transaction, and the file's save path aborted rather than advancing the primary past a
+// stale backup. A source-level ratchet rejects direct `+ 1` mints; an indirected mint is not caught.
 //
 // This records a FLOOR for the next grant and leaves the current fence alone. Rewriting the current
 // fence is what an earlier version did, and it corrupted exactly the records it meant to save: a
@@ -20,23 +19,23 @@
 // Ownership is deliberately untouched. `claimStatus` (a conflict must survive restart),
 // `ownerProcess` (the identity evidence the owner probe needs — the lease owner is a child process
 // that can outlive a main-process crash) and `handoffStage` all carry forward verbatim. Loading
-// already marks every lease unreconciled, and the restart reconciler re-adjudicates them by probe
-// once transactions are admitted. Nulling that evidence is how you get two writers on one provider
+// marks every lease unreconciled, and the restart reconciler re-adjudicates them by probe. Nulling that evidence is how you get two writers on one provider
 // session; the fence protects the store, not the provider session.
 
+import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
-
-/** Strictly above any fence the lost commit could have granted for that session. */
-export const AGENT_SESSION_BACKUP_RECOVERY_FENCE_MARGIN = 2
 
 export function raiseAgentSessionFencesAfterBackupRecovery(state: AgentSessionStoreState): void {
   for (const [sessionId, record] of state.records) {
-    const floor = record.lease.runtimeFence + AGENT_SESSION_BACKUP_RECOVERY_FENCE_MARGIN
+    const floor = nextAgentSessionFence(record.lease) + 1
+    if (!Number.isSafeInteger(floor)) {
+      throw new Error('agent_session_fence_exhausted')
+    }
     state.records.set(sessionId, {
       ...record,
       lease: {
         ...record.lease,
-        minimumNextFence: Math.max(floor, record.lease.minimumNextFence ?? 0)
+        minimumNextFence: floor
       }
     })
   }

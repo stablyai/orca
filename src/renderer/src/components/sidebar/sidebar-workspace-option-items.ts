@@ -124,6 +124,13 @@ const BASE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
     }
   },
   {
+    id: 'host',
+    properties: ['host'],
+    get label() {
+      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.host', 'Host')
+    }
+  },
+  {
     id: 'branch',
     properties: ['branch'],
     get label() {
@@ -212,8 +219,6 @@ export function getWorktreeCardPropertyOptions({
     branchOption
   ]
 }
-
-export const WORKTREE_CARD_PROPERTY_OPTIONS = getWorktreeCardPropertyOptions()
 
 export const SORT_OPTIONS = [
   {

@@ -112,6 +112,21 @@ describe('transcript row height estimate', () => {
     expect(together).toBe(receipt + NATIVE_CHAT_ROW_GAP_PX + diff)
   })
 
+  it("reserves a section's prose row the controls it keeps in flow", () => {
+    // Two lines, so the row's minimum height does not absorb the difference.
+    const prose = nativeChatRowContentMetrics(message('one\ntwo'))
+    const reasoning = nativeChatRowContentMetrics(message('one\ntwo', 'reasoning'))
+    const inSection = { ...NO_CHROME, inSubagentSection: true }
+
+    expect(
+      estimateNativeChatRowHeight(prose, inSection) - estimateNativeChatRowHeight(prose, NO_CHROME)
+    ).toBe(20)
+    // Reasoning draws no controls.
+    expect(estimateNativeChatRowHeight(reasoning, inSection)).toBe(
+      estimateNativeChatRowHeight(reasoning, NO_CHROME)
+    )
+  })
+
   it('reuses one derivation per message', () => {
     const subject = message('cached')
     expect(nativeChatRowContentMetrics(subject)).toBe(nativeChatRowContentMetrics(subject))

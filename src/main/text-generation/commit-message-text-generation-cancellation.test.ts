@@ -10,7 +10,8 @@ import {
 } from './commit-message-text-generation'
 import {
   createChildTerminationExpectation,
-  createMockDiscoveryChild
+  createMockDiscoveryChild,
+  withPlatform
 } from './commit-message-text-generation-test-harness'
 
 const { terminateWindowsProcessTreeMock } = vi.hoisted(() => ({
@@ -40,6 +41,72 @@ beforeEach(() => {
 })
 
 describe('generateCommitMessageFromContext', () => {
+  it('fails clearly before spawning when a jcode argv prompt exceeds the Windows command line', async () => {
+    await withPlatform('win32', async () => {
+      const pending = generateCommitMessageFromContext(
+        {
+          branch: 'main',
+          stagedSummary: 'M\tREADME.md',
+          stagedPatch: `+${'x'.repeat(40_000)}`
+        },
+        {
+          agentId: 'jcode',
+          model: 'default'
+        },
+        {
+          kind: 'local',
+          cwd: '/repo',
+          env: { ...process.env }
+        }
+      )
+
+      await expect(pending).resolves.toMatchObject({
+        success: false,
+        error: expect.stringContaining('too large for the Windows command line')
+      })
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('fails clearly before spawning when a jcode argv prompt exceeds the Linux single-argument cap', async () => {
+    await withPlatform('linux', async () => {
+      const pending = generateCommitMessageFromContext(
+        {
+          branch: 'main',
+          stagedSummary: 'M\tREADME.md',
+          // Why past 120 KiB and not the Windows 30k: Linux fails on ONE argument
+          // over MAX_ARG_STRLEN, which is far larger than the Windows line budget.
+          stagedPatch: `+${'x'.repeat(140_000)}`
+        },
+        { agentId: 'jcode', model: 'default' },
+        { kind: 'local', cwd: '/repo', env: { ...process.env } }
+      )
+
+      await expect(pending).resolves.toMatchObject({
+        success: false,
+        error: expect.stringContaining('single command-line argument')
+      })
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('still spawns on Linux for a prompt that only Windows would refuse', async () => {
+    await withPlatform('linux', async () => {
+      // 40k chars trips the Windows line budget but is far under the Linux per-arg cap,
+      // so the guard must not have become a lowest-common-denominator limit.
+      await generateCommitMessageFromContext(
+        {
+          branch: 'main',
+          stagedSummary: 'M\tREADME.md',
+          stagedPatch: `+${'x'.repeat(40_000)}`
+        },
+        { agentId: 'jcode', model: 'default' },
+        { kind: 'local', cwd: '/repo', env: { ...process.env } }
+      )
+      expect(spawnMock).toHaveBeenCalled()
+    })
+  })
+
   it('keeps local commit-message and pull-request cancellation lanes separate', async () => {
     const children: {
       pid: number

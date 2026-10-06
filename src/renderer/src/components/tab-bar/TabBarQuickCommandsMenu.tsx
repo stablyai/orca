@@ -326,11 +326,7 @@ export function TabBarQuickCommandsMenu({
                   setCommandValueOverride(null)
                   setQuery(nextQuery)
                 }}
-                onCompositionStart={searchInput.onCompositionStart}
-                onCompositionEnd={searchInput.onCompositionEnd}
                 onKeyDown={searchInput.onKeyDown}
-                onKeyUp={searchInput.onKeyUp}
-                onBlur={searchInput.onBlur}
                 className="h-9 py-2 text-[12px]"
                 wrapperClassName="border-b border-border/50 px-2"
                 iconClassName="h-3.5 w-3.5"

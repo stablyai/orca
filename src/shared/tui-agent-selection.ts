@@ -10,10 +10,16 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'codex',
   'grok',
   'copilot',
+  'opencode2',
   'opencode',
   'mimo-code',
   'ante',
   'trae',
+  'muse',
+  'dsh',
+  'qoder',
+  'qoder-cn',
+  'zcode',
   'pi',
   'omp',
   'prime-agent',
@@ -29,6 +35,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'autohand',
   'cline',
   'codebuff',
+  'freebuff',
   'command-code',
   'continue',
   'cursor',
@@ -40,6 +47,8 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'hermes',
   'devin',
   'openclaw',
+  'codebuddy',
+  'jcode',
   'openinterpreter'
 ] as const satisfies readonly TuiAgent[]
 

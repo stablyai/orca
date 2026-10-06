@@ -7,6 +7,10 @@ import type { StructuredAgentSessionHost } from './structured-agent-session-host
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
+  DISPATCH_DOUBT_PROVIDER_EXITED,
+  DISPATCH_DOUBT_SUBMISSION_MISSING
+} from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import {
   accepted,
   attach,
   CALLER,
@@ -19,6 +23,8 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
@@ -27,6 +33,28 @@ let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 beforeEach(() => {
   ;({ store, host, dispatch } = hostTestState())
 })
+
+function hostJournal(): AgentSessionJournal {
+  return (
+    host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
+  ).sessions.get(SESSION)!.journal
+}
+
+/** A send is accepted, then the session's delivery loop hands it over: wait for the handover's
+ *  outcome, or with `handedOver`, only for the handover itself (an admitted send stays pending). */
+async function delivered(clientMessageId: string, options: { handedOver?: true } = {}) {
+  let submission: ReturnType<AgentSessionJournal['submissions']>[number] | undefined
+  await vi.waitFor(() => {
+    submission = hostJournal()
+      .submissions()
+      .find((entry) => entry.clientMessageId === clientMessageId)
+    expect(submission?.handedOverAt).toBeDefined()
+    if (!options.handedOver) {
+      expect(submission?.dispatchState).not.toBe('pending')
+    }
+  })
+  return submission!
+}
 
 describe('send', () => {
   it('writes the submission before dispatching and resolves it accepted', async () => {
@@ -39,24 +67,54 @@ describe('send', () => {
     if (!result.ok) {
       throw new Error(`expected a send, got ${result.refusal.code}`)
     }
-    expect(result.value.submission.dispatchState).toBe('accepted')
+    if (!('submission' in result.value)) {
+      throw new Error('expected the submission arm')
+    }
+    // Answered once accepted; the delivery loop hands it over after.
+    expect(result.value.submission).toMatchObject({
+      dispatchState: 'pending',
+      handoverRecorded: true
+    })
+    expect(result.value.submission.handedOverAt).toBeUndefined()
+    await expect(delivered(result.value.clientMessageId)).resolves.toMatchObject({
+      dispatchState: 'accepted'
+    })
     expect(dispatch).toHaveBeenCalledTimes(1)
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items).toHaveLength(1)
     expect(page.ok && page.page.fence).toBe(1)
     expect(page.page.hostNow).toBe(NOW)
     expect(page.providerSession).toEqual({ key: 'session_id', id: THREAD })
   })
 
+  it('settles a submission write failure as rejected before provider dispatch', async () => {
+    await attach()
+    const journal = (
+      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
+    ).sessions.get(SESSION)!.journal
+    vi.spyOn(journal, 'appendSubmission').mockRejectedValueOnce(new Error('disk full'))
+    const body = hostTestMessage('not durably recorded')
+    const params = { envelope: envelope('agentSession.send', { body }), body }
+
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_invalid' }
+    })
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(
+      store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
+    ).toMatchObject({ outcome: { status: 'failed' } })
+  })
+
   it('settles a thrown dispatch as unknown, never as a rejection', async () => {
     await attach()
     dispatch.mockRejectedValueOnce(new Error('socket closed'))
     const body = hostTestMessage('add a retry')
-    const result = await host.send(CALLER, {
-      envelope: envelope('agentSession.send', { body }),
-      body
+    const params = { envelope: envelope('agentSession.send', { body }), body }
+    await host.send(CALLER, params)
+    await expect(delivered(params.envelope.clientOperationId)).resolves.toMatchObject({
+      dispatchState: 'unknown'
     })
-    expect(result).toMatchObject({ ok: true, value: { submission: { dispatchState: 'unknown' } } })
   })
 
   it('replays a retried send from the journal without dispatching twice', async () => {
@@ -64,6 +122,7 @@ describe('send', () => {
     const body = hostTestMessage('add a retry')
     const params = { envelope: envelope('agentSession.send', { body }), body }
     await host.send(CALLER, params)
+    await delivered(params.envelope.clientOperationId)
     const retry = await host.send(CALLER, params)
     expect(retry).toMatchObject({ ok: true, replayed: true })
     expect(dispatch).toHaveBeenCalledTimes(1)
@@ -75,24 +134,26 @@ describe('send', () => {
     const body = hostTestMessage('possibly delivered')
     const params = { envelope: envelope('agentSession.send', { body }), body }
 
-    const first = await host.send(CALLER, params)
-    expect(first).toMatchObject({
-      ok: true,
-      value: { submission: { dispatchState: 'unknown' } }
+    await host.send(CALLER, params)
+    await expect(delivered(params.envelope.clientOperationId)).resolves.toMatchObject({
+      dispatchState: 'unknown'
     })
-    // A thrown adapter call is indistinguishable from a lost reply, so it is not
-    // on the allowlist: Retry replays the recorded outcome.
+    // A thrown adapter call is indistinguishable from a lost reply, so Retry
+    // replays the recorded outcome.
     await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'unknown' } }
     })
     expect(dispatch).toHaveBeenCalledTimes(1)
-    const state = host.history({ sessionId: SESSION, direction: 'tail' })
+    const state = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(state.ok && state.page.submissions).toHaveLength(1)
   })
 
-  it('redispatches an explicitly retried unknown the write itself refused', async () => {
+  it('refuses to redeliver an unknown however strongly its reason reads', async () => {
     await attach()
+    // The reason that used to be the sole entry on the redelivery allowlist. It
+    // is now a rejection when it is real, so an `unknown` still carrying it is
+    // only a claim -- and no claim unlocks a second delivery under one id.
     dispatch
       .mockImplementationOnce(async () => ({
         state: 'unknown' as const,
@@ -103,56 +164,66 @@ describe('send', () => {
     const params = { envelope: envelope('agentSession.send', { body }), body }
 
     await host.send(CALLER, params)
-    // The only doubt on the allowlist: the transport refused the frame, so this
-    // is a first delivery and not a second.
+    await delivered(params.envelope.clientOperationId)
     await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
       ok: true,
-      replayed: false,
-      value: { submission: { dispatchState: 'accepted' } }
+      value: {
+        submission: { dispatchState: 'unknown', reason: 'provider_write_failed: broken pipe' }
+      }
     })
-    expect(dispatch).toHaveBeenCalledTimes(2)
-    const state = host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    const state = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(state.ok && state.page.submissions).toHaveLength(1)
   })
 
-  it('returns an admitted retry to pending until the provider echo accepts it', async () => {
+  it('settles a refused write as rejected and delivers a rotated id exactly once', async () => {
     await attach()
     dispatch
       .mockImplementationOnce(async () => ({
-        state: 'unknown' as const,
-        reason: 'provider_write_failed: connection closed before enqueue'
+        state: 'rejected' as const,
+        ...agentSessionFailureWords(agentSessionFailureFact('writeFailed'), {
+          surface: 'rejection'
+        })
       }))
-      .mockImplementationOnce(async () => ({ state: 'admitted' as const }))
-    const body = hostTestMessage('admitted on retry')
+      .mockImplementationOnce(async () => accepted())
+    const body = hostTestMessage('never written')
     const params = { envelope: envelope('agentSession.send', { body }), body }
 
     await host.send(CALLER, params)
-    await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
-      ok: true,
-      replayed: false,
-      value: {
-        submission: { dispatchState: 'pending', reason: null, resolvedAt: null }
-      }
+    await expect(delivered(params.envelope.clientOperationId)).resolves.toMatchObject({
+      dispatchState: 'rejected',
+      reason: 'provider_write_failed'
+    })
+    // What the user's Retry does with a rejection: a fresh client message id,
+    // which is a first delivery by construction and cannot duplicate the frame
+    // that never left the process.
+    const rotated = { envelope: envelope('agentSession.send', { body }), body }
+    await expect(host.send(CALLER, rotated)).resolves.toMatchObject({ ok: true, replayed: false })
+    await expect(delivered(rotated.envelope.clientOperationId)).resolves.toMatchObject({
+      dispatchState: 'accepted'
     })
     expect(dispatch).toHaveBeenCalledTimes(2)
+    const state = await host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(state.ok && state.page.submissions).toHaveLength(2)
   })
 
-  it('refuses to redeliver a retry for a turn the provider already owns', async () => {
+  it('refuses to redeliver a retry for a message the provider may already hold', async () => {
     await attach()
+    // A dead child ends the wait without proving non-delivery: the message was
+    // already written to that child's stdin.
     dispatch.mockImplementationOnce(async () => ({
       state: 'unknown' as const,
-      reason: 'codex app-server started a turn it did not name in time'
+      reason: DISPATCH_DOUBT_PROVIDER_EXITED
     }))
-    const body = hostTestMessage('a turn codex owns but did not name')
+    const body = hostTestMessage('a message the provider may already hold')
     const params = { envelope: envelope('agentSession.send', { body }), body }
 
-    const first = await host.send(CALLER, params)
-    expect(first).toMatchObject({
-      ok: true,
-      value: { submission: { dispatchState: 'unknown' } }
+    await host.send(CALLER, params)
+    await expect(delivered(params.envelope.clientOperationId)).resolves.toMatchObject({
+      dispatchState: 'unknown'
     })
-    // The turn is running; a second delivery would be a duplicate, so Retry
-    // replays the recorded outcome instead of re-sending.
+    // No `unknown` is re-delivered under its own id, whatever its reason says,
+    // so Retry replays the recorded outcome instead of writing again.
     await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'unknown' } }
@@ -166,6 +237,7 @@ describe('send', () => {
     const body = hostTestMessage('settled for good')
     const params = { envelope: envelope('agentSession.send', { body }), body }
     await host.send(CALLER, params)
+    await delivered(params.envelope.clientOperationId)
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
@@ -186,7 +258,7 @@ describe('send', () => {
     expect(journal.receiptFor(params.envelope.clientOperationId)).not.toBeNull()
   })
 
-  it('leaves an admitted send pending and writes no dispatch row', async () => {
+  it('leaves an admitted send pending once handed over', async () => {
     await attach()
     dispatch.mockImplementationOnce(async () => ({ state: 'admitted' as const }))
     const body = hostTestMessage('queued behind a running turn')
@@ -196,9 +268,9 @@ describe('send', () => {
       ok: true,
       value: { submission: { dispatchState: 'pending', reason: null, resolvedAt: null } }
     })
-    const journal = (
-      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
-    ).sessions.get(SESSION)!.journal
+    await delivered(params.envelope.clientOperationId, { handedOver: true })
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
+    const journal = hostJournal()
     expect(journal.pendingSubmissions()).toHaveLength(1)
   })
 
@@ -208,6 +280,8 @@ describe('send', () => {
     const body = hostTestMessage('written, never acknowledged')
     const params = { envelope: envelope('agentSession.send', { body }), body }
     await host.send(CALLER, params)
+    await delivered(params.envelope.clientOperationId, { handedOver: true })
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
@@ -229,12 +303,126 @@ describe('send', () => {
     expect(journal.submissions()).toHaveLength(1)
   })
 
+  it('answers a send whose ledger settlement fails, its row committed with the submission', async () => {
+    await attach()
+    vi.spyOn(store, 'recordOperationOutcome').mockRejectedValue(
+      new Error('operation settlement failed')
+    )
+    const body = hostTestMessage('accepted while settlement fails')
+    const params = { envelope: envelope('agentSession.send', { body }), body }
+    const clientMessageId = params.envelope.clientOperationId
+
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: false })
+    expect(
+      store.listOperationRows().find((row) => row.operationId === clientMessageId)
+    ).toMatchObject({ outcome: { status: 'succeeded' } })
+    await delivered(clientMessageId)
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({
+      ok: true,
+      replayed: true,
+      value: { submission: { dispatchState: 'accepted' } }
+    })
+    expect(dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs a send that threw before writing for the first time when it is resent, once', async () => {
+    await attach()
+    const body = hostTestMessage('first delivery after caller recovery')
+    const params = { envelope: envelope('agentSession.send', { body }), body }
+    const clientMessageId = params.envelope.clientOperationId
+    const beforeRun = () => {
+      throw new Error('host fault before the write')
+    }
+
+    await expect(host.send(CALLER, { ...params, beforeRun })).rejects.toThrow(
+      'host fault before the write'
+    )
+    expect(hostJournal().submissions()).toHaveLength(0)
+    // Its success would have committed with its write, so a row still pending wrote nothing.
+    expect(
+      store.listOperationRows().find((row) => row.operationId === clientMessageId)
+    ).toMatchObject({ outcome: { status: 'pending' } })
+
+    await expect(host.send({ callerKey: 'client-after-recovery' }, params)).resolves.toMatchObject({
+      ok: true,
+      replayed: false,
+      value: { submission: { clientMessageId, dispatchState: 'pending' } }
+    })
+    await delivered(clientMessageId)
+    expect(
+      store.listOperationRows().find((row) => row.operationId === clientMessageId)
+    ).toMatchObject({ callerKey: CALLER.callerKey, outcome: { status: 'succeeded' } })
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
+    expect(dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it("answers an older build's unknown row a new epoch emptied as recorded, never redelivering", async () => {
+    await attach()
+    const body = hostTestMessage('delivered before epoch recovery')
+    const params = { envelope: envelope('agentSession.send', { body }), body }
+    await host.send(CALLER, params)
+    await delivered(params.envelope.clientOperationId)
+    // What a build that marked a send unknown before running it leaves behind.
+    await store.recordOperationOutcome({
+      callerKey: CALLER.callerKey,
+      operationId: params.envelope.clientOperationId,
+      outcome: { status: 'pending' }
+    })
+    await store.recordOperationOutcome({
+      callerKey: CALLER.callerKey,
+      operationId: params.envelope.clientOperationId,
+      outcome: { status: 'unknown' }
+    })
+    const journal = hostJournal()
+    await journal.rollEpoch('schema_unreadable', store.getRecord(SESSION)?.lease.runtimeFence ?? 1)
+    expect(journal.submissions()).toHaveLength(0)
+
+    await expect(
+      host.send({ callerKey: 'client-after-recovery' }, { ...params, retryUnknown: true })
+    ).resolves.toMatchObject({
+      ok: true,
+      replayed: true,
+      value: {
+        submission: {
+          dispatchState: 'unknown',
+          reason: DISPATCH_DOUBT_SUBMISSION_MISSING,
+          recovered: true
+        }
+      }
+    })
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    expect(journal.submissions()).toHaveLength(0)
+  })
+
+  it('answers an accepted send a new epoch dropped as recorded, never by running it again', async () => {
+    await attach()
+    const body = hostTestMessage('accepted, then the epoch was replaced')
+    const params = { envelope: envelope('agentSession.send', { body }), body }
+    await host.send(CALLER, params)
+    await delivered(params.envelope.clientOperationId)
+    await hostJournal().rollEpoch(
+      'schema_unreadable',
+      store.getRecord(SESSION)?.lease.runtimeFence ?? 1
+    )
+
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({
+      ok: true,
+      replayed: true,
+      value: {
+        submission: { dispatchState: 'unknown', reason: DISPATCH_DOUBT_SUBMISSION_MISSING }
+      }
+    })
+    expect(dispatch).toHaveBeenCalledTimes(1)
+  })
+
   it('refuses to redeliver an admitted send whose child exited first', async () => {
     await attach()
     dispatch.mockImplementationOnce(async () => ({ state: 'admitted' as const }))
     const body = hostTestMessage('written, then the child died')
     const params = { envelope: envelope('agentSession.send', { body }), body }
     await host.send(CALLER, params)
+    await delivered(params.envelope.clientOperationId, { handedOver: true })
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
@@ -253,27 +441,32 @@ describe('send', () => {
 
   it('advances an explicit retry after a ledger-unknown send is reconciled in the journal', async () => {
     await attach()
-    const journal = (
-      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
-    ).sessions.get(SESSION)!.journal
-    vi.spyOn(journal, 'resolveDispatch').mockRejectedValueOnce(new Error('journal resolve failed'))
+    const journal = hostJournal()
+    const resolve = journal.resolveDispatch.bind(journal)
+    // The handover row lands; the provider's answer, written after the adapter took the
+    // message, does not.
+    vi.spyOn(journal, 'resolveDispatch')
+      .mockImplementationOnce(resolve)
+      .mockRejectedValueOnce(new Error('journal resolve failed'))
     const body = hostTestMessage('possibly delivered before persistence failed')
     const params = { envelope: envelope('agentSession.send', { body }), body }
 
-    await expect(host.send(CALLER, params)).rejects.toThrow('journal resolve failed')
-    expect(journal.submissions()).toMatchObject([
-      { clientMessageId: params.envelope.clientOperationId, dispatchState: 'unknown' }
-    ])
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true })
+    await expect(delivered(params.envelope.clientOperationId)).resolves.toMatchObject({
+      dispatchState: 'unknown'
+    })
+    // Acceptance is what the ledger answers for; delivery is the journal's to say.
     expect(
       store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
         ?.outcome
-    ).toEqual({ status: 'unknown' })
+    ).toMatchObject({ status: 'succeeded' })
     expect(dispatch).toHaveBeenCalledTimes(1)
 
     await journal.markPendingSubmissionsUnknown(store.getRecord(SESSION)?.lease.runtimeFence ?? 1)
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
+      ok: true,
+      replayed: true,
+      value: { submission: { dispatchState: 'unknown' } }
     })
     expect(dispatch).toHaveBeenCalledTimes(1)
 
@@ -287,24 +480,7 @@ describe('send', () => {
     expect(journal.submissions()).toHaveLength(1)
   })
 
-  it('refuses a stale fence and hands back the current one', async () => {
-    const record = await attach()
-    const body = hostTestMessage('add a retry')
-    const result = await host.send(CALLER, {
-      envelope: envelope(
-        'agentSession.send',
-        { body },
-        { expectedRuntimeFence: (record?.lease.runtimeFence ?? 1) + 5 }
-      ),
-      body
-    })
-    expect(result).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_checkpoint_stale', currentFence: record?.lease.runtimeFence }
-    })
-  })
-
-  it('does not let a refused call leave a ledger row that replays past the fence', async () => {
+  it('admits a send fenced to another generation, delivers it once, and replays it by id', async () => {
     const record = await attach()
     const body = hostTestMessage('add a retry')
     const params = {
@@ -315,12 +491,16 @@ describe('send', () => {
       ),
       body
     }
-    await host.send(CALLER, params)
-    expect(await host.send(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_checkpoint_stale' }
+    expect(await host.send(CALLER, params)).toMatchObject({ ok: true, replayed: false })
+    await expect(delivered(params.envelope.clientOperationId)).resolves.toMatchObject({
+      dispatchState: 'accepted'
     })
-    expect(dispatch).not.toHaveBeenCalled()
+    const retry = {
+      ...params,
+      envelope: { ...params.envelope, expectedRuntimeFence: record?.lease.runtimeFence ?? 1 }
+    }
+    expect(await host.send(CALLER, retry)).toMatchObject({ ok: true, replayed: true })
+    expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
   it('refuses any mutation against a session this host has not attached', async () => {

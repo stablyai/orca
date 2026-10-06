@@ -15,6 +15,7 @@ export function MobileNativeChatPromptCard({
   onDismissAsk,
   onAnswerAsk,
   onCancelAsk,
+  onCancelPrompt,
   permission,
   onRespondPermission,
   question,
@@ -25,6 +26,7 @@ export function MobileNativeChatPromptCard({
   onDismissAsk?: () => void
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   onCancelAsk?: () => Promise<boolean>
+  onCancelPrompt?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
   question?: MobileChatQuestion | null
@@ -58,6 +60,7 @@ export function MobileNativeChatPromptCard({
         key={JSON.stringify(permission)}
         permission={permission}
         onRespond={async (send) => (await onRespondPermission?.(send)) ?? false}
+        onCancel={onCancelPrompt}
       />
     )
   }
@@ -67,6 +70,7 @@ export function MobileNativeChatPromptCard({
         key={mobileChatQuestionKey(question)}
         question={question}
         onAnswer={async (text) => (await onAnswerQuestion?.(text)) ?? false}
+        onCancel={onCancelPrompt}
       />
     )
   }

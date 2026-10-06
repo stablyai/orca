@@ -1,0 +1,21 @@
+{
+  "description": "claude recording at 120x40 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-14: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "15-17: now=pending:closed edge=pending:closed quiet=pending:closed wait=blocked:agent-trust-workspace@poll",
+      "18: now=blocked:agent-trust-workspace edge=blocked:agent-trust-workspace quiet=blocked:agent-trust-workspace wait=blocked:agent-trust-workspace@start",
+      "19: now=pending:closed edge=pending:closed quiet=pending:closed wait=blocked:agent-trust-workspace@poll",
+      "20-24: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "25-51: now=ready-strong edge=ready-strong quiet=ready-strong wait=ready@start"
+    ],
+    "clockless": [
+      "0-14: verdict=pending:closed wait=pending",
+      "15-17: verdict=pending:closed wait=blocked:agent-trust-workspace@poll",
+      "18: verdict=blocked:agent-trust-workspace wait=blocked:agent-trust-workspace@start",
+      "19: verdict=pending:closed wait=blocked:agent-trust-workspace@poll",
+      "20-24: verdict=pending:closed wait=pending",
+      "25-51: verdict=ready-strong wait=ready@start"
+    ]
+  }
+}

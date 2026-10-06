@@ -1,23 +1,22 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { createServer } from 'node:net'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
+import { chromium } from 'playwright'
 import { afterAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
 import {
-  LOCAL_HTTPS_TEST_CERTIFICATE,
-  LOCAL_HTTPS_TEST_PRIVATE_KEY
-} from './browser-local-https-test-certificate'
-
-// Why this runs a real Electron: sites that hold a transplanted session re-check the browser
-// identity that minted it, and an `Orca/x.y.z … Electron/x.y.z` UA is not one any browser sends —
-// LinkedIn and x.com revoked live sessions over it (STA-7147). The header layer is the only place
-// that identity can be proven, and the vm-based unit tests cannot see Chromium's header emission
-// at all. Every clean-mode partition must therefore strip the Electron and app tokens on the
-// wire for ordinary hosts and present the Firefox identity on Google's sign-in hosts only. This
-// focused revocation fix does not claim full Chrome fingerprint parity; native mode remains the
-// fallback for sites that reject the cleaned identity, including some Turnstile deployments.
+  BrowserSessionUaCdpCollector,
+  type BrowserSessionUaCdpRequest,
+  waitForBrowserCdpEndpoint
+} from './browser-session-ua-cdp-collector'
+import {
+  startBrowserSessionUaWireProbeServer,
+  type WireProbeJavaScriptIdentity,
+  type WireProbeReceipt
+} from './browser-session-ua-wire-probe-server'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
@@ -28,241 +27,469 @@ afterAll(() => {
   }
 })
 
-// Retry once when Electron startup times out before `ready`; keep later failures fatal.
-const FIXTURE_LAUNCH_ATTEMPTS = 2
+type ProbeArm = 'clean' | 'late-session-setter' | 'mobile' | 'mixed-mobile' | 'native'
 
-type CapturedRequest = {
-  url: string
-  userAgent: string | null
-  clientHints: Record<string, string>
-}
-
-type UserAgentBrand = {
-  brand: string
-  version: string
-}
-
-type NavigatorUserAgentData = {
-  brands: UserAgentBrand[]
-  highEntropy: { fullVersionList?: UserAgentBrand[] }
-}
-
-type FixtureResult = {
+type ProbeResult = Readonly<{
+  arm: ProbeArm
   rawUserAgent: string
+  cleanUserAgent: string
+  mobileUserAgent: string
   sessionUserAgent: string
   navigatorUserAgent: string
-  navigatorUserAgentData: NavigatorUserAgentData | null
-  requests: CapturedRequest[]
-}
+  fallbackAfterReadyNameChange: string
+  startupMarks: readonly string[]
+  receipts: readonly WireProbeReceipt[]
+  identities: readonly WireProbeJavaScriptIdentity[]
+  cdpRequests: readonly BrowserSessionUaCdpRequest[]
+  cdpDiagnostics: readonly string[]
+}>
 
-function neverReachedElectronReady(fixtureResult: string): boolean {
-  try {
-    return (JSON.parse(fixtureResult) as { step?: string }).step === 'timed out after starting'
-  } catch {
-    return false
-  }
-}
+const requiredPaths = [
+  '/',
+  '/document-fetch',
+  '/document-xhr',
+  '/document-image',
+  '/frame',
+  '/blob-fetch',
+  '/blob-xhr',
+  '/blob-image',
+  '/shared-worker-fetch-a',
+  '/shared-worker-fetch-b',
+  '/service-worker-fetch',
+  '/popup',
+  '/popup-fetch',
+  '/no-header-fill',
+  '/default-session-fill',
+  '/isolated-session-fill',
+  '/default-window',
+  '/isolated-window',
+  '/plain-ws',
+  '/secure-ws'
+] as const
 
-function buildFixtureMain(modulePath: string, resultPath: string): string {
-  return `
-const { app, BrowserWindow, session } = require('electron')
-const { createServer } = require('node:https')
-const { writeFileSync } = require('node:fs')
-const { cleanElectronUserAgent, setupGoogleAuthUserAgentOverride } = require(${JSON.stringify(modulePath)})
-const resultPath = ${JSON.stringify(resultPath)}
-// Why: production's UA carries an app token ("Orca/1.4.198") between the engine comment and
-// Chrome/, and an unnamed fixture emits none — which would leave half of cleanElectronUserAgent
-// unexercised while the test still passed.
-app.setName('OrcaWireIdentityFixture')
-let currentStep = 'starting'
-const mark = (step) => {
-  currentStep = step
-  writeFileSync(resultPath, JSON.stringify({ step }))
-}
+describe('browser session wire identity under Electron', () => {
+  it('uses one process-clean identity for documents, blob frames, workers, HTTP, and WebSockets', async () => {
+    const result = await runProbe('clean')
+    assertCoverage(result)
+    expect(result.rawUserAgent).toMatch(/ Electron\/\d/)
+    expect(result.rawUserAgent).toMatch(/\(KHTML, like Gecko\) \S+ Chrome\//)
+    expect(result.cleanUserAgent).not.toContain('Electron/')
+    expect(result.startupMarks).toEqual(['fallback', 'ready', 'session', 'webContents'])
+    expect(result.fallbackAfterReadyNameChange).toBe(result.cleanUserAgent)
+    expect(distinctUserAgents(result.receipts)).toEqual([result.cleanUserAgent])
+    expect(distinctUserAgents(result.cdpRequests)).toEqual([result.cleanUserAgent])
+    expect(distinctJavaScriptUserAgents(result.identities)).toEqual([result.cleanUserAgent])
+  }, 40_000)
 
-async function run() {
-  const timeout = setTimeout(() => {
-    writeFileSync(resultPath, JSON.stringify({ step: 'timed out after ' + currentStep }))
-    app.exit(1)
-  }, 15000)
-  await app.whenReady()
-  mark('ready')
-  const partition = 'persist:wire-identity-test'
-  const sess = session.fromPartition(partition)
-  // Mirrors installBrowserSessionPartitionPolicies for a non-native profile.
-  const rawUserAgent = sess.getUserAgent()
-  const cleanUa = cleanElectronUserAgent(rawUserAgent)
-  sess.setUserAgent(cleanUa)
-  setupGoogleAuthUserAgentOverride(sess)
-  mark('clean identity installed')
+  it('goes red without the pre-ready process fallback even when the Session setter is restored', async () => {
+    const result = await runProbe('late-session-setter')
+    assertCoverage(result)
+    expect(distinctUserAgents(result.receipts)).toContain(result.rawUserAgent)
+    expect(distinctUserAgents(result.receipts)).toContain(result.cleanUserAgent)
+    expect(identityViolations(result)).not.toEqual([])
+    expect(result.receipts.some(({ userAgent }) => /Firefox\//.test(userAgent ?? ''))).toBe(false)
+  }, 40_000)
 
-  sess.setCertificateVerifyProc((_request, callback) => callback(0))
-  const requests = []
-  sess.webRequest.onSendHeaders({ urls: ['https://*/*'] }, (details) => {
-    const headers = details.requestHeaders || {}
-    const uaKey = Object.keys(headers).find((key) => key.toLowerCase() === 'user-agent')
-    const clientHints = {}
-    for (const [key, value] of Object.entries(headers)) {
-      if (key.toLowerCase().startsWith('sec-ch-ua')) {
-        clientHints[key.toLowerCase()] = value
-      }
+  // Viewport emulation is a per-target CDP override. It reaches the emulated target and nothing
+  // else, so every context must report on the wire the same identity its own JavaScript reports —
+  // a document that fetches as mobile and a worker that fetches as whatever it says it is.
+  it('emulates the targeted tab and leaves every other context self-consistent', async () => {
+    const result = await runProbe('mobile')
+    assertCoverage(result)
+
+    const targetPaths = [
+      '/',
+      '/document-fetch',
+      '/document-xhr',
+      '/document-image',
+      '/blob-fetch',
+      '/blob-xhr',
+      '/blob-image',
+      '/plain-ws',
+      '/secure-ws'
+    ]
+    expect(distinctUserAgents(receiptsForPaths(result.receipts, targetPaths))).toEqual([
+      result.mobileUserAgent
+    ])
+    expect(identityForContext(result.identities, 'document').userAgent).toBe(result.mobileUserAgent)
+    expect(identityForContext(result.identities, 'blob').userAgent).toBe(result.mobileUserAgent)
+
+    // A per-target override cannot reach a worker, so the worker stays on the session identity in
+    // JavaScript. Its requests must leave on that same identity rather than borrowing the preset
+    // of whichever tab happened to start it.
+    for (const [context, paths] of [
+      ['shared-worker', ['/shared-worker-fetch-a', '/shared-worker-fetch-b']],
+      ['service-worker', ['/service-worker-fetch']]
+    ] as const) {
+      expect(identityForContext(result.identities, context).userAgent).toBe(result.cleanUserAgent)
+      expect(distinctUserAgents(receiptsForPaths(result.receipts, paths))).toEqual([
+        result.cleanUserAgent
+      ])
     }
-    requests.push({
-      url: details.url,
-      userAgent: uaKey ? headers[uaKey] : null,
-      clientHints
-    })
-  })
 
-  const server = createServer(
-    {
-      cert: ${JSON.stringify(LOCAL_HTTPS_TEST_CERTIFICATE)},
-      key: ${JSON.stringify(LOCAL_HTTPS_TEST_PRIVATE_KEY)}
-    },
-    (_request, response) => {
-      response.setHeader('Accept-CH', 'Sec-CH-UA-Full-Version-List')
-      response.end('<!doctype html><title>identity</title>')
-    }
-  )
-  await new Promise((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', resolve)
-  })
-  const origin = 'https://127.0.0.1:' + server.address().port
-  const window = new BrowserWindow({ show: false, webPreferences: { partition } })
-  mark('window created')
-  let navigatorUserAgent
-  let navigatorUserAgentData
-  try {
-    await window.loadURL(origin + '/')
-    navigatorUserAgent = await window.webContents.executeJavaScript('navigator.userAgent')
-    navigatorUserAgentData = await window.webContents.executeJavaScript(
-      "(async () => { const data = navigator.userAgentData; return data ? { brands: data.brands, highEntropy: await data.getHighEntropyValues(['fullVersionList']) } : null })()"
+    expect(userAgentForPath(result.receipts, '/popup')).toBe(result.cleanUserAgent)
+    expect(identityForContext(result.identities, 'popup').userAgent).toBe(result.cleanUserAgent)
+  }, 40_000)
+
+  // The leak this closes: with one tab emulated mobile and a desktop peer sharing the session, the
+  // shared worker reported desktop in JavaScript while its fetches left as mobile — and the peer's
+  // own worker traffic inherited a preset that peer never had. Closing the emulated tab silently
+  // reverted it. A single context was internally inconsistent, which is worse than two contexts
+  // that disagree but are each coherent.
+  it('leaves a desktop peer and the shared worker untouched by another tab emulation', async () => {
+    const result = await runProbe('mixed-mobile')
+    assertCoverage(result)
+    expect(identityForContext(result.identities, 'document').userAgent).toBe(result.mobileUserAgent)
+    expect(identityForContext(result.identities, 'desktop-peer').userAgent).toBe(
+      result.cleanUserAgent
     )
-    await window.webContents.executeJavaScript(
-      'fetch("/hints").then((response) => response.text())'
+    expect(userAgentForPath(result.receipts, '/desktop-peer')).toBe(result.cleanUserAgent)
+
+    // Both shared workers report clean in JavaScript, so both must fetch as clean.
+    expect(
+      result.identities
+        .filter(({ context }) => context === 'shared-worker')
+        .map(({ userAgent }) => userAgent)
+    ).toEqual([result.cleanUserAgent, result.cleanUserAgent])
+    expect(
+      distinctUserAgents(
+        receiptsForPaths(result.receipts, ['/shared-worker-fetch-a', '/shared-worker-fetch-b'])
+      )
+    ).toEqual([result.cleanUserAgent])
+  }, 40_000)
+
+  it('keeps the process-native identity across documents, frames, and workers', async () => {
+    const result = await runProbe('native')
+    assertCoverage(result)
+    expect(identityForContext(result.identities, 'document').userAgent).toBe(result.rawUserAgent)
+    expect(identityForContext(result.identities, 'blob').userAgent).toBe(result.rawUserAgent)
+    expect(identityForContext(result.identities, 'shared-worker').userAgent).toBe(
+      result.rawUserAgent
     )
-  } finally {
-    await new Promise((resolve) => server.close(resolve))
-  }
-
-  // Dispatch a real auth-host request without allowing it to reach the Internet.
-  await sess.setProxy({ proxyRules: 'http://127.0.0.1:9', proxyBypassRules: '<-loopback>' })
-  await window.loadURL('https://accounts.google.com/v3/signin/identifier').catch(() => {})
-  mark('navigations attempted')
-  clearTimeout(timeout)
-  writeFileSync(resultPath, JSON.stringify({
-    rawUserAgent,
-    sessionUserAgent: sess.getUserAgent(),
-    navigatorUserAgent,
-    navigatorUserAgentData,
-    requests
-  }))
-  window.destroy()
-  app.exit(0)
-}
-
-run().catch((error) => {
-  writeFileSync(resultPath, JSON.stringify({ step: currentStep, error: String(error?.stack || error) }))
-  app.exit(1)
+    expect(identityForContext(result.identities, 'service-worker').userAgent).toBe(
+      result.rawUserAgent
+    )
+    expect(userAgentForPath(result.receipts, '/')).toBe(result.rawUserAgent)
+    expect(userAgentForPath(result.receipts, '/blob-fetch')).toBe(result.rawUserAgent)
+    expect(userAgentForPath(result.receipts, '/shared-worker-fetch-a')).toBe(result.rawUserAgent)
+    expect(userAgentForPath(result.receipts, '/service-worker-fetch')).toBe(result.rawUserAgent)
+    expect(userAgentForPath(result.receipts, '/no-header-fill')).toBe(result.rawUserAgent)
+  }, 40_000)
 })
-`
+
+async function runProbe(arm: ProbeArm): Promise<ProbeResult> {
+  const root = mkdtempSync(join(tmpdir(), `orca-wire-identity-${arm}-`))
+  fixtureRoots.push(root)
+  const processIdentityModulePath = join(root, 'browser-process-user-agent.cjs')
+  const exceptionModulePath = join(root, 'browser-session-ua.cjs')
+  await Promise.all([
+    buildModule('src/main/browser/browser-process-user-agent.ts', processIdentityModulePath),
+    buildModule('src/main/browser/browser-session-ua.ts', exceptionModulePath)
+  ])
+  const server = await startBrowserSessionUaWireProbeServer()
+  const resultPath = join(root, 'result.json')
+  const barrierPath = join(root, 'continue')
+  const fixturePath = join(root, 'main.cjs')
+  const cdpPort = await reservePort()
+  writeFileSync(
+    fixturePath,
+    fixtureMain({
+      arm,
+      barrierPath,
+      exceptionModulePath,
+      httpOrigin: server.httpOrigin,
+      processIdentityModulePath,
+      resultPath
+    })
+  )
+  let process: ChildProcess | null = null
+  let collector: BrowserSessionUaCdpCollector | null = null
+  let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | null = null
+  try {
+    process = launchFixture(fixturePath, root, cdpPort)
+    await waitForBrowserCdpEndpoint(cdpPort)
+    browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
+    collector = await BrowserSessionUaCdpCollector.connect(cdpPort)
+    await collector.installAutoAttach()
+    writeFileSync(barrierPath, '')
+    const processResult = await waitForProcess(process)
+    const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
+    expect(
+      processResult.code,
+      `${fixtureResult}\n${processResult.stderr}\n${JSON.stringify({ diagnostics: collector.diagnostics, receipts: server.receipts, identities: server.identities })}`
+    ).toBe(0)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: JSON.parse is untyped; the fixture writes exactly this shape with JSON.stringify, and the assertions below fail loudly on a missing member.
+    const parsed = JSON.parse(fixtureResult) as Omit<
+      ProbeResult,
+      'receipts' | 'identities' | 'cdpRequests' | 'cdpDiagnostics'
+    >
+    return {
+      ...parsed,
+      receipts: [...server.receipts],
+      identities: [...server.identities],
+      cdpDiagnostics: [...collector.diagnostics],
+      cdpRequests: collector
+        .snapshot()
+        .filter(
+          ({ url }) => url.startsWith(server.httpOrigin) || url.startsWith(server.httpsOrigin)
+        )
+    }
+  } finally {
+    await collector?.close().catch(() => {})
+    await browser?.close().catch(() => {})
+    await server.close()
+    if (process && process.exitCode === null) {
+      process.kill('SIGTERM')
+    }
+  }
 }
 
-async function runFixture(): Promise<FixtureResult> {
-  const root = mkdtempSync(join(tmpdir(), 'orca-wire-identity-'))
-  fixtureRoots.push(root)
-  const modulePath = join(root, 'browser-session-ua.cjs')
-  const resultPath = join(root, 'result.json')
-  const fixturePath = join(root, 'main.cjs')
+async function buildModule(entry: string, outputPath: string): Promise<void> {
   await buildVite({
     configFile: false,
     logLevel: 'silent',
     build: {
       emptyOutDir: false,
       lib: {
-        entry: join(process.cwd(), 'src/main/browser/browser-session-ua.ts'),
+        entry: join(process.cwd(), entry),
         formats: ['cjs'],
-        fileName: () => 'browser-session-ua.cjs'
+        fileName: () => basename(outputPath)
       },
-      outDir: root,
+      outDir: join(outputPath, '..'),
       target: 'node20',
       rollupOptions: { external: ['electron', /^node:/] }
     }
   })
-  writeFileSync(fixturePath, buildFixtureMain(modulePath, resultPath))
+}
+
+function launchFixture(fixturePath: string, root: string, cdpPort: number): ChildProcess {
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
-  const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
-  for (let attempt = 1; ; attempt += 1) {
-    rmSync(resultPath, { force: true })
-    // Why a fresh profile per attempt: a launch that never reached `ready` may have left the
-    // Chromium profile mid-initialization, and reusing it would bias the retry.
-    const electronArgs = [fixturePath, `--user-data-dir=${join(root, `profile-${attempt}`)}`]
-    const run = spawnSync(
-      executable,
-      process.platform === 'linux'
-        ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
-        : electronArgs,
-      { encoding: 'utf8', env, timeout: 60_000 }
-    )
-    const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
-    if (attempt < FIXTURE_LAUNCH_ATTEMPTS && neverReachedElectronReady(fixtureResult)) {
-      continue
+  return spawn(
+    process.platform === 'linux' ? 'xvfb-run' : electronBinary,
+    process.platform === 'linux'
+      ? [
+          '--auto-servernum',
+          electronBinary,
+          fixturePath,
+          `--user-data-dir=${join(root, 'profile')}`,
+          `--remote-debugging-port=${cdpPort}`,
+          '--no-sandbox'
+        ]
+      : [
+          fixturePath,
+          `--user-data-dir=${join(root, 'profile')}`,
+          `--remote-debugging-port=${cdpPort}`
+        ],
+    {
+      env: { ...env, ORCA_BACKGROUND_LAUNCH: '1' },
+      stdio: ['ignore', 'pipe', 'pipe']
     }
-    expect(run.error).toBeUndefined()
-    expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
-    return JSON.parse(fixtureResult) as FixtureResult
+  )
+}
+
+function fixtureMain(options: {
+  arm: ProbeArm
+  barrierPath: string
+  exceptionModulePath: string
+  httpOrigin: string
+  processIdentityModulePath: string
+  resultPath: string
+}): string {
+  return String.raw`
+const { app, BrowserWindow, net, session } = require('electron')
+const { existsSync, writeFileSync } = require('node:fs')
+const processIdentity = require(${JSON.stringify(options.processIdentityModulePath)})
+const { cleanElectronUserAgent } = require(${JSON.stringify(options.exceptionModulePath)})
+const arm = ${JSON.stringify(options.arm)}
+const startupMarks = []
+app.setName('OrcaWireIdentityFixture')
+const preReadyNativeUserAgent = app.userAgentFallback
+let identity
+if (arm !== 'late-session-setter') {
+  identity = processIdentity.initializeBrowserProcessUserAgent(arm === 'native' ? 'native' : 'clean')
+  startupMarks.push('fallback')
+}
+const waitForBarrier = async () => {
+  const deadline = Date.now() + 15000
+  while (!existsSync(${JSON.stringify(options.barrierPath)})) {
+    if (Date.now() >= deadline) throw new Error('startup barrier timeout')
+    await new Promise(resolve => setTimeout(resolve, 20))
   }
 }
-
-function parseClientHintBrands(value: string): UserAgentBrand[] {
-  return [...value.matchAll(/"([^"]+)";v="([^"]+)"/g)].map((match) => ({
-    brand: match[1],
-    version: match[2]
+const requestWithoutUserAgent = (sess, url) => new Promise((resolve, reject) => {
+  const request = net.request({ session: sess, url })
+  request.on('response', response => { response.on('data', () => {}); response.on('end', resolve) })
+  request.on('error', reject)
+  request.end()
+})
+async function run() {
+  const timeout = setTimeout(() => { writeFileSync(${JSON.stringify(options.resultPath)}, JSON.stringify({ error: 'timeout', startupMarks })); app.exit(2) }, 10000)
+  await app.whenReady()
+  startupMarks.push('ready')
+  app.setName('OrcaWireIdentityFixtureAfterReady')
+  const fallbackAfterReadyNameChange = app.userAgentFallback
+  await waitForBarrier()
+  const sess = session.fromPartition('persist:wire-identity-test')
+  startupMarks.push('session')
+  const rawUserAgent = arm === 'clean' ? preReadyNativeUserAgent : app.userAgentFallback
+  const cleanUserAgent = identity?.cleanUserAgent ?? cleanElectronUserAgent(rawUserAgent)
+  if (arm === 'late-session-setter') sess.setUserAgent(cleanUserAgent)
+  sess.setCertificateVerifyProc((_request, callback) => callback(0))
+  const chromeVersion = cleanUserAgent.match(/Chrome\/([\d.]+)/)?.[1] || process.versions.chrome
+  const major = chromeVersion.split('.')[0]
+  const mobileUserAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/' + chromeVersion + ' Mobile/15E148 Safari/604.1'
+  let mainWebContentsId
+  if (arm === 'clean' || arm === 'mobile' || arm === 'mixed-mobile') {
+    sess.webRequest.onBeforeSendHeaders(
+      { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
+      (details, callback) => {
+        const userAgentKey = Object.keys(details.requestHeaders).find(
+          key => key.toLowerCase() === 'user-agent'
+        ) || 'User-Agent'
+        if (arm !== 'mobile' && arm !== 'mixed-mobile') {
+          callback({ requestHeaders: details.requestHeaders })
+          return
+        }
+        // Models the viewport-emulation rule: only the emulated target's own requests are rewritten.
+        // A worker request carries no webContentsId, so it keeps the session identity here — which is
+        // the identity the worker's own JavaScript reports.
+        if (details.webContentsId !== mainWebContentsId) {
+          callback({ requestHeaders: details.requestHeaders })
+          return
+        }
+        details.requestHeaders[userAgentKey] = mobileUserAgent
+        callback({ requestHeaders: details.requestHeaders })
+      }
+    )
+  }
+  const windows = []
+  const window = new BrowserWindow({ show: false, webPreferences: { partition: 'persist:wire-identity-test', sandbox: true } })
+  windows.push(window)
+  startupMarks.push('webContents')
+  mainWebContentsId = window.webContents.id
+  const pageIdentity = arm === 'native' ? rawUserAgent : arm === 'mobile' || arm === 'mixed-mobile' ? mobileUserAgent : cleanUserAgent
+  if (arm === 'native' || arm === 'mobile' || arm === 'mixed-mobile') window.webContents.setUserAgent(pageIdentity)
+  window.webContents.setWindowOpenHandler(() => ({
+    action: 'allow',
+    createWindow: options => {
+      const popup = new BrowserWindow({ ...options, show: false })
+      popup.webContents.setUserAgent(arm === 'native' ? rawUserAgent : cleanUserAgent)
+      windows.push(popup)
+      return popup.webContents
+    }
   }))
+  await window.loadURL(${JSON.stringify(options.httpOrigin)} + '/')
+  const [navigatorUserAgent] = await Promise.all([
+    window.webContents.executeJavaScript('navigator.userAgent'),
+    window.webContents.executeJavaScript('window.probePromise'),
+    requestWithoutUserAgent(sess, ${JSON.stringify(options.httpOrigin)} + '/no-header-fill')
+  ])
+  if (arm === 'mixed-mobile') {
+    const peer = new BrowserWindow({ show: false, webPreferences: { partition: 'persist:wire-identity-test', sandbox: true } })
+    windows.push(peer)
+    await peer.loadURL(${JSON.stringify(options.httpOrigin)} + '/desktop-peer')
+    await peer.webContents.executeJavaScript('window.peerProbePromise')
+  }
+  const defaultWindow = new BrowserWindow({ show: false, webPreferences: { sandbox: true } })
+  windows.push(defaultWindow)
+  await defaultWindow.loadURL(${JSON.stringify(options.httpOrigin)} + '/default-window')
+  const appIsolatedWindow = new BrowserWindow({ show: false, webPreferences: { partition: 'persist:app-surface', sandbox: true } })
+  windows.push(appIsolatedWindow)
+  await appIsolatedWindow.loadURL(${JSON.stringify(options.httpOrigin)} + '/isolated-window')
+  await Promise.all([
+    requestWithoutUserAgent(session.defaultSession, ${JSON.stringify(options.httpOrigin)} + '/default-session-fill'),
+    requestWithoutUserAgent(session.fromPartition('persist:app-surface'), ${JSON.stringify(options.httpOrigin)} + '/isolated-session-fill')
+  ])
+  await new Promise(resolve => setTimeout(resolve, 250))
+  clearTimeout(timeout)
+  writeFileSync(${JSON.stringify(options.resultPath)}, JSON.stringify({ arm, rawUserAgent, cleanUserAgent, mobileUserAgent, sessionUserAgent: sess.getUserAgent(), navigatorUserAgent, fallbackAfterReadyNameChange, startupMarks }))
+  for (const candidate of windows) if (!candidate.isDestroyed()) candidate.destroy()
+  app.exit(0)
+}
+run().catch(error => { writeFileSync(${JSON.stringify(options.resultPath)}, JSON.stringify({ error: String(error?.stack || error), startupMarks })); app.exit(1) })
+`
 }
 
-describe('browser session wire identity under Electron', () => {
-  it('strips the Electron and app tokens for ordinary hosts and sends Firefox to Google auth hosts', async () => {
-    const result = await runFixture()
+function assertCoverage(result: ProbeResult): void {
+  const paths = new Set(result.receipts.map(({ path }) => path))
+  for (const path of requiredPaths) {
+    expect(
+      paths,
+      `${result.arm} omitted ${path}: ${JSON.stringify(result.cdpDiagnostics)}`
+    ).toContain(path)
+  }
+  const cdpUrls = result.cdpRequests.map(({ url }) => new URL(url).pathname)
+  expect(cdpUrls).toContain('/blob-fetch')
+  expect(result.cdpDiagnostics.some((message) => message.includes('attached:shared_worker:'))).toBe(
+    true
+  )
+  const expectedContexts = ['blob', 'document', 'frame', 'popup', 'service-worker', 'shared-worker']
+  if (result.arm === 'mixed-mobile') {
+    expectedContexts.push('desktop-peer', 'shared-worker')
+  }
+  expect(result.identities.map(({ context }) => context).sort()).toEqual(expectedContexts.sort())
+}
 
-    // Presence precondition: the raw identity really does carry the tokens, so the absence
-    // assertions below cannot pass vacuously on an empty or already-clean UA.
-    expect(result.rawUserAgent).toMatch(/ Electron\/\d/)
-    expect(result.rawUserAgent).toMatch(/\(KHTML, like Gecko\) \S+ Chrome\//)
+function identityViolations(result: ProbeResult): string[] {
+  return result.receipts
+    .filter(({ userAgent }) => userAgent !== result.cleanUserAgent)
+    .map(({ protocol, path }) => `${protocol}:${path}`)
+}
 
-    // The whole point of STA-7147: nothing between the engine comment and Chrome/, and no
-    // Electron token anywhere — the shape a real Chrome sends.
-    expect(result.sessionUserAgent).not.toContain('Electron/')
-    expect(result.sessionUserAgent).toMatch(/\(KHTML, like Gecko\) Chrome\/[\d.]+ Safari\/537\.36$/)
+function distinctUserAgents(records: readonly { userAgent: string | null }[]): (string | null)[] {
+  return [...new Set(records.map(({ userAgent }) => userAgent))].sort()
+}
 
-    const ordinary = result.requests.find((request) => request.url.endsWith('/hints'))
-    expect(ordinary, JSON.stringify(result.requests)).toBeDefined()
-    expect(ordinary?.userAgent).toBe(result.sessionUserAgent)
-    expect(result.navigatorUserAgent).toBe(result.sessionUserAgent)
-    expect(result.navigatorUserAgentData).not.toBeNull()
+function distinctJavaScriptUserAgents(records: readonly WireProbeJavaScriptIdentity[]): string[] {
+  return [...new Set(records.map(({ userAgent }) => userAgent))].sort()
+}
 
-    // Chromium owns both client-hint surfaces. Rewriting only the request headers would make this
-    // comparison fail while leaving the legacy UA assertions above green.
-    const wireBrands = parseClientHintBrands(ordinary?.clientHints['sec-ch-ua'] ?? '')
-    expect(wireBrands).toEqual(result.navigatorUserAgentData?.brands)
-    expect(wireBrands.some(({ brand }) => /Electron|Orca/i.test(brand))).toBe(false)
-    const chromeMajor = result.sessionUserAgent.match(/Chrome\/(\d+)/)?.[1]
-    expect(wireBrands.find(({ brand }) => brand === 'Chromium')?.version).toBe(chromeMajor)
+function receiptsForPaths(
+  receipts: readonly WireProbeReceipt[],
+  paths: readonly string[]
+): WireProbeReceipt[] {
+  const selected = new Set(paths)
+  return receipts.filter(({ path }) => selected.has(path))
+}
 
-    const fullVersionList = ordinary?.clientHints['sec-ch-ua-full-version-list']
-    if (fullVersionList) {
-      expect(parseClientHintBrands(fullVersionList)).toEqual(
-        result.navigatorUserAgentData?.highEntropy.fullVersionList
-      )
-    }
+function userAgentForPath(receipts: readonly WireProbeReceipt[], path: string): string | null {
+  const values = distinctUserAgents(receipts.filter((receipt) => receipt.path === path))
+  expect(values, path).toHaveLength(1)
+  return values[0] ?? null
+}
 
-    const auth = result.requests.find((request) =>
-      request.url.startsWith('https://accounts.google.com/')
-    )
-    expect(auth, JSON.stringify(result.requests)).toBeDefined()
-    expect(auth?.userAgent).toMatch(/Firefox\/\d/)
-    expect(auth?.userAgent).not.toContain('Chrome')
-    expect(auth?.clientHints).toEqual({})
+function identityForContext(
+  identities: readonly WireProbeJavaScriptIdentity[],
+  context: string
+): WireProbeJavaScriptIdentity {
+  const matches = identities.filter((identity) => identity.context === context)
+  expect(matches, context).toHaveLength(1)
+  return matches[0]!
+}
+
+async function reservePort(): Promise<number> {
+  const server = createServer()
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', resolve)
   })
-})
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('cdp port unavailable')
+  }
+  await new Promise<void>((resolve) => server.close(() => resolve()))
+  return address.port
+}
+
+function waitForProcess(process: ChildProcess): Promise<{ code: number | null; stderr: string }> {
+  let stderr = ''
+  process.stderr?.setEncoding('utf8')
+  process.stderr?.on('data', (chunk: string) => {
+    stderr += chunk
+  })
+  return new Promise((resolve, reject) => {
+    process.once('error', reject)
+    process.once('exit', (code) => resolve({ code, stderr }))
+  })
+}

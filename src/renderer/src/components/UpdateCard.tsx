@@ -108,7 +108,6 @@ export function UpdateCard(): React.JSX.Element | null {
       status,
       dismissedVersion,
       cachedVersion,
-      hasStartedDownload: hasStartedDownload.current,
       updateUserInitiatedCycle,
       autoDismissed,
       collapsed

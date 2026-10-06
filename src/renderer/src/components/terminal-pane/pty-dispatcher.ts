@@ -206,6 +206,7 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
         // Why forwarded: pty ids are reused, so a buffered exit needs the lifetime it describes to
         // tell "this pane's shell died" from "the id's previous owner died" (#16970).
         ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {}),
+        ...(payload.replacedByRestart === true ? { replacedByRestart: true } : {}),
         ...(primary ? { primary } : {}),
         sidecars: sidecars ? Array.from(sidecars) : []
       })

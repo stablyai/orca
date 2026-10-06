@@ -1,9 +1,10 @@
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/structured-agent-session-launch-unconfirmed-recheck'
 import { useAppStore } from '../../store'
 import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
 import {
-  beginWebSessionTabsSnapshotRecovery,
   recordReceivedWebSessionTabsInventory,
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
@@ -80,15 +81,6 @@ export function handleGlobalSessionInventoryEvent({
     event.snapshots,
     event.authoritative === true,
     runtimeId
-  )
-  const finishRecoveries = event.snapshots.map((snapshot, index) =>
-    unchanged[index]
-      ? null
-      : beginWebSessionTabsSnapshotRecovery(
-          environmentId,
-          snapshot.worktree,
-          receivedFrames[index]!
-        )
   )
   let settleHydration: (() => void) | null = null
   void Promise.all(
@@ -179,11 +171,11 @@ export function handleGlobalSessionInventoryEvent({
       }
     })
     .finally(() => {
-      for (const finishRecovery of finishRecoveries) {
-        finishRecovery?.()
-      }
       if (isCurrent()) {
         settleHydration?.()
       }
     })
+  // Each subscription opens with one census: the host is reachable again. Chats it lists were
+  // already settled as published above, before any recovery await.
+  recheckUnconfirmedStructuredAgentLaunches(toRuntimeExecutionHostId(environmentId))
 }

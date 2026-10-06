@@ -1,3 +1,5 @@
+import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
+import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import type { IDisposable } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
@@ -91,14 +93,16 @@ export type UseTerminalPaneLifecycleDeps = {
     directSshRetryAttemptId?: DirectSshPaneRetryAttemptId
   ) => void
   markWorktreeUnread: (worktreeId: string) => void
-  markTerminalTabUnread: (tabId: string) => void
-  markTerminalPaneUnread: (paneKey: string) => void
+  markTerminalTabUnread: (tabId: string, reason: AgentAttentionUnreadReason) => void
+  markTerminalPaneUnread: (paneKey: string, reason: AgentAttentionUnreadReason) => void
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
   onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
+    ptyId?: string | null
+    workspaceOwner?: NotificationWorkspaceOwner
     terminalTitle?: string
     paneKey?: string
     agentStatusSnapshot?: ParsedAgentStatusPayload

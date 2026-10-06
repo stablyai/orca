@@ -21,7 +21,7 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     const state = store.getState()
     const tab = state.createTab(id, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     return tab.id
   }, worktreeId)
   await expect
@@ -198,7 +198,7 @@ test.describe('cold worktree activation deferral', () => {
     await page.evaluate((tabId) => {
       const state = window.__store?.getState()
       state?.setActiveTab(tabId)
-      state?.setActiveTabType('terminal')
+      state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     }, deferredTabId)
     await expect
       .poll(async () => (await getMountedTabIds(page, [deferredTabId])).length, {

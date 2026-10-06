@@ -4,6 +4,7 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
+import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
@@ -15,6 +16,10 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     connectionId?: string | null
     terminalHandle?: string
     payload: ParsedAgentStatusPayload
+    /** `process`: derived from the pane's foreground process rather than parsed from its bytes. */
+    origin?: 'process'
+    /** Drop this write when a hook has reported the pane since then (the hook owns that command). */
+    yieldsToHookSince?: number
   }): void {
     const physicalPaneKey = event.paneKey.trim()
     let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
@@ -42,17 +47,30 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       return
     }
     const tabId = paneKey !== physicalPaneKey ? parsedPaneKey?.tabId : reportedTabId
-    if (this.getAgentStatusDisposition(paneKey) !== 'accept') {
-      return
-    }
-    const worktreeId =
-      event.worktreeId !== undefined && event.worktreeId.trim().length > 0
-        ? event.worktreeId.trim()
-        : undefined
+    const worktreeId = event.worktreeId?.trim() || undefined
     const connectionId =
       typeof event.connectionId === 'string' && event.connectionId.trim().length > 0
         ? event.connectionId.trim()
         : null
+    const retainedLaunchTokenHash = this.retainedOwnerLaunchTokenHash(paneKey, {
+      worktreeId,
+      connectionId
+    })
+    // Why: a verified process-lifetime Working proves a new agent run, as a hook new-turn event does.
+    const disposition = this.getAgentStatusDisposition(
+      paneKey,
+      event.origin === 'process' && event.payload.state === 'working'
+        ? { processNewTurn: true }
+        : this.restartedStatusLaunchTokenHashByPaneKey.get(paneKey)?.allowRetainedOwner
+          ? { retainedLaunchTokenHash }
+          : undefined
+    )
+    if (disposition === 'suppress') {
+      return
+    }
+    if (disposition === 'restart') {
+      this.observations.rebind(paneKey)
+    }
     const terminalHandle =
       typeof event.terminalHandle === 'string' && event.terminalHandle.trim().length > 0
         ? event.terminalHandle.trim()
@@ -81,13 +99,21 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+    // Why: a hook that reported during this command owns it (OpenCode 1 `run` loads its plugin in-process).
+    const hookOwnsCommand =
+      event.yieldsToHookSince !== undefined &&
+      previous?.observation?.origin === 'hook' &&
+      previous.receivedAt >= event.yieldsToHookSince
     if (
-      previous?.claudeLeadBoundaryChildOnly === true &&
-      previous.payload.agentType === 'claude' &&
-      event.payload.agentType === 'claude'
+      hookOwnsCommand ||
+      (previous?.payload.agentType === 'claude' &&
+        event.payload.agentType === 'claude' &&
+        isAgentStatusHeldOpenByChildWork(previous.payload) &&
+        previous.payload.subagents?.some((subagent) => subagent.state === 'working') === true)
     ) {
-      // Why: OSC has no child identity or lead boundary, so it cannot replace a persisted child-only proof before the lifecycle hook arrives.
-      if (mutationBefore !== undefined) {
+      // Why: OSC carries no child identity, so it cannot settle or repaint a row child agents hold open
+      // (working, or waiting on a child's prompt); their lifecycle hooks will.
+      if (previous && mutationBefore !== undefined) {
         this.commitStatusRowMutation(mutationBefore, previous)
         this.emitEnrichedStatus(previous)
       }
@@ -130,6 +156,14 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       (previous.payload.state !== 'done' || event.payload.state === 'done')
         ? previous.providerSession
         : undefined
+    // Why: OSC carries no main agent fact. While it repaints the state the hook row already holds, the
+    // main agent behind that state is unchanged too; a different state is a turn edge OSC cannot date.
+    const preservedMainAgent =
+      previous?.payload.mainAgent &&
+      previous.payload.state === event.payload.state &&
+      (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType)
+        ? previous.payload.mainAgent
+        : undefined
     // Why: OSC status is a runtime observation, not a prompt boundary; keep prompt-sent telemetry tied to native hooks.
     this.applyNormalizedStatus(
       {
@@ -139,10 +173,12 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         connectionId,
         ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
         ...(terminalHandle ? { terminalHandle } : {}),
-        payload: event.payload
+        payload: preservedMainAgent
+          ? { ...event.payload, mainAgent: preservedMainAgent }
+          : event.payload
       },
       undefined,
-      'osc',
+      event.origin ?? 'osc',
       undefined,
       mutationBefore
     )
