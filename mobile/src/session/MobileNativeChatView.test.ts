@@ -412,7 +412,7 @@ describe('MobileNativeChatView', () => {
         })
         list().props.onContentSizeChange(320, 1_350)
       })
-      expect(scrollToEnd).toHaveBeenCalledOnce()
+      expect(scrollToOffset).toHaveBeenCalledTimes(2)
       expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 1_350 })
     } finally {
       vi.useRealTimers()
@@ -487,7 +487,7 @@ describe('MobileNativeChatView', () => {
       })
       act(() => list().props.onContentSizeChange(320, 1_250))
 
-      expect(scrollToEnd).toHaveBeenCalledOnce()
+      expect(scrollToOffset).toHaveBeenCalledOnce()
       expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 1_250 })
     } finally {
       vi.useRealTimers()
@@ -520,8 +520,8 @@ describe('MobileNativeChatView', () => {
         vi.runOnlyPendingTimers()
       })
 
-      expect(scrollToEnd).toHaveBeenCalledOnce()
-      expect(scrollToEnd).toHaveBeenLastCalledWith({ animated: false })
+      expect(scrollToOffset).toHaveBeenCalledOnce()
+      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 1_250 })
       expect(
         renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Scroll to latest')
       ).toHaveLength(0)
@@ -595,14 +595,17 @@ describe('MobileNativeChatView', () => {
       await scrollAwayFromTail()
       scrollToEnd.mockClear()
 
+      // By send time the list has measured its content; the send pins to that height.
+      act(() => list().props.onContentSizeChange(320, 1_200))
+
       await pressSend()
 
-      expect(scrollToEnd).toHaveBeenCalledOnce()
-      expect(scrollToEnd).toHaveBeenLastCalledWith({ animated: false })
+      expect(scrollToOffset).toHaveBeenCalledOnce()
+      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 1_200 })
       await act(async () => {
         vi.advanceTimersByTime(60)
       })
-      expect(scrollToEnd).toHaveBeenCalledOnce()
+      expect(scrollToOffset).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
     }
@@ -614,14 +617,17 @@ describe('MobileNativeChatView', () => {
     await scrollAwayFromTail()
     scrollToEnd.mockClear()
 
+    // The chevron jumps to the height the detached list last measured.
+    act(() => list().props.onContentSizeChange(320, 1_200))
+
     const chevron = renderer!.root.find(
       (node) => node.props.accessibilityLabel === 'Scroll to latest'
     )
     act(() => chevron.props.onPress())
-    expect(scrollToEnd).toHaveBeenLastCalledWith({ animated: false })
+    expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 1_200 })
 
     act(() => list().props.onContentSizeChange(320, 1_300))
-    expect(scrollToEnd).toHaveBeenCalledOnce()
+    expect(scrollToOffset).toHaveBeenCalledTimes(2)
     expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 1_300 })
   })
 
@@ -633,23 +639,26 @@ describe('MobileNativeChatView', () => {
       await act(async () => {
         vi.runOnlyPendingTimers()
       })
+      // The list measures its content before the keyboard can resize the viewport.
+      act(() => list().props.onContentSizeChange(320, 1_000))
       scrollToEnd.mockClear()
+      scrollToOffset.mockClear()
 
       await update({ folded, keyboardInset: 320 })
       act(() => list().props.onLayout?.({ nativeEvent: { layout: { height: 400 } } }))
 
-      expect(scrollToEnd).toHaveBeenCalledOnce()
-      expect(scrollToEnd).toHaveBeenLastCalledWith({ animated: false })
+      expect(scrollToOffset).toHaveBeenCalledOnce()
+      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 1_000 })
       await act(async () => {
         vi.advanceTimersByTime(60)
       })
-      expect(scrollToEnd).toHaveBeenCalledOnce()
+      expect(scrollToOffset).toHaveBeenCalledOnce()
 
       await scrollAwayFromTail()
-      scrollToEnd.mockClear()
+      scrollToOffset.mockClear()
       await update({ folded, keyboardInset: 0 })
       act(() => list().props.onLayout?.({ nativeEvent: { layout: { height: 700 } } }))
-      expect(scrollToEnd).not.toHaveBeenCalled()
+      expect(scrollToOffset).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
