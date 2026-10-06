@@ -17837,6 +17837,8 @@
         "toggleDetails": "Alternar detalles del turno"
       },
       "jumpToLatest": "Saltar a lo último",
+      "jumpToTop": "Ir al principio",
+      "transcriptLabel": "Conversación",
       "toggle": {
         "showTerminal": "Mostrar terminal",
         "showChat": "Mostrar vista de chat"

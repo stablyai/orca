@@ -29,6 +29,7 @@ export function useNativeChatPickerCommandDispatch(args: {
   resolveTarget: () => NativeChatResolvedTarget | null
   onSlashCommand?: (command: string, output?: string) => void
   answerCommandLocally?: NativeChatLocalCommandAnswer
+  onSubmitted?: () => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   trackPendingSend: NativeChatSendLifecycle['trackPendingSend']
   setHistory: Dispatch<SetStateAction<HistoryState>>
@@ -46,6 +47,7 @@ export function useNativeChatPickerCommandDispatch(args: {
     resolveTarget,
     onSlashCommand,
     answerCommandLocally,
+    onSubmitted,
     sessionOptionsSurface,
     trackPendingSend,
     setHistory,
@@ -69,6 +71,7 @@ export function useNativeChatPickerCommandDispatch(args: {
           answerCommandLocally,
           sessionOptionsSurface,
           onSlashCommand,
+          onSubmitted,
           setHistory,
           setDraft,
           setCaret,
@@ -97,6 +100,7 @@ export function useNativeChatPickerCommandDispatch(args: {
         agent,
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
       })
+      onSubmitted?.()
       setHistory((previous) => pushHistory(previous, text))
       setDraft('')
       setCaret(0)
@@ -113,6 +117,7 @@ export function useNativeChatPickerCommandDispatch(args: {
       disabled,
       isDispatchingSessionOption,
       onSlashCommand,
+      onSubmitted,
       resolveTarget,
       sessionOptionsSurface,
       setActiveSuggestion,

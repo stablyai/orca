@@ -148,6 +148,7 @@ export function useStructuredAgentSession(args: {
     composerScopeKey,
     queueDelivery,
     queuedMessageIds,
+    isWorking: transportState.isWorking,
     stopping: stopControl.stopping
   })
 

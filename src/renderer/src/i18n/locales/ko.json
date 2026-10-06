@@ -17872,6 +17872,8 @@
         "toggleDetails": "턴 세부정보 전환"
       },
       "jumpToLatest": "최신으로 이동",
+      "jumpToTop": "맨 위로 이동",
+      "transcriptLabel": "대화",
       "toggle": {
         "showTerminal": "terminal 표시",
         "showChat": "채팅 보기 표시"

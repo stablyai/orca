@@ -16,7 +16,8 @@ const ATTACHMENT = { id: 'a1', path: '/tmp/shot.png' } as NativeChatComposerImag
 
 function harness(
   agent: AgentType,
-  threadGoal?: NativeChatStructuredComposerTransport['threadGoal']
+  threadGoal?: NativeChatStructuredComposerTransport['threadGoal'],
+  onSubmitted?: () => void
 ) {
   const structuredTransport = {
     send: vi.fn(() => true),
@@ -38,6 +39,7 @@ function harness(
   if (threadGoal) {
     structuredTransport.threadGoal = threadGoal
   }
+  structuredTransport.onSubmitted = onSubmitted
   const { result } = renderHook(() =>
     useNativeChatStructuredComposerSend({
       agent,
@@ -95,5 +97,34 @@ describe('attachment guard follows what the host claims', () => {
     )
     expect(setObjective).not.toHaveBeenCalled()
     expect(structuredTransport.send).not.toHaveBeenCalled()
+  })
+})
+
+// The pane brings the latest into view on this: a conversation command at the press, a message
+// once admitted, and neither for a refusal or a command the chat does not run.
+describe('reports the sends that bring the latest into view', () => {
+  it('reports a conversation command at the press, then not a message the transport refused', async () => {
+    const onSubmitted = vi.fn()
+    const { send, structuredTransport } = harness('claude', undefined, onSubmitted)
+    send('/compact', [])
+    expect(onSubmitted).toHaveBeenCalledOnce()
+
+    vi.mocked(structuredTransport.send).mockReturnValue(false)
+    send('hello', [])
+    await vi.waitFor(() => expect(structuredTransport.onError).toHaveBeenCalledTimes(2))
+    expect(structuredTransport.send).toHaveBeenCalledWith('hello', [])
+    expect(onSubmitted).toHaveBeenCalledOnce()
+  })
+
+  it('reports nothing for a host command chat sessions do not run', async () => {
+    const onSubmitted = vi.fn()
+    const { send, structuredTransport } = harness('codex', undefined, onSubmitted)
+    send('/permissions', [])
+    await vi.waitFor(() =>
+      expect(structuredTransport.onError).toHaveBeenCalledWith(
+        expect.stringContaining('not available in chat sessions')
+      )
+    )
+    expect(onSubmitted).not.toHaveBeenCalled()
   })
 })

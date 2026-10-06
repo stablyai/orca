@@ -58,7 +58,7 @@ function controller(
     cards,
     queueCapable,
     pause,
-    resume: vi.fn(async () => {}),
+    resume: vi.fn(async () => false),
     resuming: false,
     steer: vi.fn(async () => {}),
     remove: vi.fn(async () => {}),

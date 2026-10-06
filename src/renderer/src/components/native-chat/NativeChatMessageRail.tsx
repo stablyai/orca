@@ -111,7 +111,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   scrollRef: React.RefObject<HTMLDivElement | null>
   onSelect: (item: NativeChatRailItem) => void
   /** The reader scrolled the transcript through the rail. */
-  onReaderScroll?: () => void
+  onReaderScroll?: (deltaY: number) => void
   /** A tick whose older history is still paging in. */
   pendingId?: string | null
 }): React.JSX.Element | null {
@@ -200,8 +200,11 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
                 : event.deltaMode === WHEEL_DELTA_PAGE
                   ? element.clientHeight
                   : 1
+            if (event.ctrlKey) {
+              return
+            }
+            onReaderScroll?.(event.deltaY * scale)
             element.scrollTop += event.deltaY * scale
-            onReaderScroll?.()
           }}
           className="group/rail absolute inset-y-0 right-[14px] z-10 flex w-4 cursor-default flex-col items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >

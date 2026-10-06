@@ -35,7 +35,7 @@ export function NativeChatQueuedMessageList({
   const pause = cards.some((card) => card.hold === 'queue-paused') ? controller.pause : null
   // Only when focus was on the queue (a card, or Resume) — never pull it from wherever the user
   // moved on to.
-  const refocusAfter = (action: Promise<void>): void => {
+  const refocusAfter = (action: Promise<unknown>): void => {
     void action.then(() => {
       const active = document.activeElement
       if (!active || active === document.body || queueRef.current?.contains(active)) {

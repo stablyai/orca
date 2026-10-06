@@ -17837,6 +17837,8 @@
         "toggleDetails": "切换回合详情"
       },
       "jumpToLatest": "跳到最新消息",
+      "jumpToTop": "跳转到顶部",
+      "transcriptLabel": "对话",
       "toggle": {
         "showTerminal": "显示终端",
         "showChat": "显示聊天视图"

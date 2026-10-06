@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-app-root-test-render'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
@@ -453,6 +454,7 @@ describe('transcript follow ownership across growth and appends', () => {
     const scheduleSpy = vi.spyOn(window, 'requestAnimationFrame')
     const scrollToSpy = vi.spyOn(scroller, 'scrollTo')
     const readingAt = 2000
+    fireEvent.wheel(scroller, { deltaY: -100 })
     scroller.scrollTop = readingAt
     fireEvent.scroll(scroller)
     expect(scrollToSpy).toHaveBeenLastCalledWith({ behavior: 'auto', top: readingAt })

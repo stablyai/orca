@@ -8,9 +8,9 @@
 // being the same event.
 //
 // The offset belongs to the virtualizer — every pin goes through it, so a scroll
-// it is still reconciling is replaced rather than raced. Its public write adapter
-// marks every application offset; follow intent changes only on an unmarked
-// reader event, never from delayed geometry alone.
+// it is still reconciling is replaced rather than raced. Following stops only on a
+// reader gesture or a row jump, never on layout or an application write, and
+// resumes when the reader returns to the end.
 
 import {
   useCallback,
@@ -22,6 +22,8 @@ import {
 } from 'react'
 import {
   distanceFromBottom,
+  isNearBottom,
+  NATIVE_CHAT_FOLLOW_REARM_PX,
   nextFollowingEnd,
   shouldShowJumpToLatest,
   type ScrollGeometry
@@ -41,10 +43,15 @@ function hasMeasurableViewport(element: HTMLElement | null): element is HTMLElem
 
 export type NativeChatTranscriptScroll = {
   showJump: boolean
+  /** More than a viewport below the top of what is loaded. */
+  awayFromTop: boolean
   onScroll: UIEventHandler<HTMLDivElement>
   scrollToBottom: () => void
+  scrollToTop: () => void
   /** Align an element inside the transcript with the top of the viewport. */
   scrollMessageToTop: (element: HTMLElement) => void
+  /** A reader gesture left the end: the only thing besides a row jump that stops following. */
+  readerLeavesEnd: () => void
 }
 
 export function useNativeChatTranscriptScroll({
@@ -74,61 +81,78 @@ export function useNativeChatTranscriptScroll({
   reconcileReaderScroll: (isTakingOver: boolean) => void
 }): NativeChatTranscriptScroll {
   const [showJump, setShowJump] = useState(false)
+  const [awayFromTop, setAwayFromTop] = useState(false)
   const followingRef = useRef(true)
   const detachedScrollTopRef = useRef<number | null>(null)
   const isVisibleRef = useRef(isVisible)
   const previousIsVisibleRef = useRef(isVisible)
   const previousDistanceFromEndRef = useRef(Number.POSITIVE_INFINITY)
 
-  const syncScrollState = useCallback(
-    (event?: Event): ScrollGeometry | null => {
-      const element = scrollRef.current
-      if (!isVisibleRef.current || !hasMeasurableViewport(element)) {
-        return null
-      }
-      const geometry = geometryOf(element)
-      if (event) {
-        const wasFollowing = followingRef.current
-        const programmatic = consumeProgrammaticScroll(event)
-        const following = nextFollowingEnd({
-          following: followingRef.current,
-          programmatic,
-          geometry,
-          previousDistanceFromEnd: previousDistanceFromEndRef.current
-        })
-        followingRef.current = following
-        if (!programmatic) {
-          reconcileReaderScroll(wasFollowing && !following)
-        }
-      }
-      detachedScrollTopRef.current = followingRef.current ? null : geometry.scrollTop
-      setShowJump(shouldShowJumpToLatest(followingRef.current, geometry))
-      return geometry
-    },
-    [consumeProgrammaticScroll, reconcileReaderScroll, scrollRef]
-  )
+  const syncScrollState = useCallback((): ScrollGeometry | null => {
+    const element = scrollRef.current
+    if (!isVisibleRef.current || !hasMeasurableViewport(element)) {
+      return null
+    }
+    const geometry = geometryOf(element)
+    detachedScrollTopRef.current = followingRef.current ? null : geometry.scrollTop
+    setShowJump(shouldShowJumpToLatest(followingRef.current, geometry))
+    setAwayFromTop(geometry.scrollTop > geometry.clientHeight)
+    return geometry
+  }, [scrollRef])
+
+  const readerLeavesEnd = useCallback(() => {
+    followingRef.current = false
+    const element = scrollRef.current
+    if (element) {
+      previousDistanceFromEndRef.current = distanceFromBottom(geometryOf(element))
+    }
+    // Replace a pending virtualizer target before the browser applies the gesture.
+    reconcileReaderScroll(true)
+    syncScrollState()
+  }, [reconcileReaderScroll, scrollRef, syncScrollState])
 
   const onScroll = useCallback<UIEventHandler<HTMLDivElement>>(
     (event) => {
-      const geometry = syncScrollState(event.nativeEvent)
-      if (geometry) {
-        previousDistanceFromEndRef.current = distanceFromBottom(geometry)
+      const element = scrollRef.current
+      if (!isVisibleRef.current || !hasMeasurableViewport(element)) {
+        return
       }
+      const geometry = geometryOf(element)
+      followingRef.current = nextFollowingEnd({
+        following: followingRef.current,
+        programmatic: consumeProgrammaticScroll(event.nativeEvent),
+        geometry,
+        previousDistanceFromEnd: previousDistanceFromEndRef.current
+      })
+      reconcileReaderScroll(false)
+      previousDistanceFromEndRef.current = distanceFromBottom(geometry)
+      syncScrollState()
     },
-    [syncScrollState]
+    [consumeProgrammaticScroll, reconcileReaderScroll, scrollRef, syncScrollState]
   )
 
   const scrollToEndWhenMeasurable = useCallback(() => {
-    if (hasMeasurableViewport(scrollRef.current)) {
+    if (isVisibleRef.current && hasMeasurableViewport(scrollRef.current)) {
       scrollToEnd()
     }
   }, [scrollRef, scrollToEnd])
 
   const scrollToBottom = useCallback(() => {
+    // A hidden pane is not where the reader is; it keeps its position for their return.
+    if (!isVisibleRef.current) {
+      return
+    }
     followingRef.current = true
     scrollToEndWhenMeasurable()
     setShowJump(false)
   }, [scrollToEndWhenMeasurable])
+
+  const scrollToTop = useCallback(() => {
+    followingRef.current = false
+    // Also where a hidden pane lands once revealed, since the write below waits for layout.
+    detachedScrollTopRef.current = 0
+    restoreScrollOffset(0)
+  }, [restoreScrollOffset])
 
   const scrollMessageToTop = useCallback(
     (element: HTMLElement) => {
@@ -146,9 +170,17 @@ export function useNativeChatTranscriptScroll({
       return
     }
     if (!followingRef.current) {
-      if (revealed && detachedScrollTopRef.current !== null) {
-        restoreScrollOffset(detachedScrollTopRef.current)
+      if (revealed) {
+        if (detachedScrollTopRef.current !== null) {
+          restoreScrollOffset(detachedScrollTopRef.current)
+        }
+        // What changed while hidden may have brought the end to the restored offset.
+        const element = scrollRef.current
+        if (hasMeasurableViewport(element)) {
+          followingRef.current = isNearBottom(geometryOf(element), NATIVE_CHAT_FOLLOW_REARM_PX)
+        }
       }
+      syncScrollState()
       return
     }
     scrollToEndWhenMeasurable()
@@ -157,8 +189,10 @@ export function useNativeChatTranscriptScroll({
     itemCount,
     isWorking,
     restoreScrollOffset,
+    scrollRef,
     showsTailRow,
-    scrollToEndWhenMeasurable
+    scrollToEndWhenMeasurable,
+    syncScrollState
   ])
 
   useEffect(() => {
@@ -167,11 +201,14 @@ export function useNativeChatTranscriptScroll({
       return
     }
     const observer = new ResizeObserver(() => {
+      if (!isVisibleRef.current) {
+        return
+      }
+      // Growth, an opened row included, keeps a following reader at the end.
       if (followingRef.current) {
         scrollToEndWhenMeasurable()
-      } else {
-        syncScrollState()
       }
+      syncScrollState()
     })
     // Observe the growing content, not just the fixed-height viewport, so an
     // in-place streaming growth is seen; also watch the viewport for reflows.
@@ -182,5 +219,13 @@ export function useNativeChatTranscriptScroll({
     return () => observer.disconnect()
   }, [contentRef, scrollRef, scrollToEndWhenMeasurable, syncScrollState])
 
-  return { showJump, onScroll, scrollToBottom, scrollMessageToTop }
+  return {
+    showJump,
+    awayFromTop,
+    onScroll,
+    scrollToBottom,
+    scrollToTop,
+    scrollMessageToTop,
+    readerLeavesEnd
+  }
 }

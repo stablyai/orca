@@ -2,8 +2,9 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { useCallback, useMemo, useState } from 'react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-app-root-test-render'
+import { createRef, useCallback, useMemo, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
@@ -14,6 +15,7 @@ import { projectStructuredItemsToNativeChat } from '../../../../shared/structure
 import { NativeChatMessageList } from './NativeChatMessageList'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
+import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import {
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics
@@ -70,17 +72,23 @@ const ROW_HEIGHT_BY_TEXT = new Map(
 /** A lane that pages older history in the way the structured lane does: the page
  *  lands, then the returned promise settles. The outline is the unloaded prompts. */
 function PagedTranscript({
-  holdPage
+  holdPage,
+  listRef
 }: {
   /** Awaited before a page lands, to keep it in flight. */
   holdPage?: () => Promise<void>
+  /** What a send reaches to reveal the latest. */
+  listRef?: React.Ref<NativeChatMessageListHandle>
 }): React.JSX.Element {
   const [loaded, setLoaded] = useState(PAGE)
   const loadEarlier = useCallback(async (): Promise<NativeChatOlderPageResult> => {
+    if (loaded >= TOTAL) {
+      return 'exhausted'
+    }
     await (holdPage?.() ?? Promise.resolve())
     setLoaded((current) => Math.min(TOTAL, current + PAGE))
     return 'applied'
-  }, [holdPage])
+  }, [holdPage, loaded])
   const messages = useMemo(() => HISTORY.slice(TOTAL - loaded), [loaded])
   const railOutline = useMemo<NativeChatRailOutlineEntry[]>(
     () =>
@@ -95,6 +103,7 @@ function PagedTranscript({
   )
   return (
     <NativeChatMessageList
+      ref={listRef}
       session={{ ...session(messages), hasMore: loaded < TOTAL, loadEarlier }}
       railOutline={railOutline}
       isWorking={false}
@@ -435,6 +444,7 @@ describe('jumping from the rail while following the end', () => {
     await settle(10)
     // A reader parked above the end, so the button shows.
     act(() => {
+      fireEvent.wheel(scroller(), { deltaY: -100 })
       scroller().scrollTop = 200
     })
     await settle(2)
@@ -449,6 +459,122 @@ describe('jumping from the rail while following the end', () => {
     expect(pages.asked()).toBe(1)
     expect(screen.queryByText('prompt-5')).toBeNull()
     expect(distanceFromBottom()).toBe(0)
+  })
+
+  /** A reader parked above the end, so the jump buttons show. */
+  async function parkAboveTheEnd(): Promise<void> {
+    act(() => {
+      fireEvent.wheel(scroller(), { deltaY: -100 })
+      scroller().scrollTop = 200
+    })
+    await settle(2)
+  }
+
+  it('"Jump to top" loads every older page and lands on the first message', async () => {
+    render(<PagedTranscript />)
+    await settle(10)
+    // Anti-vacuous: only the newest page is loaded, and the controls hide at the end.
+    expect(screen.queryByText('prompt-0')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Jump to top' })).toBeNull()
+    await parkAboveTheEnd()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to top' }))
+    await settle(60)
+
+    expect(screen.getByText('prompt-0')).toBeTruthy()
+    expect(scroller().scrollTop).toBe(0)
+    expect(screen.queryByRole('button', { name: /load earlier messages/i })).toBeNull()
+  })
+
+  it('marks "Jump to top" busy, with a reduced-motion-safe spinner, while its pages load', async () => {
+    const pages = holdFirstPage()
+    render(<PagedTranscript holdPage={pages.holdPage} />)
+    await settle(10)
+    await parkAboveTheEnd()
+    const top = screen.getByRole('button', { name: 'Jump to top' })
+    // Anti-vacuous: idle until pressed.
+    expect(top).not.toHaveAttribute('aria-busy')
+
+    fireEvent.click(top)
+    await frame()
+
+    expect(pages.asked()).toBe(1)
+    expect(top).toHaveAttribute('aria-busy', 'true')
+    expect(top.querySelector('svg')).toHaveClass('animate-spin', 'motion-reduce:animate-none')
+    pages.release()
+    await settle(60)
+    expect(scroller().scrollTop).toBe(0)
+    expect(top).not.toHaveAttribute('aria-busy')
+  })
+
+  it.each([
+    ['the reader wheels the transcript', () => fireEvent.wheel(scroller(), { deltaY: -40 })],
+    ['the reader presses a scroll key', () => fireEvent.keyDown(scroller(), { key: 'PageUp' })]
+  ])('abandons "Jump to top" when %s while it pages', async (_case, input) => {
+    const pages = holdFirstPage()
+    render(<PagedTranscript holdPage={pages.holdPage} />)
+    await settle(10)
+    await parkAboveTheEnd()
+    const top = screen.getByRole('button', { name: 'Jump to top' })
+    fireEvent.click(top)
+    await frame()
+    // Anti-vacuous: the older page is in flight.
+    expect(pages.asked()).toBe(1)
+
+    input()
+    await frame()
+    expect(top).not.toHaveAttribute('aria-busy')
+    pages.release()
+    await settle(60)
+
+    // The abandoned jump would have paged on and pulled the reader up to the first message.
+    expect(pages.asked()).toBe(1)
+    expect(screen.queryByText('prompt-0')).toBeNull()
+    expect(scroller().scrollTop).toBeGreaterThan(0)
+  })
+
+  it('abandons "Jump to top" when the reader sends while it pages', async () => {
+    const pages = holdFirstPage()
+    const listRef = createRef<NativeChatMessageListHandle>()
+    render(<PagedTranscript holdPage={pages.holdPage} listRef={listRef} />)
+    await settle(10)
+    await parkAboveTheEnd()
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to top' }))
+    await frame()
+    expect(pages.asked()).toBe(1)
+
+    // What a send does to the transcript.
+    act(() => listRef.current?.revealLatest())
+    await frame()
+    pages.release()
+    await settle(60)
+
+    expect(pages.asked()).toBe(1)
+    expect(screen.queryByText('prompt-0')).toBeNull()
+    expect(distanceFromBottom()).toBe(0)
+  })
+
+  it('jumps to a message without animating when the reader asks for reduced motion', async () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false
+    }))
+    render(<PagedTranscript />)
+    await settle(10)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
+    await frame()
+    fireEvent.click(screen.getByRole('button', { name: 'prompt-45' }))
+    await frame()
+
+    // A smooth scroll would still be easing in here, a few pixels from where it started.
+    expect(Math.abs(rowOffsetFromViewportTop('prompt-45'))).toBeLessThanOrEqual(2)
   })
 })
 

@@ -85,6 +85,7 @@ export function useNativeChatComposerSubmit(args: {
       )
       return
     }
+    structuredTransport.onSubmitted?.()
     const submitted = readNativeChatComposerDraft(draftScopeKey)
     void threadGoal.setObjective(objective).then((accepted) => {
       if (!accepted) {
