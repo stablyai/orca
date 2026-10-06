@@ -297,7 +297,8 @@ operation: AntigravityAccountOperation): Promise<ResolvedAntigravityWslTarget | 
 `src/main/runtime/orca-runtime-get-status.ts`、`src/renderer/src/runtime/runtime-antigravity-accounts-client.ts`、
 `src/renderer/src/components/settings/AntigravityAccountsSection.tsx`。
 Modify 对应现有 client/component 测试与任务 6 RPC 测试；Create
-`src/main/runtime/antigravity-wsl-capability.test.ts`。生成
+`src/main/runtime/antigravity-wsl-capability.test.ts`；schema 边界测试位于
+`src/shared/rpc-contract/antigravity-accounts-params.test.ts`。生成
 `src/shared/rpc-contract/rpc-params-catalog.generated.ts`；新增文案沿用项目现有 i18n 机制。
 
 **Interfaces:** Consumes 任务 6 的 target.expectedAuthorityId 与 state.resolvedTarget。
@@ -306,23 +307,23 @@ Produces 两字段的 strict schema 接纳与 UI/client 绑定；schema 的 auth
 `ANTIGRAVITY_WSL_ACCOUNTS_RUNTIME_CAPABILITY = 'accounts.antigravity-native-wsl.v1'`。
 既有 callAntigravityAccounts(owner, target, action, accountId?) 继续使用，调用方传绑定后的 target。
 
-- [ ] **Step 1: 写失败测试。** schema 接受有绑定的 WSL 请求、拒绝坏绑定；Host 旧请求
+- [x] **Step 1: 写失败测试。** schema 接受有绑定的 WSL 请求、拒绝坏绑定；Host 旧请求
   不变。能力只在 Windows 发布；新版客户端缺能力时不调用 RPC、不发送新增字段给旧 Host。
   UI List 状态保存绑定，Add/Select/Remove 带绑定，default target 保留 null。
   先发 A 修改，再 rerender B，最后完成 A：B 的列表/错误/busy 不被覆盖。
-- [ ] **Step 2: 验证失败。** `pnpm test src/renderer/src/runtime/runtime-antigravity-accounts-client.test.ts
+- [x] **Step 2: 验证失败。** `pnpm test src/renderer/src/runtime/runtime-antigravity-accounts-client.test.ts
   src/renderer/src/components/settings/AntigravityAccountsSection.test.tsx
   src/main/runtime/rpc/methods/antigravity-accounts.test.ts src/main/runtime/antigravity-wsl-capability.test.ts`。
-- [ ] **Step 3: 实现协议与页面。** 读 STYLEGUIDE 后只复用已有原语。能力在现有宿主发布过滤
+- [x] **Step 3: 实现协议与页面。** 读 STYLEGUIDE 后只复用已有原语。能力在现有宿主发布过滤
   中按平台判断；strict schema 明确接纳可选字段，handler 对 WSL 修改要求绑定。
   owner/target 切换时清空状态并递增请求代次；初始化请求、动作、错误刷新和 finally
   均检查代次。功能错误后刷新只读且继续显示原错误。WSL Refresh usage 保持 disabled。
   新文案用现有 i18n，跟随项目 catalog 生成/校验，不硬编码设计 token。
-- [ ] **Step 4: 验证通过。** 重跑任务测试，`pnpm run generate:rpc-params-catalog`、
+- [x] **Step 4: 验证通过。** 重跑任务测试，`pnpm run generate:rpc-params-catalog`、
   `pnpm run verify:rpc-params-catalog`、`pnpm tc:node`、`pnpm tc:web`。
   新客户端/旧宿主、新宿主/旧客户端、非 Windows、断连四组均有断言；不新增流操作码。
   运行变更代码门禁；若新增目录文案则执行现有 localization 验证。
-- [ ] **Step 5: 提交。** 提交 `feat(antigravity): bind WSL account actions to resolved targets`。
+- [x] **Step 5: 提交。** 提交 `feat(antigravity): bind WSL account actions to resolved targets`。
 
 ## Task 8: 将启动检查接入实际 WSL spawn
 
