@@ -16,9 +16,22 @@ Thanks for contributing to Orca.
 
 ## Local Setup
 
+Prerequisites: Node 24 (see `engines` in `package.json`) and pnpm (the version pinned in
+`packageManager`; `corepack enable` picks it up).
+
 ```bash
 pnpm install
 pnpm dev
+```
+
+`mobile/` is a separate pnpm project with its own lockfile, so `pnpm install` at the root does
+not install its dependencies. `pnpm build` (its mobile web bundle step fails with
+`Could not resolve "react-native-web"` / `"expo-router"`) and the mobile-aware lint checks need
+them. Install them once before building or linting, and again whenever `mobile/pnpm-lock.yaml`
+changes:
+
+```bash
+pnpm -C mobile install --frozen-lockfile
 ```
 
 Ordinary installs include native optional dependencies for the current OS and CPU only.
@@ -40,7 +53,7 @@ Avoid vague names like `test`, `misc`, or `changes`.
 
 ## Before Opening a PR
 
-Run the same checks that CI runs:
+Run the same checks that CI runs (after the mobile install from [Local Setup](#local-setup)):
 
 ```bash
 pnpm lint
