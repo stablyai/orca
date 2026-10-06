@@ -1,0 +1,1209 @@
+$ node config/scripts/run-electron-vite-build.mjs
+rolldown-vite v7.3.1 building ssr environment for production...
+(node:21647) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[2Ktransforming...[2Ktransforming...✓ 6916 modules transformed.
+rendering chunks...
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-filesystem-provider-sftp.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-connection.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-filesystem-download.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-filesystem-provider.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-sftp-filesystem-provider.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/github/gh-account-token.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/git/command-runner/gh-bound-account-env.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/github/gh-account-binding-inventory.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/persistence/tracking-repos/repo-update-operations.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-target-registry.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/browser-network-execution-route-dispatch.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/automations/external-manager-discovery.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/automations/external-manager-relay.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/preflight-remote-windows-terminal-capabilities.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/remote-home-path.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/remote-repo-registration.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-active-relay-sessions.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connect-flow.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connection-handlers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connection-state-callbacks.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-port-forward-persistence.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-relay-session-callbacks.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-session-teardown.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-target-crud-handlers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-worktree-create-root-registration.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/preflight/agent-command-detection.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/preflight/agent-detection.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/orca-runtime-resolve-authoritative-terminal-wait-permission.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/orca-runtime-resolve-browser-network-execution-host-for-worktree.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/orca-runtime-terminal-create-deduplication.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/rpc/methods/client-events.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/rpc/methods/ssh.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-deploy.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-provider-authority.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/browser-network-execution-route-dispatch.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/local-ssh-browser-route.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/host-repo-catalog-snapshot.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connect-attempt-registry.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connect-flow.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connection-handlers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connection-state-callbacks.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-relay-session-callbacks.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-renderer-broadcast.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-target-crud-handlers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/worktrees/listing/host-qualified-worktree-listing.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/worktrees/listing/register-detected-worktree-handlers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/worktrees/metadata/host-lineage-listing.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/provisioned-root-ssh-adoption.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/sftp-upload.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-connection.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-filesystem-file-upload.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-filesystem-provider.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-deploy-helpers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-install-transfers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-session.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-deploy-helpers.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-connection.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/orcad-deployment-target.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/orcad-remote-node-runtime.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/remote-install-gc.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/remote-install-previous-version.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/remote-node-runtime-store-gc.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/remote-node-runtime-store-lock.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-build-toolchain.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-deploy.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-endpoint-incumbent.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-endpoint-takeover.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-gc-claim.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-gc-tombstone.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-install-lock.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-install-transfers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-native-deps-cache-gc.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-native-deps-cache-install.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-opencode-runtime.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-pinned-node-install.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-repair-lock.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-reset.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-ripgrep-cache-gc.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-ripgrep-install.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-runtime-self-test.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-session.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-superseded-endpoints.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-versioned-install.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-remote-node-addon-resolution.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-remote-node-install-guidance.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-remote-node-resolution.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-remote-platform-detection.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/browser.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ai-vault/ssh-session-list.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/automations/precheck-runner.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ephemeral-vm-runtime-ssh.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault-search.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault-session-title-routing.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/filesystem-import-ssh.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/remote-workspace-connected-clients.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/remote-workspace-relay-sync.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/remote-workspace.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/nested-repo-import-handler.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/nested-repo-scan-ipc.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/remote-repo-clone.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/window/attach-main-window-services.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/browser-network-execution-route-dispatch.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/local-ssh-browser-route.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/rpc/methods/browser-network-tunnel.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ai-vault/cached-session-list.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ai-vault/session-scanner-background.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ai-vault/session-scanner-service-spawn.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault-delete.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault-subagent-list.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/native-chat/transcript-opencode-database.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/orca-runtime-state-fields.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/runtime-ai-vault-commands.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/structured-agent-session-create-adoption.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/local-ssh-browser-route.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/startup/main-process-quit.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/local-ssh-browser-partitions.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/local-ssh-browser-partitions.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/browser.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-session-teardown.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/window/main-window-webview-security.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/browser-route-partition-storage-runtime.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-session-teardown.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/browser-session-startup.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/runtime-environment-connectivity-handlers.ts, dynamic import will not move module into another chunk.
+
+out/main/chunks/ssh-filesystem-provider-sftp-BBizE80A.js                         0.05 kB
+out/main/chunks/ssh-relay-deploy-helpers-eKidEbA0.js                             0.05 kB
+out/main/chunks/local-ssh-browser-route-DN-EB07A.js                              0.07 kB
+out/main/chunks/browser-network-execution-route-dispatch-B4DH3MqJ.js             0.07 kB
+out/main/chunks/sftp-upload-D82gbO44.js                                          0.11 kB
+out/main/chunks/color-validation-DgEprjbm.js                                     0.11 kB │ map:      0.28 kB
+out/main/chunks/definitive-filesystem-absence-DvQkovTC.js                        0.13 kB │ map:      1.10 kB
+out/main/chunks/runtime-client-error-BQRJ8_hV.js                                 0.17 kB │ map:      0.47 kB
+out/main/persistence/profile-state/legacy-json/profile-state-export-path.js      0.21 kB
+out/main/browser-window-close-preload.js                                         0.22 kB │ map:      1.19 kB
+out/main/chunks/ssh-provider-authority-Dci3U5yx.js                               0.23 kB
+out/main/persistence/profile-state/profile-state-active-location.js              0.24 kB
+out/main/chunks/wsl-env-C3vsrcwy.js                                              0.26 kB │ map:      0.87 kB
+out/main/persistence/profile-state/profile-state-storage-classification.js       0.26 kB
+out/main/chunks/absolute-dir-override-BXFKpCpv.js                                0.26 kB │ map:      1.16 kB
+out/main/gitlab/project-ref-parser.js                                            0.26 kB
+out/main/chunks/filesystem-watcher-event-batch-DQ_37oiQ.js                       0.32 kB │ map:      1.48 kB
+out/main/chunks/wsl-executable-path-u_h5IeOj.js                                  0.33 kB │ map:      0.96 kB
+out/main/chunks/storage-capacity-error-BNgoxGj-.js                               0.35 kB │ map:      1.17 kB
+out/main/chunks/stt-audio-resample-0TAq8rlT.js                                   0.36 kB │ map:      1.56 kB
+out/main/chunks/profile-state-storage-paths-yFe7Q2jR.js                          0.41 kB │ map:      1.10 kB
+out/main/persistence/profile-state/profile-state-backup-path.js                  0.42 kB
+out/main/chunks/opencode-data-directory-CVWgv7f3.js                              0.45 kB │ map:      1.02 kB
+out/main/chunks/agent-session-host-status-rows-CPLKc-Ty.js                       0.47 kB │ map:      1.81 kB
+out/main/chunks/port-scan-command-protocol-BtGCUHes.js                           0.47 kB │ map:      1.79 kB
+out/main/chunks/ssh-target-registry-B4Fn00pa.js                                  0.47 kB
+out/main/chunks/windows-system-binary-Bl95LYSZ.js                                0.47 kB │ map:      1.90 kB
+out/main/chunks/profile-state-storage-classification-Ctur1PDP.js                 0.51 kB │ map:      1.63 kB
+out/main/chunks/app-environment-BNjELml7.js                                      0.54 kB │ map:      4.12 kB
+out/main/chunks/cursor-profile-result-DF4lw8EV.js                                0.54 kB │ map:      1.89 kB
+out/main/chunks/profile-state-authority-marker-08WWQwwa.js                       0.56 kB │ map:      1.57 kB
+out/main/wsl-transcript-fs-process-entry.js                                      0.57 kB │ map:      2.48 kB
+out/main/chunks/worker-thread-entry-path-DP_R3Acx.js                             0.57 kB │ map:      2.77 kB
+out/main/startup/http1-compatibility-marker.js                                   0.59 kB
+out/main/chunks/codex-home-wsl-env-BoSUSstA.js                                   0.59 kB │ map:      1.39 kB
+out/main/chunks/event-loop-yield-DQ6mzHr9.js                                     0.60 kB │ map:      2.74 kB
+out/main/chunks/gh-account-token-DXH79UsJ.js                                     0.61 kB
+out/main/claude-accounts/keychain.js                                             0.62 kB
+out/main/chunks/chunk-BbcaJTa5.js                                                0.68 kB
+out/main/chunks/own-retained-string-BGvzeGnf.js                                  0.69 kB │ map:      3.82 kB
+out/main/persistence/profile-state/profile-state-domain-reader.js                0.71 kB
+out/main/chunks/startup-diagnostics-iB6ba99z.js                                  0.78 kB │ map:      2.15 kB
+out/main/chunks/terminal-scrollback-policy-58FXVlQ2.js                           0.78 kB │ map:      3.59 kB
+out/main/persistence/profile-state/profile-state-access.js                       0.79 kB
+out/main/chunks/hang-detection-marker-F0DM56uY.js                                0.80 kB │ map:      2.58 kB
+out/main/chunks/profile-state-export-path-Ge9ULXKA.js                            0.82 kB │ map:      2.27 kB
+out/main/chunks/macos-native-provider-paths-DI9voYio.js                          0.82 kB │ map:      1.76 kB
+out/main/chunks/priority-semaphore-BescTPZq.js                                   0.85 kB │ map:      2.99 kB
+out/main/chunks/map-with-concurrency-DHA8SbLX.js                                 0.90 kB │ map:      3.21 kB
+out/main/chunks/browser-route-partition-storage-runtime-Bd62L7ST.js              0.91 kB
+out/main/chunks/profile-state-versioned-export-CkOBK-rb.js                       0.92 kB │ map:      3.03 kB
+out/main/chunks/cached-session-list-C1lO2QDM.js                                  0.93 kB
+out/main/chunks/tui-agent-display-names-BtlubHK7.js                              1.00 kB │ map:      2.50 kB
+out/main/chunks/local-ssh-browser-partitions-DY4-UtYZ.js                         1.07 kB
+out/main/chunks/http1-compatibility-marker-CefWLjCE.js                           1.08 kB │ map:      4.41 kB
+out/main/chunks/windows-terminal-shell-BcFJgzmq.js                               1.19 kB │ map:      5.02 kB
+out/main/persistence/profile-state/legacy-json/profile-state-recovery.js         1.22 kB
+out/main/chunks/tui-agent-selection-C8aKB0m1.js                                  1.22 kB │ map:      3.81 kB
+out/main/port-scan-command-worker-entry.js                                       1.23 kB │ map:      7.25 kB
+out/main/profile-state-backup-worker-entry.js                                    1.23 kB │ map:      1.71 kB
+out/main/agent-hooks/managed-agent-hook-controls.js                              1.25 kB
+out/main/chunks/orca-profiles-D3GgV0ON.js                                        1.28 kB │ map:     10.15 kB
+out/main/chunks/wsl-transcript-fs-process-operations-m4p39JNi.js                 1.30 kB │ map:      5.35 kB
+out/main/chunks/session-scanner-opencode-sqlite-list-D-TpMkTb.js                 1.38 kB │ map:      6.43 kB
+out/main/persistence/profile-state/profile-state-database-recovery.js            1.41 kB
+out/main/chunks/project-ref-parser-Dv35EtH9.js                                   1.42 kB │ map:      6.29 kB
+out/main/chunks/local-build-feed-server-C0tTFmfO.js                              1.42 kB │ map:      4.41 kB
+out/main/doc-preview-link-preload.js                                             1.42 kB │ map:      8.08 kB
+out/main/chunks/opencode-database-discovery-WqHQos8C.js                          1.43 kB │ map:      5.63 kB
+out/main/chunks/profile-state-domain-reader-DrVxqD6S.js                          1.44 kB │ map:      5.73 kB
+out/main/chunks/surrogate-safe-text-slice-B7C0itnm.js                            1.45 kB │ map:      5.82 kB
+out/main/chunks/profile-state-read-snapshot-DHLUbgKh.js                          1.45 kB │ map:      4.26 kB
+out/main/chunks/profile-state-access-h6yhcS7u.js                                 1.48 kB │ map:      4.96 kB
+out/main/main-thread-hang-watchdog-entry.js                                      1.50 kB │ map:      6.26 kB
+out/main/chunks/profile-state-recovery-pQjNV27O.js                               1.54 kB │ map:      5.33 kB
+out/main/chunks/windows-transient-lock-removal-CdfAcIZe.js                       1.54 kB │ map:      5.65 kB
+out/main/chunks/plugin-host-protocol-Bui7CnHS.js                                 1.63 kB │ map:      6.11 kB
+out/main/chunks/profile-state-writer-errors-Chl4a2V6.js                          1.64 kB │ map:      4.67 kB
+out/main/chunks/profile-state-writer-protocol-CAV-D7Wp.js                        1.65 kB │ map:      5.70 kB
+out/main/chunks/json-text-structure-limit-BaVZy6RM.js                            1.71 kB │ map:      5.44 kB
+out/main/chunks/profile-state-backup-path-DJTJ2lfI.js                            1.76 kB │ map:      4.73 kB
+out/main/chunks/watcher-directory-identity-Ow-fWd1O.js                           1.95 kB │ map:      8.08 kB
+out/main/chunks/node-bounded-json-stringify-Dp4VsUML.js                          2.07 kB │ map:      7.75 kB
+out/main/chunks/profile-storage-paths-Yezdd4tj.js                                2.10 kB │ map:      4.85 kB
+out/main/chunks/capability-probe-cache-B2D3Ta_U.js                               2.11 kB │ map:      8.12 kB
+out/main/persistence/profile-state/profile-state-recovery-command.js             2.12 kB
+out/main/chunks/wsl-paths-BA3xaxFo.js                                            2.13 kB │ map:     10.56 kB
+out/main/chunks/growing-byte-buffer-CgOKoTiJ.js                                  2.22 kB │ map:      6.33 kB
+out/main/chunks/profile-state-database-recovery-DVW72ime.js                      2.26 kB │ map:      7.07 kB
+out/main/chunks/durable-file-write-C--uQ6ux.js                                   2.31 kB │ map:     10.44 kB
+out/main/chunks/computer-use-key-spec-Brct96a2.js                                2.33 kB │ map:      7.54 kB
+out/main/chunks/node-bounded-file-reader-Dw3uCoHA.js                             2.46 kB │ map:      7.66 kB
+out/main/chunks/immediate-kill-reply-budget-c5wdkoQN.js                          2.52 kB │ map:     11.09 kB
+out/main/chunks/execution-host-CipXx283.js                                       2.55 kB │ map:     11.99 kB
+out/main/chunks/harden-database-files-D05EpFO9.js                                2.56 kB │ map:      6.44 kB
+out/main/chunks/profile-state-active-location-Dk9ZQ7SW.js                        2.57 kB │ map:      7.35 kB
+out/main/orca-profiles/profile-index-store.js                                    2.58 kB
+out/main/chunks/profile-state-backup-job-DYpDkZ3G.js                             2.60 kB │ map:      8.59 kB
+out/main/chunks/ssh-B0ME9Tny.js                                                  2.60 kB
+out/main/chunks/wsl-login-shell-command-CYKCIYUj.js                              2.62 kB │ map:      7.43 kB
+out/main/plugin-host-entry.js                                                    2.78 kB │ map:     12.44 kB
+out/main/warp-theme-parser-worker.js                                             2.97 kB │ map:     10.86 kB
+out/main/chunks/terminal-custom-themes-BShH2bM3.js                               3.02 kB │ map:      9.85 kB
+out/main/chunks/main-process-ndjson-framer-CSxCXdKo.js                           3.06 kB │ map:     14.96 kB
+out/main/chunks/profile-state-database-quarantine-BzKmLGgt.js                    3.07 kB │ map:     10.14 kB
+out/main/chunks/muse-session-log-D1iAfqVK.js                                     3.11 kB │ map:     11.73 kB
+out/main/chunks/cross-platform-path-Sz6r0YLF.js                                  3.13 kB │ map:     15.91 kB
+out/main/chunks/id-DyE9NDaT.js                                                   3.22 kB │ map:     13.38 kB
+out/main/profile-state-writer-worker-entry.js                                    3.27 kB │ map:      6.26 kB
+out/main/chunks/sync-database-BudBVS8W.js                                        3.45 kB │ map:     11.85 kB
+out/main/chunks/clipboard-text-BX_BjjTd.js                                       3.63 kB │ map:     14.06 kB
+out/main/chunks/daemon-process-start-time-BgCMraSF.js                            3.69 kB │ map:     12.37 kB
+out/main/chunks/fs-utils-CbTVde3u.js                                             3.79 kB │ map:     15.64 kB
+out/main/chunks/win32-utils-DZkl0ZSY.js                                          3.86 kB │ map:     15.46 kB
+out/main/chunks/keychain-Bo6FxjYZ.js                                             3.86 kB │ map:     14.37 kB
+out/main/chunks/wsl-browser-network-execution-route-BYFuhWFU.js                  4.31 kB │ map:     14.93 kB
+out/main/chunks/profile-state-migration-Cg41Y_OP.js                              4.36 kB │ map:     12.39 kB
+out/main/chunks/wsl-browser-network-relay-launch-D-gqMluf.js                     4.48 kB │ map:     15.11 kB
+out/main/persistence/profile-state/profile-state-offline-settings.js             4.49 kB │ map:      9.85 kB
+out/main/chunks/workspace-statuses-CMXGwa7h.js                                   4.51 kB │ map:     18.06 kB
+out/main/chunks/macos-computer-use-permissions-DqBctYz1.js                       4.73 kB │ map:     15.86 kB
+out/main/chunks/profile-index-store-B-WjRti_.js                                  4.84 kB │ map:     18.37 kB
+out/main/chunks/grok-session-paths-6w0-Bg_B.js                                   4.85 kB │ map:     19.40 kB
+out/main/parcel-watcher-process-entry.js                                         4.97 kB │ map:     27.83 kB
+out/main/chunks/codex-home-paths-BnsWo0Zn.js                                     5.08 kB │ map:     21.14 kB
+out/main/chunks/abort-signal-reason-Dam3YwFy.js                                  5.97 kB │ map:     28.33 kB
+out/main/chunks/profile-state-documents-D8HzjXLR.js                              6.05 kB │ map:     23.82 kB
+out/main/stt-worker.js                                                           6.21 kB │ map:     24.05 kB
+out/main/chunks/tui-agent-config-BNjfA_iy.js                                     6.31 kB │ map:     19.72 kB
+out/main/chunks/profile-state-access-owner-xo0-Uy_D.js                           6.79 kB │ map:     20.98 kB
+out/main/chunks/wsl-BYp4tO4b.js                                                  7.36 kB │ map:     42.09 kB
+out/main/chunks/ssh-browser-network-execution-route-DRdUcWna.js                  8.08 kB │ map:     27.77 kB
+out/main/chunks/plugin-manifest-BygBb-qW.js                                      8.48 kB │ map:     30.38 kB
+out/main/chunks/profile-state-recovery-command-Dkf5ispl.js                       8.77 kB │ map:     28.94 kB
+out/main/chunks/secure-file-C0EUgWjI.js                                          9.03 kB │ map:     50.18 kB
+out/main/chunks/foreign-sqlite-reader-entry-path-BnMnnzNf.js                     9.60 kB │ map:     42.70 kB
+out/main/chunks/tui-agent-startup-shell-C3TpUAA8.js                              9.96 kB │ map:     53.04 kB
+out/main/chunks/local-build-switch-B776vmhj.js                                  10.87 kB │ map:     28.09 kB
+out/main/chunks/run-process-BnFlYEYs.js                                         11.10 kB │ map:     71.65 kB
+out/main/chunks/worktree-logic-De9qF5HE.js                                      11.93 kB │ map:     54.14 kB
+out/main/chunks/host-readable-transcript-path-CQ5M-80j.js                       12.46 kB │ map:     50.85 kB
+out/main/chunks/windows-native-registry-Cz5Ce1Ev.js                             13.06 kB │ map:     69.78 kB
+out/main/chunks/pty-descendant-exit-verification-BUe89aXr.js                    14.07 kB │ map:     76.61 kB
+out/main/chunks/own-chromium-tree-kill-guard-BD6OJfbe.js                        14.54 kB │ map:     76.37 kB
+out/main/chunks/codex-session-bridge-D4JoPk3E.js                                14.87 kB │ map:     54.07 kB
+out/main/chunks/profile-state-sqlite-authority-CjMJHBYp.js                      14.90 kB │ map:     52.39 kB
+out/main/chunks/profile-state-database-CjagdR0H.js                              15.41 kB │ map:     54.22 kB
+out/main/chunks/codex-rollout-session-meta-BMsybu6Q.js                          16.83 kB │ map:     71.14 kB
+out/main/chunks/schema-helpers-DrzECHpF.js                                      17.35 kB │ map:     79.73 kB
+out/main/chunks/session-scanner-opencode-sqlite-open-C3cRkoiJ.js                26.10 kB │ map:    107.78 kB
+out/main/foreign-sqlite-reader-entry.js                                         27.35 kB │ map:    110.05 kB
+out/main/chunks/keybindings-TiIg6SLV.js                                         31.55 kB │ map:    104.79 kB
+out/main/usage-scan-worker-entry.js                                             40.53 kB │ map:    189.04 kB
+out/main/computer-sidecar.js                                                    40.85 kB │ map:    161.47 kB
+out/main/chunks/windows-shell-args-DviZ6yF0.js                                  56.44 kB │ map:    128.29 kB
+out/main/chunks/constants-CACuFmEy.js                                           57.21 kB │ map:    226.42 kB
+out/main/session-scanner-service-entry.js                                       67.90 kB │ map:    384.29 kB
+out/main/chunks/schemas-ZmZPMU9_.js                                            102.43 kB │ map:    508.82 kB
+out/main/chunks/session-scanner-service-protocol-CHlCl0-k.js                   107.36 kB │ map:    514.73 kB
+out/main/daemon-entry.js                                                       114.12 kB │ map:    445.78 kB
+out/main/chunks/managed-agent-hook-controls-BD26kHTy.js                        273.60 kB │ map:  1,189.23 kB
+out/main/chunks/daemon-cgroup-scope-DaM6V8hV.js                                442.60 kB │ map:  1,510.89 kB
+out/main/chunks/zh-jMIHXlYM.js                                                 736.12 kB │ map:  1,058.25 kB
+out/main/chunks/es-Diq4M3KJ.js                                                 842.65 kB │ map:  1,164.83 kB
+out/main/chunks/fr-DKAVjxdP.js                                                 867.80 kB │ map:  1,189.73 kB
+out/main/chunks/ko-DbWH4Kz7.js                                                 885.91 kB │ map:  1,208.07 kB
+out/main/chunks/ja-C3es0sNx.js                                               1,011.13 kB │ map:  1,333.26 kB
+out/main/index.js                                                            8,711.67 kB │ map: 36,662.66 kB
+✓ built in 7.97s
+rolldown-vite v7.3.1 building ssr environment for production...
+[2Ktransforming...✓ 281 modules transformed.
+rendering chunks...
+out/preload/index.js  388.62 kB
+✓ built in 54ms
+rolldown-vite v7.3.1 building client environment for production...
+[2Ktransforming...[2Ktransforming...[2Ktransforming...Found 2 warnings while optimizing generated CSS:
+
+Issue #1:
+[2m│   }[22m
+[2m│ }[22m
+[2m│[22m ::highlight(markdown-preview-search-match) {
+[2m┆[22m             [33m[2m^--[22m 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?[39m
+[2m┆[22m
+[2m│   background-color: var(--markdown-search-match);[22m
+[2m│   @supports (color: color-mix(in lab, red, red)) {[22m
+
+Issue #2:
+[2m│   color: inherit;[22m
+[2m│ }[22m
+[2m│[22m ::highlight(markdown-preview-search-active-match) {
+[2m┆[22m             [33m[2m^--[22m 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?[39m
+[2m┆[22m
+[2m│   background-color: var(--markdown-search-match-active);[22m
+[2m│   @supports (color: color-mix(in lab, red, red)) {[22m
+
+✓ 13232 modules transformed.
+rendering chunks...
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/lib/launch-agent-in-new-tab.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/lib/structured-agent-session-paired-admission.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/components/dashboard/launch-dashboard-agent.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/components/floating-terminal/FloatingTerminalWindowControls.tsx, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/components/right-sidebar/runSourceControlAgentActionStart.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/components/right-sidebar/source-control/ai/recovery-launch.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/components/right-sidebar/source-control/sync/use-git-history-commit-actions.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/components/tab-bar/QuickLaunchButton.tsx, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/components/tab-bar/use-tab-bar-create-menu-controller.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/components/terminal-pane/terminal-agent-session-fork.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/components/use-terminal-create-actions.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/lib/empty-workspace-default-agent-chat.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/lib/fix-checks-agent-launch.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/lib/launch-agent-session-continuation.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/renderer/src/lib/run-quick-command-in-new-tab.ts, dynamic import will not move module into another chunk.
+
+out/renderer/assets/csv-preview.worker-CF3oAFBz.js                             4.06 kB
+out/renderer/web-index.html                                                    4.16 kB
+out/renderer/assets/gwindows_logo-HIMo1C3u.svg                                 4.36 kB
+out/renderer/assets/KaTeX_Size3-Regular-CTq5MqoE.woff                          4.42 kB
+out/renderer/assets/freebuff-BsS7TEW-.png                                      4.43 kB
+out/renderer/assets/KaTeX_Size4-Regular-Dl5lxZxV.woff2                         4.92 kB
+out/renderer/assets/KaTeX_Size2-Regular-Dy4dx90m.woff2                         5.20 kB
+out/renderer/assets/cursor-editorTextHighlight-kG3uUOwL.svg                    5.40 kB
+out/renderer/assets/KaTeX_Size1-Regular-mCD8mA8B.woff2                         5.46 kB
+out/renderer/assets/KaTeX_Size4-Regular-BF-4gkZK.woff                          5.98 kB
+out/renderer/assets/crush-DVankT2f.png                                         6.15 kB
+out/renderer/assets/KaTeX_Size2-Regular-oD1tc_U0.woff                          6.18 kB
+out/renderer/assets/KaTeX_Size1-Regular-C195tn64.woff                          6.49 kB
+out/renderer/assets/KaTeX_Caligraphic-Regular-Di6jR-x-.woff2                   6.90 kB
+out/renderer/assets/KaTeX_Caligraphic-Bold-Dq_IR9rO.woff2                      6.91 kB
+out/renderer/assets/KaTeX_Size3-Regular-DgpXs0kz.ttf                           7.58 kB
+out/renderer/assets/KaTeX_Caligraphic-Regular-CTRA-rTL.woff                    7.65 kB
+out/renderer/assets/KaTeX_Caligraphic-Bold-BEiXGLvX.woff                       7.71 kB
+out/renderer/popout.html                                                       9.50 kB
+out/renderer/assets/KaTeX_Script-Regular-D3wIWfF6.woff2                        9.64 kB
+out/renderer/assets/KaTeX_SansSerif-Regular-DDBCnlJ7.woff2                    10.34 kB
+out/renderer/assets/KaTeX_Size4-Regular-DWFBv043.ttf                          10.36 kB
+out/renderer/assets/KaTeX_Script-Regular-D5yQViql.woff                        10.58 kB
+out/renderer/assets/KaTeX_Fraktur-Regular-CTYiF6lA.woff2                      11.31 kB
+out/renderer/assets/KaTeX_Fraktur-Bold-CL6g_b3V.woff2                         11.34 kB
+out/renderer/assets/KaTeX_Size2-Regular-B7gKUWhC.ttf                          11.50 kB
+out/renderer/assets/KaTeX_SansSerif-Italic-C3H0VqGB.woff2                     12.02 kB
+out/renderer/assets/KaTeX_SansSerif-Bold-D1sUS0GD.woff2                       12.21 kB
+out/renderer/assets/KaTeX_Size1-Regular-Dbsnue_I.ttf                          12.22 kB
+out/renderer/assets/KaTeX_SansSerif-Regular-CS6fqUqJ.woff                     12.31 kB
+out/renderer/assets/KaTeX_Caligraphic-Regular-wX97UBjC.ttf                    12.34 kB
+out/renderer/assets/KaTeX_Caligraphic-Bold-ATXxdsX0.ttf                       12.36 kB
+out/renderer/assets/KaTeX_Fraktur-Regular-Dxdc4cR9.woff                       13.20 kB
+out/renderer/assets/KaTeX_Fraktur-Bold-BsDP51OF.woff                          13.29 kB
+out/renderer/assets/KaTeX_Typewriter-Regular-CO6r4hn1.woff2                   13.56 kB
+out/renderer/assets/KaTeX_SansSerif-Italic-DN2j7dab.woff                      14.11 kB
+out/renderer/assets/KaTeX_SansSerif-Bold-DbIhKOiC.woff                        14.40 kB
+out/renderer/assets/KaTeX_Typewriter-Regular-C0xS9mPB.woff                    16.02 kB
+out/renderer/assets/KaTeX_Math-BoldItalic-CZnvNsCZ.woff2                      16.40 kB
+out/renderer/assets/KaTeX_Math-Italic-t53AETM-.woff2                          16.44 kB
+out/renderer/assets/KaTeX_Script-Regular-C5JkGWo-.ttf                         16.64 kB
+out/renderer/assets/KaTeX_Main-BoldItalic-DxDJ3AOS.woff2                      16.78 kB
+out/renderer/assets/KaTeX_Main-Italic-NWA7e6Wa.woff2                          16.98 kB
+out/renderer/assets/KaTeX_Math-BoldItalic-iY-2wyZ7.woff                       18.66 kB
+out/renderer/assets/KaTeX_Math-Italic-DA0__PXp.woff                           18.74 kB
+out/renderer/assets/KaTeX_Main-BoldItalic-SpSLRI95.woff                       19.41 kB
+out/renderer/assets/KaTeX_SansSerif-Regular-BNo7hRIc.ttf                      19.43 kB
+out/renderer/assets/KaTeX_Fraktur-Regular-CB_wures.ttf                        19.57 kB
+out/renderer/assets/KaTeX_Fraktur-Bold-BdnERNNW.ttf                           19.58 kB
+out/renderer/assets/KaTeX_Main-Italic-BMLOBm91.woff                           19.67 kB
+out/renderer/assets/KaTeX_SansSerif-Italic-YYjJ1zSn.ttf                       22.36 kB
+out/renderer/assets/KaTeX_SansSerif-Bold-CFMepnvq.ttf                         24.50 kB
+out/renderer/assets/KaTeX_Main-Bold-Cx986IdX.woff2                            25.32 kB
+out/renderer/assets/KaTeX_Main-Regular-B22Nviop.woff2                         26.27 kB
+out/renderer/assets/KaTeX_Typewriter-Regular-D3Ib7_Hf.ttf                     27.55 kB
+out/renderer/assets/KaTeX_AMS-Regular-BQhdFMY1.woff2                          28.07 kB
+out/renderer/assets/icon-DcVXyfru.png                                         29.62 kB
+out/renderer/assets/KaTeX_Main-Bold-Jm3AIy58.woff                             29.91 kB
+out/renderer/assets/KaTeX_Main-Regular-Dr94JaBh.woff                          30.77 kB
+out/renderer/assets/KaTeX_Math-BoldItalic-B3XSjfu4.ttf                        31.19 kB
+out/renderer/assets/KaTeX_Math-Italic-flOr_0UB.ttf                            31.30 kB
+out/renderer/index.html                                                       31.46 kB
+out/renderer/assets/KaTeX_Main-BoldItalic-DzxPMmG6.ttf                        32.96 kB
+out/renderer/assets/KaTeX_AMS-Regular-DMm9YOAa.woff                           33.51 kB
+out/renderer/assets/KaTeX_Main-Italic-3WenGoN9.ttf                            33.58 kB
+out/renderer/assets/openclaude-logo-Cc_HobET.png                              35.06 kB
+out/renderer/assets/KaTeX_Main-Bold-waoOVXN0.ttf                              51.33 kB
+out/renderer/assets/KaTeX_Main-Regular-ypZvNtVU.ttf                           53.58 kB
+out/renderer/assets/KaTeX_AMS-Regular-DRggAlZN.ttf                            63.63 kB
+out/renderer/assets/Geist-Variable-CrgPqtmy.woff2                             69.43 kB
+out/renderer/assets/codicon-ngg6Pgfi.ttf                                     121.97 kB
+out/renderer/assets/ghostty-BvvO5xFj.svg                                     187.89 kB
+out/renderer/assets/editor.worker-DfZj-dyC.js                                280.09 kB
+out/renderer/assets/orca-blue-CWdjK-Ki.png                                   361.21 kB
+out/renderer/assets/json.worker-DilPRRH9.js                                  409.37 kB
+out/renderer/assets/onig-CwjCXqnP.wasm                                       473.15 kB
+out/renderer/assets/claude-DP4eb_vT.webp                                     514.79 kB
+out/renderer/.vite/manifest.json                                             564.34 kB
+out/renderer/assets/html.worker-DBN5wIGY.js                                  719.72 kB
+out/renderer/assets/opencode-D7g0HAT-.webp                                   757.29 kB
+out/renderer/assets/markdown-preview-document.worker-DKuz5GBq.js             852.81 kB
+out/renderer/assets/gremlin-DjAY6hUu.webp                                    942.98 kB
+out/renderer/assets/css.worker-BO2DZGvu.js                                 1,054.82 kB
+out/renderer/assets/orca-watercolor-Cl56F6Ti.png                           1,111.77 kB
+out/renderer/assets/SymbolsNerdFontMono-Regular-CoUzE12l.woff2             1,177.91 kB
+out/renderer/assets/pdf.worker.min-Dswkl-cV.mjs                            1,265.41 kB
+out/renderer/assets/ts.worker-eyR4mLwl.js                                  6,894.57 kB
+out/renderer/assets/AgentKanbanBoard-DnUULYwG.css                              0.70 kB
+out/renderer/assets/xterm-BH8SIjS7.css                                         4.69 kB
+out/renderer/assets/editor-CNIb8Czn.css                                      147.42 kB
+out/renderer/assets/monaco-setup-C9n_FGUq.css                                308.91 kB
+out/renderer/assets/ImageViewer-DfITYsd0.css                                 329.34 kB
+out/renderer/assets/I18nProvider-Dgz0FOul.css                                592.96 kB
+out/renderer/assets/github-links-CUGcOF5o.js                                   0.00 kB
+out/renderer/assets/orchestration-install-command-BXDwBbjA.js                  0.00 kB
+out/renderer/assets/csv-file-limits-BNEsChiA.js                                0.03 kB
+out/renderer/assets/browser-use-setup-state-CCG_CnHt.js                        0.04 kB
+out/renderer/assets/close-all-context-menus-CmMnVHnb.js                        0.05 kB
+out/renderer/assets/browser-guest-web-preferences-BdE6H2ub.js                  0.06 kB
+out/renderer/assets/outside-dismiss-guard-Km4iTCC4.js                          0.06 kB
+out/renderer/assets/markdown-vdBTTKtM.js                                       0.07 kB
+out/renderer/assets/ssh-types-D2igQ5v5.js                                      0.08 kB
+out/renderer/assets/worktree-display-name-order-TL2_Mi0Y.js                    0.09 kB
+out/renderer/assets/array-Dd_wXraS.js                                          0.10 kB
+out/renderer/assets/path-tree-BKYNT7Ws.js                                      0.10 kB
+out/renderer/assets/channel-B5NkTNmb.js                                        0.11 kB
+out/renderer/assets/minus-CXUpHLW6.js                                          0.11 kB
+out/renderer/assets/codex-restart-notice-state-CK9Q22BR.js                     0.11 kB
+out/renderer/assets/monaco-find-options-B3EuVEzO.js                            0.11 kB
+out/renderer/assets/agent-status-epoch-clock-FGyibGta.js                       0.11 kB
+out/renderer/assets/dictation-control-events-BS3lyN1D.js                       0.11 kB
+out/renderer/assets/pie-WAS4IAKB-CkvfbWad.js                                   0.11 kB
+out/renderer/assets/request-active-terminal-pane-split-B0oCabMo.js             0.11 kB
+out/renderer/assets/info-A6RAGUB7-BrcQQjEA.js                                  0.12 kB
+out/renderer/assets/check-DRMJ9kk6.js                                          0.12 kB
+out/renderer/assets/radar-RG4KPBEZ-BvO9h4xN.js                                 0.12 kB
+out/renderer/assets/packet-AYTQ26CC-zPNZKvuS.js                                0.12 kB
+out/renderer/assets/cynefin-OW5HDTMX-C3K5OVmC.js                               0.12 kB
+out/renderer/assets/treemap-WGGIJYW6-IZ8jWma4.js                               0.12 kB
+out/renderer/assets/wardley-WFR3VGLG-BKCveStH.js                               0.12 kB
+out/renderer/assets/gitGraph-4MIJSDKK-C1N_y3q9.js                              0.12 kB
+out/renderer/assets/railroad-74A4TZTK-J-G-UkQj.js                              0.12 kB
+out/renderer/assets/treeView-Q6P3EWNA-oPgaLXca.js                              0.12 kB
+out/renderer/assets/chevron-down-zpct2OxN.js                                   0.12 kB
+out/renderer/assets/chevron-up-vq8jDmla.js                                     0.12 kB
+out/renderer/assets/chevron-left-5_6yuNEb.js                                   0.12 kB
+out/renderer/assets/chevron-right-C3RsgHON.js                                  0.12 kB
+out/renderer/assets/circle-BipWrAQO.js                                         0.12 kB
+out/renderer/assets/railroad-peg-WCYAUIDC-B3F-iS0x.js                          0.12 kB
+out/renderer/assets/architecture-7GRP2DOG-BpXG3XKd.js                          0.12 kB
+out/renderer/assets/dist-D8A9qUnt.js                                           0.12 kB
+out/renderer/assets/railroad-abnf-HS5TGJTU-BVow0Zs6.js                         0.12 kB
+out/renderer/assets/railroad-ebnf-LZEXJU2U-CraHPzy3.js                         0.12 kB
+out/renderer/assets/eventmodeling-NTZA5JFV-C0wgbFzo.js                         0.12 kB
+out/renderer/assets/find-query-bounds-ClC3_vxJ.js                              0.13 kB
+out/renderer/assets/localized-catalog-DLVfzVCL.js                              0.13 kB
+out/renderer/assets/shortcut-platform-DKzYE2Tg.js                              0.13 kB
+out/renderer/assets/typescript-CaDRvoXS.js                                     0.13 kB
+out/renderer/assets/loader-circle-QLCdleUc.js                                  0.14 kB
+out/renderer/assets/square-r-3gDB_v.js                                         0.14 kB
+out/renderer/assets/init-BPBs_VLw.js                                           0.14 kB
+out/renderer/assets/katex-EG38JD7O.js                                          0.14 kB
+out/renderer/assets/plus-DfAQiIiD.js                                           0.15 kB
+out/renderer/assets/x-BNKMHRNr.js                                              0.15 kB
+out/renderer/assets/workspace-file-drag-source-DgMudxK4.js                     0.15 kB
+out/renderer/assets/chunk-Y2CYZVJY-CXlz6SZY.js                                 0.15 kB
+out/renderer/assets/dist-B1q0IgPp.js                                           0.15 kB
+out/renderer/assets/cloud-DP_t_eMG.js                                          0.15 kB
+out/renderer/assets/arrow-up-bcNT_pW4.js                                       0.15 kB
+out/renderer/assets/code-Lrmx-Nee.js                                           0.15 kB
+out/renderer/assets/terminal-3TrgkrNw.js                                       0.15 kB
+out/renderer/assets/arrow-down-BfOL3sW3.js                                     0.16 kB
+out/renderer/assets/arrow-left-4i4UIdik.js                                     0.16 kB
+out/renderer/assets/arrow-right-ift7Go2e.js                                    0.16 kB
+out/renderer/assets/web-agent-session-handoff-LUoqaX5w.js                      0.16 kB
+out/renderer/assets/arrow-up-right-1-OGFLUA.js                                 0.16 kB
+out/renderer/assets/clock-3-B0E28Qjk.js                                        0.16 kB
+out/renderer/assets/clock-icfSrxBh.js                                          0.16 kB
+out/renderer/assets/web-runtime-client-capabilities-CXTA4zLp.js                0.16 kB
+out/renderer/assets/circle-minus-Cah23VCX.js                                   0.16 kB
+out/renderer/assets/chevrons-up-down-BradchGA.js                               0.17 kB
+out/renderer/assets/search-agitfxUX.js                                         0.17 kB
+out/renderer/assets/circle-check-BFOo0HZ7.js                                   0.17 kB
+out/renderer/assets/classPrivateMethodInitSpec-COZra8uS.js                     0.17 kB
+out/renderer/assets/floating-terminal-W4Bxp49r.js                              0.17 kB
+out/renderer/assets/corner-down-left-BLgTHxG-.js                               0.18 kB
+out/renderer/assets/panel-right-CsthoKEE.js                                    0.18 kB
+out/renderer/assets/play-D0QBexDP.js                                           0.18 kB
+out/renderer/assets/telemetry-CxfN-QJx.js                                      0.18 kB
+out/renderer/assets/ui-zoom-level-DbBeGaZY.js                                  0.18 kB
+out/renderer/assets/list-filter-DuDBhVqV.js                                    0.19 kB
+out/renderer/assets/chunk-2Q5K7J3B-Dl3QG3lS.js                                 0.19 kB
+out/renderer/assets/smartphone-BXELafYs.js                                     0.19 kB
+out/renderer/assets/circle-stop-DdzVoeHF.js                                    0.19 kB
+out/renderer/assets/rotate-ccw-CedJGs8o.js                                     0.19 kB
+out/renderer/assets/rotate-cw-B_g-9lbo.js                                      0.19 kB
+out/renderer/assets/base-ref-search-result-BcXwONtw.js                         0.19 kB
+out/renderer/assets/info-CnNo892n.js                                           0.20 kB
+out/renderer/assets/lock-DtdAgaUz.js                                           0.20 kB
+out/renderer/assets/circle-x-eVCW7UJq.js                                       0.20 kB
+out/renderer/assets/code-xml-m7Z2NkUK.js                                       0.20 kB
+out/renderer/assets/scroll-cache-5IAgM95J.js                                   0.20 kB
+out/renderer/assets/tailnet-address-BnfI52ph.js                                0.20 kB
+out/renderer/assets/undo-2-Bi0sstq4.js                                         0.20 kB
+out/renderer/assets/use-document-dark-theme-BN_f9Pes.js                        0.20 kB
+out/renderer/assets/locale-text-collators-Bk-XgVth.js                          0.20 kB
+out/renderer/assets/pause-BM7h6sFz.js                                          0.20 kB
+out/renderer/assets/sigma-BFKV2g7B.js                                          0.21 kB
+out/renderer/assets/moon-DV6TNS7L.js                                           0.21 kB
+out/renderer/assets/repository-settings-targets-CzGGenP4.js                    0.21 kB
+out/renderer/assets/skill-freshness-update-dialog-C_4mTskx.js                  0.21 kB
+out/renderer/assets/viewport-size-change-listener-CEM2_-Vc.js                  0.21 kB
+out/renderer/assets/chunk-JWPE2WC7-o6ocAd7y.js                                 0.22 kB
+out/renderer/assets/ellipsis-C-FSXjL9.js                                       0.22 kB
+out/renderer/assets/folder-B581aSeP.js                                         0.22 kB
+out/renderer/assets/git-merge-1R3vDGiv.js                                      0.22 kB
+out/renderer/assets/panels-top-left-DtGcbpdI.js                                0.22 kB
+out/renderer/assets/git-branch-DujTwdJ_.js                                     0.22 kB
+out/renderer/assets/upload-Bw8PC4mm.js                                         0.22 kB
+out/renderer/assets/download-Br2uPiDs.js                                       0.22 kB
+out/renderer/assets/message-square-DH8xKO29.js                                 0.23 kB
+out/renderer/assets/paperclip-bc4l8ArW.js                                      0.23 kB
+out/renderer/assets/activity-qm4qKkXY.js                                       0.23 kB
+out/renderer/assets/copy-CSAgQYVv.js                                           0.23 kB
+out/renderer/assets/panel-left-close-DXLzC5Ga.js                               0.23 kB
+out/renderer/assets/history-BWvU8elh.js                                        0.23 kB
+out/renderer/assets/circle-user-round-D7piP4UH.js                              0.23 kB
+out/renderer/assets/editor-model-registry-BwQmTNzz.js                          0.23 kB
+out/renderer/assets/connection-context-DcNTSXkG.js                             0.23 kB
+out/renderer/assets/globe-D0kB7RfY.js                                          0.23 kB
+out/renderer/assets/link-2-DxIrCiFj.js                                         0.23 kB
+out/renderer/assets/square-terminal-o5L6qRKw.js                                0.23 kB
+out/renderer/assets/database-Du0RP9fS.js                                       0.24 kB
+out/renderer/assets/arrow-down-up-Bf0mlaat.js                                  0.24 kB
+out/renderer/assets/circle-question-mark-BE2FuMmG.js                           0.24 kB
+out/renderer/assets/circle-alert-CI5EL07G.js                                   0.24 kB
+out/renderer/assets/chart-column-oTwkWf1Z.js                                   0.24 kB
+out/renderer/assets/external-link-DLEVDQA1.js                                  0.24 kB
+out/renderer/assets/settings-2-DZr9Z4y8.js                                     0.24 kB
+out/renderer/assets/trash-Baz-KW8h.js                                          0.24 kB
+out/renderer/assets/clipboard-BvguUnGG.js                                      0.25 kB
+out/renderer/assets/eye-C0igUIUL.js                                            0.25 kB
+out/renderer/assets/funnel-CFRpEOvv.js                                         0.25 kB
+out/renderer/assets/link-DmAQwn5_.js                                           0.25 kB
+out/renderer/assets/table-B5NBnfl_.js                                          0.25 kB
+out/renderer/assets/pdf-scale-preference-storage-X2j9it-E.js                   0.25 kB
+out/renderer/assets/shallow-BuTrnrZM.js                                        0.25 kB
+out/renderer/assets/monitor-BrS7lm7w.js                                        0.25 kB
+out/renderer/assets/zap-CzXh7d3d.js                                            0.25 kB
+out/renderer/assets/computer-awake-mode-D0u-1513.js                            0.26 kB
+out/renderer/assets/manual-terminal-worktree-parking-DJKiPi7Q.js               0.26 kB
+out/renderer/assets/chunk-XXDRQBXY-BpQYnKvv.js                                 0.26 kB
+out/renderer/assets/triangle-alert-D5Wo82Z2.js                                 0.26 kB
+out/renderer/assets/workflow-C4C4zrfS.js                                       0.26 kB
+out/renderer/assets/image-BCmsp7VW.js                                          0.26 kB
+out/renderer/assets/use-reused-array-identity-W07ES5re.js                      0.26 kB
+out/renderer/assets/pencil-D_G2nSox.js                                         0.27 kB
+out/renderer/assets/book-open-ClMeODAH.js                                      0.27 kB
+out/renderer/assets/braces-_3NFKqwX.js                                         0.27 kB
+out/renderer/assets/list-checks-DbRONnA0.js                                    0.27 kB
+out/renderer/assets/house-siay188c.js                                          0.27 kB
+out/renderer/assets/worktree-diff-comments-selector-VxuqTr38.js                0.27 kB
+out/renderer/assets/usage-roster-formatting-B84VcHoR.js                        0.27 kB
+out/renderer/assets/confirmation-dialog-context-CCXrFH5v.js                    0.28 kB
+out/renderer/assets/plug-B-XZt1v4.js                                           0.28 kB
+out/renderer/assets/git-pull-request-BDhNagD0.js                               0.28 kB
+out/renderer/assets/bell-ByVyXZ1z.js                                           0.28 kB
+out/renderer/assets/send-C9TgLwz4.js                                           0.28 kB
+out/renderer/assets/case-sensitive-DFcgkt80.js                                 0.28 kB
+out/renderer/assets/folder-open-CedBTcBa.js                                    0.28 kB
+out/renderer/assets/list-tree-D5y7E6RW.js                                      0.29 kB
+out/renderer/assets/list-todo-CtePMVaq.js                                      0.29 kB
+out/renderer/assets/list-D041c2hR.js                                           0.29 kB
+out/renderer/assets/monitor-up-C-hNJFVg.js                                     0.30 kB
+out/renderer/assets/wrench-DuN0G8hu.js                                         0.30 kB
+out/renderer/assets/laptop-xUf7-0xO.js                                         0.30 kB
+out/renderer/assets/folder-plus-CZSl3Uxo.js                                    0.30 kB
+out/renderer/assets/box-CkUT3e3l.js                                            0.30 kB
+out/renderer/assets/message-square-plus-F4M-DRAh.js                            0.30 kB
+out/renderer/assets/regex-DaRiWO9V.js                                          0.30 kB
+out/renderer/assets/file-exclamation-point-D3VdLKBY.js                         0.30 kB
+out/renderer/assets/local-file-manager-label-CoYm4t6j.js                       0.31 kB
+out/renderer/assets/shield-check-C_T7qWWE.js                                   0.31 kB
+out/renderer/assets/git-pull-request-arrow-jUBoSwNA.js                         0.31 kB
+out/renderer/assets/refresh-ccw-U9BMV-bp.js                                    0.31 kB
+out/renderer/assets/refresh-cw-DY6zPE8k.js                                     0.31 kB
+out/renderer/assets/whole-word-76WXXaN3.js                                     0.32 kB
+out/renderer/assets/chunk-CLGD4ZFX-BOOOeLiw.js                                 0.32 kB
+out/renderer/assets/save-D6-OCrxP.js                                           0.32 kB
+out/renderer/assets/bot-DDeHprbg.js                                            0.32 kB
+out/renderer/assets/git-fork-zk1BBRri.js                                       0.32 kB
+out/renderer/assets/dist-UjOeEgd4.js                                           0.33 kB
+out/renderer/assets/pin-off-BO3e4ulb.js                                        0.33 kB
+out/renderer/assets/terminal-user-input-signal-DRxHAwqv.js                     0.33 kB
+out/renderer/assets/server-O9edkv1h.js                                         0.33 kB
+out/renderer/assets/floating-workspace-panel-reveal-jkV0RgVv.js                0.33 kB
+out/renderer/assets/agent-row-dot-state-F-vjFycz.js                            0.34 kB
+out/renderer/assets/message-square-text-Ut7oGOzJ.js                            0.34 kB
+out/renderer/assets/file-plus-B3jWqsjH.js                                      0.34 kB
+out/renderer/assets/store-Zxx24EHa.js                                          0.34 kB
+out/renderer/assets/shield-alert-C6gX8Ea8.js                                   0.35 kB
+out/renderer/assets/files-83wrXYcF.js                                          0.35 kB
+out/renderer/assets/key-round-DfNCsvLt.js                                      0.35 kB
+out/renderer/assets/ssh-connection-recoverability-CH2OjRef.js                  0.35 kB
+out/renderer/assets/programmatic-scroll-marks-CqlqaJCl.js                      0.35 kB
+out/renderer/assets/share-2-C4NJqPvp.js                                        0.35 kB
+out/renderer/assets/chunk-5VM5RSS4-ba73IXzR.js                                 0.36 kB
+out/renderer/assets/folder-git-2-qaIdXK6v.js                                   0.36 kB
+out/renderer/assets/pr-check-severity-order-BmjcSEl1.js                        0.36 kB
+out/renderer/assets/package-2KaAedII.js                                        0.36 kB
+out/renderer/assets/status-bar-context-menu-policy-Db_uoK2T.js                 0.36 kB
+out/renderer/assets/git-branch-plus-zwQlgr4J.js                                0.37 kB
+out/renderer/assets/gitlab-F-avZFXI.js                                         0.37 kB
+out/renderer/assets/use-window-stream-visibility-CQuqWcRw.js                   0.37 kB
+out/renderer/assets/editor-pending-flush-BTgP67t1.js                           0.37 kB
+out/renderer/assets/local-only-menu-hint-4r-3TebE.js                           0.37 kB
+out/renderer/assets/retired-name-cache-BRJRaipK.js                             0.37 kB
+out/renderer/assets/calendar-clock-CehHcDj9.js                                 0.37 kB
+out/renderer/assets/clipboard-copy-MIhdkNc8.js                                 0.37 kB
+out/renderer/assets/settings-search-keywords-DK9nwOZz.js                       0.37 kB
+out/renderer/assets/screen-submit-shortcut-ChD8wZEN.js                         0.38 kB
+out/renderer/assets/network-CQHP5L-J.js                                        0.38 kB
+out/renderer/assets/file-text-wmB3q0P1.js                                      0.38 kB
+out/renderer/assets/react-update-depth-attribution-B8IMYeY3.js                 0.38 kB
+out/renderer/assets/terminal-Cv63SUv6.js                                       0.38 kB
+out/renderer/assets/hard-drive-CCdn3Ojr.js                                     0.38 kB
+out/renderer/assets/quote-BJIiiZL2.js                                          0.38 kB
+out/renderer/assets/earth-BUtyjlnB.js                                          0.39 kB
+out/renderer/assets/editor-path-display-D_LtUKlg.js                            0.39 kB
+out/renderer/assets/text-cursor-input-CQBcPv4W.js                              0.39 kB
+out/renderer/assets/locate-fixed-CAvrp3ch.js                                   0.40 kB
+out/renderer/assets/window-park-visibility-CDf2C0iE.js                         0.40 kB
+out/renderer/assets/github-BYwhBdCO.js                                         0.40 kB
+out/renderer/assets/worktree-git-identity-display-BIpLNnWB.js                  0.40 kB
+out/renderer/assets/checks-panel-review-NEqr0fZZ.js                            0.41 kB
+out/renderer/assets/editable-target-B7GhjNCJ.js                                0.41 kB
+out/renderer/assets/repo-slug-index-CEyhRrn3.js                                0.41 kB
+out/renderer/assets/sliders-horizontal-DtSs4YJm.js                             0.42 kB
+out/renderer/assets/web-runtime-browser-creation-BJvmfNKG.js                   0.42 kB
+out/renderer/assets/artifact-link-actions-DgxuD50-.js                          0.42 kB
+out/renderer/assets/jsx-runtime-fpVmDKu4.js                                    0.42 kB
+out/renderer/assets/eye-off-DeSUlajY.js                                        0.42 kB
+out/renderer/assets/configured-worktree-base-path-CfOPgLWs.js                  0.42 kB
+out/renderer/assets/monospace-font-family-BrTO89vG.js                          0.42 kB
+out/renderer/assets/server-off-CfTnCzol.js                                     0.44 kB
+out/renderer/assets/keyboard-BVpDnHij.js                                       0.45 kB
+out/renderer/assets/chunk-UY3FDG6J-DDQXFWUT.js                                 0.45 kB
+out/renderer/assets/chunk-I5DQTOEV-Doq_ivbr.js                                 0.45 kB
+out/renderer/assets/agent-tab-shortcuts-DZgCKGbE.js                            0.45 kB
+out/renderer/assets/file-search-include-pattern-ZPf1_WGw.js                    0.45 kB
+out/renderer/assets/chunk-5V3GS4D5-BxSMKyfP.js                                 0.45 kB
+out/renderer/assets/chunk-KI3K4JFJ-DWPd-rk1.js                                 0.46 kB
+out/renderer/assets/chunk-6TQVIW2G-DrPCHy1b.js                                 0.46 kB
+out/renderer/assets/file-braces-BHcuxEK9.js                                    0.46 kB
+out/renderer/assets/star-CCfjjLcA.js                                           0.46 kB
+out/renderer/assets/folder-tree-SPZA377m.js                                    0.47 kB
+out/renderer/assets/agent-finished-timestamp-BirpcUF3.js                       0.48 kB
+out/renderer/assets/agent-message-send-n7jBP3oA.js                             0.48 kB
+out/renderer/assets/settings-BtGwiegm.js                                       0.48 kB
+out/renderer/assets/ssh-connect-verb-9wOgY0fY.js                               0.48 kB
+out/renderer/assets/comment-body-submit-state-D80oAmgY.js                      0.48 kB
+out/renderer/assets/cable-CEcauedg.js                                          0.49 kB
+out/renderer/assets/repo-search-Bb37hYen.js                                    0.49 kB
+out/renderer/assets/sparkles-D_ZAV9u-.js                                       0.49 kB
+out/renderer/assets/zoom-out-Bzejo4y1.js                                       0.49 kB
+out/renderer/assets/chunk-ICYGCRZG-D4OOsQVW.js                                 0.49 kB
+out/renderer/assets/relative-time-format-Bin3WGF7.js                           0.49 kB
+out/renderer/assets/diff-comments-format-Dwdc-nTB.js                           0.50 kB
+out/renderer/assets/editor-font-zoom-Bs-JGhwf.js                               0.50 kB
+out/renderer/assets/palette-l_ouykc6.js                                        0.50 kB
+out/renderer/assets/usePrefersReducedMotion-BtYghs1i.js                        0.51 kB
+out/renderer/assets/ai-vault-search-settings-bGK-B9dh.js                       0.51 kB
+out/renderer/assets/unlink-C8vPz14c.js                                         0.52 kB
+out/renderer/assets/pr-bot-author-overrides-BM7ABfXh.js                        0.53 kB
+out/renderer/assets/ghostty-CMb1eg9m.js                                        0.53 kB
+out/renderer/assets/layers-Cg06zq03.js                                         0.54 kB
+out/renderer/assets/dist-r8ZM-p7t.js                                           0.55 kB
+out/renderer/assets/request-contextual-tour-when-ready-DdSbX_5f.js             0.56 kB
+out/renderer/assets/circle-dashed-C2caFEAV.js                                  0.57 kB
+out/renderer/assets/chunk-POPQ4Y6H-CH4sePAD.js                                 0.57 kB
+out/renderer/assets/RepoBadgeLabel-BnXU_JCh.js                                 0.58 kB
+out/renderer/assets/classPrivateFieldGet2-D3oDNkDI.js                          0.58 kB
+out/renderer/assets/antigravity-session-origin-TuEI7FyO.js                     0.58 kB
+out/renderer/assets/ssh-connect-in-flight-ltwpwQ3N.js                          0.59 kB
+out/renderer/assets/chunk-3Z5EZCMW-qEBnHgin.js                                 0.59 kB
+out/renderer/assets/git-pull-request-draft-D5NSMg_D.js                         0.60 kB
+out/renderer/assets/AgentQuestionIcon--YoTgmS5.js                              0.62 kB
+out/renderer/assets/browser-focus-giqUcKNK.js                                  0.63 kB
+out/renderer/assets/review-state-presentation-Cvna98ji.js                      0.63 kB
+out/renderer/assets/task-source-provider-availability-CcDWB5H0.js              0.64 kB
+out/renderer/assets/LinearIcon-1X9I_hcy.js                                     0.65 kB
+out/renderer/assets/ime-text-field-BiIJZ_Wx.js                                 0.65 kB
+out/renderer/assets/workspace-browser-tab-open-BrHgtHCl.js                     0.65 kB
+out/renderer/assets/use-system-prefers-dark-rGEOWFjE.js                        0.65 kB
+out/renderer/assets/pane-webgl-renderer-RfZ_FVJP.js                            0.65 kB
+out/renderer/assets/dist-CPaxJvjV.js                                           0.66 kB
+out/renderer/assets/use-sidebar-host-scope-options-DRbP0WGK.js                 0.66 kB
+out/renderer/assets/flowDiagram-HODETNUW-Bhu10nQQ.js                           0.67 kB
+out/renderer/assets/user-opened-local-path-CA48AXYp.js                         0.68 kB
+out/renderer/assets/add-repo-runtime-owner-BMu4JIZY.js                         0.69 kB
+out/renderer/assets/azcli-DyA6x9uz.js                                          0.70 kB
+out/renderer/assets/native-file-drop-5vazTTDj.js                               0.70 kB
+out/renderer/assets/document-theme-lm2uRs6l.js                                 0.70 kB
+out/renderer/assets/active-agent-note-send-CT97h8-C.js                         0.71 kB
+out/renderer/assets/appearance-usage-percentage-search-xG9SKjG7.js             0.71 kB
+out/renderer/assets/skill-warning-preview-gate-DW-MIPpr.js                     0.71 kB
+out/renderer/assets/native-chat-runtime-contract-DNB4_nF2.js                   0.72 kB
+out/renderer/assets/use-now-D8VzECF8.js                                        0.72 kB
+out/renderer/assets/diff-line-counts-Bv5o4LWQ.js                               0.72 kB
+out/renderer/assets/javascript-D3CZOtK8.js                                     0.73 kB
+out/renderer/assets/integration-status-pill-CyRoKBFm.js                        0.73 kB
+out/renderer/assets/browser-workspace-tab-activation-BfcttlpL.js               0.74 kB
+out/renderer/assets/CommentMarkdown-COdZJqO8.js                                0.74 kB
+out/renderer/assets/diff-comment-popover-position-D3DOHqW2.js                  0.74 kB
+out/renderer/assets/local-file-access-CxhKz0Zw.js                              0.75 kB
+out/renderer/assets/ImageViewer-GtY3iIGT.js                                    0.75 kB
+out/renderer/assets/file-view-preference-storage-CkzGQdTs.js                   0.75 kB
+out/renderer/assets/MonacoCodeExcerpt-faQUrDWV.js                              0.75 kB
+out/renderer/assets/markdown-rich-size-limit-D0VPRSnR.js                       0.77 kB
+out/renderer/assets/dist-CNCeKXIQ.js                                           0.77 kB
+out/renderer/assets/markdown-preview-links-ChW7sfSf.js                         0.78 kB
+out/renderer/assets/folder-kanban-DFY2K4Y2.js                                  0.78 kB
+out/renderer/assets/create-project-defaults-DF0VhVs3.js                        0.79 kB
+out/renderer/assets/JiraIcon-CWrDJPFW.js                                       0.80 kB
+out/renderer/assets/editor-model-owner-qdVi3pIv.js                             0.80 kB
+out/renderer/assets/web-runtime-session-CBRDfw1Z.js                            0.81 kB
+out/renderer/assets/structured-agent-session-tab-activation-BbwTQxaj.js        0.82 kB
+out/renderer/assets/chunk-XHIXRSVI-BIyAuVPO.js                                 0.83 kB
+out/renderer/assets/defineProperty-QwMrNS9w.js                                 0.83 kB
+out/renderer/assets/label-NNMkgn9a.js                                          0.84 kB
+out/renderer/assets/classDiagram-ZZMXUADV-DyrpOAp7.js                          0.84 kB
+out/renderer/assets/classDiagram-v2-VYDZK3BY-Bq0njo62.js                       0.84 kB
+out/renderer/assets/stateDiagram-v2-MP3YSRHH-BMtvEHa6.js                       0.85 kB
+out/renderer/assets/window-visibility-interval-DiGnNZzS.js                     0.85 kB
+out/renderer/assets/monaco-content-sync-DWIQwpFO.js                            0.85 kB
+out/renderer/assets/workspace-creation-tour-handoff-BRM18Ka2.js                0.87 kB
+out/renderer/assets/file-search-selection-9lLynQTS.js                          0.88 kB
+out/renderer/assets/runtime-repo-client-CqkGDXeN.js                            0.89 kB
+out/renderer/assets/chunk-6AZGARVD-CH42TNT3.js                                 0.89 kB
+out/renderer/assets/sizeCapture-INFHLROL-BUx0b8RT.js                           0.89 kB
+out/renderer/assets/chunk-IH6LHLGP-DEvyq4uh.js                                 0.92 kB
+out/renderer/assets/SetupGuideTelemetryObserver-DBPG7Eqq.js                    0.92 kB
+out/renderer/assets/dashboard-row-bucket-bM8tM02n.js                           0.92 kB
+out/renderer/assets/HostedReviewUnlinkMenuItem-DuqxePS-.js                     0.93 kB
+out/renderer/assets/swimlanesDiagram-VR7AAH4N-CLc6W8rH.js                      0.93 kB
+out/renderer/assets/ssh-mutation-expectation-Lotxua6s.js                       0.93 kB
+out/renderer/assets/editor-labels-BgmHCs37.js                                  0.94 kB
+out/renderer/assets/primary-selection-CZf8PH-I.js                              0.94 kB
+out/renderer/assets/line-Bamb3wfB.js                                           0.94 kB
+out/renderer/assets/agent-message-send-BwgjwZet.js                             0.94 kB
+out/renderer/assets/terminal-quick-command-search-hVYIyYkv.js                  0.95 kB
+out/renderer/assets/pane-terminal-options-CaRpISG1.js                          0.95 kB
+out/renderer/assets/ini-C7299qWO.js                                            0.96 kB
+out/renderer/assets/web-agent-session-handoff-DFfhupJH.js                      0.99 kB
+out/renderer/assets/ShortcutKeyCombo-BI0RiS0G.js                               1.02 kB
+out/renderer/assets/reveal-in-file-manager-CWX4w7sh.js                         1.03 kB
+out/renderer/assets/chunk-OUJLGHUK-CWgrws2m.js                                 1.04 kB
+out/renderer/assets/input-DgCrc3xk.js                                          1.04 kB
+out/renderer/assets/CsvViewer-C8dT4fNu.js                                      1.04 kB
+out/renderer/assets/chunk-D5q2GcBw.js                                          1.05 kB
+out/renderer/assets/chunk-747NJXEK-BoY6gCmZ.js                                 1.05 kB
+out/renderer/assets/workspace-port-groups-B_dU6F6F.js                          1.05 kB
+out/renderer/assets/card-BdKFzx7s.js                                           1.06 kB
+out/renderer/assets/check-presentation-BWIKdG-s.js                             1.07 kB
+out/renderer/assets/launch-agent-in-new-tab-CIcD8-YM.js                        1.09 kB
+out/renderer/assets/clipboard-image-CY79KPjX.js                                1.10 kB
+out/renderer/assets/external-worktree-inbox-YI4hAYGi.js                        1.10 kB
+out/renderer/assets/ai-vault-types-DeOQBWXe.js                                 1.11 kB
+out/renderer/assets/useShortcutLabel-Bl3WYm45.js                               1.11 kB
+out/renderer/assets/ime-composition-keyboard-event-BcV3lXXj.js                 1.12 kB
+out/renderer/assets/chunk-2ZTRR5NV--SlwnUXj.js                                 1.12 kB
+out/renderer/assets/textarea-CEdGhJHc.js                                       1.14 kB
+out/renderer/assets/markdown-fence-scanner-B00LIbw0.js                         1.16 kB
+out/renderer/assets/project-skill-runtime-BepSetI_.js                          1.16 kB
+out/renderer/assets/ordinal-DMSHBE-2.js                                        1.17 kB
+out/renderer/assets/client-environment-info-BtyyKJYI.js                        1.17 kB
+out/renderer/assets/native-chat-tool-identity-YMLG-Ddc.js                      1.18 kB
+out/renderer/assets/diff-monaco-model-disposal-DetcrLWQ.js                     1.20 kB
+out/renderer/assets/preload-helper-lGRuUxc-.js                                 1.21 kB
+out/renderer/assets/workers-CmwsvmnU.js                                        1.22 kB
+out/renderer/assets/activity-terminal-portal-DnlDP9wq.js                       1.22 kB
+out/renderer/assets/window-close-request-coordinator-07m7efQa.js               1.23 kB
+out/renderer/assets/DetachedHeadBadge-Cf3sonCR.js                              1.23 kB
+out/renderer/assets/workspace-activation-terminal-focus-B0ZL5y3T.js            1.23 kB
+out/renderer/assets/workspace-chrome-metrics-DjyY94zT.js                       1.24 kB
+out/renderer/assets/agent-launch-request-id-BUPxcfKG.js                        1.24 kB
+out/renderer/assets/file-path-cursor-tooltip-2uDoXQzU.js                       1.25 kB
+out/renderer/assets/terminal-paste-runtime-B24BGEuq.js                         1.27 kB
+out/renderer/assets/csp-C_sUH2Rm.js                                            1.27 kB
+out/renderer/assets/infoDiagram-27XIBGKW-CI7ZsDdA.js                           1.28 kB
+out/renderer/assets/terminal-render-pause-release-BlQzQdBu.js                  1.28 kB
+out/renderer/assets/workspace-space-format-S_y1e5hZ.js                         1.29 kB
+out/renderer/assets/open-in-app-catalog-BJh9_UFV.js                            1.32 kB
+out/renderer/assets/list-table-layout-D0Ix55vq.js                              1.34 kB
+out/renderer/assets/app-font-family-Cam55E42.js                                1.35 kB
+out/renderer/assets/agent-status-worktree-attribution-Dmp0ecwN.js              1.35 kB
+out/renderer/assets/worktree-card-pr-display-Clayw5Qk.js                       1.36 kB
+out/renderer/assets/diff-navigation-context-BKlpb3kA.js                        1.37 kB
+out/renderer/assets/editor-shortcuts-k5skUNva.js                               1.37 kB
+out/renderer/assets/worktree-lineage-projection-C9wxRRg4.js                    1.37 kB
+out/renderer/assets/status-display-BfSgFbFs.js                                 1.37 kB
+out/renderer/assets/paired-mobile-devices-DJkB9N-0.js                          1.38 kB
+out/renderer/assets/onboarding-folder-agent-launch-BoOvT0PS.js                 1.40 kB
+out/renderer/assets/chunk-GVQU2GXP-DzgPMosk.js                                 1.42 kB
+out/renderer/assets/chunk-6K3QC6MW-Dr2O-z32.js                                 1.45 kB
+out/renderer/assets/useWorktreeAgentRows-DviaW0sP.js                           1.47 kB
+out/renderer/assets/terminal-ime-composition-route-BSwfgPvc.js                 1.48 kB
+out/renderer/assets/RepositoryIconEmojiPicker-DBCY8EFj.js                      1.50 kB
+out/renderer/assets/WorktreeCardHelpers-DBsCEkFC.js                            1.50 kB
+out/renderer/assets/agent-row-pane-live-title-B0DJe1ZR.js                      1.53 kB
+out/renderer/assets/automation-host-client-DF7t9BuU.js                         1.54 kB
+out/renderer/assets/pla-BuCnQLfe.js                                            1.54 kB
+out/renderer/assets/new-external-worktrees-inbox-actions-Be9HEA6U.js           1.54 kB
+out/renderer/assets/I18nProvider-mC5WzUBT.js                                   1.55 kB
+out/renderer/assets/folder-workspace-attached-worktrees-DidGLdrG.js            1.59 kB
+out/renderer/assets/terminal-pty-input-transaction-EHtJreBM.js                 1.61 kB
+out/renderer/assets/MermaidViewer-CKOOl60c.js                                  1.62 kB
+out/renderer/assets/scheme-6ExiQ8wO.js                                         1.62 kB
+out/renderer/assets/badge-CS0HLmPF.js                                          1.64 kB
+out/renderer/assets/useActiveProjectSkillRuntime-BLlcwcV0.js                   1.66 kB
+out/renderer/assets/flow9-BzYLD_m4.js                                          1.66 kB
+out/renderer/assets/chunk-6EIED4P4-WBe0wKfH.js                                 1.67 kB
+out/renderer/assets/sb-WmwSVGTC.js                                             1.68 kB
+out/renderer/assets/bat--ijwVwcm.js                                            1.69 kB
+out/renderer/assets/ephemeral-vm-recipes-RvHfzFeR.js                           1.70 kB
+out/renderer/assets/modifier-double-tap-detector-DabI0Q0e.js                   1.70 kB
+out/renderer/assets/virtualized-list-CfeSs1BD.js                               1.71 kB
+out/renderer/assets/toggle-DmdE2PJk.js                                         1.72 kB
+out/renderer/assets/dockerfile-DsWOSRd6.js                                     1.72 kB
+out/renderer/assets/runtime-project-refresh-scheduler-CFQO1Uy2.js              1.79 kB
+out/renderer/assets/dist-lNkUSbpA.js                                           1.82 kB
+out/renderer/assets/skill-warning-preview-version-DxxLUPjJ.js                  1.84 kB
+out/renderer/assets/pascaligo-VJ1qAd61.js                                      1.85 kB
+out/renderer/assets/useDetectedAgents-B07u4FwM.js                              1.86 kB
+out/renderer/assets/DiffNotesSendMenu-CIX2QQ7W.js                              1.87 kB
+out/renderer/assets/parent-pr-checks-hosted-review-cache--cfBRAgP.js           1.92 kB
+out/renderer/assets/feature-wall-setup-steps-BoL1FLOE.js                       1.93 kB
+out/renderer/assets/chunk-P2QGCYS3-DKLb3I74.js                                 1.94 kB
+out/renderer/assets/xml-bAiF8Bg4.js                                            1.95 kB
+out/renderer/assets/chunk-F27PBJKO-Bt4nqGPb.js                                 1.97 kB
+out/renderer/assets/cameligo-LJhTCRvp.js                                       1.97 kB
+out/renderer/assets/lua-D0iL-sO3.js                                            1.98 kB
+out/renderer/assets/editor-autosave-upDicis_.js                                1.99 kB
+out/renderer/assets/use-setup-guide-telemetry-wTq8ig7V.js                      1.99 kB
+out/renderer/assets/StatusIndicator-RV16lcLa.js                                1.99 kB
+out/renderer/assets/onboarding-folder-agent-launch-Bo_DxfnY.js                 2.04 kB
+out/renderer/assets/markdown-review-notes-2Nf5oQXN.js                          2.08 kB
+out/renderer/assets/objective-c-BTbBhfsb.js                                    2.10 kB
+out/renderer/assets/graphql-DcZvDEKT.js                                        2.11 kB
+out/renderer/assets/web-session-tabs-sync-D0gv1DAv.js                          2.13 kB
+out/renderer/assets/SelectedTextCopyMenu-Wo3RZDn_.js                           2.13 kB
+out/renderer/assets/source-control-tree-nS9Egdo8.js                            2.14 kB
+out/renderer/assets/dist-DxeYW0Qf.js                                           2.16 kB
+out/renderer/assets/react-renderer-root-C7dG1uLr.js                            2.17 kB
+out/renderer/assets/telemetry-x-oi7gTj.js                                      2.18 kB
+out/renderer/assets/feature-tip-telemetry-D8qCvk44.js                          2.18 kB
+out/renderer/assets/repo-slug-index-CrcfiMFS.js                                2.21 kB
+out/renderer/assets/orchestration-setup-state-BWbT0W-8.js                      2.21 kB
+out/renderer/assets/sparql-DCpKQxvf.js                                         2.21 kB
+out/renderer/assets/plugin-panels-CaE0a0EL.js                                  2.21 kB
+out/renderer/assets/check-job-log-tail-a5c8LsPw.js                             2.22 kB
+out/renderer/assets/automation-host-diagnostics-Dz20Azym.js                    2.24 kB
+out/renderer/assets/monaco-conflict-decorations-CYiCkWyX.js                    2.25 kB
+out/renderer/assets/useSidebarResize-DptLhuG4.js                               2.25 kB
+out/renderer/assets/lexon-C2u_a1dY.js                                          2.28 kB
+out/renderer/assets/railroadDiagram-O6MQD6OU-BStLUBSR.js                       2.30 kB
+out/renderer/assets/path-CffWUwtu.js                                           2.31 kB
+out/renderer/assets/native-chat-turn-status-CRLgES3-.js                        2.31 kB
+out/renderer/assets/native-chat-layout-actions-BTy3Tf8Z.js                     2.32 kB
+out/renderer/assets/mips-CHLWFJ3-.js                                           2.32 kB
+out/renderer/assets/MermaidBlock-BIzydEbb.js                                   2.33 kB
+out/renderer/assets/MonacoCodeExcerpt-DTkBeqFJ.js                              2.33 kB
+out/renderer/assets/go-R_JOKD7Z.js                                             2.35 kB
+out/renderer/assets/structured-agent-session-status-feed-QgyC66Cu.js           2.36 kB
+out/renderer/assets/bicep-C8fndPd0.js                                          2.36 kB
+out/renderer/assets/activate-ai-vault-structured-session-BFc2dJl9.js           2.37 kB
+out/renderer/assets/ImageDiffViewer-KY8blL8S.js                                2.37 kB
+out/renderer/assets/ProjectAddedDialog-COoK8gv-.js                             2.40 kB
+out/renderer/assets/progress-CwSfxvye.js                                       2.41 kB
+out/renderer/assets/logo-DmeVOqlE.js                                           2.41 kB
+out/renderer/assets/agent-pane-activity-flags-CTqaDJN3.js                      2.43 kB
+out/renderer/assets/pane-agent-owner-DQ_LO3mI.js                               2.45 kB
+out/renderer/assets/RemoveFolderDialog-Ckubjiis.js                             2.46 kB
+out/renderer/assets/task-preset-query-C1WMEZc3.js                              2.47 kB
+out/renderer/assets/sophia-BMn9dPUo.js                                         2.48 kB
+out/renderer/assets/abnfDiagram-VCTEODGH-BaZCTqo3.js                           2.48 kB
+out/renderer/assets/FloatingTerminalIconContextMenu-Brdzhjft.js                2.51 kB
+out/renderer/assets/m3-USAquJOQ.js                                             2.52 kB
+out/renderer/assets/shell-icons-DA1w9Qsz.js                                    2.53 kB
+out/renderer/assets/agent-awake-copy-Fg2gjEM_.js                               2.57 kB
+out/renderer/assets/microphone-devices-BokxSye0.js                             2.59 kB
+out/renderer/assets/use-integration-connection-status-Ch6EbAYH.js              2.60 kB
+out/renderer/assets/typespec-BqvpWAbk.js                                       2.62 kB
+out/renderer/assets/worktree-host-connection-phase-B8qe0ZBW.js                 2.63 kB
+out/renderer/assets/pascal-BvN3oAJE.js                                         2.63 kB
+out/renderer/assets/pegDiagram-XKGWAZYB-C9Lw-P8k.js                            2.64 kB
+out/renderer/assets/fsharp-O-VT_rRz.js                                         2.65 kB
+out/renderer/assets/background-terminal-worktree-mount-CXVQrHip.js             2.68 kB
+out/renderer/assets/dist-D3BE5J_E.js                                           2.69 kB
+out/renderer/assets/ebnfDiagram-PWID7BFC-pkIWRnY3.js                           2.70 kB
+out/renderer/assets/skill-freshness-4xm1VQVH.js                                2.71 kB
+out/renderer/assets/qsharp-DpfEpZ7h.js                                         2.72 kB
+out/renderer/assets/linked-work-item-context-C3I89M3v.js                       2.80 kB
+out/renderer/assets/workspace-file-drag-D1SwSAcc.js                            2.80 kB
+out/renderer/assets/shell-BdyxgRpw.js                                          2.81 kB
+out/renderer/assets/r-CuMzVFhj.js                                              2.83 kB
+out/renderer/assets/use-session-search-status-CsgeKRMk.js                      2.86 kB
+out/renderer/assets/RemoteServerUpdateStatus-BwGcBXLC.js                       2.86 kB
+out/renderer/assets/markdown-doc-links-DNIdCq9s.js                             2.87 kB
+out/renderer/assets/java-CSKHgvDT.js                                           2.90 kB
+out/renderer/assets/useModalReturnFocus-DM7xE1qW.js                            2.92 kB
+out/renderer/assets/feature-education-telemetry-BqzHe5ju.js                    2.93 kB
+out/renderer/assets/source-control-ai-settings-navigation-By2cDh2n.js          2.97 kB
+out/renderer/assets/linear-issue-workspace-attachment-BoF8qze3.js              2.98 kB
+out/renderer/assets/dist-DGbnN_gq.js                                           2.98 kB
+out/renderer/assets/useInstalledAgentSkills-QK5J-8bt.js                        3.02 kB
+out/renderer/assets/redis-DeQ3Ez4y.js                                          3.03 kB
+out/renderer/assets/sleep-worktree-flow-brx5lGks.js                            3.03 kB
+out/renderer/assets/cssMode-CUj40qr_.js                                        3.03 kB
+out/renderer/assets/kotlin-da5i2oqw.js                                         3.04 kB
+out/renderer/assets/cypher-n7c_AQTS.js                                         3.04 kB
+out/renderer/assets/AgentStateDot-CM9JyOty.js                                  3.05 kB
+out/renderer/assets/powershell-CekOgxJ-.js                                     3.05 kB
+out/renderer/assets/terminal-agent-paste-bracketing-CCANvsVl.js                3.08 kB
+out/renderer/assets/terminal-link-open-hints-BSLaGMrE.js                       3.17 kB
+out/renderer/assets/file-explorer-operation-owner-BA8uyF-4.js                  3.20 kB
+out/renderer/assets/use-contextual-tour-f-y4WhDZ.js                            3.20 kB
+out/renderer/assets/virtual-rows-B5FejA6q.js                                   3.24 kB
+out/renderer/assets/collapsible-DStkeKAS.js                                    3.24 kB
+out/renderer/assets/project-added-default-checkout-Bw6hn-Jn.js                 3.26 kB
+out/renderer/assets/tcl-DKqyh5Jy.js                                            3.27 kB
+out/renderer/assets/dialog-SPNib90K.js                                         3.28 kB
+out/renderer/assets/linear-agent-skill-runtime-BRRrLAQ3.js                     3.30 kB
+out/renderer/assets/coffee-BcnjEGf5.js                                         3.36 kB
+out/renderer/assets/sheet-43N4cvMA.js                                          3.36 kB
+out/renderer/assets/liquid-DRTRfzxk.js                                         3.37 kB
+out/renderer/assets/hcl-CZeCh0xI.js                                            3.44 kB
+out/renderer/assets/apex-DAXaNyWZ.js                                           3.46 kB
+out/renderer/assets/arc-CCBxb8hn.js                                            3.48 kB
+out/renderer/assets/python-Bn746RKh.js                                         3.48 kB
+out/renderer/assets/htmlMode-D6wZtoAI.js                                       3.48 kB
+out/renderer/assets/preserved-branch-batch-toast-D7C2TkUh.js                   3.49 kB
+out/renderer/assets/git-status-refresh-BfYsoven.js                             3.49 kB
+out/renderer/assets/CliSkillRuntimeSetup-DotMopts.js                           3.56 kB
+out/renderer/assets/yaml-Csvp4Dc_.js                                           3.57 kB
+out/renderer/assets/markdown-BfNqz1Lj.js                                       3.62 kB
+out/renderer/assets/rust-DJxYMIl0.js                                           3.66 kB
+out/renderer/assets/runtime-file-range-client-DEL8AqIr.js                      3.68 kB
+out/renderer/assets/app-menu-paste-C4x9sNcs.js                                 3.70 kB
+out/renderer/assets/dashboard-orchestration-selection-BdHWmZBl.js              3.71 kB
+out/renderer/assets/chunk-TLUHSLCS-cY-3FtZS.js                                 3.73 kB
+out/renderer/assets/restructuredtext-CxyL_1t1.js                               3.74 kB
+out/renderer/assets/less-CNZMhc1b.js                                           3.74 kB
+out/renderer/assets/gitlab-links-k0vjiWrX.js                                   3.77 kB
+out/renderer/assets/crash-diagnostics-CMk_zPuQ.js                              3.81 kB
+out/renderer/assets/toggle-group-KWXfDQGJ.js                                   3.84 kB
+out/renderer/assets/status-bar-agent-gating-vsuzvc0t.js                        3.84 kB
+out/renderer/assets/dart-8AHWm72O.js                                           3.93 kB
+out/renderer/assets/file-preview-CIgUnIbY.js                                   3.93 kB
+out/renderer/assets/worktree-title-derived-agent-rows-KGK2txa0.js              3.97 kB
+out/renderer/assets/csharp-BTezPKE5.js                                         4.11 kB
+out/renderer/assets/pane-metric-options-deferral-AR_llY0I.js                   4.12 kB
+out/renderer/assets/DiffCommentPopover-Cskw4q96.js                             4.13 kB
+out/renderer/assets/workspace-browser-tab-open-CLiq6G_w.js                     4.20 kB
+out/renderer/assets/msdax-C_Ew0H4R.js                                          4.27 kB
+out/renderer/assets/useLocalImageSrc-XfN3W2pG.js                               4.28 kB
+out/renderer/assets/remote-pairing-copy-ALnWv5gc.js                            4.31 kB
+out/renderer/assets/mdx-CcDnNeE1.js                                            4.34 kB
+out/renderer/assets/css-DYJXMTqz.js                                            4.36 kB
+out/renderer/assets/quick-open-file-list-B8P4P6gr.js                           4.40 kB
+out/renderer/assets/lazy-with-retry-Sw8e0u8_.js                                4.40 kB
+out/renderer/assets/dist-C_vXI3Sl.js                                           4.42 kB
+out/renderer/assets/SshPassphraseDialog-BA2GBqN-.js                            4.42 kB
+out/renderer/assets/NonGitFolderDialog-6kh_J5jM.js                             4.44 kB
+out/renderer/assets/pug-Dk7yKSNc.js                                            4.46 kB
+out/renderer/assets/swift-BfpkEBiS.js                                          4.48 kB
+out/renderer/assets/OrcaYamlTrustDialog-DvXsT0W4.js                            4.49 kB
+out/renderer/assets/html-yYtDvPTH.js                                           4.54 kB
+out/renderer/assets/ecl-C9iptnce.js                                            4.62 kB
+out/renderer/assets/PreservedBranchBatchReviewModal-OKafPJHX.js                4.63 kB
+out/renderer/assets/AddProjectFromFolderDialog-Az-OoGu8.js                     4.64 kB
+out/renderer/assets/defaultLocale-BpjilF35.js                                  4.64 kB
+out/renderer/assets/typescript-D3FaUHmD.js                                     4.65 kB
+out/renderer/assets/NotesSendMenu-BiW4bP0U.js                                  4.69 kB
+out/renderer/assets/runtime-environment-ssh-state-wE-dPGkR.js                  4.71 kB
+out/renderer/assets/cpp-C0GYcK-x.js                                            4.74 kB
+out/renderer/assets/monaco.contribution-D8lcoAHq.js                            4.78 kB
+out/renderer/assets/switch-OZZYjOSA.js                                         4.80 kB
+out/renderer/assets/DiffCommentCard-QJ1r-P7X.js                                4.82 kB
+out/renderer/assets/checkbox-C-fPmuth.js                                       4.83 kB
+out/renderer/assets/RecoverableRenderErrorBoundary-B5wpPbHu.js                 4.89 kB
+out/renderer/assets/selectors-G0b2_nGg.js                                      4.92 kB
+out/renderer/assets/diagram-Z3DM3KII-ggIvYP1n.js                               4.94 kB
+out/renderer/assets/BaseRefPicker-BZ0XxQwO.js                                  4.96 kB
+out/renderer/assets/dist-BGNjxuyq.js                                           5.01 kB
+out/renderer/assets/notifications-search-CuqOKDMe.js                           5.03 kB
+out/renderer/assets/plugin-language-packs-CXrlDGvu.js                          5.07 kB
+out/renderer/assets/UnexpectedSignoutCard-CfipFMfF.js                          5.09 kB
+out/renderer/assets/SourceControl-BJ5El9AG.js                                  5.13 kB
+out/renderer/assets/DashboardPopoutBridge-RmTVqUaC.js                          5.13 kB
+out/renderer/assets/useTranslation-DSQFdxpZ.js                                 5.16 kB
+out/renderer/assets/repo-icon-Di-1ymna.js                                      5.17 kB
+out/renderer/assets/ForgetSshWorkspaceDialog-z4Bn9me_.js                       5.17 kB
+out/renderer/assets/diff-editor-word-wrap-options-C4cHhn5N.js                  5.19 kB
+out/renderer/assets/vb-XetEMv7g.js                                             5.30 kB
+out/renderer/assets/useContextualCopySetup-qghZk_wn.js                         5.32 kB
+out/renderer/assets/tabs-CfcsXn8J.js                                           5.43 kB
+out/renderer/assets/plugin-manifest-DdJ6LfyS.js                                5.49 kB
+out/renderer/assets/linear-api-key-dialog-Ctg4YmCv.js                          5.53 kB
+out/renderer/assets/linear-Ci5F5Xen.js                                         5.54 kB
+out/renderer/assets/text-control-paste-CeaRvtnx.js                             5.61 kB
+out/renderer/assets/hover-card-kPw6g69A.js                                     5.69 kB
+out/renderer/assets/AgentChildRowContent-C6No8oA5.js                           5.71 kB
+out/renderer/assets/agent-child-row-model-DSq-7HGc.js                          5.72 kB
+out/renderer/assets/RemoteServerUpdateDialog-D-rR_aQu.js                       5.73 kB
+out/renderer/assets/twig-b00gWrZv.js                                           5.78 kB
+out/renderer/assets/chunk-PWAF6VOD-DyV73yxw.js                                 5.83 kB
+out/renderer/assets/worktree-agent-row-selectors-AtM2bF9R.js                   5.97 kB
+out/renderer/assets/dist-UscN9JXn.js                                           6.05 kB
+out/renderer/assets/PetStatusSegment-D05bI7tH.js                               6.07 kB
+out/renderer/assets/AgentDashboardSidebarEntry-BDJ4mxSt.js                     6.10 kB
+out/renderer/assets/floating-workspace-terminal-actions-D7nP3aw3.js            6.17 kB
+out/renderer/assets/scss-CRD5FKiM.js                                           6.26 kB
+out/renderer/assets/automation-precheck-ZfS23XR7.js                            6.26 kB
+out/renderer/assets/handlebars-BS2ZlR2C.js                                     6.31 kB
+out/renderer/assets/mermaid-parser.core-Cpzdu7oR.js                            6.35 kB
+out/renderer/assets/julia-Cjq5IH14.js                                          6.50 kB
+out/renderer/assets/floating-terminal-panel-view-state-_ldVhRJe.js             6.52 kB
+out/renderer/assets/codex-session-restart-DukFOV3y.js                          6.61 kB
+out/renderer/assets/use-setup-guide-progress-DN3e6GwJ.js                       6.63 kB
+out/renderer/assets/diagram-UQ7AKVKN-DP4VLczo.js                               6.71 kB
+out/renderer/assets/rename-file-D2Vphb7D.js                                    6.73 kB
+out/renderer/assets/popout-OtCiYKir.js                                         6.76 kB
+out/renderer/assets/SidebarAgentsList-Db6kHbaw.js                              6.80 kB
+out/renderer/assets/WorktreeOpenInMenu-CssSylJV.js                             6.80 kB
+out/renderer/assets/systemverilog-BwUDa_B3.js                                  6.85 kB
+out/renderer/assets/terminal-tab-rename-request-C-zHKTdG.js                    6.86 kB
+out/renderer/assets/pieDiagram-E7YTZNPT-CapPVQPz.js                            6.86 kB
+out/renderer/assets/FolderWorkspaceWorktreesPanel-CrYo_tJR.js                  6.93 kB
+out/renderer/assets/st-CTM5Q3N4.js                                             6.94 kB
+out/renderer/assets/QuickOpen-DDqKmoOE.js                                      7.03 kB
+out/renderer/assets/SshTargetCard-VEfJ0cpa.js                                  7.04 kB
+out/renderer/assets/scala-Ctt8qK9e.js                                          7.11 kB
+out/renderer/assets/wgsl-4Qe9DEwt.js                                           7.18 kB
+out/renderer/assets/jira-connect-dialog-KAY2EnTr.js                            7.23 kB
+out/renderer/assets/perl-CoTg5MvJ.js                                           7.35 kB
+out/renderer/assets/AgentCombobox-FKR41BQm.js                                  7.35 kB
+out/renderer/assets/dist-BEbYjz5S.js                                           7.36 kB
+out/renderer/assets/postiats-DfHnX9LC.js                                       7.36 kB
+out/renderer/assets/react-mEUfhkVm.js                                          7.52 kB
+out/renderer/assets/native-chat-resume-on-restart-store-BE5jyV81.js            7.66 kB
+out/renderer/assets/WorktreeCreationPanel--mmAIe4s.js                          7.70 kB
+out/renderer/assets/php-DJ-Yxj-r.js                                            7.74 kB
+out/renderer/assets/popover-CW0K0R7U.js                                        7.78 kB
+out/renderer/assets/IntegrationsStep-C9uL1oYe.js                               7.84 kB
+out/renderer/assets/terminal-tab-actions-KmWrF0o-.js                           7.87 kB
+out/renderer/assets/SetupGuideModal-D8g6pUYJ.js                                7.91 kB
+out/renderer/assets/typst.tmLanguage-lDiGdIzI.js                               7.92 kB
+out/renderer/assets/workspace-port-localhost-label-selector-DXae5HDE.js        7.96 kB
+out/renderer/assets/App-DnAwFmxh.js                                            8.08 kB
+out/renderer/assets/razor-B9lSipZF.js                                          8.14 kB
+out/renderer/assets/use-mobile-emulator-agent-setup-state-BFgUJDIS.js          8.15 kB
+out/renderer/assets/CsvPagedViewer-zB-mNB5v.js                                 8.20 kB
+out/renderer/assets/clojure-BmJ4RhsE.js                                        8.21 kB
+out/renderer/assets/ruby-DKXbhwfO.js                                           8.21 kB
+out/renderer/assets/SetProjectLocationDialog-CeHtL5Qt.js                       8.25 kB
+out/renderer/assets/active-agent-note-send-BeET7qWJ.js                         8.34 kB
+out/renderer/assets/LinearAgentSkillSetupDialog-B2nSsn-j.js                    8.37 kB
+out/renderer/assets/parent-pr-checks-rows-CSgEMdTj.js                          8.39 kB
+out/renderer/assets/dist-BZxVVnDO.js                                           8.44 kB
+out/renderer/assets/terminal-links-CDxxn5ff.js                                 8.63 kB
+out/renderer/assets/source-control-ai-recipe-save-C3M5ZWs4.js                  8.69 kB
+out/renderer/assets/sql-Co3gVU67.js                                            8.84 kB
+out/renderer/assets/diagram-S7CK7UJ4-D0dTAyto.js                               8.85 kB
+out/renderer/assets/worktree-agent-rows-BZXao-U1.js                            8.89 kB
+out/renderer/assets/protobuf-B-p0iqnl.js                                       8.89 kB
+out/renderer/assets/useDaemonActions-CUY-JCwl.js                               9.01 kB
+out/renderer/assets/file-type-icons-BL1MY-Yq.js                                9.12 kB
+out/renderer/assets/build-dashboard-snapshot-UkrnLTVW.js                       9.22 kB
+out/renderer/assets/workspace-status-3ezy6J2R.js                               9.26 kB
+out/renderer/assets/tooltip-C7dbudk_.js                                        9.42 kB
+out/renderer/assets/mysql-92dBlZfb.js                                          9.65 kB
+out/renderer/assets/AgentSkillSetupPanel-DeEF004v.js                           9.68 kB
+out/renderer/assets/chunk-L3NEJ4N5-BbwXIujG.js                                 9.71 kB
+out/renderer/assets/SshHostAdvancedFields-B9KOQHrH.js                          9.78 kB
+out/renderer/assets/WorktreeVisibilitySourceList-D3IaB1qr.js                   9.99 kB
+out/renderer/assets/PetOverlay-C0QRhbQY.js                                    10.07 kB
+out/renderer/assets/elixir-HgEVi0Pv.js                                        10.11 kB
+out/renderer/assets/context-menu-CW-kD3TC.js                                  10.30 kB
+out/renderer/assets/Landing-DXFl-wJz.js                                       10.31 kB
+out/renderer/assets/redshift-CR_eIyJ0.js                                      10.33 kB
+out/renderer/assets/chunk-2E4U76K2-DS4LSrHg.js                                10.41 kB
+out/renderer/assets/DiffViewer-DBA9ORzi.js                                    10.43 kB
+out/renderer/assets/cynefinDiagram-5FMLGOSQ-BPsFmJ2Y.js                       10.55 kB
+out/renderer/assets/markdown-review-note-copy-DtuPPrt5.js                     10.61 kB
+out/renderer/assets/AgentDashboardSidebarHost-BRUQQ6D-.js                     10.66 kB
+out/renderer/assets/stateDiagram-D77RDMKH-BD-B-C4b.js                         10.71 kB
+out/renderer/assets/notes-send-in-flight-BGFx-3Dk.js                          10.72 kB
+out/renderer/assets/dagre-GXQ25YYZ-DIJTKv_Q.js                                11.04 kB
+out/renderer/assets/dropdown-menu-Cs5SATEf.js                                 11.11 kB
+out/renderer/assets/browser-client-page-renderer-installation-CHiidP1P.js     11.26 kB
+out/renderer/assets/diagram-VSXAHHWV-C9OO-Mb2.js                              11.30 kB
+out/renderer/assets/PluginPanel-eWYta2uC.js                                   11.45 kB
+out/renderer/assets/activity-event-state-BrjYoNF9.js                          11.60 kB
+out/renderer/assets/abap-GWzvgJei.js                                          11.69 kB
+out/renderer/assets/useWindowsTerminalCapabilityOwnerKey-i5Rl2YXZ.js          11.84 kB
+out/renderer/assets/pgsql-D8ZS-ZZD.js                                         11.91 kB
+out/renderer/assets/ArtifactPublishButton-DhdgSOLd.js                         12.17 kB
+out/renderer/assets/jsonMode-VdSQO6-8.js                                      12.29 kB
+out/renderer/assets/FolderWorkspacePrChecksPanel-BomPJvoD.js                  12.42 kB
+out/renderer/assets/AgentSessionContinuationDialog-BVzFeCA3.js                12.55 kB
+out/renderer/assets/PortsStatusSegment-utdt5fC-.js                            12.87 kB
+out/renderer/assets/dist-ko17EiEM.js                                          13.87 kB
+out/renderer/assets/CrashReportDialogSurface-volsGT1A.js                      13.88 kB
+out/renderer/assets/SettingsFormControls-1BYoyDvq.js                          14.00 kB
+out/renderer/assets/scroll-area-DzhmJXGA.js                                   14.12 kB
+out/renderer/assets/powerquery-C_uEfv76.js                                    15.34 kB
+out/renderer/assets/freemarker2-Di31HixH.js                                   15.57 kB
+out/renderer/assets/chunk-SVP7TREG-C309265b.js                                15.64 kB
+out/renderer/assets/fix-checks-agent-launch-Doj5y2V7.js                       15.68 kB
+out/renderer/assets/solidity-BkqA3zQS.js                                      15.99 kB
+out/renderer/assets/WorktreeVisibilityDialog-CF-dyTNl.js                      16.00 kB
+out/renderer/assets/diagram-VX7I27RA-B5oSQIlK.js                              16.40 kB
+out/renderer/assets/ai-vault-session-resume-preparation-DccekaEq.js           16.44 kB
+out/renderer/assets/SshStatusSegment-VAxAVH5Q.js                              16.47 kB
+out/renderer/assets/ActivityPrototypePage-CfB9QUKq.js                         16.66 kB
+out/renderer/assets/ime-overlay-escape-DUAwkYUt.js                            17.14 kB
+out/renderer/assets/CommentMarkdown-CRxV7UJC.js                               17.15 kB
+out/renderer/assets/agent-attention-contract-CoUCchO-.js                      17.28 kB
+out/renderer/assets/ishikawaDiagram-5VMMS53U-ClIw-onm.js                      17.42 kB
+out/renderer/assets/terminal-appearance-xyK7lXj_.js                           17.54 kB
+out/renderer/assets/plugin-command-execution-CE8dSZgh.js                      17.90 kB
+out/renderer/assets/checks-list-CxMgvzID.js                                   17.93 kB
+out/renderer/assets/SidebarFeedbackDialog-Dhv40g4y.js                         18.23 kB
+out/renderer/assets/floating-ui.dom-EznJTtTD.js                               18.40 kB
+out/renderer/assets/ContextualTourOverlay-B9D5kwPz.js                         19.10 kB
+out/renderer/assets/delete-worktree-flow-CBZfOmQW.js                          19.48 kB
+out/renderer/assets/useDiffCommentDecorator-Dmk1jgdi.js                       19.68 kB
+out/renderer/assets/DictationController-DjDPxg6y.js                           19.83 kB
+out/renderer/assets/uri-D0O4c-tp.js                                           19.85 kB
+out/renderer/assets/CreateProjectLocationField-CGJRGumV.js                    19.96 kB
+out/renderer/assets/WorktreeMetaDialog-CEe1-VuS.js                            20.04 kB
+out/renderer/assets/main-DHxipXgb.js                                          20.05 kB
+out/renderer/assets/lib-CDO-0WMI.js                                           20.08 kB
+out/renderer/assets/kanban-definition-UXKFOSKX-CkaFbvnw.js                    20.41 kB
+out/renderer/assets/worktree-creation-flow-CVQ8StEU.js                        20.83 kB
+out/renderer/assets/web-runtime-session-DHEbVBgv.js                           21.22 kB
+out/renderer/assets/icons-BJ31T08T.js                                         21.78 kB
+out/renderer/assets/pane-webgl-renderer-Bulp4cJk.js                           21.97 kB
+out/renderer/assets/tsMode-wXJfd9NJ.js                                        21.97 kB
+out/renderer/assets/AddRemoteHostDialog-Bk7-8C6Q.js                           22.51 kB
+out/renderer/assets/sankeyDiagram-P5KCCOFB-B6TiNlfg.js                        22.86 kB
+out/renderer/assets/nim.tmLanguage-XjDmTrdn.js                                22.91 kB
+out/renderer/assets/useEditorExternalWatch-46pcMbc3.js                        23.08 kB
+out/renderer/assets/MonacoEditor-csC2sDnV.js                                  23.08 kB
+out/renderer/assets/journeyDiagram-3NMN7TZE-BPbILkYk.js                       23.27 kB
+out/renderer/assets/mindmap-definition-YA3MSWOX-CZJ9ekj9.js                   23.80 kB
+out/renderer/assets/select-DjzmNYX8.js                                        23.89 kB
+out/renderer/assets/CommentReactions-B8La689u.js                              24.26 kB
+out/renderer/assets/feature-wall-modal-helpers-CrXKeRBq.js                    24.32 kB
+out/renderer/assets/UpdateCard-CRWbizTh.js                                    24.34 kB
+out/renderer/assets/DeleteWorktreeDialog-D3BlZWlv.js                          24.71 kB
+out/renderer/assets/quick-commands-menu-events-BdFQ5GXf.js                    24.75 kB
+out/renderer/assets/index-BiICmk2I.js                                         24.85 kB
+out/renderer/assets/graphlib-dPKUTLM_.js                                      25.00 kB
+out/renderer/assets/esm-jVrhIiFU.js                                           25.29 kB
+out/renderer/assets/source-control-launch-platform-CySMzWgW.js                25.78 kB
+out/renderer/assets/wardleyDiagram-VM6X3IG4-_jnoLuZ6.js                       25.87 kB
+out/renderer/assets/rough.esm-CqCy3bgY.js                                     27.11 kB
+out/renderer/assets/ai-vault-view-defaults-D6pH5O1M.js                        27.54 kB
+out/renderer/assets/ArtifactsPage-BCfcRxoa.js                                 27.90 kB
+out/renderer/assets/purify.es-oE6IsoQ6.js                                     28.08 kB
+out/renderer/assets/lspLanguageFeatures-D4xl-3Yj.js                           28.53 kB
+out/renderer/assets/gitGraphDiagram-WWUBYQGX-rWMM8o1O.js                      29.67 kB
+out/renderer/assets/PortsPanel-B9YXDOUk.js                                    29.87 kB
+out/renderer/assets/use-mobile-pairing-address-preference-CA5Q2OGy.js         30.29 kB
+out/renderer/assets/timeline-definition-24CTP7MA-Dc7DClbh.js                  30.49 kB
+out/renderer/assets/terminal-tab-activity-status-DMAF1NCW.js                  30.54 kB
+out/renderer/assets/erDiagram-RLTQ6QDP-DHM7rFoH.js                            30.80 kB
+out/renderer/assets/chunk-75Z2AOVW-DqcK_mAO.js                                30.96 kB
+out/renderer/assets/requirementDiagram-BXWQKSXE-CQHvTX1K.js                   31.09 kB
+out/renderer/assets/keybindings-CFEGDOuM.js                                   31.12 kB
+out/renderer/assets/rich-markdown-spellcheck-D5qcx8Sr.js                      31.84 kB
+out/renderer/assets/combined-diff-file-tree-navigation-B6kjP2DF.js            33.27 kB
+out/renderer/assets/quadrantDiagram-AXDQQJYC-8Y7WzDcU.js                      33.62 kB
+out/renderer/assets/MarkdownPreviewBody-Jui9L9p6.js                           33.74 kB
+out/renderer/assets/CsvViewer-LcYjl7yM.js                                     34.10 kB
+out/renderer/assets/useMountedRef-C4zcP9vQ.js                                 34.28 kB
+out/renderer/assets/agent-paste-draft-Bkl0b2x7.js                             35.70 kB
+out/renderer/assets/command-D66mI7MV.js                                       36.18 kB
+out/renderer/assets/dist-DKaD5Ud9.js                                          36.39 kB
+out/renderer/assets/chunk-OSK3NFVY-DSX-Lxzx.js                                36.47 kB
+out/renderer/assets/mermaid.core-DaJ6vmAp.js                                  37.20 kB
+out/renderer/assets/dagre-CsuygGIX.js                                         37.48 kB
+out/renderer/assets/AgentKanbanBoard-C8VOxDQx.js                              37.73 kB
+out/renderer/assets/chunk-IMKFNOWR-CP6inHj1.js                                37.76 kB
+out/renderer/assets/NotificationStep-DxwjX3gN.js                              39.18 kB
+out/renderer/assets/FeatureTipsModal-DBwJO0-l.js                              39.77 kB
+out/renderer/assets/vennDiagram-4TSXK5OY-7pk4eWxS.js                          41.27 kB
+out/renderer/assets/blockDiagram-I7D4REHJ-DAOan4Av.js                         41.54 kB
+out/renderer/assets/launch-agent-in-new-tab-BmlrRLmx.js                       42.14 kB
+out/renderer/assets/IpynbViewer-B1-OSH7O.js                                   44.24 kB
+out/renderer/assets/xychartDiagram-S5SC5T6Z--0bbJSpF.js                       44.30 kB
+out/renderer/assets/OnboardingFlow-D3gb05Mf.js                                44.76 kB
+out/renderer/assets/src-CNCAzX5N.js                                           45.75 kB
+out/renderer/assets/chunk-LNGE3PJU-e7r2HDot.js                                46.41 kB
+out/renderer/assets/chunk-TICWLB2K-BbUGedDV.js                                48.89 kB
+out/renderer/assets/ResourceUsageStatusSegment-BqW-CZI7.js                    49.98 kB
+out/renderer/assets/WorkspaceSpacePage-tkVpOBpq.js                            50.95 kB
+out/renderer/assets/chunk-GMAD6QVW-PJpxS2eb.js                                52.32 kB
+out/renderer/assets/CombinedDiffViewer-DHu14K2B.js                            54.30 kB
+out/renderer/assets/agent-catalog-CNZOTxA8.js                                 54.55 kB
+out/renderer/assets/MarkdownPreview-VQeK21My.js                               54.95 kB
+out/renderer/assets/terminal-provider-snapshot-capability-Dg8ragft.js         55.71 kB
+out/renderer/assets/web-runtime-browser-creation-DMPej-ge.js                  57.26 kB
+out/renderer/assets/chunk-SHT3W25Y-CkwqrVuR.js                                61.34 kB
+out/renderer/assets/textmate-token-provider-B6arjKBv.js                       62.08 kB
+out/renderer/assets/FloatingTerminalPanel-BbhUBOa4.js                         62.53 kB
+out/renderer/assets/c4Diagram-7LVT6UL2-7yxKcZO_.js                            64.82 kB
+out/renderer/assets/plugin-command-keybindings-DO1hz_mw.js                    65.49 kB
+out/renderer/assets/ganttDiagram-EL5Y4UJY-D8PKP4Z5.js                         69.55 kB
+out/renderer/assets/activity-thread-list-pane-D43vMosw.js                     71.91 kB
+out/renderer/assets/addon-image-B4N-Lwr8.js                                   78.61 kB
+out/renderer/assets/cose-bilkent-JH36ORCC-CfLjMPCb.js                         81.44 kB
+out/renderer/assets/AddRepoDialog-BNNMa0GL.js                                 81.50 kB
+out/renderer/assets/MobilePage-L7UqFmxV.js                                    83.96 kB
+out/renderer/assets/FeatureWallSetupChecklist-Ogvq61CL.js                     89.36 kB
+out/renderer/assets/AiVaultPanel-DIoMwkHI.js                                  89.98 kB
+out/renderer/assets/worktree-activation-BaPvTB0y.js                           90.24 kB
+out/renderer/assets/use-worktree-card-secondary-details-B51CV1Br.js           90.45 kB
+out/renderer/assets/header-event-guards-CCUCqw71.js                           96.64 kB
+out/renderer/assets/StatusBar-DB8iYS0R.js                                    101.46 kB
+out/renderer/assets/WorkspaceCleanupDialog-BhAtaey_.js                       104.55 kB
+out/renderer/assets/chunk-4HAMMTFA-BDxkJ9oP.js                               104.91 kB
+out/renderer/assets/RichMarkdownEditor-Cy-CNMnB.js                           105.51 kB
+out/renderer/assets/FileExplorer-BYoev1xE.js                                 106.07 kB
+out/renderer/assets/stale-document-visibility-FIktpovE.js                    107.05 kB
+out/renderer/assets/swimlanes-42K2YHIH-CtChcUuh.js                           111.28 kB
+out/renderer/assets/WorktreeJumpPalette-DepkiTqa.js                          112.76 kB
+out/renderer/assets/sequenceDiagram-WJ2MYXX4-C_5Awm98.js                     115.94 kB
+out/renderer/assets/SkillsPage-8qz4p9NE.js                                   130.34 kB
+out/renderer/assets/Terminal-DFlysUSV.js                                     132.72 kB
+out/renderer/assets/lib-BvtLlv3k.js                                          137.56 kB
+out/renderer/assets/monaco-setup-JnqB90mD.js                                 142.00 kB
+out/renderer/assets/EditorPanel-BcG1wRI2.js                                  144.82 kB
+out/renderer/assets/structured-agent-session-launch-DCW50bxD.js              148.57 kB
+out/renderer/assets/architectureDiagram-5GKGNRK7-CW3v1kGW.js                 150.00 kB
+out/renderer/assets/i18n-Diw4byjf.js                                         151.05 kB
+out/renderer/assets/lib-DwenpNiP.js                                          161.88 kB
+out/renderer/assets/useWorkspaceEmojiShortcodeInput-DI4wMBfU.js              176.17 kB
+out/renderer/assets/web-DQKdFfdj.js                                          177.20 kB
+out/renderer/assets/client-CeDNvccB.js                                       178.44 kB
+out/renderer/assets/ChecksPanel-BL4NOL_d.js                                  181.68 kB
+out/renderer/assets/useSettingsNavigationMetadata-D1NYSHbb.js                187.07 kB
+out/renderer/assets/FeatureWallModal-D_hOeBWn.js                             191.01 kB
+out/renderer/assets/rich-markdown-extensions-OnErI_fY.js                     194.43 kB
+out/renderer/assets/chunk-DU6HZSFF-f7m_h28d.js                               208.92 kB
+out/renderer/assets/lib-BtcbeQXJ.js                                          220.86 kB
+out/renderer/assets/addon-webgl-z2WAnbQD.js                                  251.59 kB
+out/renderer/assets/katex-Qi4UOBdq.js                                        259.10 kB
+out/renderer/assets/AutomationsPage-B5yJmdZe.js                              295.80 kB
+out/renderer/assets/emoji-picker-react.esm-DQXAngno.js                       332.86 kB
+out/renderer/assets/SourceControl-DpWgjArs.js                                335.50 kB
+out/renderer/assets/dist-DKroe0f0.js                                         415.36 kB
+out/renderer/assets/cytoscape.esm-CE7yYnsV.js                                435.87 kB
+out/renderer/assets/ImageViewer-CgNEP8nE.js                                  662.61 kB
+out/renderer/assets/chunk-FOHPRMQF-CiO6jMji.js                               663.95 kB
+out/renderer/assets/terminal-native-copy-gutter-CEpCnXzk.js                  691.43 kB
+out/renderer/assets/zh-C5q__KwW.js                                           735.95 kB
+out/renderer/assets/client-creation-action-error-D0bF36mr.js                 771.51 kB
+out/renderer/assets/es-BUHpjB_u.js                                           842.49 kB
+out/renderer/assets/fr-1Zn3Gz5P.js                                           867.64 kB
+out/renderer/assets/ko-DvxCnIZA.js                                           885.75 kB
+out/renderer/assets/TaskPage-DHoXfBHr.js                                     886.74 kB
+out/renderer/assets/ja-g6t9cNT1.js                                         1,010.97 kB
+out/renderer/assets/App-CM3zIcg_.js                                        1,027.83 kB
+out/renderer/assets/Settings-CB70eI0v.js                                   1,052.02 kB
+out/renderer/assets/OnboardingInlineCommandTerminal-RPa1o15N.js            1,071.05 kB
+out/renderer/assets/store-DB4Tem-t.js                                      1,375.63 kB
+out/renderer/assets/editor.api2-JFMr0KO8.js                                3,609.40 kB
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 29.18s
+Renderer boot graph: 352 chunks, 4759.9 KB minified.

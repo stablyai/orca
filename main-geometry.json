@@ -1,0 +1,50 @@
+{
+  "sha": "ccc0bf70e46ea33b1f9d735942de9d2a71664cd2",
+  "screenshots": [
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/main-verified/main-dark-default-14-12.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/main-verified/main-narrow-20-18.png"
+  ],
+  "records": [
+    {
+      "name": "dark-default-14-12",
+      "state": {
+        "viewport": {
+          "width": 1480,
+          "height": 1500
+        },
+        "previewPresent": false,
+        "chatControlsPresent": false,
+        "inputs": [],
+        "text": null,
+        "appearanceHeading": [
+          "Appearance"
+        ]
+      }
+    },
+    {
+      "name": "narrow-20-18",
+      "state": {
+        "viewport": {
+          "width": 980,
+          "height": 1300
+        },
+        "previewPresent": false,
+        "chatControlsPresent": false,
+        "inputs": [],
+        "text": null,
+        "appearanceHeading": [
+          "Appearance"
+        ]
+      }
+    }
+  ],
+  "identity": {
+    "name": "Orca: ccc0bf70e4",
+    "isDev": true,
+    "devLabel": "pr25658-review-qa-3 @ ccc0bf70e4",
+    "devBranch": "ccc0bf70e4",
+    "devWorktreeName": "pr25658-review-qa-3",
+    "devRepoRoot": "/Users/m4air/orca/workspaces/orca/pr25658-review-qa-3",
+    "dockBadgeLabel": null
+  }
+}

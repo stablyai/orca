@@ -1,0 +1,2 @@
+/Users/m4air/orca-qa/pr-25658/remote-released-parent/main-profile/user-data/logs/daemon.log
+/Users/m4air/orca-qa/pr-25658/remote-released-parent/main-profile/user-data/daemon/daemon-v40.pid
