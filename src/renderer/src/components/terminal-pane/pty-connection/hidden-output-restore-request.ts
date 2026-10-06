@@ -4,6 +4,7 @@ import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
 import { registerStaleDocumentVisibilityRecovery } from '../stale-document-visibility'
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
 import { registerTerminalBacklogRecovery } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { getHiddenOutputRestoreCompletion } from './hidden-output-restore-completion'
 import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
@@ -288,11 +289,15 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
     return true
   }
 
-  session.unregisterBacklogRecovery = registerTerminalBacklogRecovery(session.pane.terminal, () => {
-    // Why: clear the hidden-delivery bit BEFORE the restore snapshot request; bytes arriving in between are reconciled by the seq guard.
-    session.syncHiddenRendererPtyDelivery()
-    return session.requestHiddenOutputRestoreIfNeeded()
-  })
+  session.unregisterBacklogRecovery = registerTerminalBacklogRecovery(
+    session.pane.terminal,
+    () => {
+      // Clear hidden delivery before fetching so arriving bytes use the seq guard.
+      session.syncHiddenRendererPtyDelivery()
+      return session.requestHiddenOutputRestoreIfNeeded()
+    },
+    () => getHiddenOutputRestoreCompletion(session)
+  )
   if (
     typeof document !== 'undefined' &&
     typeof document.addEventListener === 'function' &&
