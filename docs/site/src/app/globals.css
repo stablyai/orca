@@ -96,7 +96,7 @@
   --accent: #f5f5f5;
   --accent-foreground: #171717;
   --destructive: #e40014;
-  --destructive-foreground: #fcf3f3;
+  --destructive-foreground: #fff;
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
@@ -126,7 +126,7 @@
   --accent: #404040;
   --accent-foreground: #fafafa;
   --destructive: #ff6568;
-  --destructive-foreground: #df2225;
+  --destructive-foreground: #171717;
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
