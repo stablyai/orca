@@ -193,7 +193,7 @@ describe('apply suggestions', () => {
 
   it('applyMentionSuggestion replaces the active @token at the caret', () => {
     const result = applyMentionSuggestion('open @sr more', 8, 'src/app.ts')
-    expect(result.draft).toBe('open @src/app.ts  more')
+    expect(result.draft).toBe('open @src/app.ts more')
     expect(result.caret).toBe('open @src/app.ts '.length)
   })
 
@@ -206,7 +206,7 @@ describe('apply suggestions', () => {
       description: null,
       sources: []
     })
-    expect(result.draft).toBe('use $typescript  now')
+    expect(result.draft).toBe('use $typescript now')
     expect(result.caret).toBe('use $typescript '.length)
     expect(result.insertedToken).toBe('$typescript')
   })
@@ -340,7 +340,7 @@ describe('native skill and command picker', () => {
       description: null,
       sources: []
     })
-    expect(result.draft).toBe('validate it with /electron  now')
+    expect(result.draft).toBe('validate it with /electron now')
     expect(result.caret).toBe('validate it with /electron '.length)
   })
 
@@ -495,7 +495,33 @@ describe('native skill and command picker', () => {
       description: null,
       sources: []
     })
-    expect(result.draft).toBe('/browser  trailing')
+    expect(result.draft).toBe('/browser trailing')
+    expect(result.caret).toBe('/browser '.length)
+  })
+
+  it('replaces a mid-text slash token in place, preserving surrounding text', () => {
+    const result = applyPickerSuggestion('run /bro then stop', 8, {
+      kind: 'skill',
+      id: 'skill:browser',
+      name: 'browser',
+      token: '/browser',
+      description: null,
+      sources: []
+    })
+    expect(result.draft).toBe('run /browser then stop')
+    expect(result.caret).toBe('run /browser '.length)
+  })
+
+  it('inserts a separator when no whitespace follows the caret', () => {
+    const result = applyPickerSuggestion('/bro', 4, {
+      kind: 'skill',
+      id: 'skill:browser',
+      name: 'browser',
+      token: '/browser',
+      description: null,
+      sources: []
+    })
+    expect(result.draft).toBe('/browser ')
     expect(result.caret).toBe('/browser '.length)
   })
 
