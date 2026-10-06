@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ArrowUp, Check, CircleHelp, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
@@ -122,7 +122,13 @@ export function MobileNativeChatQuestion({
       </View>
 
       {hasOptions ? (
-        <View style={styles.options}>
+        <ScrollView
+          testID="native-chat-question-options"
+          style={styles.optionsScroll}
+          contentContainerStyle={styles.options}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+        >
           {optionRows.map(({ label, description, key }, optIndex) => {
             const isSelected = selectedOptionIndexes.includes(optIndex)
             return (
@@ -153,7 +159,7 @@ export function MobileNativeChatQuestion({
               </Pressable>
             )
           })}
-        </View>
+        </ScrollView>
       ) : null}
 
       {question.multiSelect && hasOptions ? (
@@ -174,7 +180,7 @@ export function MobileNativeChatQuestion({
       ) : null}
 
       {allowOther ? (
-        <View style={styles.freeTextRow}>
+        <View testID="native-chat-question-reply" style={styles.freeTextRow}>
           <TextInput
             style={mobileNativeChatInputStyles.freeInput}
             value={freeText}
@@ -236,6 +242,11 @@ const styles = StyleSheet.create({
     height: 28,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  optionsScroll: {
+    maxHeight: 240,
+    minHeight: 0,
+    flexShrink: 1
   },
   options: {
     gap: spacing.xs
