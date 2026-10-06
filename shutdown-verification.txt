@@ -1,0 +1,6 @@
+Read-only post-shutdown verification
+Recorded process group: 72709
+Recorded PIDs: 73104 (launcher), 77865 (Electron)
+Remaining PGID 72709 members: none
+Recorded PIDs present: none
+TCP listener 127.0.0.1:9441: none
