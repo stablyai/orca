@@ -35,27 +35,31 @@ export function AntigravityAccountsSection({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const pending = useRef(false)
-  const mounted = useRef(true)
+  const requestGeneration = useRef(0)
   const ownerKind = owner.kind
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   const runtime = target.runtime
   const wslDistro = target.wslDistro ?? null
 
   useEffect(() => {
-    mounted.current = true
-    let cancelled = false
+    const generation = ++requestGeneration.current
+    setState(null)
+    setUsageSnapshot(null)
+    setError(null)
+    setBusy(false)
+    pending.current = false
     const currentOwner: RuntimeClientTarget =
       ownerKind === 'environment' && environmentId
         ? { kind: 'environment', environmentId }
         : { kind: 'local' }
     void callAntigravityAccounts(currentOwner, { runtime, wslDistro }, 'List').then(
       (next) => {
-        if (!cancelled) {
+        if (requestGeneration.current === generation) {
           setState(next)
         }
       },
       (cause: unknown) => {
-        if (!cancelled) {
+        if (requestGeneration.current === generation) {
           setError(
             cause instanceof Error ? cause.message : 'Antigravity accounts could not be loaded.'
           )
@@ -63,8 +67,7 @@ export function AntigravityAccountsSection({
       }
     )
     return () => {
-      cancelled = true
-      mounted.current = false
+      requestGeneration.current = generation + 1
     }
   }, [ownerKind, environmentId, runtime, wslDistro])
 
@@ -75,6 +78,12 @@ export function AntigravityAccountsSection({
     if (pending.current) {
       return
     }
+    const generation = requestGeneration.current
+    const isCurrent = () => requestGeneration.current === generation
+    const actionTarget: AntigravityAccountTarget =
+      runtime === 'wsl' && action !== 'List' && action !== 'Usage'
+        ? { runtime, wslDistro, expectedAuthorityId: state?.resolvedTarget?.authorityId }
+        : target
     pending.current = true
     setBusy(true)
     setError(null)
@@ -82,13 +91,16 @@ export function AntigravityAccountsSection({
       if (action === 'Usage') {
         setUsageSnapshot(null)
         const before = await callAntigravityAccounts(owner, target, 'List')
+        if (!isCurrent()) {
+          return
+        }
         const snapshot = await callRuntimeRpc<{ rateLimits: RateLimitState }>(
           owner,
           'accounts.list',
           { refreshUsage: true }
         )
         const after = await callAntigravityAccounts(owner, target, 'List')
-        if (mounted.current) {
+        if (isCurrent()) {
           setState(after)
         }
         if (
@@ -98,7 +110,7 @@ export function AntigravityAccountsSection({
         ) {
           throw new Error('The native account changed while reading usage. Refresh usage again.')
         }
-        if (mounted.current) {
+        if (isCurrent()) {
           setUsageSnapshot({
             subject: before.currentAccount.subject,
             authMethod: before.currentAccount.authMethod,
@@ -109,34 +121,39 @@ export function AntigravityAccountsSection({
         if (action === 'Select') {
           setUsageSnapshot(null)
         }
-        const next = await callAntigravityAccounts(owner, target, action, accountId)
-        if (mounted.current) {
+        const next = await callAntigravityAccounts(owner, actionTarget, action, accountId)
+        if (isCurrent()) {
           setState(next)
         }
       }
     } catch (cause) {
+      if (!isCurrent()) {
+        return
+      }
       if (action === 'Select' || action === 'Remove' || action === 'AddCurrent') {
         try {
           const observed = await callAntigravityAccounts(owner, target, 'List')
-          if (mounted.current) {
+          if (isCurrent()) {
             setState(observed)
           }
         } catch {
-          if (mounted.current) {
+          if (isCurrent()) {
             setState(null)
           }
         }
       }
-      if (mounted.current) {
+      if (isCurrent()) {
         setError(cause instanceof Error ? cause.message : 'Antigravity account action failed.')
       }
     } finally {
-      pending.current = false
-      if (mounted.current) {
+      if (isCurrent()) {
+        pending.current = false
         setBusy(false)
       }
     }
   }
+
+  const unbound = runtime === 'wsl' && !state?.resolvedTarget?.authorityId
 
   return (
     <section id="accounts-antigravity" className="space-y-4 scroll-mt-6">
@@ -147,7 +164,10 @@ export function AntigravityAccountsSection({
         </h3>
         <p className="text-xs text-muted-foreground">
           {translate('accounts.antigravity.scope', 'Manage the native agy account on {{host}}.', {
-            host: label
+            host:
+              !wslDistro && state?.resolvedTarget
+                ? `${label} (${state.resolvedTarget.wslDistro})`
+                : label
           })}
         </p>
       </div>
@@ -194,7 +214,7 @@ export function AntigravityAccountsSection({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
-              disabled={busy || !state.currentAccount?.identityKnown}
+              disabled={busy || unbound || !state.currentAccount?.identityKnown}
               onClick={() => void run('AddCurrent')}
             >
               {translate('accounts.antigravity.save', 'Save current account')}
@@ -249,7 +269,7 @@ export function AntigravityAccountsSection({
                 <Button
                   size="xs"
                   variant="outline"
-                  disabled={busy}
+                  disabled={busy || unbound}
                   onClick={() => void run('Select', account.id)}
                 >
                   {state.selectedAccountId === account.id && state.activeAccountId === account.id
@@ -261,6 +281,7 @@ export function AntigravityAccountsSection({
                   variant="ghost"
                   disabled={
                     busy ||
+                    unbound ||
                     state.activeAccountId === account.id ||
                     state.selectedAccountId === account.id
                   }

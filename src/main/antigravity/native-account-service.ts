@@ -1,3 +1,8 @@
+import {
+  remainingAccountOperationMs,
+  withAntigravityAccountOperation,
+  type AntigravityAccountOperation
+} from './native-account-operation'
 import { randomUUID } from 'node:crypto'
 import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
 import {
@@ -11,8 +16,12 @@ import type {
 } from './native-account-store'
 
 export type AntigravityCredentialBackend = {
-  read(): Promise<AntigravityNativeCredential | null>
-  write(contents: string, expected: string | null): Promise<void>
+  read(operation?: AntigravityAccountOperation): Promise<AntigravityNativeCredential | null>
+  write(
+    contents: string,
+    expected: string | null,
+    operation?: AntigravityAccountOperation
+  ): Promise<void>
 }
 
 function matches(account: StoredAntigravityAccount, current: AntigravityNativeCredential): boolean {
@@ -31,13 +40,13 @@ export class AntigravityAccountService {
     private readonly now: () => number = Date.now
   ) {}
 
-  listAccounts(): Promise<AntigravityAccountState> {
-    return this.serialize(async () => this.state(await this.reconcile()))
+  listAccounts(operation?: AntigravityAccountOperation): Promise<AntigravityAccountState> {
+    return this.execute(operation, async (operation) => this.state(await this.reconcile(operation)))
   }
 
-  addCurrentAccount(): Promise<AntigravityAccountState> {
-    return this.serialize(async () => {
-      const { vault, current } = await this.reconcile()
+  addCurrentAccount(operation?: AntigravityAccountOperation): Promise<AntigravityAccountState> {
+    return this.execute(operation, async (operation) => {
+      const { vault, current } = await this.reconcile(operation)
       if (!current) {
         throw new Error('Sign in with agy on this execution host, then save the current account.')
       }
@@ -59,43 +68,50 @@ export class AntigravityAccountService {
           updatedAt: timestamp
         }
         vault.accounts.push(account)
-        this.store.write(vault)
+        await this.saveVault(vault, operation)
       }
       return this.state({ vault, current })
     })
   }
 
-  selectAccount(id: string): Promise<AntigravityAccountState> {
-    return this.serialize(async () => {
-      const { vault, current } = await this.reconcile()
+  selectAccount(
+    id: string,
+    operation?: AntigravityAccountOperation
+  ): Promise<AntigravityAccountState> {
+    return this.execute(operation, async (operation) => {
+      const { vault, current } = await this.reconcile(operation)
       const selected = vault.accounts.find((account) => account.id === id)
       if (!selected) {
         throw new Error('Antigravity account was not found.')
       }
       parseAntigravityNativeCredential(selected.credentials)
       if (!current || !matches(selected, current)) {
-        await this.backend.write(selected.credentials, current?.contents ?? null)
+        remainingAccountOperationMs(operation)
+        await this.backend.write(selected.credentials, current?.contents ?? null, operation)
       }
-      const readback = await this.backend.read()
+      const readback = await this.backend.read(operation)
       if (!readback || !matches(selected, readback)) {
         throw new Error(
           'Antigravity account switching could not be verified; refresh before retrying.'
         )
       }
-      const latest = this.store.read()
+      const latest = await this.store.read(operation)
       if (!latest.accounts.some((account) => account.id === id && matches(account, readback))) {
         throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
       }
       latest.selectedAccountId = id
       this.updateSnapshot(latest, readback)
-      this.store.write(latest)
+      await this.saveVault(latest, operation)
       return this.state({ vault: latest, current: readback })
     })
   }
 
-  removeAccount(id: string): Promise<AntigravityAccountState> {
-    return this.serialize(async () => {
-      const { vault, current } = await this.reconcile()
+  removeAccount(
+    id: string,
+    operation?: AntigravityAccountOperation
+  ): Promise<AntigravityAccountState> {
+    return this.execute(operation, async (operation) => {
+      const { vault, current } = await this.reconcile(operation)
       const account = vault.accounts.find((entry) => entry.id === id)
       if (!account) {
         throw new Error('Antigravity account was not found.')
@@ -103,8 +119,8 @@ export class AntigravityAccountService {
       if (vault.selectedAccountId === id || (current && matches(account, current))) {
         throw new Error('Select another Antigravity account before removing this account.')
       }
-      const readback = await this.backend.read()
-      const latest = this.store.read()
+      const readback = await this.backend.read(operation)
+      const latest = await this.store.read(operation)
       const latestAccount = latest.accounts.find((entry) => entry.id === id)
       if (!latestAccount) {
         throw new Error('Antigravity account snapshots changed; refresh before retrying.')
@@ -116,14 +132,14 @@ export class AntigravityAccountService {
         this.updateSnapshot(latest, readback)
       }
       latest.accounts = latest.accounts.filter((entry) => entry.id !== id)
-      this.store.write(latest)
+      await this.saveVault(latest, operation)
       return this.state({ vault: latest, current: readback })
     })
   }
 
-  prepareForLaunch(): Promise<void> {
-    return this.serialize(async () => {
-      const { vault, current } = await this.reconcile()
+  prepareForLaunch(operation?: AntigravityAccountOperation): Promise<void> {
+    return this.execute(operation, async (operation) => {
+      const { vault, current } = await this.reconcile(operation)
       if (!vault.selectedAccountId) {
         return
       }
@@ -136,14 +152,22 @@ export class AntigravityAccountService {
     })
   }
 
-  private async reconcile() {
-    const current = await this.backend.read()
+  private async reconcile(operation: AntigravityAccountOperation) {
+    const current = await this.backend.read(operation)
     // Re-read after native I/O so a delayed read never restores an older vault.
-    const vault = this.store.read()
+    const vault = await this.store.read(operation)
     if (current && this.updateSnapshot(vault, current)) {
-      this.store.write(vault)
+      await this.saveVault(vault, operation)
     }
     return { vault, current }
+  }
+
+  private async saveVault(
+    vault: AntigravityAccountVault,
+    operation: AntigravityAccountOperation
+  ): Promise<void> {
+    remainingAccountOperationMs(operation)
+    await this.store.write(vault, operation)
   }
 
   private updateSnapshot(
@@ -182,6 +206,21 @@ export class AntigravityAccountService {
           }
         : null
     }
+  }
+
+  private execute<T>(
+    operation: AntigravityAccountOperation | undefined,
+    action: (operation: AntigravityAccountOperation) => Promise<T>
+  ): Promise<T> {
+    if (!operation) {
+      return withAntigravityAccountOperation((context) => this.execute(context, action))
+    }
+    return this.serialize(async () => {
+      remainingAccountOperationMs(operation)
+      const result = await action(operation)
+      remainingAccountOperationMs(operation)
+      return result
+    })
   }
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {

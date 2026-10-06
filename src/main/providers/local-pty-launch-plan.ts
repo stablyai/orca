@@ -255,3 +255,34 @@ export function createLocalPtyLaunchPlan(
     validationCwd: cwd
   })
 }
+
+export function pinLocalPtyWslLaunchDistro(
+  plan: LocalPtyLaunchPlan,
+  spawn: PtySpawnOptions,
+  distro: string
+): void {
+  if (
+    !plan.isWslShell ||
+    (plan.wslInfo && plan.wslInfo.distro.toLowerCase() !== distro.toLowerCase())
+  ) {
+    throw new Error('The prepared WSL account does not match the terminal working directory')
+  }
+  const context: WslLaunchContext = { distro, treatPosixCwdAsWsl: true }
+  const resolved = resolveWindowsShellLaunchArgs(
+    plan.shellPath,
+    plan.cwd,
+    plan.defaultCwd,
+    context,
+    spawn.command
+  )
+  if (spawn.prevalidatedCwd !== resolved.validationCwd) {
+    validateWorkingDirectory(resolved.validationCwd)
+  }
+  plan.shellArgs = resolved.shellArgs
+  plan.effectiveCwd = resolved.effectiveCwd
+  plan.validationCwd = resolved.validationCwd
+  plan.startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
+  plan.launchWslContext = context
+  plan.launchWslDistro = distro
+  spawn.terminalWindowsWslDistro = distro
+}

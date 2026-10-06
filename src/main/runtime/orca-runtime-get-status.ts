@@ -7,6 +7,7 @@ import {
 import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identity-mode-store'
 import type { RuntimeCapability } from '../../shared/protocol-version'
 import {
+  ANTIGRAVITY_WSL_ACCOUNTS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
@@ -81,6 +82,8 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
     const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
       (capability) =>
+        (capability !== ANTIGRAVITY_WSL_ACCOUNTS_RUNTIME_CAPABILITY ||
+          process.platform === 'win32') &&
         (capability !== 'browser.screencast.v1' || canBrowse) &&
         // Why: the nested-runtime E2E needs a real legacy transport without maintaining an old binary fixture.
         (process.env.ORCA_E2E_DISABLE_RUNTIME_SHARED_CONTROL !== '1' ||

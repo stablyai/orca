@@ -157,3 +157,35 @@ describe('Antigravity native account identity and selection', () => {
     expect(h.getVault().accounts).toHaveLength(1)
   })
 })
+
+describe('asynchronous account storage', () => {
+  it('waits for the snapshot write and propagates failure before reporting success', async () => {
+    const h = harness()
+    let rejectWrite: ((error: Error) => void) | undefined
+    const service = new AntigravityAccountService(
+      {
+        read: async () => h.getVault(),
+        write: () =>
+          new Promise<void>((_, reject) => {
+            rejectWrite = reject
+          })
+      },
+      h.backend
+    )
+    const pending = service.addCurrentAccount()
+    const failed = expect(pending).rejects.toThrow('disk unavailable')
+    await vi.waitFor(() => expect(rejectWrite).toBeTypeOf('function'))
+    rejectWrite?.(new Error('disk unavailable'))
+    await failed
+  })
+  it('does not run an expired queued mutation', async () => {
+    const h = harness()
+    const id = (await h.service.addCurrentAccount()).activeAccountId!
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      h.service.selectAccount(id, { deadline: Date.now() - 1, signal: controller.signal })
+    ).rejects.toThrow('timed out')
+    expect(h.backend.write).not.toHaveBeenCalled()
+  })
+})

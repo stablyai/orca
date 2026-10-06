@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AntigravityAccountsSection } from './AntigravityAccountsSection'
@@ -165,4 +165,53 @@ describe('native Antigravity Accounts', () => {
     expect(screen.queryByText('Native account')).toBeNull()
     expect(screen.getByText(/The native account changed/)).toBeTruthy()
   })
+})
+
+it('preserves the default selector and binds WSL mutations to the observed authority', async () => {
+  const authorityId = 'a'.repeat(64)
+  vi.mocked(callAntigravityAccounts).mockResolvedValue({
+    ...state,
+    resolvedTarget: { runtime: 'wsl', wslDistro: 'Ubuntu-24.04', authorityId }
+  })
+  render(
+    <AntigravityAccountsSection
+      owner={owner}
+      target={{ runtime: 'wsl', wslDistro: null }}
+      label="WSL default"
+    />
+  )
+  await screen.findByText('Native account')
+  await userEvent.click(screen.getByRole('button', { name: 'Save current account' }))
+  expect(callAntigravityAccounts).toHaveBeenLastCalledWith(
+    owner,
+    { runtime: 'wsl', wslDistro: null, expectedAuthorityId: authorityId },
+    'AddCurrent',
+    undefined
+  )
+  expect(screen.getByRole('button', { name: 'Refresh usage' })).toBeDisabled()
+})
+it('ignores a previous target mutation result and finally handler after switching owners', async () => {
+  let resolveOld: ((value: AntigravityAccountState) => void) | undefined
+  const view = render(<AntigravityAccountsSection owner={owner} target={target} label="Host A" />)
+  await screen.findByText('Native account')
+  vi.mocked(callAntigravityAccounts).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveOld = resolve
+      })
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Save current account' }))
+  vi.mocked(callAntigravityAccounts).mockResolvedValue(changedState)
+  view.rerender(
+    <AntigravityAccountsSection
+      owner={{ kind: 'environment', environmentId: 'host-b' }}
+      target={target}
+      label="Host B"
+    />
+  )
+  await screen.findByText('second@example.invalid')
+  expect(screen.getByRole('button', { name: 'Save current account' })).toBeEnabled()
+  await act(async () => resolveOld?.(state))
+  expect(screen.getByText('second@example.invalid')).toBeInTheDocument()
+  expect(screen.queryAllByText('synthetic@example.invalid')).toHaveLength(1)
 })

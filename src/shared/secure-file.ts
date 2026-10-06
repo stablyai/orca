@@ -1,3 +1,4 @@
+export { writeProtectedFileAtomic } from './secure-file-publication'
 import { randomBytes } from 'node:crypto'
 import {
   chmodSync,

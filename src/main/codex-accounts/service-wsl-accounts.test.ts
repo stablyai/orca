@@ -41,11 +41,25 @@ function decodeEncodedWslBashCommand(command: string): string {
 }
 
 function wslOk(stdout = ''): WslResult {
-  return { environmentResolved: true, code: 0, stdout, stderr: '', timedOut: false }
+  return {
+    environmentResolved: true,
+    code: 0,
+    stdout,
+    stderr: '',
+    timedOut: false,
+    outputTruncated: false
+  }
 }
 
 function wslFailed(code: number, stderr = ''): WslResult {
-  return { environmentResolved: true, code, stdout: '', stderr, timedOut: false }
+  return {
+    environmentResolved: true,
+    code,
+    stdout: '',
+    stderr,
+    timedOut: false,
+    outputTruncated: false
+  }
 }
 
 describe('CodexAccountService config sync', () => {

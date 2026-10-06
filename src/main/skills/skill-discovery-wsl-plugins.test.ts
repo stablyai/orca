@@ -15,7 +15,14 @@ function record(...fields: string[]): string {
 }
 
 function wslResult(stdout: string): WslResult {
-  return { environmentResolved: true, code: 0, stdout, stderr: '', timedOut: false }
+  return {
+    environmentResolved: true,
+    code: 0,
+    stdout,
+    stderr: '',
+    timedOut: false,
+    outputTruncated: false
+  }
 }
 
 function recordedScript(index: number): string {
