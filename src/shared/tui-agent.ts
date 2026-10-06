@@ -46,3 +46,4 @@ export type TuiAgent =
   | 'prime-agent' // Prime Agent (Prime Intellect)
   | 'dsh' // DeepSeek Harness (`dsh`, launched through its `dsh-tui` terminal profile)
   | 'jcode' // Jcode
+  | 'mirror' // Mirror TUI harness
