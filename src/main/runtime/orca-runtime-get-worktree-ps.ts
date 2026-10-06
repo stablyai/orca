@@ -31,6 +31,7 @@ import {
   reconcileAgentSessionOwnerListings
 } from '../ipc/pty/pane/agent-session-owners'
 import { canonicalizeAgentSessionIdentity } from './agent-session-claim-identity'
+import { claudeThinkingDisplaySupport } from '../claude/claude-thinking-display-support'
 
 export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   async getWorktreePs(
@@ -191,6 +192,8 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
         resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings().agentDefaultEnv),
       resolveClaudeLaunchEnv: () =>
         resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv),
+      // Wired only here, so a test runtime never runs a real `claude --version`.
+      claudeThinkingDisplay: claudeThinkingDisplaySupport,
       resolveShellEnvironmentPolicy: () =>
         nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
       resolveClaudeAuthPolicy: () =>

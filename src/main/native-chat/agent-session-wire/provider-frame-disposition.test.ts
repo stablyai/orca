@@ -38,6 +38,9 @@ describe('provider frame classification catalog', () => {
     expect(classifyProviderFrame('claude', 'message:system:hook_started', {})).toBe(
       'suppressed-benign'
     )
+    expect(classifyProviderFrame('claude', 'message:stream_event:ping', {})).toBe(
+      'suppressed-benign'
+    )
   })
 
   it('promotes payload failures over a benign catalog classification', () => {

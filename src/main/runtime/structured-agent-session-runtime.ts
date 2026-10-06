@@ -59,6 +59,7 @@ import {
   modelCatalogHostDeps,
   type RuntimeAgentAccountHomeResolver
 } from './structured-agent-model-catalog-wiring'
+import type { ClaudeThinkingDisplaySupport } from '../claude/claude-thinking-display-support'
 
 /** Whether this profile holds a structured chat: a record or tab in the journal database, or the
  *  records file a profile from before it carries while the database still owes its copy. */
@@ -94,6 +95,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCodexCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
   resolveClaudeCommand?: () => string
+  /** Whether a Claude CLI takes the thinking-display flag; absent never passes it. */
+  claudeThinkingDisplay?: ClaudeThinkingDisplaySupport
   /** Provider transports are overridden only to drive the runtime against scripted children. */
   openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']

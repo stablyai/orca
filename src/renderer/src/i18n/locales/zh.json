@@ -17533,6 +17533,7 @@
   },
   "components": {
     "native-chat": {
+      "reasoning": "推理",
       "contextMenu": {
         "copyOrcaSessionId": "复制 Orca 会话 ID",
         "orcaSessionIdCopied": "已复制 Orca 会话 ID",
@@ -18069,6 +18070,8 @@
         "queuePaused": "队列已暂停",
         "resume": "继续"
       },
+      "thought": "已思考",
+      "thoughtForDuration": "思考了 {{duration}}",
       "structuredSessionHostDeclined": "已在终端中打开 {{value0}}",
       "structuredSessionHostDeclinedDescription": "此服务器无法在此工作区中运行 {{value0}} 聊天。",
       "structuredSessionHostUnreachable": "无法连接到 {{value0}}",

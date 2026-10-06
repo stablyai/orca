@@ -42,6 +42,8 @@ const PROSE_MIN_LINES = 1
 const USER_BUBBLE_CHROME_PX = 32
 const IMAGE_STRIP_PX = 88
 const TOOL_RUN_PX = 40
+/** A reasoning row draws only its `xs` trigger button until opened; opening remeasures it. */
+const COLLAPSED_REASONING_PX = 24
 const SUBAGENT_ROW_PX = 32
 /** The one-line head that names a subagent above its own rows. */
 export const NATIVE_CHAT_SUBAGENT_SECTION_HEAD_PX = SUBAGENT_ROW_PX
@@ -122,7 +124,12 @@ export function estimateNativeChatRowHeight(
     height = content.subagentGroupCount * SUBAGENT_ROW_PX
     partCount = height > 0 ? 1 : 0
   } else {
-    height = content.textLines * typography.lineHeightPx
+    height =
+      content.role === 'reasoning'
+        ? content.textLines > 0
+          ? COLLAPSED_REASONING_PX
+          : 0
+        : content.textLines * typography.lineHeightPx
     if (content.role === 'user' && content.textLines > 0) {
       height += USER_BUBBLE_CHROME_PX
     }
