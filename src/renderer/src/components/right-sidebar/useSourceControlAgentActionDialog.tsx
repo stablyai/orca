@@ -10,6 +10,7 @@ import { renderSourceControlActionCommandTemplate } from '../../../../shared/sou
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { resolveTuiAgentLaunchArgs } from '../../../../shared/tui-agent-launch-defaults'
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import type { UseSourceControlAgentActionDialogResult } from './source-control-agent-action-dialog-result'
 import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
@@ -52,9 +53,6 @@ export function useSourceControlAgentActionDialog({
     () => resolveSourceControlLaunchAgentScope({ settings, repo, actionId }),
     [actionId, repo, settings]
   )
-  // Why: when this repo already overrides the global default, default the save
-  // scope to the repo so saving the corrected agent updates that override in
-  // place instead of writing a global default the override would still shadow.
   const defaultSaveTargetValue =
     launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
   const ensureDetectedAgents = useAppStore((state) => state.ensureDetectedAgents)
@@ -62,8 +60,25 @@ export function useSourceControlAgentActionDialog({
   const [commandTemplate, setCommandTemplate] = useState(
     savedCommandInputTemplate ?? '{basePrompt}'
   )
-  const [agentArgs, setAgentArgs] = useState(savedAgentArgs ?? '')
   const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(savedAgentId ?? null)
+  const [agentArgs, setAgentArgs] = useState(
+    savedAgentArgs ??
+      (savedAgentId ? resolveTuiAgentLaunchArgs(savedAgentId, settings?.agentDefaultArgs) : '')
+  )
+  const [isArgsDirty, setIsArgsDirty] = useState(false)
+  const isArgsDirtyRef = useRef(false)
+  const isAgentDirtyRef = useRef(false)
+
+  const agentDefaultArgsRef = useRef(settings?.agentDefaultArgs)
+  useEffect(() => {
+    agentDefaultArgsRef.current = settings?.agentDefaultArgs
+  }, [settings?.agentDefaultArgs])
+
+  const setArgsDirty = (dirty: boolean): void => {
+    setIsArgsDirty(dirty)
+    isArgsDirtyRef.current = dirty
+  }
+
   const [detectedAgents, setDetectedAgents] = useState<TuiAgent[]>([])
   const [detecting, setDetecting] = useState(false)
   const openCycleRef = useRef(0)
@@ -109,8 +124,13 @@ export function useSourceControlAgentActionDialog({
     wasOpenRef.current = true
     setDetectedOpenCycle(null)
     setCommandTemplate(savedCommandInputTemplate ?? '{basePrompt}')
-    setAgentArgs(savedAgentArgs ?? '')
     setSelectedAgent(savedAgentId ?? null)
+    setAgentArgs(
+      savedAgentArgs ??
+        (savedAgentId ? resolveTuiAgentLaunchArgs(savedAgentId, agentDefaultArgsRef.current) : '')
+    )
+    setArgsDirty(false)
+    isAgentDirtyRef.current = false
     setSaveLaunchRecipe(true)
     setSaveTargetValue(defaultSaveTargetValue)
     let stale = false
@@ -119,19 +139,23 @@ export function useSourceControlAgentActionDialog({
     // frame on a launch that turns out to be structured.
     void Promise.all([refreshDetectedAgents(), ensureLocalRuntimeCapabilities()]).then(
       ([nextAgents]) => {
-        if (stale || openCycleRef.current !== cycle) {
+        if (stale || openCycleRef.current !== cycle || isAgentDirtyRef.current) {
           return
         }
-        setSelectedAgent(
-          (current) =>
-            current ??
-            pickSourceControlLaunchAgent({
-              savedAgent: savedAgentId,
-              defaultAgent: settings?.defaultTuiAgent,
-              detectedAgents: nextAgents,
-              disabledAgents
-            })
-        )
+        const fallbackAgent = pickSourceControlLaunchAgent({
+          savedAgent: savedAgentId,
+          defaultAgent: settings?.defaultTuiAgent,
+          detectedAgents: nextAgents,
+          disabledAgents
+        })
+        const finalAgent = fallbackAgent ?? savedAgentId ?? null
+        if (finalAgent !== (savedAgentId ?? null)) {
+          setArgsDirty(false)
+          setAgentArgs(
+            finalAgent ? resolveTuiAgentLaunchArgs(finalAgent, agentDefaultArgsRef.current) : ''
+          )
+        }
+        setSelectedAgent(finalAgent)
         setDetectedOpenCycle(cycle)
       }
     )
@@ -149,6 +173,20 @@ export function useSourceControlAgentActionDialog({
     repoId,
     settings?.defaultTuiAgent
   ])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    if (isArgsDirty) {
+      return
+    }
+    if (savedAgentArgs === null || savedAgentArgs === undefined) {
+      setAgentArgs(
+        selectedAgent ? resolveTuiAgentLaunchArgs(selectedAgent, settings?.agentDefaultArgs) : ''
+      )
+    }
+  }, [open, selectedAgent, savedAgentArgs, settings?.agentDefaultArgs, isArgsDirty])
 
   const closeDialog = useCallback(() => onOpenChange(false), [onOpenChange])
 
@@ -201,8 +239,6 @@ export function useSourceControlAgentActionDialog({
       groupId,
       promptDelivery,
       launchPlatform,
-      // Why: an SSH host runs the plain `orca` shim; keep the previewed command
-      // label aligned with the real remote launch (no `orca-ide` rename).
       isRemote: typeof connectionId === 'string',
       launchSource,
       connectionUnavailable,
@@ -271,17 +307,41 @@ export function useSourceControlAgentActionDialog({
     detecting
   })
 
-  // Why: editing any launch field invalidates the previewed delivery plan.
   const resetPlanAfter = useCallback(
-    <T>(apply: (value: T) => void) =>
+    <T,>(apply: (value: T) => void) =>
       (value: T): void => {
         apply(value)
         resetDeliveryPlan()
       },
     [resetDeliveryPlan]
   )
-  const onSelectedAgentChange = useMemo(() => resetPlanAfter(setSelectedAgent), [resetPlanAfter])
-  const onAgentArgsChange = useMemo(() => resetPlanAfter(setAgentArgs), [resetPlanAfter])
+
+  const handleSelectedAgentChange = useCallback(
+    (nextAgent: TuiAgent | null) => {
+      setSelectedAgent(nextAgent)
+      isAgentDirtyRef.current = true
+      setArgsDirty(false)
+      if (savedAgentArgs === null || savedAgentArgs === undefined) {
+        setAgentArgs(
+          nextAgent ? resolveTuiAgentLaunchArgs(nextAgent, settings?.agentDefaultArgs) : ''
+        )
+      }
+    },
+    [savedAgentArgs, settings?.agentDefaultArgs]
+  )
+
+  const onSelectedAgentChange = useMemo(
+    () => resetPlanAfter(handleSelectedAgentChange),
+    [resetPlanAfter, handleSelectedAgentChange]
+  )
+  const handleAgentArgsChange = useCallback((nextArgs: string) => {
+    setAgentArgs(nextArgs)
+    setArgsDirty(true)
+  }, [])
+  const onAgentArgsChange = useMemo(
+    () => resetPlanAfter(handleAgentArgsChange),
+    [resetPlanAfter, handleAgentArgsChange]
+  )
   const onCommandTemplateChange = useMemo(
     () => resetPlanAfter(setCommandTemplate),
     [resetPlanAfter]
