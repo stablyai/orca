@@ -15,6 +15,7 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
 }))
 
+import { setMainHttpClient } from '../network/http-client'
 import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
 
 describe('Codex backend rate-limit requests', () => {
@@ -256,5 +257,69 @@ describe('Codex backend rate-limit requests', () => {
       })
     ).rejects.toThrow('Codex reset failed: HTTP 429')
     expect(cancelledBodies).toBe(1)
+  })
+
+  // Why: a WSL UNC home routes Codex usage through the backend instead of the RPC probe, and
+  // those backend calls must use the session-backed client so a configured Orca proxy applies.
+  // The platform global is undici and ignores that proxy, which is why Claude honoured it and
+  // Codex did not (#19755).
+  it('routes backend calls through the main HTTP client so a configured proxy applies', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
+    )
+    // Why: String.raw keeps the UNC separators readable instead of double-escaping them.
+    const wslHome = String.raw`\\wsl.localhost\Ubuntu\home\alice\.local\share\orca\account\home`
+    const clientFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          plan_type: 'plus',
+          rate_limit: {
+            primary_window: {
+              used_percent: 12,
+              limit_window_seconds: 3_600,
+              reset_at: 1_800_000_000
+            }
+          }
+        })
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ available_count: 0, credits: [] })
+      } as Response)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'reset' })))
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ code: 'reset' })))
+    setMainHttpClient({ fetch: clientFetch, proxySession: () => null })
+
+    try {
+      await fetchCodexRateLimits({ codexHomePath: wslHome })
+
+      await expect(
+        consumeCodexRateLimitResetCredit({
+          codexHomePath: wslHome,
+          idempotencyKey: 'redeem-proxy-123'
+        })
+      ).resolves.toBe('reset')
+
+      expect(clientFetch).toHaveBeenCalledTimes(3)
+      expect(clientFetch).toHaveBeenNthCalledWith(
+        3,
+        'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ redeem_request_id: 'redeem-proxy-123' }),
+          signal: expect.any(AbortSignal),
+          headers: expect.objectContaining({
+            Authorization: 'Bearer access-token',
+            'ChatGPT-Account-Id': 'account-id',
+            'Content-Type': 'application/json'
+          })
+        })
+      )
+      expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+    } finally {
+      setMainHttpClient(null)
+    }
   })
 })

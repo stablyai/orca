@@ -40,6 +40,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
         ? Promise.resolve(missingWslCodexHome)
         : fetchCodexRateLimits({
             codexHomePath,
+            networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })
     ).catch((err): ProviderRateLimits => ({

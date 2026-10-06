@@ -1,4 +1,7 @@
 import type { CodexRateLimitResetOutcome, ProviderRateLimits } from '../../shared/rate-limit-types'
+import { getMainHttpClient } from '../network/http-client'
+import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
+import { addWslEnvKeys } from '../../shared/wsl-env'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -78,16 +81,21 @@ function processEnvWithoutCodexHome(): NodeJS.ProcessEnv {
   return env
 }
 
+// Why: route these through the main HTTP client so they use Chromium's network stack, which
+// follows the session proxy Orca applies from `httpProxyUrl`. The platform global is undici and
+// ignores that proxy, so a configured proxy was bypassed for usage and reset-credit calls even
+// though the Claude path honours it (#19755). On a host without Chromium the port falls back to
+// the global, so behaviour there is unchanged.
 function fetchCodexUsage(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
+  return getMainHttpClient().fetch(url, init)
 }
 
 function fetchCodexResetCredits(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
+  return getMainHttpClient().fetch(url, init)
 }
 
 function consumeCodexResetCredit(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
+  return getMainHttpClient().fetch(url, init)
 }
 
 async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<ProviderRateLimits> {
@@ -95,20 +103,32 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     return abortedCodexRateLimitResult()
   }
   const codexArgs = [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS]
+  // Why: a local probe reads the proxy from its own env. The WSL branch instead names the
+  // values in WSLENV so the distro imports them — serializing them into the wsl.exe command
+  // line would expose proxy credentials to local process listings (the URL is a protected
+  // secret at rest), and merging them into the wsl.exe env alone would be inert (#19755).
+  const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
   const wslCodex = options?.codexHomePath
     ? buildWslCodexCommand(options.codexHomePath, codexArgs)
     : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
+  const spawnEnv = withCliRuntimeOnPath(codexCommand, {
+    ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
+    ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {}),
+    // Why: local Codex reads these directly, while WSLENV imports them without exposing proxy
+    // credentials in the wsl.exe command line (#19755).
+    ...proxyEnv
+  })
+  if (wslCodex && Object.keys(proxyEnv).length > 0) {
+    addWslEnvKeys(spawnEnv, Object.keys(proxyEnv))
+  }
   // Why the bare CLI: spawnProcess resolves an npm `codex.cmd` shim past cmd.exe itself.
   const child = spawnProcess({
     program: wslCodex ? wslCodex.command : codexCommand,
     args: wslCodex ? wslCodex.args : codexArgs,
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: resolveHiddenRateLimitPtyCwd(),
-    env: withCliRuntimeOnPath(codexCommand, {
-      ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
-      ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
-    })
+    env: spawnEnv
   })
   return readCodexRateLimitsViaRpc({
     child: child as CodexRpcRateLimitChild,
