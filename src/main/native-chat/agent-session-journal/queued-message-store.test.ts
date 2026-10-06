@@ -13,6 +13,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { QUEUED_MESSAGE_PAUSED_KEPT } from '../../../shared/agent-session-queued-message-wire'
 import Database from '../../sqlite/sync-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'
@@ -90,7 +91,12 @@ async function queueDraft(journal: AgentSessionJournal, messageId: string, text 
 async function consumeDraft(
   journal: AgentSessionJournal,
   messageId: string,
-  options: { as?: string; expect?: 'waiting' | 'returned'; settledByOp?: string | null } = {}
+  options: {
+    as?: string
+    expect?: 'waiting' | 'returned'
+    settledByOp?: string | null
+    origin?: 'client' | 'host'
+  } = {}
 ) {
   const draft = journal.queuedMessages.get(messageId)
   await journal.appendSubmission(
@@ -99,7 +105,8 @@ async function consumeDraft(
       payloadFingerprint: draft?.fingerprint ?? `fp-${messageId}`,
       body: draft?.body ?? message('queued text'),
       fence: 0,
-      handoverRecorded: true
+      handoverRecorded: true,
+      ...(options.origin ? { origin: options.origin } : {})
     },
     {
       messageId,
@@ -400,25 +407,32 @@ describe('returned transition (D1/N4)', () => {
     expect(journal.submission('sub-draft-1')?.queuedMessageId).toBe('draft-1')
   })
 
-  it("a restart between consume and handover sends the draft back to waiting under the restart's pause", async () => {
-    let journal = await open()
-    await queueDraft(journal, 'draft-1')
-    await consumeDraft(journal, 'draft-1')
-    await journal.close()
-    journal = await open()
-    expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
-    await journal.rejectQueuedSubmissions(0, HOST_RESTARTED, (submission) =>
-      journal.wroteBeforeOpen(submission.acceptedSequence)
-    )
-    // No stored hold: the restart's pause derives from the row's host instance.
-    expect(journal.queuedMessages.get('draft-1')).toMatchObject({
-      state: 'waiting',
-      holdReason: null,
-      hostInstance: 'proc-1',
-      consumedAs: null,
-      returnedReason: null
-    })
-  })
+  it.each([
+    { by: 'the queue', origin: 'host' as const, holdReason: null },
+    { by: 'the person', origin: 'client' as const, holdReason: QUEUED_MESSAGE_PAUSED_KEPT }
+  ])(
+    'a restart between $by’s consume and handover sends the draft back to waiting',
+    async ({ origin, holdReason }) => {
+      let journal = await open()
+      await queueDraft(journal, 'draft-1')
+      await consumeDraft(journal, 'draft-1', { origin })
+      await journal.close()
+      journal = await open()
+      expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
+      await journal.rejectQueuedSubmissions(0, HOST_RESTARTED, (submission) =>
+        journal.wroteBeforeOpen(submission.acceptedSequence)
+      )
+      // The queue's own hand-off waits under the restart's pause, derived from the row's host
+      // instance; a Send the person asked for waits for them, kept.
+      expect(journal.queuedMessages.get('draft-1')).toMatchObject({
+        state: 'waiting',
+        holdReason,
+        hostInstance: 'proc-1',
+        consumedAs: null,
+        returnedReason: null
+      })
+    }
+  )
 
   it('refuse → Send under a fresh id → refuse again returns the card again; a late duplicate of the first refusal never touches the re-send (N4)', async () => {
     const journal = await open()
@@ -568,6 +582,46 @@ describe('open-time repair and retention', () => {
       warn.mockRestore()
     }
   })
+
+  // The repair reaches the live hook's answer from the stored rejection and who asked for it.
+  it.each([
+    {
+      origin: 'client' as const,
+      cause: 'hostRestarted' as const,
+      holdReason: QUEUED_MESSAGE_PAUSED_KEPT
+    },
+    { origin: 'host' as const, cause: 'hostRestarted' as const, holdReason: null },
+    {
+      origin: 'client' as const,
+      cause: 'chatClosed' as const,
+      holdReason: QUEUED_MESSAGE_PAUSED_KEPT
+    },
+    { origin: 'host' as const, cause: 'chatClosed' as const, holdReason: null }
+  ])(
+    'a skipped hook for a $origin hand-off cut short ($cause) is repaired at open, holdReason $holdReason',
+    async ({ origin, cause, holdReason }) => {
+      let journal = await open()
+      await queueDraft(journal, 'draft-1')
+      await consumeDraft(journal, 'draft-1', { origin })
+      await journal.rejectQueuedSubmissions(
+        0,
+        agentSessionFailureWords(agentSessionFailureFact(cause), { surface: 'rejection' })
+      )
+      await journal.close()
+      // The hook "was skipped": the draft is back to dispatched behind the stored rejection.
+      const db = new Database(journalDatabasePath(root))
+      db.prepare(
+        "UPDATE queued_messages SET state = 'dispatched', hold_reason = NULL, consumed_as = 'sub-draft-1' WHERE message_id = ?"
+      ).run('draft-1')
+      db.close()
+      journal = await open()
+      expect(journal.queuedMessages.get('draft-1')).toMatchObject({
+        state: 'waiting',
+        holdReason,
+        consumedAs: null
+      })
+    }
+  )
 
   it('returns a dispatched row whose loaded submission is effectively rejected (downgrade wrote no hook)', async () => {
     let journal = await open()

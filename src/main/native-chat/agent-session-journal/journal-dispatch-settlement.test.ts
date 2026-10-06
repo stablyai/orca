@@ -10,27 +10,34 @@ import {
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { rejectedDraftSettlement } from './journal-dispatch-settlement'
 
-function settle(kind: SubmissionRejectionKind) {
-  return rejectedDraftSettlement(
-    agentSessionFailureWords(agentSessionFailureFact(kind), { surface: 'rejection' })
-  )
+function settle(kind: SubmissionRejectionKind, origin?: 'client' | 'host') {
+  return rejectedDraftSettlement({
+    ...agentSessionFailureWords(agentSessionFailureFact(kind), { surface: 'rejection' }),
+    origin
+  })
 }
 
 describe('what a rejection does to the draft it was consumed from', () => {
   it("a Stop's withdrawal sends it back to waiting, under the queue's pause rather than a hold of its own", () => {
-    expect(settle('cancelled')).toEqual({ state: 'waiting' })
+    expect(settle('cancelled')).toEqual({ state: 'waiting', kept: false })
     expect(rejectedDraftSettlement({ reason: DISPATCH_REJECTED_CANCELLED })).toEqual({
-      state: 'waiting'
+      state: 'waiting',
+      kept: false
     })
+    expect(settle('notDelivered')).toEqual({ state: 'waiting', kept: false })
   })
 
-  it('a restart or close before hand-over sends it back to waiting too', () => {
-    for (const kind of ['hostRestarted', 'chatClosed', 'notDelivered'] as const) {
-      expect(settle(kind)).toEqual({ state: 'waiting' })
+  // A Send the person asked for and the host never handed over waits for them; the queue's own
+  // hand-off, or one from a build that recorded no origin, waits under the queue's pause.
+  it('a restart or close before hand-over sends it back to waiting, kept only when the person sent it', () => {
+    for (const kind of ['hostRestarted', 'chatClosed'] as const) {
+      expect(settle(kind, 'client')).toEqual({ state: 'waiting', kept: true })
+      expect(settle(kind, 'host')).toEqual({ state: 'waiting', kept: false })
+      expect(settle(kind)).toEqual({ state: 'waiting', kept: false })
     }
-    expect(rejectedDraftSettlement({ reason: DISPATCH_REJECTED_HOST_RESTARTED })).toEqual({
-      state: 'waiting'
-    })
+    expect(
+      rejectedDraftSettlement({ reason: DISPATCH_REJECTED_HOST_RESTARTED, origin: 'client' })
+    ).toEqual({ state: 'waiting', kept: true })
   })
 
   it('a failure returns the card for the user to act on', () => {
