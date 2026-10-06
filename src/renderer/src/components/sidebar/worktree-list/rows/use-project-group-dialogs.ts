@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
+import { addProjectTargetForGroup } from '@/lib/added-project-group-assignment'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -68,6 +69,7 @@ export function useProjectGroupDialogs(args: {
   projectGroups: readonly ProjectGroup[]
 }) {
   const { repos, repoMap, projectGroups } = args
+  const openModal = useAppStore((s) => s.openModal)
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
@@ -103,6 +105,13 @@ export function useProjectGroupDialogs(args: {
       setNameDialog({ type: 'rename', groupId, currentName, hostId })
     },
     []
+  )
+
+  const handleAddProjectToGroup = useCallback(
+    (projectGroup: ProjectGroup) => {
+      openModal('add-repo', { addProjectTarget: addProjectTargetForGroup(projectGroup) })
+    },
+    [openModal]
   )
 
   const handleSubmitProjectGroupName = useCallback(
@@ -199,6 +208,7 @@ export function useProjectGroupDialogs(args: {
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,
     handleRenameProjectGroup,
+    handleAddProjectToGroup,
     handleSubmitProjectGroupName,
     handleDeleteProjectGroup,
     handleConfirmDeleteProjectGroup

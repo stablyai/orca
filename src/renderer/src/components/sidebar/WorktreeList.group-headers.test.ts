@@ -39,7 +39,8 @@ vi.mock('@/components/ui/dropdown-menu', () => createDropdownMenuModuleMock())
 
 function setProjectGroupWithoutWorktreeRowsState(
   filterRepoIds: string[] = [],
-  collapsedGroups = new Set<string>()
+  collapsedGroups = new Set<string>(),
+  options: { group?: Partial<ProjectGroup>; withUngroupedRepo?: boolean } = {}
 ): void {
   const group: ProjectGroup = {
     id: 'group-1',
@@ -51,12 +52,15 @@ function setProjectGroupWithoutWorktreeRowsState(
     isCollapsed: false,
     color: null,
     createdAt: 1,
-    updatedAt: 1
+    updatedAt: 1,
+    ...options.group
   }
   const repo: Repo = {
     ...makeRepo(),
     projectGroupId: group.id
   }
+  const ungroupedRepo: Repo = { ...makeRepo(), id: 'ungrouped-repo', displayName: 'Loose' }
+  const repos = options.withUngroupedRepo ? [repo, ungroupedRepo] : [repo]
 
   mockStore.state = {
     ...makeFolderWorkspacePathStatusMockState(),
@@ -84,7 +88,7 @@ function setProjectGroupWithoutWorktreeRowsState(
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     retainedAgentsByPaneKey: {},
-    repos: [repo],
+    repos,
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),
     setHideDefaultBranchWorkspace: vi.fn(),
@@ -108,9 +112,7 @@ function setProjectGroupWithoutWorktreeRowsState(
     workspaceStatuses: [],
     worktreeCardProperties: ['status', 'inline-agents'],
     worktreeLineageById: {},
-    worktreesByRepo: {
-      [repo.id]: []
-    }
+    worktreesByRepo: Object.fromEntries(repos.map((entry) => [entry.id, []]))
   }
 }
 
@@ -143,6 +145,35 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).toContain('data-repo-header-collapse-affordance=""')
     expect(markup).toContain('aria-expanded="false"')
     expect(markup).toContain('-rotate-90')
+  })
+
+  it('offers Add project on a plain project group header', async () => {
+    setProjectGroupWithoutWorktreeRowsState([], new Set(), {
+      group: { parentPath: null, createdFrom: 'manual' }
+    })
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('aria-label="Add project to Imported Services"')
+  })
+
+  // Why: folder-backed groups already spend the Plus slot on "create workspace".
+  it('leaves the Plus slot to folder-backed project groups', async () => {
+    setProjectGroupWithoutWorktreeRowsState()
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('aria-label="Create workspace for Imported Services"')
+    expect(markup).not.toContain('aria-label="Add project to')
+  })
+
+  it('does not offer Add project on the synthetic Ungrouped header', async () => {
+    setProjectGroupWithoutWorktreeRowsState([], new Set(), {
+      group: { parentPath: null, createdFrom: 'manual' },
+      withUngroupedRepo: true
+    })
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('aria-label="Add project to Imported Services"')
+    expect(markup).not.toContain('aria-label="Add project to Ungrouped"')
   })
 
   it('does not render the project collapse affordance on flat section headers', async () => {
