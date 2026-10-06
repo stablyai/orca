@@ -19,6 +19,17 @@ export function installMultiplexFrameDelivery(
 ): asserts build is TerminalMultiplexFrameDeliveryStage {
   const state = build as TerminalMultiplexConnection
   const { sendBinary, emit, streams } = state
+  // Why: the transport discarded a frame, so reconnect is the only retry boundary with an
+  // authoritative snapshot. Closing only the multiplex left the client's socket open with no
+  // multiplex behind it: output stopped and every Input frame vanished with no error (#20802).
+  // A socket close is the one signal every client build already recovers from.
+  const closeAfterDiscardedFrame = (): void => {
+    const wasOpen = !state.closed
+    state.closeMultiplex()
+    if (wasOpen) {
+      state.closeConnection?.(1013, 'Terminal stream frame dropped under backpressure')
+    }
+  }
   state.sendFrame = (
     streamId: number,
     opcode: TerminalStreamOpcode,
@@ -38,13 +49,12 @@ export function installMultiplexFrameDelivery(
       sent = sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload }))
     } catch {
       onRejected?.()
-      state.closeMultiplex()
+      closeAfterDiscardedFrame()
       return false
     }
     if (sent === false) {
       onRejected?.()
-      // Why: false means the transport discarded this frame; reconnect is the only available retry boundary with an authoritative snapshot.
-      state.closeMultiplex()
+      closeAfterDiscardedFrame()
       return false
     }
     return true
