@@ -605,11 +605,12 @@ describe('useMobileNativeChatTurnDisclosure', () => {
           )
         })
         const disclosure = renderer!.root.findByType('result').props.disclosure
-        const [rowW1, rowB] = messages.map((message, index) =>
+        const [, rowB, rowW2] = messages.map((message, index) =>
           disclosure.resolveRow(index, message)
         )
-        expect(rowW1.turnStatus).toEqual({ startedAt: 5_000, thinking: false, workedSeconds: 15 })
-        expect(rowB.turnStatus).toBeNull()
+        // The first visible row carries the bar after earlier activity folds away.
+        expect(rowB.turnStatus).toEqual({ startedAt: 5_000, thinking: false, workedSeconds: 15 })
+        expect(rowW2.turnStatus).toBeNull()
       } finally {
         vi.useRealTimers()
       }
@@ -672,8 +673,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
         })
         expect(drawn).toEqual([
           ['A', 17, false],
-          ['a-tool-1', undefined, false],
-          ['a-tool-2', undefined, false],
           ['FIRST DONE', undefined, false],
           ['B', null, true],
           ['b-answer', undefined, true]

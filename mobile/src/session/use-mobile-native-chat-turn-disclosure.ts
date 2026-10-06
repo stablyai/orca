@@ -1,15 +1,21 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import {
+  isBackgroundTaskBlock,
+  isSubagentGroupBlock,
+  type NativeChatMessage
+} from '../../../src/shared/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../src/shared/native-chat-row-content'
+import {
+  nativeChatTurnFold,
+  type NativeChatTurnFoldRow
+} from '../../../src/shared/native-chat-turn-fold'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import {
   nativeChatMessagesWaitingBehindLiveTurn,
   nativeChatTurnMembership,
   type NativeChatTurnJournal
 } from '../../../src/shared/native-chat-turn-membership'
-import {
-  nativeChatRowsInDrawOrder,
-  nativeChatTurnBarRows
-} from '../../../src/shared/native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from '../../../src/shared/native-chat-turn-grouping'
 import {
   useMobileNativeChatTurnStatus,
   type NativeChatTurnStatus
@@ -81,18 +87,6 @@ export function useMobileNativeChatTurnDisclosure({
       liveTurnKey: membership.liveTurnKey
     }
   }, [enabled, messages, turnJournal])
-  // A message waiting behind the live turn draws after that turn's live status, not in the list.
-  const waiting = useMemo(() => {
-    const ids = enabled ? nativeChatMessagesWaitingBehindLiveTurn(rows, turnJournal?.items) : null
-    if (!ids?.size) {
-      return { listMessages: rows, waitingRows: [], indexById: null }
-    }
-    return {
-      listMessages: rows.filter((message) => !ids.has(message.id)),
-      waitingRows: rows.flatMap((item, index) => (ids.has(item.id) ? [{ item, index }] : [])),
-      indexById: new Map(rows.map((message, index) => [message.id, index]))
-    }
-  }, [enabled, rows, turnJournal])
   const turnStatuses = useMobileNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
@@ -109,6 +103,105 @@ export function useMobileNativeChatTurnDisclosure({
   }>(() => ({ scopeKey, turnIds: new Set() }))
   const expandedTurnIds =
     expandedTurns.scopeKey === scopeKey ? expandedTurns.turnIds : EMPTY_TURN_IDS
+  // A message waiting behind the live turn draws after that turn's live status, not in the list.
+  const waiting = useMemo(() => {
+    if (!enabled) {
+      return {
+        listMessages: rows,
+        waitingRows: [],
+        indexById: new Map<string, number>(),
+        foldedRows: new Set<number>(),
+        bars: new Map<string, { index: number; above: boolean }>()
+      }
+    }
+    const ids = enabled ? nativeChatMessagesWaitingBehindLiveTurn(rows, turnJournal?.items) : null
+    const foldRows: NativeChatTurnFoldRow[] = rows.map((message, index) => {
+      const content = deriveNativeChatRowContent(message.blocks)
+      return {
+        turnKey: turnKeys[index],
+        role: message.role,
+        rendersProse: content.markdown.length > 0 || content.hasImages,
+        outlivesTurn: message.blocks.some(
+          (block) => isSubagentGroupBlock(block) || isBackgroundTaskBlock(block)
+        ),
+        reportsFailure: message.blocks.some(
+          (block) => block.type === 'text' && block.tone === 'error'
+        ),
+        reportsCompaction: message.blocks.some(
+          (block) => block.type === 'text' && block.presentation === 'compaction'
+        )
+      }
+    })
+    const settledTurnKeys = new Set(
+      Object.entries(turnStatuses.completedByTurn)
+        .filter(([, status]) => status.workedSeconds != null)
+        .map(([turnKey]) => turnKey)
+    )
+    const { foldedRows: folded } = nativeChatTurnFold({
+      rows: foldRows,
+      settledTurnKeys,
+      expandedTurnKeys: expandedTurnIds
+    })
+    const foldedRows = new Set(folded)
+    const carrierRows = new Set<number>()
+    // A provider-opened/history turn can have no user row in the loaded window. Keep a
+    // first-row carrier for its settled status; settled tool content is hidden by the message
+    // renderer, while the caret still has a row to attach to.
+    const firstRowByTurn = new Map<string, number>()
+    const hasAnswer = new Set<string>()
+    for (const [index, row] of foldRows.entries()) {
+      if (row.turnKey === undefined) {
+        continue
+      }
+      if (!firstRowByTurn.has(row.turnKey)) {
+        firstRowByTurn.set(row.turnKey, index)
+      }
+      if (
+        row.rendersProse &&
+        (row.role === 'assistant' || (row.role === 'system' && row.reportsFailure))
+      ) {
+        hasAnswer.add(row.turnKey)
+      }
+    }
+    for (const [turnKey, index] of firstRowByTurn) {
+      if (
+        settledTurnKeys.has(turnKey) &&
+        !hasAnswer.has(turnKey) &&
+        !expandedTurnIds.has(turnKey) &&
+        foldedRows.has(index)
+      ) {
+        foldedRows.delete(index)
+        carrierRows.add(index)
+      }
+    }
+    const indexById = new Map(rows.map((message, index) => [message.id, index]))
+    const bars = new Map<string, { index: number; above: boolean }>()
+    rows.forEach((message, index) => {
+      const turnKey = turnKeys[index]
+      if (turnKey !== undefined && !foldedRows.has(index) && !bars.has(turnKey)) {
+        bars.set(turnKey, { index, above: message.id !== turnKey })
+      }
+    })
+    const visibleMessage = (message: NativeChatMessage, index: number): NativeChatMessage =>
+      carrierRows.has(index) ? { ...message, blocks: [] } : message
+    const listMessages = rows.flatMap((message, index) =>
+      foldedRows.has(index) ? [] : [visibleMessage(message, index)]
+    )
+    if (!ids?.size) {
+      return { listMessages, waitingRows: [], indexById, foldedRows, bars }
+    }
+    return {
+      listMessages: listMessages.filter((message) => !ids.has(message.id)),
+      waitingRows: rows.flatMap((item, index) =>
+        ids.has(item.id) && !foldedRows.has(index)
+          ? [{ item: visibleMessage(item, index), index }]
+          : []
+      ),
+      indexById,
+      foldedRows,
+      bars
+    }
+  }, [enabled, rows, turnJournal, turnKeys, turnStatuses.completedByTurn, expandedTurnIds])
   const toggleExpandedTurn = useCallback(
     (turnKey: string) => {
       setExpandedTurns((current) => {
@@ -127,15 +220,13 @@ export function useMobileNativeChatTurnDisclosure({
     },
     [scopeKey]
   )
-  const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
-
   const { active, activeTurnKey, completedByTurn } = turnStatuses
   const activeActivityText = enabled && isWorking ? (activityText ?? null) : null
   const resolveRow = useCallback(
     (listIndex: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
-      const index = waiting.indexById?.get(message.id) ?? listIndex
+      const index = waiting.indexById.get(message.id) ?? listIndex
       const turnKey = turnKeys[index]
-      const bar = turnKey === undefined ? undefined : bars.get(turnKey)
+      const bar = turnKey === undefined ? undefined : waiting.bars.get(turnKey)
       // A turn's bar draws at its first row; the live turn's carries its running clock and settles
       // in place. A message folded into a turn (a steer) carries none.
       const turnStatus =
@@ -162,7 +253,6 @@ export function useMobileNativeChatTurnDisclosure({
     [
       turnKeys,
       waiting,
-      bars,
       liveTurnKey,
       enabled,
       activeTurnKey,
