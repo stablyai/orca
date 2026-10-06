@@ -4,6 +4,8 @@ export type GitRemoteIdentity = {
   canonicalKey: string
   remoteName: string
   remoteUrl: string
+  /** Fetch URL for the specifically named origin remote, if configured. */
+  originRemoteUrl?: string
 }
 
 export type GitRemoteKeyParts = {
@@ -131,11 +133,13 @@ export function deriveGitRemoteIdentity(stdout: string): GitRemoteIdentity | nul
       return priority === 0 ? left.name.localeCompare(right.name) : priority
     })
   const selected = entries[0]
+  const originRemoteUrl = entries.find((entry) => entry.name === 'origin')?.url
   return selected
     ? {
         canonicalKey: selected.canonicalKey,
         remoteName: selected.name,
-        remoteUrl: selected.url
+        remoteUrl: selected.url,
+        ...(originRemoteUrl ? { originRemoteUrl } : {})
       }
     : null
 }

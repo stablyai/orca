@@ -9,7 +9,8 @@ const gitlabRemote = 'origin\tgit@gitlab.example.com:team/orca.git (fetch)\n'
 const gitlabIdentity = {
   canonicalKey: 'gitlab.example.com/team/orca',
   remoteName: 'origin',
-  remoteUrl: 'git@gitlab.example.com:team/orca.git'
+  remoteUrl: 'git@gitlab.example.com:team/orca.git',
+  originRemoteUrl: 'git@gitlab.example.com:team/orca.git'
 }
 
 const registered: string[] = []
@@ -65,7 +66,8 @@ describe('probeGitRemoteIdentity', () => {
       identity: {
         canonicalKey: 'gitlab.example.com/team/other',
         remoteName: 'origin',
-        remoteUrl: 'git@gitlab.example.com:team/other.git'
+        remoteUrl: 'git@gitlab.example.com:team/other.git',
+        originRemoteUrl: 'git@gitlab.example.com:team/other.git'
       }
     })
     expect(m4air).toHaveBeenCalledTimes(1)

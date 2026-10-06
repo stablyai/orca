@@ -36,6 +36,7 @@ type EditorFileTabContextMenuProps = {
   open: boolean
   menuPoint: { x: number; y: number }
   file: OpenFile & { tabId?: string }
+  githubFileUrl: string | null
   unifiedTabId: string
   groupId: string
   isPinned: boolean
@@ -73,6 +74,7 @@ export function EditorFileTabContextMenu({
   open,
   menuPoint,
   file,
+  githubFileUrl,
   unifiedTabId,
   groupId,
   isPinned,
@@ -234,6 +236,15 @@ export function EditorFileTabContextMenu({
             'Copy Relative Path'
           )}
         </DropdownMenuItem>
+        {githubFileUrl ? (
+          <DropdownMenuItem onSelect={() => void window.api.ui.writeClipboardText(githubFileUrl)}>
+            <Copy className="size-3.5" />
+            {translate(
+              'components.tab.bar.EditorFileTabContextMenu.copyGithubPath',
+              'Copy Github Path'
+            )}
+          </DropdownMenuItem>
+        ) : null}
         {/* Why: virtual editor tabs use synthetic ids instead of on-disk paths. */}
         {file.mode !== 'check-details' && (
           <>
