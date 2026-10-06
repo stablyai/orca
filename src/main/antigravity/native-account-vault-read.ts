@@ -66,7 +66,8 @@ export async function readAntigravityAccountVault(
     if (!sameFile(before, opened)) {
       throw new Error('Antigravity vault changed before reading')
     }
-    const buffer = Buffer.alloc(opened.size + 1)
+    // One byte past the checked size reveals a same-metadata append, but never past the cap.
+    const buffer = Buffer.alloc(Math.min(opened.size + 1, MAX_VAULT_BYTES))
     let total = 0
     while (total < buffer.length) {
       remainingAccountOperationMs(operation)
