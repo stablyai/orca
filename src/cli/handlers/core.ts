@@ -59,6 +59,17 @@ function getOptionalServePort(flags: Map<string, string | boolean>): string | nu
   return rawPort
 }
 
+function getOptionalServeBind(flags: Map<string, string | boolean>): string | null {
+  if (!flags.has('bind')) {
+    return null
+  }
+  const rawBind = flags.get('bind')
+  if (typeof rawBind !== 'string' || rawBind.length === 0) {
+    throw new RuntimeClientError('invalid_argument', 'Missing value for --bind.')
+  }
+  return rawBind
+}
+
 export const CORE_HANDLERS: Record<string, CommandHandler> = {
   'claude-teams': async ({ client, rawArgs }) => {
     if (process.platform === 'win32') {
@@ -103,7 +114,9 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const noPairing = flags.get('no-pairing') === true
     const mobilePairing = flags.get('mobile-pairing') === true
     const recipeJson = flags.get('recipe-json') === true
+    const bind = getOptionalServeBind(flags)
     const validationError = getServeOptionValidationError({
+      bindHost: bind,
       noPairing,
       mobilePairing,
       recipeJson,
@@ -117,6 +130,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const exitCode = await serveOrcaApp({
       json,
       port,
+      bind,
       pairingAddress: typeof pairingAddressValue === 'string' ? pairingAddressValue : null,
       noPairing,
       mobilePairing,
