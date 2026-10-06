@@ -64,6 +64,30 @@ function expectValidActiveFile(store: ReturnType<typeof createTestStore>): void 
 }
 
 describe('closeFile when activeFileId is not an open file', () => {
+  it('removes every tab reference when closing a duplicated file once', () => {
+    const store = createTestStore()
+    seed(
+      store,
+      ['/a', '/a', '/a', '/a', '/b'],
+      [
+        ['t-a1', '/a'],
+        ['t-a2', '/a'],
+        ['t-a1', '/a'],
+        ['t-b', '/b']
+      ],
+      't-a1',
+      ['t-a2', 't-a1']
+    )
+
+    store.getState().closeFile('/a')
+
+    expect(store.getState().openFiles.map((file) => file.id)).toEqual(['/other', '/b'])
+    expect(store.getState().unifiedTabsByWorktree[WT].map((tab) => tab.id)).toEqual(['t-b'])
+    expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual(['t-b'])
+    expect(store.getState().activeFileId).toBe('/b')
+    expectValidActiveFile(store)
+  })
+
   it('closes an editor tab whose file is gone without throwing', () => {
     const store = createTestStore()
     seed(

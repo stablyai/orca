@@ -9,6 +9,7 @@ import {
   shouldDeleteUntouchedUntitledFile
 } from '../tabs/untitled-file-cleanup'
 import { unifiedTabsKeepWorktreeSelected } from './unified-tabs-keep-worktree-selected'
+import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 
 export function createCloseFileAction(
   set: EditorSet,
@@ -203,19 +204,12 @@ export function createCloseFileAction(
         deleteUntouchedUntitledFile(get(), preClose)
       }
 
-      // Why: route editor/diff closes through the unified close path (MRU + visual-neighbor fallback) so they match terminal/browser tab-close behavior.
+      // Removing the file retires every reference, including duplicate and split-group tabs.
       for (const tabs of Object.values(get().unifiedTabsByWorktree ?? {})) {
-        const unifiedTab = tabs.find(
-          (entry) =>
-            entry.entityId === fileId &&
-            (entry.contentType === 'editor' ||
-              entry.contentType === 'diff' ||
-              entry.contentType === 'conflict-review' ||
-              entry.contentType === 'check-details')
-        )
-        if (unifiedTab) {
-          get().closeUnifiedTab(unifiedTab.id)
-          break
+        for (const tab of tabs) {
+          if (tab.entityId === fileId && isEditorTabContentType(tab.contentType)) {
+            get().closeUnifiedTab(tab.id)
+          }
         }
       }
     }
