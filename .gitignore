@@ -112,6 +112,7 @@ docs/**
 !docs/bug-reproductions/
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
+!docs/omarchy-theme.md
 !docs/audits/
 !docs/audits/crashpad-read-limit/
 !docs/audits/crashpad-read-limit/source-hashes.json

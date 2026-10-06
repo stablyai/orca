@@ -4,6 +4,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
+import { useMonacoThemeName } from '@/hooks/use-monaco-theme-name'
 import { Button } from '@/components/ui/button'
 import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
 import { isCombinedDiffSizeUnknown } from './combined-diff-on-demand-load'
@@ -62,6 +63,7 @@ export function DiffSectionBody({
   onSaveLimitedDiff,
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
+  const monacoTheme = useMonacoThemeName(isDark)
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const wordWrapOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
@@ -207,7 +209,7 @@ export function DiffSectionBody({
           language={language}
           original={section.originalContent}
           modified={section.modifiedContent}
-          theme={isDark ? 'vs-dark' : 'vs'}
+          theme={monacoTheme}
           onMount={handleEditorMount}
           // Why: @monaco-editor/react can dispose models before widget teardown.
           // Keep them through unmount and dispose unattached models next tick.

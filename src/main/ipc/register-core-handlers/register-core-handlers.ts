@@ -38,6 +38,7 @@ import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser'
 import { setTrustedBrowserRendererWebContentsId } from '../browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
 import { registerSettingsHandlers } from '../settings'
+import { registerOmarchyThemeHandlers } from '../../omarchy-theme-watcher'
 import { registerDiagnosticsHandlers } from '../diagnostics'
 import { registerSkillsHandlers } from '../skills'
 import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
@@ -185,6 +186,7 @@ export function registerCoreHandlers(
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()
   registerSettingsHandlers(store, agentAwakeService)
+  registerOmarchyThemeHandlers(store)
   registerSkillsHandlers(store, runtime)
   registerSkillDeleteIpcHandlers(store, runtime)
   if (automations) {

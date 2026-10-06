@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
+import {
+  deriveOmarchyPalette,
+  OMARCHY_SEED_COLOR_KEYS,
+  OMARCHY_TERMINAL_THEME_SELECTION,
+  type OmarchyThemePalette,
+  type OmarchyThemeSeed
+} from '../../../../shared/omarchy-theme-palette'
 
 let themeTarget: 'dark' | 'light' | undefined = 'dark'
 
@@ -72,7 +79,8 @@ function renderCatalog(
   updateSettings = vi.fn(),
   target?: 'dark' | 'light',
   preferredTarget?: 'dark' | 'light',
-  systemPrefersDark = true
+  systemPrefersDark = true,
+  omarchyPalette: OmarchyThemePalette | null = null
 ): React.JSX.Element {
   themeTarget = target
   return TerminalThemeCatalogSection({
@@ -85,8 +93,19 @@ function renderCatalog(
     importedHighlightSignal: 7,
     warpThemes: warpThemesMock,
     showThemeImport: true,
-    preferredTarget
+    preferredTarget,
+    omarchyPalette
   })
+}
+
+function omarchyPalette(): OmarchyThemePalette {
+  const seed: Record<string, string> = { mode: 'dark' }
+  for (const key of OMARCHY_SEED_COLOR_KEYS) {
+    seed[key] = '#808080'
+  }
+  seed.background = '#0a1220'
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every seed key is assigned above.
+  return deriveOmarchyPalette(seed as OmarchyThemeSeed)
 }
 
 function getTypeName(node: ReactElementLike): string {
@@ -327,6 +346,38 @@ describe('TerminalThemeCatalogSection', () => {
     selectTheme('Builtin Solarized Dark')
 
     expect(updateSettings).toHaveBeenCalledWith({ terminalThemeDark: 'Builtin Solarized Dark' })
+  })
+
+  it('offers the live Omarchy theme only when a palette is available', () => {
+    const omarchyOption = expect.arrayContaining([
+      expect.objectContaining({ value: OMARCHY_TERMINAL_THEME_SELECTION })
+    ])
+    const themeOptions = (element: React.JSX.Element): unknown =>
+      findElementByTypeName(element, 'ThemePicker')?.props?.themeOptions
+
+    expect(themeOptions(renderCatalog(makeSettings(), vi.fn(), 'dark'))).not.toEqual(omarchyOption)
+
+    const updateSettings = vi.fn<(updates: Partial<GlobalSettings>) => void>()
+    const element = renderCatalog(
+      makeSettings(),
+      updateSettings,
+      'dark',
+      undefined,
+      true,
+      omarchyPalette()
+    )
+    expect(themeOptions(element)).toEqual(omarchyOption)
+
+    const picker = findElementByTypeName(element, 'ThemePicker')
+    const selectTheme = picker?.props?.onSelectTheme as (theme: string) => void
+    selectTheme(OMARCHY_TERMINAL_THEME_SELECTION)
+    const update = updateSettings.mock.lastCall?.[0]
+    expect(update?.terminalThemeDark).toBe(OMARCHY_TERMINAL_THEME_SELECTION)
+    expect(update?.terminalCustomThemes?.[0]).toMatchObject({
+      id: 'omarchy:live',
+      source: 'omarchy',
+      terminal: { background: '#0a1220' }
+    })
   })
 
   it('updates the light theme from the catalog when the light target is active', () => {

@@ -255,6 +255,9 @@
         "sharper": "Sharper",
         "terminalControlledHint": "Set by terminal interface.",
         "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this."
+      },
+      "theme": {
+        "omarchy": "Omarchy"
       }
     },
     "browser": {

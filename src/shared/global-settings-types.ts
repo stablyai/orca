@@ -70,6 +70,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
   theme: 'system' | 'dark' | 'light'
+  /** Linux-only: UI chrome follows the live Omarchy palette; `theme` tracks its mode. */
+  omarchyTheme?: boolean
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string

@@ -4,6 +4,7 @@ import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
 } from '../../shared/terminal-custom-themes'
+import type { OmarchyThemePalette } from '../../shared/omarchy-theme-palette'
 import type { PreloadApi } from '../api-types'
 
 export const settingsApi = {
@@ -33,5 +34,15 @@ export const settingsApi = {
       callback(updates)
     ipcRenderer.on('settings:changed', listener)
     return () => ipcRenderer.removeListener('settings:changed', listener)
+  },
+
+  readOmarchyTheme: (): Promise<OmarchyThemePalette | null> =>
+    ipcRenderer.invoke('settings:readOmarchyTheme'),
+
+  onOmarchyThemeChanged: (callback: (palette: OmarchyThemePalette) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, palette: OmarchyThemePalette): void =>
+      callback(palette)
+    ipcRenderer.on('settings:omarchyThemeChanged', listener)
+    return () => ipcRenderer.removeListener('settings:omarchyThemeChanged', listener)
   }
 } satisfies PreloadApi['settings']

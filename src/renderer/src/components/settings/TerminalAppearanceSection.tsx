@@ -35,6 +35,7 @@ import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { WarpThemeImportModal } from './WarpThemeImportModal'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import { isWebClientLocation } from '@/lib/web-client-location'
+import { useAvailableOmarchyTheme } from '@/hooks/use-available-omarchy-theme'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { translate } from '@/i18n/i18n'
 
@@ -84,6 +85,7 @@ export function TerminalAppearanceSection({
   const [themeSearch, setThemeSearch] = useState('')
   const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
   const showDesktopThemeImports = !isWebClientLocation()
+  const omarchyPalette = useAvailableOmarchyTheme()
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
   const lightThemeSearchEntries = getTerminalLightThemeSearchEntries()
   const terminalTypographyEntries = getTerminalTypographySearchEntries()
@@ -264,6 +266,7 @@ export function TerminalAppearanceSection({
           showThemeImport={showDesktopThemeImports}
           preferredTarget={preferredThemeTarget}
           advancedContent={previewAdvancedContent}
+          omarchyPalette={omarchyPalette}
         />
       ) : null}
 

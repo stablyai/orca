@@ -38,6 +38,10 @@ vi.mock('@/lib/keyboard-layout/use-effective-mac-option-as-alt', () => ({
   useDetectedOptionAsAlt: () => 'us'
 }))
 
+vi.mock('@/hooks/use-available-omarchy-theme', () => ({
+  useAvailableOmarchyTheme: () => null
+}))
+
 vi.mock('@/lib/keyboard-layout/detect-option-as-alt', () => ({
   detectedCategoryToDefault: () => 'left-option'
 }))

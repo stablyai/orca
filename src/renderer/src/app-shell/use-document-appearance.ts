@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { applyDocumentTheme } from '../lib/document-theme'
+import { getOmarchyThemePalette, setOmarchyThemePalette } from '../lib/omarchy-theme-state'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
 
@@ -8,6 +9,7 @@ import { useAppStore } from '../store'
 export function useDocumentAppearance(): void {
   const theme = useAppStore((s) => s.settings?.theme)
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
+  const omarchyTheme = useAppStore((s) => s.settings?.omarchyTheme === true)
 
   useEffect(() => {
     if (!theme) {
@@ -32,6 +34,26 @@ export function useDocumentAppearance(): void {
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [theme])
+
+  useEffect(() => {
+    if (!omarchyTheme) {
+      setOmarchyThemePalette(null)
+      return undefined
+    }
+    let disposed = false
+    const unsubscribe = window.api.settings.onOmarchyThemeChanged(setOmarchyThemePalette)
+    void window.api.settings.readOmarchyTheme().then((palette) => {
+      // A pushed palette is newer than this startup read, so never overwrite it.
+      if (!disposed && palette && !getOmarchyThemePalette()) {
+        setOmarchyThemePalette(palette)
+      }
+    })
+    return () => {
+      disposed = true
+      unsubscribe()
+      setOmarchyThemePalette(null)
+    }
+  }, [omarchyTheme])
 
   useEffect(() => {
     document.documentElement.style.setProperty(

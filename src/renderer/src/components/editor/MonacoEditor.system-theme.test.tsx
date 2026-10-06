@@ -1,11 +1,20 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
+import type * as MonacoModule from 'monaco-editor'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetSystemPrefersDarkSubscriptionForTests } from '@/components/terminal-pane/use-system-prefers-dark'
+import { setOmarchyThemePalette } from '@/lib/omarchy-theme-state'
+import {
+  deriveOmarchyPalette,
+  OMARCHY_SEED_COLOR_KEYS,
+  type OmarchyThemeSeed
+} from '../../../../shared/omarchy-theme-palette'
 
 const editorProps: { current: Record<string, unknown> | null } = vi.hoisted(() => ({
   current: null
 }))
+const definedThemes: { current: Map<string, { base: string; colors: Record<string, string> }> } =
+  vi.hoisted(() => ({ current: new Map() }))
 const settingsState: { theme: 'system' | 'dark' | 'light' } = vi.hoisted(() => ({
   theme: 'system'
 }))
@@ -17,6 +26,18 @@ vi.mock('@monaco-editor/react', () => ({
   },
   loader: { config: vi.fn() }
 }))
+vi.mock('monaco-editor', async (importOriginal) => {
+  const actual = await importOriginal<typeof MonacoModule>()
+  return {
+    ...actual,
+    editor: {
+      ...actual.editor,
+      defineTheme: (name: string, data: { base: string; colors: Record<string, string> }) => {
+        definedThemes.current.set(name, data)
+      }
+    }
+  }
+})
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -108,6 +129,8 @@ afterEach(() => {
   cleanup()
   editorProps.current = null
   settingsState.theme = 'system'
+  setOmarchyThemePalette(null)
+  definedThemes.current.clear()
   resetSystemPrefersDarkSubscriptionForTests()
   window.matchMedia = originalMatchMedia
 })
@@ -142,4 +165,39 @@ describe('MonacoEditor system theme', () => {
     })
     expect(editorProps.current?.theme).toBe('vs')
   })
+
+  it('uses the live Omarchy palette and repaints when it changes', () => {
+    settingsState.theme = 'dark'
+    installMatchMedia(true)
+    renderEditor()
+    expect(editorProps.current?.theme).toBe('vs-dark')
+
+    act(() => {
+      setOmarchyThemePalette(deriveOmarchyPalette(omarchySeed('dark', '#0a1220')))
+    })
+    expect(editorProps.current?.theme).toBe('orca-omarchy')
+    expect(definedThemes.current.get('orca-omarchy')?.base).toBe('vs-dark')
+    expect(definedThemes.current.get('orca-omarchy')?.colors['editor.background']).toBe('#0a1220')
+
+    act(() => {
+      setOmarchyThemePalette(deriveOmarchyPalette(omarchySeed('light', '#f4f4f0')))
+    })
+    expect(definedThemes.current.get('orca-omarchy')?.base).toBe('vs')
+    expect(definedThemes.current.get('orca-omarchy')?.colors['editor.background']).toBe('#f4f4f0')
+
+    act(() => {
+      setOmarchyThemePalette(null)
+    })
+    expect(editorProps.current?.theme).toBe('vs-dark')
+  })
 })
+
+function omarchySeed(mode: 'dark' | 'light', background: string): OmarchyThemeSeed {
+  const seed: Record<string, string> = { mode }
+  for (const key of OMARCHY_SEED_COLOR_KEYS) {
+    seed[key] = '#808080'
+  }
+  seed.background = background
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every seed key is assigned above.
+  return seed as OmarchyThemeSeed
+}
