@@ -16,6 +16,7 @@ import type {
   Worktree
 } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { WorkspacePinTarget } from '../../../../store/slices/worktree-helpers'
 import type { HostSectionRow } from '../../host-section-rows'
 import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
@@ -83,8 +84,8 @@ export type VirtualizedWorktreeViewportProps = {
   onMoveWorktreeToStatus: (worktreeId: string, status: WorkspaceStatus) => void
   onMoveWorktreesToStatus: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onMoveWorktreesToStatusAtIndex: (args: WorktreeStatusDropAtIndexArgs) => void
-  onPinWorktree: (worktreeId: string) => void
-  onPinWorktrees: (worktreeIds: readonly string[]) => void
+  onPinWorktree: (target: WorkspacePinTarget) => void
+  onPinWorktrees: (targets: readonly WorkspacePinTarget[]) => void
   onDropWorktreesOnWorkspaceBoard: (args: WorktreeStatusDropAtIndexArgs) => void
   workspaceBoardOpen: boolean
   onWorktreeCardClick?: () => void

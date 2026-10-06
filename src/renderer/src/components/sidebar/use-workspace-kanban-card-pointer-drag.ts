@@ -31,6 +31,7 @@ type DragState = {
   currentY: number
   worktreeIds: string[]
   worktreeIdentities: string[]
+  pinTargets: WorkspacePinTarget[]
   sourceCard: HTMLElement
   preview: HTMLElement | null
   previewOffsetX: number
@@ -45,6 +46,7 @@ import {
   resolveWorkspaceKanbanPointerDragSelection,
   type UseWorkspaceKanbanCardPointerDragParams
 } from './workspace-kanban-pointer-drag-selection'
+import type { WorkspacePinTarget } from '../../store/slices/worktree-helpers'
 
 export function useWorkspaceKanbanCardPointerDrag({
   open,
@@ -126,7 +128,7 @@ export function useWorkspaceKanbanCardPointerDrag({
       }
 
       if (commitTarget.isPinDrop) {
-        pinWorktreesRef.current(state.worktreeIds)
+        pinWorktreesRef.current(state.pinTargets)
       } else if (commitTarget.status) {
         dropWorktreesInStatusRef.current({
           worktreeIds: state.worktreeIds,
@@ -291,12 +293,13 @@ export function useWorkspaceKanbanCardPointerDrag({
       }
 
       const selectedWorktrees = selectedWorktreesRef.current
-      const { worktreeIds, worktreeIdentities } = resolveWorkspaceKanbanPointerDragSelection({
-        sourceWorktreeId: worktreeId,
-        sourceWorktreeIdentity: worktreeIdentity,
-        selectedWorktreeIds: selectedWorktreeIdsRef.current,
-        selectedWorktrees
-      })
+      const { worktreeIds, worktreeIdentities, pinTargets } =
+        resolveWorkspaceKanbanPointerDragSelection({
+          sourceWorktreeId: worktreeId,
+          sourceWorktreeIdentity: worktreeIdentity,
+          selectedWorktreeIds: selectedWorktreeIdsRef.current,
+          selectedWorktrees
+        })
       dragRef.current = {
         pointerId: event.pointerId,
         startX: event.clientX,
@@ -305,6 +308,7 @@ export function useWorkspaceKanbanCardPointerDrag({
         currentY: event.clientY,
         worktreeIds,
         worktreeIdentities,
+        pinTargets,
         sourceCard: card,
         preview: null,
         previewOffsetX: 0,

@@ -5,6 +5,7 @@ import type {
   WorktreeSidebarStatusDropTarget,
   WorktreeSidebarTrackedStatusDropTarget
 } from '../../worktree-sidebar-drop-preview'
+import type { WorkspacePinTarget } from '../../../../store/slices/worktree-helpers'
 
 export type WorktreeRowDragState = {
   draggingWorktreeId: string | null
@@ -37,6 +38,7 @@ export type WorktreePointerDrag = {
   currentY: number
   worktreeId: string
   draggedIds: readonly string[]
+  pinTargets: readonly WorkspacePinTarget[]
   reorderDraggedIds: readonly string[]
   reorderUnitDraggedIds: readonly string[]
   sourceGroupKey: string

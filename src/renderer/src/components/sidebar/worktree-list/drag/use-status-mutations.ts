@@ -6,7 +6,10 @@ import type {
   Worktree
 } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
-import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktree-helpers'
+import type {
+  WorktreeMetaBatchUpdate,
+  WorkspacePinTarget
+} from '../../../../store/slices/worktree-helpers'
 import { getWorkspaceStatus, getWorkspaceStatusGroupKey } from '../../workspace-status'
 import {
   buildManualOrderUpdatesForGroupDrop,
@@ -119,15 +122,15 @@ export function useWorktreeStatusMutations(args: {
   )
 
   const pinWorktree = useCallback(
-    (worktreeId: string) => {
-      setWorktreesPinnedAndReveal([worktreeId], true)
+    (target: WorkspacePinTarget) => {
+      setWorktreesPinnedAndReveal([target], true)
     },
     [setWorktreesPinnedAndReveal]
   )
 
   const pinWorktrees = useCallback(
-    (worktreeIds: readonly string[]) => {
-      setWorktreesPinnedAndReveal(worktreeIds, true)
+    (targets: readonly WorkspacePinTarget[]) => {
+      setWorktreesPinnedAndReveal(targets, true)
     },
     [setWorktreesPinnedAndReveal]
   )

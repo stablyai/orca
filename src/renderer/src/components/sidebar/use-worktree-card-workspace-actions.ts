@@ -7,6 +7,7 @@ import { runWorktreeDelete } from './delete-worktree-flow'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'
 import { writeWorkspaceDragData } from './workspace-status'
+import { getWorktreePinTarget } from './worktree-drag-units'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardLinkedDetails } from './use-worktree-card-linked-details'
 import type { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
@@ -133,14 +134,19 @@ export function useWorktreeCardWorkspaceActions({
         event.preventDefault()
         return
       }
-      const dragIds =
+      const draggedWorktrees =
         isMultiSelected && selectedWorktrees && selectedWorktrees.length > 1
-          ? selectedWorktrees.map((item) => item.id)
-          : worktree.id
-      writeWorkspaceDragData(event.dataTransfer, dragIds)
-      onCardDragStart?.(event, worktree.id, Array.isArray(dragIds) ? dragIds : [dragIds])
+          ? selectedWorktrees
+          : [worktree]
+      const dragIds = draggedWorktrees.map((item) => item.id)
+      const pinTargets = draggedWorktrees.map(getWorktreePinTarget)
+      if (!writeWorkspaceDragData(event.dataTransfer, dragIds, pinTargets)) {
+        event.preventDefault()
+        return
+      }
+      onCardDragStart?.(event, worktree.id, dragIds)
     },
-    [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree.id]
+    [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree]
   )
 
   const handleDragEnd = useCallback(

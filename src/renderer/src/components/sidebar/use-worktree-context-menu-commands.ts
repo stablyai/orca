@@ -14,6 +14,7 @@ import {
   planWorkspaceStatusAssignment,
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
+import { getWorktreePinTarget } from './worktree-drag-units'
 
 export function useWorktreeContextMenuCommands(args: {
   activeContextWorktrees: readonly Worktree[]
@@ -53,7 +54,7 @@ export function useWorktreeContextMenuCommands(args: {
     )
   }, [args])
   const handleTogglePin = useCallback(() => {
-    args.setWorktreesPinnedAndReveal([args.worktree.id], !args.worktree.isPinned)
+    args.setWorktreesPinnedAndReveal([getWorktreePinTarget(args.worktree)], !args.worktree.isPinned)
   }, [args])
   const handleCreateGroupFromRepo = useCallback(() => {
     if (!args.repo) {
