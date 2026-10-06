@@ -312,7 +312,8 @@ describe('detectRepoIcon', () => {
       gitRemoteIdentity: {
         canonicalKey: 'github.com/stablyai/orca',
         remoteName: 'upstream',
-        remoteUrl: 'git@github.com:stablyai/orca.git'
+        remoteUrl: 'git@github.com:stablyai/orca.git',
+        originRemoteUrl: 'git@github.com:tmchow/orca.git'
       },
       repoIcon: {
         type: 'image',
@@ -344,7 +345,8 @@ describe('detectRepoIcon', () => {
       gitRemoteIdentity: {
         canonicalKey: 'github.com/upstream-org/rocket',
         remoteName: 'upstream',
-        remoteUrl: 'git@github.com:upstream-org/rocket.git'
+        remoteUrl: 'git@github.com:upstream-org/rocket.git',
+        originRemoteUrl: 'git@github.com:acme/rocket-pro.git'
       },
       // Why: a renamed fork is its own project, so the avatar stays on the origin owner.
       repoIcon: {
