@@ -205,4 +205,18 @@ describe('resolveTerminalTabPtyOwnership', () => {
     const s = state({ tabs: { wt: [{ id: 'tab-a', ptyId: 'wt@@2' }] } })
     expect(resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1')).toEqual({ kind: 'none' })
   })
+
+  it('does not report no owner while a layout still records the ptyId (STA-7961)', () => {
+    // terminalLayoutsByTabId is keyed by tab id alone, so it outlives the tab
+    // row's membership in this worktree list. Reporting none here is what lets
+    // the reveal bridge mint a second tab that re-binds the recorded leaf id.
+    const s = state({
+      tabs: {
+        wt: [{ id: 'tab-other', ptyId: 'wt@@2' }],
+        'wt-other': [{ id: 'tab-a', ptyId: null }]
+      },
+      layouts: { 'tab-a': { ptyIdsByLeafId: { 'leaf-shared': 'wt@@1' } } }
+    })
+    expect(resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1')).not.toEqual({ kind: 'none' })
+  })
 })
