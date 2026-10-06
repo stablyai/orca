@@ -204,23 +204,6 @@ describe('installed agent skill discovery lifecycle', () => {
     expect(discover).toHaveBeenLastCalledWith(LOCAL, { projectRuntime: repairProjectRuntime })
   })
 
-  it('keys WSL targets by distro so two distros do not share one entry', async () => {
-    const discover = discoverSkillsForRuntimeTarget
-    discover.mockResolvedValueOnce(result(1))
-    discover.mockResolvedValueOnce(result(2))
-
-    await expect(
-      discoverInstalledAgentSkills(false, { runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).resolves.toEqual(result(1))
-    await expect(
-      discoverInstalledAgentSkills(false, { runtime: 'wsl', wslDistro: 'Debian' })
-    ).resolves.toEqual(result(2))
-    await expect(
-      discoverInstalledAgentSkills(false, { runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).resolves.toEqual(result(1))
-    expect(discover).toHaveBeenCalledTimes(2)
-  })
-
   it('keys targets by runtime and project identity', () => {
     expect(getSkillDiscoveryTargetKey(undefined)).toBe('host')
     expect(getSkillDiscoveryTargetKey({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe('wsl:Ubuntu')
@@ -231,6 +214,29 @@ describe('installed agent skill discovery lifecycle', () => {
       'repo-1:repair:wsl-distro-required:default'
     )
   })
+
+  it('normalizes effective filters into local, project, and environment keys', () => {
+    const target = {
+      projectRuntime: resolvedWslProjectRuntime,
+      names: [' Computer-Use ', 'orchestration', 'computer-use'],
+      sourceKinds: ['home' as const]
+    }
+    const normalizedFilters = [['computer-use', 'orchestration'], ['home']]
+
+    expect(getSkillDiscoveryTargetKey(target)).toBe(
+      JSON.stringify(['repo-1:wsl:Ubuntu', ...normalizedFilters])
+    )
+    expect(getRuntimeScopedSkillDiscoveryKey(remote('env-a'), target)).toBe(
+      JSON.stringify(['runtime:env-a', ...normalizedFilters])
+    )
+    expect(getSkillDiscoveryTargetKey(target, [], [])).toBe(
+      JSON.stringify(['repo-1:wsl:Ubuntu', ...normalizedFilters])
+    )
+    expect(getSkillDiscoveryTargetKey(target, ['ORCHESTRATION'], [])).toBe(
+      JSON.stringify(['repo-1:wsl:Ubuntu', ['orchestration'], ['home']])
+    )
+  })
+
   it('keys the bounded cache by runtime scope, not by the client target', async () => {
     // Why: #6887 scopes remote scans by environment. The cap rewrites this same
     // module, so pin that getRuntimeScopedSkillDiscoveryKey stays the producer —

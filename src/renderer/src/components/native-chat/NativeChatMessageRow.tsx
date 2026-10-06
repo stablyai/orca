@@ -1,19 +1,73 @@
-import { memo, useCallback, useMemo, useRef } from 'react'
+import { memo, useCallback, useRef } from 'react'
+import { Goal, RotateCcw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import CommentMarkdown, {
   type CommentMarkdownLinkClickHandler
 } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { splitNativeChatBlocks } from './native-chat-tool-fold'
+import type {
+  NativeChatMessage,
+  NativeChatToolCallBlock
+} from '../../../../shared/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
 import { NativeChatToolRun } from './NativeChatToolRun'
-import { nativeChatProseToMarkdown } from './native-chat-prose'
+import { NativeChatCodeBlock } from './NativeChatCodeBlock'
+import { NativeChatNoticeRow } from './NativeChatNoticeRow'
+import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import {
   NativeChatAgentControls,
   NativeChatImageAttachments,
   ProviderFrameRow
 } from './NativeChatTranscriptChrome'
+import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
+import type {
+  NativeChatSubagentDisclosure,
+  NativeChatSubagentRosterState
+} from './native-chat-subagent-sections'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+
+/** What a user message says about its delivery: that nothing has confirmed it yet, quietly in
+ *  place of its time, or that it did not go through, with its own Retry when the surface can send
+ *  it again. */
+export type NativeChatDeliveryNotice =
+  | { sending: true; text?: never; onRetry?: never; onDismiss?: never }
+  | { sending?: never; text: string; onRetry?: () => void; onDismiss?: () => void }
+
+const USER_META_REVEAL =
+  'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
+
+/** Under a user message: copy + timestamp, revealed together like the agent controls row. Until
+ *  confirmed, a quiet "Sending…" stays visible in the time's place and copy keeps its own reveal,
+ *  so the row keeps its height when it clears. Image-only prompts have no text to copy. */
+function UserMessageMeta({
+  markdown,
+  timestamp,
+  sending
+}: {
+  markdown: string
+  timestamp: number | null
+  sending: boolean
+}): React.JSX.Element | null {
+  if (!markdown && timestamp === null && !sending) {
+    return null
+  }
+  return (
+    <div className={cn('flex select-none items-center gap-1', !sending && USER_META_REVEAL)}>
+      {markdown ? (
+        <NativeChatCopyButton text={markdown} className={sending ? USER_META_REVEAL : undefined} />
+      ) : null}
+      {sending ? (
+        <span className="text-xs whitespace-nowrap text-muted-foreground">
+          {translate('components.native-chat.messageSending', 'Sending…')}
+        </span>
+      ) : (
+        <NativeChatMessageTimestamp timestamp={timestamp} focusable />
+      )}
+    </div>
+  )
+}
 
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
@@ -22,39 +76,49 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
  *  keep their block identity, so only the changed row re-renders. */
 export const MessageRow = memo(function MessageRow({
   message,
+  previousTodoWrite,
+  previousUpdatePlan,
+  revealedDiff,
   expandSignal,
   activeTurnIsWorking,
+  trailingRun,
   onScrollMessageToTop,
   onLinkClick,
   allowFileUriLinks = false,
-  deliveryFailed = false,
-  activityExpandOverride,
-  structuredActivityUi = true,
+  deliveryNotice,
+  folded = false,
+  subagentRoster,
+  subagentDisclosure,
+  inSubagentSection = false,
   runtimeContext
 }: {
   message: NativeChatMessage
+  previousTodoWrite?: NativeChatToolCallBlock
+  previousUpdatePlan?: NativeChatToolCallBlock
+  revealedDiff?: NativeChatDiffReveal
   expandSignal: boolean
   activeTurnIsWorking?: boolean
+  /** This row's tool run is the turn's last, so it is the one still live. */
+  trailingRun?: boolean
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
-  deliveryFailed?: boolean
-  activityExpandOverride?: boolean
-  structuredActivityUi?: boolean
+  deliveryNotice?: NativeChatDeliveryNotice
+  /** Behind a folded turn: the row keeps only what outlives the turn. */
+  folded?: boolean
+  /** On a roster row: its list's state and the subagents whose rows open below it. */
+  subagentRoster?: NativeChatSubagentRosterState
+  subagentDisclosure?: NativeChatSubagentDisclosure
+  /** Inside a subagent's section, whose border has to reach past the row's controls. */
+  inSubagentSection?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
-  // One pass per block set: a streaming turn re-renders this row on every frame, and these
-  // derivations used to re-run each time even though `message.blocks` had not changed.
-  const { hasImages, markdown, prose, tools } = useMemo(() => {
-    const split = splitNativeChatBlocks(message.blocks)
-    return {
-      ...split,
-      markdown: nativeChatProseToMarkdown(split.prose),
-      hasImages: split.prose.some((block) => block.type === 'image-ref')
-    }
-  }, [message.blocks])
+  // One pass per block set, shared with the list that decides whether this row
+  // occupies a slot — so "draws nothing" means the same thing to both.
+  const { backgroundTasks, hasImages, markdown, prose, subagentGroups, tools } =
+    deriveNativeChatRowContent(message.blocks)
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
@@ -69,8 +133,38 @@ export const MessageRow = memo(function MessageRow({
   // Skip rows with nothing renderable so the transcript shows no empty/ghost
   // bubble.
   // After all hooks, so hook order stays unconditional.
-  if (markdown.length === 0 && !hasImages && tools.length === 0) {
+  if (
+    markdown.length === 0 &&
+    !hasImages &&
+    tools.length === 0 &&
+    subagentGroups.length === 0 &&
+    backgroundTasks.length === 0
+  ) {
     return null
+  }
+
+  // Behind a folded turn this row is the work, not the answer. Rows that outlive
+  // their turn never reach here — the fold leaves them out.
+  if (folded) {
+    return null
+  }
+
+  const notice = isSystem
+    ? message.blocks.find(
+        (block) =>
+          block.type === 'text' && (block.presentation !== undefined || block.tone !== undefined)
+      )
+    : undefined
+  if (notice?.type === 'text') {
+    return (
+      <div ref={rowRef}>
+        <NativeChatNoticeRow
+          block={notice}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+        />
+      </div>
+    )
   }
 
   if (providerFrame) {
@@ -83,7 +177,7 @@ export const MessageRow = memo(function MessageRow({
 
   if (isUser) {
     return (
-      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
+      <div ref={rowRef} className="group relative flex flex-col items-end gap-0.5">
         {/* User turns get a distinct muted fill (not the card/canvas color) so
             the prompt reads apart from the assistant's body copy. */}
         <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
@@ -98,6 +192,7 @@ export const MessageRow = memo(function MessageRow({
                 content={markdown}
                 variant="document"
                 className="text-sm"
+                renderCodeBlock={NativeChatCodeBlock}
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
               />
@@ -110,12 +205,34 @@ export const MessageRow = memo(function MessageRow({
             />
           )}
         </div>
-        {deliveryFailed ? (
-          <div className="max-w-[85%] text-[11px] text-destructive/80">
-            {translate(
-              'components.native-chat.launchPromptNotDelivered',
-              'Not delivered — check the terminal'
-            )}
+        {message.sentAs === 'goal' ? (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Goal className="size-3" aria-hidden />
+            <span>{translate('components.native-chat.goal.sentAsGoal', 'Sent as goal')}</span>
+          </div>
+        ) : null}
+        <UserMessageMeta
+          markdown={markdown}
+          timestamp={message.timestamp}
+          sending={deliveryNotice?.sending === true}
+        />
+        {deliveryNotice?.text !== undefined ? (
+          <div className="flex max-w-[85%] items-center gap-2 text-[11px] text-destructive/80">
+            <span className="min-w-0 break-words">{deliveryNotice.text}</span>
+            {deliveryNotice.onDismiss ? (
+              <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onDismiss}>
+                {translate('components.native-chat.dismissDeliveryNotice', 'Dismiss')}
+              </Button>
+            ) : null}
+            {deliveryNotice.onRetry ? (
+              <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onRetry}>
+                <RotateCcw className="size-3" />
+                {translate(
+                  'auto.components.native.chat.NativeChatStructuredSession.a5e7f14068',
+                  'Retry'
+                )}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -123,7 +240,7 @@ export const MessageRow = memo(function MessageRow({
   }
 
   // Plain assistant prose is the copyable unit; reasoning/system asides stay
-  // chrome-free. The controls reveal on hover (and on keyboard focus-within).
+  // chrome-free. Controls reveal on hover/keyboard focus and stay visible on touch.
   const showControls = !isReasoning && !isSystem && markdown.length > 0
 
   return (
@@ -146,25 +263,40 @@ export const MessageRow = memo(function MessageRow({
           content={markdown}
           variant="document"
           className="text-sm"
+          renderCodeBlock={NativeChatCodeBlock}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
           linkifyFilePaths={onLinkClick !== undefined}
         />
       ) : null}
-      {tools.length > 0 ? (
+      {tools.length > 0 || subagentGroups.length > 0 || backgroundTasks.length > 0 ? (
         <NativeChatToolRun
           blocks={tools}
+          previousTodoWrite={previousTodoWrite}
+          previousUpdatePlan={previousUpdatePlan}
+          revealedDiff={revealedDiff}
+          onRevealDiff={onScrollMessageToTop}
+          onLinkClick={onLinkClick}
+          subagentGroups={subagentGroups}
+          subagentRoster={subagentRoster}
+          subagentDisclosure={subagentDisclosure}
+          backgroundTasks={backgroundTasks}
           expandSignal={expandSignal}
-          expandOverride={activityExpandOverride}
           activeTurnIsWorking={activeTurnIsWorking}
-          structuredActivityUi={structuredActivityUi}
+          trailing={trailingRun}
+          disclosureId={message.id}
         />
       ) : null}
       {showControls ? (
         <NativeChatAgentControls
           markdown={markdown}
+          timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
-          className="pointer-events-none mt-1 -mb-5 w-fit select-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          className={cn(
+            'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100',
+            // They hang into the gap below; a section keeps them inside its border instead.
+            !inSubagentSection && '-mb-5'
+          )}
         />
       ) : null}
     </div>

@@ -179,6 +179,18 @@ describe('LocalPtyProvider', () => {
       )
     })
 
+    it('passes explicit pane environment separately from inherited process values', async () => {
+      const buildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => env)
+      provider.configure({ buildSpawnEnv })
+      const env = { XDG_DATA_HOME: '/pane/data' }
+      await provider.spawn({ cols: 80, rows: 24, env })
+      expect(buildSpawnEnv).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Object),
+        expect.objectContaining({ explicitEnv: env })
+      )
+    })
+
     it('invokes buildSpawnEnv callback to customize environment', async () => {
       const buildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => {
         env.CUSTOM_VAR = 'custom-value'

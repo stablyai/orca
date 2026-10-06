@@ -13,7 +13,7 @@ type WindowsClipboardImageFileDeps = {
   openFile: (filePath: string) => Promise<ClipboardImageFileHandle>
 }
 
-type WindowsClipboardImageFileFormats = {
+export type WindowsClipboardFileFormats = {
   fileNameW: Buffer
   shellIdListArray: Buffer
 }
@@ -68,16 +68,20 @@ function decodeFileNameW(value: Buffer): string | null {
   return filePath
 }
 
-export function isWindowsClipboardImageFile(filePath: string): boolean {
-  return IMAGE_FILE_EXTENSION_SET.has(win32.extname(filePath).toLowerCase())
-}
-
 function hasAtMostOneShellItem(value: Buffer): boolean {
   if (value.byteLength === 0) {
     return true
   }
   // Why: Explorer's FileNameW exposes only the first path even when its CIDA has multiple items.
   return value.byteLength >= 12 && value.readUInt32LE(0) === 1
+}
+
+/** The one file Explorer copied; null when it copied none or several. */
+export function readWindowsCopiedFilePath({
+  fileNameW,
+  shellIdListArray
+}: WindowsClipboardFileFormats): string | null {
+  return hasAtMostOneShellItem(shellIdListArray) ? decodeFileNameW(fileNameW) : null
 }
 
 function readPngDimensions(source: Buffer): { height: number; width: number } | null {
@@ -156,23 +160,12 @@ async function readStableFile(
   return bytesRead === expectedSize ? buffer.subarray(0, bytesRead) : null
 }
 
-// Why: Explorer exposes a copied file only through FileNameW (first item) plus the CIDA item count.
-export function decodeWindowsClipboardFilePath({
-  fileNameW,
-  shellIdListArray
-}: WindowsClipboardImageFileFormats): string | null {
-  if (!hasAtMostOneShellItem(shellIdListArray)) {
-    return null
-  }
-  return decodeFileNameW(fileNameW)
-}
-
 export async function readWindowsClipboardImageFileAsPng(
-  formats: WindowsClipboardImageFileFormats,
+  formats: WindowsClipboardFileFormats,
   { createImageFromBuffer, openFile }: WindowsClipboardImageFileDeps
 ): Promise<Buffer | null> {
-  const filePath = decodeWindowsClipboardFilePath(formats)
-  if (!filePath || !isWindowsClipboardImageFile(filePath)) {
+  const filePath = readWindowsCopiedFilePath(formats)
+  if (!filePath || !IMAGE_FILE_EXTENSION_SET.has(win32.extname(filePath).toLowerCase())) {
     return null
   }
 

@@ -67,6 +67,14 @@ export function resolveCommand(
     wslGitReadEnvironment?: WslGitReadEnvironment
     env?: NodeJS.ProcessEnv
     terminationBarrier?: boolean
+    /** Pre-quoted shell expression that names the program inside WSL, replacing `command`. */
+    wslShellCommand?: string
+    /**
+     * Exit with this code when the `cd` fails, instead of letting `&&` swallow it as the shell's
+     * own exit 1. Why: ripgrep also exits 1 for "no matches", so an unreachable workspace would
+     * otherwise be indistinguishable from an empty result.
+     */
+    cwdFailureExitCode?: number
   } = {}
 ): ResolvedCommand {
   if (process.platform !== 'win32') {
@@ -85,14 +93,18 @@ export function resolveCommand(
   const translatedArgs = translateArgsForWsl(args)
   // Why: env on wsl.exe stays Windows-side (WSLENV forwards only named vars), so the locale must ride the command string (issue #7808).
   const localePrefix = command === 'git' ? `${GIT_OUTPUT_LOCALE_SHELL_PREFIX} ` : ''
-  const escapedCommand = quotePosixShell(command)
+  const escapedCommand = options.wslShellCommand ?? quotePosixShell(command)
   // Why: shell-escape each arg to prevent word splitting / glob expansion inside the bash -c string.
   const escapedArgs = translatedArgs.map(quotePosixShell)
   // Why: prepend `cd <linuxPath> &&` for a UNC cwd; skip it when only a distro override was given (global gh needs no cwd).
   const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
-  const shellCmd = linuxCwd
-    ? `cd ${quotePosixShell(linuxCwd)} && ${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
-    : `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
+  const invocation = `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
+  const enterCwd = linuxCwd
+    ? options.cwdFailureExitCode === undefined
+      ? `cd ${quotePosixShell(linuxCwd)} && `
+      : `cd ${quotePosixShell(linuxCwd)} || exit ${Math.trunc(options.cwdFailureExitCode)}; `
+    : ''
+  const shellCmd = `${enterCwd}${invocation}`
 
   if (command === 'git' && options.wslGitReadEnvironment) {
     const optionalLocks = options.env?.GIT_OPTIONAL_LOCKS

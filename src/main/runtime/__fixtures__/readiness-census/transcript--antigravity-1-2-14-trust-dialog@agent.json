@@ -1,0 +1,13 @@
+{
+  "description": "antigravity recording at 120x40 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-21: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "22-24: now=blocked:agent-trust-workspace edge=blocked:agent-trust-workspace quiet=blocked:agent-trust-workspace wait=blocked:agent-trust-workspace@start"
+    ],
+    "clockless": [
+      "0-21: verdict=pending:closed wait=pending",
+      "22-24: verdict=blocked:agent-trust-workspace wait=blocked:agent-trust-workspace@start"
+    ]
+  }
+}

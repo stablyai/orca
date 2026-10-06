@@ -2,9 +2,11 @@ import { delimiter } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { discoverFiles } from './session-scanner-discovery'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
+import { zcodeDiscoveries } from './session-scanner-zcode-sources'
 import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
 import { AI_VAULT_AGENT_SOURCES, type AiVaultAgentSource } from './session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from './session-scanner-roots'
+import { configureOpenCodeWslReaders } from './session-scanner-opencode-wsl-client'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 
 export { DEFAULT_CODEX_HOME_DIR } from './session-scanner-agent-sources'
@@ -15,13 +17,19 @@ export async function discoverAiVaultSessionSources(args: {
   issues: AiVaultScanIssue[]
 }): Promise<SessionFileDiscovery[]> {
   const { options, limitPerAgent, issues } = args
+  if (options.wslOpenCodeReaders) {
+    configureOpenCodeWslReaders(options.wslOpenCodeReaders)
+  }
   const wslHomeDirs = normalizedWslHomeDirs(options.wslHomeDirs)
 
+  // The Cursor chat-meta scan scope is owned by scanAiVaultSessions: it has to
+  // span parse as well, and finalize runs after this returns.
   return Promise.all([
     // Why: OpenCode 1.17.x migrated sessions from per-session JSON files to a
     // SQLite DB. discoverOpenCodeSessions runs both the file scanner (legacy)
     // and the SQLite scanner (1.17.x); dedup by sessionId happens inside.
     ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+    ...zcodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...Object.entries(AI_VAULT_AGENT_SOURCES).flatMap(([agent, source]) =>
       source

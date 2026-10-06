@@ -1,10 +1,8 @@
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { isAgentPromptStalledError } from '../../../../agent-prompt-submission-verification'
 import { isUnknownWorkerStartOutcome, type WorkerSetupReceipt } from './worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
-import { isAgentSessionPtyWriteRefusedError } from '../../../../../../shared/agent-session-pty-write-admission'
-import type { FailedStartTerminalAdoption } from '../../../../orchestration/db/worker-terminal/failed-start-terminal-adoption'
-import { structuredChatPtyWriteRefusalCopy } from '../../../../../../shared/agent-session-pty-write-refusal-copy'
+import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
+import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
 
 export function failWorkerStartWithReceipt(args: {
   db: OrchestrationDb
@@ -15,30 +13,19 @@ export function failWorkerStartWithReceipt(args: {
   error: unknown
   setup: WorkerSetupReceipt
   launch: OrchestrationWorkerLaunchReceipt
-  /** The terminal this start created and never handed to an owner. */
-  residualAgentTerminal?: FailedStartTerminalAdoption
+  mode: WorkerStartModeReceipt
 }): unknown {
-  const agentSessionRefusal = isAgentSessionPtyWriteRefusedError(args.error)
-    ? args.error.refusal
-    : undefined
-  const reason =
-    (agentSessionRefusal &&
-      structuredChatPtyWriteRefusalCopy(agentSessionRefusal, 'worker-start')) ??
-    (args.error instanceof Error ? args.error.message : String(args.error))
+  const reason = args.error instanceof Error ? args.error.message : String(args.error)
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
-    : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason, {
-        // Why (#16095): the preamble is written before submission is verified, so a stalled
-        // verdict never means the worker lacks its task — keep the authority its report needs.
-        retainCapability: isAgentPromptStalledError(args.error),
-        ...(args.residualAgentTerminal ? { adoptResidualTerminal: args.residualAgentTerminal } : {})
-      })
-  // Only claim cleanup the ownership table actually accepted; the adoption declines a terminal
-  // another resource already accounts for.
-  const adopted =
-    Boolean(args.residualAgentTerminal) &&
-    Boolean(args.db.getWorkerTerminalResourceByOwner(args.dispatchId))
+    : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
+  // Only name cleanup this start actually left behind: a terminal it created and still owns. A
+  // structured session is discarded by the teardown, a pane the user typed into is theirs, and an
+  // unknown outcome is not settled — none of the three has anything for `worker-release` to close.
+  const residual = unknown ? undefined : args.db.getWorkerTerminalResourceByOwner(args.dispatchId)
+  const releasable =
+    residual?.ownership_state === 'owned' && !isStructuredWorkerHandle(residual.terminal_handle)
   return {
     runId: args.runId,
     taskId: args.taskId,
@@ -49,10 +36,10 @@ export function failWorkerStartWithReceipt(args: {
     lastError: reason,
     setup: args.setup,
     launch: args.launch,
+    mode: args.mode,
     effects: JSON.parse(worker.effects) as unknown[],
     residualResources: JSON.parse(worker.residual_resources) as unknown[],
-    ...(agentSessionRefusal ? { agentSessionRefusal } : {}),
-    ...(adopted
+    ...(releasable
       ? {
           recovery: `This start created a terminal that never ran the Task. Close it with: orca orchestration worker-release --dispatch ${args.dispatchId}`
         }

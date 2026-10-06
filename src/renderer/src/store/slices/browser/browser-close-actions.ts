@@ -12,6 +12,8 @@ import { getFallbackTabTypeForWorktree, isLocalBrowserPageOwner } from './browse
 import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { destroyWorkspaceWebviews } from '../browser-webview-cleanup'
+import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
+import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 
 export function createBrowserCloseActions(
   set: BrowserSliceSet,
@@ -27,6 +29,7 @@ export function createBrowserCloseActions(
       // grant is the only authority the preview scheme honors — a closed document must stop being
       // readable, and it must stop being readable even if the reducer bails out below.
       let docPageIdsToRelease: string[] = []
+      let closedPagesForMountRelease: string[] = []
       let activeBrowserWorktreeIdToNotify: string | null = null
       set((s) => {
         let owningWorktreeId: string | null = null
@@ -48,14 +51,17 @@ export function createBrowserCloseActions(
         }
 
         const closedPages = s.browserPagesByWorkspace[tabId] ?? []
+        closedPagesForMountRelease = closedPages.map((page) => page.id)
         const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
         delete nextBrowserPagesByWorkspace[tabId]
         const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+        const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
         const nextBrowserCertificateFailuresByPageId = {
           ...s.browserCertificateFailuresByPageId
         }
         for (const page of closedPages) {
           delete nextBrowserAnnotationsByPageId[page.id]
+          delete nextBrowserAnnotationMarkerIdsByPageId[page.id]
           delete nextBrowserCertificateFailuresByPageId[page.id]
         }
         docPageIdsToRelease = closedPages.filter((page) => page.docLocation).map((page) => page.id)
@@ -134,16 +140,17 @@ export function createBrowserCloseActions(
         }
         delete nextRecentlyClosedBrowserPagesByWorkspace[tabId]
 
-        const nextPendingAddressBarFocusByPageId = Object.fromEntries(
-          Object.entries(s.pendingAddressBarFocusByPageId).filter(
-            ([pageId]) => !closedPages.some((page) => page.id === pageId)
-          )
+        // Why omit rather than rebuild: only the closed ids can match, so this touches the
+        // closed pages instead of every pending entry and keeps the record identity when none did.
+        const closedPageIds = closedPages.map((page) => page.id)
+        const nextPendingAddressBarFocusByPageId = omitRecordKeys(
+          s.pendingAddressBarFocusByPageId,
+          closedPageIds
         )
-        const nextPendingAddressBarFocusByTabId = Object.fromEntries(
-          Object.entries(s.pendingAddressBarFocusByTabId).filter(
-            ([focusId]) => focusId !== tabId && !closedPages.some((page) => page.id === focusId)
-          )
-        )
+        const nextPendingAddressBarFocusByTabId = omitRecordKeys(s.pendingAddressBarFocusByTabId, [
+          ...closedPageIds,
+          tabId
+        ])
 
         return {
           browserTabsByWorktree: nextBrowserTabsByWorktree,
@@ -163,7 +170,8 @@ export function createBrowserCloseActions(
           recentlyClosedBrowserPagesByWorkspace: nextRecentlyClosedBrowserPagesByWorkspace,
           remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
           browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
-          browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
+          browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
+          browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
         }
       })
 
@@ -177,6 +185,9 @@ export function createBrowserCloseActions(
 
       for (const docPageId of docPageIdsToRelease) {
         releaseDocPreviewGrant(docPageId)
+      }
+      for (const pageId of closedPagesForMountRelease) {
+        releaseBrowserPageMount(pageId)
       }
 
       for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
@@ -231,10 +242,15 @@ export function createBrowserCloseActions(
         destroyWorkspaceWebviews(browserPagesByWorkspace, workspace.id)
       }
       set((s) => {
-        const nextBrowserTabsByWorktree = { ...s.browserTabsByWorktree }
-        delete nextBrowserTabsByWorktree[worktreeId]
-        const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
-        delete nextActiveBrowserTabIdByWorktree[worktreeId]
+        const removedWorktreeIds = [worktreeId]
+        const nextBrowserTabsByWorktree = omitRecordKeys(
+          s.browserTabsByWorktree,
+          removedWorktreeIds
+        )
+        const nextActiveBrowserTabIdByWorktree = omitRecordKeys(
+          s.activeBrowserTabIdByWorktree,
+          removedWorktreeIds
+        )
         // Why: reset the global browser surface only when the shut-down worktree is the active one AND had tabs.
         const shouldResetGlobalBrowser = s.activeWorktreeId === worktreeId && hadBrowserTabs
         return {

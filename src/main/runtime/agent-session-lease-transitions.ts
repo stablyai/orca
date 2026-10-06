@@ -6,6 +6,7 @@
  * observed process identity, and a proved provider handle — in that order, at one fence.
  */
 
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
   adjudicateAgentSessionRestart,
   evaluateAgentSessionAcquisition,
@@ -15,17 +16,16 @@ import {
   appendAgentSessionProviderHandleLink,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleBelongsTo } from '../../shared/agent-session-provider-handle-encoding'
+import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
 import type {
-  AgentSessionJournalCheckpoint,
-  AgentSessionHandoffStage,
+  AgentSessionDeathEvidence,
   AgentSessionLease,
-  AgentSessionOwnerRuntimeKind,
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../shared/agent-session-record'
 
 export type AgentSessionReservation = {
-  runtimeKind: AgentSessionOwnerRuntimeKind
   spawnToken: string
   claimKeyId: string
   handoffOperationId: string | null
@@ -42,10 +42,10 @@ export function withLease(
 
 export function assertFence(lease: AgentSessionLease, fence: number): void {
   if (lease.runtimeFence !== fence) {
-    throw new Error('agent_session_checkpoint_stale')
+    throw agentSessionRefusalError('agent_session_checkpoint_stale', { reason: 'leaseMoved' })
   }
   if (lease.unreconciled) {
-    throw new Error('execution_owner_reconciling')
+    throw agentSessionRefusalError('execution_owner_reconciling', { reason: 'hostReconciling' })
   }
 }
 
@@ -67,7 +67,7 @@ export function reserveAgentSessionOwner(args: {
     probe: args.probe
   })
   if (decision.decision === 'refused') {
-    throw new Error(decision.code)
+    throw agentSessionRefusalError(decision.code, decision.details)
   }
   if (decision.decision === 'retry-reservation') {
     return { record, disposition: 'retry-reservation' }
@@ -76,21 +76,18 @@ export function reserveAgentSessionOwner(args: {
     disposition: 'reserved',
     record: withLease(record, {
       ...record.lease,
-      runtimeKind: reservation.runtimeKind,
+      runtimeKind: 'native',
       runtimeFence: decision.nextFence,
       // Why: a reserved owner is not yet a writer; it may only talk to the provider to prove resume.
       handoffStage: 'new-owner-proving',
       provenHandleLinkId: null,
       ownerProcess: null,
       reservedSpawnToken: reservation.spawnToken,
-      processlessAt: null,
       leaseDeadlineAt: reservation.now + reservation.leaseTtlMs,
       lastRenewedAt: reservation.now,
       handoffOperationId: reservation.handoffOperationId,
       claimKeyId: reservation.claimKeyId,
       claimStatus: 'reserved',
-      settlementRetryRequired: undefined,
-      settlementRetryId: undefined,
       deathEvidence: null
     })
   }
@@ -110,16 +107,19 @@ export function commitAgentSessionProcessIdentity(
   const { record } = args
   assertFence(record.lease, args.fence)
   if (record.lease.claimStatus !== 'reserved' || record.lease.ownerProcess !== null) {
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', {
+      reason: 'spawnIdentityMismatch'
+    })
   }
   if (record.lease.reservedSpawnToken !== args.process.spawnToken) {
     // Why: a child that cannot echo the reserved token is not the process Orca started.
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', {
+      reason: 'spawnIdentityMismatch'
+    })
   }
   return withLease(record, {
     ...record.lease,
     ownerProcess: args.process,
-    processlessAt: null,
     lastRenewedAt: args.now
   })
 }
@@ -142,9 +142,11 @@ export function proveAgentSessionOwner(args: {
     record.lease.handoffStage !== 'new-owner-proving' ||
     record.lease.ownerProcess === null
   ) {
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', {
+      reason: 'spawnIdentityMismatch'
+    })
   }
-  if (args.link.handle.provider !== record.provider) {
+  if (!agentSessionProviderHandleBelongsTo(args.link.handle, record.provider)) {
     throw new Error('agent_session_provider_handle_provider_mismatch')
   }
   if (args.link.mintedAtFence !== args.fence) {
@@ -210,9 +212,6 @@ export function evictAgentSessionOwner(args: {
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
-  if (record.lease.settlementRetryRequired) {
-    throw new Error('agent_session_ownership_unknown')
-  }
   const adjudication = adjudicateAgentSessionRestart({
     lease: record.lease,
     probe: args.probe,
@@ -225,70 +224,49 @@ export function evictAgentSessionOwner(args: {
       ...record.lease,
       handoffStage: null,
       handoffOperationId: null,
-      processlessAt: null,
       lastRenewedAt: args.now
     })
   }
   if (adjudication.disposition !== 'evicted') {
     throw new Error('agent_session_ownership_unknown')
   }
+  return releasedAgentSessionLease(record, adjudication.nextFence, adjudication.evidence, args.now)
+}
+
+/**
+ * Recovery's conclusion when proof never came: a recorded owner whose identity cannot be verified,
+ * or that survived the stop ladder. Its transport died with the runtime that held it, so nothing
+ * can drive it, and a verdict that never arrives must not hold the conversation. Nothing proved it
+ * gone, so no death evidence is written.
+ */
+export function releaseUnprovenAgentSessionOwner(args: {
+  record: AgentSessionRecord
+  expectedFence: number
+  now: number
+}): AgentSessionRecord {
+  const { record } = args
+  assertFence(record.lease, args.expectedFence)
+  if (record.lease.handoffStage !== 'recovering') {
+    throw new Error('agent_session_ownership_unknown')
+  }
+  return releasedAgentSessionLease(record, nextAgentSessionFence(record.lease), null, args.now)
+}
+
+function releasedAgentSessionLease(
+  record: AgentSessionRecord,
+  runtimeFence: number,
+  deathEvidence: AgentSessionDeathEvidence | null,
+  now: number
+): AgentSessionRecord {
   return withLease(record, {
     ...record.lease,
-    runtimeFence: adjudication.nextFence,
+    runtimeFence,
     handoffStage: null,
     ownerProcess: null,
     reservedSpawnToken: null,
-    processlessAt: null,
     claimStatus: 'released',
-    lastRenewedAt: args.now,
+    lastRenewedAt: now,
     handoffOperationId: null,
-    deathEvidence: adjudication.evidence
-  })
-}
-
-export function setAgentSessionHandoffStage(args: {
-  record: AgentSessionRecord
-  fence: number
-  stage: AgentSessionHandoffStage | null
-  handoffOperationId: string | null
-  now: number
-}): AgentSessionRecord {
-  const { record } = args
-  assertFence(record.lease, args.fence)
-  if (
-    record.lease.handoffOperationId !== null &&
-    args.handoffOperationId !== null &&
-    args.handoffOperationId !== record.lease.handoffOperationId
-  ) {
-    throw new Error('agent_session_operation_conflict')
-  }
-  return withLease(record, {
-    ...record.lease,
-    handoffStage: args.stage,
-    handoffOperationId: args.handoffOperationId,
-    lastRenewedAt: args.now
-  })
-}
-
-export function setAgentSessionJournalCheckpoint(args: {
-  record: AgentSessionRecord
-  fence: number
-  checkpoint: AgentSessionJournalCheckpoint
-  now: number
-}): AgentSessionRecord {
-  const { record } = args
-  assertFence(record.lease, args.fence)
-  const current = record.lease.journalCheckpoint
-  if (
-    current &&
-    (current.epoch > args.checkpoint.epoch ||
-      (current.epoch === args.checkpoint.epoch && current.sequence > args.checkpoint.sequence))
-  ) {
-    throw new Error('agent_session_checkpoint_stale')
-  }
-  return withLease(record, {
-    ...record.lease,
-    journalCheckpoint: args.checkpoint,
-    lastRenewedAt: args.now
+    deathEvidence
   })
 }

@@ -1,18 +1,22 @@
 import { join } from 'node:path'
 import {
+  buildManagedCommandHook,
   getSharedManagedScriptPath,
-  wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
+  MANAGED_HOOK_TIMEOUT_SECONDS,
   writeHooksJson,
+  type HookCommandConfig,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../agent-hooks/hook-stdin-contract'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import { buildCodexHookCommand } from './codex-hook-command-form'
 import { CODEX_HOOK_EVENT_LABEL, getCodexManagedScriptFileName } from './codex-hook-identity'
 import { getManagedScript } from './codex-hook-script'
 import type { CodexEventLabel } from './config-toml-trust'
+import { normalizeCodexHookTimeoutSec } from './codex-trust-identity'
 
 // Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while Orca flips the pane to waiting.
+// Interrupt (Codex 0.150+) is the only hook an Esc-cancelled turn fires; older Codex ignores the unknown key.
 export const CODEX_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
@@ -21,7 +25,8 @@ export const CODEX_EVENTS = [
   'PostToolUse',
   'SubagentStart',
   'SubagentStop',
-  'Stop'
+  'Stop',
+  'Interrupt'
 ] as const
 
 export function getConfigPath(runtimeHomePath: string = getOrcaManagedCodexHomePath()): string {
@@ -51,7 +56,19 @@ export const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEvent
   PostToolUse: CODEX_HOOK_EVENT_LABEL.PostToolUse!,
   SubagentStart: CODEX_HOOK_EVENT_LABEL.SubagentStart!,
   SubagentStop: CODEX_HOOK_EVENT_LABEL.SubagentStop!,
-  Stop: CODEX_HOOK_EVENT_LABEL.Stop!
+  Stop: CODEX_HOOK_EVENT_LABEL.Stop!,
+  Interrupt: CODEX_HOOK_EVENT_LABEL.Interrupt!
+}
+
+// Why: pre-clamped to Codex's per-event cap (Interrupt: 3s), which Codex warns about at every startup.
+export function buildCodexManagedHook(
+  command: string,
+  eventName: (typeof CODEX_EVENTS)[number]
+): HookCommandConfig {
+  return buildManagedCommandHook(
+    command,
+    normalizeCodexHookTimeoutSec(CODEX_EVENT_LABEL[eventName], MANAGED_HOOK_TIMEOUT_SECONDS)
+  )
 }
 
 export const CODEX_MANAGED_EVENT_LABELS = new Set<CodexEventLabel>(
@@ -70,9 +87,7 @@ export function getManagedScriptPath(): string {
 }
 
 export function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32'
-    ? wrapWindowsCmdHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath)
+  return buildCodexHookCommand(scriptPath)
 }
 
 export type CodexManagedHookInstallMaterial = {

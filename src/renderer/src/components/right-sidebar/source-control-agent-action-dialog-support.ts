@@ -4,6 +4,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { translate } from '@/i18n/i18n'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
+import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
 
 export function isSourceControlAgentDetectedAndEnabled(
   agent: TuiAgent | null,
@@ -98,4 +99,22 @@ export function buildSourceControlAgentStatusCopy(args: {
     return 'No enabled agents were detected on this workspace host.'
   }
   return null
+}
+
+/** Names the agent this action will really use when the repo overrides the global default. */
+export function buildSourceControlAgentScopeNote(launchAgentScope: {
+  overridesGlobalAgent: boolean
+  effectiveAgentId: TuiAgent | null
+  globalAgentId: TuiAgent | null
+}): SourceControlAgentScopeNote | null {
+  if (!launchAgentScope.overridesGlobalAgent) {
+    return null
+  }
+  const catalog = getAgentCatalog()
+  const labelFor = (agentId: TuiAgent | null): string =>
+    catalog.find((entry) => entry.id === agentId)?.label ?? agentId ?? ''
+  return {
+    effectiveAgentLabel: labelFor(launchAgentScope.effectiveAgentId),
+    globalAgentLabel: labelFor(launchAgentScope.globalAgentId)
+  }
 }

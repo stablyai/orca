@@ -3,6 +3,11 @@ import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { parse } from 'yaml'
+import {
+  SHARED_STUB_SOURCE,
+  parseSharedStubBlocks,
+  renderSharedStubBody
+} from './skill-stub-composition.mjs'
 
 const SCRIPT_DIR = import.meta.dirname
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..')
@@ -90,11 +95,30 @@ function frontmatterBlock(markdown, sourcePath) {
 
 // Why: the stub's routing frontmatter (name + description) must stay byte-identical to the
 // guide's — it is the unchanged discovery surface — so we reuse the guide's own block and
-// replace only the body. Body normalized to LF with exactly one trailing newline.
-function composeStubProjection(guideMarkdown, stubBody, sourcePath) {
+// replace only the body. The body is the per-topic stub with its shared markers expanded,
+// normalized to LF with exactly one trailing newline.
+function composeStubProjection(guideMarkdown, stubBody, sourcePath, { sharedBlocks }) {
   const block = frontmatterBlock(guideMarkdown, sourcePath)
-  const body = normalizeMarkdown(stubBody).replace(/^\n+/, '').replace(/\n*$/, '\n')
+  const composed = renderSharedStubBody(normalizeMarkdown(stubBody), {
+    blocks: sharedBlocks,
+    sourcePath
+  })
+  const body = composed.replace(/^\n+/, '').replace(/\n*$/, '\n')
   return `${block}\n${body}`
+}
+
+async function readSharedStubBlocks(repoRoot) {
+  const sourcePath = path.join(repoRoot, ...SHARED_STUB_SOURCE.split('/'))
+  let markdown
+  try {
+    markdown = normalizeMarkdown(await readFile(sourcePath, 'utf8'))
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`Stub topics require the shared fragment: ${SHARED_STUB_SOURCE}`)
+    }
+    throw error
+  }
+  return parseSharedStubBlocks(markdown, SHARED_STUB_SOURCE)
 }
 
 function constantName(name) {
@@ -275,6 +299,7 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
   await assertStubSourcesMatchTopics(repoRoot)
 
   const stubTopics = new Set(STUB_TOPICS)
+  const sharedBlocks = stubTopics.size > 0 ? await readSharedStubBlocks(repoRoot) : new Map()
   const guides = []
   const projections = []
   for (const name of expectedNames) {
@@ -305,7 +330,12 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
     })
     const stubPath = path.join(repoRoot, 'skill-stubs', `${name}.md`)
     const content = stubTopics.has(name)
-      ? composeStubProjection(markdown, await readFile(stubPath, 'utf8'), `skill-stubs/${name}.md`)
+      ? composeStubProjection(
+          markdown,
+          await readFile(stubPath, 'utf8'),
+          `skill-stubs/${name}.md`,
+          { sharedBlocks }
+        )
       : markdown
     projections.push({
       path: path.join(repoRoot, 'skills', name, 'SKILL.md'),
@@ -374,6 +404,7 @@ export {
   frontmatterBlock,
   normalizeMarkdown,
   parseFrontmatter,
+  readSharedStubBlocks,
   serializeEmbeddedModule,
   toPosixRelativePath,
   verifyArtifacts,

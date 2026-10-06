@@ -100,13 +100,15 @@ function patchTextFromToolInput(value: Record<string, unknown>): string | null {
   if (!Array.isArray(value.changes)) {
     return null
   }
-  const sections = value.changes.flatMap((entry) => {
+  const sections: string[] = []
+  let length = 0
+  for (const entry of value.changes) {
     if (typeof entry !== 'object' || entry === null) {
-      return []
+      continue
     }
     const change = entry as Record<string, unknown>
     if (typeof change.diff !== 'string') {
-      return []
+      continue
     }
     const path = typeof change.path === 'string' ? change.path : 'file'
     const kind =
@@ -114,8 +116,14 @@ function patchTextFromToolInput(value: Record<string, unknown>): string | null {
         ? (change.kind as Record<string, unknown>)
         : null
     const nextPath = kind && typeof kind.move_path === 'string' ? kind.move_path : path
-    return [`--- ${path}\n+++ ${nextPath}\n${change.diff}`]
-  })
+    const section = `--- ${path}\n+++ ${nextPath}\n${change.diff}`
+    length += section.length + (sections.length > 0 ? 1 : 0)
+    sections.push(section)
+    // Keep the extra character that tells toLines the diff was truncated.
+    if (length > MAX_DIFF_CHARS) {
+      break
+    }
+  }
   return sections.length > 0 ? sections.join('\n') : null
 }
 

@@ -1,13 +1,13 @@
-import { defineMethod, type RpcMethod } from '../core'
-import { z } from 'zod'
+import { defineMethod } from '../core'
 import {
   checkRemoteServerUpdater,
   downloadRemoteServerUpdater,
   getRemoteServerUpdaterSnapshot,
   installRemoteServerUpdater
 } from '../../remote-server-updater'
+import { UpdaterCheckParams } from '../../../../shared/rpc-contract/updater-params'
 
-export const UPDATER_METHODS: RpcMethod[] = [
+export const UPDATER_METHODS = [
   defineMethod({
     name: 'updater.getStatus',
     params: null,
@@ -15,10 +15,7 @@ export const UPDATER_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'updater.check',
-    params: z.object({
-      includePrerelease: z.boolean().optional(),
-      includePerfPrerelease: z.boolean().optional()
-    }),
+    params: UpdaterCheckParams,
     handler: (params, { runtime }) => checkRemoteServerUpdater(runtime.getRuntimeId(), params)
   }),
   defineMethod({

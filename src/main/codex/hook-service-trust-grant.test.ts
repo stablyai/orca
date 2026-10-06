@@ -33,7 +33,6 @@ import {
 } from './codex-trust-grant-ledger'
 import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
 import { getCodexHookTrustSignature } from './codex-hook-identity'
-import { _internals as rebaseInternals } from './codex-user-hook-trust-rebase'
 
 const { getPathMock, homedirMock, resolveCodexCommandMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -75,7 +74,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  rebaseInternals.setSessionRunner(null)
   trustGrantInternals.setGrantSessionRunner(null)
   trustGrantInternals.resetDiagnostics()
   codexAppServerCapabilityCache.clear()
@@ -174,7 +172,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       timeoutSec: 10
     })
     expect(trustConfig).not.toContain(selfComputed)
-    expect(Object.keys(readCodexTrustGrantLedgerHome(managedHome)!.entries)).toHaveLength(8)
+    expect(Object.keys(readCodexTrustGrantLedgerHome(managedHome)!.entries)).toHaveLength(9)
   })
 
   it('keeps config byte-stable and skips the session on a repeat ledger hit', async () => {
@@ -193,7 +191,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     expect(readFileSync(join(managedHome, 'config.toml'))).toEqual(firstToml)
   })
 
-  it('retries ledger-proven real-home trust cleanup after the hook is already gone', async () => {
+  it('retries ledger-proven real-home trust cleanup on opt-out after the hook is already gone', async () => {
     prepareSystemHome()
     const systemHome = join(tmpHome, '.codex')
     const hooksPath = join(systemHome, 'hooks.json')
@@ -223,7 +221,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     })
     installCodexLikeGrantRunner()
 
-    expect((await new CodexHookService().install()).state).toBe('installed')
+    await new CodexHookService().remove()
 
     expect(readHookTrustEntries(configPath).has(trustKey)).toBe(false)
     expect(readCodexTrustGrantLedgerHome(systemHome)).toBeNull()
@@ -231,7 +229,7 @@ describe('CodexHookService app-server trust grant lane', () => {
 
   // Why: ordinary Windows CI tokens cannot create file symlinks without Developer Mode.
   it.skipIf(process.platform === 'win32')(
-    'keeps a real-home symlink and rebases later user trust during flag-off cleanup',
+    'keeps a real-home symlink and moves later user trust during an explicit opt-out',
     async () => {
       prepareSystemHome()
       const systemHome = join(tmpHome, '.codex')
@@ -255,36 +253,19 @@ describe('CodexHookService app-server trust grant lane', () => {
         )}\n`
       )
       symlinkSync(targetPath, hooksPath)
-      const operations: string[] = []
-      rebaseInternals.setSessionRunner(async (request) => {
-        operations.push(request.operation)
-        if (request.operation === 'inspect-user-hook-trust') {
-          return {
-            outcome: 'inspected',
-            moves: request.moves.map((move) => ({
-              ...move,
-              reportedOldKey: move.oldKey,
-              wasTrusted: true,
-              enabled: true
-            }))
-          }
-        }
-        return { outcome: 'repaired', repaired: 1 }
-      })
       installCodexLikeGrantRunner()
 
-      expect((await new CodexHookService().install()).state).toBe('installed')
+      await new CodexHookService().remove()
 
       expect(lstatSync(hooksPath).isSymbolicLink()).toBe(true)
       expect(JSON.parse(readFileSync(targetPath, 'utf-8')).hooks.Stop).toEqual([
         { hooks: [userHook] }
       ])
-      expect(operations).toEqual(['inspect-user-hook-trust', 'repair-user-hook-trust'])
     }
   )
 
   it.skipIf(process.platform === 'win32')(
-    'preserves restrictive real-home hooks permissions during flag-off cleanup',
+    'preserves restrictive real-home hooks permissions during an explicit opt-out',
     async () => {
       prepareSystemHome()
       const hooksPath = join(tmpHome, '.codex', 'hooks.json')
@@ -296,7 +277,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       chmodSync(hooksPath, 0o600)
       installCodexLikeGrantRunner()
 
-      expect((await new CodexHookService().install()).state).toBe('installed')
+      await new CodexHookService().remove()
 
       expect(statSync(hooksPath).mode & 0o777).toBe(0o600)
     }
@@ -379,29 +360,30 @@ describe('CodexHookService app-server trust grant lane', () => {
     expect(resolveCodexCommandMock).not.toHaveBeenCalled()
   })
 
-  it('restores exact config bytes before fallback after a mutating RPC failure', async () => {
+  // Why: without a restore, the managed fallback still settles Orca's trust, and
+  // a save made during the failed session survives.
+  it('settles managed trust through the fallback after a mutating RPC failure', async () => {
     prepareSystemHome()
     const service = new CodexHookService()
     process.env.ORCA_DISABLE_CODEX_TRUST_RPC = '1'
     expect((await service.install()).state).toBe('installed')
     const managedHome = join(userDataDir, 'codex-runtime-home', 'home')
-    const baseline = readFileSync(join(managedHome, 'config.toml'))
+    const baselineTrust = readHookTrustEntries(join(managedHome, 'config.toml'))
 
     delete process.env.ORCA_DISABLE_CODEX_TRUST_RPC
-    rmSync(managedHome, { recursive: true, force: true })
     trustGrantInternals.resetDiagnostics()
     const runner = vi.fn(async (request: CodexHookTrustGrantRequest) => {
-      const codexHome = request.invocation.env?.CODEX_HOME
-      writeFileSync(
-        join(codexHome!, 'config.toml'),
-        '[hooks.state."rpc-partial"]\ntrusted_hash = "sha256:changed"\n'
-      )
+      const tomlPath = join(request.invocation.env!.CODEX_HOME!, 'config.toml')
+      writeFileSync(tomlPath, `model = "saved-during-session"\n${readFileSync(tomlPath, 'utf8')}`)
       throw new Error('transport failed after config/batchWrite')
     })
     trustGrantInternals.setGrantSessionRunner(runner)
 
     expect((await service.install()).state).toBe('installed')
     expect(runner).toHaveBeenCalledTimes(1)
-    expect(readFileSync(join(managedHome, 'config.toml'))).toEqual(baseline)
+    const configPath = join(managedHome, 'config.toml')
+    expect(readFileSync(configPath, 'utf8')).toContain('model = "saved-during-session"')
+    expect(baselineTrust.size).toBeGreaterThan(0)
+    expect(new Map(readHookTrustEntries(configPath))).toEqual(new Map(baselineTrust))
   })
 })

@@ -70,9 +70,13 @@ export function buildSearchableBrowserPages({
       worktreeOrder.get(getPaletteWorktreeIdentity(worktree)) ??
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
+    const unifiedBrowserTabsByWorkspaceId = new Map<string, Tab>()
     const focusedAtByWorkspaceId = new Map<string, number>()
     const unifiedTabs = unifiedTabsByWorktree?.[worktree.id] ?? []
     for (const tab of unifiedTabs) {
+      if (tab.contentType === 'browser' && !unifiedBrowserTabsByWorkspaceId.has(tab.entityId)) {
+        unifiedBrowserTabsByWorkspaceId.set(tab.entityId, tab)
+      }
       if (
         tab.contentType === 'browser' &&
         isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds) &&
@@ -88,13 +92,12 @@ export function buildSearchableBrowserPages({
       ) {
         continue
       }
-      const workspaceTabs = unifiedTabs.filter(
-        (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
-      )
-      const unifiedTab = workspaceTabs.find((tab) =>
-        isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
-      )
-      if (!unifiedTab && (workspaceTabs.length > 0 || ambiguousWorktreeIds.has(worktree.id))) {
+      const candidate = unifiedBrowserTabsByWorkspaceId.get(workspace.id)
+      const unifiedTab =
+        candidate && isUnifiedTabOwnedByWorktree(candidate, worktree, ambiguousWorktreeIds)
+          ? candidate
+          : undefined
+      if (!unifiedTab && (candidate || ambiguousWorktreeIds.has(worktree.id))) {
         continue
       }
       if (unifiedTab && duplicateTabIds.has(unifiedTab.id)) {

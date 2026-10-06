@@ -11,7 +11,7 @@ import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import type { AutomationRowAction } from './automation-captured-owner'
 import type { AutomationHostTarget } from './automation-host-client'
@@ -53,7 +53,7 @@ import { AutomationListToolbar } from './AutomationListToolbar'
 const TEMPLATE_EMPTY_STATES: ReadonlySet<string> = new Set(['host-empty', 'all-hosts-empty'])
 const EMPTY_AUTOMATION_RUNS: ReadonlyMap<string, AutomationRun> = new Map()
 
-type AutomationsListPanelProps = {
+export type AutomationsListPanelProps = {
   hasListItems: boolean
   hasFilteredListItems: boolean
   listSearchQuery: string
@@ -83,10 +83,7 @@ type AutomationsListPanelProps = {
   worktreeForRow?: (row: AutomationListRow, repo: Repo | undefined) => Worktree | undefined
   projectHostSetups: readonly ProjectHostSetup[]
   sshConnectionStates: ReadonlyMap<string, Pick<SshConnectionState, 'status'>>
-  runtimeStatusByEnvironmentId: ReadonlyMap<
-    string,
-    { status: RuntimeStatus | null; checkedAt: number }
-  >
+  runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
   hostTargetFor: (row: AutomationListRow) => AutomationHostTarget | null
   automationSourceHostAvailabilityByRowKey: ReadonlyMap<string, TaskSourceHostAvailability[]>
   hostLabelById?: ReadonlyMap<string, string>

@@ -1,10 +1,5 @@
-import { isAgentSessionPtyWriteRefusedError } from '../../../../../shared/agent-session-pty-write-admission'
 import { InvalidArgumentError } from '../../core'
-import type {
-  DriverState,
-  OrcaRuntimeService,
-  SubscriptionRegistration
-} from '../../../orca-runtime'
+import type { DriverState, OrcaRuntimeService } from '../../../orca-runtime'
 import {
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR,
@@ -52,51 +47,7 @@ export function resolveMobileFloorClientId(
 
 export type TerminalStreamInputOutcome = 'delivered' | 'rejected' | 'failed'
 
-export function watchSubscriptionLifetime(
-  runtime: OrcaRuntimeService,
-  ptyId: string,
-  signal: AbortSignal | undefined,
-  registration: SubscriptionRegistration
-): () => void {
-  let unsubscribeExit: (() => void) | null = null
-  let removeAbort: (() => void) | null = null
-  let stopped = false
-  const stop = (): void => {
-    stopped = true
-    unsubscribeExit?.()
-    removeAbort?.()
-  }
-  const release = (): void => {
-    registration.releaseIfCurrent()
-    stop()
-  }
-  unsubscribeExit = runtime.subscribeToPtyExit(ptyId, release)
-  if (stopped) {
-    unsubscribeExit()
-    return stop
-  }
-  if (!signal) {
-    return stop
-  }
-  if (signal.aborted) {
-    release()
-    return stop
-  }
-  const onAbort = (): void => release()
-  removeAbort = () => signal.removeEventListener('abort', onAbort)
-  signal.addEventListener('abort', onAbort, { once: true })
-  if (stopped) {
-    removeAbort()
-  }
-  return stop
-}
-
 export function isTerminalStreamInputRejection(error: unknown): boolean {
-  // Why: a lease refusal is a deliberate rejection, not a transport failure, so the stream reports
-  // it through the WriteUnavailable frame old clients already decode rather than a new opcode.
-  if (isAgentSessionPtyWriteRefusedError(error)) {
-    return true
-  }
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('terminal_not_writable') || message.includes('terminal_handle_stale')
 }
@@ -115,10 +66,11 @@ export async function sendTerminalStreamInput(
   const floorClaim: MobileInputFloorClaimHolder = { current: null }
   try {
     if (!clientId) {
-      const result = await runtime.sendTerminal(args.terminal, action)
+      const result = await runtime.sendTerminal(args.terminal, action, { inputKind: 'driving' })
       return result.accepted ? 'delivered' : 'rejected'
     }
     const result = await runtime.sendTerminal(args.terminal, action, {
+      inputKind: 'driving',
       reserveWrite: (writePtyId) => {
         const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
         if (!claim) {

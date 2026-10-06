@@ -63,6 +63,7 @@ export function TerminalPaneSurface({
     handleToggleNativeChat,
     hiddenStartupStyle,
     isActive,
+    isTabPinned,
     keybindings,
     managedPanes,
     managerRef,
@@ -89,15 +90,16 @@ export function TerminalPaneSurface({
     saveQuickCommand,
     searchOpen,
     searchStateRef,
+    searchInputRef,
     sessionRestoredBannerPaneIds,
-    sessionStateSaveFailureOpen,
+    sessionStateSaveFailureMessage,
     setAgentSessionContinuation,
     setAgentSessionFork,
     setContainerRef,
     setQuickCommandEditorOpen,
     setRenameValue,
     setSearchOpen,
-    setSessionStateSaveFailureOpen,
+    setSessionStateSaveFailureMessage,
     showSplitButton,
     showSshReconnectOverlay,
     splitTerminalPaneFromHeader,
@@ -176,7 +178,10 @@ export function TerminalPaneSurface({
                       return requestTerminalPaneRecovery({
                         tabId,
                         ptyId,
-                        reason: 'reattach-unverifiable'
+                        reason: 'reattach-unverifiable',
+                        // The user asking again is the new trigger that reopens
+                        // a reason an observed failure has closed.
+                        trigger: 'user'
                       }).then((recovered) => {
                         if (recovered) {
                           dismissTerminalError()
@@ -196,8 +201,9 @@ export function TerminalPaneSurface({
       <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog
-          open={sessionStateSaveFailureOpen}
-          onDismiss={() => setSessionStateSaveFailureOpen(false)}
+          open={sessionStateSaveFailureMessage !== null}
+          failureMessage={sessionStateSaveFailureMessage ?? ''}
+          onDismiss={() => setSessionStateSaveFailureMessage(null)}
           onOpenSpaceAnalyzer={openDiskSpaceAnalyzer}
         />
       )}
@@ -208,6 +214,7 @@ export function TerminalPaneSurface({
             onClose={() => setSearchOpen(false)}
             searchAddon={activePane.searchAddon ?? null}
             searchStateRef={searchStateRef}
+            inputRef={searchInputRef}
           />,
           activePane.container
         )}
@@ -236,6 +243,7 @@ export function TerminalPaneSurface({
         onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
+        onResetTerminal={contextMenu.onResetTerminal}
         canContinueAgentSessionInNewSession={contextMenuCanContinueInNewSession}
         onContinueAgentSessionInNewSession={contextMenu.onContinueAgentSessionInNewSession}
         onForkAgentSession={() => void contextMenu.onForkAgentSession()}
@@ -297,6 +305,7 @@ export function TerminalPaneSurface({
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
         showSplitButton={showSplitButton}
+        isTabPinned={isTabPinned}
         paneCount={paneCount}
         activePaneId={activePane?.id}
         panes={managedPanes}

@@ -12,7 +12,8 @@ import {
 } from '../../gh-utils'
 import {
   githubHostExecOptions,
-  resolveIssueGitHubApiRepositorySource
+  resolveIssueGitHubApiRepositorySource,
+  type GitHubRepoExecOptions
 } from '../../github-api-repository'
 import {
   getRateLimit,
@@ -23,6 +24,7 @@ import {
 import { sameOwnerRepo } from './../github-exec-scope'
 import { resolvePrWorkItemSource } from './work-item-list-request'
 import { buildSearchQueryString, defaultOpenWorkItemQuery } from './work-item-search-query'
+import { searchWorkItemCount, usesGraphqlWorkItemSearch } from './work-item-search-page'
 export async function countWorkItemsForQuery(
   repoPath: string,
   ownerRepo: OwnerRepo,
@@ -31,9 +33,22 @@ export async function countWorkItemsForQuery(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<number> {
   const searchQ = buildSearchQueryString(ownerRepo, query)
-  const ghOptions = {
+  const ghOptions: GitHubRepoExecOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(ownerRepo)
+  }
+  if (usesGraphqlWorkItemSearch(ownerRepo, ghOptions)) {
+    ghOptions.env = { ...process.env }
+    try {
+      return await searchWorkItemCount(searchQ, ghOptions)
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw error
+      }
+    }
+  }
+  if (repositoryRateLimitGuard(ownerRepo, 'search', ghOptions).blocked) {
+    return 0
   }
   const { stdout } = await ghExecFileAsync(
     [
@@ -85,7 +100,10 @@ export async function countWorkItems(
   if (spendsSharedGitHubComQuota(ownerRepo, ghOptions)) {
     await getRateLimit()
   }
-  if (repositoryRateLimitGuard(ownerRepo, 'search', ghOptions).blocked) {
+  if (
+    !usesGraphqlWorkItemSearch(ownerRepo, ghOptions) &&
+    repositoryRateLimitGuard(ownerRepo, 'search', ghOptions).blocked
+  ) {
     return 0
   }
 

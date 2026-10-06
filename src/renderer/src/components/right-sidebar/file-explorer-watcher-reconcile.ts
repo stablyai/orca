@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { DirCache } from './file-explorer-types'
-import { normalizeAbsolutePath, isPathEqualOrDescendant } from './file-explorer-paths'
+import { isPathEqualOrDescendant } from './file-explorer-paths'
 import { useAppStore } from '@/store'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 
@@ -103,14 +103,10 @@ export function purgeExpandedDirsSubtrees(
 // would cause the reveal logic to expand stale ancestor directories.
 
 export function clearStalePendingReveal(deletedPath: string): void {
-  const normalized = normalizeAbsolutePath(deletedPath)
   useAppStore.setState((state) => {
     if (
       state.pendingExplorerReveal &&
-      isPathEqualOrDescendant(
-        normalizeAbsolutePath(state.pendingExplorerReveal.filePath),
-        normalized
-      )
+      isPathEqualOrDescendant(state.pendingExplorerReveal.filePath, deletedPath)
     ) {
       return { pendingExplorerReveal: null }
     }

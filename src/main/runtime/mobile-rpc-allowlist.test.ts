@@ -161,12 +161,18 @@ describe('mobile RPC allowlist', () => {
       'agentSession.reveal',
       'agentSession.send',
       'agentSession.cancel',
+      'agentSession.queuedMessageSend',
+      'agentSession.queuedMessageDelete',
+      'agentSession.queuedMessagesResume',
       'agentSession.close',
       'agentSession.respondToApproval',
       'agentSession.respondToQuestion',
       'agentSession.setOption',
       'agentSession.handoffStatus',
       'agentSession.options',
+      'agentSession.modelCatalog',
+      'agentSession.conversationCommand',
+      'agentSession.commands',
       'agentSession.history',
       'agentSession.subscribe',
       'agentSession.unsubscribe',
@@ -174,6 +180,5 @@ describe('mobile RPC allowlist', () => {
       'agentSession.release'
     ])
     expect(mobileRpcAllowlist().has('agentSession.attach')).toBe(false)
-    expect(mobileRpcAllowlist().has('agentSession.requestHandoff')).toBe(false)
   })
 })

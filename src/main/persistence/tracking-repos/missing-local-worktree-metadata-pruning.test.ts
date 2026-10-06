@@ -3,6 +3,7 @@ import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../s
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Project } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
@@ -299,7 +300,7 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     for (const worktreeId of allIds) {
       state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
     }
-    const lease = (worktreeId: string, index: number, extra: object) => ({
+    const lease = (worktreeId: string, index: number, extra: Partial<SshRemotePtyLease>) => ({
       targetId: 'builder',
       ptyId: `pty-${index}`,
       worktreeId,

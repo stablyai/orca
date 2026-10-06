@@ -27,6 +27,7 @@ describe('orchestration federated folder placement', () => {
     await expect(
       method.handler(
         method.params!.parse({
+          runId: 'run-home',
           dispatchId: 'ctx_folder',
           taskId: 'task_folder',
           taskSpec: 'work in folder',

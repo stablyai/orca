@@ -6,7 +6,13 @@ import type {
 import type { Repo } from '../../../../shared/repo-types'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control-ai-types'
-import type { PullRequestFieldRevisions } from '@/store/slices/pull-request-generation'
+import type {
+  PullRequestFieldRevisions,
+  PullRequestGenerationFields
+} from '@/store/slices/pull-request-generation'
+import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
+
+export type PullRequestGenerationOutcome = { result: PullRequestGenerationFields | null }
 
 export type PullRequestDraftFields = {
   base: string
@@ -44,8 +50,9 @@ export type UseCreatePullRequestDialogFieldsOptions = {
     onGenerate: (
       fields: PullRequestDraftFields,
       fieldRevisions: PullRequestFieldRevisions,
-      overrides?: RuntimeGeneratePullRequestFieldsOverrides
-    ) => void
+      overrides?: RuntimeGeneratePullRequestFieldsOverrides,
+      options?: PullRequestGenerationOptions
+    ) => void | Promise<PullRequestGenerationOutcome | undefined>
     onCancelGenerate: () => void
   }
 }

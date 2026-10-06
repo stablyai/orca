@@ -6,6 +6,7 @@ import type {
   RuntimeWorktreeRemoveResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
+import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
 import {
   annotateOmittedHostScope,
@@ -13,8 +14,6 @@ import {
 } from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
 import {
-  getOptionalNullableNumberFlag,
-  getOptionalNumberFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
@@ -33,50 +32,13 @@ import {
   resolveProjectCreateRepoSelector
 } from '../worktree-project-target'
 import {
-  assertCreateParentFlagsCompatible,
+  assertWorktreeParentFlagsCompatible,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-
-type HookWarningResult = {
-  warning?: string
-}
-
-type PreservedBranchResult = {
-  preservedBranch?: {
-    branchName: string
-  }
-}
-
-function printHookWarning(result: HookWarningResult, json: boolean): void {
-  if (!json && result.warning) {
-    console.error(`warning: ${result.warning}`)
-  }
-}
-
-function printPreservedBranchWarning(result: PreservedBranchResult, json: boolean): void {
-  if (!json && result.preservedBranch) {
-    console.error(
-      `warning: local branch "${result.preservedBranch.branchName}" was kept because Git could not safely delete it`
-    )
-  }
-}
-
-function assertParentWorktreeFlagsCompatible(flags: Map<string, string | boolean>): void {
-  if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Choose either --parent-worktree or --no-parent, not both.'
-    )
-  }
-  const parentWorktree = flags.get('parent-worktree')
-  if (
-    flags.has('parent-worktree') &&
-    (typeof parentWorktree !== 'string' || parentWorktree === '')
-  ) {
-    throw new RuntimeClientError('invalid_argument', 'Missing required --parent-worktree')
-  }
-}
+import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
+import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
+import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-context'
 
 function getEnvParentWorkspace(): string | undefined {
   const workspaceId = process.env.ORCA_WORKSPACE_ID
@@ -206,8 +168,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree create': async ({ flags, client, cwd, json }) => {
-    assertCreateParentFlagsCompatible(flags)
+    assertWorktreeParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
+    const reviewLinks = getReviewTargetLinkFlags(flags)
     const callerTerminalHandle =
       typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
       process.env.ORCA_TERMINAL_HANDLE.length > 0
@@ -241,13 +204,15 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
+    const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
+    await assertGitLabLinkFlagProjectsMatch(flags, client, { repo })
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
-      repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
+      repo,
       name,
       displayName: name,
       displayNameKind: 'user',
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
-      linkedIssue: getOptionalNumberFlag(flags, 'issue'),
+      ...reviewLinks,
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
@@ -268,7 +233,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(startupAgent
         ? {
             startupAgent,
-            startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? ''
+            startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? '',
+            launchSource: 'cli'
           }
         : {})
     })
@@ -277,17 +243,25 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
-    assertParentWorktreeFlagsCompatible(flags)
+    assertWorktreeParentFlagsCompatible(
+      flags,
+      'Choose either --parent-worktree or --no-parent, not both.'
+    )
+    const isUnread = getOptionalWorktreeUnreadFlag(flags)
+    const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })
+    const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+    await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.set', {
-      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
+      worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
-      linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
+      ...reviewLinks,
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
+      isUnread,
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
       noParent: flags.get('no-parent') === true
     })
@@ -305,16 +279,31 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
       )
     }
+    // Why (#19334): the waiver only ever applies to a hook that ran, so without --run-hooks it
+    // silently does nothing. Rejecting it beats letting someone believe they waived something.
+    if (flags.get('allow-failed-archive-hook') === true && flags.get('run-hooks') !== true) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--allow-failed-archive-hook waives a FAILED archive hook, but without --run-hooks no hook runs at all. Pass --run-hooks too, or drop the waiver.'
+      )
+    }
     const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
       worktree,
       hostId,
       force: flags.get('force') === true,
       // Why (#11960): --force is explicit here, so it may also waive PTY-stop proof.
       allowUnverifiedPtyStop: flags.get('force') === true,
-      runHooks: flags.get('run-hooks') === true
+      runHooks: flags.get('run-hooks') === true,
+      // Why (#19334): deliberately NOT coupled to --force, which above already waives PTY-stop
+      // proof. Waiving a failed archive hook is a separate decision about the user's data.
+      allowFailedArchiveHook: flags.get('allow-failed-archive-hook') === true
     })
     printHookWarning(result.result, json)
     printPreservedBranchWarning(result.result, json)
-    printResult(result, json, (value) => `removed: ${value.removed}`)
+    printResult(result, json, (value) =>
+      value.removing
+        ? `removed: ${value.removed}\nOrca is still deleting the checkout in the background.`
+        : `removed: ${value.removed}`
+    )
   }
 }

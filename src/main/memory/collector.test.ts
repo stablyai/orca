@@ -53,6 +53,8 @@ async function loadCollector() {
 }
 
 const emptyStore = {
+  getFolderWorkspace: () => undefined,
+  getProjectGroups: () => [],
   getWorktreeMeta: () => undefined,
   getRepo: () => undefined
 } satisfies MemorySnapshotStore

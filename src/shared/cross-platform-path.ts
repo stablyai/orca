@@ -165,7 +165,8 @@ export function getRuntimePathBasename(value: string): string {
   if (!trimmed) {
     return ''
   }
-  return trimmed.split(/[\\/]/).findLast(Boolean) ?? ''
+  const separator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
+  return trimmed.slice(separator + 1)
 }
 
 /**

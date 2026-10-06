@@ -1,8 +1,15 @@
+import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
+import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { IPtyProvider } from '../providers/types'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+  /** Identity of the daemon behind this adapter; null until hello completes or after a disconnect. */
+  getDaemonIdentity(): DaemonEndpointIdentity | null {
+    return this.client.getDaemonIdentity()
+  }
+
   protected setupEventRouting(): void {
     if (this.removeEventListener) {
       return
@@ -16,8 +23,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
 
       if (event.event === 'data') {
         this.markSessionDirty(event.sessionId)
-        // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-        for (const listener of [...this.dataListeners]) {
+        emitPtyListeners(this.dataListeners, (listener) =>
           listener({
             id: event.sessionId,
             data: event.payload.data,
@@ -27,7 +33,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             ...(event.payload.transformed ? { transformed: true } : {}),
             ...(event.payload.seq === undefined ? {} : { seq: event.payload.seq })
           })
-        }
+        )
       } else if (event.event === 'sessionBackgroundMarker') {
         this.emitBackgroundStreamEvent({
           id: event.sessionId,
@@ -97,15 +103,9 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           event.payload.code,
           event.payload.incarnationId
         )
-        // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-        for (const listener of [...this.exitListeners]) {
-          listener({
-            id: event.sessionId,
-            code: event.payload.code,
-            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}),
-            ...(event.payload.cause ? { cause: event.payload.cause } : {})
-          })
-        }
+        emitPtyListeners(this.exitListeners, (listener) =>
+          listener(createPtyExitPayload(event.sessionId, event.payload))
+        )
       }
     })
   }

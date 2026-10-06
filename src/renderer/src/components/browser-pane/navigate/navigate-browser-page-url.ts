@@ -2,11 +2,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionId } from '@/lib/connection-context'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { useAppStore } from '@/store'
-import {
-  isRemoteRuntimeFileOperation,
-  statRuntimePath,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -25,6 +21,7 @@ import type {
   BrowserTabPageState
 } from '../describe-page/browser-page-types'
 import type { MutableRefObject } from 'react'
+import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 
 export type NavigateBrowserPageToUrlArgs = {
   url: string
@@ -107,22 +104,24 @@ export function navigateBrowserPageToUrl({
           worktreePath: activeWorktree?.path,
           connectionId: undefined
         }
-        if (!isRemoteRuntimeFileOperation(fileContext, notebookPath)) {
-          await window.api.fs.authorizeExternalPath({ targetPath: notebookPath })
-        }
-        const stat = await statRuntimePath(fileContext, notebookPath)
+        const stat = await statUserOpenedPath(fileContext, notebookPath)
         if (stat.isDirectory) {
           navigateBrowserUrl(url)
           return
         }
 
         let relativePath = notebookPath
-        if (activeWorktree?.path && isPathInsideWorktree(notebookPath, activeWorktree.path)) {
+        // Why: a project link out of the project keeps its absolute path, so it reads as user-named.
+        if (
+          activeWorktree?.path &&
+          !stat.escapesWorktree &&
+          isPathInsideWorktree(notebookPath, activeWorktree.path)
+        ) {
           relativePath = toWorktreeRelativePath(notebookPath, activeWorktree.path) ?? notebookPath
         }
 
         // Why: file:// notebooks in the browser are otherwise rendered as raw JSON by Chromium.
-        store.setActiveTabType('editor')
+        store.setActiveTabType('editor', worktreeId)
         store.openFile(
           {
             filePath: notebookPath,

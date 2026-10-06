@@ -2,33 +2,42 @@ import type {
   BrowserGrabPayload,
   BrowserPageAnnotation
 } from '../../../../../shared/browser-grab-types'
+import { browserAnnotationMatchesPageUrl } from './browser-annotation-page-url'
 
-/**
- * Push the current annotation set into the guest, where badges render in-page so they track scroll
- * without a message per frame. Shared by every surface that annotates a guest — the payload is
- * derived only from the annotations themselves, so the two surfaces cannot disagree about it.
- */
+// Guest-rendered badges track scrolling without a renderer message per frame.
 export function syncGuestAnnotationViewportBridge({
   toolTargetId,
   annotations,
+  currentDocument,
   pendingPayload,
   surfaceActive,
   token
 }: {
   toolTargetId: string
   annotations: BrowserPageAnnotation[]
+  currentDocument?: { markerIds: readonly string[]; url: string }
   pendingPayload: BrowserGrabPayload | null
   surfaceActive: boolean
   token: string
 }): void {
   // Why: existing badges render in-guest for smooth scroll; only the pending dialog needs viewport messages.
-  const markers = annotations.map((annotation, index) => ({
-    id: annotation.id,
-    index,
-    isFixed: annotation.payload.target.isFixed === true,
-    rectPage: annotation.payload.target.rectPage,
-    rectViewport: annotation.payload.target.rectViewport
-  }))
+  const eligibleIds = currentDocument ? new Set(currentDocument.markerIds) : null
+  // Keep tray numbering even when earlier notes belong to retired documents.
+  const markers = annotations.flatMap((annotation, index) =>
+    currentDocument &&
+    (!eligibleIds?.has(annotation.id) ||
+      !browserAnnotationMatchesPageUrl(annotation.payload.page.sanitizedUrl, currentDocument.url))
+      ? []
+      : [
+          {
+            id: annotation.id,
+            index,
+            isFixed: annotation.payload.target.isFixed === true,
+            rectPage: annotation.payload.target.rectPage,
+            rectViewport: annotation.payload.target.rectViewport
+          }
+        ]
+  )
   void window.api.browser
     .setAnnotationViewportBridge({
       browserPageId: toolTargetId,

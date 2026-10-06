@@ -5,9 +5,11 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../orca-runtime-get-orchestration-dispatch-authority'
 import {
+  AgentStatusObservedPaneIdentityCapture,
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
 } from '../../../../agent-status-observed-pane-identity'
+import type { EnrichedAgentHookEventPayload } from '../../../../../agent-hooks/server/server-types'
 import { projectFleetWorkerPage } from './worker-observation'
 
 /**
@@ -135,6 +137,33 @@ function livenessOf(world: ObservedWorld, db: OrchestrationDb, dispatchId: strin
 }
 
 describe('fleet evidence keeps the identity it was observed under', () => {
+  it('buffers startup observations until terminal recovery is ready', () => {
+    const identities = new AgentStatusObservedPaneIdentities()
+    const capture = new AgentStatusObservedPaneIdentityCapture(identities)
+    const runtime = {
+      getAgentStatusTerminalHandleForPaneKey: () => TERMINAL_HANDLE,
+      getTerminalProcessIncarnation: () => INCARNATION_ONE,
+      getAgentStatusOrchestrationContextForPaneKey: () => undefined
+    }
+    const entry = {
+      paneKey: PANE_KEY,
+      payload: { state: 'working', prompt: 'startup', agentType: 'claude' },
+      receivedAt: 1,
+      stateStartedAt: 1
+    } as EnrichedAgentHookEventPayload
+
+    capture.observe(entry)
+    expect(identities.read(PANE_KEY)).toEqual({ kind: 'unobserved' })
+
+    capture.attach(runtime)
+    expect(identities.read(PANE_KEY)).toEqual({
+      kind: 'observed',
+      terminalHandle: TERMINAL_HANDLE,
+      processIncarnation: INCARNATION_ONE,
+      dispatchId: null
+    })
+  })
+
   it('reads live while the pane still runs the process the row was observed on', () => {
     const world = createWorld()
     world.bindPane(PANE_KEY, TERMINAL_HANDLE)

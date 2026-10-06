@@ -1,83 +1,36 @@
-import { ExternalLink, HelpCircle, Loader2, Lock, LockOpen, ShieldCheck } from 'lucide-react'
+import { ExternalLink, ShieldCheck } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { cn } from '@/lib/utils'
-import { Badge } from '../ui/badge'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { MiniMaxIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 import { DebouncedSettingsTextInput } from './DebouncedSettingsTextInput'
 
-const MINIMAX_CONSOLE_URL = 'https://platform.minimax.io/console/usage'
-
-function formatMiniMaxRelativeRefresh(updatedAt: number, now: number): string {
-  const diffMs = Math.max(0, now - updatedAt)
-  if (diffMs < 60_000) {
-    return translate('auto.components.settings.AccountsPane.3a30aaf526', 'just now')
-  }
-  return formatUiRelativeTime(-diffMs)
-}
-
-function MiniMaxCookieHelpPopover(): React.JSX.Element {
-  const steps = [
-    translate(
-      'auto.components.settings.AccountsPane.f5d8d2a6a1',
-      'Open platform.minimax.io/console/usage in your browser and sign in.'
-    ),
-    translate('auto.components.settings.AccountsPane.24560fe830', 'Open DevTools.'),
-    translate(
-      'auto.components.settings.AccountsPane.4cab0fa42d',
-      'Go to the Network tab and enable Preserve log.'
-    ),
-    translate('auto.components.settings.AccountsPane.bee4e63e1c', 'Reload the page.'),
-    translate(
-      'auto.components.settings.AccountsPane.87f814af6f',
-      'Filter for remains and select the coding_plan/remains request.'
-    ),
-    translate(
-      'auto.components.settings.AccountsPane.435df0ee51',
-      'Under Request Headers, copy the Cookie value.'
-    ),
-    translate('auto.components.settings.AccountsPane.7492fb3bba', 'Paste it here and click Save.')
-  ]
-  return (
-    <div className="space-y-3 p-3 text-xs">
-      <div className="space-y-1">
-        <p className="font-medium">
-          {translate('auto.components.settings.AccountsPane.9fec52de4b', 'How to copy the cookie')}
-        </p>
-        <p className="text-muted-foreground">
-          {translate(
-            'auto.components.settings.AccountsPane.4e32e030b2',
-            'Stored locally. Orca sends it only to platform.minimax.io for usage refreshes.'
-          )}
-        </p>
-      </div>
-      <ol className="list-decimal space-y-1 pl-4 text-muted-foreground">
-        {steps.map((step) => (
-          <li key={step}>{step}</li>
-        ))}
-      </ol>
-    </div>
-  )
-}
+import { MiniMaxCredentials } from './accounts-pane-minimax-credentials'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
 export function renderMiniMaxAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const {
-    clearMiniMaxCookie,
     miniMaxConfigured,
-    miniMaxCookieDraft,
+    miniMaxApiKeyConfigured,
     miniMaxCredentialBusy,
-    miniMaxRateLimits,
-    saveMiniMaxCookie,
-    setMiniMaxCookieDraft,
     settings,
-    updateSettings
+    updateSettings,
+    recordFeatureInteraction
   } = model
+  const consoleUrl =
+    settings.minimaxEndpoint === 'cn'
+      ? 'https://platform.minimaxi.com/console/usage'
+      : 'https://platform.minimax.io/console/usage'
+  const configured = miniMaxConfigured || miniMaxApiKeyConfigured
+  const handleMiniMaxEndpointChange = (value: string): void => {
+    if ((value !== 'overseas' && value !== 'cn') || value === settings.minimaxEndpoint) {
+      return
+    }
+    recordFeatureInteraction('usage-tracking')
+    void updateSettings({ minimaxEndpoint: value })
+  }
   return (
     <section key="minimax" id="accounts-minimax" className="space-y-4 scroll-mt-6">
       <div className="flex items-start justify-between gap-3">
@@ -88,13 +41,13 @@ export function renderMiniMaxAccountsSection(model: AccountsPaneSectionModel): R
           </h3>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.AccountsPane.15e831350e',
-              'Configure MiniMax usage tracking from platform.minimax.io.'
+              'auto.components.settings.AccountsPane.usageTracking',
+              'Configure MiniMax usage tracking for your account.'
             )}
           </p>
         </div>
         <a
-          href={MINIMAX_CONSOLE_URL}
+          href={consoleUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
@@ -107,137 +60,79 @@ export function renderMiniMaxAccountsSection(model: AccountsPaneSectionModel): R
       <div
         className={cn(
           'flex items-start gap-3 rounded-lg border bg-muted/20 p-3',
-          miniMaxConfigured ? 'border-border/60' : 'border-border/40'
+          configured ? 'border-border/60' : 'border-border/40'
         )}
       >
         <ShieldCheck
           className={cn(
             'mt-0.5 size-4 shrink-0',
-            miniMaxConfigured ? 'text-foreground' : 'text-muted-foreground'
+            configured ? 'text-foreground' : 'text-muted-foreground'
           )}
         />
         <div className="space-y-0.5">
           <p className="text-xs font-medium">
-            {miniMaxConfigured
+            {configured
               ? translate('auto.components.settings.AccountsPane.0b8c1c7e02', 'Stored locally')
-              : translate('auto.components.settings.AccountsPane.1fd1b1b6b4', 'Cookie not set')}
+              : translate(
+                  'auto.components.settings.AccountsPane.credentialsNotSet',
+                  'Credentials not set'
+                )}
           </p>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.AccountsPane.5e08b0fe57',
-              'Stored locally and sent only to platform.minimax.io for usage refreshes.'
+              'auto.components.settings.AccountsPane.selectedEndpointStorage',
+              'Stored locally and sent to the selected MiniMax endpoint for usage refreshes.'
             )}
           </p>
         </div>
       </div>
 
       <SearchableSetting
-        title={translate(
-          'auto.components.settings.AccountsPane.21d6eb141e',
-          'MiniMax Session Cookie'
-        )}
+        title={translate('auto.components.settings.AccountsPane.f8a4b9d210', 'MiniMax endpoint')}
         description={translate(
-          'auto.components.settings.AccountsPane.33bba5ad83',
-          'Paste your MiniMax session cookie for local rate-limit fetching.'
+          'auto.components.settings.AccountsPane.0b3a9f6c2e',
+          'Pick the host that matches your account. Both overseas (platform.minimax.io) and China (platform.minimaxi.com) accept either a session cookie or an API key.'
         )}
-        keywords={['minimax', 'cookie', 'session', 'rate limit', 'status bar']}
+        keywords={['minimax', 'endpoint', 'region', 'host', 'cn', 'china', 'overseas', 'api key']}
         className="space-y-2"
       >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Label>
-              {translate(
-                'auto.components.settings.AccountsPane.21d6eb141e',
-                'MiniMax Session Cookie'
-              )}
-            </Label>
-            <Badge
-              variant={miniMaxConfigured ? 'secondary' : 'outline'}
-              className="h-5 gap-1 rounded-full px-2 text-[10px] font-medium text-muted-foreground"
-            >
-              {miniMaxConfigured ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
-              {miniMaxConfigured
-                ? translate('auto.components.settings.AccountsPane.73ea15f24b', 'Saved')
-                : translate('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
-            </Badge>
-          </div>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <HelpCircle className="size-3" />
-                {translate('auto.components.settings.AccountsPane.43d7a45b97', 'How to copy')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" side="bottom" sideOffset={6} className="w-80 p-0">
-              <MiniMaxCookieHelpPopover />
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            type="password"
-            value={miniMaxCookieDraft}
-            onChange={(e) => setMiniMaxCookieDraft(e.target.value)}
-            placeholder={translate(
-              'auto.components.settings.AccountsPane.b8a4f21c3e',
-              'Paste the Cookie header from DevTools'
-            )}
-            spellCheck={false}
-            className="flex-1 text-xs"
-          />
-          <Button
-            size="xs"
-            onClick={() => void saveMiniMaxCookie()}
-            disabled={miniMaxCredentialBusy || !miniMaxCookieDraft.trim()}
-            className="h-7 shrink-0 text-xs"
-          >
-            {miniMaxCredentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
-            {miniMaxConfigured
-              ? translate('auto.components.settings.AccountsPane.f38b9cc4bd', 'Replace')
-              : translate('auto.components.settings.AccountsPane.590a3130f9', 'Save')}
-          </Button>
-          {miniMaxConfigured ? (
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => void clearMiniMaxCookie()}
-              disabled={miniMaxCredentialBusy}
-              className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
-            >
-              {translate('auto.components.settings.AccountsPane.316ca4e610', 'Forget cookie')}
-            </Button>
-          ) : null}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.AccountsPane.79418c782a',
-            'Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).'
-          )}
-        </p>
-        {miniMaxConfigured &&
-        miniMaxRateLimits?.status === 'ok' &&
-        miniMaxRateLimits.error === null ? (
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.AccountsPane.53f7b8c7a2',
-              'Last refresh: {{value0}}',
+        <Label htmlFor="minimax-endpoint">
+          {translate('auto.components.settings.AccountsPane.f8a4b9d210', 'MiniMax endpoint')}
+        </Label>
+        <Select
+          value={settings.minimaxEndpoint}
+          onValueChange={handleMiniMaxEndpointChange}
+          disabled={miniMaxCredentialBusy}
+        >
+          <SelectTrigger id="minimax-endpoint" className="h-8 w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[
               {
-                value0: formatMiniMaxRelativeRefresh(miniMaxRateLimits.updatedAt, Date.now())
+                value: 'overseas',
+                label: translate(
+                  'auto.components.settings.AccountsPane.endpointOverseas',
+                  'Overseas (platform.minimax.io)'
+                )
+              },
+              {
+                value: 'cn',
+                label: translate(
+                  'auto.components.settings.AccountsPane.endpointChina',
+                  'China (platform.minimaxi.com)'
+                )
               }
-            )}
-          </p>
-        ) : null}
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.AccountsPane.31d24a4e87',
-            'Cookie expires when you sign out in the browser.'
-          )}
-        </p>
+            ].map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </SearchableSetting>
+
+      <MiniMaxCredentials model={model} consoleUrl={consoleUrl} />
 
       <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
         <div className="flex items-center justify-between gap-3">

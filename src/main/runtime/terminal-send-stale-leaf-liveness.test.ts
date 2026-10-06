@@ -96,9 +96,9 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
     const probe = vi.fn(async () => false)
     const { runtime, handle, write } = await makeRuntimeWithLeafHandle({ probePtyLiveness: probe })
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).rejects.toThrow(
-      'terminal_not_writable'
-    )
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_not_writable')
 
     expect(probe).toHaveBeenCalledWith(STALE_PTY_ID)
     expect(write).not.toHaveBeenCalled()
@@ -108,9 +108,9 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
     const probe = vi.fn(async () => false)
     const { runtime, handle, write } = await makeRuntimeWithLeafHandle({ probePtyLiveness: probe })
 
-    await expect(runtime.sendTerminalAgentPrompt(handle, 'do the thing')).rejects.toThrow(
-      'terminal_not_writable'
-    )
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'do the thing', { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_not_writable')
 
     expect(write).not.toHaveBeenCalled()
   })
@@ -120,12 +120,14 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       probePtyLiveness: async () => null
     })
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       handle,
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
   })
 
   it('treats a throwing probe as unknown and proceeds', async () => {
@@ -135,11 +137,13 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       }
     })
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
   })
 
   it('proceeds when the probe answers live (restored session before its pane remounts)', async () => {
@@ -147,21 +151,25 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       probePtyLiveness: async () => true
     })
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
   })
 
   it('proceeds unchanged when the controller exposes no probe', async () => {
     const { runtime, handle, write } = await makeRuntimeWithLeafHandle({})
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
   })
 
   it('never probes when the provider synchronously knows the id (live pty)', async () => {
@@ -171,24 +179,26 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       hasPty: (ptyId) => ptyId === STALE_PTY_ID
     })
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       accepted: true
     })
 
     expect(probe).not.toHaveBeenCalled()
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
   })
 
   it('reuses a proven-absent verdict across repeated sends instead of re-probing', async () => {
     const probe = vi.fn(async () => false)
     const { runtime, handle } = await makeRuntimeWithLeafHandle({ probePtyLiveness: probe })
 
-    await expect(runtime.sendTerminal(handle, { text: 'a' })).rejects.toThrow(
-      'terminal_not_writable'
-    )
-    await expect(runtime.sendTerminal(handle, { text: 'b' })).rejects.toThrow(
-      'terminal_not_writable'
-    )
+    await expect(
+      runtime.sendTerminal(handle, { text: 'a' }, { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_not_writable')
+    await expect(
+      runtime.sendTerminal(handle, { text: 'b' }, { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_not_writable')
 
     expect(probe).toHaveBeenCalledTimes(1)
   })
@@ -201,17 +211,19 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       hasPty: (ptyId) => livePtyIds.has(ptyId)
     })
 
-    await expect(runtime.sendTerminal(handle, { text: 'a' })).rejects.toThrow(
-      'terminal_not_writable'
-    )
+    await expect(
+      runtime.sendTerminal(handle, { text: 'a' }, { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_not_writable')
     // Same id recreated by a fresh spawn: provider knowledge must beat the verdict.
     livePtyIds.add(STALE_PTY_ID)
 
-    await expect(runtime.sendTerminal(handle, { text: 'b' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'b' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       accepted: true
     })
     expect(probe).toHaveBeenCalledTimes(1)
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'b')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'b', 'driving')
   })
 })
 
@@ -386,6 +398,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
     runMailbox,
     markAsDelivered,
     markAsUndelivered,
+    releaseMailboxPointerEnter,
     stageMailboxPointerEnter,
     insert(subject: string, type: StoredMessageRow['type'] = 'status'): void {
       rows.push({
@@ -759,7 +772,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
       expect(stub.rows[0].delivered_at).toBeNull()
 
       // The replacement's own delivery starts a fresh flight and completes —
@@ -804,7 +817,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
       // No stray settle flushed the parked trigger into the dead pty.
       expect(write).toHaveBeenCalledTimes(1)
       expect(stub.rows.every((row) => row.delivered_at === null)).toBe(true)
@@ -835,7 +848,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
       expect(stub.rows[0].delivered_at).toBeNull()
     } finally {
       vi.useRealTimers()

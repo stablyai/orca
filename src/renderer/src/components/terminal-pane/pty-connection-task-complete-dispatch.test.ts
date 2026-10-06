@@ -2,7 +2,6 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../shared/terminal-mode-reset-profiles'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { YOLO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from './pty-connection-test-constants'
 import {
@@ -148,14 +147,14 @@ function notifyStoreSubscribers(): void {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -196,6 +195,7 @@ describe('connectPanePty', () => {
     expect(deps.dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: 'experimental-agent-observability',
+      ptyId: 'tab-pty',
       paneKey: makePaneKey('tab-1', LEAF_1)
     })
     expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')
@@ -281,135 +281,7 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('suppresses PTY-owned Codex auto-approved permission statuses before status or notification work', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('pty-hook')
-    transportFactoryQueue.push(transport)
-    enableActiveRuntimeEnvironment()
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
-      launchConfig: {
-        agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
-        agentEnv: {}
-      }
-    }
-
-    const launchConfig = {
-      agentCommand: 'codex',
-      agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
-      agentEnv: {}
-    }
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const deps = createDeps({
-      startup: {
-        command: 'codex',
-        launchConfig,
-        launchToken: 'launch-yolo',
-        launchAgent: 'codex'
-      }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-
-    const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-      | ((payload: {
-          state: 'waiting'
-          prompt: string
-          agentType: 'codex'
-          toolName: string
-          toolInput: string
-        }) => void)
-      | undefined
-    if (!statusHandler) {
-      throw new Error('Expected onAgentStatus to be registered')
-    }
-
-    statusHandler({
-      state: 'waiting',
-      prompt: 'auto-approved permission',
-      agentType: 'codex',
-      toolName: 'exec_command',
-      toolInput: 'git status'
-    })
-
-    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
-    expect(deps.dispatchNotification).not.toHaveBeenCalled()
-  })
-
-  it('suppresses synthetic Codex auto-approved permission titles before title work', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('pty-hook')
-    transportFactoryQueue.push(transport)
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
-      launchConfig: {
-        agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
-        agentEnv: {}
-      }
-    }
-
-    const pane = createPane(1)
-    const manager = createManager(1)
-    manager.getActivePane.mockReturnValue({ id: 1 })
-    const deps = createDeps({
-      startup: {
-        command: 'codex',
-        launchConfig: {
-          agentCommand: 'codex',
-          agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
-          agentEnv: {}
-        },
-        launchToken: 'launch-yolo',
-        launchAgent: 'codex'
-      }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-
-    const titleHandler = createdTransportOptions[0]?.onTitleChange as
-      | ((title: string, rawTitle: string) => void)
-      | undefined
-    if (!titleHandler) {
-      throw new Error('Expected onTitleChange to be registered')
-    }
-    mockStoreState.getAgentLaunchConfigForStatusMetadata.mockClear()
-
-    titleHandler('Codex - action required', 'Codex - action required')
-
-    expect(mockStoreState.getAgentLaunchConfigForStatusMetadata).toHaveBeenCalledTimes(1)
-    expect(deps.setRuntimePaneTitle).not.toHaveBeenCalled()
-    expect(deps.updateTabTitle).not.toHaveBeenCalled()
-    expect(manager.setPaneGpuRendering).not.toHaveBeenCalled()
-  })
-
-  it('does not resolve launch config for ordinary title changes', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('pty-hook')
-    transportFactoryQueue.push(transport)
-
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const deps = createDeps()
-
-    connectPanePty(pane as never, manager as never, deps as never)
-
-    const titleHandler = createdTransportOptions[0]?.onTitleChange as
-      | ((title: string, rawTitle: string) => void)
-      | undefined
-    if (!titleHandler) {
-      throw new Error('Expected onTitleChange to be registered')
-    }
-    mockStoreState.getAgentLaunchConfigForStatusMetadata.mockClear()
-
-    for (let index = 0; index < 100; index += 1) {
-      titleHandler(`build output ${index}`, `build output ${index}`)
-    }
-
-    expect(mockStoreState.getAgentLaunchConfigForStatusMetadata).not.toHaveBeenCalled()
-  })
-
-  it('preserves synthetic Codex manual permission titles', async () => {
+  it('preserves synthetic Codex permission titles', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-hook')
     transportFactoryQueue.push(transport)
@@ -828,7 +700,7 @@ describe('connectPanePty', () => {
     expect('agentToolName' in dispatchArgs).toBe(false)
     expect('agentToolInput' in dispatchArgs).toBe(false)
     expect('agentLastAssistantMessage' in dispatchArgs).toBe(false)
-    expect('agentInterrupted' in dispatchArgs).toBe(false)
+    expect('agentTurnOutcome' in dispatchArgs).toBe(false)
   })
 
   // Why: agent-row removal belongs to process/PTY lifecycle, not title reversion, so interrupts can't disappear the activity row.

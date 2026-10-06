@@ -17,7 +17,7 @@ export type PaletteHostBadge = {
 // unlike the sidebar gate, which lists disconnected hosts so users can connect.
 function hasActiveRemoteHost(hostOptions: readonly SidebarHostOption[]): boolean {
   return hostOptions.some(
-    (host) => host.id !== LOCAL_EXECUTION_HOST_ID && host.health !== 'disconnected'
+    (host) => host.id !== LOCAL_EXECUTION_HOST_ID && host.health === 'available'
   )
 }
 

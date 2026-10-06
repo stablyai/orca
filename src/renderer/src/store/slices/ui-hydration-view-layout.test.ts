@@ -50,17 +50,28 @@ beforeEach(() => {
 })
 
 describe('sidebar reveal actions', () => {
-  it('switch the sidebar body back to Spaces so the worktree list can consume the reveal', () => {
+  it('skip reveals while the activity view is showing instead of switching bodies', () => {
     const store = createUIStore()
     store.getState().setSidebarBody('agents')
 
     store.getState().revealWorktreeInSidebar('wt-1', { highlight: true })
+    store.getState().revealSidebarRow('repo:r1')
+
+    expect(store.getState().sidebarBody).toBe('agents')
+    expect(store.getState().pendingRevealWorktree).toBeNull()
+    expect(store.getState().pendingRevealSidebarRow).toBeNull()
+  })
+
+  it('reveal after an explicit switch to the workspace list', () => {
+    const store = createUIStore()
+    store.getState().setSidebarBody('agents')
+
+    store.getState().setSidebarBody('workspaces')
+    store.getState().revealWorktreeInSidebar('wt-1', { highlight: true })
+    store.getState().revealSidebarRow('repo:r1')
+
     expect(store.getState().sidebarBody).toBe('workspaces')
     expect(store.getState().pendingRevealWorktree?.worktreeId).toBe('wt-1')
-
-    store.getState().setSidebarBody('agents')
-    store.getState().revealSidebarRow('repo:r1')
-    expect(store.getState().sidebarBody).toBe('workspaces')
     expect(store.getState().pendingRevealSidebarRow?.rowKey).toBe('repo:r1')
   })
 })
@@ -212,6 +223,43 @@ describe('createUISlice hydratePersistedUI', () => {
     })
 
     expect(store.getState().rightSidebarWidth).toBe(360)
+  })
+
+  it('hydrates a persisted closed left sidebar preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ sidebarOpen: false }))
+
+    expect(store.getState().sidebarOpen).toBe(false)
+  })
+
+  it('hydrates a persisted open left sidebar preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ sidebarOpen: true }))
+
+    expect(store.getState().sidebarOpen).toBe(true)
+  })
+
+  it('hydrates a missing left sidebar preference as open', () => {
+    const store = createUIStore()
+
+    store.setState({ sidebarOpen: false })
+    store.getState().hydratePersistedUI({ ...makePersistedUI(), sidebarOpen: undefined })
+
+    expect(store.getState().sidebarOpen).toBe(true)
+  })
+
+  it('keeps an unsaved left sidebar close when a sync omits the left sidebar preference', () => {
+    const store = createUIStore()
+    store.getState().hydratePersistedUI(makePersistedUI(), 'startup')
+
+    store.getState().setSidebarOpen(false)
+    store.getState().hydratePersistedUI({ ...makePersistedUI(), sidebarOpen: undefined }, 'sync')
+
+    // Why: the baseline must stay open or the writer sees no diff and the close never persists.
+    expect(store.getState().sidebarOpen).toBe(false)
+    expect(store.getState().persistedUIWriteBaseline?.sidebarOpen).toBe(true)
   })
 
   it('hydrates a persisted closed right sidebar preference', () => {
@@ -485,6 +533,24 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().groupBy).toBe('none')
     expect([...store.getState().collapsedGroups]).toEqual([])
     expect(setUI).toHaveBeenCalledWith({ groupBy: 'none', collapsedGroups: [] })
+  })
+
+  it('hydrates persisted per-worktree explorer roots', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        explorerDisplayRootByWorktree: {
+          'repo-1::/repo': '/',
+          'repo-2::/repo': 'packages/app'
+        }
+      })
+    )
+
+    expect(store.getState().explorerDisplayRootByWorktree).toEqual({
+      'repo-1::/repo': '/',
+      'repo-2::/repo': 'packages/app'
+    })
   })
 
   it('hydrates persisted per-worktree dotfile visibility', () => {

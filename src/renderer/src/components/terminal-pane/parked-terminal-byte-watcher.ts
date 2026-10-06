@@ -2,6 +2,8 @@
  * Parked terminal side-effect watcher.
  * Why: parking unmounts TerminalPane, so this replays its bell/title/agent-completion/PR-link side effects while parked.
  */
+import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
+import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import { isClaudeAgent } from '../../../../shared/agent-detection'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
@@ -42,6 +44,7 @@ function isAgentTaskCompleteTrackingEnabled(state: StoreState): boolean {
 }
 
 export type ParkedTerminalByteWatcherOptions = {
+  workspaceOwner?: NotificationWorkspaceOwner
   ptyId: string
   tabId: string
   worktreeId: string
@@ -66,6 +69,10 @@ export function startParkedTerminalByteWatcher(
   const remoteRuntimePty = isRemoteRuntimePtyId(ptyId)
   const drivesTabTitle = options.drivesTabTitle ?? true
   const paneKey = makePaneKey(tabId, options.leafId)
+  const workspaceOwner =
+    options.workspaceOwner ??
+    resolveTerminalNotificationOwner(useAppStore.getState(), worktreeId, { paneKey, ptyId }) ??
+    undefined
 
   // Why: one watcher per PTY — a stale watcher from a previous park cycle would double-fire bell/completion for the same bytes.
   parkedWatcherDisposersByPtyId.get(ptyId)?.()
@@ -110,7 +117,12 @@ export function startParkedTerminalByteWatcher(
         return
       }
       pendingBellNotification = false
-      dispatchTerminalNotification(worktreeId, { source: 'terminal-bell', paneKey })
+      dispatchTerminalNotification(worktreeId, {
+        source: 'terminal-bell',
+        paneKey,
+        ptyId,
+        workspaceOwner
+      })
     }, PARKED_NOTIFICATION_GRACE_MS)
   }
 
@@ -127,9 +139,9 @@ export function startParkedTerminalByteWatcher(
     onBell: (): void => {
       const state = useAppStore.getState()
       state.markWorktreeUnread(worktreeId)
-      state.markTerminalTabUnread(tabId)
+      state.markTerminalTabUnread(tabId, 'terminal-bell')
       if (state.settings?.experimentalTerminalAttention === true) {
-        state.markTerminalPaneUnread(paneKey)
+        state.markTerminalPaneUnread(paneKey, 'terminal-bell')
       }
       // Why: agents emit BEL in the same burst as working→idle, so delay only the OS notification to let the richer completion notification win.
       pendingBellNotification = true
@@ -167,9 +179,8 @@ export function startParkedTerminalByteWatcher(
           source: 'agent-task-complete',
           terminalTitle: title,
           paneKey,
-          ...(isAgentTaskCompleteOsNotificationEnabled(useAppStore.getState())
-            ? {}
-            : { suppressOsNotification: true })
+          ptyId,
+          workspaceOwner
         })
       }, PARKED_NOTIFICATION_GRACE_MS)
     },

@@ -1,7 +1,6 @@
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata,
-  AgentLaunchConfigStatusMetadata,
   AgentProviderSessionRecordMetadata,
   AgentProviderSessionRouting,
   AgentProviderSessionTiming,
@@ -51,10 +50,6 @@ export type AgentStatusSlice = {
   /** Durable agent sessions captured on sleep (not live rows); power the one-click CLI resume on wake. */
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
 
-  /** Panes the runtime fenced against automatic resume. Held separately because a worker can
-   *  settle while its tab is open, before the sleeping record the fence belongs on exists. */
-  automaticResumeBlockedPaneKeys: Record<string, true>
-
   /** Ephemeral launch snapshots keyed by pane; hook payloads lack Orca launch settings, so the renderer supplies them from startup. */
   agentLaunchConfigByPaneKey: Record<string, AgentLaunchConfigRegistryEntry>
 
@@ -65,7 +60,7 @@ export type AgentStatusSlice = {
   recentlyClosedAgentStatusTabIds: Record<string, true>
 
   /** Exact pane authorities retired while sibling panes in the tab stay live. */
-  recentlyRetiredAgentStatusPaneKeys: Record<string, true>
+  recentlyRetiredAgentStatusPaneKeys: Record<string, true | string>
 
   retireAgentPaneAuthority: (
     paneKey: string,
@@ -116,9 +111,6 @@ export type AgentStatusSlice = {
   getAgentLaunchConfigForStatusEntry: (
     entry: AgentStatusEntry
   ) => SleepingAgentLaunchConfig | undefined
-  getAgentLaunchConfigForStatusMetadata: (
-    metadata: AgentLaunchConfigStatusMetadata
-  ) => SleepingAgentLaunchConfig | undefined
   clearAgentLaunchConfig: (paneKey: string) => void
 
   setRuntimeAgentOrchestrationByPaneKey: (
@@ -162,7 +154,6 @@ export type AgentStatusSlice = {
   captureAllSleepingAgentSessions: (mode: AllAgentSessionCaptureMode) => void
   clearSleepingAgentSession: (paneKey: string) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
-  setSleepingAgentAutomaticResumeBlocked: (paneKey: string, blocked: boolean) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
 

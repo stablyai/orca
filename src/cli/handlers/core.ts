@@ -3,6 +3,7 @@ import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
+import { resolveCliStatusCaller } from '../runtime/status-caller'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
 
 function envRecord(): Record<string, string> {
@@ -73,16 +74,20 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         'orca claude-teams must be run inside an Orca terminal.'
       )
     }
-    const response = await client.call<{ launch: { env: Record<string, string> } }>(
-      'agentTeams.prepareLaunch',
-      {
-        paneKey,
-        env: envRecord()
-      }
-    )
+    const inheritedEnv = envRecord()
+    const response = await client.call<{
+      launch: { env: Record<string, string>; envToDelete?: string[] }
+    }>('agentTeams.prepareLaunch', {
+      paneKey,
+      env: inheritedEnv,
+      prepareAuth: true
+    })
+    for (const key of response.result.launch.envToDelete ?? []) {
+      delete inheritedEnv[key]
+    }
     process.exitCode = await runClaudeAgentTeams(
       {
-        ...envRecord(),
+        ...inheritedEnv,
         ...response.result.launch.env
       },
       rawArgs ?? []
@@ -125,6 +130,13 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     if (!json && !result.result.runtime.reachable) {
       process.exitCode = 1
     }
-    printResult(result, json, formatStatus)
+    const caller = result.result.runtime.reachable
+      ? await resolveCliStatusCaller(client)
+      : undefined
+    printResult(
+      caller === undefined ? result : { ...result, result: { ...result.result, caller } },
+      json,
+      formatStatus
+    )
   }
 }

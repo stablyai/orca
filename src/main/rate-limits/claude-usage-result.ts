@@ -112,7 +112,9 @@ export function mergeClaudeUsageWindows(
     ...primary,
     session: primary.session ?? supplement.session,
     weekly: primary.weekly ?? supplement.weekly,
-    fableWeekly: primary.fableWeekly ?? supplement.fableWeekly ?? null
+    fableWeekly: primary.fableWeekly ?? supplement.fableWeekly ?? null,
+    // Only OAuth reports the extra-usage cap; keep it when the CLI supplements windows.
+    extraUsage: primary.extraUsage ?? supplement.extraUsage ?? null
   }
 }
 

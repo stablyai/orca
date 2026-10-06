@@ -14,6 +14,7 @@
  * failure this is meant to avoid, arrived at from the other side.
  */
 import type { SshConnection } from './ssh-connection'
+import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../shared/orcad-profile-preflight'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
 import { computeRemoteInstallDir } from './ssh-relay-versioned-install'
@@ -71,7 +72,6 @@ export type OrcadRollbackResult =
   | { outcome: 'refused'; code: string; reason: string }
   | { outcome: 'failed'; code: string; reason: string }
 
-const DEFAULT_READINESS_TIMEOUT_MS = 90_000
 const READINESS_POLL_MS = 500
 const STOP_WAIT_SECONDS = 20
 
@@ -142,7 +142,10 @@ export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<Orca
     const stopped = parseOrcadStopOutcome(
       await exec(
         options,
-        stopOrcadCommand(options.host, outgoingDir, { waitSeconds: STOP_WAIT_SECONDS })
+        stopOrcadCommand(options.host, outgoingDir, {
+          waitSeconds: STOP_WAIT_SECONDS,
+          nodePath: options.nodePath
+        })
       )
     )
     if (!orcadStopFreedTheHost(stopped)) {
@@ -150,9 +153,9 @@ export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<Orca
         outcome: 'failed',
         code: 'orcad_rollback_stop_incomplete',
         reason:
-          `orcad ${options.record.active} did not exit within ${STOP_WAIT_SECONDS}s of SIGTERM ` +
-          `(${stopped}). Nothing was restored — the store is untouched and the host is still ` +
-          'serving the version you tried to leave.'
+          `Could not verify that orcad ${options.record.active} exited (${stopped}). ` +
+          'Nothing was restored. Orca requires matching runtime readiness before signaling ' +
+          'an incumbent and confirmed exit before replacing its state.'
       }
     }
   }
@@ -193,7 +196,7 @@ export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<Orca
       port: options.port
     })
   )
-  const deadline = Date.now() + (options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS)
+  const deadline = Date.now() + (options.readinessTimeoutMs ?? ORCAD_STARTUP_READINESS_TIMEOUT_MS)
   const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   let parsed = parseOrcadReadinessOutput('')
   while (Date.now() < deadline && parsed.state === 'pending') {

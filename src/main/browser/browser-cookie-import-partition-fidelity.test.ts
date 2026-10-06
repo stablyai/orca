@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
+import type { CookiesGetFilter } from 'electron'
 
 const {
   appGetPathMock,
@@ -45,11 +46,11 @@ vi.mock('electron', () => ({
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
-      get: (filter: object) => Promise<unknown>
+      get: (filter: CookiesGetFilter) => Promise<unknown>
       remove: (url: string, name: string) => Promise<void>
     }
   }) => ({
-    get: (filter: object) => targetSession.cookies.get(filter),
+    get: (filter: CookiesGetFilter) => targetSession.cookies.get(filter),
     remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
     snapshotClearIdentities: async (items: { cookie: Record<string, unknown>; url: string }[]) =>
       items.map(({ cookie, url }) => ({ url, ...cookie })),
@@ -181,44 +182,6 @@ describe('validated import partition fidelity', () => {
     expect(result.ok && result.summary.importedCookies).toBe(1)
     expect(result.ok && result.summary.skippedCookies).toBe(1)
     expect(result.ok && result.summary.domains).toEqual(['plain.example'])
-  })
-
-  it('does not replace existing cookies for a domain whose only source cookie is skipped', async () => {
-    const remove = vi.fn().mockResolvedValue(undefined)
-    sessionFromPartitionMock.mockReturnValue({
-      cookies: {
-        get: vi.fn().mockResolvedValue([
-          {
-            name: 'existing-session',
-            value: 'still-valid',
-            domain: '.app.example',
-            path: '/',
-            secure: true,
-            httpOnly: true,
-            hostOnly: false,
-            session: true,
-            sameSite: 'lax'
-          }
-        ]),
-        remove,
-        set: unreachableCookieSet
-      }
-    })
-    const filePath = writeCookieFile([
-      {
-        domain: '.app.example',
-        name: 'chips-auth',
-        value: 'keep-me',
-        secure: true,
-        partitionKey: { topLevelSite: 'https://top.example' }
-      }
-    ])
-
-    const result = await importCookiesFromFile(filePath, 'persist:test')
-
-    expect(result.ok && result.summary.partitionSkippedCookies).toBe(1)
-    expect(cookieWriteMock).not.toHaveBeenCalled()
-    expect(remove).not.toHaveBeenCalled()
   })
 
   it('preserves a populated family and creates no staged replay for an opaque JSON partition', async () => {

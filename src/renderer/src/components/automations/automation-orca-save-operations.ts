@@ -33,6 +33,7 @@ import type { AutomationHostTarget } from './automation-host-client'
 import type { AutomationAuthorityChangeReason } from './automation-host-invalidation'
 import type { AutomationSaveContext } from './automation-save-context'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type AutomationMoveOperationContext = {
   automationDispatchContext: AutomationDispatchContext
@@ -165,7 +166,7 @@ export async function moveAutomationToDestination(
   }
 
   const operationKey = `${source.id}:${target.entry.stableKey}`
-  const creationKey = context.moveCreationKeysRef.current.get(operationKey) ?? crypto.randomUUID()
+  const creationKey = context.moveCreationKeysRef.current.get(operationKey) ?? createBrowserUuid()
   context.moveCreationKeysRef.current.set(operationKey, creationKey)
   const created = toDispatchResult(
     await createAutomationAtDestination(

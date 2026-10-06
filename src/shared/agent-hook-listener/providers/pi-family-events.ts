@@ -8,6 +8,9 @@ import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 
+/** Maps a Pi-family hook event (Pi, OMP, Prime) onto a pane status: lifecycle
+ *  events become `working` / `done`, an ask tool becomes `blocked`, and OMP's
+ *  `model` stamp rides along. Returns null for events that carry no status. */
 export function normalizePiCompatibleEvent(
   state: HookListenerState,
   agentType: 'pi' | 'omp' | 'prime-agent',
@@ -19,7 +22,25 @@ export function normalizePiCompatibleEvent(
   if (agentType !== 'omp' && eventName === 'session_start') {
     // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
     clearPaneTurnCacheState(state, paneKey)
-    return null
+    // Why: a custom modal can switch sessions before its promise resolves.
+    if (agentType !== 'pi' || hookPayload.ui_prompt_active !== true) {
+      return null
+    }
+  }
+
+  // Why: the OMP extension stamps `provider/id` on every post; Pi posts carry none.
+  const model = readString(hookPayload, 'model')
+  const modelSwitchCommand =
+    hookPayload.model_switch_command === 'orca-model' ? 'orca-model' : undefined
+  if (eventName === 'model_select') {
+    // Why: a model switch happens between turns, so it must ride on the pane's last
+    // known status instead of inventing a state — and before any status exists there
+    // is nothing for a model to describe.
+    const previous = state.lastStatusByPaneKey.get(paneKey)?.payload
+    if (!model || !previous || previous.agentType !== agentType) {
+      return null
+    }
+    return normalizeAgentStatusPayload({ ...previous, model, modelSwitchCommand })
   }
 
   // Why: gate on the event's own tool_name so a stale cached question can't re-enter blocked.
@@ -28,10 +49,17 @@ export function normalizePiCompatibleEvent(
     ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
       (agentType === 'omp' && toolName === 'ask')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
+  // Why: unlike Codex's PermissionRequest, omp emits this only after its own policy engine already
+  // resolved to "prompt", so a human is always the decider. The forwarded approval_mode is the
+  // ambient mode, not the verdict -- it reads 'yolo' whenever tools.approval.<tool> prompts -- so
+  // no value of it can downgrade this to working without hiding a real prompt.
   const isOmpApprovalRequest = agentType === 'omp' && eventName === 'tool_approval_requested'
   const isOmpApprovalResolution = agentType === 'omp' && eventName === 'tool_approval_resolved'
+  const isPiUiPrompt =
+    agentType === 'pi' && (eventName === 'ui_prompt_start' || hookPayload.ui_prompt_active === true)
+  const isPiUiPromptEnd = agentType === 'pi' && eventName === 'ui_prompt_end'
 
-  const stateName =
+  let stateName =
     isPiCompatibleAsk || isOmpApprovalRequest
       ? 'blocked'
       : isOmpApprovalResolution ||
@@ -46,7 +74,17 @@ export function normalizePiCompatibleEvent(
           ? 'done'
           : null
 
-  if (!stateName) {
+  if (isPiUiPrompt) {
+    // Why: waiting uses the same orange question icon as Claude/Codex input prompts.
+    stateName = 'waiting'
+  } else if (isPiUiPromptEnd) {
+    stateName = hookPayload.is_idle === true ? 'done' : 'working'
+  }
+
+  if (
+    !stateName ||
+    (stateName === 'working' && holdsOmpApproval(state, agentType, eventName, paneKey))
+  ) {
     return null
   }
 
@@ -63,10 +101,39 @@ export function normalizePiCompatibleEvent(
       resetOnNewTurn: isNewTurnEvent(agentType, eventName)
     }),
     agentType,
+    model,
+    modelSwitchCommand,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
   })
+}
+
+const OMP_APPROVAL_RELEASE_EVENTS: ReadonlySet<unknown> = new Set([
+  'tool_approval_resolved',
+  'before_agent_start',
+  'agent_start'
+])
+
+/**
+ * Whether an OMP approval wait must survive this working event. omp posts `tool_execution_start`
+ * right after `tool_approval_requested`, while its Approve/Deny select still holds the human, so
+ * only the resolution (or a new turn) ends the wait. An `ask` row is its own tool's wait, which
+ * `tool_execution_end` ends.
+ */
+function holdsOmpApproval(
+  state: HookListenerState,
+  agentType: 'pi' | 'omp' | 'prime-agent',
+  eventName: unknown,
+  paneKey: string
+): boolean {
+  if (agentType !== 'omp' || OMP_APPROVAL_RELEASE_EVENTS.has(eventName)) {
+    return false
+  }
+  const previous = state.lastStatusByPaneKey.get(paneKey)?.payload
+  return (
+    previous?.agentType === 'omp' && previous.state === 'blocked' && previous.toolName !== 'ask'
+  )
 }

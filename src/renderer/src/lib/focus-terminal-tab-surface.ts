@@ -80,7 +80,10 @@ export function focusTerminalTabSurface(
       const scopedSelector = leafId
         ? `[data-terminal-tab-id="${escapedTabId}"] [data-leaf-id="${cssAttributeString(leafId)}"]${UNCOVERED_TERMINAL_LEAF_SELECTOR} .xterm-helper-textarea`
         : `[data-terminal-tab-id="${escapedTabId}"] ${UNCOVERED_TERMINAL_LEAF_SELECTOR} .xterm-helper-textarea`
-      const scoped = document.querySelector(scopedSelector) as HTMLElement | null
+      // A pane-specific reveal may have focused a split while this tab-wide request was waiting.
+      const scoped =
+        (!leafId ? document.querySelector<HTMLElement>(`${scopedSelector}:focus`) : null) ??
+        document.querySelector<HTMLElement>(scopedSelector)
       if (scoped) {
         focusTerminalHelper(scoped, options)
         return

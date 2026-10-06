@@ -19,7 +19,7 @@ for (const config of Object.values(TUI_AGENT_CONFIG)) {
   }
 }
 
-export function getTerminalStartupCommandToken(command: string): string {
+function getTerminalStartupCommandToken(command: string): string {
   const scanLimit = Math.min(command.length, TERMINAL_STARTUP_COMMAND_TOKEN_MAX_CHARS)
   let index = 0
 
@@ -50,17 +50,13 @@ export function getTerminalStartupCommandToken(command: string): string {
   return command.slice(tokenStart, index)
 }
 
-export function isCodexTerminalStartupCommand(command: string): boolean {
-  const executable = getTerminalStartupCommandExecutableName(command)
-  return executable === 'codex' || executable.startsWith('codex-')
-}
-
 export function isKnownTuiAgentTerminalStartupCommand(command: string): boolean {
   const executable = getTerminalStartupCommandExecutableName(command)
   return (
     KNOWN_TUI_AGENT_EXECUTABLES.has(executable) ||
     executable.startsWith('codex-') ||
-    executable.startsWith('grok-')
+    executable.startsWith('grok-') ||
+    executable.startsWith('muse-bin-')
   )
 }
 

@@ -12,8 +12,13 @@ describe('terminal IME e2e workflow', () => {
 
   it('runs only on schedule or manual dispatch', () => {
     expect(workflow.on.pull_request).toBeUndefined()
-    expect(workflow.on.workflow_dispatch).toBeNull()
+    expect(workflow.on.workflow_dispatch.inputs.diagnose_wayland_input).toMatchObject({
+      required: false,
+      type: 'boolean',
+      default: false
+    })
     expect(workflow.on.schedule).toEqual([{ cron: '30 9 * * *' }])
+    expect(workflow.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
   })
 
   it('installs native IBus Hangul and X11 input tools', () => {
@@ -45,35 +50,18 @@ describe('terminal IME e2e workflow', () => {
     expect(nativeIndex).toBeGreaterThan(deterministicIndex)
   })
 
-  it('keeps IBus lifecycle scoped to owned processes', () => {
-    const runner = readFileSync(
-      join(projectDir, 'config/scripts/run-terminal-ibus-hangul-e2e.mjs'),
-      'utf8'
+  it('runs native Wayland independently with CJK fonts and retained evidence', () => {
+    const job = workflow.jobs['linux-wayland']
+    expect(job.needs).toBeUndefined()
+    const install = job.steps.find((step) => step.run?.includes('apt-get install')).run
+    for (const tool of ['gnome-shell', 'ibus-hangul', 'fonts-noto-cjk', 'xwininfo']) {
+      expect(install).toContain(tool === 'xwininfo' ? 'x11-utils' : tool)
+    }
+    expect(job.steps.find((step) => step.run?.includes('--nested-wayland')).run).toBe(
+      'node config/scripts/run-terminal-ibus-hangul-e2e.mjs --nested-wayland'
     )
-
-    expect(runner).toContain(
-      "['--xim', '--verbose', '--panel=disable', '--emoji-extension=disable']"
-    )
-    expect(runner).toContain("spawn('xfwm4', ['--compositor=off']")
-    expect(runner).toContain("['initial-input-mode', 'hangul']")
-    expect(runner).toContain("['hangul-keyboard', '2']")
-    expect(runner).toContain("process.kill(-processGroupId, 'SIGTERM')")
-    expect(runner).toContain("process.kill(-processGroupId, 'SIGKILL')")
-    expect(runner).toContain('const killDeadline = Date.now() + processKillTimeoutMs')
-    expect(runner).toMatch(
-      /'test:e2e:headful',\s*'--workers=1',\s*'--',\s*'tests\/e2e\/terminal-ibus-hangul-native\.spec\.ts'/
-    )
-    expect(runner).not.toContain("'--replace'")
-    expect(runner).not.toContain('killall')
-    expect(runner).not.toContain('pkill')
-  })
-
-  it('bounds blocking native input commands', () => {
-    const nativeSpec = readFileSync(
-      join(projectDir, 'tests/e2e/terminal-ibus-hangul-native.spec.ts'),
-      'utf8'
-    )
-
-    expect(nativeSpec.match(/timeout: NATIVE_COMMAND_TIMEOUT_MS/g)).toHaveLength(3)
+    const upload = job.steps.find((step) => step.uses?.startsWith('actions/upload-artifact'))
+    expect(upload.if).toBe('always()')
+    expect(upload.with.name).toBe('terminal-wayland-ime-evidence')
   })
 })

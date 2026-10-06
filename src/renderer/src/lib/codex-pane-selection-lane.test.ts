@@ -367,9 +367,10 @@ describe('resolveCodexPaneSelectionLane', () => {
         if (property === 'worktreesByRepo') {
           throw new Error('state read blew up')
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: raw string|symbol pass-through; the receiver stays the target on purpose.
         return Reflect.get(target, property)
       }
-    }) as LaneState
+    })
     // Why: this call sits outside the scan's per-pane failure guard, so a throw
     // would lose the notice for every pane in the batch, not just this one.
     expect(

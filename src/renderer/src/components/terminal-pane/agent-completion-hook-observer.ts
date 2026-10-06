@@ -23,7 +23,6 @@ type HookObserverOptions = {
   establishAgentEvidence: () => void
   recordPaneActivity: () => void
   clearPendingHookDone: () => void
-  clearPendingCodexAttention: () => void
   dispatchAttention: (payload: AgentCompletionStatusSnapshot) => void
   dispatchCompletion: (source: 'hook', title: string, override?: Record<string, unknown>) => boolean
   scheduleHookDoneCompletion: (title: string, payload: AgentCompletionStatusSnapshot) => void
@@ -37,6 +36,7 @@ type HookObserverOptions = {
   consumePendingStampedTailForAgent: (agent: string | null, identity: string | null) => boolean
   consumeStampedTailForCurrentCoordinator: (timestamp: number) => void
   clearOriginStampedTail: () => void
+  clearProcessExitCompletion: () => void
   recordWorkingBoundary: (timestamp: number | undefined) => void
   dropPendingTitle: () => void
 }
@@ -55,7 +55,6 @@ export function createAgentCompletionHookObserver({
   establishAgentEvidence,
   recordPaneActivity,
   clearPendingHookDone,
-  clearPendingCodexAttention,
   dispatchAttention,
   dispatchCompletion,
   scheduleHookDoneCompletion,
@@ -69,18 +68,12 @@ export function createAgentCompletionHookObserver({
   consumePendingStampedTailForAgent,
   consumeStampedTailForCurrentCoordinator,
   clearOriginStampedTail,
+  clearProcessExitCompletion,
   recordWorkingBoundary,
   dropPendingTitle
 }: HookObserverOptions) {
   function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
     recordPaneActivity()
-    if (options.shouldSuppressHookCompletion?.(payload)) {
-      if (isAttentionHookState(payload.state)) {
-        clearPendingHookDone()
-        clearPendingCodexAttention()
-      }
-      return
-    }
     if (isRecognizedAgentType(payload.agentType)) {
       establishAgentEvidence()
     }
@@ -123,9 +116,11 @@ export function createAgentCompletionHookObserver({
         return
       }
       clearOriginStampedTail()
+      // Why: an exit identity names no turn, so kept past a new turn it matches (by agent) and
+      // swallows every later hook Done of that agent in this pane.
+      clearProcessExitCompletion()
       recordWorkingBoundary(payload.stateStartedAt)
       clearPendingHookDone()
-      clearPendingCodexAttention()
       state.workingStatusObserved = true
       state.requiresFreshWorking = false
       state.lastCompletionIdentity = null
@@ -146,7 +141,6 @@ export function createAgentCompletionHookObserver({
     if (payload.state !== 'done') {
       return
     }
-    clearPendingCodexAttention()
     const identity = hookCompletionIdentity(payload)
     const turnCompletedAt = isFiniteTurnCompletedAt(payload.turnCompletedAt)
       ? payload.turnCompletedAt

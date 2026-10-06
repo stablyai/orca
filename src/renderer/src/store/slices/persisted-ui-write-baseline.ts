@@ -10,6 +10,7 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
  */
 export type PersistedUIWriteBaseline = {
   sidebarWidth: number
+  sidebarOpen: boolean
   rightSidebarOpen: boolean
   rightSidebarTab: PersistedUIState['rightSidebarTab']
   rightSidebarExplorerView: PersistedUIState['rightSidebarExplorerView']
@@ -26,6 +27,7 @@ export type PersistedUIWriteBaseline = {
   hideDetachedHeadWorkspaces: boolean
   hideWorkspacesFromOtherDevices: boolean
   alwaysShowDefaultBranchWorkspace: boolean
+  explorerDisplayRootByWorktree: Record<string, string>
   showDotfilesByWorktree: Record<string, boolean>
   filterRepoIds: readonly string[]
   acknowledgedAgentsByPaneKey: Record<string, number>
@@ -39,6 +41,7 @@ export type PersistedUIWriteBaseline = {
 // this module exists to close (see ui-state-schema-parity.ts for the same lesson).
 const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   sidebarWidth: true,
+  sidebarOpen: true,
   rightSidebarOpen: true,
   rightSidebarTab: true,
   rightSidebarExplorerView: true,
@@ -55,6 +58,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   hideDetachedHeadWorkspaces: true,
   hideWorkspacesFromOtherDevices: true,
   alwaysShowDefaultBranchWorkspace: true,
+  explorerDisplayRootByWorktree: true,
   showDotfilesByWorktree: true,
   filterRepoIds: true,
   acknowledgedAgentsByPaneKey: true,
@@ -95,11 +99,13 @@ function stringArrayEqual(a: readonly string[], b: readonly string[]): boolean {
   return a === b || (a.length === b.length && a.every((value, i) => value === b[i]))
 }
 
+/** Compares collection fields by value so hydration does not produce redundant persistence writes from new identities. */
 function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: unknown): boolean {
   if (field === 'filterRepoIds') {
     return stringArrayEqual(a as readonly string[], b as readonly string[])
   }
   if (
+    field === 'explorerDisplayRootByWorktree' ||
     field === 'showDotfilesByWorktree' ||
     field === 'acknowledgedAgentsByPaneKey' ||
     field === 'activityClearedAtByPaneKey' ||

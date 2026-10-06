@@ -1,9 +1,11 @@
+import '../unused-default-rpc-methods.test-fixture'
 // The create route's pre-commit boundary: a failure before `attach` must reach the client as a
 // refusal it can classify, and a failure at or after `attach` must not.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -49,7 +51,11 @@ function hostStub(): StructuredAgentSessionHost {
     cursor: { epoch: 'epoch-a', sequence: 0 },
     value: { sessionId: SESSION, fence: 1, page: {}, unconfirmedClientMessageIds: [] }
   }))
-  return { attach } as unknown as StructuredAgentSessionHost
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create reaches only attach, and the logger a failure past it reports to.
+  return {
+    attach,
+    deps: { logger: recordingStructuredAgentSessionLogger().logger }
+  } as unknown as StructuredAgentSessionHost
 }
 
 const resolvedIntent = {
@@ -71,6 +77,9 @@ async function create(
 ): Promise<RpcResponse> {
   const runtime = {
     getRuntimeId: () => 'runtime-1',
+    // The structured surface is settings-gated for every caller; these fixtures probe the
+    // pre-commit boundary, which only runs once the gate admits the call.
+    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),

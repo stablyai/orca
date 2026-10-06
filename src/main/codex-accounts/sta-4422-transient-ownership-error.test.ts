@@ -121,7 +121,7 @@ describe('STA-4422 Codex sessions keep logging out', () => {
     )
     const store = createStore(
       createSettings({
-        shellStartupEnvProbeSupported: true,
+        realHomeRoutable: true,
         codexManagedAccounts: [
           createCodexAccountRecord('account-1', 'user@example.com', 'acct-1', managedHomePath)
         ],
@@ -193,7 +193,7 @@ describe('STA-4422 Codex sessions keep logging out', () => {
     writeFileSync(join(managedHomePath, '.orca-managed-home'), 'someone-else\n', 'utf-8')
     const store = createStore(
       createSettings({
-        shellStartupEnvProbeSupported: true,
+        realHomeRoutable: true,
         codexManagedAccounts: [
           createCodexAccountRecord('account-1', 'user@example.com', 'acct-1', managedHomePath)
         ],

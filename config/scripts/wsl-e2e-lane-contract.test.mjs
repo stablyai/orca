@@ -8,6 +8,7 @@ const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), '
 describe('real WSL terminal lane', () => {
   it.each([
     'config/scripts/verify-wsl-e2e-participation.mjs',
+    'config/scripts/verify-playwright-participation.mjs',
     'src/main/wsl-availability.ts',
     'src/main/wsl/wsl-runner.ts',
     'src/main/pty/wsl-orca-env.ts',

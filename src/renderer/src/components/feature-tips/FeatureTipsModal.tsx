@@ -6,20 +6,9 @@ import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
-import { CliFeatureTipVisual } from './CliFeatureTipVisual'
+import { CliSetupTipDialog } from './CliSetupTipDialog'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
-import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
-import { FeatureTipActions } from './FeatureTipActions'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
 import {
@@ -29,16 +18,11 @@ import {
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
+import { SessionSearchTipDialog } from './SessionSearchTipDialog'
+import { useSessionSearchTipSetup } from './use-session-search-tip-setup'
 import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
-
-function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
-  return (
-    <span className="rounded-sm bg-foreground/10 px-1 py-0.5 font-medium text-foreground">
-      {children}
-    </span>
-  )
-}
 
 export default function FeatureTipsModal(): JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -51,6 +35,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const modalData = useAppStore((s) => s.modalData)
+  const showAiVaultSearch = useAppStore((s) => s.showAiVaultSearch)
   const mountedRef = useMountedRef()
   const activeModalRef = useRef(activeModal)
   const setupRequestIdRef = useRef(0)
@@ -62,7 +47,11 @@ export default function FeatureTipsModal(): JSX.Element | null {
     modalData,
     seenTipIds,
     featureInteractions,
-    settings
+    settings,
+    webClient: isWebClientLocation()
+  })
+  const sessionSearchSetup = useSessionSearchTipSetup({
+    dialogOpen: isOpen && currentTip?.id === 'agent-session-search'
   })
 
   useEffect(() => {
@@ -115,6 +104,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
     openSettingsPage()
   }
 
+  const openSessionSearchSettings = (): void => {
+    markCurrentTipSeen()
+    closeModal()
+    openSettingsTarget({ pane: 'session-history', repoId: null })
+    openSettingsPage()
+  }
+
   const enableOrchestrationSkillSetup = (): void => {
     localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
     localStorage.removeItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
@@ -148,6 +144,20 @@ export default function FeatureTipsModal(): JSX.Element | null {
         closeModal()
         openSettingsTarget({ pane: 'voice', repoId: null })
         openSettingsPage()
+        break
+      }
+      case 'enable-session-search': {
+        if (sessionSearchSetup.stage === 'offer') {
+          // Why: stay open through the first index so search is never offered half-built.
+          setPrimaryBusy(true)
+          await sessionSearchSetup.enable()
+          setPrimaryBusy(false)
+          break
+        }
+        closeModal()
+        if (sessionSearchSetup.stage === 'ready') {
+          showAiVaultSearch()
+        }
         break
       }
       case 'setup-cli': {
@@ -240,114 +250,15 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
   if (currentTip.action === 'setup-cli') {
     return (
-      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-        {/* Why: the CLI tip sits over terminal surfaces, so it needs a local token-mixed surface. */}
-        <DialogContent
-          className="!flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden bg-[color-mix(in_srgb,var(--foreground)_8%,var(--background))] p-0 dark:bg-[color-mix(in_srgb,var(--foreground)_16%,var(--background))] sm:max-w-4xl md:!h-[min(31rem,calc(100vh-2rem))] md:!flex-row"
-          showCloseButton={!skillTerminalOpen}
-        >
-          <div
-            className={`scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col justify-between overflow-y-auto px-8 py-9 transition-[flex-basis] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:shrink-0 ${
-              skillTerminalOpen ? 'basis-auto md:basis-full' : 'basis-auto md:basis-[47.5%]'
-            }`}
-          >
-            <DialogHeader className={`${skillTerminalOpen ? 'gap-2' : 'gap-4'} text-left`}>
-              <div>
-                <DialogTitle
-                  className={`text-3xl font-semibold leading-tight tracking-tight ${
-                    skillTerminalOpen ? 'max-w-2xl' : 'max-w-[22rem]'
-                  }`}
-                >
-                  {currentTip.title}
-                </DialogTitle>
-                <DialogDescription className="mt-3 max-w-2xl text-sm leading-relaxed">
-                  {currentTip.description}
-                </DialogDescription>
-                <div
-                  aria-hidden={skillTerminalOpen}
-                  className={`max-w-sm space-y-2 overflow-hidden rounded-md border text-sm leading-relaxed text-muted-foreground transition-[max-height,opacity,transform,margin,padding,border-color] duration-300 ease-out motion-reduce:transition-none ${
-                    skillTerminalOpen
-                      ? 'pointer-events-none mt-0 max-h-0 -translate-y-2 border-transparent p-0 opacity-0'
-                      : 'mt-3 max-h-64 translate-y-0 border-border/70 bg-muted/35 p-3 opacity-100'
-                  }`}
-                >
-                  <p className="font-medium text-foreground">
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.4795ac2d4a',
-                      'Try asking:'
-                    )}
-                  </p>
-                  <p>
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.55846c7f95',
-                      '“Split this PR into two'
-                    )}
-                    <WorktreePromptTerm>
-                      {translate(
-                        'auto.components.feature.tips.FeatureTipsModal.27c567a89c',
-                        'worktrees'
-                      )}
-                    </WorktreePromptTerm>{' '}
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.7fc6f02099',
-                      'and create PRs for each.”'
-                    )}
-                  </p>
-                  <p>
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.864e2db28f',
-                      '“When the agent in'
-                    )}
-                    <WorktreePromptTerm>
-                      {translate(
-                        'auto.components.feature.tips.FeatureTipsModal.298301b7a0',
-                        'worktree'
-                      )}
-                    </WorktreePromptTerm>{' '}
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.3c6c478462',
-                      'X finishes, send it the review task.”'
-                    )}
-                  </p>
-                </div>
-              </div>
-              {skillTerminalOpen ? <CliSkillSetupTerminal /> : null}
-            </DialogHeader>
-
-            <DialogFooter className="mt-8 flex sm:justify-stretch">
-              {skillTerminalOpen ? (
-                <Button className="w-full" onClick={handleSkip}>
-                  {translate('auto.components.feature.tips.FeatureTipsModal.c169298e4d', 'Done')}
-                </Button>
-              ) : (
-                <FeatureTipActions
-                  currentTip={currentTip}
-                  primaryBusy={primaryBusy}
-                  onPrimaryAction={() => void handlePrimaryAction()}
-                  onSkip={handleSkip}
-                  showSkip={false}
-                  fullWidth
-                />
-              )}
-            </DialogFooter>
-          </div>
-          <div
-            className={`min-h-0 min-w-0 shrink-0 overflow-hidden transition-[flex-basis,max-height] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
-              skillTerminalOpen
-                ? 'pointer-events-none max-h-0 basis-0 md:max-h-none md:basis-0'
-                : 'max-h-[40rem] basis-auto md:basis-[52.5%]'
-            }`}
-          >
-            <div
-              className={`h-full transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:w-[29.4rem] ${
-                skillTerminalOpen ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'
-              }`}
-            >
-              {skillTerminalOpen ? null : <CliFeatureTipVisual />}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CliSetupTipDialog
+        open={isOpen}
+        tip={currentTip}
+        primaryBusy={primaryBusy}
+        skillTerminalOpen={skillTerminalOpen}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSkip={handleSkip}
+      />
     )
   }
 
@@ -361,6 +272,21 @@ export default function FeatureTipsModal(): JSX.Element | null {
         onPrimaryAction={() => void handlePrimaryAction()}
         onSkip={handleSkip}
         onRebindClick={openShortcutsSettings}
+      />
+    )
+  }
+
+  if (currentTip.action === 'enable-session-search') {
+    return (
+      <SessionSearchTipDialog
+        open={isOpen}
+        tip={currentTip}
+        primaryBusy={primaryBusy}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSettingsClick={openSessionSearchSettings}
+        stage={sessionSearchSetup.stage}
+        status={sessionSearchSetup.status}
       />
     )
   }

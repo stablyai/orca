@@ -11,6 +11,7 @@ import {
 } from './command-code-prompt-text'
 import { stripTerminalControl } from './terminal-control-stripping'
 import { escapeRegex } from './string-utils'
+import { ownRetainedString } from './own-retained-string'
 
 export { stripTerminalControl } from './terminal-control-stripping'
 
@@ -159,7 +160,7 @@ function rawChunkMayContainCommandCodeBanner(previousRawText: string, data: stri
 
 function appendRecentRawText(previousRawText: string, data: string): string {
   if (data.length >= RECENT_TEXT_LIMIT) {
-    return data.slice(-RECENT_TEXT_LIMIT)
+    return ownRetainedString(data.slice(-RECENT_TEXT_LIMIT))
   }
   return (previousRawText + data).slice(-RECENT_TEXT_LIMIT)
 }

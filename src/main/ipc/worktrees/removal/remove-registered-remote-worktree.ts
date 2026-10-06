@@ -3,6 +3,8 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { SshGitProvider } from '../../../providers/ssh-git-provider'
+import { previewNestedWorktreeRemoval } from './nested-worktree-removal'
+import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
 import { deleteRemoteWorktreeHistory } from '../../../remote-worktree-history-cleanup'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import { getSshPtyProvider } from '../../pty'
@@ -10,6 +12,7 @@ import {
   cleanupUnusedWorktreePushTargetRemoteSsh,
   notifyWorktreesChanged
 } from '../../worktree-remote'
+import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import {
@@ -34,6 +37,15 @@ export async function removeRegisteredRemoteWorktree(
   deleteBranch: boolean
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
+  if (args.expectedCheckout) {
+    const refreshed = await previewNestedWorktreeRemoval(
+      context,
+      repo,
+      canonicalWorktreePath,
+      removalHostId
+    )
+    assertNestedWorktreeRemovalApproval(refreshed, [args.expectedCheckout])
+  }
   const remoteConnectionId = repo.connectionId!
   // Why: SSH deletion mirrors the local flow — hooks run while the directory is intact, then the clean check guards removal.
   if (!args.force) {
@@ -63,6 +75,8 @@ export async function removeRegisteredRemoteWorktree(
         ? provider!.removeWorktree(canonicalWorktreePath, args.force, remoteRemoveOptions)
         : provider!.removeWorktree(canonicalWorktreePath, args.force)
     )
+    // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
+    runWorktreeChangeInvalidators(repoId)
     removalCompleted = true
   } finally {
     await removalGate.finish(removalCompleted)

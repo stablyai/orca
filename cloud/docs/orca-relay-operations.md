@@ -2,6 +2,21 @@
 
 This runbook applies to the stable Cloud Run director and the production-shaped GCE cells in both environments. It does not authorize a full Terraform apply: staging and production contain unrelated drift, so inspect a saved targeted plan and its destroy count before every apply.
 
+## PostgreSQL statement statistics
+
+Relay schema startup exposes `pg_stat_statements` when the server already preloads
+that collector and the schema identity can install its extension. Servers without
+the collector or the required privileges continue normally. Installation does not
+change preload settings, reset collected counters, or require a database restart;
+concurrent startups yield to one installer. An existing extension is left in place.
+
+For SQL incidents, inspect bounded aggregates of `calls`, `total_exec_time`,
+`shared_blks_read`, `shared_blks_dirtied`, and `wal_bytes`, scoped to the relay
+database and identified query IDs. Compare counter deltas over the same interval
+as fleet runtime metrics; retain the statistics reset timestamp. Do not export
+query text, identities, credentials, or invoke `pg_stat_statements_reset()` during
+an investigation. Treat an unavailable view as missing evidence, not zero work.
+
 The relay is automatically active for entitled signed-in desktops. There is no rollout flag, cohort, or user toggle. The emergency product kill switch is the auth plane refusing relay-token exchange; use cell drains only to move or terminate existing data-plane work.
 
 ## Safety rules
@@ -464,6 +479,75 @@ Once a target control is registered, do not force the pre-registration rollback.
 
 After a deployment traffic shift, preserve the old revision/tag until metrics and live reconnect checks pass. If the new revision is unhealthy, shift traffic back only while old controls are still valid, then issue a strictly newer director migration rather than reusing a prior epoch.
 
+## Regional rehoming
+
+Idle regional correction requires both source and target cells to advertise
+`regionalRehomeProtocol >= 3`. PR #20105 introduced this capability version with
+the idle handoff implementation. With that runtime, both rehome trust environment
+settings must be configured to advertise 3; otherwise the cell advertises 0.
+An older trusted runtime can advertise 1: configuring trust alone does not upgrade
+its implementation. The separate `connectionCapacityProtocol: 2` health field does
+not establish regional-correction readiness. Verify the live runtime version and
+image, not only instance-template configuration, before rollout or enablement.
+Incompatible cells are excluded from correction selection; enabling the cohort
+cannot override this check. Director and cell deployments are separate operations.
+
+The idle-rehome commit runs on the source cell, so from an Asia cell every
+statement is a cross-region round trip to the database. It takes no fleet-wide
+lock. It locks the global rehome control and worker rows NOWAIT, then the host's
+own rows, and reads the cell inventory, runtime, capability and safety tables
+unlocked. Its only cell lock is the target cell row, taken NOWAIT by the last
+statement before COMMIT. That statement re-checks that the target is enabled, in
+general admission and has request capacity. The target row is held for about one
+round trip, roughly 175 ms from Asia, and no other cell row is held at all. If
+the target changed admission, filled up, or is locked by another writer such as
+an admission change, the commit rolls back whole and answers `deferred` with
+reason `candidate-ineligible`. The cell logs
+`orca_relay_idle_rehome_target_deferred` with the cause, and the director moves
+to its next candidate. Runtime metrics report the hold as
+`rehomeTargetRowHoldMsMax` and `rehomeTargetRowHolds`. The same hold also feeds
+`cellInventoryHoldMsMax`, and `cellInventoryHoldMaxSite` names the lock that
+produced that max. An Asia-sourced commit still holds the global rehome control
+row for its whole length, roughly 6.5 s at 175 ms per statement. An operator
+pause through `applyRegionalRehomeControl` waits 1 s for that row, 3 attempts,
+so it can fail during one commit: retry a pause that fails once, and do not
+treat that as a fault.
+
+Each hold site also reports its own p99: `inventoryHoldMsP99`,
+`rehomeTargetRowHoldMsP99` and `isolatedReplacementHoldMsP99`, the last being
+the regional target rows a drain return locks; a site with no holds in the
+interval reports 0, so read these filtered to values above 0. Directors also
+report lane slot times (`stickyServiceMsP50/P99`, `drainReturnServiceMsP50/P95`,
+omitted when the lane served nothing; a sticky slot held only for a drain-return
+or unverified host's verification read counts too, so its p50 moves with that
+share), every `/v1/assign` 503 by cause in
+`assign503sByCauseDelta`, and `assignNonDrain503sDelta`, which leaves out the
+scheduled `drain-return-deferred` answers a fast drain produces by design.
+Every 5 s each director samples `pg_stat_activity` for relay backends waiting
+on a lock, keyed by waiter role, table and holder role
+(`dbLockWaitersByKeyDelta`). The holder is the root of the wait chain, and the
+table is the first relay table the waiting statement names. The sample runs
+on the director's own 3-connection pool, so when every connection is waiting on
+a lock it queues behind them and undercounts director waiters; a dedicated
+sampler connection would fix that. Summed waiters divided by `dbLockWaitSamplesDelta`
+is the mean number waiting, i.e. lock-wait seconds per second; directors and
+cells share one database user, so Query Insights cannot make this split.
+Reconciliation logs `orca_relay_reservation_drift` for each cell whose
+`reserved_requests` it corrected.
+
+`host-cooldown-ms` is the minimum gap between two rehomes of one host. It bounds the damage from
+a desktop whose region probe flips: without it the host would be dragged back across the ocean on
+every flip, since the preference age never expires while the host keeps reconnecting.
+
+Rehome is currently inflow-only into Asia. The director only picks source cells in its own region,
+which is the database's region (US): hosts move from US cells to Asia cells, and a host already on
+an Asia cell stays there. Asia cells remain valid targets. The source cell runs the rehome commit,
+and an Asia source pays a cross-ocean round trip per statement while holding row locks every cell
+needs, which stalled the fleet's database. The preview reports those hosts as
+`source-outside-director-region`, and the poll summary line reports the skipped Asia cells as
+`skippedOffRegionSourceCells`. This is a temporary stopgap: it is removed once the rehome commit
+no longer holds those locks across round trips. Deploy or remove it only while rehome is paused.
+
 ## Game-day matrix
 
 Run and record each scenario in staging before launch:
@@ -479,3 +563,64 @@ Run and record each scenario in staging before launch:
 - return a dormant host, overload a cell, kill a cell, evacuate active work, and exercise pre-registration rollback.
 
 The served black-box relay suite validates the protocol/state transitions used by these procedures. The physical-device and real-GFE canaries remain separate launch gates; unit/black-box success cannot replace them.
+
+## Optional measured region correction (deployment gated)
+
+New optimization claims require both the durable regional-rehome control and
+`ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT` (integer 0–100, default **0**).
+Turning either gate off stops new optional moves; ordinary migration cleanup and
+recovery continue. Legacy preferred-region hints do not certify a correction. Both
+cells must advertise regional protocol3 and the authenticated desktop control must
+advertise idle-regional-rehome-v1. The source must have no actual client sockets or
+pending admission/control work; a live control socket alone does not prevent a move.
+
+The monitor/deploy identity can read **GET `/v1/admin/regional-rehome-preview`**.
+It returns full-population eligibility/exclusion counts, open-migration capacity,
+process-safety gating and aggregate migration outcomes; it never claims a
+host or changes the failure budget. This is advisory, with separately read state:
+concurrent assignments, capacity changes, rate pauses and control changes can make
+the next claim differ. Inspect the durable control separately before enabling.
+Do not treat an unavailable/failed preview as zero eligible hosts.
+
+`orca_relay_region_correction_outcomes` reports attempts by source/target,
+registration/completion/abort state, oldest open age and target
+reservation units every five minutes. `orca_relay_region_comparison` samples a
+stable 10% of accepted reports (including unchanged hosts), keyed by host digest,
+assignment epoch and decision generation. Existing control RTT and client-accept
+logs include assignment epoch, control generation and drain mode; join those for
+matched before/after and unchanged-cohort comparisons. Client accept latency is
+connection setup, not application command round trip. No application-latency
+improvement has been demonstrated by probe differences alone.
+
+Quiet live connections count as work and defer optional correction indefinitely.
+A returning client may race with the short admission gate and retry normally. No
+optimization timer may close an established client. Investigate failed registration,
+ambiguous authority, stuck reservations and reconnect/failure rates against agreed
+limits. A database outage can keep the source fenced until locked reconciliation
+establishes its authority; timeout alone is not permission to reopen admissions.
+
+All directors must run the reviewed idle worker before enabling. Record the tested
+immutable source and rollback revisions, then verify the ordinary migration recovery
+path before rollout. There is no retained-source table or renewal protocol. Deploying
+supporting cells/desktops and enabling a cohort require separate rollout authorization
+and explicit numerical stop criteria; this change enables neither.
+
+### Setting the correction cohort during a reviewed director rollout
+
+The existing **Deploy Relay Production Director** workflow accepts
+`region-correction-cohort-percent`: `preserve` (default) or an integer0–100.
+It carries the cohort onto both candidate and compatible rollback revisions and
+verifies the environment before promotion. If the predecessor has no setting,
+`preserve` stamps zero. An explicit change requires the exact disabled durable
+rehome generation; configuring a nonzero cohort does not itself enable the sweep.
+The usual image, identity, health and traffic checks remain in force. No workflow
+was dispatched as part of implementation.
+
+Terraform reads the cohort from the same traffic-serving revision used to preserve
+regional placement. A later apply therefore preserves a workflow-set cohort,
+including explicit zero; only an absent service/setting bootstraps to0. Malformed
+or ambiguous live settings fail the plan instead of silently resetting the cohort.
+The audited director workflow owns subsequent changes.
+Before the first nonzero cohort, verify compatible protocol2 cells, updated
+cleanup workers, preview eligibility, both serving/rollback images and the
+explicitly approved observation/stop criteria.

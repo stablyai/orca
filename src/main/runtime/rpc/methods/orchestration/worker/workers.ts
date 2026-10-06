@@ -1,7 +1,11 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { startFederatedWorker } from '../federation/federated-worker-start'
 import { startLocalWorker } from './local-worker-start'
+import {
+  decideWorkerStartMode,
+  readWorkerStartModeSettings
+} from '../../orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import { WorkerStartParams } from './worker-start-schema'
 import {
@@ -10,13 +14,13 @@ import {
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
 
-export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_START_METHODS = [
   defineMethod({
     name: 'orchestration.workerStart',
     params: WorkerStartParams,
     handler: async (
       params,
-      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence }
+      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence, orchestrationCaller }
     ) => {
       if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
         throw new OrchestrationError(
@@ -26,11 +30,12 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       }
       const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
       const db = runtime.getOrchestrationDb()
-      const coordinatorPane = resolveOrchestrationCaller(runtime, {
+      const coordinator = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
-        callerEvidence: orchestrationCompatibilityEvidence
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller
       })
-      const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
+      const run = coordinator ? db.getCurrentRunForCoordinator(coordinator) : undefined
       if (!run || (params.run && params.run !== run.id)) {
         throw new OrchestrationError(
           'consumer_fenced',
@@ -45,24 +50,34 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         )
       }
       await assertWorkerStartTaskSpecWithinPromptBudget(params.spec ?? existingTask!.spec)
+      const mode = decideWorkerStartMode({
+        params,
+        settings: readWorkerStartModeSettings(runtime)
+      })
       if (params.on) {
-        return startFederatedWorker({
+        // A remote worker is always a terminal agent; the mode receipt rides along so the
+        // coordinator still learns why its structured default did not apply.
+        const receipt = await startFederatedWorker({
           params,
           runtime,
           db,
           runId: run.id,
           task: existingTask,
-          orchestrationMutation
+          orchestrationMutation,
+          callerSession: orchestrationCaller
         })
+        return receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
       }
       return startLocalWorker({
         params: { ...params, timeoutMs: readinessTimeoutMs },
         runtime,
         db,
         run,
-        coordinatorPane,
+        coordinator,
+        callerSession: orchestrationCaller,
         existingTask,
-        orchestrationMutation
+        orchestrationMutation,
+        mode
       })
     }
   })

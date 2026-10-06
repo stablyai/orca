@@ -2,6 +2,7 @@ import {
   getCyclicWorktreeLineageChildIds,
   isValidResolvedWorktreeLineageEdge
 } from '../../../../shared/resolved-worktree-lineage'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
@@ -123,6 +124,33 @@ export function getProjectedWorktreeLineageChildrenByParentId(
   }
   projection.childrenByParentId = childrenByParentId
   return childrenByParentId
+}
+
+/**
+ * Lineage inputs for one execution host. Why: the id-keyed projection keeps one
+ * row per id, so a two-host id collision must be narrowed to the target's host.
+ */
+export function getHostScopedWorktreeLineageInputs(
+  worktrees: readonly Worktree[],
+  lineageById: Readonly<Record<string, WorktreeLineage>>,
+  executionHostId: ExecutionHostId | undefined
+): { worktreeMap: Map<string, Worktree>; lineageById: Record<string, WorktreeLineage> } {
+  const worktreeMap = new Map<string, Worktree>()
+  const hostLineageById: Record<string, WorktreeLineage> = {}
+  for (const worktree of worktrees) {
+    if (executionHostId && worktree.hostId && worktree.hostId !== executionHostId) {
+      continue
+    }
+    worktreeMap.set(worktree.id, worktree)
+    const projected = lineageById[worktree.id]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolved rows may carry an inline lineage the Worktree type omits; it is only read, never trusted over a matching projection.
+    const inline = (worktree as WorktreeWithResolvedLineage).lineage
+    const lineage = projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
+    if (lineage) {
+      hostLineageById[worktree.id] = lineage
+    }
+  }
+  return { worktreeMap, lineageById: hostLineageById }
 }
 
 export function getWorktreeLineageAncestors(

@@ -5,13 +5,21 @@ const mocks = vi.hoisted(() => ({ gitExecFileAsync: vi.fn() }))
 vi.mock('./runner', () => ({ gitExecFileAsync: mocks.gitExecFileAsync }))
 
 import { GIT_READ_TIMEOUT_MS } from './command-runner/git-command-timeout'
+import { GitAdmissionScheduler } from './command-runner/git-subprocess-admission'
+import type { GitAdmissionTier } from './command-runner/git-exec-options'
 import { WSL_GIT_READ_ENVIRONMENT_WAIT_MS } from './wsl-git-read-environment'
 import {
   measureRetargetDivergence,
   RETARGET_DIVERGENCE_BUDGET_MS
 } from './worktree-base-divergence'
 
-type ExecOptions = { cwd: string; timeout?: number; wslDistro?: string; signal?: AbortSignal }
+type ExecOptions = {
+  cwd: string
+  timeout?: number
+  wslDistro?: string
+  signal?: AbortSignal
+  admissionTier?: GitAdmissionTier
+}
 
 function callOptions(): ExecOptions[] {
   return mocks.gitExecFileAsync.mock.calls.map((call) => call[1] as ExecOptions)
@@ -36,6 +44,35 @@ beforeEach(() => {
 })
 
 describe('measureRetargetDivergence deadlines', () => {
+  it('finishes through interactive headroom while general capacity is occupied', async () => {
+    const scheduler = new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 1 })
+    const blocker = await scheduler.acquire({ args: ['status'], cwd: '/repo' })
+    mocks.gitExecFileAsync.mockImplementation(async (args: string[], options: ExecOptions) => {
+      const grant = await scheduler.acquire({
+        args,
+        cwd: options.cwd,
+        signal: options.signal,
+        tier: options.admissionTier
+      })
+      try {
+        return { stdout: args[0] === 'merge-base' ? 'abc123\n' : '1\n' }
+      } finally {
+        grant.release()
+      }
+    })
+    try {
+      await expect(
+        measureRetargetDivergence('/repo', 'refs/heads/main', 'refs/remotes/origin/main', {
+          admissionTier: 'interactive',
+          budgetMsForTest: 200
+        })
+      ).resolves.toBe('within')
+      expect(subcommands()).toEqual(['rev-list', 'rev-list', 'merge-base'])
+    } finally {
+      blocker.release()
+    }
+  })
+
   it('puts every probe under one shared budget, not a budget each', async () => {
     answerProbes('3\n')
 

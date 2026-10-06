@@ -9,7 +9,8 @@ import {
 import { spawn } from 'node:child_process'
 import { open, stat } from 'node:fs/promises'
 import type { Store } from '../persistence'
-import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import { PATH_ACCESS_DENIED_MESSAGE } from '../ipc/filesystem-auth'
+import { resolveDesktopAuthorizedPath } from '../ipc/local-file-access-resolution'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
@@ -24,6 +25,7 @@ import {
   assertClipboardImageBase64LengthWithinLimit,
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit,
+  clipboardFormatsIncludeImage,
   type ClipboardImageThumbnail
 } from '../../shared/clipboard-image'
 import {
@@ -31,7 +33,6 @@ import {
   type ClipboardFileDeps,
   type ClipboardFileResult
 } from './clipboard-file-copy'
-import { readClipboardFilePaths } from './clipboard-file-read'
 import {
   cleanupExpiredRemoteClipboardFiles,
   scheduleLegacyRemoteClipboardFileCleanup,
@@ -39,6 +40,7 @@ import {
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
+import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
@@ -56,8 +58,16 @@ async function saveClipboardImageBufferForTarget(
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
   const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
-  if (runtimeEnvironmentId && !args?.connectionId) {
-    return saveClipboardImageBufferInRuntime(app.getPath('userData'), runtimeEnvironmentId, buffer)
+  // Why (#17679): with a runtime owner, a connectionId names one of the RUNTIME's SSH
+  // connections (nested Remote Server -> SSH), not one this process dialed. Looking it up
+  // in the local provider registry can only miss, so the runtime must perform the save.
+  if (runtimeEnvironmentId) {
+    return saveClipboardImageBufferInRuntime(
+      app.getPath('userData'),
+      runtimeEnvironmentId,
+      buffer,
+      args?.connectionId ?? null
+    )
   }
   return saveClipboardImageBufferAsTempFile(buffer, args)
 }
@@ -82,7 +92,6 @@ function runCommand(command: string, args: string[], stdin?: string): Promise<vo
 export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
-  ipcMain.removeHandler('clipboard:readFilePaths')
   ipcMain.removeHandler('clipboard:writeText')
   ipcMain.removeHandler('clipboard:writeTerminalText')
   ipcMain.removeHandler('clipboard:writeSelectionText')
@@ -90,6 +99,8 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:writeFile')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
   ipcMain.removeHandler('clipboard:readImageThumbnail')
+  ipcMain.removeHandler('clipboard:hasImage')
+  ipcMain.removeHandler('clipboard:readFilePaths')
 
   void cleanupExpiredRemoteClipboardFiles()
   scheduleLegacyRemoteClipboardFileCleanup()
@@ -105,20 +116,20 @@ export function registerClipboardHandlers(store: Store): void {
       return assertClipboardTextWithinLimitWithYield(clipboard.readText('selection'), options)
     }
   )
-  // Why: a file copied in Finder/Explorer reads back as its display name in the
-  // text flavor; terminals need the real path from the OS file flavor.
-  ipcMain.handle('clipboard:readFilePaths', (event): string[] => {
-    assertTrustedClipboardSender(event)
-    return readClipboardFilePaths({
-      platform: process.platform,
-      readBuffer: (format) => clipboard.readBuffer(format)
-    })
-  })
   // Why: an unanswered paste reads as a dropped paste, so the composer probes
   // the clipboard in memory before the (slower) save lands.
   ipcMain.handle('clipboard:readImageThumbnail', (event): ClipboardImageThumbnail | null => {
     assertTrustedClipboardSender(event)
     return buildClipboardImageThumbnail(clipboard.readImage())
+  })
+  ipcMain.handle('clipboard:hasImage', (event): boolean => {
+    assertTrustedClipboardSender(event)
+    return clipboardFormatsIncludeImage(clipboard.availableFormats())
+  })
+  // Why: a file-manager copy also carries the files' names as text, which a paste must not type.
+  ipcMain.handle('clipboard:readFilePaths', (event): string[] => {
+    assertTrustedClipboardSender(event)
+    return readClipboardCopiedFilePaths(clipboard)
   })
   // Why: terminals need to detect clipboard images to support tools like Claude
   // Code that accept image input via paste. Writes the clipboard image to a
@@ -160,7 +171,7 @@ export function registerClipboardHandlers(store: Store): void {
       }
       const deps = makeClipboardFileDeps(async (path) => {
         try {
-          const authorizedPath = await resolveAuthorizedPath(path, store)
+          const authorizedPath = await resolveDesktopAuthorizedPath(path, store)
           await stat(authorizedPath)
           return { ok: true, path: authorizedPath }
         } catch (error) {
@@ -182,7 +193,15 @@ export function registerClipboardHandlers(store: Store): void {
   )
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
-    return clipboard.writeText(await assertClipboardTextWriteWithinLimitWithYield(text))
+    const safeText = await assertClipboardTextWriteWithinLimitWithYield(text)
+    try {
+      clipboard.writeText(safeText)
+    } catch (error) {
+      // Native failures can name paths or platform state, so they stay here; the renderer
+      // only renders a vetted reason (describeClipboardWriteFailure).
+      console.error('[clipboard] writeText failed', error)
+      throw error
+    }
   })
   ipcMain.handle('clipboard:writeTerminalText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)

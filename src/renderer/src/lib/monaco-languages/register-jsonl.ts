@@ -34,7 +34,14 @@ export const jsonlMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       { include: '@whitespace' },
       // Property key vs string value are both quoted; color keys distinctly.
       [/"(?:[^"\\]|\\.)*"(?=\s*:)/, 'type.identifier'],
-      [/"/, 'string', '@string'],
+      // Why the lookahead: each JSONL line is an independent value, but Monarch
+      // state survives the line break. Pushing `@string` unconditionally meant
+      // one truncated record (a normal way for a log to end) left every later
+      // record inside the string state, rendering the rest of the file as one
+      // string. Only enter the escape-aware state once a closing quote is known
+      // to be on this line; an unterminated remainder is consumed below instead.
+      [/"(?=(?:[^"\\]|\\.)*")/, 'string', '@string'],
+      [/"(?:[^"\\]|\\.)*\\?$/, 'string.invalid'],
       [/[{}[\]]/, '@brackets'],
       [/-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/, 'number'],
       [/\b(?:true|false)\b/, 'keyword'],

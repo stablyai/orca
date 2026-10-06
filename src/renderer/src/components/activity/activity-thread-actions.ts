@@ -1,8 +1,10 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { useAppStore } from '@/store'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
@@ -62,19 +64,26 @@ export function createActivityThreadActions({
 }): {
   markThreadRead: (thread: AgentPaneThread) => void
   markThreadUnread: (thread: AgentPaneThread) => void
+  markThreadsRead: (threads: readonly AgentPaneThread[]) => void
+  markThreadsUnread: (threads: readonly AgentPaneThread[]) => void
   selectThread: (thread: AgentPaneThread) => void
   jumpToWorkspace: (thread: AgentPaneThread) => void
   markAllThreadsRead: () => void
 } {
-  const markThreadRead = (thread: AgentPaneThread): void => {
-    acknowledgeAgents([thread.paneKey])
+  const markThreadsRead = (threads: readonly AgentPaneThread[]): void => {
+    acknowledgeAgents(threads.map((thread) => thread.paneKey))
   }
 
-  const markThreadUnread = (thread: AgentPaneThread): void => {
-    unacknowledgeAgents([thread.paneKey])
+  const markThreadsUnread = (threads: readonly AgentPaneThread[]): void => {
+    unacknowledgeAgents(threads.map((thread) => thread.paneKey))
   }
+
+  const markThreadRead = (thread: AgentPaneThread): void => markThreadsRead([thread])
+
+  const markThreadUnread = (thread: AgentPaneThread): void => markThreadsUnread([thread])
 
   const activateThreadTarget = (thread: AgentPaneThread): void => {
+    const isFloatingTerminal = thread.worktree.id === FLOATING_TERMINAL_WORKTREE_ID
     const executionHostId = getActivityThreadExecutionHostId(
       thread,
       getSettingsFocusedExecutionHostId(useAppStore.getState().settings)
@@ -84,6 +93,7 @@ export function createActivityThreadActions({
     // resumeSleepingAgentSessionsForWorktree/ensureWorktreeHasInitialTerminal run inside here.
     // Probing tab residency first is what made a remote row click a silent no-op (#16731).
     if (
+      !isFloatingTerminal &&
       activateAndRevealWorkspace(thread.worktree.id, {
         executionHostId,
         revealInSidebar: false,
@@ -105,7 +115,11 @@ export function createActivityThreadActions({
       // no pane to focus and focusing a sibling would be worse than focusing nothing.
       return
     }
-    activated.setActiveTabType('terminal')
+    // Floating tabs have no catalog workspace; reveal their panel without changing the main workspace.
+    if (isFloatingTerminal) {
+      revealFloatingWorkspacePanel(activated)
+    }
+    activated.setActiveTabType('terminal', thread.worktree.id)
     const parsed = parsePaneKey(thread.paneKey)
     activateTabAndFocusPane(
       thread.tab.id,
@@ -143,6 +157,8 @@ export function createActivityThreadActions({
   return {
     markThreadRead,
     markThreadUnread,
+    markThreadsRead,
+    markThreadsUnread,
     selectThread,
     jumpToWorkspace,
     markAllThreadsRead

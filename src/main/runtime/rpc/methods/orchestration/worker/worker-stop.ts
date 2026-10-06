@@ -1,16 +1,18 @@
-import { z } from 'zod'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
-import { requiredString } from '../../../schemas'
+import { defineMethod } from '../../../core'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
 import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { inspectWorkerTerminal, resolvePinnedFederatedServer } from './worker-observation'
+import {
+  resolveStructuredWorkerForDispatch,
+  stopStructuredWorker
+} from '../../orchestration-structured-worker-lifecycle'
+import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
 
-const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
-
-export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineMethod({
     name: 'orchestration.workerStop',
     params: WorkerDispatchParams,
@@ -126,7 +128,20 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
             'unknown'
           )
         }
+        if (isStructuredWorkerHandle(handle)) {
+          // The same install release performs, for the same reason: after a restart nothing has
+          // installed the structured host, and both the observation below and the close read it.
+          // Without this a restarted worker answers `unknown` forever and can never be stopped.
+          await runtime.ensureStructuredAgentSessionHost().catch((error: unknown) => {
+            console.warn(
+              '[orchestration] structured host install failed before stop',
+              handle,
+              error
+            )
+          })
+        }
         const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
+        const liveHandle = observation.terminalHandle ?? handle
         // The host exit can settle this stop while terminal inspection is awaiting inventory.
         if (db.getWorkerDispatch(params.dispatch)?.state === 'stopped') {
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
@@ -164,8 +179,30 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
             'none'
           )
         }
+        const structured = resolveStructuredWorkerForDispatch(db, params.dispatch)
+        if (structured) {
+          const stop = await stopStructuredWorker(structured, params.dispatch, runtime)
+          if (!stop.stopped) {
+            // Close is retried by the host; only a proven exit may settle the dispatch. And when no
+            // close was issued at all — no host in this runtime generation — the receipt says so
+            // rather than crediting this runtime with a terminal it never touched.
+            return unknownReceipt(
+              params.dispatch,
+              db.markWorkerStopUnknown(params.dispatch, stop.reason ?? 'The close was not proven.'),
+              stop.closeAttempted ? 'closed_agent_terminal' : 'none'
+            )
+          }
+          const stopped = db.settleWorkerStop(params.dispatch)
+          runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+          return {
+            dispatchId: params.dispatch,
+            state: stopped.state,
+            alreadySettled: false,
+            processAction: 'closed_agent_terminal'
+          }
+        }
         const closed = await runtime
-          .closeTerminal(handle)
+          .closeTerminal(liveHandle)
           .then((close) => ({ close }) as const)
           .catch(
             (error: unknown) =>
@@ -206,8 +243,9 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
 
 const activeStopByRuntime = new WeakMap<OrcaRuntimeService, Map<string, Promise<unknown>>>()
 
-/** Two callers stopping one Dispatch: the second reached `beginWorkerStop` after the first moved
- *  the row to `stopping` and got `dispatch_inactive` instead of the first caller's receipt. */
+/** Two callers stopping one Dispatch: coalesced so only one of them closes the terminal. Both are
+ *  in this runtime and so carry one epoch, which `beginWorkerStop` refuses a second time anyway;
+ *  the epoch it does accept belongs to a row a dead runtime stranded, and no caller here holds one. */
 function dedupeWorkerStop(
   runtime: OrcaRuntimeService,
   dispatchId: string,

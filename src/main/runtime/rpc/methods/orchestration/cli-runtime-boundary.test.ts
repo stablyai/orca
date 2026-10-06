@@ -43,8 +43,10 @@ describe('orchestration CLI/runtime boundary', () => {
       isRemote: false,
       /** Preserves terminal-handle validation while routing other calls through runtime RPC. */
       async call<T>(method: string, params?: unknown): Promise<{ result: T }> {
-        if (method === 'terminal.show') {
-          return { result: { terminal: { handle: objectParams(params).terminal } } as T }
+        if (method === 'terminal.resolveIdentity') {
+          return {
+            result: { identity: { handle: objectParams(params).terminal, live: true } } as T
+          }
         }
         return { result: (await callRpc(method, objectParams(params))) as T }
       }

@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getStatus: vi.fn(),
-  refreshGrokRateLimits: vi.fn()
+  refreshGrokRateLimits: vi.fn(),
+  grokUsage: vi.fn<() => unknown>(() => null)
 }))
 
 vi.mock('@/lib/agent-catalog', () => ({
@@ -29,7 +30,8 @@ vi.mock('../../store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       refreshGrokRateLimits: mocks.refreshGrokRateLimits,
-      rateLimits: { grok: null }
+      settingsSearchQuery: '',
+      rateLimits: { grok: mocks.grokUsage() }
     })
 }))
 
@@ -45,6 +47,7 @@ describe('GrokAccountsSection', () => {
       error: null
     })
     mocks.refreshGrokRateLimits.mockResolvedValue(undefined)
+    mocks.grokUsage.mockReturnValue(null)
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { grokAccounts: { getStatus: mocks.getStatus } }
@@ -65,5 +68,24 @@ describe('GrokAccountsSection', () => {
       )
     ).toBeInTheDocument()
     expect(screen.queryByText(/grok login/i)).not.toBeInTheDocument()
+  })
+
+  // Why: #15740 — an unreported percentage must be stated, never shown as 0%.
+  it('shows why usage is unknown instead of hiding the row', async () => {
+    mocks.grokUsage.mockReturnValue({
+      provider: 'grok',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Grok did not report a usage percentage for this account',
+      status: 'unavailable'
+    })
+
+    render(<GrokAccountsSection />)
+
+    expect(
+      await screen.findByText('Grok did not report a usage percentage for this account')
+    ).toBeInTheDocument()
+    expect(screen.queryByText('0%')).not.toBeInTheDocument()
   })
 })

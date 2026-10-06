@@ -11,20 +11,21 @@ function item(overrides: Partial<GitHistoryItem> = {}): GitHistoryItem {
     subject: 'feat: thing',
     message: 'feat: thing\n\nbody',
     author: 'Jane',
-    timestamp: NOW / 1000 - 3600,
+    timestamp: NOW - 3_600_000,
     ...overrides
   }
 }
 
 describe('formatCommitTime', () => {
-  it('formats across thresholds', () => {
-    const s = NOW / 1000
-    expect(formatCommitTime(s - 30, NOW)).toBe('just now')
-    expect(formatCommitTime(s - 5 * 60, NOW)).toBe('5m')
-    expect(formatCommitTime(s - 3 * 3600, NOW)).toBe('3h')
-    expect(formatCommitTime(s - 2 * 86400, NOW)).toBe('2d')
-    expect(formatCommitTime(s - 60 * 86400, NOW)).toBe('2mo')
-    expect(formatCommitTime(s - 800 * 86400, NOW)).toBe('2y')
+  it('formats across thresholds from epoch-millisecond timestamps', () => {
+    // GitHistoryItem.timestamp is epoch ms (git-history-log-parser scales git %at by 1000).
+    const ms = { min: 60_000, hour: 3_600_000, day: 86_400_000 }
+    expect(formatCommitTime(NOW - 3 * ms.hour, NOW)).toBe('3h')
+    expect(formatCommitTime(NOW - 30_000, NOW)).toBe('just now')
+    expect(formatCommitTime(NOW - 5 * ms.min, NOW)).toBe('5m')
+    expect(formatCommitTime(NOW - 2 * ms.day, NOW)).toBe('2d')
+    expect(formatCommitTime(NOW - 60 * ms.day, NOW)).toBe('2mo')
+    expect(formatCommitTime(NOW - 800 * ms.day, NOW)).toBe('2y')
   })
 
   it('returns empty for missing timestamp', () => {

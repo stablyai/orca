@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_IMAGE_COUNT,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES,
   hasAttachableFeedbackImage,
   readFeedbackImageFiles
 } from './feedback-image-attachments'
@@ -101,7 +102,42 @@ describe('readFeedbackImageFiles', () => {
     )
 
     expect(images).toEqual([])
-    expect(errors).toEqual(['huge.png is larger than 8.0 MB.'])
+    expect(errors).toEqual(['huge.png is larger than 4.0 MB.'])
+  })
+
+  it('accepts a set that totals exactly the attachment budget', async () => {
+    const quarter = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / MAX_FEEDBACK_IMAGE_COUNT
+    const files = Array.from({ length: MAX_FEEDBACK_IMAGE_COUNT }, (_, index) =>
+      pngFile(`part-${index}.png`, quarter)
+    )
+
+    const { images, errors } = await readFeedbackImageFiles(files, 0)
+
+    expect(errors).toEqual([])
+    expect(images).toHaveLength(MAX_FEEDBACK_IMAGE_COUNT)
+  })
+
+  it('rejects an image that would take the set over the total budget', async () => {
+    const half = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / 2
+
+    const { images, errors } = await readFeedbackImageFiles(
+      [pngFile('a.png', half), pngFile('b.png', half), pngFile('c.png', 1)],
+      0
+    )
+
+    expect(images.map((image) => image.name)).toEqual(['a.png', 'b.png'])
+    expect(errors).toEqual(['c.png would bring the attachments over 4.0 MB in total.'])
+  })
+
+  it('counts already attached bytes and still fits a later smaller image', async () => {
+    const { images, errors } = await readFeedbackImageFiles(
+      [pngFile('big.png', 2048), pngFile('small.png', 1024)],
+      1,
+      MAX_FEEDBACK_IMAGE_TOTAL_BYTES - 1024
+    )
+
+    expect(images.map((image) => image.name)).toEqual(['small.png'])
+    expect(errors).toEqual(['big.png would bring the attachments over 4.0 MB in total.'])
   })
 
   it('reports an empty image instead of deferring rejection until submit', async () => {

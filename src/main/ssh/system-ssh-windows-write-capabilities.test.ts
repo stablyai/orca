@@ -76,4 +76,15 @@ describe('getWindowsRemoteWriteCapabilities', () => {
     expect(capabilities.shouldTry('sftp-subsystem')).toBe(true)
     expect(capabilities.shouldTry('pwsh')).toBe(false)
   })
+
+  it('bounds host capability entries while retaining recent hosts', () => {
+    const first = asTarget({ id: 'first', host: 'win-first.example', username: 'dev' })
+    getWindowsRemoteWriteCapabilities(first).rememberUnsupported('sftp-subsystem')
+    for (let index = 0; index < 260; index += 1) {
+      getWindowsRemoteWriteCapabilities(
+        asTarget({ id: String(index), host: `win-${index}.example`, username: 'dev' })
+      )
+    }
+    expect(getWindowsRemoteWriteCapabilities(first).shouldTry('sftp-subsystem')).toBe(true)
+  })
 })

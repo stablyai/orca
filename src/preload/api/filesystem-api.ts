@@ -1,3 +1,5 @@
+import type { PathExistenceResult } from '../../shared/path-existence-batch'
+import type { RuntimeFileReadChunkResult } from '../../shared/runtime-types'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import type {
   DirEntry,
@@ -5,12 +7,26 @@ import type {
   MarkdownDocument
 } from '../../shared/filesystem-entry-types'
 import type {
+  ImportItemResult,
+  ResolveDroppedPathsResult,
+  StagedExternalImportSource
+} from '../../shared/filesystem-import-result-types'
+import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
   LocalLogTailWatchArgs
 } from '../../shared/local-log-tail-types'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
+import type { LocalFileAccess } from '../../shared/local-file-access'
+import type {
+  CreateVenvResult,
+  KernelFrameEvent,
+  KernelStartResult,
+  PythonEnvironment,
+  PythonEnvironments
+} from '../../shared/notebook-kernel-types'
+import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
 
 export type ExportApi = {
   htmlToPdf: (args: {
@@ -23,11 +39,19 @@ export type ExportApi = {
 
 export type FilesystemApi = {
   fs: {
+    readFileChunk: (args: {
+      filePath: string
+      connectionId?: string
+      access?: LocalFileAccess
+      offset: number
+      length: number
+    }) => Promise<RuntimeFileReadChunkResult>
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {
       filePath: string
       connectionId?: string
       includeLocalLogMetadata?: boolean
+      access?: LocalFileAccess
     }) => Promise<{
       content: string
       isBinary: boolean
@@ -74,6 +98,7 @@ export type FilesystemApi = {
         filePath: string
         content: string
         connectionId?: string
+        access?: LocalFileAccess
       } & SshMutationExpectation
     ) => Promise<void>
     createFile: (
@@ -90,6 +115,7 @@ export type FilesystemApi = {
         oldPath: string
         newPath: string
         connectionId?: string
+        access?: LocalFileAccess
       } & SshMutationExpectation
     ) => Promise<void>
     copy: (
@@ -106,12 +132,20 @@ export type FilesystemApi = {
         recursive?: boolean
       } & SshMutationExpectation
     ) => Promise<void>
-    authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
     stat: (args: {
       filePath: string
       connectionId?: string
+      access?: LocalFileAccess
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
-    pathExists: (args: { filePath: string; connectionId?: string }) => Promise<boolean>
+    pathsExist?: (args: {
+      filePaths: string[]
+      connectionId?: string
+    }) => Promise<PathExistenceResult[]>
+    pathExists: (args: {
+      filePath: string
+      connectionId?: string
+      access?: LocalFileAccess
+    }) => Promise<boolean>
     listFiles: (args: {
       rootPath: string
       connectionId?: string
@@ -119,6 +153,7 @@ export type FilesystemApi = {
       requestToken?: string
       maxResults?: number
       searchQuery?: string
+      nameFilter?: string
     }) => Promise<string[]>
     cancelListFiles: (args: { requestToken: string }) => Promise<void>
     search: (args: SearchOptions & { connectionId?: string }) => Promise<SearchResult>
@@ -128,82 +163,45 @@ export type FilesystemApi = {
         destDir: string
         connectionId?: string
         ensureDir?: boolean
+        access?: LocalFileAccess
       } & SshMutationExpectation
-    ) => Promise<{
-      results: (
-        | {
-            sourcePath: string
-            status: 'imported'
-            destPath: string
-            kind: 'file' | 'directory'
-            renamed: boolean
-          }
-        | {
-            sourcePath: string
-            status: 'skipped'
-            reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
-          }
-        | {
-            sourcePath: string
-            status: 'failed'
-            reason: string
-          }
-      )[]
-    }>
-    stageExternalPathsForRuntimeUpload: (args: { sourcePaths: string[] }) => Promise<{
-      sources: (
-        | {
-            sourcePath: string
-            status: 'staged'
-            name: string
-            kind: 'file' | 'directory'
-            entries: (
-              | { relativePath: string; kind: 'directory' }
-              | { relativePath: string; kind: 'file'; contentBase64: string }
-            )[]
-          }
-        | {
-            sourcePath: string
-            status: 'skipped'
-            reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
-          }
-        | {
-            sourcePath: string
-            status: 'failed'
-            reason: string
-          }
-      )[]
-    }>
+    ) => Promise<{ results: ImportItemResult[] }>
+    stageExternalPathsForRuntimeUpload: (args: {
+      sourcePaths: string[]
+    }) => Promise<{ sources: StagedExternalImportSource[] }>
+    uploadExternalFileToRuntime: (
+      args: RuntimeUploadFileStreamRequest
+    ) => Promise<{ byteLength: number }>
     resolveDroppedPathsForAgent: (
       args: {
         paths: string[]
         worktreePath: string
         connectionId?: string
       } & SshMutationExpectation
-    ) => Promise<{
-      resolvedPaths: string[]
-      skipped: {
-        sourcePath: string
-        reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
-      }[]
-      failed: { sourcePath: string; reason: string }[]
-    }>
+    ) => Promise<ResolveDroppedPathsResult>
     watchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }
   notebook: {
-    runPythonCell: (args: {
+    listPythonEnvironments: (args: {
       filePath: string
-      code: string
-      preamble?: string
-      connectionId?: string | null
-    }) => Promise<{
-      stdout: string
-      stderr: string
-      exitCode: number | null
-      error?: string
-    }>
+      rootPath: string | null
+      /** False until the notebook is trusted: workspace envs are then listed without running them. */
+      runWorkspaceInterpreters: boolean
+    }) => Promise<PythonEnvironments>
+    describePython: (args: { path: string }) => Promise<PythonEnvironment | null>
+    startKernel: (args: { filePath: string; python: string }) => Promise<KernelStartResult>
+    installIpykernel: (args: { python: string }) => Promise<{ ok: boolean; detail: string }>
+    createVenv: (args: {
+      filePath: string
+      rootPath: string | null
+      python: string
+    }) => Promise<CreateVenvResult>
+    execute: (args: { filePath: string; code: string }) => Promise<void>
+    interrupt: (args: { filePath: string }) => Promise<void>
+    shutdownKernel: (args: { filePath: string }) => Promise<void>
+    onKernelFrame: (callback: (event: KernelFrameEvent) => void) => () => void
   }
   export: ExportApi
 }

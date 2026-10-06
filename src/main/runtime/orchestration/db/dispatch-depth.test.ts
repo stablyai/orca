@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import {
+  mintStructuredWorkerHandle,
+  mintStructuredWorkerPaneKey,
+  structuredWorkerProcessIncarnation
+} from '../../structured-worker-identity'
 import { OrchestrationDb } from '../db'
 import { AmbiguousDispatchParentError } from './dispatch-depth'
+import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
 
 /**
  * These pin the fence Orca documented but never enforced: before this feature a
@@ -16,7 +22,7 @@ describe('nested worker depth', () => {
 
   function coordinatorDispatchesWorker(maxDepth = UNCAPPED) {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'root task' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'root task' })
     const worker = db.createDispatchContext({
       taskId: task.id,
       assigneeHandle: 'term_worker',
@@ -33,7 +39,7 @@ describe('nested worker depth', () => {
 
   it('refuses a worker dispatching a sub-worker at the default cap', () => {
     coordinatorDispatchesWorker()
-    const nested = db.createTask({ spec: 'nested task' })
+    const nested = db.createTask({ runId: 'run_legacy_local', spec: 'nested task' })
     expect(() =>
       db.createDispatchContext({
         taskId: nested.id,
@@ -51,7 +57,7 @@ describe('nested worker depth', () => {
 
   it('tells the refused worker to complete the task itself', () => {
     coordinatorDispatchesWorker()
-    const nested = db.createTask({ spec: 'nested task' })
+    const nested = db.createTask({ runId: 'run_legacy_local', spec: 'nested task' })
     expect(() =>
       db.createDispatchContext({
         taskId: nested.id,
@@ -64,7 +70,7 @@ describe('nested worker depth', () => {
 
   it('permits one more generation when the cap is raised, and records depth 2', () => {
     coordinatorDispatchesWorker()
-    const nested = db.createTask({ spec: 'nested task' })
+    const nested = db.createTask({ runId: 'run_legacy_local', spec: 'nested task' })
     const sub = db.createDispatchContext({
       taskId: nested.id,
       assigneeHandle: 'term_sub',
@@ -113,9 +119,9 @@ describe('nested worker depth', () => {
       db.db
         .prepare(
           `INSERT INTO remote_dispatch_attachments
-             (dispatch_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch,
+             (dispatch_id, task_id, home_run_id, home_peer_fingerprint, protocol_version, runtime_epoch,
               pane_key, process_incarnation, state, depth)
-           VALUES (?, ?, 'peer', 1, 'epoch', ?, ?, ?, ?)`
+           VALUES (?, ?, 'run_home', 'peer', 1, 'epoch', ?, ?, ?, ?)`
         )
         .run(`ctx_${state}_${depth}_${paneKey}_${inc}`, 'task_remote', paneKey, inc, state, depth)
     }
@@ -182,7 +188,10 @@ describe('nested worker depth', () => {
     it('takes the maximum when a process holds both a local and a remote role', () => {
       // Query order must not decide the answer: the deeper role governs.
       db = new OrchestrationDb(':memory:')
-      const task = db.createTask({ spec: 'local role' })
+      const task = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'local role'
+      })
       db.createDispatchContext({
         taskId: task.id,
         assigneeHandle: 'term_both',
@@ -220,13 +229,19 @@ describe('nested worker depth', () => {
 
     it('stamps depth 1 for a root coordinator', () => {
       db = new OrchestrationDb(':memory:')
-      const task = db.createTask({ spec: 'root work' })
+      const task = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'root work'
+      })
       expect(startWorker(task.id, SYSTEM, UNCAPPED).dispatch.depth).toBe(1)
     })
 
     it('refuses a worker starting a sub-worker at the default cap', () => {
       coordinatorDispatchesWorker()
-      const nested = db.createTask({ spec: 'nested work' })
+      const nested = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'nested work'
+      })
       expect(() =>
         startWorker(
           nested.id,
@@ -238,7 +253,10 @@ describe('nested worker depth', () => {
 
     it('refuses a worker retrying into a sub-worker at the default cap', () => {
       coordinatorDispatchesWorker()
-      const nested = db.createTask({ spec: 'nested retry work' })
+      const nested = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'nested retry work'
+      })
       const first = startWorker(nested.id, SYSTEM, UNCAPPED)
       db.failWorkerStart(first.dispatch.id, 'accepted', 'first attempt failed')
       expect(() =>
@@ -257,7 +275,10 @@ describe('nested worker depth', () => {
     // Context-only dispatch stores null on purpose; requiring an incarnation
     // locally would silently drop real parents and fail open.
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'context only' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'context only'
+    })
     const row = db.createDispatchContext({
       taskId: task.id,
       assigneeHandle: 'term_ctx',
@@ -267,5 +288,48 @@ describe('nested worker depth', () => {
     })
     expect(row.process_incarnation).toBeNull()
     expect(db.resolveCreatorDepth({ kind: 'terminal', handle: 'term_ctx' })).toBe(1)
+  })
+
+  // Pinned for the reader that switches self-dispatch detection to Orca session id equality: equal
+  // creator and assignee ids must keep meaning bookkeeping, and different ones delegation.
+  it('records equal Orca session ids exactly when a structured session dispatches to itself', () => {
+    db = new OrchestrationDb(':memory:')
+    const sessionId = '5c7e9a1d-3f6b-4c8e-8d2a-4b6c8e0a2d36'
+    const self = {
+      kind: 'terminal',
+      handle: mintStructuredWorkerHandle(),
+      paneKey: mintStructuredWorkerPaneKey(sessionId)
+    } as const
+    const own = db.createDispatchContext({
+      taskId: db.createTask({ runId: 'run_legacy_local', spec: 'own bookkeeping' }).id,
+      assigneeHandle: self.handle,
+      assigneePaneKey: self.paneKey,
+      processIncarnation: structuredWorkerProcessIncarnation(sessionId),
+      creator: self,
+      maxDepth: UNCAPPED
+    })
+    const delegated = db.createDispatchContext({
+      taskId: db.createTask({ runId: 'run_legacy_local', spec: 'delegated' }).id,
+      assigneeHandle: 'term_delegate',
+      assigneePaneKey: 'tab_delegate:22222222-2222-4222-8222-222222222222',
+      creator: self,
+      maxDepth: UNCAPPED
+    })
+    backfillStructuredWorkerOrcaSessionIds(db.db)
+
+    const ownRow = db.getDispatchContextById(own.id)
+    expect(ownRow?.creator_orca_session_id).toBe(sessionId)
+    expect(ownRow?.assignee_orca_session_id).toBe(ownRow?.creator_orca_session_id)
+    expect(db.resolveCreatorDepth(self)).toBe(0)
+    const delegatedRow = db.getDispatchContextById(delegated.id)
+    expect(delegatedRow?.creator_orca_session_id).toBe(sessionId)
+    expect(delegatedRow?.assignee_orca_session_id).toBeNull()
+    expect(
+      db.resolveCreatorDepth({
+        kind: 'terminal',
+        handle: 'term_delegate',
+        paneKey: 'tab_delegate:22222222-2222-4222-8222-222222222222'
+      })
+    ).toBe(1)
   })
 })

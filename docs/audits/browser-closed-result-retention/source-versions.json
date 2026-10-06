@@ -1,0 +1,405 @@
+{
+  "canonicalLF": true,
+  "sources": [
+    {
+      "path": "src/main/browser/browser-client-host-command-dispatcher.ts",
+      "workingSha256": "f8c610a54f7d16c59043250dde5ef399f70e1a974c9492d09d403138e46c1da3",
+      "lineCount": 315,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "f8c610a54f7d16c59043250dde5ef399f70e1a974c9492d09d403138e46c1da3",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "f8c610a54f7d16c59043250dde5ef399f70e1a974c9492d09d403138e46c1da3",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/browser-client-host-command-result-cache.ts",
+      "workingSha256": "9ec3dad78c83f864f74957cad766cbcf41863e92d81d7e7a471702b0f9ab2f34",
+      "lineCount": 51,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "9ec3dad78c83f864f74957cad766cbcf41863e92d81d7e7a471702b0f9ab2f34",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "9ec3dad78c83f864f74957cad766cbcf41863e92d81d7e7a471702b0f9ab2f34",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/browser-client-host-command-state.ts",
+      "workingSha256": "a5f6b7a3737f86b2953fc43fa0e3ed5faaa141814d5f94fd192da1bb510f355f",
+      "lineCount": 171,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "a5f6b7a3737f86b2953fc43fa0e3ed5faaa141814d5f94fd192da1bb510f355f",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "a5f6b7a3737f86b2953fc43fa0e3ed5faaa141814d5f94fd192da1bb510f355f",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/browser-client-host-command-page.ts",
+      "workingSha256": "f5ca7f90511ee0290d2a1d0b3c5c39d3c9841ebcf90a5564bce83fbc9aca06bb",
+      "lineCount": 220,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "f5ca7f90511ee0290d2a1d0b3c5c39d3c9841ebcf90a5564bce83fbc9aca06bb",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "f5ca7f90511ee0290d2a1d0b3c5c39d3c9841ebcf90a5564bce83fbc9aca06bb",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/browser-client-host-command-join.ts",
+      "workingSha256": "5bf1a38231100cc416176ef2052bdff7b3fca91b6f6dbefcd222b92be59cbb2f",
+      "lineCount": 21,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "5bf1a38231100cc416176ef2052bdff7b3fca91b6f6dbefcd222b92be59cbb2f",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "5bf1a38231100cc416176ef2052bdff7b3fca91b6f6dbefcd222b92be59cbb2f",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/browser-client-page-command-executor.ts",
+      "workingSha256": "d249de82f89365371fa4f3b457e0da552910819555a5a0bced0c95010ccacb01",
+      "lineCount": 319,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "d249de82f89365371fa4f3b457e0da552910819555a5a0bced0c95010ccacb01",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "d249de82f89365371fa4f3b457e0da552910819555a5a0bced0c95010ccacb01",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/browser-client-page-command-execution.ts",
+      "workingSha256": "82b7c87d17b34c267ebfdf3d6ee25058cbd05dbc163ac24c43aefed00f0e3c6e",
+      "lineCount": 114,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "82b7c87d17b34c267ebfdf3d6ee25058cbd05dbc163ac24c43aefed00f0e3c6e",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "82b7c87d17b34c267ebfdf3d6ee25058cbd05dbc163ac24c43aefed00f0e3c6e",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/browser-client-page-command-executor-test-harness.ts",
+      "workingSha256": "b43ec764e4d094070fab51381ceb24487999dca97b4a38131be08fab0c5cbe24",
+      "lineCount": 145,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "b43ec764e4d094070fab51381ceb24487999dca97b4a38131be08fab0c5cbe24",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "b43ec764e4d094070fab51381ceb24487999dca97b4a38131be08fab0c5cbe24",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/browser-client-page-automation-runtime.ts",
+      "workingSha256": "7b1c0c527a87b8c22ea8290a2e1efc7ca659f2b4a5e2bd7c740fb5c22a2a6319",
+      "lineCount": 141,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "7b1c0c527a87b8c22ea8290a2e1efc7ca659f2b4a5e2bd7c740fb5c22a2a6319",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "7b1c0c527a87b8c22ea8290a2e1efc7ca659f2b4a5e2bd7c740fb5c22a2a6319",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/browser-route-guest-lifecycle.ts",
+      "workingSha256": "52adbea664bcfc5d774f129d442f4fc36d4a1e1280a073053fc09ae026ca83cb",
+      "lineCount": 172,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "52adbea664bcfc5d774f129d442f4fc36d4a1e1280a073053fc09ae026ca83cb",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "52adbea664bcfc5d774f129d442f4fc36d4a1e1280a073053fc09ae026ca83cb",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/browser-route-webcontents-registry.ts",
+      "workingSha256": "132c6740539aaeb9b1ceb3c108d2aebfb9e8e5c4ce3ff7cd1191e5b45dff8cad",
+      "lineCount": 325,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "132c6740539aaeb9b1ceb3c108d2aebfb9e8e5c4ce3ff7cd1191e5b45dff8cad",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "132c6740539aaeb9b1ceb3c108d2aebfb9e8e5c4ce3ff7cd1191e5b45dff8cad",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/paired-runtime-browser-client-host.ts",
+      "workingSha256": "797c0130e30c5f40551f5d392326fff1ac8752e262653b3f855dfd7df9fa0038",
+      "lineCount": 193,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "797c0130e30c5f40551f5d392326fff1ac8752e262653b3f855dfd7df9fa0038",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "797c0130e30c5f40551f5d392326fff1ac8752e262653b3f855dfd7df9fa0038",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/paired-runtime-browser-client-host-composition.ts",
+      "workingSha256": "f8b55a24035e929664f3c5f61ee8a81ee560250379dcf64b39d35e1b60628b74",
+      "lineCount": 323,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "f8b55a24035e929664f3c5f61ee8a81ee560250379dcf64b39d35e1b60628b74",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "f8b55a24035e929664f3c5f61ee8a81ee560250379dcf64b39d35e1b60628b74",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/paired-runtime-browser-client-host-teardown.ts",
+      "workingSha256": "4d9eb53c81ddfa3cb8181735b08c2b90a380bebab1f173ae5d8da9f719671f59",
+      "lineCount": 68,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "4d9eb53c81ddfa3cb8181735b08c2b90a380bebab1f173ae5d8da9f719671f59",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "4d9eb53c81ddfa3cb8181735b08c2b90a380bebab1f173ae5d8da9f719671f59",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/paired-runtime-browser-client-host-runtime.ts",
+      "workingSha256": "2d0650d0a5ebe88f1185ab5676762ed93188e7c28a69508137ed7cfa36e3832c",
+      "lineCount": 327,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "2d0650d0a5ebe88f1185ab5676762ed93188e7c28a69508137ed7cfa36e3832c",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "2d0650d0a5ebe88f1185ab5676762ed93188e7c28a69508137ed7cfa36e3832c",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/runtime/rpc/methods/browser-core.ts",
+      "workingSha256": "fdc2afeece6689644fbd607a59e484ef9d2ac6db7404e3378f2db10e16984f6d",
+      "lineCount": 293,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "fdc2afeece6689644fbd607a59e484ef9d2ac6db7404e3378f2db10e16984f6d",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "c847be873f4ce19b04796be962985a0234f159da2b38881fb8f6db1a1cbf720b",
+          "matchesWorking": false
+        }
+      }
+    },
+    {
+      "path": "src/main/runtime/runtime-browser-commands-active-screencasts-by-page-id.ts",
+      "workingSha256": "0af16d6fe883f6af79754e064b77a1b9ab8e80953657434eacc88cc1c523e038",
+      "lineCount": 209,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "0af16d6fe883f6af79754e064b77a1b9ab8e80953657434eacc88cc1c523e038",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "0af16d6fe883f6af79754e064b77a1b9ab8e80953657434eacc88cc1c523e038",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/agent-browser-bridge-types.ts",
+      "workingSha256": "3ea69d15aef862807108835d1cbd536275a105a96bdc86f3be95dfbed55ab45f",
+      "lineCount": 65,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "3ea69d15aef862807108835d1cbd536275a105a96bdc86f3be95dfbed55ab45f",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "3ea69d15aef862807108835d1cbd536275a105a96bdc86f3be95dfbed55ab45f",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/agent-browser-bridge-raw-process.ts",
+      "workingSha256": "d0e9929c4a4571d8752efa5e4063500efa75fefd228eb6cb1ea6092748befb0c",
+      "lineCount": 108,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "d0e9929c4a4571d8752efa5e4063500efa75fefd228eb6cb1ea6092748befb0c",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "d0e9929c4a4571d8752efa5e4063500efa75fefd228eb6cb1ea6092748befb0c",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/main/browser/agent-browser-bridge-core-commands.ts",
+      "workingSha256": "d587a7e7c3bd368c9003802607edd20def98e64442cd6d5914779c633feebd03",
+      "lineCount": 169,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "d587a7e7c3bd368c9003802607edd20def98e64442cd6d5914779c633feebd03",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "06d6a61e431680ebd89e9a29b18e2198da3d84df6398b234fa8a255a6fcedf8a",
+          "matchesWorking": false
+        }
+      }
+    },
+    {
+      "path": "src/main/startup/main-process-ready-runtime.ts",
+      "workingSha256": "5bb3615e9dc430e0a9ab61cb3d70e57ecbfa4c5ea82d5414fc82d93e81e9819b",
+      "lineCount": 156,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "5bb3615e9dc430e0a9ab61cb3d70e57ecbfa4c5ea82d5414fc82d93e81e9819b",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "5bb3615e9dc430e0a9ab61cb3d70e57ecbfa4c5ea82d5414fc82d93e81e9819b",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/shared/browser-client-host-protocol.ts",
+      "workingSha256": "712fe3eaed30c2de322466f316c966e526dcb60cf387cc0f6ba48012c70a7956",
+      "lineCount": 343,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "712fe3eaed30c2de322466f316c966e526dcb60cf387cc0f6ba48012c70a7956",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "712fe3eaed30c2de322466f316c966e526dcb60cf387cc0f6ba48012c70a7956",
+          "matchesWorking": true
+        }
+      }
+    },
+    {
+      "path": "src/shared/browser-client-automation-protocol.ts",
+      "workingSha256": "f93331c39fd0f8e08518d7a11a461bf5108c1a65be8f213ab2e2eff2ab977e58",
+      "lineCount": 129,
+      "namedRefs": {
+        "mainCheckpoint": {
+          "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "f93331c39fd0f8e08518d7a11a461bf5108c1a65be8f213ab2e2eff2ab977e58",
+          "matchesWorking": true
+        },
+        "v1.4.198": {
+          "ref": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "f93331c39fd0f8e08518d7a11a461bf5108c1a65be8f213ab2e2eff2ab977e58",
+          "matchesWorking": true
+        }
+      }
+    }
+  ],
+  "baselineHashes": {
+    "src/main/browser/browser-client-host-command-dispatcher.ts": "f8c610a54f7d16c59043250dde5ef399f70e1a974c9492d09d403138e46c1da3",
+    "src/main/browser/browser-client-host-command-result-cache.ts": "9ec3dad78c83f864f74957cad766cbcf41863e92d81d7e7a471702b0f9ab2f34"
+  },
+  "fixedHashes": {
+    "src/main/browser/browser-client-host-command-dispatcher.ts": "0e4074a4cb7379de58d75dd93e3f74090dea18a944bd4f038730cf19f6e68a98",
+    "src/main/browser/browser-client-host-command-result-cache.ts": "f06bd1f31be9ffcbb750f242bacd0c2f16222cde7d011010acbd46ceb70ea83f"
+  },
+  "auditedHead": "6ab6802df90553d2a26e9a4c7a519ae11d4b5e09"
+}

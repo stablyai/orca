@@ -27,7 +27,7 @@ describe('R1 identity migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-r1-identity-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
-    const task = db.createTask({ spec: 'legacy supervised worker' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'legacy supervised worker' })
     const started = db.createStartingWorkerDispatch({
       taskId: task.id,
       startOptions: { worktree: 'folder:/workspace' },

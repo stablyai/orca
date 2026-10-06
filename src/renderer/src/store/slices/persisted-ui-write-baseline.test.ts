@@ -10,6 +10,7 @@ import {
 function makeBaseline(overrides: Partial<PersistedUIWriteBaseline> = {}): PersistedUIWriteBaseline {
   return {
     sidebarWidth: 280,
+    sidebarOpen: true,
     rightSidebarOpen: true,
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
@@ -26,6 +27,7 @@ function makeBaseline(overrides: Partial<PersistedUIWriteBaseline> = {}): Persis
     hideDetachedHeadWorkspaces: false,
     hideWorkspacesFromOtherDevices: false,
     alwaysShowDefaultBranchWorkspace: true,
+    explorerDisplayRootByWorktree: {},
     showDotfilesByWorktree: {},
     filterRepoIds: [],
     acknowledgedAgentsByPaneKey: {},
@@ -142,5 +144,12 @@ describe('persistedUIWriteFieldsToWireUpdate', () => {
       groupBy: 'none'
     })
     expect(update).toEqual({ hideDefaultBranchWorkspace: true, groupBy: 'none' })
+  })
+})
+
+describe('sidebarOpen write round-trip', () => {
+  it('sends a left sidebar close to main under its persisted key', () => {
+    const changed = diffPersistedUIWriteFields(makeBaseline({ sidebarOpen: false }), makeBaseline())
+    expect(persistedUIWriteFieldsToWireUpdate(changed)).toEqual({ sidebarOpen: false })
   })
 })

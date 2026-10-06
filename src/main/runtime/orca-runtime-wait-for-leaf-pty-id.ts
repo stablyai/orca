@@ -142,16 +142,6 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
   }
 
   // Why: a leaf exists before its PTY spawns; a handle issued while ptyId is null gets invalidated on the next sync, so wait for a connected PTY.
-  protected countLeavesInTab(tabId: string): number {
-    let count = 0
-    for (const leaf of this.leaves.values()) {
-      if (leaf.tabId === tabId) {
-        count++
-      }
-    }
-    return count
-  }
-
   protected resolveHandleForTab(tabId: string): string | null {
     for (const leaf of this.leaves.values()) {
       if (leaf.tabId === tabId && leaf.ptyId !== null) {

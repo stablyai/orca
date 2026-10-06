@@ -1,0 +1,95 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.tab-activation",
+  "family": "session.tab-activation",
+  "namedDeltas": [],
+  "values": {
+    "7a0a4e34e537": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": {
+          "code": "tab_not_found",
+          "message": "No such tab"
+        },
+        "id": "frame-1",
+        "ok": false
+      }
+    },
+    "80b6a2c3dc17": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "tab_not_found",
+            "message": "No such tab"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "97f1e4150cc6": {
+      "activate": {
+        "error": {
+          "code": "tab_not_found",
+          "message": "No such tab"
+        },
+        "id": "frame-1",
+        "ok": false
+      },
+      "failure": {
+        "$rpc": "null"
+      }
+    },
+    "af35a6da041d": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "session-tab-activation-refused",
+    "checkpoints": [
+      {
+        "id": "refused",
+        "observation": {
+          "sender": ["80b6a2c3dc17"],
+          "payloads": ["af35a6da041d"],
+          "settlements": {
+            "activate": "7a0a4e34e537"
+          },
+          "state": "97f1e4150cc6",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

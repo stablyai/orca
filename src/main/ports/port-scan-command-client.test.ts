@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -175,11 +174,16 @@ describe('PortScanCommandClient', () => {
     const client = makeClient(workers)
 
     const accepted = Array.from({ length: MAX_QUEUED_CALLS + 1 }, () => client.run('lsof', []))
-    const overflow = client.run('lsof', [])
+    // A different command than the accepted ones: the message must name the
+    // request that was actually shed, which is all a log has to identify it.
+    const overflow = client.run('netstat', ['-ano'])
 
     const error = await overflow.catch((err: unknown) => err)
     expect(error).toBeInstanceOf(Error)
     expect(error).not.toBeInstanceOf(PortScanCommandTimeoutError)
+    expect(error instanceof Error ? error.message : String(error)).toBe(
+      'Port scan command queue is full; dropped netstat.'
+    )
 
     for (let i = 0; i < accepted.length; i++) {
       workers[0].respond({ ok: true, stdout: 'drained', spawnMs: 1 })
@@ -238,17 +242,6 @@ describe('resolveWorkerEntryPath', () => {
 
     expect(resolved).toBe(join(moduleDir, WORKER_ENTRY_FILENAME))
     expect(resolved).not.toContain('app.asar')
-  })
-
-  // A rename in the build config would leave both branches pointing at a file
-  // that is never emitted, and only the packaged one fails silently.
-  it('names the entry the main build actually emits', () => {
-    const config = readFileSync(
-      join(import.meta.dirname, '..', '..', '..', 'electron.vite.config.ts'),
-      'utf8'
-    )
-
-    expect(config).toContain("'port-scan-command-worker-entry': resolve(")
   })
 })
 

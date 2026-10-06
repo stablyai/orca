@@ -1,4 +1,5 @@
 import { settledWriteStub } from '../../providers/settled-pty-write-stub'
+import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -139,7 +140,9 @@ describe('OrcaRuntimeService', () => {
   // #7970: headless serve has no renderer syncing tab.agentStatus, so hook-only transitions must republish the snapshot carrying the retained hook payload.
   it('republishes mobile session tabs with hook payloads for title-less OSC 9999 transitions', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'hook-only-pty' })
-    const runtime = new OrcaRuntimeService(store)
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
+    const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -188,12 +191,15 @@ describe('OrcaRuntimeService', () => {
     )
 
     unsubscribe()
+    uninstallRepublish()
   })
 
   // Why: restored OMP panes can retain the hook while the wrapped Pi owns foreground (#6364).
   it('keeps an OMP hook labeled OMP when the wrapped pi child owns the foreground', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'omp-flicker-pty' })
-    const runtime = new OrcaRuntimeService(store)
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
+    const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -240,11 +246,14 @@ describe('OrcaRuntimeService', () => {
     )
 
     unsubscribe()
+    uninstallRepublish()
   })
 
   it('does not republish mobile session tabs for repeated identical OSC 9999 payloads', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'hook-ping-pty' })
-    const runtime = new OrcaRuntimeService(store)
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
+    const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -270,6 +279,7 @@ describe('OrcaRuntimeService', () => {
     expect(events).toHaveLength(1)
 
     unsubscribe()
+    uninstallRepublish()
   })
 
   it('suppresses a retained hook working status once the shell owns the pane title again', async () => {

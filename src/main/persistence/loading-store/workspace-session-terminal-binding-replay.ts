@@ -93,6 +93,7 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
     if (!priorList) {
       continue
     }
+    let priorById: Map<string, (typeof priorList)[number]> | undefined
     for (const tab of tabs) {
       if (ambiguousTabIds.has(tab.id)) {
         continue
@@ -100,7 +101,8 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
       if (tab.ptyId) {
         continue
       }
-      const priorTab = priorList.find((candidate) => candidate.id === tab.id)
+      priorById ??= new Map(priorList.map((candidate) => [candidate.id, candidate]))
+      const priorTab = priorById.get(tab.id)
       const incomingLayout = nextLayouts[tab.id]
       const priorLayout = priorLayouts[tab.id]
       const priorPtyLeafId = priorLayout

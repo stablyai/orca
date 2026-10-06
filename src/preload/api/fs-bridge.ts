@@ -1,7 +1,15 @@
+import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import { ipcRenderer } from 'electron'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
+import type { LocalFileAccess } from '../../shared/local-file-access'
+import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
 import type { SearchResult } from '../../shared/code-search-types'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
+import type {
+  ImportItemResult,
+  ResolveDroppedPathsResult,
+  StagedExternalImportSource
+} from '../../shared/filesystem-import-result-types'
 import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
@@ -11,6 +19,13 @@ import type {
 import type { PreloadApi } from '../api-types'
 
 export const fsApi = {
+  readFileChunk: (args: {
+    filePath: string
+    connectionId?: string
+    access?: LocalFileAccess
+    offset: number
+    length: number
+  }) => ipcRenderer.invoke('fs:readFileChunk', args),
   readDir: (args: {
     dirPath: string
     connectionId?: string
@@ -20,6 +35,7 @@ export const fsApi = {
     filePath: string
     connectionId?: string
     includeLocalLogMetadata?: boolean
+    access?: LocalFileAccess
   }): Promise<{
     content: string
     isBinary: boolean
@@ -84,6 +100,7 @@ export const fsApi = {
       filePath: string
       content: string
       connectionId?: string
+      access?: LocalFileAccess
     } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:writeFile', args),
   createFile: (
@@ -93,7 +110,12 @@ export const fsApi = {
     args: { dirPath: string; connectionId?: string } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:createDir', args),
   rename: (
-    args: { oldPath: string; newPath: string; connectionId?: string } & SshMutationExpectation
+    args: {
+      oldPath: string
+      newPath: string
+      connectionId?: string
+      access?: LocalFileAccess
+    } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:rename', args),
   copy: (
     args: {
@@ -109,15 +131,21 @@ export const fsApi = {
       recursive?: boolean
     } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
-  authorizeExternalPath: (args: { targetPath: string }): Promise<void> =>
-    ipcRenderer.invoke('fs:authorizeExternalPath', args),
   stat: (args: {
     filePath: string
     connectionId?: string
+    access?: LocalFileAccess
   }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
     ipcRenderer.invoke('fs:stat', args),
-  pathExists: (args: { filePath: string; connectionId?: string }): Promise<boolean> =>
-    ipcRenderer.invoke('fs:pathExists', args),
+  pathsExist: (args: {
+    filePaths: string[]
+    connectionId?: string
+  }): Promise<PathExistenceResult[]> => ipcRenderer.invoke('fs:pathsExist', args),
+  pathExists: (args: {
+    filePath: string
+    connectionId?: string
+    access?: LocalFileAccess
+  }): Promise<boolean> => ipcRenderer.invoke('fs:pathExists', args),
   listFiles: (args: {
     rootPath: string
     connectionId?: string
@@ -125,6 +153,7 @@ export const fsApi = {
     requestToken?: string
     maxResults?: number
     searchQuery?: string
+    nameFilter?: string
   }): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', args),
   cancelListFiles: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('fs:cancelListFiles', args),
@@ -145,68 +174,24 @@ export const fsApi = {
       destDir: string
       connectionId?: string
       ensureDir?: boolean
+      access?: LocalFileAccess
     } & SshMutationExpectation
-  ): Promise<{
-    results: (
-      | {
-          sourcePath: string
-          status: 'imported'
-          destPath: string
-          kind: 'file' | 'directory'
-          renamed: boolean
-        }
-      | {
-          sourcePath: string
-          status: 'skipped'
-          reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
-        }
-      | {
-          sourcePath: string
-          status: 'failed'
-          reason: string
-        }
-    )[]
-  }> => ipcRenderer.invoke('fs:importExternalPaths', args),
+  ): Promise<{ results: ImportItemResult[] }> => ipcRenderer.invoke('fs:importExternalPaths', args),
   stageExternalPathsForRuntimeUpload: (args: {
     sourcePaths: string[]
-  }): Promise<{
-    sources: (
-      | {
-          sourcePath: string
-          status: 'staged'
-          name: string
-          kind: 'file' | 'directory'
-          entries: (
-            | { relativePath: string; kind: 'directory' }
-            | { relativePath: string; kind: 'file'; contentBase64: string }
-          )[]
-        }
-      | {
-          sourcePath: string
-          status: 'skipped'
-          reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
-        }
-      | {
-          sourcePath: string
-          status: 'failed'
-          reason: string
-        }
-    )[]
-  }> => ipcRenderer.invoke('fs:stageExternalPathsForRuntimeUpload', args),
+  }): Promise<{ sources: StagedExternalImportSource[] }> =>
+    ipcRenderer.invoke('fs:stageExternalPathsForRuntimeUpload', args),
+  uploadExternalFileToRuntime: (
+    args: RuntimeUploadFileStreamRequest
+  ): Promise<{ byteLength: number }> => ipcRenderer.invoke('fs:uploadExternalFileToRuntime', args),
   resolveDroppedPathsForAgent: (
     args: {
       paths: string[]
       worktreePath: string
       connectionId?: string
     } & SshMutationExpectation
-  ): Promise<{
-    resolvedPaths: string[]
-    skipped: {
-      sourcePath: string
-      reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
-    }[]
-    failed: { sourcePath: string; reason: string }[]
-  }> => ipcRenderer.invoke('fs:resolveDroppedPathsForAgent', args),
+  ): Promise<ResolveDroppedPathsResult> =>
+    ipcRenderer.invoke('fs:resolveDroppedPathsForAgent', args),
   watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
     ipcRenderer.invoke('fs:watchWorktree', args),
   unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>

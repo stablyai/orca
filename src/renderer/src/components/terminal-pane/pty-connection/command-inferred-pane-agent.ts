@@ -10,7 +10,7 @@ import type { AgentCompletionStatusSnapshot } from '../agent-completion-coordina
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-process-recognition'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../../../shared/terminal-agent'
 import { isTuiAgent } from '../../../../../shared/tui-agent-config'
 
 import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
@@ -26,7 +26,7 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
   session.pendingShellCommandCursor = 0
   session.commandInferredPaneAgentGeneration = 0
   session.shellCommandInferenceSuspendedUntilCommandEnd = false
-  session.startAcceptedInferredCommand = (_agent: TuiAgent): void => {}
+  session.startAcceptedInferredCommand = (_agent: TerminalAgent): void => {}
   session.requestKnownWindowsShiftEnterReconfirmation = (): void => {}
   session.resetPendingShellCommandLine = (): void => {
     session.pendingShellCommandLine = ''

@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -83,14 +84,14 @@ describe('OrcaRuntimeService', () => {
       rows: 24
     })
     const runtime = new OrcaRuntimeService(
-      {
+      withDurableRuntimeStore({
         ...runtimeStore,
         getRepos: () => [remoteRepo],
         getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
         getWorkspaceSession,
         setWorkspaceSession,
         flushOrThrow: vi.fn()
-      } as never,
+      }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -153,11 +154,8 @@ describe('OrcaRuntimeService', () => {
         deferredDispatchIds: ['dispatch-ssh']
       })
       expect(listProcesses).not.toHaveBeenCalled()
-      expect(
-        getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]?.automaticResumeBlockedBy
-      ).toBe('legacy-orchestration-worker')
+      expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeDefined()
       expect(localSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
-      expect(getWorkspaceSession).toHaveBeenCalledWith(`ssh:${connectionId}`)
 
       await expect(
         runtime.reconcileLegacyWorkerTerminals({
@@ -175,6 +173,7 @@ describe('OrcaRuntimeService', () => {
     }
 
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
+    expect(getWorkspaceSession).toHaveBeenCalledWith(`ssh:${connectionId}`)
     expect(setWorkspaceSession).toHaveBeenCalledWith(expect.any(Object), `ssh:${connectionId}`)
     expect(listProcesses).toHaveBeenCalledTimes(3)
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
@@ -222,7 +221,7 @@ describe('OrcaRuntimeService', () => {
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(
-      {
+      withDurableRuntimeStore({
         ...runtimeStore,
         getProjects: () => [
           {
@@ -230,17 +229,17 @@ describe('OrcaRuntimeService', () => {
             displayName: 'repo',
             badgeColor: 'blue',
             sourceRepoIds: [TEST_REPO_ID],
-            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+            localWindowsRuntimePreference: { kind: 'wsl' as const, distro: 'Ubuntu' },
             createdAt: 0,
             updatedAt: 0
           }
         ],
         getSettings: () => ({
           ...store.getSettings(),
-          localWindowsRuntimeDefault: { kind: 'windows-host' }
+          localWindowsRuntimeDefault: { kind: 'windows-host' as const }
         }),
         flushOrThrow: vi.fn()
-      } as never,
+      }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -297,9 +296,7 @@ describe('OrcaRuntimeService', () => {
       exitedDispatchIds: [],
       deferredDispatchIds: ['dispatch-wsl']
     })
-    expect(
-      getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]?.automaticResumeBlockedBy
-    ).toBe('legacy-orchestration-worker')
+    expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeDefined()
     expect(revealTerminalSession).not.toHaveBeenCalled()
 
     observedDistro = 'Ubuntu'
@@ -357,7 +354,9 @@ describe('OrcaRuntimeService', () => {
       }
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -528,7 +527,9 @@ describe('OrcaRuntimeService', () => {
       }
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,

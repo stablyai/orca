@@ -4,6 +4,7 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protoco
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { eraseRpcMethods } from '../../../core'
 
 // The federation host runs its own copy of the observation and stop logic, so
 // it needs the same rule: lost contact with a worker's host is not an exit, and
@@ -58,6 +59,7 @@ describe('federation host liveness verdicts', () => {
       status: 'exited'
     } as never)
     db.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId: DISPATCH_ID,
       taskId: 'task_remote',
       homePeerFingerprint: HOME_FINGERPRINT,
@@ -86,7 +88,9 @@ describe('federation host liveness verdicts', () => {
   afterEach(() => db.close())
 
   async function call(name: string, params: Record<string, unknown>) {
-    const method = ORCHESTRATION_METHODS.find((candidate) => candidate.name === name)
+    const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
+      (candidate) => candidate.name === name
+    )
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
@@ -112,6 +116,7 @@ describe('federation host liveness verdicts', () => {
       throw new Error('Expected the real runtime PTY to be listed')
     }
     hostDb.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId: DISPATCH_ID,
       taskId: 'task_remote',
       homePeerFingerprint: HOME_FINGERPRINT,
@@ -136,7 +141,9 @@ describe('federation host liveness verdicts', () => {
     })
     hostDb.markRemoteAttachmentReady(DISPATCH_ID)
     const callHost = async (name: string, params: Record<string, unknown>) => {
-      const method = ORCHESTRATION_METHODS.find((candidate) => candidate.name === name)
+      const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
+        (candidate) => candidate.name === name
+      )
       if (!method) {
         throw new Error(`Method not found: ${name}`)
       }

@@ -119,6 +119,29 @@ describe('Jira issue operations', () => {
     )
   })
 
+  it('scopes create-time assignable search by project, with the Server username param', async () => {
+    jiraRequestMock.mockResolvedValueOnce([{ accountId: 'acc-1', displayName: 'Ada' }])
+    const { listAssignableUsersForProject } = await import('./issues')
+
+    const cloudUsers = await listAssignableUsersForProject('ALP', 'ada', 'site-1')
+
+    expect(jiraRequestMock).toHaveBeenCalledWith(
+      expect.anything(),
+      '/rest/api/3/user/assignable/search?project=ALP&maxResults=50&query=ada'
+    )
+    expect(cloudUsers).toEqual([expect.objectContaining({ accountId: 'acc-1' })])
+
+    getClientsMock.mockReturnValue([makeServerEntry()])
+    jiraRequestMock.mockResolvedValueOnce([])
+
+    await listAssignableUsersForProject('ALP', 'ada', 'server-1')
+
+    expect(jiraRequestMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      '/rest/api/2/user/assignable/search?project=ALP&maxResults=50&username=ada'
+    )
+  })
+
   it('loads Jira summaries without descriptions, rendered fields, or attachment media', async () => {
     jiraRequestMock.mockResolvedValueOnce({
       id: 'issue-1',

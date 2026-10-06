@@ -439,4 +439,25 @@ describe('terminal clipboard paste', () => {
 
     expect(pasteText).toHaveBeenCalledWith('plain text')
   })
+
+  it.each([
+    ['C:\\Users\\me\\shot.PNG', 'image-path'],
+    ['C:\\Users\\me\\photo.jpeg', 'image-path'],
+    ['C:\\Users\\me\\clip.gif', 'file-path']
+  ])('keeps Explorer-copied PNG/JPEG on the Windows image flow: %s', async (path, kind) => {
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' })
+    try {
+      const result = await pasteTerminalClipboard({
+        readClipboardText: vi.fn().mockResolvedValue(''),
+        readClipboardFilePaths: vi.fn().mockResolvedValue([path]),
+        pasteFilePaths: vi.fn().mockResolvedValue(undefined),
+        saveClipboardImageAsTempFile: vi.fn().mockResolvedValue('C:\\Temp\\orca-paste-1-id.png'),
+        pasteText: vi.fn()
+      })
+
+      expect(result).toEqual({ status: 'pasted', kind })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

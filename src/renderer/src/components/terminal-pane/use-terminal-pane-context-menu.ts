@@ -26,6 +26,7 @@ import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigg
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
+import { resetTerminalInputModes } from './terminal-input-mode-reset'
 
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
@@ -68,6 +69,7 @@ type TerminalMenuState = {
   onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
+  onResetTerminal: () => void
   onForkAgentSession: () => Promise<void>
   onContinueAgentSessionInNewSession: () => void
   onCopyAgentSessionContext: () => Promise<void>
@@ -210,6 +212,13 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  const onResetTerminal = (): void => {
+    const pane = resolveMenuPane()
+    if (pane) {
+      resetTerminalInputModes(paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null)
+    }
+  }
+
   const onForkAgentSession = async (): Promise<void> =>
     forkAgentSessionFromMenuPane(agentSessionContext, resolveMenuPane())
 
@@ -296,6 +305,7 @@ export function useTerminalPaneContextMenu({
     onEqualizePaneSizes,
     onClosePane,
     onClearScreen,
+    onResetTerminal,
     onForkAgentSession,
     onContinueAgentSessionInNewSession,
     onCopyAgentSessionContext,

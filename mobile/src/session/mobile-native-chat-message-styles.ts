@@ -29,22 +29,10 @@ export const styles = StyleSheet.create({
     lineHeight: TEXT_SIZE + 6,
     fontWeight: '500'
   },
-  controls: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.xs,
-    marginBottom: 2,
-    opacity: 0.7
-  },
-  controlButton: {
-    padding: 3
-  },
-  controlPressed: {
-    opacity: 0.5
-  },
-  copied: {
-    backgroundColor: colors.diffAddedBg,
-    borderRadius: radii.card
+  hostNotice: {
+    color: colors.textMuted,
+    fontSize: TEXT_SIZE,
+    lineHeight: TEXT_SIZE + 6
   },
   reasoning: {
     opacity: 0.7
@@ -63,10 +51,6 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: 3
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end'
   },
   toolRunCount: {
     color: colors.statusGreen,

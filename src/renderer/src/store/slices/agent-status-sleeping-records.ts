@@ -1,7 +1,10 @@
 import type { AppState } from '../types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
-  agentProviderSessionsEqual,
+  agentTurnEndedUncleanly,
+  agentVerdictFields
+} from '../../../../shared/agent-main-agent-verdict'
+import {
   getAgentResumeArgv,
   isResumableTuiAgent,
   type SleepingAgentLaunchConfig,
@@ -58,12 +61,8 @@ export function sleepingRecordFromEntry(args: {
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
     ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
-    ...(args.entry.interrupted ? { interrupted: true } : {}),
-    ...(args.origin ? { origin: args.origin } : {}),
-    // The worker can settle while the tab is open, so the fence arrives before this record exists.
-    ...(args.state.automaticResumeBlockedPaneKeys?.[args.entry.paneKey]
-      ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' as const }
-      : {})
+    ...agentVerdictFields(args.entry),
+    ...(args.origin ? { origin: args.origin } : {})
   }
 }
 
@@ -84,7 +83,7 @@ export function normalizeSleepingAgentSessionCollectOptions(
 }
 
 export function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean {
-  return entry.state === 'done' && entry.interrupted !== true
+  return entry.state === 'done' && !agentTurnEndedUncleanly(entry)
 }
 
 // Why: a finished pane is passive wake evidence, and a mobile wake background-mounts every passive
@@ -103,29 +102,18 @@ export function isDurableSleepingCapture(record: SleepingAgentSessionRecord): bo
 }
 
 // Why: manual sleep kills the pty either way, so the record carries resume identity, not the dead
-// turn's interrupt flag — and an explicitly slept workspace is never stale at wake, so a row the
+// turn's verdict — and an explicitly slept workspace is never stale at wake, so a row the
 // user is deliberately sleeping must not trip the wake-side staleness discard. `state` is preserved
 // so a done pane wakes lazily in place instead of spawning a new tab.
 export function manualSleepCaptureEntry(
   entry: AgentStatusEntry,
   capturedAt: number
 ): AgentStatusEntry {
-  return { ...entry, updatedAt: capturedAt, interrupted: false }
-}
-
-// Why: capture recreates a record the manual-sleep wipe would otherwise remove, so a deliberately
-// blocked worker must not become auto-resumable at wake.
-export function carryOverAutomaticResumeBlock(
-  record: SleepingAgentSessionRecord,
-  previous: SleepingAgentSessionRecord | undefined
-): void {
-  if (
-    previous?.automaticResumeBlockedBy === 'legacy-orchestration-worker' &&
-    previous.agent === record.agent &&
-    agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
-  ) {
-    record.automaticResumeBlockedBy = previous.automaticResumeBlockedBy
+  if (!entry.mainAgent) {
+    return { ...entry, updatedAt: capturedAt, interrupted: false }
   }
+  const { outcome: _outcome, ...mainAgent } = entry.mainAgent
+  return { ...entry, updatedAt: capturedAt, interrupted: false, mainAgent }
 }
 
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(

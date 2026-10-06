@@ -1,0 +1,67 @@
+name: Prepare server native prebuilds
+description: Builds and smokes the current server slot, optionally restoring a validated Windows slot.
+
+inputs:
+  resolve-windows-cache:
+    description: Resolve the exact Windows cache identity for restoration or later qualified publication.
+    default: 'false'
+  restore-windows-cache:
+    description: Restore the exact Windows slot when its identity is available.
+    default: 'false'
+
+outputs:
+  cache-key:
+    description: Exact Windows server cache key.
+    value: ${{ steps.orcad-prebuild-cache-identity.outputs.key }}
+  cache-path:
+    description: Directory containing the Windows slot and its manifest.
+    value: ${{ steps.orcad-prebuild-cache-identity.outputs.path }}
+  cache-identity-outcome:
+    description: Whether Windows cache identity resolution succeeded.
+    value: ${{ steps.orcad-prebuild-cache-identity.outcome }}
+  cache-hit:
+    description: Whether the exact Windows slot was restored.
+    value: ${{ steps.orcad-prebuild-cache-restore.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve this Windows server prebuild cache
+      id: orcad-prebuild-cache-identity
+      if: >-
+        inputs.resolve-windows-cache == 'true' && runner.os == 'Windows' &&
+        (runner.arch == 'X64' || runner.arch == 'ARM64')
+      continue-on-error: true
+      shell: bash
+      run: node config/scripts/orcad-windows-prebuild-cache.mjs --fingerprint
+
+    - name: Restore the exact Windows server prebuild
+      id: orcad-prebuild-cache-restore
+      if: >-
+        inputs.restore-windows-cache == 'true' &&
+        steps.orcad-prebuild-cache-identity.outcome == 'success' &&
+        steps.orcad-prebuild-cache-identity.outputs.key != ''
+      continue-on-error: true
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ steps.orcad-prebuild-cache-identity.outputs.path }}
+        key: ${{ steps.orcad-prebuild-cache-identity.outputs.key }}
+
+    - name: Build and smoke this runner's node-pty prebuild slot under the pinned Node
+      shell: bash
+      env:
+        WINDOWS_PREBUILD_CACHE_HIT: ${{ steps.orcad-prebuild-cache-restore.outputs.cache-hit }}
+        WINDOWS_PREBUILD_CACHE_RESTORE_OUTCOME: ${{ steps.orcad-prebuild-cache-restore.outcome }}
+      run: |
+        if [ "$RUNNER_OS" = Windows ] && [ "$WINDOWS_PREBUILD_CACHE_HIT" = true ] &&
+           [ "$WINDOWS_PREBUILD_CACHE_RESTORE_OUTCOME" = success ] &&
+           node config/scripts/orcad-windows-prebuild-cache.mjs --validate; then
+          echo 'Using the validated Windows server prebuild'
+        else
+          if [ "$RUNNER_OS" = Windows ]; then
+            rm -rf -- out/orcad-prebuilds
+          fi
+          pnpm build:orcad-prebuilds
+        fi
+        pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+        pnpm build:orcad-prebuilds --smoke

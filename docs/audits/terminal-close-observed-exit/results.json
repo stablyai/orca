@@ -1,0 +1,359 @@
+{
+  "sourceHashes": {
+    "before": "963a18c7811f9bb47c5308f795edfc7ed6f7b91ccfa5c415357c701679f4204b",
+    "after": "36ea86fcd71c37384af31ae9b8cf8f348e4435854f5faf4829f5fafb618c2c44",
+    "fixture": "e9df0f19562ef2f162a6262c5052dd0e52d7770b88dc852b599e858d99452b1d"
+  },
+  "phases": [
+    {
+      "phase": "before",
+      "sockets": [
+        {
+          "scenario": "healthy",
+          "close": {
+            "ptyKilled": true,
+            "ptyStopVerdict": null
+          },
+          "fallbackKills": 0,
+          "targetInventoryCount": 0,
+          "targetProbe": false,
+          "routerProbe": false,
+          "beforeStreamResume": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 0,
+            "exitListenerCalls": 1
+          },
+          "settled": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        },
+        {
+          "scenario": "unrelated-endpoint-gone",
+          "close": {
+            "ptyKilled": false,
+            "ptyStopVerdict": "unverifiable"
+          },
+          "fallbackKills": 1,
+          "targetInventoryCount": 0,
+          "targetProbe": false,
+          "routerProbe": null,
+          "beforeStreamResume": {
+            "connected": false,
+            "exitCause": {
+              "kind": "unknown",
+              "reason": "stop_unverified"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "unverifiable",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 0,
+            "exitListenerCalls": 1
+          },
+          "settled": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        },
+        {
+          "scenario": "physical-exit-observed",
+          "close": {
+            "ptyKilled": false,
+            "ptyStopVerdict": null
+          },
+          "fallbackKills": 1,
+          "targetInventoryCount": 0,
+          "targetProbe": false,
+          "routerProbe": null,
+          "beforeStreamResume": {
+            "connected": false,
+            "exitCause": {
+              "kind": "unknown",
+              "reason": "stop_unverified"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 2,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          },
+          "settled": {
+            "connected": false,
+            "exitCause": {
+              "kind": "unknown",
+              "reason": "stop_unverified"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 2,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        }
+      ],
+      "controls": [
+        {
+          "scenario": "same-incarnation",
+          "stopped": false,
+          "fallbackKills": 1,
+          "verdict": {
+            "status": "exited"
+          }
+        },
+        {
+          "scenario": "replacement",
+          "stopped": false,
+          "fallbackKills": 1,
+          "verdict": {
+            "status": "unverifiable",
+            "reason": "a follow-up stop was issued but its outcome could not be verified"
+          }
+        },
+        {
+          "scenario": "unverified",
+          "stopped": false,
+          "fallbackKills": 1,
+          "verdict": {
+            "status": "unverifiable",
+            "reason": "a follow-up stop was issued but its outcome could not be verified"
+          }
+        },
+        {
+          "scenario": "legacy-unstamped",
+          "stopped": false,
+          "fallbackKills": 1,
+          "verdict": {
+            "status": "exited"
+          }
+        },
+        {
+          "scenario": "throw-after-exit",
+          "stopped": false,
+          "fallbackKills": 1,
+          "verdict": {
+            "status": "unverifiable",
+            "reason": "unverified transport failure"
+          }
+        }
+      ]
+    },
+    {
+      "phase": "after",
+      "sockets": [
+        {
+          "scenario": "healthy",
+          "close": {
+            "ptyKilled": true,
+            "ptyStopVerdict": null
+          },
+          "fallbackKills": 0,
+          "targetInventoryCount": 0,
+          "targetProbe": false,
+          "routerProbe": false,
+          "beforeStreamResume": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 0,
+            "exitListenerCalls": 1
+          },
+          "settled": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        },
+        {
+          "scenario": "unrelated-endpoint-gone",
+          "close": {
+            "ptyKilled": false,
+            "ptyStopVerdict": "unverifiable"
+          },
+          "fallbackKills": 1,
+          "targetInventoryCount": 0,
+          "targetProbe": false,
+          "routerProbe": null,
+          "beforeStreamResume": {
+            "connected": false,
+            "exitCause": {
+              "kind": "unknown",
+              "reason": "stop_unverified"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "unverifiable",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 0,
+            "exitListenerCalls": 1
+          },
+          "settled": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        },
+        {
+          "scenario": "physical-exit-observed",
+          "close": {
+            "ptyKilled": true,
+            "ptyStopVerdict": null
+          },
+          "fallbackKills": 0,
+          "targetInventoryCount": 0,
+          "targetProbe": false,
+          "routerProbe": null,
+          "beforeStreamResume": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          },
+          "settled": {
+            "connected": false,
+            "exitCause": {
+              "kind": "operator_close"
+            },
+            "headlessModelRetained": false,
+            "titleTrackerRetained": false,
+            "liveness": "exited",
+            "providerHasPty": false,
+            "hostInventoryCount": 0,
+            "deliveredData": [],
+            "rendererExitCount": 1,
+            "providerExitCount": 1,
+            "exitListenerCalls": 1
+          }
+        }
+      ],
+      "controls": [
+        {
+          "scenario": "same-incarnation",
+          "stopped": true,
+          "fallbackKills": 0,
+          "verdict": {
+            "status": "exited"
+          }
+        },
+        {
+          "scenario": "replacement",
+          "stopped": false,
+          "fallbackKills": 1,
+          "verdict": {
+            "status": "unverifiable",
+            "reason": "a follow-up stop was issued but its outcome could not be verified"
+          }
+        },
+        {
+          "scenario": "unverified",
+          "stopped": false,
+          "fallbackKills": 1,
+          "verdict": {
+            "status": "unverifiable",
+            "reason": "a follow-up stop was issued but its outcome could not be verified"
+          }
+        },
+        {
+          "scenario": "legacy-unstamped",
+          "stopped": false,
+          "fallbackKills": 1,
+          "verdict": {
+            "status": "exited"
+          }
+        },
+        {
+          "scenario": "throw-after-exit",
+          "stopped": false,
+          "fallbackKills": 1,
+          "verdict": {
+            "status": "unverifiable",
+            "reason": "unverified transport failure"
+          }
+        }
+      ]
+    }
+  ]
+}

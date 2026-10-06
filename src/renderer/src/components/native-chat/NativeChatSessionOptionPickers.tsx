@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { SwitchIndicator } from '@/components/ui/switch'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +31,9 @@ import {
   nativeChatSessionOptionLabel
 } from './native-chat-session-option-labels'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import { agentSessionThrownFailure } from '../../../../shared/agent-session-write-failure'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
 
 export type NativeChatSessionOptionPickersProps = {
   surface: SessionOptionsSurface | null
@@ -140,38 +144,32 @@ function DescriptorMenuRows(props: {
       </DropdownMenuItem>
     )
   }
-  // Why: absolute On/Off only when we have tracked truth. Unknown composed
-  // booleans leave the group unselected so empty radios are not a selection.
+  // Why one switch row and not On/Off: the option is binary, so a single control
+  // carries it. The row owns the label, which is why the caller drops its header.
   if (descriptor.kind.type === 'boolean') {
-    const selected =
-      descriptor.kind.currentValue === true
-        ? 'on'
-        : descriptor.kind.currentValue === false
-          ? 'off'
-          : undefined
+    const checked = descriptor.kind.currentValue
+    const label = nativeChatSessionOptionLabel(descriptor)
     return (
-      <>
-        {selected === undefined ? (
-          <DropdownMenuLabel className="font-normal text-muted-foreground">
-            {translate(
-              'components.native-chat.composer.valueUnknown',
-              'Current value unknown — pick On or Off'
-            )}
-          </DropdownMenuLabel>
-        ) : null}
-        <DropdownMenuRadioGroup value={selected} onValueChange={(next) => setValue(next === 'on')}>
-          <DropdownMenuRadioItem value="on" disabled={!descriptor.settable || pending}>
-            {translate('components.native-chat.composer.optionValue.on', 'On')}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="off" disabled={!descriptor.settable || pending}>
-            {translate('components.native-chat.composer.optionValue.off', 'Off')}
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </>
+      <DropdownMenuItem
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        disabled={!descriptor.settable || pending}
+        // Keep the menu open: the write is async and its result lands in this row.
+        onSelect={(event) => {
+          event.preventDefault()
+          setValue(!checked)
+        }}
+        className="justify-between gap-2"
+      >
+        <span>{label}</span>
+        <SwitchIndicator checked={checked} />
+      </DropdownMenuItem>
     )
   }
   return (
     <DropdownMenuRadioGroup
+      aria-label={nativeChatSessionOptionLabel(descriptor)}
       value={descriptor.kind.currentValue}
       onValueChange={(value) => setValue(value)}
     >
@@ -191,6 +189,15 @@ function DescriptorMenuRows(props: {
   )
 }
 
+/** A host's error is words for its log, so it gets the table's; a local surface's error is
+ *  already written for the person. */
+function optionUpdateFailureDescription(error: unknown): string {
+  if (error instanceof RuntimeRpcCallError) {
+    return agentSessionWriteFailureText(agentSessionThrownFailure(error, error.code), 'option')
+  }
+  return error instanceof Error ? error.message : String(error)
+}
+
 function runSurfaceCall(
   pendingKey: string,
   setPendingId: (id: string | null) => void,
@@ -201,7 +208,7 @@ function runSurfaceCall(
     .catch((error) => {
       toast.error(
         translate('components.native-chat.composer.optionUpdateFailed', 'Could not update option'),
-        { description: error instanceof Error ? error.message : String(error) }
+        { description: optionUpdateFailureDescription(error) }
       )
     })
     .finally(() => setPendingId(null))
@@ -219,6 +226,8 @@ function NativeChatSessionOptionPickersInner({
   if (!surface || !model) {
     return null
   }
+  // Still listed by the host: the pill shows its value and does not open, even on request.
+  const modelChoicesPending = model.choicesPending === true
   const requestedModelSequence = pickerRequest?.id === model.id ? pickerRequest.sequence : null
   const requestedOptionsSequence = options.some((descriptor) => descriptor.id === pickerRequest?.id)
     ? (pickerRequest?.sequence ?? null)
@@ -241,6 +250,30 @@ function NativeChatSessionOptionPickersInner({
 
   return (
     <div className="flex min-w-0 items-center gap-0.5">
+      <DropdownMenu
+        key={`model:${requestedModelSequence ?? 'idle'}`}
+        // Read only when a request remounts the menu: one made while pending is spent shut.
+        defaultOpen={requestedModelSequence !== null && !modelChoicesPending}
+      >
+        <PickerTrigger
+          label={nativeChatModelPillLabel(model)}
+          tooltipLabel={modelTooltip}
+          disabled={isWorking || pendingId !== null || modelChoicesPending}
+          disabledReason={modelReason}
+          dispatched={sessionOptionDispatchUnconfirmed(model)}
+        />
+        <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-64">
+          {modelReason && !model.settable ? (
+            <DropdownMenuLabel className="font-normal">{modelReason}</DropdownMenuLabel>
+          ) : null}
+          <DescriptorMenuRows
+            descriptor={model}
+            pending={pendingId !== null}
+            setValue={(value) => setOption(model, value)}
+            invokeAction={() => invokeAction(model)}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
       {options.length > 0 ? (
         <DropdownMenu
           key={`options:${requestedOptionsSequence ?? 'idle'}`}
@@ -259,7 +292,11 @@ function NativeChatSessionOptionPickersInner({
               return (
                 <div key={descriptor.id}>
                   {index > 0 ? <DropdownMenuSeparator /> : null}
-                  <DropdownMenuLabel>{nativeChatSessionOptionLabel(descriptor)}</DropdownMenuLabel>
+                  {descriptor.kind.type === 'boolean' && !descriptor.action ? null : (
+                    <DropdownMenuLabel>
+                      {nativeChatSessionOptionLabel(descriptor)}
+                    </DropdownMenuLabel>
+                  )}
                   {reason && !descriptor.settable ? (
                     <DropdownMenuLabel className="font-normal">{reason}</DropdownMenuLabel>
                   ) : null}
@@ -275,29 +312,6 @@ function NativeChatSessionOptionPickersInner({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      <DropdownMenu
-        key={`model:${requestedModelSequence ?? 'idle'}`}
-        defaultOpen={requestedModelSequence !== null}
-      >
-        <PickerTrigger
-          label={nativeChatModelPillLabel(model)}
-          tooltipLabel={modelTooltip}
-          disabled={isWorking || pendingId !== null}
-          disabledReason={modelReason}
-          dispatched={sessionOptionDispatchUnconfirmed(model)}
-        />
-        <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-64">
-          {modelReason && !model.settable ? (
-            <DropdownMenuLabel className="font-normal">{modelReason}</DropdownMenuLabel>
-          ) : null}
-          <DescriptorMenuRows
-            descriptor={model}
-            pending={pendingId !== null}
-            setValue={(value) => setOption(model, value)}
-            invokeAction={() => invokeAction(model)}
-          />
-        </DropdownMenuContent>
-      </DropdownMenu>
     </div>
   )
 }

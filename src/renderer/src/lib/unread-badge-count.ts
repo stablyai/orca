@@ -1,3 +1,4 @@
+import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
@@ -8,7 +9,7 @@ export type UnreadBadgeTab = Pick<TerminalTab, 'id'>
 export type UnreadBadgeCountSources = {
   worktreesByRepo: Readonly<Record<string, readonly UnreadBadgeWorktree[]>>
   tabsByWorktree: Readonly<Record<string, readonly UnreadBadgeTab[]>>
-  unreadTerminalTabs: Readonly<Record<string, true>>
+  unreadTerminalTabs: Readonly<Record<string, StoredAgentAttentionUnread>>
 }
 
 export function getUnreadBadgeCount({

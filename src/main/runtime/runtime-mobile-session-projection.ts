@@ -20,6 +20,8 @@ import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import {
   getLatestAgentCandidateTitle,
+  getLeafDisplayRecord,
+  getPtyDisplayRecord,
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
 
@@ -47,6 +49,42 @@ export function projectRuntimeMobileSessionTabs(
     const rows = hookRowsByPaneKey.get(paneKey) ?? []
     hookRowsForPane.set(paneKey, rows)
     return rows
+  }
+  let statusRowsByPaneKey: Map<string, AgentStatusIpcPayload[]> | null = null
+  let statusRowsByTerminalHandle: Map<string, AgentStatusIpcPayload[]> | null = null
+  const getStatusRows = (
+    paneKey: string,
+    terminalHandle: string | null
+  ): AgentStatusIpcPayload[] => {
+    if (!statusRowsByPaneKey || !statusRowsByTerminalHandle) {
+      statusRowsByPaneKey = new Map()
+      statusRowsByTerminalHandle = new Map()
+      for (const row of host.getStatusSnapshot()) {
+        const paneRows = statusRowsByPaneKey.get(row.paneKey)
+        if (paneRows) {
+          paneRows.push(row)
+        } else {
+          statusRowsByPaneKey.set(row.paneKey, [row])
+        }
+        if (row.terminalHandle) {
+          const handleRows = statusRowsByTerminalHandle.get(row.terminalHandle)
+          if (handleRows) {
+            handleRows.push(row)
+          } else {
+            statusRowsByTerminalHandle.set(row.terminalHandle, [row])
+          }
+        }
+      }
+    }
+    const paneRows = statusRowsByPaneKey.get(paneKey) ?? []
+    if (!terminalHandle) {
+      return paneRows
+    }
+    const handleRows = statusRowsByTerminalHandle.get(terminalHandle) ?? []
+    if (paneRows.length === 0) {
+      return handleRows
+    }
+    return [...paneRows, ...handleRows.filter((row) => !paneRows.includes(row))]
   }
   // Why: a live PTY backs one surface; claim each once so two leaves resolving to it can't emit duplicate React keys and crash the client.
   const claimedLivePtyIds = new Set<string>()
@@ -98,11 +136,11 @@ export function projectRuntimeMobileSessionTabs(
       ? makePaneKey(tab.parentTabId, tab.leafId)
       : `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
     const mobileStatusPty = livePty ?? pty
-    // Why: headless hooks live only in main's retained rows; reuse this lookup
+    // Why: headless hooks live in main's status store; reuse this lookup
     // for both title ownership and status publication so the two cannot diverge.
     const retainedAgentStatus = tab.agentStatus
       ? null
-      : host.getRetainedStatus(paneKey, liveLeafPty ?? mobileStatusPty, tab)
+      : host.getRetainedStatus(paneKey, liveLeafPty ?? mobileStatusPty, tab, getStatusRows)
     const hookAgentStatus = tab.agentStatus
       ? selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey))
       : null
@@ -110,16 +148,20 @@ export function projectRuntimeMobileSessionTabs(
     // null, because persisted ids can collide with an unrelated pane after restart — reading
     // that pane's tracker would publish its title here, ahead of every other source.
     const trackerOnlyTitle = host.getTrackedTitle(liveLeafPtyId ?? pty?.ptyId ?? null)
-    const leafTitle = leaf
+    const displayLeaf = leaf
+      ? getLeafDisplayRecord(leaf, host.getTitleDisplayClear(leaf.ptyId))
+      : null
+    const displayPty = pty ? getPtyDisplayRecord(pty, host.getTitleDisplayClear(pty.ptyId)) : null
+    const leafTitle = displayLeaf
       ? getLatestAgentCandidateTitle(
-          { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-          { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
+          { title: displayLeaf.paneTitle, updatedAt: displayLeaf.paneTitleUpdatedAt },
+          { title: displayLeaf.lastOscTitle, updatedAt: displayLeaf.lastOscTitleAt }
         )
       : null
-    const ptyTitle = pty
+    const ptyTitle = displayPty
       ? getLatestAgentCandidateTitle(
-          { title: pty.title, updatedAt: pty.titleUpdatedAt },
-          { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
+          { title: displayPty.title, updatedAt: displayPty.titleUpdatedAt },
+          { title: displayPty.lastOscTitle, updatedAt: displayPty.lastOscTitleAt }
         )
       : null
     // Renderer omission is authoritative: PTY launch provenance outlives agent exit.
@@ -162,7 +204,10 @@ export function projectRuntimeMobileSessionTabs(
         (hookAgentStatus.providerSessionReceivedAt ?? -1) >= tab.agentStatus.updatedAt)
         ? hookAgentStatus.providerSession
         : tab.agentStatus?.providerSession
-    const statusPty = liveLeafPty ?? mobileStatusPty
+    const nativeStatusPty = liveLeafPty ?? mobileStatusPty
+    const statusPty = nativeStatusPty
+      ? getPtyDisplayRecord(nativeStatusPty, host.getTitleDisplayClear(nativeStatusPty.ptyId))
+      : null
     const normalizedTabAgentStatus = renewRuntimeMobileAgentStatusFromPtyTitle(
       tab.agentStatus
         ? normalizeCompatibleAgentStatusEntryForOwner(

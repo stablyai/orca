@@ -246,11 +246,17 @@ test('reuses a terminal file link already open in a sibling workspace @golden', 
 
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
-  await orcaPage.evaluate(() => {
+  await orcaPage.evaluate((sourceWorktreeId) => {
     const state = window.__store?.getState()
     state?.setSidebarOpen(false)
     state?.setRightSidebarOpen(false)
-  })
+    // Why: closing the left sidebar can drop activeWorktreeId on mac CI,
+    // which remounts Landing and leaves terminal.cols at 0.
+    if (state && state.activeWorktreeId !== sourceWorktreeId) {
+      state.setActiveWorktree(sourceWorktreeId)
+    }
+  }, sourceWorktreeId)
+  await ensureTerminalVisible(orcaPage)
   await expect
     .poll(
       () =>

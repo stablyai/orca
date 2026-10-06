@@ -182,15 +182,40 @@ export function readCodexAuthIdentity(contents: string): CodexAuthIdentity | nul
         readStringClaim(authClaims, 'chatgpt_account_id') ??
         readStringClaim(payload, 'chatgpt_account_id')
     ),
-    workspaceLabel: normalizeField(
-      readStringClaim(authClaims, 'workspace_name') ??
-        readStringClaim(profileClaims, 'workspace_name')
-    ),
+    workspaceLabel:
+      normalizeField(readStringClaim(authClaims, 'workspace_name')) ??
+      normalizeField(readStringClaim(profileClaims, 'workspace_name')) ??
+      readPlanWorkspaceLabel(authClaims),
     workspaceAccountId: normalizeField(
       readStringClaim(authClaims, 'workspace_account_id') ??
         tokenAccountId ??
         readStringClaim(payload, 'chatgpt_account_id')
     )
+  }
+}
+
+function readPlanWorkspaceLabel(authClaims: Record<string, unknown> | null): string | null {
+  // Codex tokens commonly omit workspace_name but identify the account's plan.
+  switch (normalizeField(readStringClaim(authClaims, 'chatgpt_plan_type'))?.toLowerCase()) {
+    case 'free':
+      return 'Personal (Free)'
+    case 'go':
+      return 'Personal (Go)'
+    case 'plus':
+      return 'Personal (Plus)'
+    case 'pro':
+      return 'Personal (Pro)'
+    case 'team':
+      return 'Team'
+    case 'business':
+      return 'Business'
+    case 'enterprise':
+      return 'Enterprise'
+    case 'edu':
+      return 'Education'
+    case undefined:
+    default:
+      return null
   }
 }
 

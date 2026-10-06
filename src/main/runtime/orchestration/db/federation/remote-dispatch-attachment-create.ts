@@ -2,12 +2,15 @@ import type { WorkerDispatchState, RemoteDispatchAttachmentRow } from '../../typ
 import { OrchestrationError } from '../../orchestration-error'
 import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
+import { federatedStubHomeRunId } from '../contract-constants'
 import { insertRemoteDispatchAttachmentRow } from '../dispatch-row-writer'
 
 export function createRemoteDispatchAttachment(
   this: OrchestrationDb,
   params: {
     dispatchId: string
+    /** Absent from a v1.4.198 coordinator; replaced by a per-attachment stub Run. */
+    runId?: string
     taskId: string
     homePeerFingerprint: string
     protocolVersion: number
@@ -43,6 +46,17 @@ export function createRemoteDispatchAttachment(
         `Remote attachment request ${params.mutationReceipt.requestId} already exists.`
       )
     }
+    const runId = params.runId ?? federatedStubHomeRunId(params.dispatchId)
+    if (!runId.trim()) {
+      throw new OrchestrationError('invalid_argument', 'Missing Run ID')
+    }
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO runs (id, objective, home_database, consumer_generation, legacy)
+         VALUES (?, ?, 'remote', 0, 0)`
+      )
+      .run(runId, `Coordinated from ${params.homePeerFingerprint}`)
+    this.requireRun(runId)
     ensureMutationReceiptCapacity(this.db)
     this.db
       .prepare(
@@ -59,6 +73,7 @@ export function createRemoteDispatchAttachment(
       )
     insertRemoteDispatchAttachmentRow(this.db, {
       dispatchId: params.dispatchId,
+      runId,
       taskId: params.taskId,
       homePeerFingerprint: params.homePeerFingerprint,
       protocolVersion: params.protocolVersion,

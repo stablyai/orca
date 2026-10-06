@@ -1,3 +1,4 @@
+import { translateMain } from '../i18n/main-i18n'
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 
 const NOTIFICATION_AGENT_LABEL_MAX_LENGTH = 40
@@ -57,16 +58,41 @@ function buildAgentTaskCompleteNotificationOptions(
 
   const agentLabel = formatNotificationAgentLabel(args.agentType)
   const worktreeContext = formatNotificationWorktreeContext(args)
-  const statusText =
-    args.agentState === 'blocked' || args.agentState === 'waiting'
-      ? 'needs input'
-      : args.agentState === 'done' && args.agentInterrupted
-        ? 'stopped'
-        : 'finished'
+  const statusText = formatAgentNotificationStatusText(args)
 
   return {
     title: `${worktreeContext} - ${agentLabel} ${statusText}`,
     body: buildAgentTaskCompleteRichBody(args) ?? `${agentLabel} ${statusText}.`
+  }
+}
+
+// Why (#4375): a still-working agent must never be announced as finished. Only an
+// explicit terminal state, or no state at all (the hook snapshot expired and the
+// notification itself is the completion signal), may say "finished".
+function formatAgentNotificationStatusText(args: NotificationDispatchRequest): string {
+  if (args.agentState === 'blocked' || args.agentState === 'waiting') {
+    return translateMain('notifications.agentStatus.needsInput', 'needs input')
+  }
+  if (args.agentState === 'working') {
+    return translateMain('notifications.agentStatus.working', 'working')
+  }
+  if (args.agentState !== 'done') {
+    return translateMain('notifications.agentStatus.finished', 'finished')
+  }
+  switch (args.agentTurnOutcome) {
+    // A turn cut short by anything but the user is a fault, as a failure is.
+    case 'failure':
+    case 'interruption':
+      return translateMain('notifications.agentStatus.failed', 'failed')
+    // Why: a Stop the user asked for, a turn a newer request replaced, or an end Orca cannot
+    // prove, still never reads finished.
+    case 'cancellation':
+    case 'superseded':
+    case 'unconfirmed':
+      return translateMain('notifications.agentStatus.stopped', 'stopped')
+    case 'success':
+    case undefined:
+      return translateMain('notifications.agentStatus.finished', 'finished')
   }
 }
 
@@ -76,7 +102,7 @@ function formatNotificationWorktreeContext(args: NotificationDispatchRequest): s
     NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
   )
   const repoLabel = normalizeNotificationText(args.repoLabel, NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH)
-  if (args.hasMultipleActiveRepos && repoLabel && worktreeLabel) {
+  if (repoLabel && worktreeLabel) {
     return normalizeNotificationText(
       `${repoLabel} / ${worktreeLabel}`,
       NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
@@ -93,7 +119,7 @@ function hasAgentNotificationSnapshot(args: NotificationDispatchRequest): boolea
     args.agentToolName ||
     args.agentToolInput ||
     args.agentLastAssistantMessage ||
-    args.agentInterrupted
+    args.agentTurnOutcome !== undefined
   )
 }
 

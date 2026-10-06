@@ -217,7 +217,7 @@ describe('LocalPtyProvider', () => {
         expect(mockProc.write).not.toHaveBeenCalled()
 
         await vi.advanceTimersByTimeAsync(200)
-        expect(mockProc.write).toHaveBeenCalledWith(`${command}\n`)
+        expect(mockProc.write).toHaveBeenCalledWith(`${command}\r`)
       } finally {
         vi.useRealTimers()
       }
@@ -269,27 +269,10 @@ describe('LocalPtyProvider', () => {
 
         vi.advanceTimersByTime(1)
         await Promise.resolve()
-        expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\n")
+        expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\r")
       } finally {
         vi.useRealTimers()
       }
-    })
-
-    it.each([
-      ['after the ready marker', ['\x1b]777;orca-shell-ready\x07', '\x1b[?2004hfish> ']],
-      ['after the ESC introducer', ['\x1b]777;orca-shell-ready\x07\x1b', '[?2004hfish> ']]
-    ])('preserves Fish bracketed-paste output split %s', async (_boundary, chunks) => {
-      process.env.SHELL = '/usr/bin/fish'
-      const received: string[] = []
-      provider.configure({ onData: (_id, data) => received.push(data) })
-
-      await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
-      const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
-      for (const chunk of chunks) {
-        dataCallback(chunk)
-      }
-
-      expect(received.join('')).toBe('\x1b[?2004hfish> ')
     })
 
     it('releases held marker-prefix bytes when local shell readiness times out', async () => {
@@ -315,7 +298,7 @@ describe('LocalPtyProvider', () => {
 
         vi.advanceTimersByTime(200)
         await Promise.resolve()
-        expect(mockProc.write).toHaveBeenCalledWith('printf ready\n')
+        expect(mockProc.write).toHaveBeenCalledWith('printf ready\r')
       } finally {
         vi.useRealTimers()
       }

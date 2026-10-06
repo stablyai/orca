@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { Code, Eye } from 'lucide-react-native'
+import { openExternalLink } from '../platform/external-link'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
-type Props = {
+export type MobileHtmlPreviewProps = {
   html: string
   // Rendered when the user flips to "Source" (the existing syntax view).
   renderSource: () => React.ReactNode
@@ -14,15 +15,23 @@ type Props = {
 // Preview/Source toggle. Navigation is locked: only the initial inline document
 // loads in-place; any link tap opens externally so a page can't hijack the
 // review surface.
-export function MobileHtmlPreview({ html, renderSource }: Props) {
+export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
 
   return (
     <View style={styles.container}>
-      <View style={styles.toolbar}>
+      {/* A tab pair, not two buttons: which side is showing is carried by the active style, and a
+          style is announced to nobody. */}
+      <View style={styles.toolbar} accessibilityRole="tablist">
         <Pressable
           style={[styles.toggle, mode === 'preview' && styles.toggleActive]}
           onPress={() => setMode('preview')}
+          accessibilityRole="tab"
+          // Both, because they reach different readers: `accessibilityState` is what the phone's
+          // screen reader takes, and react-native-web drops it entirely -- measured, the DOM carries
+          // no `aria-selected` without the line below.
+          accessibilityState={{ selected: mode === 'preview' }}
+          aria-selected={mode === 'preview'}
           accessibilityLabel="Preview rendered HTML"
         >
           <Eye size={13} color={colors.textSecondary} strokeWidth={2.2} />
@@ -31,6 +40,9 @@ export function MobileHtmlPreview({ html, renderSource }: Props) {
         <Pressable
           style={[styles.toggle, mode === 'source' && styles.toggleActive]}
           onPress={() => setMode('source')}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: mode === 'source' }}
+          aria-selected={mode === 'source'}
           accessibilityLabel="View HTML source"
         >
           <Code size={13} color={colors.textSecondary} strokeWidth={2.2} />
@@ -50,7 +62,7 @@ export function MobileHtmlPreview({ html, renderSource }: Props) {
             if (request.url === 'about:blank' || request.url.startsWith('data:')) {
               return true
             }
-            void Linking.openURL(request.url).catch(() => {})
+            openExternalLink(request.url)
             return false
           }}
         />

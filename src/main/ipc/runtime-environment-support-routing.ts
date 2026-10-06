@@ -7,7 +7,8 @@ import type {
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import { markEnvironmentUsed, resolveEnvironment } from '../../shared/runtime-environment-store'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
+import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
@@ -18,10 +19,7 @@ import {
   type RuntimeEnvironmentCapabilityOutcome
 } from './runtime-environment-capability-evidence'
 import { runtimeEnvironmentRevisionFailure } from './runtime-environment-revision-guard'
-import {
-  clearSharedControlSupport,
-  supportsSharedControl
-} from './runtime-environment-shared-control-support'
+import { supportsSharedControl } from './runtime-environment-shared-control-support'
 import {
   sendRemoteRuntimeRequestAbortable,
   sendRemoteRuntimeSharedControlRequestAbortable
@@ -205,7 +203,6 @@ export async function routeRuntimeEnvironmentCallBySupport(args: {
       }
       return response
     }
-    clearSharedControlSupport(environment.id)
     environment = resolveEnvironment(args.userDataPath, environment.id)
   }
   return runtimeEnvironmentChangedFailure(environment, args.method)
@@ -266,7 +263,7 @@ function subscriptionCallbacks(
   return {
     onResponse: (response: RuntimeRpcResponse<unknown>) => {
       if (response.ok && shouldMarkUsed()) {
-        markEnvironmentUsed(args.userDataPath, args.environment.id, {
+        recordRuntimeEnvironmentUsage(args.userDataPath, args.environment.id, {
           runtimeId: response._meta.runtimeId
         })
       }

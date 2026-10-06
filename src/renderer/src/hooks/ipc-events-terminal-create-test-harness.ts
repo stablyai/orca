@@ -1,3 +1,6 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for useIpcEvents-terminal-create-surfacing.test.ts, not shipped code, and it
+   falls outside the *.test / *.spec / tests glob set. That spec already sits at 799 of its 800 max-lines budget, so these 13
+   stubs cannot move back into it without a max-lines disable. */
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import { buildTerminalCreateWindow } from './ipc-events-terminal-create-window-test-fixtures'

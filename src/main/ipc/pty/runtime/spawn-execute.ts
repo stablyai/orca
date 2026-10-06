@@ -17,6 +17,7 @@ import {
   isSshPtyIdentityMismatchError
 } from '../../../providers/ssh-pty-errors'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { markRuntimeSpawnHiddenBeforeSpawn } from './spawn-hidden-delivery'
 
 export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise<void> {
   const args = ctx.args
@@ -42,6 +43,9 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
           )
     const expectedPtyId =
       stablePaneOwnerCandidate?.ptyId ?? ctx.effectiveSessionAppId ?? ctx.sessionId
+    if (!stablePaneOwnerCandidate) {
+      markRuntimeSpawnHiddenBeforeSpawn(ctx)
+    }
     if (expectedPtyId) {
       ctx.deps.runtime?.beginPtyRegistration?.(expectedPtyId)
       ctx.pendingRegistrationPtyId = expectedPtyId

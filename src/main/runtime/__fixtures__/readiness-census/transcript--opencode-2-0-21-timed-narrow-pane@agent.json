@@ -1,0 +1,15 @@
+{
+  "description": "opencode2 recording at 40x40 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-13: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "14-124: now=ready-weak edge=ready-weak quiet=ready-weak wait=ready@start",
+      "125-127: now=ready-strong edge=ready-strong quiet=ready-strong wait=ready@start"
+    ],
+    "clockless": [
+      "0-13: verdict=pending:closed wait=pending",
+      "14-124: verdict=ready-weak wait=ready@start",
+      "125-127: verdict=ready-strong wait=ready@start"
+    ]
+  }
+}

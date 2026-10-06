@@ -1,28 +1,26 @@
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
-import { markNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
 import { closeStartupQueryAuthorityForPty, getRelayPtyId } from '../provider/registry'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { recordCodexPaneAccountForSpawn } from '../host-env/codex-home'
 import { persistAdmittedStablePaneBinding } from '../pane/stable-owner'
+import { swapReplacedPaneBinding } from '../pane/pane-owner-replacement'
+import { claimSshPaneLease } from '../pane/ssh-pane-lease-claim'
 import {
   pendingByPaneKey,
   pendingPtyIdBySerializerGeneration,
   rendererSerializerReadiness
 } from '../pane/serializer-state'
-import { ptyOwnership, ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
+import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { resolveCommittedPtySize, type PtyGrid } from '../delivery/attached-pty-size'
-import { clearProviderPtyState } from '../provider/state-cleanup'
+import { discardUnpersistedPtySpawn } from '../pane/spawn-registration'
+import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { PtyIpcSpawnState } from './spawn-state'
 
-export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
-  rendererPreSignaled: boolean
-  rendererAlreadyRegistered: boolean
-  committedSize: PtyGrid
-}> {
+export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<PtyGrid> {
   const args = ctx.args
   try {
-    ctx.stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
+    ctx.stablePaneBindingPersisted = await persistAdmittedStablePaneBinding({
       store: ctx.deps.store,
       owner: ctx.stablePaneOwner,
       result: ctx.result,
@@ -35,72 +33,17 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
       throw error
     }
     console.error('[pty] failed to persist PTY binding after attach:', error)
-    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(error)), {
       agentSessionOperationOutcome: 'unknown' as const
     })
-  }
-  ctx.spawnTiming.log(ctx.result.id, {
-    daemon: ctx.isDaemonHostSpawn,
-    reattach: ctx.result.isReattach ?? false
-  })
-  recordCodexPaneAccountForSpawn({
-    ptyId: ctx.result.id,
-    isDaemonHostSpawn: ctx.isDaemonHostSpawn,
-    isReattach: ctx.result.isReattach === true,
-    pinnedByResume: ctx.codexResumeHomeSelected,
-    launchCodexHomePath: ctx.selectedCodexHomePath,
-    launchEnv: ctx.baseEnv,
-    target: ctx.codexSelectionTarget,
-    settings: ctx.deps.getSettings?.()
-  })
-  ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
-  if (ctx.result.incarnationId) {
-    ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
-  }
-  if (ctx.initiallyHidden) {
-    // Why marked synchronously here: provider data events dispatch on later tasks, so this still lands ahead of the first byte's delivery decision (idempotent if already marked pre-spawn).
-    ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.result.id, true)
-    if (ctx.preSpawnHiddenMarkId !== null && ctx.preSpawnHiddenMarkId !== ctx.result.id) {
-      // Defense: never strand a mark on an id the provider renamed.
-      ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
-    }
-    // Why after ptyOwnership.set: provider lookup routes by ownership, and a hidden-spawned agent should be paceable from its first flood.
-    ctx.deps.syncPtyBackgroundedDelivery(ctx.result.id, 'spawn')
-    closeStartupQueryAuthorityForPty(ctx.result.id)
-  }
-  // Why: record the native-Windows-ConPTY determination before the headless seed so the emulator's DA1 override exists from byte zero.
-  if (ctx.nativeWindowsConptySpawn) {
-    markNativeWindowsConptyPty(ctx.result.id)
-  }
-  const relayResultId = getRelayPtyId(args.connectionId, ctx.result.id)
-  if (ctx.deps.store && args.connectionId) {
-    // Why: remote PTYs live in the SSH relay grace window after Orca detaches; persist IDs immediately so reconnect reattaches instead of spawning a fresh shell.
-    ctx.deps.store.upsertSshRemotePtyLease({
-      targetId: args.connectionId,
-      ptyId: relayResultId,
-      ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
-      ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
-      ...(ctx.validatedLeafId ? { leafId: ctx.validatedLeafId } : {}),
-      state: 'attached',
-      lastAttachedAt: Date.now()
-    })
-  }
-  if (ctx.preAllocatedHandle && !ctx.stablePaneOwner?.handle) {
-    if (ctx.deps.runtime?.registerPreAllocatedHandleForPty) {
-      ctx.deps.runtime.registerPreAllocatedHandleForPty(ctx.result.id, ctx.preAllocatedHandle)
-      ctx.agentTeamsLeaderHandle = null
-    }
   }
   const committedSize = resolveCommittedPtySize({
     result: ctx.result,
     requested: { cols: args.cols, rows: args.rows },
     cachedBeforeAttach: ctx.sessionSizeBeforeAttach
   })
-  ptySizes.set(ctx.result.id, committedSize)
-  if (ctx.effectiveSessionAppId !== undefined && ctx.effectiveSessionAppId !== ctx.result.id) {
-    ptySizes.delete(ctx.effectiveSessionAppId)
-  }
-  // Why: patch the load-bearing ptyId binding synchronously so a force-quit in the renderer's ~450 ms debounce window can't orphan daemon history or an SSH relay lease (Issue #217).
+  const relayResultId = getRelayPtyId(args.connectionId, ctx.result.id)
+  // Persist the binding before acknowledging spawn so the renderer debounce cannot orphan history.
   if (
     ctx.deps.store &&
     typeof args.worktreeId === 'string' &&
@@ -115,40 +58,87 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
         leafId: ctx.validatedLeafId,
         ptyId: ctx.result.id,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
-        ...(ctx.cwd ? { startupCwd: ctx.cwd } : {})
+        ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
+        origin: spawnCommitBindingOrigin(ctx.result)
       }
-      if (args.connectionId) {
-        ctx.deps.store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
-      } else {
-        ctx.deps.store.persistPtyBinding(binding)
+      const hostId = args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
+      const input = ctx.replacedPaneOwner
+        ? swapReplacedPaneBinding(ctx.deps.store, binding, ctx.replacedPaneOwner, hostId)
+        : binding
+      const persisted = hostId
+        ? await ctx.deps.store.persistPtyBinding(input, hostId)
+        : await ctx.deps.store.persistPtyBinding(input)
+      if (persisted === false) {
+        throw new Error('terminal_pane_owner_changed')
       }
     } catch (err) {
       console.error('[pty] failed to persist PTY binding after spawn:', err)
-      if (!ctx.result.isReattach) {
-        try {
-          await ctx.provider.shutdown(ctx.result.id, { immediate: true })
-        } catch (shutdownErr) {
-          console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
+      await discardUnpersistedPtySpawn(ctx.provider, ctx.result, () => {
+        if (args.connectionId && ctx.deps.store) {
+          ctx.deps.store.removeSshRemotePtyLease(args.connectionId, relayResultId)
         }
-        clearProviderPtyState(ctx.result.id)
-        deletePtyOwnership(ctx.result.id)
+      })
+      if (err instanceof Error && err.message === 'terminal_pane_owner_changed') {
+        throw err
       }
-      if (!ctx.result.isReattach && args.connectionId && ctx.deps.store) {
-        ctx.deps.store.removeSshRemotePtyLease(args.connectionId, relayResultId)
-      }
-      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(err)), {
         agentSessionOperationOutcome: 'unknown' as const
       })
     }
   }
-  // Why here and not at the upsert: this path leases before it binds, so supersession fenced on the
-  // pane's binding still named the predecessor and bailed on every reconnect — one more reattachable
-  // lease, and one more `pty.attach`, per reconnect forever. Runs after whichever binding write this
-  // commit made, so the lease/binding order no longer decides.
-  if (ctx.deps.store && args.connectionId && ctx.validatedLeafId !== null) {
-    ctx.deps.store.supersedeSshRemotePtyLeasesForBoundPane(args.connectionId, ctx.validatedLeafId)
+  return committedSize
+}
+
+export function publishPtyIpcSpawnCommit(ctx: PtyIpcSpawnState, committedSize: PtyGrid): void {
+  const args = ctx.args
+  // Why here: every IPC spawn that survives its binding save publishes once through this point.
+  ctx.deps.runtime?.noteTerminalSpawnCommit?.(ctx.result)
+  ctx.spawnTiming.log(ctx.result.id, {
+    daemon: ctx.isDaemonHostSpawn,
+    reattach: ctx.result.isReattach ?? false
+  })
+  recordCodexPaneAccountForSpawn({
+    ptyId: ctx.result.id,
+    isDaemonHostSpawn: ctx.isDaemonHostSpawn,
+    isReattach: ctx.result.isReattach === true,
+    pinnedByResume: ctx.codexResumeHomeSelected,
+    launchCodexHomePath: ctx.selectedCodexHomePath,
+    target: ctx.codexSelectionTarget,
+    settings: ctx.deps.getSettings?.()
+  })
+  ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
+  if (ctx.result.incarnationId) {
+    ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
   }
-  // Why: when the renderer has declared it will own the serializer for this paneKey, suppress the daemon-snapshot seed so its hydration path is sole authority (keyed on paneKey since the ptyId isn't known yet). See docs/mobile-prefer-renderer-scrollback.md.
+  if (ctx.initiallyHidden) {
+    // Refresh the pre-spawn hidden mark only after this incarnation survives its save.
+    ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.result.id, true)
+    if (ctx.preSpawnHiddenMarkId !== null && ctx.preSpawnHiddenMarkId !== ctx.result.id) {
+      // Defense: never strand a mark on an id the provider renamed.
+      ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
+    }
+    // Why after ptyOwnership.set: provider lookup routes by ownership, and a hidden-spawned agent should be paceable from its first flood.
+    ctx.deps.syncPtyBackgroundedDelivery(ctx.result.id, 'spawn')
+    closeStartupQueryAuthorityForPty(ctx.result.id)
+  }
+  if (ctx.preAllocatedHandle && !ctx.stablePaneOwner?.handle) {
+    if (ctx.deps.runtime?.registerPreAllocatedHandleForPty) {
+      ctx.deps.runtime.registerPreAllocatedHandleForPty(ctx.result.id, ctx.preAllocatedHandle)
+      ctx.agentTeamsLeaderHandle = null
+    }
+  }
+  ptySizes.set(ctx.result.id, committedSize)
+  if (ctx.effectiveSessionAppId !== undefined && ctx.effectiveSessionAppId !== ctx.result.id) {
+    ptySizes.delete(ctx.effectiveSessionAppId)
+  }
+  claimSshPaneLease({
+    store: ctx.deps.store,
+    connectionId: args.connectionId,
+    ptyId: ctx.result.id,
+    worktreeId: args.worktreeId,
+    tabId: args.tabId,
+    leafId: ctx.validatedLeafId ?? undefined
+  })
   const rendererPreSignaled = ctx.validatedPaneKey
     ? pendingByPaneKey.has(ctx.validatedPaneKey)
     : false
@@ -164,5 +154,4 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
       pendingPtyIdBySerializerGeneration.set(pending.gen, ctx.result.id)
     }
   }
-  return { rendererPreSignaled, rendererAlreadyRegistered, committedSize }
 }

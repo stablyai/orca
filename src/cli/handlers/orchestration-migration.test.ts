@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
+// worker_done carries a CLI-minted request id so its runtime_unavailable retries replay one mutation.
+const WORKER_DONE_REQUEST = { orchestrationRequestId: expect.any(String) }
+
 const originalPaneKey = process.env.ORCA_PANE_KEY
 
 afterEach(() => {
@@ -34,20 +37,24 @@ describe('orchestration CLI migration recovery', () => {
         json: true
       } as never)
 
-      expect(call).toHaveBeenCalledWith('orchestration.send', {
-        from: 'term_worker',
-        to: undefined,
-        run: undefined,
-        subject: 'Done',
-        body: undefined,
-        type: 'worker_done',
-        priority: undefined,
-        threadId: undefined,
-        payload: undefined,
-        senderPaneKey: 'tab-worker:leaf-worker',
-        waitForLifecycleSettlement: true,
-        devMode: false
-      })
+      expect(call).toHaveBeenCalledWith(
+        'orchestration.send',
+        {
+          from: 'term_worker',
+          to: undefined,
+          run: undefined,
+          subject: 'Done',
+          body: undefined,
+          type: 'worker_done',
+          priority: undefined,
+          threadId: undefined,
+          payload: undefined,
+          senderPaneKey: 'tab-worker:leaf-worker',
+          waitForLifecycleSettlement: true,
+          devMode: false
+        },
+        WORKER_DONE_REQUEST
+      )
       expect(call).toHaveBeenCalledOnce()
     }
   )

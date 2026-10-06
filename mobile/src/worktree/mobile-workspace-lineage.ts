@@ -22,16 +22,14 @@ function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
   )
 }
 
-export function applyMobileWorkspaceLineage(
-  worktrees: readonly Worktree[],
-  collapsedGroups: ReadonlySet<string> = new Set()
-): Worktree[] {
-  const visibleIds = new Set(worktrees.map((worktree) => getWorktreeRowIdentity(worktree)))
+/** Children keyed by parent row identity, over valid edges between the given rows only. */
+export function getMobileWorkspaceLineageChildren(
+  worktrees: readonly Worktree[]
+): Map<string, Worktree[]> {
   const worktreeById = new Map(
     worktrees.map((worktree) => [getWorktreeRowIdentity(worktree), worktree])
   )
   const childrenByParentId = new Map<string, Worktree[]>()
-  const childIds = new Set<string>()
 
   for (const worktree of worktrees) {
     const worktreeId = getWorktreeRowIdentity(worktree)
@@ -43,17 +41,26 @@ export function applyMobileWorkspaceLineage(
     if (
       !parentIdentity ||
       parentIdentity === worktreeId ||
-      !visibleIds.has(parentIdentity) ||
       !parent ||
       !hasValidLineageParent(worktree, parent)
     ) {
       continue
     }
-    childIds.add(worktreeId)
     const children = childrenByParentId.get(parentIdentity) ?? []
     children.push(worktree)
     childrenByParentId.set(parentIdentity, children)
   }
+  return childrenByParentId
+}
+
+export function applyMobileWorkspaceLineage(
+  worktrees: readonly Worktree[],
+  collapsedGroups: ReadonlySet<string> = new Set()
+): Worktree[] {
+  const childrenByParentId = getMobileWorkspaceLineageChildren(worktrees)
+  const childIds = new Set(
+    [...childrenByParentId.values()].flat().map((worktree) => getWorktreeRowIdentity(worktree))
+  )
 
   const result: Worktree[] = []
   const emitted = new Set<string>()

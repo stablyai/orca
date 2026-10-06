@@ -3,6 +3,8 @@
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatSkillDiscovery } from './use-native-chat-skills'
+import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import { isSkillPickerTriggered } from './native-chat-composer-state'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),
@@ -54,6 +56,10 @@ function stateForHost(hostId: string) {
 function Probe({ enabled }: { enabled: boolean }): null {
   mocks.snapshots.push(useNativeChatSkills('codex', 'tab-1', enabled))
   return null
+}
+
+function DraftProbe({ draft }: { draft: string }): React.JSX.Element {
+  return <Probe enabled={isSkillPickerTriggered(draft, getNativeChatAgentProfile('codex'))} />
 }
 
 describe('useNativeChatSkills', () => {
@@ -130,6 +136,24 @@ describe('useNativeChatSkills', () => {
       { cwd: '/repo/worktree', worktreeId: 'worktree-1' },
       { timeoutMs: 10_000 }
     )
+  })
+
+  it('reuses one discovery while typing and reopening leading and mid-prompt slash tokens', async () => {
+    const view = render(<DraftProbe draft="Explain" />)
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+
+    view.rerender(<DraftProbe draft="Explain /" />)
+    await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('ready'))
+    for (const draft of ['Explain /b', 'Explain /br', 'Explain /bro']) {
+      view.rerender(<DraftProbe draft={draft} />)
+      expect(mocks.snapshots.at(-1)?.skills.map((skill) => skill.name)).toEqual(['browser'])
+    }
+    view.rerender(<DraftProbe draft="Explain $browser " />)
+    expect(mocks.snapshots.at(-1)?.status).toBe('idle')
+    view.rerender(<DraftProbe draft="/" />)
+    await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('ready'))
+    view.rerender(<DraftProbe draft="/bro" />)
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(1)
   })
 
   it('surfaces discovery failure instead of remaining loading', async () => {

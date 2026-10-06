@@ -9,10 +9,6 @@ import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { EphemeralVmRecipeRow } from './EphemeralVmRecipeRow'
 import { translate } from '@/i18n/i18n'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
-} from '@/lib/agent-skill-cli-prerequisite'
-import {
   EPHEMERAL_VMS_SKILL_INSTALL_COMMAND,
   EPHEMERAL_VMS_SKILL_NAME,
   EPHEMERAL_VMS_SKILL_UPDATE_COMMAND
@@ -22,11 +18,7 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import {
-  buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest
-} from './CliSkillRuntimeSetup'
+import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
 
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
@@ -45,6 +37,15 @@ export function EphemeralVmsPane(): React.JSX.Element {
   const [promptCopied, setPromptCopied] = useState(false)
   const mountedRef = useMountedRef()
   const refreshGenerationRef = useRef(0)
+  const promptResetTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (promptResetTimerRef.current !== null) {
+        window.clearTimeout(promptResetTimerRef.current)
+      }
+    }
+  }, [])
 
   // Why: an absent runtime still resolves to the local host, which is what the
   // seven sibling panes rely on to reach the Windows npx preflight.
@@ -126,8 +127,17 @@ export function EphemeralVmsPane(): React.JSX.Element {
     try {
       await window.api.ui.writeClipboardText(AGENT_PROMPT)
       useAppStore.getState().recordFeatureInteraction('ephemeral-vm-setup')
+      if (!mountedRef.current) {
+        return
+      }
       setPromptCopied(true)
-      setTimeout(() => setPromptCopied(false), 1500)
+      if (promptResetTimerRef.current !== null) {
+        window.clearTimeout(promptResetTimerRef.current)
+      }
+      promptResetTimerRef.current = window.setTimeout(() => {
+        promptResetTimerRef.current = null
+        setPromptCopied(false)
+      }, 1500)
     } catch {
       toast.error(
         translate(
@@ -169,19 +179,6 @@ export function EphemeralVmsPane(): React.JSX.Element {
         error={activeSkillRuntime.installDisabledReason ?? skillError}
         installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
         icon={<Server className="size-5" />}
-        preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-        getPrerequisiteStatus={() =>
-          activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-            ? window.api.cli.getWslInstallStatus(
-                getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
-              )
-            : window.api.cli.getInstallStatus()
-        }
-        onBeforeOpenTerminal={async () => {
-          await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-            ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-            : ensureOrcaCliAvailableForAgentSkillTerminal())
-        }}
         onRecheck={refreshSkill}
         freshnessSkillName={
           activeSkillRuntime.canUseLocalSkillFreshness ? EPHEMERAL_VMS_SKILL_NAME : undefined

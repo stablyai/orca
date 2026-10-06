@@ -1,0 +1,88 @@
+{
+  "backgroundLaunch": "All tests and proofs used ORCA_BACKGROUND_LAUNCH=1; Electron additionally used ELECTRON_RUN_AS_NODE=1. No application, native PTY, socket or network.",
+  "fixedTests": {
+    "passed": 54,
+    "failed": 0,
+    "files": 3,
+    "newTests": 4,
+    "config": "config/vitest.config.ts"
+  },
+  "baselineOverlay": {
+    "passed": 53,
+    "failed": 1,
+    "config": "docs/audits/daemon-shared-owner-incarnation-retention/before.config.mjs",
+    "intendedFailure": "releases both private indexes after repeated authenticated daemon replacements",
+    "actualLivenessKeys": ["retired-0", "legacy-live"],
+    "expectedLivenessKeys": ["legacy-live"]
+  },
+  "portableProofs": {
+    "reports": [
+      "node-results.json",
+      "electron-results.json",
+      "publication-node-results.json",
+      "publication-electron-results.json"
+    ],
+    "phasesPerReport": ["before", "fixed"],
+    "replacementCyclesPerPhase": 32,
+    "afterLegacyExit": {
+      "before": {
+        "sharedRoutes": 0,
+        "attachEntries": 0,
+        "livenessEntries": 32
+      },
+      "fixed": {
+        "sharedRoutes": 0,
+        "attachEntries": 0,
+        "livenessEntries": 0
+      }
+    },
+    "workingEvaluatedModules": 276,
+    "publicationEvaluatedModules": 274,
+    "crlfSourceAndPatchReads": 2,
+    "controls": [
+      "unchanged authenticated identity",
+      "other live provider",
+      "ordinary exit",
+      "same-ID successor",
+      "matching direct attach without inventory",
+      "authoritative incarnation mismatch refusal"
+    ]
+  },
+  "typechecks": {
+    "node": "Passed full pnpm tc:node."
+  },
+  "fullPublicationQuality": {
+    "paths": [
+      "src/main/daemon/daemon-session-owner-resolution.ts",
+      "src/main/daemon/daemon-shared-owner-incarnation-retention.test.ts",
+      "docs/audits/daemon-shared-owner-incarnation-retention/sources.cjs",
+      "docs/audits/daemon-shared-owner-incarnation-retention/scenario.cjs",
+      "docs/audits/daemon-shared-owner-incarnation-retention/reproduce.cjs",
+      "docs/audits/daemon-shared-owner-incarnation-retention/before.config.mjs"
+    ],
+    "scans": [
+      "default rules and unused suppression",
+      "casting",
+      "type-aware quality",
+      "React Doctor",
+      "design system",
+      "default type-aware rules"
+    ],
+    "result": "All six full-file scans passed with --no-ignore --deny-warnings, including CJS/MJS artifact files."
+  },
+  "changedQuality": {
+    "base": "6ab6802df90553d2a26e9a4c7a519ae11d4b5e09",
+    "result": "Passed all changed-code scans plus SAFETY rationale across two changed source files. Artifacts separately covered by explicit full-file scans."
+  },
+  "productHashes": [
+    {
+      "path": "src/main/daemon/daemon-session-owner-resolution.ts",
+      "sha256": "8f62a181a398dc91d20d269a19e3266e199191486fddfee6dcaf3b2a570c76eb"
+    },
+    {
+      "path": "src/main/daemon/daemon-shared-owner-incarnation-retention.test.ts",
+      "sha256": "b88680e374c054143c344444b98e80368c05736add90698f9e540d2a4420265f"
+    }
+  ],
+  "limits": "Entry-count retention proof, no byte/RSS/OOM/incident claim. Finite inert transport replies. Named main source overlays use working external dependencies; v1.4.198 checked core source parity only."
+}

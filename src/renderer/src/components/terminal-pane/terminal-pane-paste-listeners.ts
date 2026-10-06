@@ -17,17 +17,12 @@ import {
 } from '@/lib/app-menu-selection-actions'
 import { isEditableTarget } from '@/lib/editable-target'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { isInsideNativeChatCover } from './native-chat-covered-pane'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 import {
   formatClipboardImagePasteError,
   type TerminalPanePasteExecution
 } from './terminal-pane-paste-execution'
-
-const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
-
-function isInsideNativeChatRoot(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest(NATIVE_CHAT_ROOT_SELECTOR) !== null
-}
 
 export function registerTerminalPanePasteListeners({
   container,
@@ -77,7 +72,7 @@ export function registerTerminalPanePasteListeners({
     const target = event.target
     if (
       (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
-      isInsideNativeChatRoot(target)
+      isInsideNativeChatCover(target)
     ) {
       return
     }
@@ -129,7 +124,7 @@ export function registerTerminalPanePasteListeners({
     const target = event.target
     if (
       (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
-      isInsideNativeChatRoot(target)
+      isInsideNativeChatCover(target)
     ) {
       return
     }
@@ -164,12 +159,15 @@ export function registerTerminalPanePasteListeners({
   }
 
   const onAppMenuPaste = (event: Event): void => {
+    if (event.defaultPrevented) {
+      return
+    }
     const activeElementAtDispatch = document.activeElement
     if (
       !(activeElementAtDispatch instanceof Element) ||
       !container.contains(activeElementAtDispatch) ||
       activeElementAtDispatch.closest('[data-terminal-search-root]') ||
-      isInsideNativeChatRoot(activeElementAtDispatch)
+      isInsideNativeChatCover(activeElementAtDispatch)
     ) {
       return
     }
@@ -218,7 +216,7 @@ export function registerTerminalPanePasteListeners({
       !container.contains(activeElement) ||
       isEditableTarget(activeElement) ||
       activeElement.closest('[data-terminal-search-root]') ||
-      isInsideNativeChatRoot(activeElement)
+      isInsideNativeChatCover(activeElement)
     ) {
       return
     }

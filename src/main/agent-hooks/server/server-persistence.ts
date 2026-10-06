@@ -27,9 +27,12 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         continue
       }
       const enrichedPayload = payload as EnrichedAgentHookEventPayload
-      const childOnlyBoundary = enrichedPayload.claudeLeadBoundaryChildOnly === true
+      // Why: the session journal is the durable truth for a structured row and the host republishes
+      // it on restore; a persisted copy would hydrate unconfirmed and fight that republish.
+      if (enrichedPayload.structuredHost) {
+        continue
+      }
       const {
-        claudeRunningNonAgentTask: _claudeRunningNonAgentTask,
         promptInteractionKey: _promptInteractionKey,
         // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
         restoredUnconfirmed: _restoredUnconfirmed,
@@ -37,15 +40,19 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         observation: _observation,
         // Replay provenance is runtime-only and must not survive another restart.
         isReplay: _isReplay,
+        // A terminal handle belongs to the runtime that issued it; a hydrated one could only
+        // rejoin a row to somebody else's terminal.
+        terminalHandle: _terminalHandle,
         launchToken,
         ...persistedPayload
       } = enrichedPayload
       const launchTokenHash = launchToken?.trim()
         ? createHash('sha256').update(launchToken.trim()).digest('hex')
         : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
+      // `payload.mainAgent` rides inside the payload; the legacy `claudeLeadBoundaryChildOnly` flag it
+      // replaced is read at hydrate and never written again.
       entries[paneKey] = {
         ...persistedPayload,
-        ...(childOnlyBoundary ? { claudeLeadBoundaryChildOnly: true } : {}),
         ...(launchTokenHash ? { launchTokenHash } : {})
       }
       const commitment = this.toAuthorityEvidence(payload, launchTokenHash)

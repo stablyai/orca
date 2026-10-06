@@ -2,8 +2,11 @@ import { delimiter } from 'node:path'
 import { isLegacyTerminalShimPathEntry } from '../../../pty/legacy-terminal-shim-dir'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 
-export function readInheritedPath(baseEnv: Record<string, string>): string {
-  const pathKey = resolvePathEnvKey(baseEnv, process.platform)
+export function readInheritedPath(
+  baseEnv: Record<string, string>,
+  platform: NodeJS.Platform = process.platform
+): string {
+  const pathKey = resolvePathEnvKey(baseEnv, platform)
   return baseEnv[pathKey] ?? process.env[pathKey] ?? ''
 }
 

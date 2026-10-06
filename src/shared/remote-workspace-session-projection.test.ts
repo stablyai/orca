@@ -4,8 +4,55 @@ import {
   importRemoteWorkspaceSession
 } from './remote-workspace-session-projection'
 import { getDefaultWorkspaceSession } from './constants'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from './terminal-scrollback-limits'
 
 describe('remote workspace session projection', () => {
+  // The transient set this boundary mirrors. `recovery` is the tab's in-flight
+  // heal, timestamped with THIS machine's clock, and `pendingActivationSpawn` is
+  // a one-shot mount handoff — neither means anything on another client's row,
+  // and a foreign `startedAt` would be compared against the reader's Date.now().
+  it('strips client-local transient tab fields on the way out', () => {
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'repo-a',
+      activeWorktreeId: 'repo-a::/srv/app',
+      activeTabId: 'tab-1',
+      tabsByWorktree: {
+        'repo-a::/srv/app': [
+          {
+            id: 'tab-1',
+            ptyId: 'pty-1',
+            worktreeId: 'repo-a::/srv/app',
+            title: 'Remote',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            pendingActivationSpawn: true,
+            recovery: {
+              attemptedAt: [1_000],
+              generation: 1,
+              outcome: 'failed' as const,
+              startedAt: 1_000,
+              reason: 'reattach-unverifiable' as const,
+              tabGeneration: 1
+            }
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    }
+
+    const projected = exportRemoteWorkspaceSession(session, {
+      isTargetWorktree: (worktreeId) => worktreeId.startsWith('repo-a::')
+    })
+
+    const exported = projected.tabsByWorktreePath['/srv/app'][0] as Record<string, unknown>
+    expect(exported.recovery).toBeUndefined()
+    expect(exported.pendingActivationSpawn).toBeUndefined()
+    expect(exported.id).toBe('tab-1')
+  })
+
   it('exports terminal state using remote worktree paths instead of local repo ids', () => {
     const session = {
       ...getDefaultWorkspaceSession(),
@@ -296,5 +343,108 @@ describe('remote workspace session projection', () => {
     )
 
     expect(unplaced).toEqual([])
+  })
+
+  // The upload-volume contract behind WorkspaceSessionState.localOnlyScrollbackByTabId: a
+  // buffer in the shared layout rides the export whole; the same bytes in the local-only home
+  // never leave the client. 20 tabs x 2 panes at the per-leaf cap is the shape that measured
+  // ~22 MiB per replace-session when ordinary parks wrote the layout.
+  describe('scrollback upload volume', () => {
+    const TABS = 20
+    const PANES = 2
+    const worktreeId = 'repo-a::/srv/app'
+    const leafBuffer = 'x'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)
+
+    function tabId(index: number): string {
+      return `tab-${index}`
+    }
+    function leafId(tab: number, pane: number): string {
+      return `${tabId(tab)}:leaf-${pane}`
+    }
+    function leafBuffers(tab: number): Record<string, string> {
+      return Object.fromEntries(
+        Array.from({ length: PANES }, (_, pane) => [leafId(tab, pane), leafBuffer])
+      )
+    }
+    function sessionWith(home: 'shared' | 'localOnly' | 'none') {
+      const tabs = Array.from({ length: TABS }, (_, index) => index)
+      return {
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: 'repo-a',
+        activeWorktreeId: worktreeId,
+        activeTabId: tabId(0),
+        tabsByWorktree: {
+          [worktreeId]: tabs.map((index) => ({
+            id: tabId(index),
+            ptyId: `pty-${index}`,
+            worktreeId,
+            title: `Remote ${index}`,
+            customTitle: null,
+            color: null,
+            sortOrder: index,
+            createdAt: 1
+          }))
+        },
+        terminalLayoutsByTabId: Object.fromEntries(
+          tabs.map((index) => [
+            tabId(index),
+            {
+              root: {
+                type: 'split' as const,
+                direction: 'horizontal' as const,
+                ratio: 0.5,
+                first: { type: 'leaf' as const, leafId: leafId(index, 0) },
+                second: { type: 'leaf' as const, leafId: leafId(index, 1) }
+              },
+              activeLeafId: leafId(index, 0),
+              expandedLeafId: null,
+              ptyIdsByLeafId: {
+                [leafId(index, 0)]: `pty-${index}`,
+                [leafId(index, 1)]: `pty-${index}b`
+              },
+              ...(home === 'shared' ? { buffersByLeafId: leafBuffers(index) } : {})
+            }
+          ])
+        ),
+        ...(home === 'localOnly'
+          ? {
+              localOnlyScrollbackByTabId: Object.fromEntries(
+                tabs.map((index) => [tabId(index), leafBuffers(index)])
+              )
+            }
+          : {})
+      }
+    }
+    function exportedBytes(home: 'shared' | 'localOnly' | 'none'): number {
+      const projected = exportRemoteWorkspaceSession(sessionWith(home), {
+        isTargetWorktree: (id) => id === worktreeId
+      })
+      return Buffer.byteLength(JSON.stringify(projected))
+    }
+
+    it('ships a shared-layout capture whole, at roughly the raw byte count', () => {
+      const shared = exportedBytes('shared')
+      const rawBytes = TABS * PANES * TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+      console.log(
+        `[upload-volume] shared-layout capture: ${(shared / 1024 / 1024).toFixed(1)} MiB (raw ${(rawBytes / 1024 / 1024).toFixed(1)} MiB)`
+      )
+      expect(shared).toBeGreaterThan(rawBytes)
+    })
+
+    it('never ships the local-only home: the export stays at the bufferless baseline', () => {
+      const baseline = exportedBytes('none')
+      const localOnly = exportedBytes('localOnly')
+      console.log(
+        `[upload-volume] bufferless baseline: ${(baseline / 1024).toFixed(1)} KiB; local-only capture: ${(localOnly / 1024).toFixed(1)} KiB`
+      )
+      expect(localOnly).toBe(baseline)
+      expect(
+        JSON.stringify(
+          exportRemoteWorkspaceSession(sessionWith('localOnly'), {
+            isTargetWorktree: (id) => id === worktreeId
+          })
+        )
+      ).not.toContain('localOnlyScrollbackByTabId')
+    })
   })
 })

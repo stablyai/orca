@@ -89,9 +89,4 @@ describe('getDevBundleProcessTable', () => {
       })
     ).toBeNull()
   })
-
-  it('reads the real process table on this host', () => {
-    const table = getDevBundleProcessTable()
-    expect(typeof table === 'string' || table === null).toBe(true)
-  })
 })

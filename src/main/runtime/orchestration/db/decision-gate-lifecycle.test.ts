@@ -9,7 +9,7 @@ describe('decision-gate lifecycle transitions', () => {
 
   it('blocks the dispatched Task when creating a gate', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'gate blocks task' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'gate blocks task' })
     createRootDispatch(db, task.id, 'term_gate')
     expect(db.getTask(task.id)?.status).toBe('dispatched')
 
@@ -20,7 +20,7 @@ describe('decision-gate lifecycle transitions', () => {
 
   it('rolls back the gate row when the Task transition cannot commit', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'atomic gate creation' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'atomic gate creation' })
     const dispatch = createRootDispatch(db, task.id, 'term_gate')
     db.db.exec(`
       CREATE TRIGGER reject_gate_task_block

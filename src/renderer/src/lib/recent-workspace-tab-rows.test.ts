@@ -5,7 +5,11 @@ import {
   type RecentWorkspaceTabRow
 } from './recent-workspace-tab-rows'
 import type { TabPaneInputSources } from '@/components/sidebar/smart-attention'
-import type { AgentStatusEntry, AgentStatusState } from '../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry,
+  type AgentStatusState
+} from '../../../shared/agent-status-types'
 
 const NOW = 1_700_000_000_000
 const LEAF_ID = '11111111-2222-4333-8444-555555555555'
@@ -106,18 +110,101 @@ describe('orderRecentWorkspaceTabs', () => {
 })
 
 describe('resolveRecentWorkspaceTabStatus', () => {
-  it('surfaces an interrupted outcome without promoting its sort class', () => {
-    const interrupted = entry('interrupted', 'done', NOW - 1_000, { interrupted: true })
+  it.each(['tab', 'pane'] as const)(
+    'suppresses a stale done pane permission %s title',
+    (surface) => {
+      const title = 'Codex - action required'
+      const stale = entry('stale', 'done', NOW - AGENT_STATUS_STALE_AFTER_MS - 1)
+      const paneSources = sources([stale], {
+        ptyIdsByTabId: { stale: ['pty-1'] },
+        runtimePaneTitlesByTabId: surface === 'pane' ? { stale: { 1: title } } : {}
+      })
+      expect(
+        resolveRecentWorkspaceTabStatus(
+          row('stale', { terminalTab: { id: 'stale', title } }),
+          paneSources,
+          NOW
+        )
+      ).toBe('active')
 
-    expect(resolveRecentWorkspaceTabStatus(row('interrupted'), sources([interrupted]), NOW)).toBe(
-      'interrupted'
-    )
+      stale.updatedAt = NOW
+      stale.state = 'blocked'
+      expect(resolveRecentWorkspaceTabStatus(row('stale'), paneSources, NOW)).toBe('permission')
+    }
+  )
+
+  it('keeps stale-pane spinner fallback and permission on an uncovered split sibling', () => {
+    const stale = entry('split', 'done', NOW - AGENT_STATUS_STALE_AFTER_MS - 1)
+    const paneSources = sources([stale], {
+      ptyIdsByTabId: { split: ['pty-1', 'pty-2'] },
+      terminalLayoutsByTabId: {
+        split: {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: LEAF_ID },
+            second: { type: 'leaf', leafId: '22222222-2222-4222-8222-222222222222' }
+          },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      runtimePaneTitlesByTabId: { split: { 1: 'Codex - action required', 2: 'zsh' } }
+    })
+    expect(resolveRecentWorkspaceTabStatus(row('split'), paneSources, NOW)).toBe('active')
+    paneSources.runtimePaneTitlesByTabId.split = { 1: '⠹ codex working', 2: 'zsh' }
+    expect(resolveRecentWorkspaceTabStatus(row('split'), paneSources, NOW)).toBe('working')
+    paneSources.runtimePaneTitlesByTabId.split = { 2: 'Codex - action required' }
+    expect(resolveRecentWorkspaceTabStatus(row('split'), paneSources, NOW)).toBe('permission')
   })
 
-  it('does not let a cleanly finished sibling mask an interruption', () => {
+  it('surfaces a turn a crash cut short as failed', () => {
+    const cut = entry('cut', 'done', NOW - 1_000, {
+      mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: NOW - 1_000 }
+    })
+
+    expect(resolveRecentWorkspaceTabStatus(row('cut'), sources([cut]), NOW)).toBe('failed')
+  })
+
+  it("reads a user's Stop as interrupted though attention demotes it, whether recorded or an old host's flag", () => {
+    const recorded = entry('stopped', 'done', NOW - 1_000, {
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 1_000 }
+    })
+    const legacy = entry('stopped', 'done', NOW - 1_000, { interrupted: true })
+
+    for (const stopped of [recorded, legacy]) {
+      expect(resolveRecentWorkspaceTabStatus(row('stopped'), sources([stopped]), NOW)).toBe(
+        'interrupted'
+      )
+    }
+  })
+
+  it('surfaces a failed outcome as failed', () => {
+    const failed = entry('failed', 'done', NOW - 1_000, {
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 1_000 }
+    })
+
+    expect(resolveRecentWorkspaceTabStatus(row('failed'), sources([failed]), NOW)).toBe('failed')
+  })
+
+  it('surfaces a main agent that failed while its subagent works as failed, above working', () => {
+    const held = (tabId: string, outcome: 'failure' | 'success') =>
+      entry(tabId, 'working', NOW - 1_000, {
+        mainAgent: { state: 'done', outcome, stateStartedAt: NOW - 2_000 }
+      })
+
+    expect(
+      resolveRecentWorkspaceTabStatus(row('held'), sources([held('held', 'failure')]), NOW)
+    ).toBe('failed')
+    expect(
+      resolveRecentWorkspaceTabStatus(row('held'), sources([held('held', 'success')]), NOW)
+    ).toBe('working')
+  })
+
+  it("does not let a cleanly finished sibling mask a user's Stop", () => {
     const interrupted = entry('mixed', 'done', NOW - 1_000, {
       paneKey: `mixed:${LEAF_ID}`,
-      interrupted: true
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 1_000 }
     })
     const finished = entry('mixed', 'done', NOW - 2_000, {
       paneKey: 'mixed:22222222-2222-4222-8222-222222222222'

@@ -16,6 +16,8 @@ export type UnconfirmedSend = {
   text: string
   normalizedText: string
   baselineTailMessageId: string | null
+  /** Queued-draft cards on screen at send time; see `findQueuedUnconfirmedSends`. */
+  baselineQueuedMessageIds?: readonly string[]
   deadline: ReturnType<typeof setTimeout> | null
 }
 
@@ -217,6 +219,33 @@ export function findLandedImagePreviewEchoes(
     landed.push({ pendingId: entry.id, messageId: candidate.id, images: entry.images })
   }
   return landed
+}
+
+/** Holds the host already took as queued-draft cards: a card not on screen at
+ *  send time with the send's text. It will reach the transcript only when it
+ *  drains, which can be long past the unconfirmed deadline. */
+export function findQueuedUnconfirmedSends(
+  cards: readonly { messageId: string; text: string }[],
+  entries: readonly UnconfirmedSend[]
+): UnconfirmedSend[] {
+  if (cards.length === 0) {
+    return []
+  }
+  const claimed = new Set<string>()
+  const held: UnconfirmedSend[] = []
+  for (const entry of entries) {
+    const card = cards.find(
+      (candidate) =>
+        !claimed.has(candidate.messageId) &&
+        !(entry.baselineQueuedMessageIds ?? []).includes(candidate.messageId) &&
+        normalizeNativeChatUserText(candidate.text) === entry.normalizedText
+    )
+    if (card) {
+      claimed.add(card.messageId)
+      held.push(entry)
+    }
+  }
+  return held
 }
 
 export function findLandedUnconfirmedSends(

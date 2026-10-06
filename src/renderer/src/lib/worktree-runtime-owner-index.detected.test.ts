@@ -67,11 +67,11 @@ function buildCase(random: () => number): {
   worktreesByRepo: Record<string, readonly OwnerRecord[]>
   probeIds: string[]
 } {
-  const shape = random()
-  if (shape < 0.05) {
+  const roll = random()
+  if (roll < 0.05) {
     return { detectedWorktreesByRepo: undefined, worktreesByRepo: {}, probeIds: ['repo-0::absent'] }
   }
-  if (shape < 0.1) {
+  if (roll < 0.1) {
     return { detectedWorktreesByRepo: {}, worktreesByRepo: {}, probeIds: ['repo-0::absent'] }
   }
   const repoCount = 1 + Math.floor(random() * 6)

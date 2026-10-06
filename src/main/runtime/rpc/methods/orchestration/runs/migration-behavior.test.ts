@@ -1,3 +1,4 @@
+import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import {
@@ -31,7 +32,7 @@ describe('orchestration migration behavior', () => {
 
   it('lists an explicitly selected legacy Run without binding or mutation', async () => {
     const { db, runtime } = createRuntime()
-    const task = db.createTask({ spec: 'pre-upgrade work' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'pre-upgrade work' })
     const taskList = ORCHESTRATION_METHODS.find(
       (method) => method.name === 'orchestration.taskList'
     )!
@@ -55,6 +56,7 @@ describe('orchestration migration behavior', () => {
   it('formats legacy terminal inspection as read-only without consuming mail', async () => {
     const { db, runtime } = createRuntime()
     const message = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_worker',
       to: 'term_coord',
       subject: 'still working',
@@ -79,6 +81,7 @@ describe('orchestration migration behavior', () => {
     // A consuming check refuses a handle with no live pane before it reads any mail.
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_legacy:leaf_legacy')
     const message = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_worker',
       to: 'term_coord',
       subject: 'still working'
@@ -98,6 +101,7 @@ describe('orchestration migration behavior', () => {
   it('rejects replies to legacy mail without marking or inserting rows', async () => {
     const { db, runtime } = createRuntime()
     const message = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_worker',
       to: 'term_coord',
       subject: 'legacy question'

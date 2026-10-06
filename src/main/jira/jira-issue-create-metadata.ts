@@ -162,17 +162,18 @@ export async function searchUsers(query?: string, siteId?: string | null): Promi
   }
 }
 
-export async function listAssignableUsers(
-  key: string,
-  query?: string,
-  siteId?: string | null
+async function searchAssignableUsers(
+  scope: { issueKey: string } | { project: string },
+  query: string | undefined,
+  siteId: string | null | undefined,
+  label: string
 ): Promise<JiraUser[]> {
   const entry = getClients(siteId)[0]
   if (!entry) {
     return []
   }
   const isServer = entry.site.authType === 'server'
-  const params = new URLSearchParams({ issueKey: key, maxResults: '50' })
+  const params = new URLSearchParams({ ...scope, maxResults: '50' })
   if (query?.trim()) {
     // Server/DC filters assignable users by `username`; `query` is Cloud-only.
     params.set(isServer ? 'username' : 'query', query.trim())
@@ -189,9 +190,31 @@ export async function listAssignableUsers(
       clearToken(entry.site.id)
       throw error
     }
-    console.warn('[jira] listAssignableUsers failed:', error)
+    console.warn(`[jira] ${label} failed:`, error)
     return []
   } finally {
     release()
   }
+}
+
+export async function listAssignableUsers(
+  key: string,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
+  return searchAssignableUsers({ issueKey: key }, query, siteId, 'listAssignableUsers')
+}
+
+// Creation has no issue key yet, so assignability is scoped by project.
+export async function listAssignableUsersForProject(
+  projectIdOrKey: string,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
+  return searchAssignableUsers(
+    { project: projectIdOrKey },
+    query,
+    siteId,
+    'listAssignableUsersForProject'
+  )
 }

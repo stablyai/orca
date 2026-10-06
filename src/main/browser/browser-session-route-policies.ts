@@ -5,16 +5,15 @@ import {
   clearBrowserSessionPartitionPolicies,
   installBrowserSessionPartitionPolicies
 } from './browser-session-partition-policies'
-import { clearBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 
 export function installBrowserRoutePartitionPolicies(
   profile: BrowserSessionProfile,
   partition: string
-): void {
+): Promise<void> {
   if (!isBrowserRoutePartition(partition)) {
     throw new Error('browser_route_partition_profile_unavailable')
   }
-  void installBrowserSessionPartitionPolicies(
+  return installBrowserSessionPartitionPolicies(
     { ...profile, partition },
     { applyAppWideProxy: false }
   )
@@ -25,6 +24,5 @@ export function clearBrowserRoutePartitionPolicies(partition: string): void {
     return
   }
   const sess = session.fromPartition(partition)
-  clearBrowserSessionUserAgentMode(sess)
   clearBrowserSessionPartitionPolicies(partition, sess)
 }

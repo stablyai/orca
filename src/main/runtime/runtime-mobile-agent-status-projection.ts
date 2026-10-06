@@ -1,5 +1,6 @@
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  agentStatusAuthorityObservedAt,
   pickParsedAgentStatusPayload,
   type AgentStatusEntry,
   type AgentStatusIpcPayload
@@ -22,7 +23,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   if (
     (status.state === 'waiting' || status.state === 'blocked') &&
     pty.lastAgentStatus === 'idle' &&
-    Date.now() - status.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+    Date.now() - agentStatusAuthorityObservedAt(status) <= AGENT_STATUS_STALE_AFTER_MS
   ) {
     return status
   }
@@ -35,7 +36,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   }
   const richStatusCanOwnTitleInterval =
     pty.lastAgentStatusRichInvalidatedAtEpochMs === null ||
-    status.updatedAt > pty.lastAgentStatusRichInvalidatedAtEpochMs
+    agentStatusAuthorityObservedAt(status) > pty.lastAgentStatusRichInvalidatedAtEpochMs
   const titleEvidenceAt = pty.lastOscTitleEpochMs
   if (titleEvidenceAt === null) {
     return richStatusCanOwnTitleInterval ? status : null
@@ -63,7 +64,10 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     (pty.lastAgentStatus === 'permission' &&
       (status.state === 'blocked' || status.state === 'waiting'))
   if (!titleConfirmsState) {
-    if (richStatusCanOwnTitleInterval && status.updatedAt >= titleEvidenceAt) {
+    if (
+      richStatusCanOwnTitleInterval &&
+      agentStatusAuthorityObservedAt(status) >= titleEvidenceAt
+    ) {
       return status
     }
     if (pty.lastAgentStatus === null && !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle)) {
@@ -82,7 +86,8 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     )
   }
   const richStatusOwnsCurrentState =
-    Date.now() - status.updatedAt <= AGENT_STATUS_STALE_AFTER_MS && richStatusCanOwnTitleInterval
+    Date.now() - agentStatusAuthorityObservedAt(status) <= AGENT_STATUS_STALE_AFTER_MS &&
+    richStatusCanOwnTitleInterval
   // Fresh explicit evidence from this title interval owns acknowledgement identity.
   const stateStartedAt = richStatusOwnsCurrentState
     ? status.stateStartedAt
@@ -124,7 +129,7 @@ export function selectRuntimeHookAgentRowForPane(
       entry.agentType &&
       (entry.providerSessionOnly !== true ||
         (entry.agentType === 'pi' && entry.providerSession != null)) &&
-      entry.receivedAt >= freshAfter &&
+      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
       (!agent || entry.receivedAt > agent.receivedAt)
     ) {
       agent = entry
@@ -133,7 +138,7 @@ export function selectRuntimeHookAgentRowForPane(
       entry.providerSessionOnly !== true &&
       // Restored rows cannot prove liveness because the turn may have ended while offline (#12346).
       entry.restoredUnconfirmed !== true &&
-      entry.receivedAt >= freshAfter &&
+      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
       (!live || entry.receivedAt > live.receivedAt)
     ) {
       live = entry
@@ -149,6 +154,9 @@ export function selectRuntimeHookAgentRowForPane(
       ? {
           payload: pickParsedAgentStatusPayload(live),
           updatedAt: live.receivedAt,
+          ...(live.evidenceObservedAt !== undefined
+            ? { evidenceObservedAt: live.evidenceObservedAt }
+            : {}),
           stateStartedAt: live.stateStartedAt ?? live.receivedAt,
           ...(live.worktreeId ? { worktreeId: live.worktreeId } : {})
         }
@@ -167,6 +175,13 @@ export function resolveRuntimeHookLiveAgentRow(
   if (live.payload.interactivePrompt != null) {
     return live
   }
-  // This is the pane's only wall-clock title timestamp comparable to hook `receivedAt`.
-  return !nonAgentTitle && live.updatedAt >= (pty?.lastOscTitleEpochMs ?? 0) ? live : null
+  // This is the pane's only wall-clock title timestamp comparable to when the hook evidence
+  // was observed; replay delivery order must not make old evidence outrank a newer title.
+  return !nonAgentTitle &&
+    agentStatusAuthorityObservedAt({
+      updatedAt: live.updatedAt,
+      evidenceObservedAt: live.evidenceObservedAt
+    }) >= (pty?.lastOscTitleEpochMs ?? 0)
+    ? live
+    : null
 }

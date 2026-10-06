@@ -59,23 +59,31 @@ describe('useNow', () => {
   it('ticks while active, pauses in the background, and refreshes immediately on resume', () => {
     expect(latest).toBe(1_000)
 
-    act(() => vi.advanceTimersByTime(1_000))
+    act(() => {
+      vi.advanceTimersByTime(1_000)
+    })
     expect(latest).toBe(2_000)
 
     changeAppState('background')
-    act(() => vi.advanceTimersByTime(5_000))
+    act(() => {
+      vi.advanceTimersByTime(5_000)
+    })
     expect(latest).toBe(2_000)
 
     changeAppState('active')
     expect(latest).toBe(7_000)
 
-    act(() => vi.advanceTimersByTime(1_000))
+    act(() => {
+      vi.advanceTimersByTime(1_000)
+    })
     expect(latest).toBe(8_000)
   })
 
   it('stops while disabled and refreshes immediately when re-enabled', () => {
     act(() => renderer?.update(createElement(Harness, { enabled: false })))
-    act(() => vi.advanceTimersByTime(5_000))
+    act(() => {
+      vi.advanceTimersByTime(5_000)
+    })
     expect(latest).toBe(1_000)
 
     act(() => renderer?.update(createElement(Harness, { enabled: true })))

@@ -95,7 +95,10 @@ describe('OrcaRuntimeService', () => {
           return [name, createRootDispatch(db, task.id, handles[name], paneKey(name))]
         })
       )
-      const legacyTask = db.createTask({ spec: 'legacy worker' })
+      const legacyTask = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'legacy worker'
+      })
       const legacyDispatch = createRootDispatch(
         db,
         legacyTask.id,

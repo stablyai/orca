@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks'
+import { setPtyOwnerHostColors } from '../../shared/pty-owner-color-query-colors'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { ConnectedDaemonClient, DaemonClientConnections } from './daemon-client-connections'
 import type { DaemonFileLog } from './daemon-file-log'
@@ -70,6 +71,9 @@ export class DaemonRequestRouter {
         return {
           appliedSeq: this.options.host.closeStartupQueryAuthority(request.payload.sessionId)
         }
+      case 'setColorQueryReplyColors':
+        setPtyOwnerHostColors(request.payload.colors)
+        return {}
       case 'write':
         return this.write(client, request.payload.sessionId, request.payload.data)
       case 'resize':
@@ -128,6 +132,9 @@ export class DaemonRequestRouter {
         }
       case 'clearScrollback':
         this.options.host.clearScrollback(request.payload.sessionId)
+        return {}
+      case 'resetInputModes':
+        this.options.host.resetInputModes(request.payload.sessionId)
         return {}
       case 'listSessions':
         return { sessions: this.options.host.listSessions() }
@@ -203,7 +210,11 @@ export class DaemonRequestRouter {
       await this.options.host.kill(sessionId, { immediate })
     } catch (error) {
       if (!(canceledPendingSpawn && error instanceof SessionNotFoundError)) {
-        this.options.log.log('session-kill-failed', attribution)
+        this.options.log.log('session-kill-failed', {
+          ...attribution,
+          errorName: error instanceof Error ? error.name : typeof error,
+          error: error instanceof Error ? error.message : String(error)
+        })
         throw error
       }
     }

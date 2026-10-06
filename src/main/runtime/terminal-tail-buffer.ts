@@ -1,4 +1,5 @@
 import { containsTerminalVerticalLineControl } from './terminal-ansi-normalization'
+import { ownRetainedString } from '../../shared/own-retained-string'
 import { carryTerminalTailSentinelMatches } from './terminal-tail-sentinel-index'
 import {
   applyTerminalLineControls,
@@ -171,11 +172,13 @@ export function appendNormalizedToTailBuffer(
   const pieces = processTerminalTailCompleteSegments(segments.completeSegments)
   const newlyCompletedLines: string[] = []
   for (const piece of pieces) {
-    newlyCompletedLines.push(trimTerminalLineRight(piece))
+    // Why own: every retained row is sliced from this chunk but outlives it by up to
+    // MAX_TAIL_LINES chunks, so an un-owned row pins its whole 64 KiB chunk.
+    newlyCompletedLines.push(ownRetainedString(trimTerminalLineRight(piece)))
   }
   const partialResult = applyTerminalLineControls(segments.partialSegment)
   const nextPartialLine = trimTerminalLineRight(partialResult.text)
-  const retainedPartialLine = nextPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
+  const retainedPartialLine = ownRetainedString(nextPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS))
   const newCompleteLines = segments.completeLineCount
   const omittedNewCompleteLines = newCompleteLines - pieces.length
 
@@ -293,7 +296,7 @@ function appendNormalizedToMultilineTailBuffer(
       const line = rewritten[index]!
       const lastChar = line.charCodeAt(line.length - 1)
       if (lastChar === 32 || lastChar === 9) {
-        rewritten[index] = line.replace(/[ \t]+$/g, '')
+        rewritten[index] = trimTerminalLineRight(line)
       }
     }
     for (const line of windowed.lines) {

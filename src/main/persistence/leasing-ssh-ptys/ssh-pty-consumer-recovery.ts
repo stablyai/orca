@@ -1,3 +1,4 @@
+import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import type { SshPtyConsumerRecovery } from '../../../shared/ssh-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
@@ -7,16 +8,7 @@ import { normalizeSshPtyConsumerRecovery } from './ssh-normalization'
 export type SshPtyConsumerRecoveryOperations = {
   state: PersistedState
   protectedSecrets: Pick<ProtectedSecretPersistence, 'isSealed' | 'removeRetainedBlob'>
-  flushDurableStateOrThrowAsync: () => Promise<void>
-}
-
-async function flushSshPtyConsumerRecovery(
-  operations: SshPtyConsumerRecoveryOperations
-): Promise<void> {
-  // Why: ownership must be durable before relay setup continues, but this runs on the live
-  // establish/reconnect path — a sync flush would park the main thread on a stalled profile mount.
-  // Why not caught here: the failure must reach the awaiting caller.
-  await operations.flushDurableStateOrThrowAsync()
+  runDurableMutation: StoreRuntimeState['runDurableMutation']
 }
 
 export function getSshPtyConsumerRecovery(
@@ -46,24 +38,37 @@ export async function upsertSshPtyConsumerRecovery(
   if (!normalized) {
     throw new Error('Invalid SSH PTY consumer recovery record')
   }
-  const recoveries = operations.state.sshPtyConsumerRecoveries ?? []
-  operations.state.sshPtyConsumerRecoveries = [
-    ...recoveries.filter((candidate) => candidate.targetId !== normalized.targetId),
-    normalized
-  ]
-  await flushSshPtyConsumerRecovery(operations)
+  await operations.runDurableMutation(() => {
+    const recoveries = operations.state.sshPtyConsumerRecoveries ?? []
+    operations.state.sshPtyConsumerRecoveries = [
+      ...recoveries.filter((candidate) => candidate.targetId !== normalized.targetId),
+      normalized
+    ]
+    return { value: undefined }
+  })
 }
 
 export async function removeSshPtyConsumerRecovery(
   operations: SshPtyConsumerRecoveryOperations,
-  targetId: string
+  targetId: string,
+  expectedClientInstanceId?: string
 ): Promise<void> {
-  const recoveries = operations.state.sshPtyConsumerRecoveries ?? []
-  const next = recoveries.filter((record) => record.targetId !== targetId)
-  if (next.length === recoveries.length) {
-    return
+  await operations.runDurableMutation(() => {
+    const recoveries = operations.state.sshPtyConsumerRecoveries ?? []
+    const current = recoveries.find((record) => record.targetId === targetId)
+    if (
+      expectedClientInstanceId !== undefined &&
+      current &&
+      current.clientInstanceId !== expectedClientInstanceId
+    ) {
+      return { value: undefined, persist: false }
+    }
+    operations.state.sshPtyConsumerRecoveries = recoveries.filter(
+      (record) => record.targetId !== targetId
+    )
+    return { value: undefined }
+  })
+  if (!operations.state.sshPtyConsumerRecoveries?.some((record) => record.targetId === targetId)) {
+    operations.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(targetId))
   }
-  operations.state.sshPtyConsumerRecoveries = next
-  operations.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(targetId))
-  await flushSshPtyConsumerRecovery(operations)
 }

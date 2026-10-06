@@ -104,7 +104,6 @@ export async function runLegacyWorkerTerminalRecovery(
     exitedDispatchIds.push(candidate.dispatchId)
   }
   const result = {
-    blockedPaneCount: plan.blockedPanes.length,
     adoptedDispatchIds,
     exitedDispatchIds,
     deferredDispatchIds: [...deferredDispatchIds]

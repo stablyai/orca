@@ -101,6 +101,7 @@ function createHarness(options: { staleActivePane?: boolean } = {}): {
     persistLayoutSnapshot: vi.fn(),
     toggleExpandPane: vi.fn(),
     setSearchOpen: vi.fn(),
+    focusSearchInput: vi.fn(),
     onSearchSelectedText: vi.fn(),
     onRequestClosePane: vi.fn(),
     onClearPaneScrollback: vi.fn(),
@@ -327,7 +328,7 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
     vi.runAllTimers()
 
     expect(harness.sendInput).toHaveBeenCalledTimes(1)
-    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r')
+    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r', 'driving')
     hook.unmount()
     harness.dispose()
   })
@@ -350,7 +351,7 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
     vi.runAllTimers()
 
     expect(harness.sendInput).toHaveBeenCalledTimes(1)
-    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r')
+    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r', 'driving')
     hook.unmount()
     harness.dispose()
   })
@@ -373,7 +374,7 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
 
     expect(harness.setActivePane).toHaveBeenCalledWith(2, { focus: false })
     expect(harness.sendInput).toHaveBeenCalledOnce()
-    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r')
+    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r', 'driving')
     hook.unmount()
     harness.dispose()
   })

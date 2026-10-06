@@ -103,6 +103,7 @@ describe('OrchestrationDb bounded mutation receipts', () => {
     insertMutationReceipts(db, MUTATION_RECEIPT_MAX_ROWS, 'completed')
 
     db.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId: 'ctx_remote_pruned',
       taskId: 'task_remote_pruned',
       homePeerFingerprint: 'caller',
@@ -131,6 +132,7 @@ describe('OrchestrationDb bounded mutation receipts', () => {
 
     expect(() =>
       db!.createRemoteDispatchAttachment({
+        runId: 'run-home',
         dispatchId: 'ctx_remote_overflow',
         taskId: 'task_remote_overflow',
         homePeerFingerprint: 'caller',
@@ -151,7 +153,7 @@ describe('OrchestrationDb bounded mutation receipts', () => {
 
   it('guards atomic worker acceptance without changing task state', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'capacity check' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'capacity check' })
     insertMutationReceipts(db, MUTATION_RECEIPT_MAX_ROWS, 'pending')
 
     expect(() =>
@@ -226,7 +228,10 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-dispatch-index-migration-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
-    const task = db.createTask({ spec: 'indexed lookup' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'indexed lookup'
+    })
     const dispatch = createRootDispatch(db, task.id, 'term_worker')
     db.close()
     db = undefined
@@ -245,7 +250,9 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
     db = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
     expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
-    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({ assignee_handle: 'term_worker' })
+    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({
+      assignee_handle: 'term_worker'
+    })
     expect(db.getTask(task.id)).toMatchObject({
       created_by_pane_key: null,
       created_by_process_incarnation: null,

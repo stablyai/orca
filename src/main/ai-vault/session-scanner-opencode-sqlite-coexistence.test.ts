@@ -13,8 +13,13 @@ vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
     import('./session-scanner-opencode-sqlite-list'),
     import('./session-scanner-opencode-sqlite')
   ])
+  const { listOpenCode2SqliteSessions } = await import('./session-scanner-opencode2-sqlite-list')
   return {
+    listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
     listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
+    // ZCode reuses the OpenCode SQLite lister; the worker only varies the agent it stamps.
+    listZcodeSqliteSessionsViaWorker: (args: Parameters<typeof listOpenCodeSqliteSessions>[0]) =>
+      listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
     parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
   }
 })
@@ -51,7 +56,10 @@ function isolatedScanRoots(root: string) {
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
     kimiSessionsDir: join(root, 'kimi-sessions'),
+    museSessionsDir: join(root, 'muse-sessions'),
+    zcodeDbPath: join(root, 'zcode-db.sqlite'),
     ompSessionsDir: join(root, 'omp-sessions'),
+    jcodeSessionsDir: join(root, 'jcode-sessions'),
     primeAgentSessionsDir: join(root, 'prime-agent-sessions')
   }
 }

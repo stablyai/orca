@@ -142,6 +142,7 @@ describe('applyTerminalAppearance theme assignment', () => {
   // panes that can measure; unmeasurable panes defer them until fit/reveal.
   function makePane(id: number, overrides?: { measurable?: boolean }): ManagedPane {
     const measurable = overrides?.measurable ?? true
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the pane members exercised by appearance logic.
     return {
       id,
       terminal: { options: {}, cols: 80, rows: 24 },
@@ -156,11 +157,13 @@ describe('applyTerminalAppearance theme assignment', () => {
   }
 
   function makeManager(panes: ManagedPane[]): PaneManager {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the manager members exercised by appearance logic.
     return {
       // Mirrors the real getPanes(), which allocates a fresh toPublicPane()
       // wrapper per call over a shared terminal — per-pane state must survive that.
       getPanes: () => panes.map((pane) => ({ ...pane })),
       setPaneLigaturesEnabled: vi.fn(),
+      setPaneInlineImagesEnabled: vi.fn(),
       setPaneStyleOptions: vi.fn()
     } as unknown as PaneManager
   }
@@ -266,6 +269,46 @@ describe('applyTerminalAppearance theme assignment', () => {
     apply(pane, { ...settings, theme: 'dark', terminalThemeDark: 'Builtin Tango Light' })
 
     expect(pane.terminal.options.minimumContrastRatio).toBe(4.5)
+  })
+
+  // #10754: a Powerline statusline draws its segment separators in the neighbouring segment's
+  // background color, so the automatic floor turns every invisible seam into a bright line.
+  it('lets the user setting disable contrast correction on a dark theme', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: 1 })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+  })
+
+  it('lets the user setting override the light-background floor as well', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'light', terminalMinimumContrastRatio: 1 })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+  })
+
+  it('clamps an out-of-range user setting before it reaches xterm', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: 99 })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(21)
+  })
+
+  it('returns to the automatic floor when the user setting is cleared live', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: 1 })
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: undefined })
+    expect(pane.terminal.options.minimumContrastRatio).toBe(3)
   })
 
   it('skips the minimumContrastRatio write on a no-op re-apply (preserves xterm contrast cache)', () => {
@@ -394,9 +437,11 @@ describe('publishTerminalViewAttributesAtAppStart', () => {
       expect(publishMock).toHaveBeenCalledTimes(1)
 
       // Identical app-global snapshot, so the publisher dedupe keeps it a single push.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the manager members exercised by appearance publication.
       const manager = {
         getPanes: () => [],
         setPaneLigaturesEnabled: vi.fn(),
+        setPaneInlineImagesEnabled: vi.fn(),
         setPaneStyleOptions: vi.fn()
       } as unknown as PaneManager
       applyTerminalAppearance(

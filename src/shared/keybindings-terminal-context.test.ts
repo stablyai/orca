@@ -38,8 +38,56 @@ describe('keybindings', () => {
         undefined,
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
-    ).toBe(true)
+    ).toBe(false)
   })
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'defers editing and history chords on %s while app focus retains them',
+    (platform) => {
+      const chords = [
+        { action: 'terminal.search', key: 'f', code: 'KeyF', shift: false },
+        { action: 'terminal.clear', key: 'k', code: 'KeyK', shift: false },
+        { action: 'terminal.closePane', key: 'w', code: 'KeyW', shift: false },
+        { action: 'tab.newTerminal', key: 't', code: 'KeyT', shift: false },
+        { action: 'terminal.selectAll', key: 'a', code: 'KeyA', shift: platform !== 'darwin' },
+        { action: 'terminal.splitRight', key: 'd', code: 'KeyD', shift: platform !== 'darwin' }
+      ] as const
+      for (const chord of chords) {
+        const input = {
+          ...chord,
+          meta: platform === 'darwin',
+          control: platform !== 'darwin',
+          alt: false
+        }
+        expect(
+          keybindingMatchesAction(chord.action, input, platform, undefined, {
+            context: 'terminal',
+            terminalShortcutPolicy: 'terminal-first'
+          })
+        ).toBe(false)
+        expect(
+          keybindingMatchesAction(chord.action, input, platform, undefined, {
+            context: 'app',
+            terminalShortcutPolicy: 'terminal-first'
+          })
+        ).toBe(true)
+      }
+      const historyInput = {
+        key: 'ArrowLeft',
+        code: 'ArrowLeft',
+        meta: platform === 'darwin',
+        control: platform !== 'darwin',
+        alt: true,
+        shift: false
+      }
+      expect(
+        keybindingMatchesAction('worktree.history.back', historyInput, platform, undefined, {
+          context: 'terminal',
+          terminalShortcutPolicy: 'terminal-first'
+        })
+      ).toBe(false)
+    }
+  )
 
   it('keeps floating workspace tab shortcuts active in app focus even with terminal-first policy configured', () => {
     const panelFocus = {

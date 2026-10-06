@@ -20,8 +20,7 @@ function countCollectionReads<T>(items: readonly T[]): {
     get(array, property) {
       if (property === 'map' || property === 'flatMap') {
         counters[property] += 1
-        const method = Reflect.get(array, property) as (...args: unknown[]) => unknown
-        return method.bind(array)
+        return array[property].bind(array)
       }
       if (property === Symbol.iterator) {
         counters.iterator += 1
@@ -30,6 +29,7 @@ function countCollectionReads<T>(items: readonly T[]): {
       if (property === 'length') {
         counters.length += 1
       }
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
       return Reflect.get(array, property)
     }
   })

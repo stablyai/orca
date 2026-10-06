@@ -1,7 +1,7 @@
 import type { NdjsonRejectedRecord } from '../../shared/main-process-ndjson-framer'
 import type { CodexAppServerConnectionHandlers } from './codex-app-server-connection-types'
 import { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
-import { isAppServerRecord } from './codex-app-server-jsonl'
+import { isProviderRecord } from '../provider-process/provider-json-record'
 import { CodexAppServerRequestError } from './codex-app-server-request-error'
 import {
   CodexAppServerUnsupportedError,
@@ -10,6 +10,7 @@ import {
 import { classifyJsonRpcPrefix } from './codex-app-server-record-prefix'
 
 const OVERSIZED_REQUEST_ERROR_CODE = -32001
+const MAX_REMEMBERED_TIMEOUTS = 64
 
 export type CodexPendingRequest = {
   method: string
@@ -25,11 +26,26 @@ export function createCodexAppServerRecordDispatcher(input: {
 }): {
   addPending: (id: number, waiter: CodexPendingRequest) => void
   deletePending: (id: number) => void
+  timeOutPending: (id: number) => void
   failPending: (error: Error) => void
   dispatch: (message: Record<string, unknown>) => void
   rejectOversized: (rejected: NdjsonRejectedRecord & { kind: 'line-too-long' }) => void
 } {
   const pending = new Map<number, CodexPendingRequest>()
+  const timedOutMethods = new Map<number, string>()
+
+  const timeOutPending = (id: number): void => {
+    const waiter = pending.get(id)
+    if (!waiter) {
+      return
+    }
+    pending.delete(id)
+    timedOutMethods.set(id, waiter.method)
+    const oldest = timedOutMethods.keys().next()
+    if (timedOutMethods.size > MAX_REMEMBERED_TIMEOUTS && !oldest.done) {
+      timedOutMethods.delete(oldest.value)
+    }
+  }
 
   const failPending = (error: Error): void => {
     for (const waiter of pending.values()) {
@@ -72,13 +88,23 @@ export function createCodexAppServerRecordDispatcher(input: {
     }
     const waiter = pending.get(message.id)
     if (!waiter) {
-      input.handlers.onUnhandledFrame?.('response:unmatched', message)
+      // Transport diagnostics, not conversation: only the request that gave up could have
+      // interpreted this reply, and it already reported its own outcome.
+      const timedOutMethod = timedOutMethods.get(message.id)
+      timedOutMethods.delete(message.id)
+      const error = isProviderRecord(message.error) ? message.error.message : undefined
+      console.warn(
+        timedOutMethod
+          ? `[codex-app-server] late reply to ${timedOutMethod} after timeout (id ${message.id})`
+          : `[codex-app-server] reply with no waiting request (id ${message.id})`,
+        ...(typeof error === 'string' ? [error] : [])
+      )
       return
     }
     pending.delete(message.id)
     clearTimeout(waiter.timer)
     const error = message.error
-    if (isAppServerRecord(error)) {
+    if (isProviderRecord(error)) {
       const detail = typeof error.message === 'string' ? error.message : 'unknown error'
       waiter.reject(
         isCodexMethodNotFoundError(error)
@@ -88,7 +114,8 @@ export function createCodexAppServerRecordDispatcher(input: {
           : new CodexAppServerRequestError(
               waiter.method,
               typeof error.code === 'number' ? error.code : null,
-              `codex app-server ${waiter.method} failed: ${detail}`
+              `codex app-server ${waiter.method} failed: ${detail}`,
+              typeof error.message === 'string' ? error.message : undefined
             )
       )
       return
@@ -159,6 +186,7 @@ export function createCodexAppServerRecordDispatcher(input: {
   return {
     addPending: (id, waiter) => pending.set(id, waiter),
     deletePending: (id) => pending.delete(id),
+    timeOutPending,
     failPending,
     dispatch,
     rejectOversized

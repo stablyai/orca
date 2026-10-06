@@ -2,6 +2,7 @@ import {
   formatAssignmentInventorySnapshot,
   readAssignmentInventorySnapshot
 } from './assignment-inventory-snapshot.js'
+import { readRegionCorrectionOutcomes } from './region-correction-outcomes.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import { loadRelayConfig } from './config.js'
 import { startCellHeartbeat } from './cell-heartbeat-client.js'
@@ -9,14 +10,15 @@ import {
   reconcileCellAdmissionAtStartup,
   roleOwnsAssignmentMaintenance
 } from './cell-admission-startup.js'
+import { openRelayDatabaseAtBoot } from './boot-database-open.js'
 import {
   consumeRelayCellInventoryHold,
   consumeRelayDatabasePoolPressure,
-  openRelayDatabase,
   readRelayDatabasePoolPressure
 } from './database.js'
 import { runAssignmentCleanup } from './assignment-cleanup-steps.js'
 import { runRelayBackgroundOperation } from './relay-background-operation.js'
+import { readPostgresLockWaitSample } from './postgres-lock-wait-sample.js'
 import { jitteredSweepIntervalMs } from './relay-sweep-schedule.js'
 import { observedRelayRequests } from './relay-observability.js'
 import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
@@ -27,7 +29,7 @@ import {
 } from './registered-migration-inventory.js'
 
 const config = loadRelayConfig()
-const database = await openRelayDatabase({
+const database = await openRelayDatabaseAtBoot({
   databaseUrl: config.databaseUrl,
   dataDir: config.dataDir,
   poolMax: config.databasePoolMax,
@@ -45,14 +47,19 @@ const {
   ready,
   cellIncarnation
 } = createRelayServer(config, database)
-const cleanupTimer = setInterval(
-  () =>
-    void runRelayBackgroundOperation(
-      () => store.cleanup(),
-      '[orca-relay] credential cleanup failed'
-    ),
-  30_000
-)
+// Same owner as the assignment sweep: the cleanup only expires credentials that every reader
+// already re-checks at read time, so running it in all 23 cells multiplied one table scan by 23
+// without changing any answer.
+const cleanupTimer = roleOwnsAssignmentMaintenance(config.role)
+  ? setInterval(
+      () =>
+        void runRelayBackgroundOperation(
+          () => store.cleanup(),
+          '[orca-relay] credential cleanup failed'
+        ),
+      jitteredSweepIntervalMs(30_000)
+    )
+  : null
 const assignmentCleanupTimer = roleOwnsAssignmentMaintenance(config.role)
   ? setInterval(() => {
       void runAssignmentCleanup(assignments)
@@ -71,11 +78,33 @@ const migrationInventoryTimer = roleOwnsAssignmentMaintenance(config.role)
       void runRelayBackgroundOperation(async () => {
         const inventory = await readRegisteredMigrationInventory(database, Date.now())
         for (const line of formatRegisteredMigrationInventory(inventory)) console.warn(line)
+        console.log(
+          JSON.stringify({
+            event: 'orca_relay_region_correction_outcomes',
+            observedAt: Date.now(),
+            outcomes: await readRegionCorrectionOutcomes(database, Date.now())
+          })
+        )
       }, '[orca-relay] migration inventory failed')
     }, 5 * 60_000)
   : null
-cleanupTimer.unref()
+// Directors only: one role's view covers every backend, and cells roll separately.
+// Single-flight, so a slow database never stacks samples on the 3-slot pool.
+let lockWaitSampling = false
+const lockWaitSampleTimer = roleOwnsAssignmentMaintenance(config.role)
+  ? setInterval(() => {
+      if (database.dialect !== 'postgres' || lockWaitSampling) return
+      lockWaitSampling = true
+      void runRelayBackgroundOperation(async () => {
+        observability.recordDatabaseLockWaitSample(await readPostgresLockWaitSample(database))
+      }, '[orca-relay] lock wait sample failed').finally(() => {
+        lockWaitSampling = false
+      })
+    }, 5_000)
+  : null
+cleanupTimer?.unref()
 assignmentCleanupTimer?.unref()
+lockWaitSampleTimer?.unref()
 inventorySnapshotTimer?.unref()
 migrationInventoryTimer?.unref()
 observability.start(() => ({
@@ -120,10 +149,11 @@ server.listen(config.port, () => {
 })
 
 const shutdown = (): void => {
-  clearInterval(cleanupTimer)
+  if (cleanupTimer) clearInterval(cleanupTimer)
   if (assignmentCleanupTimer) clearInterval(assignmentCleanupTimer)
   if (inventorySnapshotTimer) clearInterval(inventorySnapshotTimer)
   if (migrationInventoryTimer) clearInterval(migrationInventoryTimer)
+  if (lockWaitSampleTimer) clearInterval(lockWaitSampleTimer)
   observability.stop()
   heartbeat?.stop()
   regionalRehomeWorker?.stop()

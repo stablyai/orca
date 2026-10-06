@@ -4,6 +4,7 @@ import {
   AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS,
   type AgentPromptActivity,
   isAgentPromptStalledError,
+  isTerminalSendSettlementAgent,
   readAgentPromptWaitText,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
@@ -292,10 +293,18 @@ describe('agent prompt submission verification', () => {
   })
 
   it('gives hook-observed agents the longer effect window', () => {
+    expect(resolveAgentPromptEffectTimeoutMs('antigravity')).toBe(
+      AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS
+    )
     expect(resolveAgentPromptEffectTimeoutMs('codex')).toBe(AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS)
     expect(resolveAgentPromptEffectTimeoutMs('kimi')).toBe(AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS)
     expect(resolveAgentPromptEffectTimeoutMs('claude')).toBe(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
     expect(resolveAgentPromptEffectTimeoutMs(null)).toBe(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+  })
+
+  it('uses Antigravity PreInvocation hooks to settle prompt receipts', () => {
+    expect(isTerminalSendSettlementAgent('antigravity')).toBe(true)
+    expect(isTerminalSendSettlementAgent('gemini')).toBe(false)
   })
 
   it('recognizes a stalled verdict from a message or a relayed error code', () => {

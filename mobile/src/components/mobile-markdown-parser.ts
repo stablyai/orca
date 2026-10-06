@@ -1,3 +1,5 @@
+import { isTableSeparator, splitTableRow } from './rich-markdown/markdown-table-rows'
+
 export type MobileMarkdownBlock =
   | { type: 'paragraph'; text: string }
   | { type: 'heading'; level: number; text: string }
@@ -8,19 +10,8 @@ export type MobileMarkdownBlock =
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'rule' }
 
-function splitTableRow(line: string): string[] {
-  return line
-    .trim()
-    .replace(/^\|/, '')
-    .replace(/\|$/, '')
-    .split('|')
-    .map((cell) => cell.trim())
-}
-
-function isTableSeparator(line: string): boolean {
-  const cells = splitTableRow(line)
-  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell))
-}
+const HEADING = /^(#{1,6})\s+(.+)$/
+const CODE_FENCE = /^```([A-Za-z0-9_-]+)?\s*$/
 
 export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
   const lines = content.replace(/\r\n?/g, '\n').split('\n')
@@ -34,7 +25,7 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
       continue
     }
 
-    const fence = line.match(/^```([A-Za-z0-9_-]+)?\s*$/)
+    const fence = line.match(CODE_FENCE)
     if (fence) {
       index += 1
       const code: string[] = []
@@ -80,7 +71,7 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
       continue
     }
 
-    const heading = line.match(/^(#{1,6})\s+(.+)$/)
+    const heading = line.match(HEADING)
     if (heading) {
       blocks.push({ type: 'heading', level: heading[1]!.length, text: heading[2]!.trim() })
       index += 1
@@ -121,8 +112,8 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
     while (
       index < lines.length &&
       lines[index]?.trim() &&
-      !(lines[index] ?? '').startsWith('```') &&
-      !/^(#{1,6})\s+/.test(lines[index] ?? '') &&
+      !CODE_FENCE.test(lines[index] ?? '') &&
+      !HEADING.test(lines[index] ?? '') &&
       !/^>\s?/.test(lines[index] ?? '') &&
       !/^\s*(?:[-*+]|\d+[.)])\s+/.test(lines[index] ?? '') &&
       !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[index] ?? '')

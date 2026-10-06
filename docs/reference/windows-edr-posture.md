@@ -31,12 +31,12 @@ administrators can do about it.
 
 Four independent evidence clusters, from six incidents:
 
-| Cluster           | Incidents | Evidence                                                                                                             |
-| ----------------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
-| **Update**        | A, B, C   | `orca-windows-setup.exe` → `old-uninstaller.exe`, `Uninstall Orca.exe` (electron-builder generates these; they are in no repo file) |
+| Cluster           | Incidents | Evidence                                                                                                                              |
+| ----------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Update**        | A, B, C   | `orca-windows-setup.exe` → `old-uninstaller.exe`, `Uninstall Orca.exe` (electron-builder generates these; they are in no repo file)   |
 | **Spawn**         | all six   | `Orca.exe` → `orca-terminal-daemon.exe` → `powershell.exe` / `pwsh.exe` / `cmd.exe` / `reg.exe` → `claude.exe`, `gh.exe`, `codex.cmd` |
-| **Process table** | D         | "suspicious memory activity" — `OpenProcess` plus a PEB read against every process on a repeating cadence            |
-| **Computer use**  | E, F      | `runtime.ps1`, `computer-sidecar.js`, many `operation.json`, a burst of ~10 short-lived `powershell.exe`             |
+| **Process table** | D         | "suspicious memory activity" — `OpenProcess` plus a PEB read against every process on a repeating cadence                             |
+| **Computer use**  | E, F      | `runtime.ps1`, `computer-sidecar.js`, many `operation.json`, a burst of ~10 short-lived `powershell.exe`                              |
 
 Incident E is the one to look at hardest: 5 alerts, 37 evidence items, ATT&CK
 **Execution + Collection**, and a description reading _"Screenshots were taken
@@ -143,11 +143,11 @@ PEB fallback to reinstate it — a hooked `ntdll` answering
 `STATUS_INVALID_INFO_CLASS` for one target would have flipped a process-wide,
 one-way switch back to `PROCESS_VM_READ` on exactly the machines this exists for.
 
-Because the property is the *absence* of an import, it is checkable on the
+Because the property is the _absence_ of an import, it is checkable on the
 artifact rather than the source: `inspectWindowsProcessTreeAddon()` answers
 `clean` / `unpatched` / `missing`, and the rebuild, `ensure-native-runtime.mjs`,
 the relay build and `loadWindowsProcessTree()` all key on it. That check is load-
-bearing because the published tarball ships a *loadable* prebuilt built from
+bearing because the published tarball ships a _loadable_ prebuilt built from
 unpatched source, so "it required cleanly" is not evidence.
 
 What to declare to administrators is now one
@@ -180,7 +180,7 @@ Three sites are named in the incident analysis:
 `src/shared/setup-agent-sequencing.ts`,
 `src/shared/windows-cmd-runner-delayed-launch.ts` and
 `src/shared/windows-interactive-login-spawn.ts` each dropped
-`-ExecutionPolicy Bypass` as a measured no-op: the policy gates script *files*,
+`-ExecutionPolicy Bypass` as a measured no-op: the policy gates script _files_,
 never `-EncodedCommand`. Where the bypass was load-bearing it moved in-payload as
 a process-scope `Set-ExecutionPolicy` (`setup-agent-sequencing.ts`), which is the
 pattern to copy rather than restoring the switch — the switch loses to a GPO
@@ -192,7 +192,7 @@ What remains is `-EncodedCommand` without the bypass: the PTY bootstraps
 (`src/main/agent-hooks/windows-powershell-hook-launcher.ts` and its callers
 `src/main/agent-hooks/runtime-home-hook-command.ts`,
 `src/main/agent-hooks/installer-utils.ts`, and `src/main/claude/hook-settings.ts`
-— that last one only as a *fallback* since #18875, see below),
+— that last one only as a _fallback_ since #18875, see below),
 `src/main/runtime/windows-default-route-interfaces.ts`,
 `src/main/runtime/orchestration/setup-completion-signal.ts`,
 `src/shared/hermes-startup-query.ts`, and the four ex-bypass sites above.
@@ -203,7 +203,9 @@ unquoted parameter string on whitespace.
 
 One site still spells `-ExecutionPolicy Bypass` with **no** encoding, the weaker
 signal: `src/main/cli/wsl-cli-scripts.ts` (`-File`, and it is a real script
-file, so the switch is not a no-op there). `src/main/system-fonts.ts` dropped it
+file, so the switch is not a no-op there). Every Orca-managed WSL terminal now
+reaches it by default on each CLI call (`docs/reference/wsl-managed-cli.md`), not
+only after the user registers the WSL CLI. `src/main/system-fonts.ts` dropped it
 for plain `-Command`; `src/shared/secure-path-windows-acl.ts` no longer runs
 PowerShell at all, having moved to `icacls.exe`; and computer use now asks for
 `-ExecutionPolicy RemoteSigned` in
@@ -224,7 +226,7 @@ denies the analyser the payload it would otherwise clear.
 The hook launcher is prior art worth knowing about. #16003 measured, on a
 reporting Kaspersky host, that `-WindowStyle Hidden` paired with
 `-EncodedCommand` was denied at `CreateProcess` with exit 126 regardless of
-payload — `exit 0` was denied too. The fix was to stop *spelling* the flags:
+payload — `exit 0` was denied too. The fix was to stop _spelling_ the flags:
 `WINDOWS_POWERSHELL_HOOK_SWITCHES` is now just `-NoProfile`, and separately, in
 #16576, the execution policy bypass moved in-payload as a process-scope
 `Set-ExecutionPolicy` — a real command-line signal reduction, though #16003's
@@ -247,7 +249,7 @@ a quoted token, each `%` is broken with `"^%"`.
 
 The escaping is not decorative. Measured on Windows 11 against a real `.cmd`
 shim, `["a b", 'c"d', "e%F%g", "h&i", "j^k"]` came back as `["a b", 'c"d',
-"e^%F^%g", "h"]` — the `&` truncated the argument *and* ran the remainder as a
+"e^%F^%g", "h"]` — the `&` truncated the argument _and_ ran the remainder as a
 command.
 
 **How an EDR reads it:** caret escaping is the canonical obfuscation marker in
@@ -259,7 +261,7 @@ obfuscated-command-line detector is tuned on.
 
 `Orca.exe` → the relocated daemon host (`orca-terminal-daemon.exe` in the builds
 these incidents cover, `Orca.exe` since) → a shell → an agent CLI is what a
-terminal multiplexer for coding agents *is*. `reg.exe` appears from
+terminal multiplexer for coding agents _is_. `reg.exe` appears from
 `src/main/win32-utils.ts`,
 `src/main/agent-hooks/managed-hook-owner-identity.ts` and
 `src/relay/pty-shell-utils.ts` (reading the OpenSSH `DefaultShell`).
@@ -267,12 +269,12 @@ terminal multiplexer for coding agents *is*. `reg.exe` appears from
 Nothing here is avoidable in principle. What is controllable is depth and
 breadth: every interpreter hop between Orca and the thing the user asked for adds
 a scored edge, which is why the shipped doctrine of #15520 and #15595 is to
-*shorten the interpreter chain* rather than to hide a window.
+_shorten the interpreter chain_ rather than to hide a window.
 
 #18875 is a worked example of that doctrine. The Claude Code lifecycle hook was
 registered as `powershell.exe -NoProfile -EncodedCommand <...>` whose entire
 decoded payload was a `Test-Path` and a call to `~/.orca/agent-hooks/claude-hook.cmd`.
-It now registers the script path itself (`<path> || echo {}`), so `bash ->
+It now registers the bare script path itself, with no shell operators, so `bash ->
 powershell -> cmd -> curl` became `bash -> cmd -> curl` and one
 `powershell.exe -EncodedCommand` per hook event — a first-class Defender alert
 title — leaves the tree. The reporting box fired ~6 900 of them in five days,
@@ -285,24 +287,24 @@ concurrency, invoked as Claude Code invokes it. **No EDR verdict on either tree
 was measured**, so claim the removed `-EncodedCommand` spelling and the shorter
 chain, not a score. `cmd.exe` remains in the tree, spelled by MSYS's own `.cmd`
 spawn rather than by us — the doc's one "unavoidable for `.cmd`/`.bat`" case,
-carrying an absolute path and two literal tokens, with no caret escaping, no
+carrying only an absolute path, with no caret escaping, no
 encoding and no free text. The encoded launcher is still the shape for profile
 paths the shells cannot carry bare (a space, `%`, `^`, `&`, non-ASCII, a UNC
-profile) and for hosts where Git Bash is not resolvable, because PowerShell 5.1
-rejects `||` (measured: parse error, exit 1).
+profile).
 
-That last clause is the standing assumption of this change, and it is worth
-stating plainly because it is **not** measured. `||` parses in Git Bash, cmd.exe
-and pwsh, but not in Windows PowerShell 5.1, so the direct shape is correct for
-any host that is one of the first three. Claude Code itself is a Git Bash host on
-native Windows. What no one here has verified is which host a *compat consumer*
-uses: cursor-agent and Devin import `~/.claude/settings.json` and run `command`
-through their own launcher (the managed `.cmd` carries a `DEVIN_PROJECT_DIR` skip
-for exactly that). If one of them spawns hook strings through Windows PowerShell
-5.1, its imported Claude events become a parse error with empty stdout, which is
-the fail-closed case #14818 exists to prevent. The encoded launcher had no such
-assumption — it was a `powershell.exe` invocation and therefore parsed anywhere.
-Before widening the direct shape to another agent, measure that consumer's host.
+The direct shape first shipped as `<path> || echo {}`, gated on Git Bash being
+resolvable. That gate guessed at a choice Claude Code makes on its own: it runs
+hooks under Windows PowerShell 5.1 when it picks PowerShell, and 5.1 rejects `||`
+(parse error, exit 1), so every hook failed (STA-8913). The registered command is
+now the bare path, which parses in Git Bash, cmd.exe, pwsh and PowerShell 5.1.
+The neutral `{}` for a missing payload lives in the `claude-hook.cmd` entry, which
+hands off to `claude-hook-impl.cmd` in the same `cmd.exe`; a deleted entry is an
+ordinary non-blocking hook error (never exit 2) until the next install rewrites it.
+Compat consumers such as cursor-agent and Devin import `~/.claude/settings.json`
+and run `command` through their own launcher (the payload carries a
+`DEVIN_PROJECT_DIR` skip for that); one that cannot start a `.cmd` at all still
+gets a launch failure. Before widening the direct shape to another agent, measure
+that consumer's host.
 
 ### Computer use: screen capture, synthetic input, runtime-compiled MSIL
 
@@ -318,12 +320,12 @@ then captures the screen through `Graphics.CopyFromScreen`.
 
 That is four separate high-signal behaviours stacked in one process:
 
-| Behaviour                                       | How it is scored                                     |
-| ----------------------------------------------- | ---------------------------------------------------- |
-| `Graphics.CopyFromScreen`                       | **MITRE T1113**, screen capture — Collection tactic  |
-| `SendInput` synthetic keyboard/mouse            | input synthesis against other applications           |
-| `Add-Type -TypeDefinition` on every operation   | MSIL compiled at runtime; incident F's "suspicious MSIL code" |
-| One `powershell.exe` per operation              | a burst of short-lived interpreters under one parent |
+| Behaviour                                     | How it is scored                                              |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| `Graphics.CopyFromScreen`                     | **MITRE T1113**, screen capture — Collection tactic           |
+| `SendInput` synthetic keyboard/mouse          | input synthesis against other applications                    |
+| `Add-Type -TypeDefinition` on every operation | MSIL compiled at runtime; incident F's "suspicious MSIL code" |
+| One `powershell.exe` per operation            | a burst of short-lived interpreters under one parent          |
 
 The bottom two rows are the two the incident text named directly, and they are
 also the two a persistent runtime host would remove: a long-lived helper compiles
@@ -332,6 +334,67 @@ MSIL recompilation nor the interpreter burst repeats. A change doing that is in
 flight and unmerged at the time of writing; check the code rather than this
 paragraph for what the shipped build does. Screen capture and `SendInput` are
 inherent to the feature and no refactor removes them.
+
+### SSH hosts: upload-stage file identity and runtime-store GC
+
+These run on the _remote_ Windows host over SSH, not on the desktop, but the
+host's EDR scores them the same way.
+
+The relay upload stage fences each slot with the directory's file ID (volume
+serial plus file index). That used to come from `Add-Type -TypeDefinition` over
+a P/Invoke of `GetFileInformationByHandle`, compiled in every stage command. When
+the relay runs on Orca's pinned Node (design D5), node.exe is already hashed
+against the pin and has run once, so the stage commands now ask it instead:
+`src/main/ssh/ssh-relay-upload-stage-windows-commands.ts` runs
+`node.exe -e <fixed script> -- <path>`, a fixed `fs.lstatSync(..., { bigint: true })`
+with the path as an argument. libuv fills `dev` and `ino` from the same volume
+serial and file index, so both readers write the same `vol:high:low` lowercase
+hex, and identity files are compared after normalising hex spelling. An old
+client can recover a stage a new one reserved, and the reverse.
+
+Two alternatives were rejected:
+
+- **PowerShell alone.** Neither .NET Framework (Windows PowerShell 5.1) nor .NET
+  exposes a file index without P/Invoke, which is what `Add-Type` compiles.
+  `fsutil file queryfileid` would spawn another binary per lookup and prints a
+  different format, which would break mixed-version recovery.
+- **Host Node.** Relays still on the host's own Node (rung C and the legacy
+  path) keep the `Add-Type` helper, because Orca has not verified that binary.
+  That is the one remaining `Add-Type` site on SSH hosts; it goes when those
+  rungs do.
+
+A lookup costs one short-lived node.exe per existing stage directory the command
+inspects, usually one or two. It is not a loop over the whole pool.
+
+Runtime-store GC (`src/main/ssh/remote-node-runtime-store-windows.ts`) reads the
+store in one PowerShell invocation. It learns which runtimes are in use from a
+single `Get-CimInstance Win32_Process` query, filtered on an image path under
+`runtimes\`. It never matches on the image name, so another program's node.exe
+holds nothing. WMI refuses a standard user's SSH logon, so a refusal falls back to
+`Get-Process`, which reads the image path of the account's own processes — the
+only ones running from its store. If both fail, no process check has run and the
+pass keeps everything. Windows itself also refuses to delete a running image, which is a
+second safeguard.
+
+### SSH hosts: starting the relay outside the session
+
+Win32-OpenSSH puts each session's shell in a job with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK`
+(`contrib/win32/win32compat/w32-doexec.c`, unchanged since 2018), so the relay
+must leave that job to outlive the connection. It used to leave through WMI
+`Win32_Process.Create`, which is both an EDR-scored remote-execution shape
+(T1047) and refused to a standard user's network logon unless an administrator
+grants Remote Enable on `root\cimv2`.
+
+Now `relay.js --windows-breakaway-launch` runs once per launch on the same
+node.exe and calls `spawnOutsideJob` in the staged process-tree addon
+(`src/process_launch.cc` in the patch): one `CreateProcessW` with
+`CREATE_BREAKAWAY_FROM_JOB`, and a handle list that passes only the relay's
+three stdio handles, so no SSH channel pipe is inherited. libuv never passes that
+flag, so Node alone cannot do this. WMI remains only as the fallback for a relay
+built without the addon or a job that refuses breakaway, and a refusal there is
+reported as `ORCA_RELAY_LAUNCH_REFUSED`. The Windows SSH-host lanes run with no
+WMI grant and assert the breakaway route.
 
 ## Signing is not the gate
 
@@ -381,16 +444,16 @@ changed. Check the code before relying on it.
 
 The checklist. On Windows, do not reach for:
 
-| Don't                                                       | Instead                                                                                                                    |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `-ExecutionPolicy Bypass` on the command line               | Set the policy in-payload at process scope, as `windows-powershell-hook-launcher.ts` does, or do not run a `.ps1` at all    |
-| `-EncodedCommand`                                           | A temp `.ps1` with an argument, or no PowerShell hop: prefer a native API or an existing Node path                          |
-| `cmd.exe /c` carrying escaped free text                     | Spawn the real target directly. `cmd.exe` is only unavoidable for `.cmd`/`.bat`; keep free text out of the line where you can |
-| Forking `powershell.exe` to read system state               | The native reader — [`windows-process-enumeration.md`](./windows-process-enumeration.md) is the standing rule for the process table |
-| A process per operation in a loop                           | One long-lived helper with a request channel. A burst of short-lived interpreters under one parent is itself the signal     |
-| `Add-Type -TypeDefinition` at runtime                       | A precompiled, signed assembly, or a native helper                                                                          |
-| Copying our own image under a different name                | Copy it verbatim — [`windows-daemon-host-relocation.md`](./windows-daemon-host-relocation.md) (done for the daemon host)    |
-| Deriving a script runner from a UI preference               | [`windows-setup-shell.md`](./windows-setup-shell.md) — the script declares its own interpreter                              |
+| Don't                                         | Instead                                                                                                                             |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `-ExecutionPolicy Bypass` on the command line | Set the policy in-payload at process scope, as `windows-powershell-hook-launcher.ts` does, or do not run a `.ps1` at all            |
+| `-EncodedCommand`                             | A temp `.ps1` with an argument, or no PowerShell hop: prefer a native API or an existing Node path                                  |
+| `cmd.exe /c` carrying escaped free text       | Spawn the real target directly. `cmd.exe` is only unavoidable for `.cmd`/`.bat`; keep free text out of the line where you can       |
+| Forking `powershell.exe` to read system state | The native reader — [`windows-process-enumeration.md`](./windows-process-enumeration.md) is the standing rule for the process table |
+| A process per operation in a loop             | One long-lived helper with a request channel. A burst of short-lived interpreters under one parent is itself the signal             |
+| `Add-Type -TypeDefinition` at runtime         | A precompiled, signed assembly, or a native helper                                                                                  |
+| Copying our own image under a different name  | Copy it verbatim — [`windows-daemon-host-relocation.md`](./windows-daemon-host-relocation.md) (done for the daemon host)            |
+| Deriving a script runner from a UI preference | [`windows-setup-shell.md`](./windows-setup-shell.md) — the script declares its own interpreter                                      |
 
 Two framing rules that outlast the table:
 
@@ -407,7 +470,7 @@ Two framing rules that outlast the table:
 
 This is the single most important operational point, and it is the one most
 commonly got wrong. The six incidents are **MDE EDR behavioural alerts**.
-Defender Antivirus path exclusions suppress *scan* detections; they do not
+Defender Antivirus path exclusions suppress _scan_ detections; they do not
 suppress EDR behavioural alerts the same way. Adding
 `%LOCALAPPDATA%\Programs\orca\` to the AV exclusion list and expecting the
 incidents to stop will not work.

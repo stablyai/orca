@@ -29,7 +29,7 @@ export function createMarkWorktreeVisited(
           hostId: ownerHostId
         }) ?? 0
       if (!(now > prev)) {
-        return {}
+        return s
       }
       return {
         lastVisitedAtByWorktreeId: {
@@ -124,7 +124,7 @@ export function createPruneLastVisitedTimestamps(
           patch.activeWorkspaceExecutionHostId = null
         }
       }
-      return Object.keys(patch).length > 0 ? patch : {}
+      return Object.keys(patch).length > 0 ? patch : s
     })
   }
 }
@@ -137,12 +137,12 @@ export function createSeedActiveWorktreeLastVisitedIfMissing(
     set((s) => {
       const id = s.activeWorktreeId
       if (!id) {
-        return {}
+        return s
       }
       const hostId = s.activeWorkspaceExecutionHostId ?? s.getKnownWorktreeById(id)?.hostId
       const key = getWorktreeVisitKey(id, hostId)
       if (getWorktreeVisitTimestamp(s.lastVisitedAtByWorktreeId, { id, hostId }) != null) {
-        return {}
+        return s
       }
       return {
         lastVisitedAtByWorktreeId: {

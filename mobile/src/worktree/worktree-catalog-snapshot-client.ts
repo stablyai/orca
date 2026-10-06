@@ -1,6 +1,7 @@
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import type { RpcFailure } from '../transport/types'
 import type { Worktree } from './workspace-list-sections'
+import { worktreeCatalogRead } from './worktree-catalog-operations'
 
 // Why: worktree.ps silently truncates at 200; use a high cap so large hosts don't drop workspaces.
 export const WORKTREE_PS_FULL_LIMIT = 10_000
@@ -71,12 +72,15 @@ export class WorktreeCatalogSnapshotClient {
       this.confirmedWorktrees = null
     }
     const requestedSnapshotId = this.snapshotId
-    const response = await client.sendRequest('worktree.ps', {
+    const reply = await worktreeCatalogRead.request(client, {
       limit: WORKTREE_PS_FULL_LIMIT,
       afterSnapshotId: requestedSnapshotId
     })
-    if (!response.ok) {
-      const code = (response as RpcFailure).error?.code
+    const catalog = worktreeCatalogRead.interpret(reply)
+    if (!catalog.accepted) {
+      // The refusal code the caller reports lives on the envelope; no acceptance policy carries it.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
+      const code = (reply as RpcFailure).error?.code
       return {
         kind: 'request_failed',
         code: typeof code === 'string' && code.length > 0 ? code : 'request_failed'
@@ -85,10 +89,7 @@ export class WorktreeCatalogSnapshotClient {
     return {
       kind: 'response',
       pending: {
-        admission: admitWorktreeCatalogResponse<Worktree>(
-          (response as RpcSuccess).result,
-          requestedSnapshotId
-        ),
+        admission: admitWorktreeCatalogResponse<Worktree>(catalog.value, requestedSnapshotId),
         client,
         hostId
       }

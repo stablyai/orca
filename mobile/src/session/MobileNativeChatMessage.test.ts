@@ -3,12 +3,15 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat-tool-summary'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../src/shared/agent-session-host-status-rows'
+import { colors } from '../theme/mobile-theme'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>
     React.createElement('Text', props, children)
   return {
+    ActivityIndicator: 'ActivityIndicator',
     Animated: {
       Text,
       Value: class {
@@ -19,6 +22,7 @@ vi.mock('react-native', async () => {
       timing: () => ({ start: vi.fn(), stop: vi.fn() })
     },
     Image: 'Image',
+    Platform: { OS: 'ios' },
     Pressable: 'Pressable',
     Text,
     View: ({ children, ...props }: { children?: unknown }) =>
@@ -37,6 +41,9 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
+  MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
+}))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 
@@ -59,6 +66,7 @@ describe('MobileNativeChatMessage', () => {
   function render(
     message: NativeChatMessage,
     props: {
+      fontScale?: number
       toolsExpanded?: boolean
       structuredActivityUi?: boolean
       activeTurnIsWorking?: boolean
@@ -79,6 +87,38 @@ describe('MobileNativeChatMessage', () => {
 
   const textIn = (node: ReactTestInstance): string[] =>
     node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
+
+  it.each(['system', 'user'] as const)(
+    'renders a %s host notice as selectable muted text rather than a markdown answer',
+    (role) => {
+      const tree = render(
+        {
+          id: 'notice',
+          role,
+          timestamp: 1,
+          blocks: [
+            { type: 'text', text: 'provider fallback', presentation: 'history-item-too-large' }
+          ]
+        },
+        { fontScale: 1.5 }
+      )
+      expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
+      const text = tree.root.find((node) => String(node.type) === 'Text')
+      expect(text.props.children).toBe(AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'])
+      expect(text.props.selectable).toBe(true)
+      expect(Object.assign({}, ...text.props.style)).toMatchObject({
+        color: colors.textMuted,
+        fontSize: 25.5
+      })
+    }
+  )
+
+  it('preserves an ordinary assistant answer without interpreting its text as a host notice', () => {
+    const tree = render(toolMessage([{ type: 'text', text: 'provider fallback' }]))
+    expect(tree.root.find((node) => String(node.type) === 'MobileMarkdown').props.content).toBe(
+      'provider fallback'
+    )
+  })
 
   it('renders a loadable preview URI as an image thumbnail', () => {
     const tree = render(userMessage([{ type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }]))
@@ -104,6 +144,21 @@ describe('MobileNativeChatMessage', () => {
       .findAllByType('Text' as never)
       .map((node) => String(node.children.join('')))
     expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(true)
+  })
+
+  it('makes user message text selectable', () => {
+    const tree = render(userMessage([{ type: 'text', text: 'Prompt I typed' }]))
+    const text = tree.root
+      .findAllByType('Text' as never)
+      .find((node) => String(node.children.join('')) === 'Prompt I typed')
+    expect(text?.props.selectable).toBe(true)
+  })
+
+  it('routes assistant prose through selectable Markdown', () => {
+    const tree = render(toolMessage([{ type: 'text', text: 'Agent reply prose' }]))
+    const markdown = tree.root.findByType('MobileMarkdown' as never)
+    expect(markdown.props.content).toBe('Agent reply prose')
+    expect(markdown.props.rangeSelectable).toBe(true)
   })
 
   it('labels a tool row with the target path instead of raw input JSON', () => {
@@ -253,12 +308,12 @@ describe('MobileNativeChatMessage', () => {
       expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(0)
     })
 
-    it('renders the turn status row under a user message', () => {
+    it('renders the settled turn status row under a user message', () => {
       const tree = render(userMessage([{ type: 'text', text: 'go' }]), {
         structuredActivityUi: true,
-        turnStatus: { startedAt: Date.now(), thinking: true, workedSeconds: null }
+        turnStatus: { startedAt: Date.now() - 3_000, thinking: false, workedSeconds: 3 }
       })
-      expect(textIn(tree.root)).toContain('Thinking')
+      expect(textIn(tree.root)).toContain('Worked for 3s')
     })
 
     it('does not render a turn status row without one', () => {

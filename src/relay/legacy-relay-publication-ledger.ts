@@ -83,11 +83,18 @@ export class LegacyRelayPublicationLedger {
     })
   }
 
-  belowLowWater(clientKeys?: readonly string[]): boolean {
+  // Why the thunk overload: the aggregate ceiling below decides on its own most of the time, and it
+  // decides *first*. A caller passing an eager array has already built one string per client before
+  // learning the keys were never going to be read -- and it pays that most in the loaded case,
+  // because that is exactly when the aggregate check short-circuits.
+  belowLowWater(clientKeys?: readonly string[] | (() => readonly string[])): boolean {
     if (this.aggregateBytes > this.relayLowBytes) {
       return false
     }
-    const keys = clientKeys ?? Array.from(this.clientBytes.keys())
+    const keys =
+      typeof clientKeys === 'function'
+        ? clientKeys()
+        : (clientKeys ?? Array.from(this.clientBytes.keys()))
     return keys.every((clientKey) => (this.clientBytes.get(clientKey) ?? 0) <= this.clientLowBytes)
   }
 

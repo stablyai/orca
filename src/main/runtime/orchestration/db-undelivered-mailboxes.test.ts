@@ -8,10 +8,20 @@ describe('undelivered orchestration mailboxes', () => {
 
   it('lists only mailboxes with undelivered unread messages', () => {
     db = new OrchestrationDb(':memory:')
-    const delivered = db.insertMessage({ from: 'a', to: 'delivered', subject: 'done' })
-    const read = db.insertMessage({ from: 'a', to: 'read', subject: 'seen' })
-    db.insertMessage({ from: 'a', to: 'pending', subject: 'first' })
-    db.insertMessage({ from: 'a', to: 'pending', subject: 'second' })
+    const delivered = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'delivered',
+      subject: 'done'
+    })
+    const read = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'read',
+      subject: 'seen'
+    })
+    db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'pending', subject: 'first' })
+    db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'pending', subject: 'second' })
     db.markAsDelivered([delivered.id])
     db.markAsRead([read.id])
 
@@ -20,7 +30,12 @@ describe('undelivered orchestration mailboxes', () => {
 
   it('persists and settles a pending pointer Enter independently of delivery', () => {
     db = new OrchestrationDb(':memory:')
-    const message = db.insertMessage({ from: 'a', to: 'run:run_1', subject: 'staged' })
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run_1',
+      subject: 'staged'
+    })
 
     expect(
       db.stageMailboxPointerEnter([message.id], {

@@ -1,9 +1,14 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import { constants } from 'node:fs'
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
 import type { Store } from '../persistence'
-import { resolveAuthorizedPath } from './filesystem-auth'
+import {
+  resolveDesktopAuthorizedPath,
+  resolveLocalRenamePaths,
+  resolveLocalRequestPath
+} from './local-file-access-resolution'
+import type { LocalFileAccess } from '../../shared/local-file-access'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 import { importExternalPathsSsh } from './filesystem-import-ssh'
@@ -16,9 +21,17 @@ import type {
   ImportSkipReason,
   ResolveDroppedPathsResult,
   StagedExternalImportSource
-} from './filesystem-import-result-types'
+} from '../../shared/filesystem-import-result-types'
 import { importOneSource } from './filesystem-import-local'
-import { stageOneSourceForRuntimeUpload } from './filesystem-runtime-upload-staging'
+import {
+  stagedRuntimeUploadByteLength,
+  stageOneSourceForRuntimeUpload
+} from './filesystem-runtime-upload-staging'
+import { streamExternalFileToRuntime } from './runtime-upload-file-stream'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import { sweepAbandonedRuntimeUploadTempPath } from './runtime-upload-temp-sweep'
+import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
+import { resolveEnvironment } from '../../shared/runtime-environment-store'
 
 /**
  * IPC handlers for file/folder creation and renaming.
@@ -41,7 +54,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.createFile(args.filePath)
       }
-      const filePath = await resolveAuthorizedPath(args.filePath, store)
+      const filePath = await resolveDesktopAuthorizedPath(args.filePath, store)
       await mkdir(dirname(filePath), { recursive: true })
       try {
         // Use the 'wx' flag for atomic create-if-not-exists, avoiding TOCTOU races
@@ -68,7 +81,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.createDir(args.dirPath)
       }
-      const dirPath = await resolveAuthorizedPath(args.dirPath, store)
+      const dirPath = await resolveDesktopAuthorizedPath(args.dirPath, store)
       await assertNotExists(dirPath)
       await mkdir(dirPath, { recursive: true })
     }
@@ -81,7 +94,12 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:rename',
     async (
       _event,
-      args: { oldPath: string; newPath: string; connectionId?: string } & SshMutationExpectation
+      args: {
+        oldPath: string
+        newPath: string
+        connectionId?: string
+        access?: LocalFileAccess
+      } & SshMutationExpectation
     ): Promise<void> => {
       assertSshMutationExpectation(
         args.connectionId,
@@ -99,9 +117,14 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // target file (potentially elsewhere in the worktree) and leave the
       // symlink dangling. newPath must also preserve its leaf so we don't
       // accidentally write into a symlinked destination name.
-      const oldPath = await resolveAuthorizedPath(args.oldPath, store, { preserveSymlink: true })
-      const newPath = await resolveAuthorizedPath(args.newPath, store, { preserveSymlink: true })
-      await renameLocalPathSerializedByDestination(oldPath, newPath)
+      // Outside every project, a document the user opened may still be renamed, to any path.
+      const { from, to } = await resolveLocalRenamePaths(
+        args.oldPath,
+        args.newPath,
+        args.access,
+        store
+      )
+      await renameLocalPathSerializedByDestination(from, to)
     }
   )
 
@@ -125,10 +148,10 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.copy(args.sourcePath, args.destinationPath)
       }
-      const sourcePath = await resolveAuthorizedPath(args.sourcePath, store, {
+      const sourcePath = await resolveDesktopAuthorizedPath(args.sourcePath, store, {
         preserveSymlink: true
       })
-      const destinationPath = await resolveAuthorizedPath(args.destinationPath, store, {
+      const destinationPath = await resolveDesktopAuthorizedPath(args.destinationPath, store, {
         preserveSymlink: true
       })
       await mkdir(dirname(destinationPath), { recursive: true })
@@ -147,6 +170,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         destDir: string
         connectionId?: string
         ensureDir?: boolean
+        access?: LocalFileAccess
       } & SshMutationExpectation
     ): Promise<{ results: ImportItemResult[] }> => {
       assertSshMutationExpectation(
@@ -172,7 +196,13 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // destination is outside allowed roots, the entire import fails.
       // This only applies to local imports — remote paths are authorized by
       // the SSH connection boundary (see importExternalPathsSsh).
-      const resolvedDest = await resolveAuthorizedPath(args.destDir, store)
+      // An image inserted into a document the user opened lands in that document's own folder.
+      const resolvedDest = await resolveLocalRequestPath(
+        args.destDir,
+        args.access,
+        store,
+        'import-into'
+      )
 
       const results: ImportItemResult[] = []
       const reservedNames = new Set<string>()
@@ -196,10 +226,51 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       args: { sourcePaths: string[] }
     ): Promise<{ sources: StagedExternalImportSource[] }> => {
       const sources: StagedExternalImportSource[] = []
+      // Why: one budget for the whole drop — per-source counters would let five
+      // 2 GB files through a ceiling meant to cap the drop.
+      let totalBytes = 0
       for (const sourcePath of args.sourcePaths) {
-        sources.push(await stageOneSourceForRuntimeUpload(sourcePath))
+        const source = await stageOneSourceForRuntimeUpload(sourcePath, totalBytes)
+        totalBytes += stagedRuntimeUploadByteLength(source)
+        sources.push(source)
       }
       return { sources }
+    }
+  )
+
+  // Why: the file handle and the runtime socket both live in main, so the byte
+  // pump runs here. The renderer keeps deconflict/commit/rollback orchestration
+  // and never sees file contents.
+  ipcMain.handle(
+    'fs:uploadExternalFileToRuntime',
+    async (event, args: RuntimeUploadFileStreamRequest): Promise<{ byteLength: number }> => {
+      const userDataPath = app.getPath('userData')
+      // Why: the streamer's manual-disconnect check keys on the environment id,
+      // and the renderer may pass any selector the store resolves.
+      const request = {
+        ...args,
+        environmentId: resolveEnvironment(userDataPath, args.environmentId).id
+      }
+      // Why: the renderer's own loop died with its window. Now that the bytes
+      // move in main, a reload or close has to stop the transfer explicitly,
+      // or a multi-GB upload outlives the window that asked for it.
+      const lifetime = abortWhenRendererGone(event.sender)
+      try {
+        return await streamExternalFileToRuntime({
+          ...request,
+          userDataPath,
+          signal: lifetime.signal
+        })
+      } catch (error) {
+        if (lifetime.signal.aborted) {
+          // Why: the renderer owns temp cleanup, and it is gone — so the
+          // abandoned temp path is only collectable from here.
+          await sweepAbandonedRuntimeUploadTempPath(userDataPath, request)
+        }
+        throw error
+      } finally {
+        lifetime.dispose()
+      }
     }
   )
 

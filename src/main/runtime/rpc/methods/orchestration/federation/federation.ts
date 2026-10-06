@@ -1,7 +1,11 @@
+import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
+import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
+import { createWorkerBriefWriteGuard } from '../../../../launched-agent-write-guard'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
 import {
   appendFederationSetupEffect,
@@ -17,14 +21,15 @@ import {
 } from './federation-setup'
 import { FederationAttachStartParams } from './federation-start-schema'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
-import { prepareFederationAttachmentWorkerStart } from '../worker/worker-start-validation'
+import { prepareFederationWorkerLaunchOnHost } from '../worker/worker-opencode-model-preflight'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
+import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 
-export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
     name: 'orchestration.federationAttachStart',
     params: FederationAttachStartParams,
@@ -50,7 +55,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
         )
       }
       const createsWorktree = params.worktree === 'new-top-level'
-      const { agent, launch } = prepareFederationAttachmentWorkerStart({
+      const { agent, launch } = await prepareFederationWorkerLaunchOnHost({
         params,
         createsWorktree,
         runtime
@@ -65,6 +70,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
 
       const db = runtime.getOrchestrationDb()
       db.createRemoteDispatchAttachment({
+        runId: params.runId,
         dispatchId: params.dispatchId,
         taskId: params.taskId,
         homePeerFingerprint: orchestrationMutation.callerFingerprint,
@@ -109,6 +115,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             observeSetupCompletion: true,
             createdWithAgent: agent as TuiAgent,
             startupAgent: agent as TuiAgent,
+            startupLaunchSource: 'orchestration',
             ...(launch.preferences ? { startupLaunchPreferences: launch.preferences } : {}),
             activate: false,
             lineage: { noParent: true }
@@ -180,6 +187,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
               // Why: agent ids are not shell commands (`cursor` is the desktop app,
               // its CLI is `cursor-agent`); resolve through the TUI agent config.
               startupAgent: agent as TuiAgent,
+              launchSource: 'orchestration',
               ...(launch.preferences ? { launchPreferences: launch.preferences } : {}),
               title: `worker-${params.taskId}`,
               presentation: 'background'
@@ -210,8 +218,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
         }
         persistFederatedReadinessStage(setupStage)
         failedStage = 'agent_readiness'
-        const wait = await runtime.waitForTerminal(terminalHandle, {
-          condition: 'tui-idle',
+        const wait = await waitForWorkerAgentReady(runtime, terminalHandle, {
+          agent,
+          reusesTerminal: Boolean(params.terminal),
           timeoutMs: readinessTimeoutMs
         })
         persistFederatedSetupWaitOutcome({ ...setupStage, wait })
@@ -221,50 +230,45 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           }
           throw new Error(
             wait.blockedReason
-              ? `Agent startup blocked: ${wait.blockedReason}`
+              ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
               : `Agent did not become ready (${wait.status}).`
           )
         }
-        const authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
-        const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(terminalHandle)
-        const processIncarnation =
-          authority?.processIncarnation ?? runtime.getTerminalProcessIncarnation(terminalHandle)
-        if (!paneKey || !processIncarnation) {
-          throw new Error('stable_pane_required')
-        }
-        const capability = db.prepareRemoteAttachmentAuthority({
+        prepareFederatedAttachmentAuthority({
+          runtime,
+          db,
           dispatchId: params.dispatchId,
-          paneKey,
-          processIncarnation,
           worktreeId: worktree.id,
           terminalHandle,
-          setupState: setup.state,
+          setup,
           effects,
-          hostScope: authority?.hostScope ? JSON.stringify(authority.hostScope) : null,
-          terminalOwnership: params.terminal ? 'external' : 'created'
+          reusesTerminal: Boolean(params.terminal)
         })
         failedStage = 'dispatch_input'
-        const prompt = await runtime.sendTerminalAgentPrompt(
-          terminalHandle,
-          buildDispatchPreamble({
-            taskId: params.taskId,
-            dispatchId: params.dispatchId,
-            taskSpec: params.taskSpec,
-            coordinatorHandle: 'Run home (relayed by Orca)',
-            workerHandle: terminalHandle,
-            dispatchCapability: capability,
-            devMode: params.devMode,
-            // Why the worker host's own setting: enforcement runs here, with this
-            // host's code, against this host's cap.
-            canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
-            cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
-          }),
-          {
-            acceptQueued: true,
-            observationTimeoutMs: 0,
-            requestId: orchestrationMutation.requestId
+        // A shell back at its prompt also reads as ready, so the brief needs the agent found in front.
+        const briefGuard = createWorkerBriefWriteGuard(runtime, agent, !params.terminal)
+        const prompt = await sendAgentTurn({
+          kind: 'terminal',
+          runtime,
+          handle: terminalHandle,
+          ...(briefGuard ? { beforeWrite: briefGuard.beforeWrite } : {}),
+          turn: {
+            purpose: 'dispatch-preamble',
+            operationId: orchestrationMutation.requestId,
+            body: buildDispatchPreamble({
+              taskId: params.taskId,
+              dispatchId: params.dispatchId,
+              taskSpec: params.taskSpec,
+              coordinatorHandle: 'Run home (relayed by Orca)',
+              workerHandle: terminalHandle,
+              devMode: params.devMode,
+              // Why the worker host's own setting: enforcement runs here, with this
+              // host's code, against this host's cap.
+              canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
+              cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+            })
           }
-        )
+        }).finally(() => briefGuard?.dispose())
         effects.push({
           kind: 'dispatch_input',
           role: 'agent',

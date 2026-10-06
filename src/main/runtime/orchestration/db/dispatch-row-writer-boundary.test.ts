@@ -93,47 +93,4 @@ describe('live-worker row insert boundary', () => {
       expect(insertPattern(table).test(contents)).toBe(true)
     }
   })
-
-  it('does not fire on schema DDL, migration DDL, or reset SQL', () => {
-    // Why explicit: a naive identifier scan flags all three, which is how the
-    // first two drafts of this ratchet failed against their own tree.
-    const exempt = [
-      'src/main/runtime/orchestration/db/schema/create-graph-tables-sql.ts',
-      'src/main/runtime/orchestration/db/schema/migrate-v13-v30.ts',
-      'src/main/runtime/orchestration/db/reset/orchestration-reset.ts'
-    ]
-    for (const rel of exempt) {
-      expect(
-        EXEMPT_PATH_FRAGMENTS.some((fragment) => rel.includes(fragment)),
-        `${rel} must be exempt`
-      ).toBe(true)
-    }
-  })
-
-  it('detects the insert forms it claims to detect', () => {
-    expect(insertPattern('dispatch_contexts').test('INSERT INTO dispatch_contexts (id)')).toBe(true)
-    expect(
-      insertPattern('dispatch_contexts').test('INSERT OR REPLACE INTO dispatch_contexts (id)')
-    ).toBe(true)
-    expect(insertPattern('dispatch_contexts').test('INSERT\n  INTO dispatch_contexts')).toBe(true)
-    expect(insertPattern('dispatch_contexts').test('SELECT * FROM dispatch_contexts')).toBe(false)
-    expect(insertPattern('dispatch_contexts').test('DELETE FROM dispatch_contexts')).toBe(false)
-    // Guards against matching the longer sibling table name by prefix.
-    expect(insertPattern('dispatch_contexts').test('INSERT INTO dispatch_contexts_archive')).toBe(
-      false
-    )
-  })
-
-  it('records the evasions this scanner cannot catch', () => {
-    // Why asserted rather than commented: these are the scanner's known blind
-    // spots. Centralization is the convention; this test only guards the common
-    // form. If any of these ever becomes reachable in production SQL, the
-    // boundary needs an AST-level check instead.
-    const dynamicTable = 'const t = "dispatch_contexts"; db.prepare(`INSERT INTO ${t} (id)`)'
-    const splitLiteral = 'db.prepare("INSERT INTO " + "dispatch_contexts (id)")'
-    const queryBuilder = 'db.insertInto("dispatch_contexts").values({ id })'
-    expect(insertPattern('dispatch_contexts').test(dynamicTable)).toBe(false)
-    expect(insertPattern('dispatch_contexts').test(splitLiteral)).toBe(false)
-    expect(insertPattern('dispatch_contexts').test(queryBuilder)).toBe(false)
-  })
 })

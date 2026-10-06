@@ -1,20 +1,26 @@
-import { remoteSessionContentLines } from './remote-session-content-lines'
-import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
-import { createInterface } from 'node:readline'
+import {
+  remoteSessionContentLines,
+  type RemoteSessionContent
+} from './remote-session-content-lines'
+import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
+import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './session-transcript-record-budget'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   accumulatorFoldResumeState,
   addPreviewMessage,
   createAccumulator,
+  timestampIso,
   updateTimeline
 } from './session-scanner-accumulator'
 import { antigravityConversationIdFromTranscriptPath } from './session-scanner-antigravity-paths'
+import { antigravityHistoryPromptHash } from './antigravity-history-prompt'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
   SessionAccumulator
 } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import { extractString, normalizeTitleText, parseJsonObject } from './session-scanner-values'
 
 type ParserSessionOptions = {
@@ -24,23 +30,24 @@ type ParserSessionOptions = {
 
 export async function parseAntigravitySessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
-  const input = openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan')
-  const lines = createInterface({ input, crlfDelay: Infinity })
-  try {
-    return await parseAntigravitySessionLines({ file, lines, platform })
-  } finally {
-    // readline.close() leaves the underlying stream open; destroy it so a
-    // mid-parse throw cannot leak the gated transcript handle.
-    lines.close()
-    input.destroy()
+  const state = createAntigravitySessionResumeState(file, messages)
+  const read = await consumeCompleteJsonlLines({
+    path: file.path,
+    start: 0,
+    onLine: (line) => state.consumeLine(line)
+  })
+  if (read.trailingPartialLine) {
+    state.consumeLine(read.trailingPartialLine)
   }
+  return state.finalize(platform)
 }
 
 export async function parseAntigravitySessionContent(
   file: FileWithMtime,
-  content: string,
+  content: RemoteSessionContent,
   platform: NodeJS.Platform = process.platform,
   options: ParserSessionOptions = {},
   signal?: AbortSignal
@@ -54,13 +61,14 @@ export async function parseAntigravitySessionContent(
 }
 
 export function createAntigravitySessionResumeState(
-  file: FileWithMtime
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
 ): ResumableSessionParseState {
   const sessionId = antigravityConversationIdFromTranscriptPath(file.path) ?? ''
   // Why: the transcript has no cwd/model fields. Workspace enrichment is a
   // separate, conservative history join; protobuf/SQLite blobs are unstable.
   return accumulatorFoldResumeState(
-    createAccumulator({ agent: 'antigravity', file, sessionId }),
+    createAccumulator({ agent: 'antigravity', file, sessionId, messages }),
     consumeAntigravityRecordLine
   )
 }
@@ -70,8 +78,9 @@ async function parseAntigravitySessionLines(args: {
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
+  messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
-  const state = createAntigravitySessionResumeState(args.file)
+  const state = createAntigravitySessionResumeState(args.file, args.messages)
   for await (const line of args.lines) {
     state.consumeLine(line)
   }
@@ -79,6 +88,9 @@ async function parseAntigravitySessionLines(args: {
 }
 
 function consumeAntigravityRecordLine(accumulator: SessionAccumulator, line: string): void {
+  if (Buffer.byteLength(line) > MAX_SESSION_TRANSCRIPT_RECORD_BYTES) {
+    return
+  }
   const record = parseJsonObject(line)
   if (!record) {
     return
@@ -98,6 +110,12 @@ function consumeAntigravityRecordLine(accumulator: SessionAccumulator, line: str
       return
     }
     accumulator.messageCount++
+    if (accumulator.antigravityOpeningPrompt === undefined) {
+      const hash = antigravityHistoryPromptHash(request)
+      accumulator.antigravityOpeningPrompt = hash
+        ? { hash, timestamp: timestampIso(record.created_at) }
+        : null
+    }
     accumulator.title ??= normalizeTitleText(request)
     addPreviewMessage(accumulator, { role: 'user', text: request, timestamp: record.created_at })
     return

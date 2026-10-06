@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import {
   applyExpandedLayoutTo,
   cancelPendingPaneSizeRefreshFrames,
@@ -8,8 +8,12 @@ import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import {
   isHostAuthoritativeLayout,
-  planTerminalLiveLayoutInsertions
+  planTerminalLiveLayoutInsertions,
+  planTerminalLiveLayoutRemovals,
+  selectRetiredPaneIds,
+  trackRetiredLeafIds
 } from './terminal-live-layout-reconciliation'
+import { collectLeafIds } from './terminal-pane-layout-tree'
 import { useTerminalPaneProcessExitActions } from './use-terminal-pane-process-exit-actions'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
@@ -18,17 +22,25 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     activityIsolationSnapshotRef,
     closeTerminalLinkActions,
     containerRef,
+    executeClosePane,
     isActive,
     isRendererVisible,
     isolatedPaneKey,
     managerRef,
     paneCount,
     paneLayoutRevision,
+    paneTransportsRef,
     pendingPaneSizeRefreshFrameIdsRef,
     persistLayoutSnapshot,
+    ptyRecoveryStatesByPaneId,
     restoredLayout,
     tabId
   } = controller
+  // Leaves the last host-authoritative layout named, and the ones it has since
+  // dropped whose panes are still mounted; a removal needs the host to have
+  // named the leaf before it dropped it, and may have to wait for the PTY exit.
+  const hostLayoutLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
+  const retiredLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     closeTerminalLinkActions()
@@ -47,11 +59,23 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     ) {
       return
     }
-    const insertions = planTerminalLiveLayoutInsertions(
+    const layoutLeafIds = new Set(collectLeafIds(restoredLayout.root))
+    const mountedLeafIds = manager.getPanes().map((pane) => pane.leafId)
+    const retiredLeafIds = trackRetiredLeafIds({
+      retiredLeafIds: retiredLeafIdsRef.current,
+      previousLayoutLeafIds: hostLayoutLeafIdsRef.current,
+      layoutLeafIds,
+      mountedLeafIds
+    })
+    hostLayoutLeafIdsRef.current = layoutLeafIds
+    retiredLeafIdsRef.current = retiredLeafIds
+    const insertions = planTerminalLiveLayoutInsertions(restoredLayout.root, mountedLeafIds)
+    const removals = planTerminalLiveLayoutRemovals(
       restoredLayout.root,
-      manager.getPanes().map((pane) => pane.leafId)
+      mountedLeafIds,
+      retiredLeafIds
     )
-    if (insertions.length === 0) {
+    if (insertions.length === 0 && removals.length === 0) {
       return
     }
     let appliedInsertion = false
@@ -82,6 +106,21 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
         appliedInsertion = true
       }
     }
+    // Why: the host retired these leaves (its PTY for them ended), so their panes
+    // would otherwise outlive the layout as blank ghosts and take the tab's next
+    // close for themselves. selectRetiredPaneIds closes only a pane whose PTY has
+    // already cleared, so this never kills a still-live remote terminal; a leaf
+    // whose PTY is still ending is kept retired and removed on the re-run the
+    // transport's recovery-state change (ptyRecoveryStatesByPaneId) triggers.
+    // executeClosePane runs the same cleanup a user close does.
+    const retiredPaneIds = selectRetiredPaneIds(removals, {
+      paneCount: manager.getPanes().length,
+      paneIdForLeaf: (leafId) => manager.getNumericIdForLeaf(leafId),
+      ptyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId()
+    })
+    for (const paneId of retiredPaneIds) {
+      executeClosePane(paneId)
+    }
     if (appliedInsertion) {
       persistLayoutSnapshot()
     }
@@ -93,8 +132,18 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     if (nextActivePaneId !== null) {
       manager.setActivePane(nextActivePaneId, { focus: isActive })
     }
+    // Why ptyRecoveryStatesByPaneId: a host-retired pane whose PTY has not yet
+    // finished ending is kept until this re-run, when its transport reports a new
+    // recovery state and its PTY has cleared.
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [isActive, paneCount, persistLayoutSnapshot, restoredLayout])
+  }, [
+    executeClosePane,
+    isActive,
+    paneCount,
+    persistLayoutSnapshot,
+    ptyRecoveryStatesByPaneId,
+    restoredLayout
+  ])
 
   useLayoutEffect(() => {
     const snapshots = activityIsolationSnapshotRef.current

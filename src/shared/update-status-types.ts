@@ -88,6 +88,8 @@ export type UpdateStatus = (
       version?: string
       /** Omitted by older hosts and for failures whose retryability is unknown. */
       retryable?: boolean
+      /** A staged update can retry installation without downloading again; older hosts omit this. */
+      retryAction?: 'install'
       userInitiated?: boolean
       activeNudgeId?: string
       recovery?: LinuxPackageInstallRecovery

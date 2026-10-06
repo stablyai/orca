@@ -82,7 +82,10 @@ export function registerAgentStatusListeners(args: {
         }
       }
       const store = useAppStore.getState()
-      if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
+      if (
+        data.statusUnavailable !== true &&
+        store.agentStatusByPaneKey[data.paneKey]?.state === 'done'
+      ) {
         return
       }
       store.removeAgentStatus(data.paneKey)
@@ -125,13 +128,5 @@ export function registerAgentStatusListeners(args: {
     })
   if (unsubscribeLegacyWorkerTerminalRecovery) {
     unsubs.push(unsubscribeLegacyWorkerTerminalRecovery)
-  }
-  const unsubscribeResumeFence = window.api.agentStatus.onLegacyWorkerTerminalResumeFence?.(
-    ({ paneKey, blocked }) => {
-      useAppStore.getState().setSleepingAgentAutomaticResumeBlocked(paneKey, blocked)
-    }
-  )
-  if (unsubscribeResumeFence) {
-    unsubs.push(unsubscribeResumeFence)
   }
 }

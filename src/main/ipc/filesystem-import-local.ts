@@ -1,8 +1,7 @@
-import { lstat, rm } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
-import { authorizeExternalPath } from './filesystem-auth'
 import { isENOENT } from './filesystem-path-containment'
-import type { ImportItemResult } from './filesystem-import-result-types'
+import type { ImportItemResult } from '../../shared/filesystem-import-result-types'
 import {
   copyLocalFileNoFollow,
   preScanForSymlinks,
@@ -10,8 +9,8 @@ import {
 } from './filesystem-import-local-tree-copy'
 
 /**
- * Import a single top-level source into destDir, handling authorization,
- * validation, pre-scan, deconfliction, and copy.
+ * Import a single top-level source into destDir, handling validation, pre-scan,
+ * deconfliction, and copy.
  */
 export async function importOneSource(
   sourcePath: string,
@@ -19,10 +18,6 @@ export async function importOneSource(
   reservedNames: Set<string>
 ): Promise<ImportItemResult> {
   const resolvedSource = resolve(sourcePath)
-
-  // Why: authorize the external source path so downstream filesystem
-  // operations (lstat, readdir, copyFile) are permitted by Electron.
-  authorizeExternalPath(resolvedSource)
 
   // Why: validate source using lstat on the unresolved path *before*
   // canonicalization so top-level symlinks are rejected instead of being
@@ -82,9 +77,6 @@ export async function importOneSource(
       ? recursiveCopyDir(resolvedSource, destPath)
       : copyLocalFileNoFollow(resolvedSource, destPath))
   } catch (error) {
-    if (isDir) {
-      await rm(destPath, { recursive: true, force: true }).catch(() => {})
-    }
     return {
       sourcePath,
       status: 'failed',

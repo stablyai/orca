@@ -1,4 +1,5 @@
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { defaultScheduleTimer } from '../transport/timer-scheduler'
 import {
   createMobileFilePreviewHref,
   type MobileFilePreviewHref,
@@ -24,7 +25,7 @@ export function navigateToMobileFilePreview(
   if (options.embedded && options.onRequestClose) {
     // Why: closing the dock immediately can unmount the subtree before Expo
     // commits the route transition.
-    const scheduleClose = options.scheduleClose ?? setTimeout
+    const scheduleClose = options.scheduleClose ?? defaultScheduleTimer
     scheduleClose(options.onRequestClose, 0)
   }
 }

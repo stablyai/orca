@@ -16,6 +16,7 @@ import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
+import { buildCodexAccountRestartStartup } from '@/lib/codex-account-restart-startup'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -127,13 +128,10 @@ function locateCodexPane(state: AppState, ptyId: string): LocatedCodexPane | nul
 
 function getWorkspacePath(state: AppState, worktreeId: string): string | null {
   const parsed = parseWorkspaceKey(worktreeId)
-  if (parsed?.type === 'folder') {
-    return (
-      (state.folderWorkspaces ?? []).find((workspace) => workspace.id === parsed.folderWorkspaceId)
-        ?.folderPath ?? null
-    )
-  }
-  return getWorktreeMapFromState(state).get(worktreeId)?.path ?? null
+  return parsed?.type === 'folder'
+    ? (state.folderWorkspaces.find((workspace) => workspace.id === parsed.folderWorkspaceId)
+        ?.folderPath ?? null)
+    : (getWorktreeMapFromState(state).get(worktreeId)?.path ?? null)
 }
 
 function buildPaneIdentityEnv(
@@ -183,6 +181,12 @@ async function executeDetachedCodexPaneRestart(
     return
   }
   const { worktreeId, tab, leafId } = located
+  const startup = buildCodexAccountRestartStartup({
+    worktreeId,
+    tabId: tab.id,
+    leafId,
+    shellOverride: tab.shellOverride
+  })
 
   const workspacePath = getWorkspacePath(state, worktreeId)
   const cwd = tab.startupCwd ?? workspacePath ?? undefined
@@ -207,32 +211,30 @@ async function executeDetachedCodexPaneRestart(
   }
 
   // Hidden replacements converge on mount; provider sizing must not delay ownership transfer.
+  // Main stops `ptyId` first and labels its exit as a replacement, so parked watchers and the
+  // pre-attach buffer leave the pane alone; a failed stop sends no exit and changes nothing here.
   const spawned = await window.api.pty.spawn({
     cols: 80,
     rows: 24,
     ...(cwd ? { cwd } : {}),
     cwdFallback: 'worktree',
-    env: buildPaneIdentityEnv(state, worktreeId, tab.id, leafId),
-    command: CODEX_ACCOUNT_RESTART_STARTUP.command,
-    startupCommandDelivery: CODEX_ACCOUNT_RESTART_STARTUP.startupCommandDelivery,
-    launchAgent: CODEX_ACCOUNT_RESTART_STARTUP.launchAgent,
+    ...startup,
+    env: { ...startup.env, ...buildPaneIdentityEnv(state, worktreeId, tab.id, leafId) },
     worktreeId,
     tabId: tab.id,
     leafId,
+    replacesPtyId: ptyId,
     ...(tab.shellOverride ? { shellOverride: tab.shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),
     initiallyHidden: true
   })
 
+  // Why adopt rather than stand down: main stopped `ptyId` before replying, so the replacement is
+  // the pane's only process — even if that exit already cleared the old binding or a pane mounted.
   const store = useAppStore.getState()
-  if (!isLocatedCodexPaneCurrent(store, located, ptyId)) {
+  if (!isLocatedCodexPaneLeafAdoptable(store, located, ptyId, spawned.id)) {
     reopenCurrentCodexRestartPrompt(located, ptyId)
     reapUnboundCodexPty(spawned.id, 'stale detached spawn')
-    return
-  }
-  if (hasRegisteredRuntimeTerminalTab(tab.id, worktreeId) || ptyDataHandlers.has(ptyId)) {
-    store.queueCodexPaneRestarts([ptyId])
-    reapUnboundCodexPty(spawned.id, 'mounted-owner handoff spawn')
     return
   }
   store.updateTabPtyId(tab.id, spawned.id, ptyId)
@@ -248,8 +250,7 @@ async function executeDetachedCodexPaneRestart(
   // new PTY; the restart it recorded is now done, so the block must lift.
   store.clearCodexRestartNotice(spawned.id)
   store.clearCodexRestartNotice(ptyId)
-
-  killReplacedCodexPanePty(ptyId)
+  releaseReplacedCodexPanePty(ptyId)
 }
 
 function isLocatedCodexPaneCurrent(
@@ -272,6 +273,22 @@ function isLocatedCodexPaneCurrent(
     located.leafId === null ||
     state.terminalLayoutsByTabId[located.tab.id]?.ptyIdsByLeafId?.[located.leafId] === ptyId
   )
+}
+
+function isLocatedCodexPaneLeafAdoptable(
+  state: AppState,
+  located: LocatedCodexPane,
+  replacedPtyId: string,
+  replacementPtyId: string
+): boolean {
+  const currentTab = state.tabsByWorktree[located.worktreeId]?.find(
+    (candidate) => candidate.id === located.tab.id
+  )
+  if (!currentTab || (currentTab.generation ?? 0) !== located.generation || !located.leafId) {
+    return false
+  }
+  const boundPtyId = state.terminalLayoutsByTabId[located.tab.id]?.ptyIdsByLeafId?.[located.leafId]
+  return boundPtyId === replacedPtyId || boundPtyId === replacementPtyId
 }
 
 function reopenCurrentCodexRestartPrompt(located: LocatedCodexPane, replacedPtyId: string): void {
@@ -331,12 +348,17 @@ function reapUnboundCodexPty(ptyId: string, reason: string): void {
   discardPreHandlerPtyState(ptyId)
 }
 
-function killReplacedCodexPanePty(ptyId: string): void {
-  // Why the disposal: a parked tab's exit sidecar treats any exit as the pane
+function releaseReplacedCodexPanePty(ptyId: string): void {
+  // Why the disposal: a parked tab's exit sidecar treats an unlabeled exit as the pane
   // dying — it would collapse the just-rebound leaf or close the whole tab.
   disposeParkedTerminalWatchersForPtyIds([ptyId])
   for (const snapshot of unregisterPtyDataHandlers([ptyId])) {
     snapshot.commit()
   }
+  discardPreHandlerPtyState(ptyId)
+}
+
+function killReplacedCodexPanePty(ptyId: string): void {
+  releaseReplacedCodexPanePty(ptyId)
   reapUnboundCodexPty(ptyId, 'replaced Codex pane PTY')
 }

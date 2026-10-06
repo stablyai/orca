@@ -23,7 +23,7 @@ export function startOfLastLines(value: string, count: number): number {
 export function startOfLastNonBlankLines(value: string, count: number): number {
   let seen = 0
   let lineEnd = value.length
-  for (;;) {
+  while (lineEnd > 0) {
     const lineStart = value.lastIndexOf('\n', lineEnd - 1) + 1
     if (hasNonWhitespaceBetween(value, lineStart, lineEnd)) {
       seen += 1
@@ -36,6 +36,7 @@ export function startOfLastNonBlankLines(value: string, count: number): number {
     }
     lineEnd = lineStart - 1
   }
+  return 0
 }
 
 function hasNonWhitespaceBetween(value: string, start: number, end: number): boolean {

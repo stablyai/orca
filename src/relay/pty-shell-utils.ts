@@ -184,9 +184,15 @@ function collectDescendants(
   rootPid: number
 ): (ProcessTableRow & { depth: number })[] {
   const descendants: (ProcessTableRow & { depth: number })[] = []
+  const seen = new Set<number>([rootPid])
   const stack = (index.childrenByPpid.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
   while (stack.length > 0) {
     const { row, depth } = stack.pop()!
+    // Process snapshots can contain duplicate PIDs or cycles during reparenting.
+    if (seen.has(row.pid)) {
+      continue
+    }
+    seen.add(row.pid)
     descendants.push({ ...row, depth })
     for (const child of index.childrenByPpid.get(row.pid) ?? []) {
       stack.push({ row: child, depth: depth + 1 })

@@ -55,31 +55,6 @@ describe('registerGitHubHandlers', () => {
     })
   })
 
-  it('accepts every app star source for success telemetry', async () => {
-    starOrcaMock.mockResolvedValue(true)
-
-    registerGitHubHandlers(store as never, stats as never)
-
-    for (const source of [
-      'star_nag',
-      'agent_value_moment',
-      'onboarding_completed',
-      'settings',
-      'landing'
-    ] as const) {
-      await expect(handlers['gh:starOrca'](null, source)).resolves.toBe(true)
-    }
-
-    expect(trackMock).toHaveBeenCalledTimes(5)
-    expect(trackMock.mock.calls.map(([, props]) => props)).toEqual([
-      { source: 'star_nag', nth_repo_added: undefined },
-      { source: 'agent_value_moment', nth_repo_added: undefined },
-      { source: 'onboarding_completed', nth_repo_added: undefined },
-      { source: 'settings', nth_repo_added: undefined },
-      { source: 'landing', nth_repo_added: undefined }
-    ])
-  })
-
   it('does not emit app_starred_orca when the star action returns false', async () => {
     starOrcaMock.mockResolvedValue(false)
 

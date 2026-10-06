@@ -49,6 +49,7 @@ describe('orchestration federated setup evidence', () => {
       }
     ]
     db.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: 'task_remote_setup',
       homePeerFingerprint: 'home_peer',

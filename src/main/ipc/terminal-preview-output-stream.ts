@@ -120,9 +120,12 @@ export class TerminalPreviewOutputStream {
   }
 
   completeSnapshot(snapshotSeq?: number): TerminalPreviewReplayChunk[] {
-    const replay = this.initialPending.flatMap((output) => {
+    const replay: TerminalPreviewReplayChunk[] = []
+    this.initialPending.forEach((output) => {
       const uncovered = outputAfterSnapshotSeq(output, snapshotSeq)
-      return uncovered && uncovered.data.length > 0 ? [uncovered] : []
+      if (uncovered && uncovered.data.length > 0) {
+        replay.push(uncovered)
+      }
     })
     this.initialPending = []
     this.initialPendingBytes = 0

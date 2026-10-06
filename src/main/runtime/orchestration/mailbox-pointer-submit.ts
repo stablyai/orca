@@ -53,6 +53,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
   let releaseWithoutRedrive = false
   let finalizeReservation = true
   let preserveAmbiguousDelivery = false
+  let deferredUntilIdle = false
   let expectedPhase = MAILBOX_POINTER_WRITE_ATTEMPTED
   const messageIds = input.messages.map((message) => message.id)
   const reservationTarget = {
@@ -87,6 +88,14 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
           exactTarget.leaf.lastAgentStatus === 'working')
       if (!exactTarget?.leaf.writable || !sameMailbox) {
         clearAndRedrive = true
+      } else if (
+        exactTarget.leaf.lastAgentStatusObservedLive &&
+        exactTarget.leaf.lastAgentStatus === null
+      ) {
+        // A neutral title can outlive the foreground check; no Enter has been attempted yet.
+        deps.state.deferFlightUntilIdle(input.ptyId)
+        input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
+        deferredUntilIdle = true
       } else if (!queueSafe) {
         releaseWithoutRedrive = true
       } else {
@@ -127,6 +136,9 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       }
     })
     .finally(() => {
+      if (deferredUntilIdle) {
+        return
+      }
       let released = false
       let rollbackPersisted = true
       if (finalizeReservation) {

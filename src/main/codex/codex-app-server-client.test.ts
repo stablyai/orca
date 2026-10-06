@@ -11,7 +11,8 @@ import {
   runCodexHookTrustGrantSession,
   type CodexHookTrustGrantRequest
 } from './codex-app-server-client'
-import { killCodexAppServerProcessTree, runCodexAppServerSession } from './codex-app-server-session'
+import { killCodexAppServerProcessTree } from './codex-app-server-process-tree-kill'
+import { runCodexAppServerSession } from './codex-app-server-session'
 
 // Stub codex app-server speaking the same JSONL protocol: initialize →
 // initialized → hooks/list → config/batchWrite → hooks/list. Scenario-driven

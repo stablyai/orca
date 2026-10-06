@@ -24,6 +24,18 @@ function splitPath(pathValue: string): string[] {
   return pathValue.split(pathWin32.delimiter).filter(Boolean)
 }
 
+export function createWindowsPathKey(): (segment: string) => string {
+  const keys = new Map<string, string>()
+  return (segment) => {
+    let key = keys.get(segment)
+    if (key === undefined) {
+      key = windowsPathSegmentKey(segment)
+      keys.set(segment, key)
+    }
+    return key
+  }
+}
+
 function externalAdditions(application: AppliedWindowsPath, currentValue: string): string[] {
   if (currentValue === application.appliedValue) {
     return []

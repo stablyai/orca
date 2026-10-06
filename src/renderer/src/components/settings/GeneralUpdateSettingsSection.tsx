@@ -138,6 +138,13 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
               )}
               {updateStatus.version})
             </Button>
+          ) : updateStatus.state === 'error' &&
+            updateStatus.retryAction === 'install' &&
+            updateStatus.retryable !== false ? (
+            <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
+              <RefreshCw className="size-3.5" />
+              {translate('auto.components.UpdateCard.2c2d3e03ca', 'Try Again')}
+            </Button>
           ) : updateStatus.state === 'downloaded' ? (
             <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
               <Download className="size-3.5" />

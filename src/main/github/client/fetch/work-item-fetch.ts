@@ -22,11 +22,13 @@ export async function fetchIssueWorkItem(
   ownerRepo: GitHubApiRepository | null,
   number: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  environment?: NodeJS.ProcessEnv
 ): Promise<MainWorkItem | null> {
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
-    ...githubHostExecOptions(ownerRepo)
+    ...githubHostExecOptions(ownerRepo),
+    ...(environment ? { env: environment } : {})
   }
   if (ownerRepo) {
     const { stdout } = await ghExecFileAsync(

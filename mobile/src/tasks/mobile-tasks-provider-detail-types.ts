@@ -104,17 +104,22 @@ export type GitLabWorkItem = {
   repoName: string
 }
 
+/**
+ * A to-do as the reader proves it, not as the host declares it: the five members the screen reads
+ * with no guard are required, and the rest are optional because a guard already stands in front of
+ * each one. See `gitlabTodoSchema` in task-list-reply-schema.ts.
+ */
 export type GitLabTodo = {
   id: number
   actionName: string
-  targetType: string
-  targetIid: number | null
-  targetTitle: string
+  targetType?: string
+  targetIid?: number | null
+  targetTitle?: string
   targetUrl: string
   projectPath: string
-  authorUsername: string
+  authorUsername?: string
   updatedAt: string
-  state: 'pending' | 'done'
+  state?: 'pending' | 'done'
 }
 
 export type GitPushTarget = {
@@ -177,16 +182,15 @@ export type DetailComment = {
   body: string
   createdAt?: string
   url?: string
+  /**
+   * `content` is whatever the provider called the reaction — GitHub's `GitHubReactionContent`
+   * (`'+1'`, `'-1'`, `laugh`, ...) and absent on GitLab, whose rows are `{ name, count }`. It was
+   * declared as an eight-arm mobile vocabulary no producer sends; `COMMENT_REACTION_EMOJI` is
+   * keyed by that same vocabulary and so resolves no glyph for a real reaction, which is a
+   * separate defect this type must not hide.
+   */
   reactions?: Array<{
-    content:
-      | 'thumbs_up'
-      | 'thumbs_down'
-      | 'laugh'
-      | 'confused'
-      | 'heart'
-      | 'hooray'
-      | 'rocket'
-      | 'eyes'
+    content?: string
     count: number
   }>
   path?: string
@@ -196,6 +200,10 @@ export type DetailComment = {
   isResolved?: boolean
 }
 
+/** `viewerViewedState` is `string`, not `GitHubPRFileViewedState`'s three arms: the reader forwards
+ *  whatever arrives so an arm this build predates reaches the `=== 'VIEWED'` tests as itself.
+ *  `status` keeps the host's seven arms because its only consumer sends it back as a
+ *  `github.prFileContents` param, which the host validates against that same set. */
 export type GitHubDetailFile = {
   path: string
   oldPath?: string
@@ -203,7 +211,7 @@ export type GitHubDetailFile = {
   additions?: number
   deletions?: number
   isBinary?: boolean
-  viewerViewedState?: 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
+  viewerViewedState?: string
 }
 
 export type GitHubDetailCheck = {
@@ -213,11 +221,17 @@ export type GitHubDetailCheck = {
   url?: string | null
 }
 
+/** Optional throughout because nothing reads a member unguarded: the review panels reach each flag
+ *  through `?.`, and `splitContentLines` (github-pr-file-diff.ts:21) takes `string | undefined`
+ *  behind a falsy guard. The host sets the two too-large flags only when it skipped a side for size
+ *  (pull-request-file-contents.ts:54), so they are absent on an ordinary reply. */
 export type GitHubPRFileContents = {
-  original: string
-  modified: string
-  originalIsBinary: boolean
-  modifiedIsBinary: boolean
+  original?: string
+  modified?: string
+  originalIsBinary?: boolean
+  modifiedIsBinary?: boolean
+  originalTooLarge?: boolean
+  modifiedTooLarge?: boolean
 }
 
 export type DetailPayload =

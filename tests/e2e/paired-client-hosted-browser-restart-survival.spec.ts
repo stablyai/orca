@@ -112,24 +112,22 @@ test('keeps a client-hosted browser tab across a paired runtime restart', async 
       })
       .toContain(opened.remotePageId)
 
-    await expect
-      .poll(() => findMirroredBrowserPage(client!.page, restartedWorktreeId, fixture.origin), {
-        timeout: 180_000,
-        message: 'the client lost its client-hosted row across the runtime restart'
-      })
-      .not.toBeNull()
+    let survivor: Awaited<ReturnType<typeof findMirroredBrowserPage>> = null
+    // Reconnection can replace the retained row between reads; wait for the whole contract.
+    await expect(async () => {
+      const rows = await readClientBrowserRows(client!.page, restartedWorktreeId)
+      const survivorRows = rows.filter((row) => row.url.startsWith(fixture.origin))
+      expect(survivorRows, 'the tab must survive the restart exactly once').toHaveLength(1)
 
-    // Counted across the whole fixture origin: a recovery that also replays the create URL leaves
-    // two rows, and matching only the moved one would call that a pass.
-    const rows = await readClientBrowserRows(client.page, restartedWorktreeId)
-    const survivorRows = rows.filter((row) => row.url.startsWith(fixture.origin))
-    expect(survivorRows, 'the tab must survive the restart exactly once').toHaveLength(1)
-
-    const survivor = await findMirroredBrowserPage(client.page, restartedWorktreeId, fixture.origin)
-    expect(survivor?.remotePageId, 'recovery must keep the page identity it was created with').toBe(
-      opened.remotePageId
-    )
-    expect(survivor?.placementKind, 'the surviving tab must still be client-hosted').toBe('client')
+      survivor = await findMirroredBrowserPage(client!.page, restartedWorktreeId, fixture.origin)
+      expect(
+        survivor?.remotePageId,
+        'recovery must keep the page identity it was created with'
+      ).toBe(opened.remotePageId)
+      expect(survivor?.placementKind, 'the surviving tab must still be client-hosted').toBe(
+        'client'
+      )
+    }).toPass({ timeout: 180_000 })
 
     await focusClientBrowserRow(client.page, restartedWorktreeId, survivor!.localPageId)
     expect(
@@ -140,6 +138,11 @@ test('keeps a client-hosted browser tab across a paired runtime restart', async 
       ),
       'the tab must come back where the user left it, not on its create URL'
     ).toBe('moved-on')
+    const renderedRows = await readClientBrowserRows(client.page, restartedWorktreeId)
+    expect(
+      renderedRows.filter((row) => row.url.startsWith(fixture.origin)),
+      'rendering the recovered guest must leave exactly one surviving tab'
+    ).toHaveLength(1)
   } finally {
     if (client) {
       await cleanupE2EDaemons(client.userDataDir).catch(() => undefined)

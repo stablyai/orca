@@ -49,7 +49,7 @@ describe('CodexRuntimeHomeService', () => {
     )
     const store = createStore(
       createSettings({
-        shellStartupEnvProbeSupported: true,
+        realHomeRoutable: true,
         codexManagedAccounts: [
           {
             id: 'account-1',
@@ -87,64 +87,67 @@ describe('CodexRuntimeHomeService', () => {
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toContain(managedHomePath)
   })
 
-  it('gives two managed accounts distinct homes without racing one auth.json', async () => {
-    writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
-    const account1Auth = createCodexAuthJson('one@example.com', 'acct-1', 'one')
-    const account2Auth = createCodexAuthJson('two@example.com', 'acct-2', 'two')
-    const home1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
-    const home2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
-    const settings = createSettings({
-      shellStartupEnvProbeSupported: true,
-      codexManagedAccounts: [
-        {
-          id: 'account-1',
-          email: 'one@example.com',
-          managedHomePath: home1,
-          providerAccountId: 'acct-1',
-          workspaceLabel: null,
-          workspaceAccountId: 'acct-1',
-          createdAt: 1,
-          updatedAt: 1,
-          lastAuthenticatedAt: 1
-        },
-        {
-          id: 'account-2',
-          email: 'two@example.com',
-          managedHomePath: home2,
-          providerAccountId: 'acct-2',
-          workspaceLabel: null,
-          workspaceAccountId: 'acct-2',
-          createdAt: 2,
-          updatedAt: 2,
-          lastAuthenticatedAt: 2
-        }
-      ],
-      activeCodexManagedAccountId: 'account-1',
-      activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
-    })
-    const store = createStore(settings)
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    // A pane for account-1 launches, then the user switches and a second pane
-    // for account-2 launches concurrently — each gets its OWN CODEX_HOME.
-    expect(service.prepareForCodexLaunch()).toBe(home1)
-    settings.activeCodexManagedAccountId = 'account-2'
-    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-2', wsl: {} }
-    expect(service.prepareForCodexLaunch()).toBe(home2)
-    expect(
-      service.prepareForCodexLaunch(undefined, undefined, {
-        unavailableManagedHomePath: home1
+  it.each(['two@example.com', 'one@example.com'])(
+    'isolates account homes when the second email is %s',
+    async (secondEmail) => {
+      writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
+      const account1Auth = createCodexAuthJson('one@example.com', 'acct-1', 'one')
+      const account2Auth = createCodexAuthJson(secondEmail, 'acct-2', 'two')
+      const home1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+      const home2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+      const settings = createSettings({
+        realHomeRoutable: true,
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'one@example.com',
+            managedHomePath: home1,
+            providerAccountId: 'acct-1',
+            workspaceLabel: null,
+            workspaceAccountId: 'acct-1',
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          },
+          {
+            id: 'account-2',
+            email: secondEmail,
+            managedHomePath: home2,
+            providerAccountId: 'acct-2',
+            workspaceLabel: null,
+            workspaceAccountId: 'acct-2',
+            createdAt: 2,
+            updatedAt: 2,
+            lastAuthenticatedAt: 2
+          }
+        ],
+        activeCodexManagedAccountId: 'account-1',
+        activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
       })
-    ).toBe(home2)
-    expect(store.updateSettings).not.toHaveBeenCalled()
+      const store = createStore(settings)
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
 
-    // Nothing is hot-swapped, so the still-running account-1 pane keeps seeing
-    // account-1's credentials — the single-auth.json race (GAP-5) is gone.
-    expect(readFileSync(join(home1, 'auth.json'), 'utf-8')).toBe(account1Auth)
-    expect(readFileSync(join(home2, 'auth.json'), 'utf-8')).toBe(account2Auth)
-    expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
-  })
+      // A pane for account-1 launches, then the user switches and a second pane
+      // for account-2 launches concurrently — each gets its OWN CODEX_HOME.
+      expect(service.prepareForCodexLaunch()).toBe(home1)
+      settings.activeCodexManagedAccountId = 'account-2'
+      settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-2', wsl: {} }
+      expect(service.prepareForCodexLaunch()).toBe(home2)
+      expect(
+        service.prepareForCodexLaunch(undefined, undefined, {
+          unavailableManagedHomePath: home1
+        })
+      ).toBe(home2)
+      expect(store.updateSettings).not.toHaveBeenCalled()
+
+      // Nothing is hot-swapped, so the still-running account-1 pane keeps seeing
+      // account-1's credentials — the single-auth.json race (GAP-5) is gone.
+      expect(readFileSync(join(home1, 'auth.json'), 'utf-8')).toBe(account1Auth)
+      expect(readFileSync(join(home2, 'auth.json'), 'utf-8')).toBe(account2Auth)
+      expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
+    }
+  )
 
   it('materializes resources and config into the per-account home on launch', async () => {
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
@@ -166,7 +169,7 @@ describe('CodexRuntimeHomeService', () => {
     )
     const store = createStore(
       createSettings({
-        shellStartupEnvProbeSupported: true,
+        realHomeRoutable: true,
         codexManagedAccounts: [
           {
             id: 'account-1',
@@ -200,7 +203,7 @@ describe('CodexRuntimeHomeService', () => {
     const home1 = createManagedAuth(testState.userDataDir, 'account-1', '{"account":"managed"}\n')
     const store = createStore(
       createSettings({
-        shellStartupEnvProbeSupported: true,
+        realHomeRoutable: true,
         codexManagedAccounts: [
           {
             id: 'account-1',
@@ -231,7 +234,7 @@ describe('CodexRuntimeHomeService', () => {
     mkdirSync(brokenHome, { recursive: true })
     writeFileSync(join(brokenHome, '.orca-managed-home'), 'account-1\n', 'utf-8')
     const settings = createSettings({
-      shellStartupEnvProbeSupported: true,
+      realHomeRoutable: true,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -277,7 +280,7 @@ describe('CodexRuntimeHomeService', () => {
     )
     const store = createStore(
       createSettings({
-        shellStartupEnvProbeSupported: true,
+        realHomeRoutable: true,
         codexManagedAccounts: [
           {
             id: 'account-1',
@@ -335,7 +338,7 @@ describe('CodexRuntimeHomeService', () => {
   })
 
   it('surfaces per-account rollouts for session discovery on the mirror lane', async () => {
-    // A Windows host keeps the shared system-default mirror, but its managed
+    // A custom CODEX_HOME keeps the system default on Orca's mirror, but managed
     // accounts still launch from their own homes and accumulate rollouts there.
     const home1 = createManagedAuth(
       testState.userDataDir,
@@ -347,7 +350,7 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(join(rolloutDir, 'rollout-e-era.jsonl'), '{"record":"e-era"}\n', 'utf-8')
     const store = createStore(
       createSettings({
-        shellStartupEnvProbeSupported: false,
+        realHomeRoutable: false,
         codexManagedAccounts: [
           {
             id: 'account-1',
@@ -385,7 +388,7 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
     const settings = createSettings({
-      shellStartupEnvProbeSupported: true,
+      realHomeRoutable: true,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -439,7 +442,7 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
     const settings = createSettings({
-      shellStartupEnvProbeSupported: true,
+      realHomeRoutable: true,
       codexManagedAccounts: [
         {
           id: 'account-1',

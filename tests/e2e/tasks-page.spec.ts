@@ -13,6 +13,9 @@ import { GITHUB_TASK_SEARCH_IDLE_MS } from '../../src/renderer/src/components/us
 // on a loaded runner, so one slow keystroke committed a prefix and failed the assertion.
 const TASK_SEARCH_TYPING_DELAY_MS = Math.round(GITHUB_TASK_SEARCH_IDLE_MS / 6)
 const TASK_SEARCH_SETTLE_MS = GITHUB_TASK_SEARCH_IDLE_MS + 50
+// Why derived: the probe must outlast the idle window plus a React commit and two
+// store round trips; a flat 2s left ~1.2s of slack on a single-worker runner.
+const TASK_SEARCH_PROBE_TIMEOUT_MS = GITHUB_TASK_SEARCH_IDLE_MS * 6
 
 type RenderedTaskSource = {
   source: string
@@ -411,7 +414,9 @@ test.describe('Tasks page', () => {
 
     await input.fill('')
     await expect
-      .poll(async () => readTaskSearchRequestProbe(orcaPage), { timeout: 2_000 })
+      .poll(async () => readTaskSearchRequestProbe(orcaPage), {
+        timeout: TASK_SEARCH_PROBE_TIMEOUT_MS
+      })
       .toEqual({ countQueries: ['is:issue is:open'], fetchQueries: ['is:issue is:open'] })
     await resetTaskSearchRequestProbe(orcaPage)
 
@@ -422,7 +427,9 @@ test.describe('Tasks page', () => {
     // The contract is that no prefix of the typed query is ever queried, not that the
     // probe is empty at one instant: exactly one request per surface, for the final value.
     await expect
-      .poll(async () => readTaskSearchRequestProbe(orcaPage), { timeout: 2_000 })
+      .poll(async () => readTaskSearchRequestProbe(orcaPage), {
+        timeout: TASK_SEARCH_PROBE_TIMEOUT_MS
+      })
       .toEqual({ countQueries: ['is:issue rate'], fetchQueries: ['is:issue rate'] })
 
     await resetTaskSearchRequestProbe(orcaPage)
@@ -430,7 +437,9 @@ test.describe('Tasks page', () => {
     await input.press('Enter')
 
     await expect
-      .poll(async () => readTaskSearchRequestProbe(orcaPage), { timeout: 2_000 })
+      .poll(async () => readTaskSearchRequestProbe(orcaPage), {
+        timeout: TASK_SEARCH_PROBE_TIMEOUT_MS
+      })
       .toEqual({ countQueries: ['is:issue ratex'], fetchQueries: ['is:issue ratex'] })
     await orcaPage.waitForTimeout(TASK_SEARCH_SETTLE_MS)
     expect(await readTaskSearchRequestProbe(orcaPage)).toEqual({

@@ -602,3 +602,113 @@ describe('WorkspacePortScanner', () => {
     expect(getPublishedRemoteWorktreePorts()).toBeUndefined()
   })
 })
+
+describe('advertised URL refresh bursts', () => {
+  async function mountLocalScanner(): Promise<() => void> {
+    useAppStore.setState({ settings: getDefaultSettings('/tmp/orca-workspaces') })
+    await act(async () => {
+      root?.render(<WorkspacePortScanner />)
+      await flushPromises()
+    })
+    localScan.mockClear()
+    return vi.mocked(window.api.workspacePorts.onAdvertisedUrlChanged).mock
+      .calls[0][0] as () => void
+  }
+
+  it('coalesces sequential URL changes into one immediate scan and one settled scan', async () => {
+    const changed = await mountLocalScanner()
+    for (let index = 0; index < 5; index++) {
+      await act(async () => {
+        changed()
+        await flushPromises()
+        await vi.advanceTimersByTimeAsync(100)
+      })
+    }
+    expect(localScan).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
+    expect(localScan).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      changed()
+      await flushPromises()
+    })
+    expect(localScan).toHaveBeenCalledTimes(3)
+  })
+
+  it('cancels the settled scan on unmount', async () => {
+    const changed = await mountLocalScanner()
+    await act(async () => {
+      changed()
+      await flushPromises()
+    })
+    act(() => root?.unmount())
+    root = null
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(localScan).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips the settled scan while hidden and accepts the next visible URL change', async () => {
+    let visibility: DocumentVisibilityState = 'visible'
+    const restore = overrideDocumentVisibilityState(() => visibility)
+    try {
+      const changed = await mountLocalScanner()
+      await act(async () => {
+        changed()
+        await flushPromises()
+      })
+      visibility = 'hidden'
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000)
+      })
+      expect(localScan).toHaveBeenCalledTimes(1)
+      visibility = 'visible'
+      await act(async () => {
+        changed()
+        await flushPromises()
+      })
+      expect(localScan).toHaveBeenCalledTimes(2)
+    } finally {
+      restore()
+    }
+  })
+})
+
+it('releases the URL burst when its leading scan finishes while hidden', async () => {
+  let visibility: DocumentVisibilityState = 'visible'
+  const restore = overrideDocumentVisibilityState(() => visibility)
+  try {
+    useAppStore.setState({ settings: getDefaultSettings('/tmp/orca-workspaces') })
+    await act(async () => {
+      root?.render(<WorkspacePortScanner />)
+      await flushPromises()
+    })
+    const changed = vi.mocked(window.api.workspacePorts.onAdvertisedUrlChanged).mock
+      .calls[0][0] as () => void
+    let finish!: (scan: WorkspacePortScanResult) => void
+    localScan.mockClear()
+    localScan.mockImplementationOnce(
+      () =>
+        new Promise<WorkspacePortScanResult>((resolve) => {
+          finish = resolve
+        })
+    )
+    await act(async () => {
+      changed()
+      await flushPromises()
+    })
+    visibility = 'hidden'
+    await act(async () => {
+      finish(emptyScan)
+      await flushPromises()
+    })
+    visibility = 'visible'
+    await act(async () => {
+      changed()
+      await flushPromises()
+    })
+    expect(localScan).toHaveBeenCalledTimes(2)
+  } finally {
+    restore()
+  }
+})

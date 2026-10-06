@@ -7,6 +7,7 @@ const openURL = vi.fn(() => Promise.resolve())
 
 vi.mock('react-native', () => ({
   Linking: { openURL: (url: string) => openURL(url) },
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -53,6 +54,21 @@ describe('MobileMarkdown file links', () => {
     })
     return renderer!
   }
+
+  it('preserves a long unmatched bracket run as literal rendered text', () => {
+    const text = '['.repeat(60_000)
+    const tree = render(text)
+    expect(flattenText(tree.root)).toBe(text)
+    expect(pressables(tree)).toEqual([])
+  })
+
+  it('preserves nested labels and empty image labels', () => {
+    const tree = render('[[nested](https://example.com) ![](https://example.com/image)')
+    pressByText(tree, '[nested')
+    expect(openURL).toHaveBeenLastCalledWith('https://example.com')
+    pressByText(tree, 'image')
+    expect(openURL).toHaveBeenLastCalledWith('https://example.com/image')
+  })
 
   it('opens a tapped POSIX absolute path in prose', () => {
     pressByText(render('Edit /Users/me/wt/src/app.tsx now'), '/Users/me/wt/src/app.tsx')

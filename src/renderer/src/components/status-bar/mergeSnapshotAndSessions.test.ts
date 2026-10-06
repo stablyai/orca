@@ -573,3 +573,130 @@ describe('mergeSnapshotAndSessions', () => {
     expect(out[0].worktrees[0].sessions[0].bound).toBe(false)
   })
 })
+
+it('indexes tab labels when merging a large resource inventory', () => {
+  let reads = 0
+  const tabs = Array.from({ length: 1000 }, (_, i) => ({
+    ...makeTab(`tab-${i}`, `Terminal ${i}`),
+    get id() {
+      reads++
+      return `tab-${i}`
+    },
+    ptyId: `pty-${i}`
+  }))
+  const sessions: DaemonSession[] = tabs.map((_, i) => ({
+    id: `pty-${i}`,
+    cwd: '/repo',
+    title: '',
+    agentOwnership: 'unknown'
+  }))
+  const result = mergeSnapshotAndSessions(
+    null,
+    sessions,
+    baseCtx({ tabsByWorktree: { 'repo::/repo': tabs } })
+  )
+  expect(reads).toBeLessThan(5000)
+  expect(result[0].worktrees[0].sessions.map((session) => session.label)).toEqual(
+    Array.from({ length: 1000 }, (_, i) => `Terminal ${i}`)
+  )
+})
+
+it('does not scan accumulated worktree rows for unrelated daemon sessions', () => {
+  const sessions: DaemonSession[] = Array.from({ length: 1000 }, (_, i) => ({
+    id: `opaque-${i}`,
+    cwd: '',
+    title: '',
+    agentOwnership: 'unknown'
+  }))
+  const find = Array.prototype.find
+  let scanned = 0
+  Array.prototype.find = function (this: unknown[], ...args: Parameters<typeof find>) {
+    const first = this[0] as { sessions?: unknown; hasLocalSamples?: unknown } | undefined
+    if (first?.sessions && first.hasLocalSamples !== undefined) {
+      scanned += this.length
+    }
+    return find.apply(this, args)
+  }
+  let merged: ReturnType<typeof mergeSnapshotAndSessions>
+  try {
+    merged = mergeSnapshotAndSessions(null, sessions, baseCtx())
+  } finally {
+    Array.prototype.find = find
+  }
+  expect(scanned).toBe(0)
+  expect(merged[0].worktrees).toHaveLength(1000)
+  expect(merged[0].worktrees.every((row) => row.sessions[0].agentOwnership === 'unknown')).toBe(
+    true
+  )
+})
+
+const LEAF = '11111111-1111-4111-8111-111111111111'
+
+// The tab index replaces `tabs.findIndex`, which resolves to the first match; a duplicated tab id
+// must not start resolving to the last one and relabel a session with a stranger's title.
+it('resolves a duplicated tab id to the first tab, as the replaced scan did', () => {
+  const first = makeTab('dup', 'First tab')
+  const second = makeTab('dup', 'Second tab')
+  const wt: WorktreeMemory = {
+    worktreeId: 'orca::/Users/me/Triton',
+    worktreeName: 'Triton',
+    repoId: 'orca',
+    repoName: 'ORCA',
+    cpu: 0,
+    memory: 0,
+    history: [],
+    sessions: [{ sessionId: 'pty-1', paneKey: `dup:${LEAF}`, pid: 5, cpu: 0, memory: 0 }]
+  }
+  const out = mergeSnapshotAndSessions(
+    makeSnapshot([wt]),
+    [],
+    baseCtx({ tabsByWorktree: { 'orca::/Users/me/Triton': [first, second] } })
+  )
+  expect(out[0].worktrees[0].sessions[0].label).toBe('First tab')
+})
+
+// A tab id present in another worktree must not leak a label across worktrees.
+it('keeps tab labels scoped to their own worktree', () => {
+  const wt: WorktreeMemory = {
+    worktreeId: 'orca::/Users/me/Triton',
+    worktreeName: 'Triton',
+    repoId: 'orca',
+    repoName: 'ORCA',
+    cpu: 0,
+    memory: 0,
+    history: [],
+    sessions: [{ sessionId: 'pty-1', paneKey: `shared:${LEAF}`, pid: 5, cpu: 0, memory: 0 }]
+  }
+  const out = mergeSnapshotAndSessions(
+    makeSnapshot([wt]),
+    [],
+    baseCtx({ tabsByWorktree: { 'orca::/Users/me/Other': [makeTab('shared', 'Elsewhere')] } })
+  )
+  expect(out[0].worktrees[0].sessions[0].label).toBe('pid 5')
+})
+
+// findWorktreeRow replaces `repo.worktrees.find`, which returns the first row; a snapshot that
+// repeats a worktree must keep later daemon sessions landing on that same first row.
+it('attaches later daemon sessions to the first row of a duplicated worktree', () => {
+  const wt = (name: string): WorktreeMemory => ({
+    worktreeId: 'orca::/Users/me/Triton',
+    worktreeName: name,
+    repoId: 'orca',
+    repoName: 'ORCA',
+    cpu: 0,
+    memory: 0,
+    history: [],
+    sessions: []
+  })
+  const out = mergeSnapshotAndSessions(
+    makeSnapshot([wt('first'), wt('second')]),
+    [{ id: 'orca::/Users/me/Triton@@late', cwd: '', title: '', agentOwnership: 'unknown' }],
+    baseCtx()
+  )
+  expect(out[0].worktrees).toHaveLength(2)
+  expect(out[0].worktrees[0].worktreeName).toBe('first')
+  expect(out[0].worktrees[0].sessions.map((s) => s.sessionId)).toEqual([
+    'orca::/Users/me/Triton@@late'
+  ])
+  expect(out[0].worktrees[1].sessions).toEqual([])
+})

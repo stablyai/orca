@@ -52,17 +52,17 @@ type RigOptions = {
  * overflow. This gives the preedit span a width and the screen its cols*rows box.
  */
 function stubCompositionLayout(preeditWidth: () => number): void {
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
-    function (this: HTMLElement) {
-      if (this.classList.contains('xterm-composition-preedit')) {
-        return DOMRect.fromRect({ height: CELL_HEIGHT_PX, width: preeditWidth() })
-      }
-      if (this.classList.contains('xterm-screen')) {
-        return DOMRect.fromRect({ height: 24 * CELL_HEIGHT_PX, width: 80 * CELL_WIDTH_PX })
-      }
-      return DOMRect.fromRect({ height: 0, width: 0 })
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    if (this.classList.contains('xterm-composition-preedit')) {
+      return DOMRect.fromRect({ height: CELL_HEIGHT_PX, width: preeditWidth() })
     }
-  )
+    if (this.classList.contains('xterm-screen')) {
+      return DOMRect.fromRect({ height: 24 * CELL_HEIGHT_PX, width: 80 * CELL_WIDTH_PX })
+    }
+    return DOMRect.fromRect({ height: 0, width: 0 })
+  })
 }
 
 function openTerminal(options: RigOptions = {}): Rig {
@@ -455,6 +455,8 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     const rig = openTerminal()
     await rig.write('안녕하세요\x1b[6D')
     rig.compose('가')
+    const original = viewParts(rig.compositionView)
+    const glyphs = Array.from(original.preedit!.childNodes)
 
     // A TUI repaint: erase from the cursor, draw a different tail, put the cursor back.
     await rig.writeAwaitingRender('\x1b[K체크\x1b[4D')
@@ -462,6 +464,13 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     const { preedit, remainder } = viewParts(rig.compositionView)
     expect(stripMarks(preedit!.textContent)).toBe('가')
     expect(remainder!.textContent).toBe('체크')
+    expect(preedit).toBe(original.preedit)
+    expect(Array.from(preedit!.childNodes)).toEqual(glyphs)
+    expect(viewParts(rig.compositionView).caret).toBe(original.caret)
+
+    await rig.writeAwaitingRender('\x1b[K')
+    expect(viewParts(rig.compositionView).remainder).toBeNull()
+    expect(viewParts(rig.compositionView).preedit).toBe(original.preedit)
   })
 
   it('starts rendering a tail when text lands after an end-of-row composition began', async () => {

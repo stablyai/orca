@@ -1,19 +1,24 @@
-import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
 import { buildWindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { parseCodexLoginAuthUrl } from './codex-login-auth-url'
+import { loginAuthChanged, readLoginAuthSnapshot } from './codex-login-auth-snapshot'
 import {
   buildWslCodexAvailabilityScript,
   buildWslCodexLoginArgs,
   WSL_CODEX_AVAILABILITY_TIMEOUT_MS
 } from './wsl-codex-command'
 
-const LOGIN_TIMEOUT_MS = 120_000
+// Why: matches Claude's window. Signing in through a copied link — a second
+// browser, a password manager, an incognito window — routinely outlasts two
+// minutes, and the old 120s deadline failed those users mid-flow.
+const LOGIN_TIMEOUT_MS = 180_000
 const MAX_LOGIN_OUTPUT_CHARS = 4_000
 const WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS = 500
 const WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS = 5_000
@@ -50,35 +55,47 @@ type CodexLoginSessionDependencies = {
     child: CodexLoginChild,
     interactiveLogin?: WindowsHostInteractiveLoginSpawn | null
   ) => void
+  /** Registers the handle that abandons this login; the caller clears it. */
+  setCancel: (cancel: () => boolean) => void
+  /** The browser link codex printed, published as soon as it is complete. */
+  onAuthUrl: (url: string) => void
 }
 
-function readLoginAuthSnapshot(authJsonPath: string): string | null | undefined {
-  try {
-    return readFileSync(authJsonPath, 'utf-8')
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === 'ENOENT' || code === 'ENOTDIR') {
-      return null
-    }
-    // Why: codex can atomically replace auth.json while the poll runs; a later
-    // poll will observe the stable credential. An unreadable initial file must
-    // disable the shortcut rather than look like a fresh login.
-    return undefined
-  }
-}
-
-function loginAuthChanged(
-  initial: string | null | undefined,
-  current: string | null | undefined
-): boolean {
-  // Why: metadata-only touches can happen before OAuth finishes. Requiring new
-  // credential bytes prevents reauthentication from being killed prematurely.
-  return initial !== undefined && current !== undefined && current !== null && current !== initial
+type LoginCancellation = {
+  isCancelled: () => boolean
+  setSpawnedCancel: (cancel: () => boolean) => void
 }
 
 export async function runCodexLoginSession(
   managedHomePath: string,
   dependencies: CodexLoginSessionDependencies
+): Promise<void> {
+  let cancelSpawnedLogin: (() => boolean) | null = null
+  let cancelled = false
+  dependencies.setCancel(() => {
+    // Why: only an accepted cancel latches. A spawned login that refuses —
+    // because it already authenticated — must stay cancellable, or the Cancel
+    // button and the next add both go dead for the rest of the deadline.
+    if (cancelled || cancelSpawnedLogin?.() === false) {
+      return false
+    }
+    // A cancel before the spawn has no tree to kill; the pre-spawn probe reads
+    // this flag instead of opening a browser nobody is waiting for.
+    cancelled = true
+    return true
+  })
+  await runCodexLoginProcess(managedHomePath, dependencies, {
+    isCancelled: () => cancelled,
+    setSpawnedCancel: (cancel) => {
+      cancelSpawnedLogin = cancel
+    }
+  })
+}
+
+async function runCodexLoginProcess(
+  managedHomePath: string,
+  dependencies: CodexLoginSessionDependencies,
+  cancellation: LoginCancellation
 ): Promise<void> {
   const wslInfo = parseWslUncPath(managedHomePath)
   if (wslInfo) {
@@ -87,9 +104,15 @@ export async function runCodexLoginSession(
   // Why: reauthentication starts with an existing auth.json. Only new auth
   // bytes prove this login completed; existence alone would kill the
   // Windows OAuth flow five seconds after it opened.
+  // WSL keeps its baseline unread — the UNC round trip belongs nowhere in the
+  // pre-spawn path — so there is nothing to compare a WSL home against.
   const initialAuthSnapshot = wslInfo
     ? null
     : readLoginAuthSnapshot(join(managedHomePath, 'auth.json'))
+  const hasAuthBaseline = !wslInfo
+  if (cancellation.isCancelled()) {
+    throw new Error(CODEX_LOGIN_CANCELLED_MESSAGE)
+  }
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const spawnConfig = wslInfo
@@ -119,6 +142,22 @@ export async function runCodexLoginSession(
       }
     }
 
+    // Why its own buffer: a stderr chunk interleaved between two halves of the
+    // link would end the match early, and the published link never changes.
+    let stdoutText = ''
+    let publishedAuthUrl = false
+    const publishAuthUrl = (chunk: Buffer): void => {
+      if (publishedAuthUrl) {
+        return
+      }
+      stdoutText = `${stdoutText}${chunk.toString()}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
+      const authUrl = parseCodexLoginAuthUrl(stdoutText)
+      if (authUrl) {
+        publishedAuthUrl = true
+        dependencies.onAuthUrl(authUrl)
+      }
+    }
+
     let timeout: ReturnType<typeof setTimeout> | null = null
     let authWatchInterval: ReturnType<typeof setInterval> | null = null
     let postAuthExitTimeout: ReturnType<typeof setTimeout> | null = null
@@ -138,6 +177,7 @@ export async function runCodexLoginSession(
         postAuthExitTimeout = null
       }
       child.stdout?.off('data', appendOutput)
+      child.stdout?.off('data', publishAuthUrl)
       child.stderr?.off('data', appendOutput)
       child.off('error', onError)
       child.off('close', onClose)
@@ -152,6 +192,23 @@ export async function runCodexLoginSession(
       cleanupListeners()
       callback()
     }
+
+    cancellation.setSpawnedCancel(() => {
+      // Why: once codex has written new credential bytes the sign-in already
+      // succeeded, and rejecting here would send the caller's rollback at the
+      // home it just authenticated. Nothing left to cancel — let it settle.
+      // Without a baseline (WSL) an existing auth.json says nothing about this
+      // login, so refusing on it would make a WSL reauth uncancellable.
+      const alreadyAuthenticated =
+        hasAuthBaseline &&
+        loginAuthChanged(initialAuthSnapshot, readLoginAuthSnapshot(authJsonPath))
+      if (settled || alreadyAuthenticated) {
+        return false
+      }
+      dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
+      settle(() => rejectPromise(new Error(CODEX_LOGIN_CANCELLED_MESSAGE)))
+      return true
+    })
 
     const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
     timeout = setTimeout(() => {
@@ -221,6 +278,7 @@ export async function runCodexLoginSession(
     }
 
     child.stdout?.on('data', appendOutput)
+    child.stdout?.on('data', publishAuthUrl)
     child.stderr?.on('data', appendOutput)
     child.on('error', onError)
     child.on('close', onClose)

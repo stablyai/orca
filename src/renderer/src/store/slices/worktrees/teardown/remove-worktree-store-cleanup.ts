@@ -6,6 +6,7 @@ import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
 import { omitRecordKeys } from './record-key-omission'
 
+/** Clears worktree-owned renderer state after successful removal so a reused identity cannot inherit stale preferences. */
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
   worktreeId: string,
@@ -35,6 +36,12 @@ export function applyRemoveWorktreeSuccessState(
       }
     }
     const omitByFileId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, removedFileIds)
+    // Why guarded: a removed worktree usually has no open file, and an unconditional
+    // filter would hand openFiles a new identity anyway — the sibling purge path
+    // already does this.
+    const nextOpenFiles = s.openFiles.some((f) => f.worktreeId === worktreeId)
+      ? s.openFiles.filter((f) => f.worktreeId !== worktreeId)
+      : s.openFiles
     // If the active file belonged to the removed worktree, clear it
     const activeFileCleared = s.activeFileId
       ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
@@ -54,6 +61,8 @@ export function applyRemoveWorktreeSuccessState(
       nativeChatLaunchDraftByTabId: omitByTabId(s.nativeChatLaunchDraftByTabId),
       unverifiedPtyLossTabIds: omitByTabId(s.unverifiedPtyLossTabIds),
       terminalLayoutsByTabId: omitByTabId(s.terminalLayoutsByTabId),
+      pendingDirectSshLayoutEditsByTabId: omitByTabId(s.pendingDirectSshLayoutEditsByTabId),
+      localOnlyScrollbackByTabId: omitByTabId(s.localOnlyScrollbackByTabId),
       // Why: closeTab deletes these per-tab maps but removeWorktree missed them, leaking a split pane's expand flags.
       expandedPaneByTabId: omitByTabId(s.expandedPaneByTabId),
       canExpandPaneByTabId: omitByTabId(s.canExpandPaneByTabId),
@@ -79,7 +88,7 @@ export function applyRemoveWorktreeSuccessState(
         ? null
         : s.activeWorkspaceExecutionHostId,
       activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
-      openFiles: s.openFiles.filter((f) => f.worktreeId !== worktreeId),
+      openFiles: nextOpenFiles,
       browserTabsByWorktree: omitByWorktree(s.browserTabsByWorktree),
       // Why: closeBrowserTab records a Cmd+Shift+T undo snapshot, but a deleted worktree's tabs can't be restored; purge it.
       recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
@@ -103,6 +112,7 @@ export function applyRemoveWorktreeSuccessState(
       markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
       // Why: editorCursorLine is keyed by fileId; clear it with the other per-file state so it doesn't leak.
       editorCursorLine: omitByFileId(s.editorCursorLine),
+      explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
       expandedDirs: omitByWorktree(s.expandedDirs),
       // Why: clear the huge-status marker so it doesn't linger after the worktree is gone.

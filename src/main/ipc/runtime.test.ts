@@ -107,9 +107,34 @@ describe('registerRuntimeHandlers', () => {
     expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
   })
 
+  it('answers runtime:getStatus only once the machine-name lookup has landed', async () => {
+    let machineName = 'm4-air.local'
+    let finishLookup: (() => void) | undefined
+    const runtime = {
+      machineNameReady: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishLookup = () => {
+              machineName = 'Friendly Name'
+              resolve()
+            }
+          })
+      ),
+      getStatus: vi.fn(() => ({ runtimeId: 'runtime-1', machineName }))
+    }
+
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(([channel]) => channel === 'runtime:getStatus')![1]
+    const pending = handler()
+    finishLookup?.()
+
+    await expect(pending).resolves.toMatchObject({ machineName: 'Friendly Name' })
+  })
+
   it('routes generic local runtime RPC calls through the dispatcher', async () => {
     const runtime = {
       syncWindowGraph: vi.fn(),
+      machineNameReady: vi.fn(async () => undefined),
       getStatus: vi.fn().mockReturnValue({
         runtimeId: 'runtime-1',
         rendererGraphEpoch: 0,
@@ -147,6 +172,7 @@ describe('registerRuntimeHandlers', () => {
     }
     const runtime = {
       getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
+      getClientSettings: vi.fn(() => ({ experimentalStructuredNativeChat: true })),
       restoreStructuredAgentSessionTabs: vi.fn(async () => undefined),
       listMobileSessionTabs: vi.fn(async () => ({
         worktree: 'workspace-1',

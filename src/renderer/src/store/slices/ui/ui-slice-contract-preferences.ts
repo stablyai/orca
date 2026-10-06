@@ -59,7 +59,9 @@ export type UISlicePreferences = {
   setHideWorkspacesFromOtherDevices: (v: boolean) => void
   alwaysShowDefaultBranchWorkspace: boolean
   setAlwaysShowDefaultBranchWorkspace: (v: boolean) => void
+  explorerDisplayRootByWorktree: Record<string, string>
   showDotfilesByWorktree: Record<string, boolean>
+  setExplorerDisplayRootForWorktree: (worktreeId: string, value: string) => void
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
   filterRepoIds: readonly string[]
@@ -69,10 +71,18 @@ export type UISlicePreferences = {
   setAgentsVisibleHostIds: (ids: VisibleWorkspaceHostIds) => void
   agentsFilterRepoIds: readonly string[]
   setAgentsFilterRepoIds: (ids: readonly string[]) => void
+  agentsHideWorkspacesFromOtherDevices: boolean
+  setAgentsHideWorkspacesFromOtherDevices: (v: boolean) => void
+  agentsHideAutomationGeneratedWorkspaces: boolean
+  setAgentsHideAutomationGeneratedWorkspaces: (v: boolean) => void
+  agentsHideCliCreatedWorkspaces: boolean
+  setAgentsHideCliCreatedWorkspaces: (v: boolean) => void
   agentsShowChildAgents: boolean
   setAgentsShowChildAgents: (v: boolean) => void
   agentsCompactMode: boolean
   setAgentsCompactMode: (v: boolean) => void
+  agentsShowSearch: boolean
+  setAgentsShowSearch: (v: boolean) => void
   agentsReadFilter: ThreadReadFilter
   setAgentsReadFilter: (v: ThreadReadFilter) => void
   agentsGroupBy: ActivityGroupBy
@@ -173,10 +183,14 @@ export type UISlicePersistence = {
   dismissedUpdateVersion: string | null
   dismissUpdate: (versionOverride?: string) => void
   clearDismissedUpdateVersion: () => void
+  /** Version when the sign-out notice was seen or dismissed; null = unseen. */
+  dismissedUnexpectedSignoutVersion: string | null
+  unexpectedSignoutDismissedVersions: string[]
+  dismissUnexpectedSignoutCard: (version: string) => void
   /** Dev-only channel override; null follows the running build's own channel. */
   releaseChannelOverride: ReleaseChannel | null
   setReleaseChannelOverride: (channel: ReleaseChannel | null) => void
-  // Why: ephemeral, renderer-only — never persisted; resets each session and on every phase transition (see setUpdateStatus).
+  // Ephemeral disclosure state; setUpdateStatus initializes it when the phase or error actionability changes.
   updateCardCollapsed: boolean
   setUpdateCardCollapsed: (collapsed: boolean) => void
   updateReassuranceSeen: boolean

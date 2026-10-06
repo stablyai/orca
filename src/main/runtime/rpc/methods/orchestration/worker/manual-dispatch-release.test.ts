@@ -3,6 +3,7 @@ import type Database from '../../../../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { eraseRpcMethods } from '../../../core'
 
 const COORDINATOR = 'term_coordinator'
 const TARGET = 'term_target'
@@ -177,7 +178,9 @@ describe('manual Dispatch release', () => {
   }
 
   async function call(name: string, params: Record<string, unknown>): Promise<unknown> {
-    const method = ORCHESTRATION_METHODS.find((candidate) => candidate.name === name)
+    const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
+      (candidate) => candidate.name === name
+    )
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }

@@ -3,6 +3,7 @@ import type { WebContents } from 'electron'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 import type { CdpClientResponseWriter } from './cdp-client-response-writer'
 import type { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 
 /**
  * The IO boundary with webContents.debugger: lease-based attach, event fan-out to
@@ -53,7 +54,7 @@ export class CdpDebuggerChannel {
       // agent-browser filters events by the sessionId from Target.attachToTarget.
       const msg: Record<string, unknown> = { method, params }
       msg.sessionId = sessionId || this.sessions.primarySessionId
-      client.send(JSON.stringify(msg))
+      this.responder.send(msg, client)
     }
     this.debuggerDetachHandler = () => {
       this.attached = false
@@ -86,10 +87,9 @@ export class CdpDebuggerChannel {
     params: Record<string, unknown>,
     sessionId?: string
   ): Promise<unknown> {
-    const command = sessionId
-      ? this.webContents.debugger.sendCommand(method, params, sessionId)
-      : this.webContents.debugger.sendCommand(method, params)
-    return Promise.resolve(command)
+    return sessionId
+      ? sendGuestCdpCommand(this.webContents, method, params, sessionId)
+      : sendGuestCdpCommand(this.webContents, method, params)
   }
 
   forwardCommand(

@@ -1,14 +1,16 @@
 import type { PRCheckDetail } from '../../shared/github/check-types'
 import type { GitHubPRFile, GitHubPRFileContents } from '../../shared/github/pull-request-types'
-import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../shared/github/work-item-types'
+import type { GitHubWorkItemDetails } from '../../shared/github/work-item-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
-import { getPRChecks, getPRComments, getWorkItem } from './client'
-import { acquire, release, type LocalGitExecOptions } from './gh-utils'
 import {
-  getIssueGitHubApiRepository,
-  resolveGitHubRepoExecution,
-  type GitHubApiRepository
-} from './github-api-repository'
+  getPRChecks,
+  getPRComments,
+  getWorkItemWithRepository,
+  getWorkItemByOwnerRepo
+} from './client'
+import { acquire, release, type LocalGitExecOptions } from './gh-utils'
+import { resolveGitHubRepoExecution, type GitHubApiRepository } from './github-api-repository'
+import { isValidGitHubApiRepository } from './github-api-repository-validation'
 import { getIssueBodyAndComments, getIssueDetailsViaGraphQL } from './issue-work-item-details'
 import {
   getPRFiles,
@@ -69,23 +71,49 @@ export async function getWorkItemDetails(
   type?: 'issue' | 'pr',
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  preference?: IssueSourcePreference
+  preference?: IssueSourcePreference,
+  repositoryOverride?: unknown
 ): Promise<GitHubWorkItemDetails | null> {
-  const item: Omit<GitHubWorkItem, 'repoId'> | null = await getWorkItem(
-    repoPath,
-    number,
-    type,
-    connectionId,
-    localGitOptions,
-    preference
-  )
+  let issueRepositoryOverride: GitHubApiRepository | null = null
+  if (type === 'issue' && repositoryOverride != null) {
+    if (!isValidGitHubApiRepository(repositoryOverride)) {
+      return null
+    }
+    issueRepositoryOverride = (
+      await resolveGitHubRepoExecution(repoPath, repositoryOverride, connectionId, localGitOptions)
+    ).ownerRepo
+    if (!issueRepositoryOverride) {
+      return null
+    }
+  }
+  const { item, repository: selectedRepository } = issueRepositoryOverride
+    ? {
+        item: await getWorkItemByOwnerRepo(
+          repoPath,
+          issueRepositoryOverride,
+          number,
+          'issue',
+          connectionId,
+          localGitOptions
+        ),
+        repository: issueRepositoryOverride
+      }
+    : await getWorkItemWithRepository(
+        repoPath,
+        number,
+        type,
+        connectionId,
+        localGitOptions,
+        preference
+      )
   if (!item) {
     return null
   }
 
+  // Keep the conversation in the same repository as the selected issue.
   const resolvedRepository =
     item.type === 'issue'
-      ? await getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions)
+      ? selectedRepository
       : (await resolveGitHubRepoExecution(repoPath, item.prRepo, connectionId, localGitOptions))
           .ownerRepo
 

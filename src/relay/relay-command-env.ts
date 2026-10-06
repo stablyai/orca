@@ -178,6 +178,5 @@ export function buildRelayUnattendedGitEnv(
   // Why: SSH-host GCM can open its own OAuth window even though the clone's
   // stdin is ignored, leaving the relay request hung with no way to answer it.
   const env = gitCredentialPromptGuardEnv(buildRelayGitEnv(baseEnv, platform), platform)
-  env.GIT_SSH_COMMAND ??= 'ssh -o BatchMode=yes'
   return env
 }

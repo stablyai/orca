@@ -1,8 +1,12 @@
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { nativeChatTerminalWrite } from './mobile-session-write-operations'
 import { typeAgentTuiCommand } from '../../../src/shared/agent-tui-command-typing'
+
+/** What a native-chat write takes, named from an operation so no module names the raw port. */
+export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]
 
 type MobileTerminalClient = {
   id: string
@@ -24,8 +28,13 @@ type MobileNativeChatSendArgs = {
 
 /** 'unknown' = the RPC failed without proof the request never reached the
  *  desktop (ack loss after a write, or a cutover that cannot tell whether the
- *  frame was written) — callers must not present it as a definite send failure. */
-export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown'
+ *  frame was written) — callers must not present it as a definite send failure.
+ *  'queued' = structured lane only: the host holds the message as a queued
+ *  draft, so it shows as a card above the composer, never a transcript echo. */
+export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
+
+/** What a terminal write can answer: the PTY lane has no draft queue. */
+export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>
 
 /** Without an explicit timeout `sendRequest` waits for reconnect indefinitely, and
  *  the composer holds `sending` (send arrow dimmed, no error) for as long as it
@@ -42,7 +51,7 @@ export function openMobileNativeChatSendBudget(): number {
 
 export async function sendMobileNativeChatMessageWithOutcome(
   args: MobileNativeChatSendArgs
-): Promise<MobileNativeChatSendOutcome> {
+): Promise<MobileNativeChatWriteOutcome> {
   const timeoutMs =
     args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
   // Starting an underfunded final write risks delivery followed by a false timeout.
@@ -50,8 +59,8 @@ export async function sendMobileNativeChatMessageWithOutcome(
     return 'rejected'
   }
   try {
-    const response = await args.client.sendRequest(
-      'terminal.send',
+    const response = await nativeChatTerminalWrite.request(
+      args.client,
       {
         terminal: args.terminal,
         text: args.text,
@@ -64,7 +73,11 @@ export async function sendMobileNativeChatMessageWithOutcome(
       // pins the composer for twice as long.
       { timeoutMs, budgetSpansConnect: true }
     )
-    return isTerminalSendRpcAccepted(response) ? 'accepted' : 'rejected'
+    if (nativeChatTerminalWrite.interpret(response) !== true) {
+      return 'rejected'
+    }
+    reportWorkerTerminalUserInput(args.client, args.terminal)
+    return 'accepted'
   } catch (error) {
     // Why: a logical relay↔direct cutover rejects the in-flight send without
     // knowing whether its frame reached the wire (the desktop may have delivered
@@ -90,7 +103,7 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
   resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
   deadline?: number
-}): Promise<MobileNativeChatSendOutcome> {
+}): Promise<MobileNativeChatWriteOutcome> {
   let writeIndex = 0
   return typeAgentTuiCommand({
     command: args.command,
@@ -134,8 +147,8 @@ export async function clearMobileNativeChatInput(args: {
     return false
   }
   try {
-    const response = await args.client.sendRequest(
-      'terminal.send',
+    const response = await nativeChatTerminalWrite.request(
+      args.client,
       {
         terminal: args.terminal,
         text: args.clearInput,
@@ -144,7 +157,7 @@ export async function clearMobileNativeChatInput(args: {
       },
       { timeoutMs, budgetSpansConnect: true }
     )
-    return isTerminalSendRpcAccepted(response)
+    return nativeChatTerminalWrite.interpret(response) === true
   } catch {
     // A failed clear must not send the body on top of an uncleared line.
     return false

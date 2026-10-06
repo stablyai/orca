@@ -1,3 +1,9 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson,
+  writePersistedStateJson
+} from '../../persistence-test-harness'
 /**
  * The write path now hands the file a Buffer it built in one pass instead of a string it rebuilt
  * per secret. Drives the real `Store` end to end — encrypted settings, a local session and a remote
@@ -5,7 +11,8 @@
  * against (a mis-sliced segment, a re-encoded payload, a dropped sentinel) is invisible until
  * something reads the bytes back.
  */
-import { mkdtempSync, readFileSync, realpathSync } from 'node:fs'
+import { getSecretStore } from '../../../shared/secret-store'
+import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -35,15 +42,16 @@ const { Store } = await import('./store')
 const HOST_ID = 'ssh:user@host'
 
 const stores: InstanceType<typeof Store>[] = []
-afterEach(() => {
+afterEach(async () => {
   for (const store of stores.splice(0)) {
-    store.flush()
+    store.freezeWrites()
   }
+  await closeTestStores()
   vi.restoreAllMocks()
 })
 
 function openStore(dataFile: string): InstanceType<typeof Store> {
-  const store = new Store({ dataFile })
+  const store = createSqliteTestStore(Store, { dataFile })
   stores.push(store)
   return store
 }
@@ -71,6 +79,68 @@ function session(activeTabId: string): WorkspaceSessionState {
 }
 
 describe('persisted state survives a save/load round trip', () => {
+  it('keeps a #22551 settings-slot OpenCode Go key on disk until its new owner has it', () => {
+    const dataFile = join(
+      realpathSync(mkdtempSync(join(tmpdir(), 'orca-legacy-opencode-go-key-'))),
+      'state.json'
+    )
+    const first = openStore(dataFile)
+    first.updateSettings({ opencodeWorkspaceId: 'wrk_test' })
+    first.flush()
+    const persisted = JSON.parse(readPersistedStateJson(dataFile))
+    // Sealed exactly as #22551's protected-secret slot wrote it.
+    const sealed = getSecretStore().encryptString('fake-legacy-key').toString('base64')
+    persisted.settings.opencodeGoApiKey = sealed
+    writePersistedStateJson(dataFile, JSON.stringify(persisted))
+    const onDiskKey = (): unknown =>
+      JSON.parse(readPersistedStateJson(dataFile)).settings.opencodeGoApiKey
+
+    // orcad-style consumer: loads and flushes the profile but never runs the migration.
+    const daemon = createSqliteTestStore(Store, { dataFile })
+    stores.push(daemon)
+    expect(daemon.getSettings()).not.toHaveProperty('opencodeGoApiKey')
+    daemon.updateSettings({ opencodeWorkspaceId: 'wrk_daemon' })
+    daemon.flush()
+    expect(onDiskKey()).toBe(sealed)
+    expect(readPersistedStateJson(dataFile)).not.toContain('fake-legacy-key')
+
+    const loaded = openStore(dataFile)
+    expect(loaded.getSettings().opencodeWorkspaceId).toBe('wrk_daemon')
+    expect(loaded.getSettings()).not.toHaveProperty('opencodeGoApiKey')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    loaded.migrateLegacyOpenCodeGoApiKey({
+      has: () => false,
+      read: () => null,
+      save: () => {
+        throw new Error('disk full')
+      }
+    })
+    loaded.flush()
+    expect(onDiskKey()).toBe(sealed)
+
+    // Why: an older paired client can still send the retired field; it must not be stored.
+    const updates = { opencodeGoApiKey: 'fake-remote-key', opencodeWorkspaceId: 'wrk_next' }
+    expect(loaded.updateSettings(updates)).not.toHaveProperty('opencodeGoApiKey')
+    loaded.flush()
+    expect(onDiskKey()).toBe(sealed)
+
+    const saved: string[] = []
+    loaded.migrateLegacyOpenCodeGoApiKey({
+      has: () => saved.length > 0,
+      read: () => saved[0] ?? null,
+      save: (key) => saved.push(key)
+    })
+    loaded.migrateLegacyOpenCodeGoApiKey({
+      has: () => saved.length > 0,
+      read: () => saved[0] ?? null,
+      save: (key) => saved.push(key)
+    })
+    expect(saved).toEqual(['fake-legacy-key'])
+    loaded.flush()
+    expect(readPersistedStateJson(dataFile)).not.toContain('opencodeGoApiKey')
+    expect(openStore(dataFile).getSettings()).not.toHaveProperty('opencodeGoApiKey')
+  })
+
   it('reloads settings, secrets and both session partitions unchanged', () => {
     const dataFile = join(
       realpathSync(mkdtempSync(join(tmpdir(), 'orca-store-round-trip-'))),
@@ -95,7 +165,7 @@ describe('persisted state survives a save/load round trip', () => {
     }
 
     // The file is valid UTF-8 JSON and holds ciphertext, not the plaintext secrets.
-    const bytes = readFileSync(dataFile)
+    const bytes = Buffer.from(readPersistedStateJson(dataFile))
     const onDisk = JSON.parse(bytes.toString('utf8'))
     expect(onDisk.settings.opencodeSessionCookie).not.toBe('cookie-é-value')
     expect(Buffer.from(onDisk.settings.opencodeSessionCookie, 'base64').toString('utf8')).toContain(
@@ -118,7 +188,7 @@ describe('persisted state survives a save/load round trip', () => {
     // Deep equality of the whole reloaded state, taken across a second round trip so the assertion
     // is not comparing against the first load's one-time settings migrations.
     reloaded.flush()
-    const bytesAfterReload = readFileSync(dataFile)
+    const bytesAfterReload = Buffer.from(readPersistedStateJson(dataFile))
     const again = openStore(dataFile)
     expect(again.getSettings()).toEqual(reloaded.getSettings())
     expect(again.getUI()).toEqual(reloaded.getUI())
@@ -126,6 +196,6 @@ describe('persisted state survives a save/load round trip', () => {
     expect(again.getWorkspaceSession(HOST_ID)).toEqual(reloaded.getWorkspaceSession(HOST_ID))
     // ...and the bytes are stable, so a quiet app is not rewriting a 4 MB file with new content.
     again.flush()
-    expect(readFileSync(dataFile).equals(bytesAfterReload)).toBe(true)
+    expect(Buffer.from(readPersistedStateJson(dataFile)).equals(bytesAfterReload)).toBe(true)
   })
 })

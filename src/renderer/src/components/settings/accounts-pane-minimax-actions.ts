@@ -1,24 +1,37 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
+import type { SecretAtRestProtection } from '../../../../shared/secret-at-rest-protection'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
 type MiniMaxCredentialActionContext = {
+  miniMaxApiKeyDraft: string
+  setMiniMaxApiKeyDraft: Dispatch<SetStateAction<string>>
+  setMiniMaxApiKeyConfigured: Dispatch<SetStateAction<boolean>>
+  setMiniMaxApiKeyProtection: Dispatch<SetStateAction<SecretAtRestProtection | null>>
   miniMaxCookieDraft: string
   setMiniMaxCookieDraft: Dispatch<SetStateAction<string>>
   setMiniMaxConfigured: Dispatch<SetStateAction<boolean>>
+  setMiniMaxCookieProtection: Dispatch<SetStateAction<SecretAtRestProtection | null>>
   setMiniMaxCredentialBusy: Dispatch<SetStateAction<boolean>>
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
 }
 
 export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionContext): {
+  saveMiniMaxApiKey: () => Promise<void>
+  clearMiniMaxApiKey: () => Promise<void>
   saveMiniMaxCookie: () => Promise<void>
   clearMiniMaxCookie: () => Promise<void>
 } {
   const {
+    miniMaxApiKeyDraft,
+    setMiniMaxApiKeyDraft,
+    setMiniMaxApiKeyConfigured,
+    setMiniMaxApiKeyProtection,
     miniMaxCookieDraft,
     setMiniMaxCookieDraft,
     setMiniMaxConfigured,
+    setMiniMaxCookieProtection,
     setMiniMaxCredentialBusy,
     recordFeatureInteraction
   } = context
@@ -32,7 +45,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
     setMiniMaxCredentialBusy(true)
     try {
       const status = await window.api.minimaxCredentials.saveCookie(miniMaxCookieDraft.trim())
-      if (!status.configured) {
+      if (!status.cookieConfigured) {
         throw new Error(
           translate(
             'auto.components.settings.AccountsPane.8e6f0cb1d8',
@@ -40,7 +53,8 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
           )
         )
       }
-      setMiniMaxConfigured(status.configured)
+      setMiniMaxConfigured(status.cookieConfigured)
+      setMiniMaxCookieProtection(status.cookieProtection)
       setMiniMaxCookieDraft('')
       recordFeatureInteraction('usage-tracking')
       toast.success(
@@ -52,7 +66,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
           'auto.components.settings.AccountsPane.b43e761fe5',
           'MiniMax cookie update failed.'
         ),
-        { description: String((error as Error)?.message ?? error) }
+        { description: error instanceof Error ? error.message : String(error) }
       )
     } finally {
       setMiniMaxCredentialBusy(false)
@@ -63,7 +77,8 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
     setMiniMaxCredentialBusy(true)
     try {
       const status = await window.api.minimaxCredentials.clearCookie()
-      setMiniMaxConfigured(status.configured)
+      setMiniMaxConfigured(status.cookieConfigured)
+      setMiniMaxCookieProtection(status.cookieProtection)
       setMiniMaxCookieDraft('')
       recordFeatureInteraction('usage-tracking')
     } catch (error) {
@@ -72,12 +87,74 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
           'auto.components.settings.AccountsPane.b43e761fe5',
           'MiniMax cookie update failed.'
         ),
-        { description: String((error as Error)?.message ?? error) }
+        { description: error instanceof Error ? error.message : String(error) }
       )
     } finally {
       setMiniMaxCredentialBusy(false)
     }
   }
 
-  return { saveMiniMaxCookie, clearMiniMaxCookie }
+  const saveMiniMaxApiKey = async (): Promise<void> => {
+    if (!miniMaxApiKeyDraft.trim()) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.d6f1b9b6a2',
+          'MiniMax API key is required.'
+        )
+      )
+      return
+    }
+    setMiniMaxCredentialBusy(true)
+    try {
+      const status = await window.api.minimaxCredentials.saveApiKey(miniMaxApiKeyDraft.trim())
+      if (!status.apiKeyConfigured) {
+        throw new Error(
+          translate(
+            'auto.components.settings.AccountsPane.7c5d8a4e1b',
+            'MiniMax API key was not saved.'
+          )
+        )
+      }
+      setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
+      setMiniMaxApiKeyProtection(status.apiKeyProtection)
+      setMiniMaxApiKeyDraft('')
+      recordFeatureInteraction('usage-tracking')
+      toast.success(
+        translate('auto.components.settings.AccountsPane.4d2c7b9e83', 'MiniMax API key saved.')
+      )
+    } catch (error) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.b43e761fe5',
+          'MiniMax credential update failed.'
+        ),
+        { description: error instanceof Error ? error.message : String(error) }
+      )
+    } finally {
+      setMiniMaxCredentialBusy(false)
+    }
+  }
+
+  const clearMiniMaxApiKey = async (): Promise<void> => {
+    setMiniMaxCredentialBusy(true)
+    try {
+      const status = await window.api.minimaxCredentials.clearApiKey()
+      setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
+      setMiniMaxApiKeyProtection(status.apiKeyProtection)
+      setMiniMaxApiKeyDraft('')
+      recordFeatureInteraction('usage-tracking')
+    } catch (error) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.b43e761fe5',
+          'MiniMax credential update failed.'
+        ),
+        { description: error instanceof Error ? error.message : String(error) }
+      )
+    } finally {
+      setMiniMaxCredentialBusy(false)
+    }
+  }
+
+  return { saveMiniMaxCookie, clearMiniMaxCookie, saveMiniMaxApiKey, clearMiniMaxApiKey }
 }

@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   OrcaRuntimeService,
   electronMocks,
@@ -11,6 +14,14 @@ import { wireHeadlessServeRuntime } from '../orca-runtime-test-scenario-builders
 describe('OrcaRuntimeService', () => {
   it('restores captured native Claude Agent Teams mode with fresh service env', async () => {
     setPlatform('linux')
+    // Why: native panes write their tmux shim under ~/.orca.
+    const home = await mkdtemp(join(tmpdir(), 'orca-agent-teams-home-'))
+    vi.stubEnv('HOME', home)
+    vi.stubEnv('USERPROFILE', home)
+    onTestFinished(async () => {
+      vi.unstubAllEnvs()
+      await rm(home, { recursive: true, force: true })
+    })
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
     const runtimeStore = {

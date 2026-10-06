@@ -98,6 +98,9 @@ vi.mock('../runtime/worktree-teardown', async () =>
 )
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
+// Why: every removal and listing reply now names the catalog it produced or scanned.
+const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
+
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
 
@@ -322,7 +325,7 @@ describe('registerWorktreeHandlers', () => {
 
       await expect(
         handlers['worktrees:remove'](null, { worktreeId, force: true })
-      ).resolves.toEqual({})
+      ).resolves.toEqual({ catalogVersion: anyCatalogVersion })
 
       await expect(lstat(leftoverPath)).rejects.toMatchObject({ code: 'ENOENT' })
       expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(

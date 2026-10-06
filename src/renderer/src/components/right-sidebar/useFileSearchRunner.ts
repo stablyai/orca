@@ -1,3 +1,5 @@
+import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, useRef } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import {
@@ -17,6 +19,7 @@ const SEARCH_DEBOUNCE_MS = 300
 const SEARCH_MAX_RESULTS = 2000
 
 type UpdateSearchState = (updates: {
+  error?: string | null
   loading?: boolean
   results?: SearchResult | null
   resultOwner?: FileSearchResultOwner | null
@@ -54,6 +57,7 @@ export function useFileSearchRunner({
     (query: string) => {
       latestSearchIdRef.current += 1
       const searchId = latestSearchIdRef.current
+      updateActiveSearchState({ error: null })
 
       if (searchTimerRef.current) {
         clearTimeout(searchTimerRef.current)
@@ -138,7 +142,10 @@ export function useFileSearchRunner({
           console.error('Search failed:', err)
           if (latestSearchIdRef.current === searchId) {
             updateActiveSearchState({
-              results: { files: [], totalMatches: 0, truncated: false },
+              results: null,
+              error:
+                readIpcErrorDetail(err) ??
+                translate('fileSearch.failed', 'Search failed. Try again.'),
               resultOwner
             })
           }

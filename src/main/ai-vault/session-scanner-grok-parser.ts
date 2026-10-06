@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   addPreviewMessage,
   createAccumulator,
@@ -34,7 +35,8 @@ const GROK_USER_QUERY_PREVIEW_SCAN_LIMIT = 4096
 
 export async function parseGrokSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const record = asRecord(JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown)
   if (!record) {
@@ -42,7 +44,7 @@ export async function parseGrokSessionFile(
   }
   const info = asRecord(record.info)
   const sessionId = extractString(info?.id) ?? sessionIdFromFileName(dirname(file.path))
-  const accumulator = createAccumulator({ agent: 'grok', file, sessionId })
+  const accumulator = createAccumulator({ agent: 'grok', file, sessionId, messages })
   accumulator.cwd = extractString(info?.cwd)
   accumulator.title =
     normalizeTitleText(extractString(record.generated_title) ?? '') ??

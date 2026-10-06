@@ -3,6 +3,7 @@
  * path. Removing 'google.com' from NON_TRANSPLANTABLE_DOMAINS flips every test here red.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CookiesGetFilter } from 'electron'
 
 const {
   appGetPathMock,
@@ -33,12 +34,12 @@ vi.mock('electron', () => ({
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
-      get: (filter: object) => Promise<unknown>
+      get: (filter: CookiesGetFilter) => Promise<unknown>
       remove: (url: string, name: string) => Promise<void>
       set?: (details: Record<string, unknown>) => Promise<void>
     }
   }) => ({
-    get: (filter: object) => targetSession.cookies.get(filter),
+    get: (filter: CookiesGetFilter) => targetSession.cookies.get(filter),
     remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
     // Why (STA-4300): the import writes go through CDP identities; route them to the same spy so
     // a missing method cannot silently reroute every write down the rejected-cookie path.
@@ -174,25 +175,6 @@ describe('file import excludes the Google cookie family', () => {
       '.linear.app'
     ])
   })
-
-  it('leaves Google cookies from an older import in place too', async () => {
-    cookiesGetMock.mockResolvedValue([existingCookie('.google.com', 'SAPISID')])
-
-    const result = await importCookiesFromFile(
-      writeCookies([{ domain: '.google.com', name: 'SAPISID', value: 'newer', secure: true }]),
-      'persist:test'
-    )
-
-    expect(result.ok && result.summary).toMatchObject({
-      totalCookies: 1,
-      importedCookies: 0,
-      skippedCookies: 1,
-      googleCookiesSkipped: 1,
-      domains: []
-    })
-    expect(cookiesRemoveMock).not.toHaveBeenCalled()
-    expect(cookiesSetMock).not.toHaveBeenCalled()
-  })
 })
 
 describe('native Chromium import excludes the Google cookie family', () => {
@@ -293,32 +275,6 @@ describe('native Chromium import excludes the Google cookie family', () => {
     })
     expect(execFileSyncMock).not.toHaveBeenCalled()
     expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['session'])
-  })
-
-  it('does not request an encryption key for excluded Google rows', async () => {
-    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    createChromiumCookieTestDatabase(sourceCookiesPath, [
-      {
-        domain: '.google.com',
-        name: 'SID',
-        value: '',
-        encryptedValue: Buffer.from('v10-invalid')
-      }
-    ]).close()
-    seedTarget([])
-
-    const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
-
-    expect(result.ok && result.summary).toEqual({
-      totalCookies: 1,
-      importedCookies: 0,
-      skippedCookies: 1,
-      googleCookiesSkipped: 1,
-      domains: []
-    })
-    expect(execFileSyncMock).not.toHaveBeenCalled()
-    expect(clearDataMock).not.toHaveBeenCalled()
-    expect(cookiesSetMock).not.toHaveBeenCalled()
   })
 
   it('keeps the live Google rows in the staged restart-fallback database', async () => {

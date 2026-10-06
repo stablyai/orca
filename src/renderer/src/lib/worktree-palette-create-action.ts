@@ -41,15 +41,6 @@ export function isWorktreePaletteCreateActivationAllowed(args: {
   return args.hasTaskUrlIntent || args.hasCreateName || args.selectionMovedByUser
 }
 
-export const WORKTREE_PALETTE_SELECTION_MOVE_KEYS: ReadonlySet<string> = new Set([
-  'ArrowDown',
-  'ArrowUp',
-  'Home',
-  'End',
-  'PageDown',
-  'PageUp'
-])
-
 type WorktreePaletteSelectionCandidateEntry = {
   id: string
   type: string

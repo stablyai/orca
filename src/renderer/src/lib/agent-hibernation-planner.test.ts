@@ -110,6 +110,21 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [interrupted.paneKey]: interrupted } }))
     ).toEqual([])
+    // A failure ranks like a completion for attention, but a failed pane is never passive.
+    const failed = entry({ mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: OLD } })
+    expect(
+      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [failed.paneKey]: failed } }))
+    ).toEqual([])
+    // A main agent that finished while its subagents still run is live work, whatever its verdict.
+    for (const outcome of ['success', 'failure'] as const) {
+      const held = entry({
+        state: 'working',
+        mainAgent: { state: 'done', outcome, stateStartedAt: OLD }
+      })
+      expect(
+        plannedWorktrees(snapshot({ agentStatusByPaneKey: { [held.paneKey]: held } }))
+      ).toEqual([])
+    }
     const noSession = entry({ providerSession: undefined })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [noSession.paneKey]: noSession } }))
@@ -644,41 +659,6 @@ describe('agent sleep planner', () => {
     ).toEqual([`tab-1:${LEAF}`, `tab-1:${OTHER_LEAF}`])
   })
 
-  it('restarts the idle window once a phantom subagent stops gating the pane working', () => {
-    // Why: a restored subagent row holds a finished lead at 'working', which is
-    // the one state hibernation never accepts — reaping it is what unlocks it.
-    const gated = entry({
-      state: 'working',
-      subagents: [{ id: 'areview-loop-c237a4c577493352', state: 'working', startedAt: 1 }]
-    })
-    expect(plannedPaneKeys(snapshot({ agentStatusByPaneKey: { [gated.paneKey]: gated } }))).toEqual(
-      []
-    )
-
-    const reaped = entry({ state: 'done', updatedAt: NOW, stateStartedAt: NOW })
-    expect(
-      plannedPaneKeys(snapshot({ agentStatusByPaneKey: { [reaped.paneKey]: reaped } }))
-    ).toEqual([])
-
-    const idleReaped = entry({ state: 'done' })
-    expect(
-      plannedPaneKeys(snapshot({ agentStatusByPaneKey: { [idleReaped.paneKey]: idleReaped } }))
-    ).toEqual([`tab-1:${LEAF}`])
-
-    // Why: reaping only clears the child gate — a draft typed into the composer
-    // while that segment was open still dies with the PTY, so it keeps blocking.
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          agentStatusByPaneKey: { [idleReaped.paneKey]: idleReaped },
-          lastTerminalInputAtByPaneKey: {
-            [idleReaped.paneKey]: idleReaped.stateStartedAt + 1
-          }
-        })
-      )
-    ).toEqual([])
-  })
-
   it('clamps corrupt or out-of-range idle durations to the default', () => {
     expect(getEffectiveAgentHibernationIdleMs(0)).toBe(DEFAULT_AGENT_HIBERNATION_IDLE_MS)
     expect(getEffectiveAgentHibernationIdleMs(Number.NaN)).toBe(DEFAULT_AGENT_HIBERNATION_IDLE_MS)
@@ -747,37 +727,6 @@ describe('live resume anchors do not block hibernation (#10238 regression)', () 
           agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
           sleepingAgentSessionsByPaneKey: {
             [agentEntry.paneKey]: liveAnchor(agent, providerSession) as never
-          },
-          ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
-        })
-      )
-    ).toEqual([agentEntry.paneKey])
-  })
-
-  it('still refuses a pane fenced against automatic resume', () => {
-    const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
-    const agentEntry = entry({ agentType: 'claude', providerSession })
-    const fenced = {
-      ...liveAnchor('claude', providerSession),
-      automaticResumeBlockedBy: 'legacy-orchestration-worker'
-    }
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
-          sleepingAgentSessionsByPaneKey: { [agentEntry.paneKey]: fenced as never },
-          ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
-        })
-      )
-    ).toEqual([])
-    // Control: the identical pane IS planned once the fence is gone, so the rejection
-    // above isolates the fence rather than some other guard.
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
-          sleepingAgentSessionsByPaneKey: {
-            [agentEntry.paneKey]: liveAnchor('claude', providerSession) as never
           },
           ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
         })

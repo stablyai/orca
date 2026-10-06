@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-29T03:31:06.000Z",
+  "platform": "darwin",
+  "command": ["codex", "--dangerously-bypass-approvals-and-sandbox"],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.157.0, plain launch on a fresh CODEX_HOME whose config.toml sets model = \"gpt-5.4-mini\", a model missing from 0.157's catalog, so Codex shows its retired-model notice without choices: `GPT-5.4 Mini is no longer available`, `Switch to GPT-6 Luna to continue.` and the key row `enter/esc continue · ctrl+c quit`. Enter or Esc switches the model; the heading comes from the model catalog, not the older `Codex just got an upgrade` wording. No key was sent (only automatic terminal-query replies). Cut 6 s after spawn. Home-directory user name redacted by hand, same length.",
+  "exitCode": null
+}

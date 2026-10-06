@@ -1,8 +1,14 @@
-import { rejectPaneSpawnReservation } from '../pane/spawn-reservation'
+import { rejectPaneSpawnReservation, reserveIdlePaneSpawn } from '../pane/spawn-reservation'
 import { ptySizes } from '../delivery/visibility-state'
-import { beginPtyIpcSpawn } from './spawn-begin'
+import {
+  beginPtyIpcSpawn,
+  resolveEarlyPaneKey,
+  resolveEarlyPaneSpawnReservationKey
+} from './spawn-begin'
+import { releaseStoppedPaneBinding, stopReplacedPaneOwner } from '../pane/pane-owner-replacement'
 import { preparePtyIpcSpawnPreflight } from './spawn-preflight'
 import { assemblePtyIpcSpawnEnv } from './spawn-env'
+import { preparePtyIpcQoderCommand } from './spawn-qoder-command'
 import { buildPtyIpcSpawnOptions } from './spawn-options'
 import { executePtyIpcSpawn } from './spawn-execute'
 import { commitPtyIpcSpawn } from './spawn-commit'
@@ -31,15 +37,32 @@ function restoreProvisionalPtySize(ctx: PtyIpcSpawnState): void {
 }
 
 export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArgs) {
-  triggerPtySpawnPushTargetMaterialization(deps, args)
   const ctx = createPtyIpcSpawnState(deps, args)
-  const early = await beginPtyIpcSpawn(ctx)
-  if (early) {
-    return early
+  const replacedPaneKey =
+    args.replacesPtyId !== undefined ? resolveEarlyPaneSpawnReservationKey(args) : null
+  if (replacedPaneKey) {
+    // Why: hold the pane across the stop, so a spawn for it arriving meanwhile (a hidden tab
+    // revealed mid-restart) joins the replacement instead of reattaching the owner being stopped.
+    ctx.paneSpawnReservation = await reserveIdlePaneSpawn(replacedPaneKey)
+    ctx.paneSpawnReservationKey = replacedPaneKey
   }
   try {
+    if (args.replacesPtyId !== undefined) {
+      ctx.replacedPaneOwner = await stopReplacedPaneOwner(deps, {
+        replacesPtyId: args.replacesPtyId,
+        paneKey: resolveEarlyPaneKey(args),
+        worktreeId: args.worktreeId,
+        connectionId: args.connectionId
+      })
+    }
+    triggerPtySpawnPushTargetMaterialization(deps, args)
+    const early = await beginPtyIpcSpawn(ctx)
+    if (early) {
+      return early
+    }
     await preparePtyIpcSpawnPreflight(ctx)
     await assemblePtyIpcSpawnEnv(ctx)
+    await preparePtyIpcQoderCommand(ctx)
     const earlyReserved = await buildPtyIpcSpawnOptions(ctx).catch((error: unknown) => {
       restoreProvisionalPtySize(ctx)
       throw error
@@ -65,6 +88,9 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
         ctx.rejectedRegistrationCandidate?.incarnationId
       )
       ctx.pendingRegistrationPtyId = null
+    }
+    if (ctx.replacedPaneOwner) {
+      await releaseStoppedPaneBinding(deps.store, ctx.replacedPaneOwner)
     }
     // Why: once the reservation is created, any later throw —
     // spawn failure, persist failure, or a post-spawn helper such as

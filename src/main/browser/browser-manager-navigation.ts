@@ -1,87 +1,152 @@
 import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
-import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
-import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
-import { buildViewportUserAgentOverride } from './browser-viewport-user-agent'
+import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
+import type { BrowserSessionRequestUserAgentResolver } from './browser-session-ua'
+import { isGoogleAuthUrl } from './browser-google-auth-ua'
+import {
+  googleAuthTabIdentity,
+  resolveBrowserTabIdentity,
+  type BrowserTabIdentity
+} from './browser-tab-identity'
 import {
   safeOrigin,
-  type AuthUserAgentOverrideOperation,
-  type AuthUserAgentOverrideState
+  type CdpUserAgentOverride,
+  type CdpUserAgentOverrideOperation,
+  type CdpUserAgentOverrideState
 } from './browser-manager-types'
 import { BrowserManagerVisibility } from './browser-manager-visibility'
 
 export abstract class BrowserManagerNavigation extends BrowserManagerVisibility {
-  // Why: navigator.userAgent (read by Google's auth JS) reflects the WebContents UA,
-  // not the request header, so the header-level Firefox switch in setupGoogleAuthUserAgentOverride
-  // must be matched here per navigation or the two layers disagree — itself a bot tell.
-  // Restores the session's base identity off the auth hosts. Native-UA profiles opt out
-  // of the Firefox switch, so they keep their untouched identity everywhere.
-  protected applyGoogleAuthUserAgent(
+  resolveBrowserGuestRequestUserAgent(
+    request: Parameters<BrowserSessionRequestUserAgentResolver>[0]
+  ): BrowserTabIdentity {
+    const processIdentity = getBrowserProcessUserAgentIdentity()
+    const googleAuth = googleAuthTabIdentity()
+    const pendingNavigation =
+      request.webContentsId === undefined
+        ? undefined
+        : this.pendingNavigationByGuestId.get(request.webContentsId)
+    // Firefox is delivered per-target and cannot reach workers; keep it clean-only to preserve one
+    // coherent identity per mode instead of pairing a Firefox document with native workers.
+    const googleAuthEnabled = processIdentity.mode === 'clean'
+    if (
+      googleAuthEnabled &&
+      request.currentUserAgent === googleAuth.userAgent &&
+      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
+    ) {
+      return googleAuth
+    }
+    const standingOverride =
+      request.webContentsId === undefined
+        ? undefined
+        : this.standingCdpUserAgentOverride(request.webContentsId)
+    if (
+      googleAuthEnabled &&
+      !standingOverride &&
+      request.effectiveUserAgent === googleAuth.userAgent &&
+      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
+    ) {
+      return googleAuth
+    }
+    if (googleAuthEnabled && standingOverride?.userAgent === googleAuth.userAgent) {
+      return googleAuth
+    }
+    // Shared and service worker requests carry no webContentsId, and resolving a session-wide mobile
+    // intent for one put the mobile UA on the wire for a context whose own navigator.userAgent is
+    // desktop-clean — and for every tab sharing the session. One context, one identity: those workers
+    // stay on the session identity, while emulation reaches documents and the emulated tab's dedicated
+    // workers, which carry the owning webContentsId.
+    // Why the standing override and not the requested preset: the wire must match what the document
+    // presents, and a preset whose CDP write never landed (no debugger, a failed write) presents none.
+    return resolveBrowserTabIdentity({
+      url: request.url,
+      mobile: standingOverride?.userAgentMetadata?.mobile === true,
+      processIdentity
+    })
+  }
+
+  // Why: gate on the DIRECT page id, not ownerTabId — a popup has no device-metrics override of its
+  // own, so inheriting the owner tab's preset would pair a mobile UA with a desktop viewport.
+  protected hasMobileViewportApplied(guestWebContentsId: number): boolean {
+    const browserPageId = this.tabIdByWebContentsId.get(guestWebContentsId)
+    const preset = browserPageId ? this.viewportPresetByTabId.get(browserPageId) : undefined
+    return preset?.guestWebContentsId === guestWebContentsId && preset.applied?.mobile === true
+  }
+
+  /**
+   * The only writer of the WebContents UA. Chromium cancels a redirect, and reloads a loading
+   * document, when that UA changes at any other moment; a cross-document did-start-navigation is
+   * the one point where it lands on the new document alone. Call it synchronously from that event.
+   */
+  protected presentTabIdentityAtNavigationStart(
     guest: Electron.WebContents,
     url: string,
-    options: { duringRedirect?: boolean } = {}
-  ): void {
-    const browserPageId = this.tabIdByWebContentsId.get(guest.id)
-    // Why: popup child windows get these policies but are never in tabIdByWebContentsId, so a direct
-    // lookup misses the native-UA opt-out and would hand a native profile's popup the Firefox UA.
-    // That is worse than doing nothing: native sessions never install the header-level Firefox
-    // switch, so the popup would send the Electron UA on the wire while navigator.userAgent claims Firefox.
-    const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
-    // Session state is authoritative before renderer registration and after a native profile imports a source UA.
-    const mode =
-      getBrowserSessionUserAgentMode(guest.session) ??
-      (ownerTabId ? this.userAgentModeByPageId.get(ownerTabId) : undefined)
-    if (mode === 'native') {
-      return
+    sameDocument: boolean
+  ): Promise<boolean> {
+    const identity = this.resolveGuestTabIdentity(guest, url)
+    // The WebContents UA carries no mobile identity: that needs metadata only CDP can send.
+    const webContentsUserAgent =
+      identity.kind === 'google-auth'
+        ? identity.userAgent
+        : getBrowserProcessUserAgentIdentity().userAgent
+    let presentedByWebContents = guest.getUserAgent()
+    if (!sameDocument && presentedByWebContents !== webContentsUserAgent) {
+      guest.setUserAgent(webContentsUserAgent)
+      presentedByWebContents = webContentsUserAgent
     }
-    const firefoxUa = googleAuthUserAgent()
-    const overrideState = this.authUserAgentOverrideStateByGuestId.get(guest.id)
-    const latestPendingOverride = overrideState?.pending.at(-1)
-    const confirmedOverride = overrideState?.confirmed
-    const currentOverride =
-      latestPendingOverride && latestPendingOverride.sequence > (confirmedOverride?.sequence ?? -1)
-        ? latestPendingOverride
-        : confirmedOverride
-    const currentUa = currentOverride?.userAgent ?? guest.getUserAgent()
-    const nextUa = isGoogleAuthUrl(url)
-      ? firefoxUa
-      : // Only restore when the auth-host override is actually in place, so normal
-        // navigation never touches the session UA.
-        currentUa === firefoxUa
-        ? guest.session.getUserAgent()
-        : null
-    let authOverrideIssuedOverCdp = false
-    if (nextUa !== null && nextUa !== currentUa) {
-      // Why: WebContents.setUserAgent() during a redirect makes Chromium cancel the in-flight
-      // navigation (ERR_ABORTED) and replay the original request, which a POST-started OAuth chain
-      // cannot survive — the sign-in lands on a blank tab. CDP retargets navigator.userAgent without
-      // touching the navigation, and it outranks the WebContents UA from then on, so a guest that
-      // switches to it stays on it. The wire UA never depended on this write:
-      // setupGoogleAuthUserAgentOverride rewrites User-Agent per request for auth-host URLs on its own.
-      if (options.duringRedirect === true || overrideState !== undefined) {
-        if (this.canOverrideUserAgentOverCdp(guest)) {
-          authOverrideIssuedOverCdp = true
-          // Why: go through the viewport builder rather than writing nextUa raw, so both CDP writers
-          // resolve one identity for this URL — Firefox on auth hosts, the session's base identity
-          // off them, any mobile preset preserved.
-          void this.applyAuthUserAgentOverrideOverCdp(
-            guest,
-            (browserPageId ? this.viewportUaOverrideMobileByTabId.get(browserPageId) : undefined) ??
-              false,
-            url,
-            nextUa
-          )
-        }
-        // Why: with no debugger there is no way to retarget the identity without cancelling the
-        // redirect. A stale navigator.userAgent is recoverable; a dead navigation is not.
-      } else {
-        guest.setUserAgent(nextUa)
-      }
+    return this.writeTabIdentityOverride(guest, identity, presentedByWebContents)
+  }
+
+  /** Every other identity change (redirects, failed loads, preset changes) goes over CDP only. */
+  protected retargetTabIdentity(guest: Electron.WebContents, url: string): Promise<boolean> {
+    return this.writeTabIdentityOverride(
+      guest,
+      this.resolveGuestTabIdentity(guest, url),
+      guest.getUserAgent()
+    )
+  }
+
+  private resolveGuestTabIdentity(guest: Electron.WebContents, url: string): BrowserTabIdentity {
+    return resolveBrowserTabIdentity({
+      url,
+      mobile: this.hasMobileViewportApplied(guest.id),
+      processIdentity: getBrowserProcessUserAgentIdentity()
+    })
+  }
+
+  // Why clear rather than restate: any override without userAgentMetadata makes Chromium drop
+  // navigator.userAgentData and every sec-ch-ua header, so it stands only when the WebContents UA
+  // cannot present the identity itself.
+  private writeTabIdentityOverride(
+    guest: Electron.WebContents,
+    identity: BrowserTabIdentity,
+    presentedByWebContents: string
+  ): Promise<boolean> {
+    const override: CdpUserAgentOverride =
+      identity.kind === 'mobile'
+        ? { userAgent: identity.userAgent, userAgentMetadata: identity.userAgentMetadata }
+        : presentedByWebContents === identity.userAgent
+          ? { userAgent: '' }
+          : // Only reachable before a navigation start can rewrite the WebContents UA (a redirect
+            // off the auth host, a failed load); the next cross-document navigation clears it.
+            { userAgent: identity.userAgent }
+    if (override.userAgent === '' && !this.standingCdpUserAgentOverride(guest.id)) {
+      return Promise.resolve(true)
     }
-    // Why: gate on the DIRECT page id, not ownerTabId — a popup has no device-metrics override of
-    // its own, so inheriting the owner tab's preset UA would pair a mobile UA with a desktop viewport.
-    if (browserPageId && !authOverrideIssuedOverCdp) {
-      this.reapplyViewportUserAgentOverride(guest, browserPageId, url)
-    }
+    // Why: with no debugger there is no way to retarget the identity without cancelling a redirect.
+    // A stale navigator.userAgent is recoverable; a dead navigation is not. The wire UA never
+    // depended on this write: the session request hook rewrites User-Agent on its own.
+    return this.writeCdpUserAgentOverride(guest, override)
+  }
+
+  /** The override Chromium holds or is about to hold; undefined when none stands. */
+  protected standingCdpUserAgentOverride(guestId: number): CdpUserAgentOverride | undefined {
+    const state = this.cdpUserAgentOverrideStateByGuestId.get(guestId)
+    const latestPending = state?.pending.at(-1)
+    const current =
+      latestPending && latestPending.sequence > (state?.confirmed?.sequence ?? -1)
+        ? latestPending
+        : state?.confirmed
+    return current && current.override.userAgent !== '' ? current.override : undefined
   }
 
   protected canOverrideUserAgentOverCdp(guest: Electron.WebContents): boolean {
@@ -92,39 +157,43 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     }
   }
 
-  protected applyAuthUserAgentOverrideOverCdp(
+  // Why no queue: debugger.sendCommand dispatches in call order over one channel, so the later-issued
+  // write wins. The sequence only keeps a failed or superseded write from being recorded as standing.
+  protected writeCdpUserAgentOverride(
     guest: Electron.WebContents,
-    mobile: boolean,
-    url: string,
-    userAgent: string
+    override: CdpUserAgentOverride
   ): Promise<boolean> {
     if (!this.canOverrideUserAgentOverCdp(guest)) {
       return Promise.resolve(false)
     }
-    const state = this.authUserAgentOverrideStateByGuestId.get(guest.id) ?? {
+    const state = this.cdpUserAgentOverrideStateByGuestId.get(guest.id) ?? {
       confirmed: null,
       nextSequence: 0,
       pending: []
     }
-    const operation = { sequence: ++state.nextSequence, userAgent }
+    const operation = { sequence: ++state.nextSequence, override }
     state.pending.push(operation)
-    this.authUserAgentOverrideStateByGuestId.set(guest.id, state)
-    return this.sendViewportUserAgentOverride(guest, mobile, url, userAgent).then(
-      () => this.settleAuthUserAgentOverride(guest.id, state, operation, true),
-      () => {
-        this.settleAuthUserAgentOverride(guest.id, state, operation, false)
+    this.cdpUserAgentOverrideStateByGuestId.set(guest.id, state)
+    return guest.debugger.sendCommand('Emulation.setUserAgentOverride', override).then(
+      () => this.settleCdpUserAgentOverride(guest.id, state, operation, true),
+      (error: unknown) => {
+        this.settleCdpUserAgentOverride(guest.id, state, operation, false)
+        console.warn('[browser-manager] failed to write the tab user agent override', {
+          guestWebContentsId: guest.id,
+          error: error instanceof Error ? error.message : String(error)
+        })
         return false
       }
     )
   }
 
-  protected settleAuthUserAgentOverride(
+  protected settleCdpUserAgentOverride(
     guestId: number,
-    state: AuthUserAgentOverrideState,
-    operation: AuthUserAgentOverrideOperation,
+    state: CdpUserAgentOverrideState,
+    operation: CdpUserAgentOverrideOperation,
     succeeded: boolean
   ): boolean {
-    if (this.authUserAgentOverrideStateByGuestId.get(guestId) !== state) {
+    if (this.cdpUserAgentOverrideStateByGuestId.get(guestId) !== state) {
       return false
     }
     if (succeeded && (state.confirmed?.sequence ?? -1) < operation.sequence) {
@@ -134,10 +203,13 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     if (pendingIndex !== -1) {
       state.pending.splice(pendingIndex, 1)
     }
-    if (state.confirmed === null && state.pending.length === 0) {
-      this.authUserAgentOverrideStateByGuestId.delete(guestId)
+    if (
+      (state.confirmed === null || state.confirmed.override.userAgent === '') &&
+      state.pending.length === 0
+    ) {
+      this.cdpUserAgentOverrideStateByGuestId.delete(guestId)
     }
-    return true
+    return succeeded
   }
 
   protected startPendingNavigation(guestId: number, url: string): void {
@@ -182,47 +254,6 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   // here or two writers racing the same navigation will pick opposite identities.
   protected resolveTabNavigationUrl(guest: Electron.WebContents): string {
     return this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? guest.getURL()
-  }
-
-  // Why: Emulation.setUserAgentOverride is set once and stands across every later navigation,
-  // outranking setUserAgent for navigator.userAgent. A viewport preset applied before reaching an
-  // auth host would otherwise pin navigator.userAgent to the session's preset UA while the
-  // request header says Firefox — the two-layer disagreement this scope exists to remove.
-  protected reapplyViewportUserAgentOverride(
-    guest: Electron.WebContents,
-    browserTabId: string,
-    url: string
-  ): void {
-    const mobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
-    if (mobile === undefined) {
-      return
-    }
-    // Why: no queue needed — debugger.sendCommand dispatches in call order over one channel, so the
-    // later-issued write wins. What matters is that both writers resolve the SAME host, which they
-    // now do via the navigation target rather than the stale committed URL.
-    void this.sendViewportUserAgentOverride(guest, mobile, url).catch(() => {})
-  }
-
-  protected async sendViewportUserAgentOverride(
-    guest: Electron.WebContents,
-    mobile: boolean,
-    url?: string,
-    baseUserAgent?: string
-  ): Promise<void> {
-    if (guest.isDestroyed() || !guest.debugger.isAttached()) {
-      return
-    }
-    await guest.debugger.sendCommand(
-      'Emulation.setUserAgentOverride',
-      buildViewportUserAgentOverride({
-        url: url ?? this.resolveTabNavigationUrl(guest),
-        mobile,
-        // Why: the session UA is the profile's stable base identity. guest.getUserAgent() is not:
-        // applyGoogleAuthUserAgent leaves it pinned to the Firefox auth UA once a guest switches to
-        // the CDP override, so reading it back here would republish that identity on ordinary hosts.
-        baseUserAgent: baseUserAgent ?? guest.session.getUserAgent()
-      })
-    )
   }
 
   /** Route guests own their own popup handler, so their denials arrive here instead. */

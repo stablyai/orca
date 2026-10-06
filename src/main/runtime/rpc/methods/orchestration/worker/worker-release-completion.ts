@@ -1,5 +1,6 @@
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type {
+  WorkerTerminalArchiveKind,
   WorkerTerminalArchiveStatus,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
@@ -15,6 +16,9 @@ import { orchestrationTimestampToMs } from './worker-output'
 import { archiveSummary } from './worker-terminal-resource-presentation'
 import { classifyWorkerTerminalCloseError } from './worker-release-close-error'
 import { workerTerminalLeaseIsCurrent } from './worker-terminal-release-lease'
+import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
+import { stopStructuredWorkerForRelease } from './structured-worker-release-stop'
+import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
 
 export {
   archiveSummary,
@@ -88,6 +92,22 @@ async function completeWorkerTerminalReleaseOnce(
   args: WorkerTerminalReleaseArgs
 ): Promise<WorkerReleaseReceipt> {
   const { runtime, db, dispatchId, resource } = args
+  if (isStructuredWorkerHandle(resource.terminal_handle)) {
+    // Observation and archive capture both read the structured host, and after a restart nothing
+    // has installed it yet — the startup recovery reconciler runs exactly this path. Installing it
+    // here is what lets the release see the session instead of reporting it unreadable.
+    //
+    // NOT yet handled, and deliberately follow-up: rebinding a restarted runtime to a structured
+    // worker's redrive subscription. Until that exists, a worker that survives a restart has its
+    // parked mail wait for the next arrival rather than a settle edge.
+    await runtime.ensureStructuredAgentSessionHost().catch((error: unknown) => {
+      console.warn(
+        '[orchestration] structured host install failed before release',
+        dispatchId,
+        error
+      )
+    })
+  }
   const worker = db.getWorkerDispatch(dispatchId)
   if (!worker || worker.agent_terminal_handle !== resource.terminal_handle) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
@@ -100,6 +120,9 @@ async function completeWorkerTerminalReleaseOnce(
     }
   }
   const observation = await inspectWorkerTerminal(runtime, db, dispatchId)
+  // The live handle to act on: the durable one, or a handle re-minted from the recorded process
+  // incarnation when the durable handle went stale (inspectWorkerTerminal proved it live).
+  const terminalHandle = observation.terminalHandle ?? resource.terminal_handle
   if (observation.status === 'identity_changed') {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
     return {
@@ -111,33 +134,39 @@ async function completeWorkerTerminalReleaseOnce(
     }
   }
   if (observation.status === 'missing' || observation.status === 'unattached') {
-    if (args.mode === 'recovery') {
-      // A close can succeed before the process crashes, leaving `releasing` durable state while
-      // terminal inventory no longer resolves the handle. Only a positive host liveness verdict
-      // may settle that exact incarnation; contact loss remains pending/unverifiable.
-      if (resource.process_incarnation) {
-        const processLiveness = await runtime.inspectTerminalProcessIncarnationLiveness(
-          resource.process_incarnation,
-          resource.host_scope
-        )
-        if (processLiveness === 'exited') {
-          const reconciled = db.settleDeadWorkerTerminalRelease({
-            requestingDispatchId: dispatchId,
-            resourceId: resource.id,
-            processIncarnation: resource.process_incarnation
-          })
-          if (reconciled.disposition === 'released') {
-            runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
-            return {
-              dispatchId,
-              state: 'released',
-              processAction: 'closed_exited_terminal',
-              archive: archiveSummary(reconciled.resource)
-            }
+    // Re-resolution by process incarnation (inspectWorkerTerminal) already failed, so no live PTY
+    // carries this worker's exact incarnation. If that incarnation is provably gone, settle
+    // released BEFORE the recovery defer: proof of death outranks deferral, so a provably-exited
+    // worker never languishes in release_pending across recovery passes.
+    if (resource.process_incarnation) {
+      const processLiveness = await runtime.inspectTerminalProcessIncarnationLiveness(
+        resource.process_incarnation,
+        resource.host_scope
+      )
+      if (processLiveness === 'exited') {
+        // Prefer incarnation-fenced settle (dispatch relation + process_incarnation CAS).
+        const reconciled = db.settleDeadWorkerTerminalRelease({
+          requestingDispatchId: dispatchId,
+          resourceId: resource.id,
+          processIncarnation: resource.process_incarnation
+        })
+        if (reconciled.disposition === 'released') {
+          runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
+          return {
+            dispatchId,
+            state: 'released',
+            processAction: 'none',
+            archive: archiveSummary(reconciled.resource)
           }
         }
+        // settleDead retains when the archive is still mandatory and missing (e.g. requested but
+        // never committed). Do NOT plain-settle: that would discard output and break recovery's
+        // "archive is mandatory" invariant. Fall through to recovery pending / unknown instead.
       }
-      // Inventory may still be incomplete during startup/reconnect discovery; defer.
+    }
+    if (args.mode === 'recovery') {
+      // No death certificate yet: inventory may still be incomplete during startup/reconnect
+      // discovery, so defer instead of guessing.
       return {
         dispatchId,
         state: 'release_pending',
@@ -163,7 +192,7 @@ async function completeWorkerTerminalReleaseOnce(
     }
   }
 
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource)) {
+  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, terminalHandle)) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
     return {
       dispatchId,
@@ -176,16 +205,18 @@ async function completeWorkerTerminalReleaseOnce(
   const archive = db.getWorkerTerminalArchive(dispatchId)
   let archiveSource = resource.archive_source as 'transcript' | 'terminal' | null
   let archiveStatus: WorkerTerminalArchiveStatus | null = resource.archive_status
-  let capturedArchive: { kind: 'transcript_pin' | 'terminal_tail'; content: string } | undefined
+  let capturedArchive: { kind: WorkerTerminalArchiveKind; content: string } | undefined
+  const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
   if (!archive) {
     const captured = await captureWorkerOutputArchive({
       runtime,
       dispatchId,
-      terminalHandle: resource.terminal_handle,
-      attachedAtMs: orchestrationTimestampToMs(worker.created_at)
+      terminalHandle,
+      attachedAtMs: orchestrationTimestampToMs(worker.created_at),
+      structuredWorker: structured
     })
     capturedArchive = { kind: captured.kind, content: JSON.stringify(captured.content) }
-    archiveSource = captured.kind === 'transcript_pin' ? 'transcript' : 'terminal'
+    archiveSource = captured.kind === 'terminal_tail' ? 'terminal' : 'transcript'
     archiveStatus = captured.status
   } else {
     const stored = summarizeWorkerOutputArchive(archive)
@@ -208,7 +239,7 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(releasing)
     }
   }
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing)) {
+  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing, terminalHandle)) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
     return {
       dispatchId,
@@ -220,7 +251,18 @@ async function completeWorkerTerminalReleaseOnce(
   }
 
   try {
-    const close = await runtime.closeTerminal(resource.terminal_handle)
+    if (structured) {
+      return await stopStructuredWorkerForRelease({
+        structured,
+        dispatchId,
+        resource,
+        runtime,
+        db,
+        archiveSource,
+        archiveStatus
+      })
+    }
+    const close = await runtime.closeTerminal(terminalHandle)
     if (!close.ptyKilled) {
       const reason = describeUnconfirmedAgentStop(close)
       const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)

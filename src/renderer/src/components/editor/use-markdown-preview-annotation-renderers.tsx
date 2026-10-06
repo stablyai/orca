@@ -88,7 +88,11 @@ export function useMarkdownPreviewAnnotationRenderers({
       }
 
       return (
-        <div className="markdown-annotation-controls">
+        // Why: annotation controls (add-note button, composer, saved note
+        // stack) are transient review state, not document content. They render
+        // inside `.markdown-body`, so mark the container for PDF export
+        // exclusion — the extract scrub and export CSS both honor this.
+        <div className="markdown-annotation-controls" data-orca-export-hide="true">
           <button
             type="button"
             className="markdown-annotation-add"

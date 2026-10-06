@@ -5,10 +5,15 @@ import {
   type GitHubProjectField,
   type GitHubProjectFieldMutationValue,
   type GitHubProjectRow,
-  isSuccess,
   optimisticProjectFieldValue,
   splitRepositorySlug
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubProjectFieldClear,
+  githubProjectFieldUpdate,
+  githubProjectIssueTypeUpdate,
+  githubProjectIssueUpdate
+} from './mobile-task-project-board-operations'
 
 export function useMobileTasksProjectMetadataActions(model: ProjectThreadReplyActionsModel) {
   const {
@@ -43,8 +48,8 @@ export function useMobileTasksProjectMetadataActions(model: ProjectThreadReplyAc
       }
       setProjectMutating(true)
       try {
-        const response = await client.sendRequest(
-          'github.project.updateIssueBySlug',
+        const reply = await githubProjectIssueUpdate.request(
+          client,
           {
             owner: slug.owner,
             repo: slug.repo,
@@ -54,10 +59,7 @@ export function useMobileTasksProjectMetadataActions(model: ProjectThreadReplyAc
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: { message?: string } }
+        const result = githubProjectIssueUpdate.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error?.message ?? 'Failed to update GitHub item')
         }
@@ -147,28 +149,36 @@ export function useMobileTasksProjectMetadataActions(model: ProjectThreadReplyAc
       }
       setProjectMutating(true)
       try {
-        const response = await client.sendRequest(
-          value === null ? 'github.project.clearItemField' : 'github.project.updateItemField',
+        // Clearing and setting a field are different methods with different params, so each arm
+        // sends its own operation rather than one call picking a method string.
+        const written =
           value === null
-            ? {
-                projectId: githubProjectTable.project.id,
-                host: activeGitHubProjectHost,
-                itemId: row.id,
-                fieldId: field.id
-              }
-            : {
-                projectId: githubProjectTable.project.id,
-                host: activeGitHubProjectHost,
-                itemId: row.id,
-                fieldId: field.id,
-                value
-              },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: { message?: string } }
+            ? githubProjectFieldClear.interpret(
+                await githubProjectFieldClear.request(
+                  client,
+                  {
+                    projectId: githubProjectTable.project.id,
+                    host: activeGitHubProjectHost,
+                    itemId: row.id,
+                    fieldId: field.id
+                  },
+                  { timeoutMs: 30_000 }
+                )
+              )
+            : githubProjectFieldUpdate.interpret(
+                await githubProjectFieldUpdate.request(
+                  client,
+                  {
+                    projectId: githubProjectTable.project.id,
+                    host: activeGitHubProjectHost,
+                    itemId: row.id,
+                    fieldId: field.id,
+                    value
+                  },
+                  { timeoutMs: 30_000 }
+                )
+              )
+        const result = written
         if (result.ok === false) {
           throw new Error(result.error?.message ?? 'Failed to update project field')
         }
@@ -220,8 +230,8 @@ export function useMobileTasksProjectMetadataActions(model: ProjectThreadReplyAc
       }
       setProjectMutating(true)
       try {
-        const response = await client.sendRequest(
-          'github.project.updateIssueTypeBySlug',
+        const reply = await githubProjectIssueTypeUpdate.request(
+          client,
           {
             owner: slug.owner,
             repo: slug.repo,
@@ -231,10 +241,7 @@ export function useMobileTasksProjectMetadataActions(model: ProjectThreadReplyAc
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: { message?: string } }
+        const result = githubProjectIssueTypeUpdate.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error?.message ?? 'Failed to update issue type')
         }

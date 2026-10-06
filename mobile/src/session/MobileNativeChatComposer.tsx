@@ -10,8 +10,9 @@ import {
   View
 } from 'react-native'
 import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { getVerifiedNativeChatCommands } from '../../../src/shared/native-chat-agent-profiles'
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import { structuredSlashCommands } from '../../../src/shared/structured-agent-session-composer'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import {
   applyAutocomplete,
   detectAutocompleteTrigger,
@@ -28,11 +29,17 @@ import {
   type MobileNativeChatSessionOptionPickersProps
 } from './MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
+import { getMobileNativeChatCommands } from './mobile-native-chat-send-classification'
+import { keepHeldPressThroughLongPress } from './held-press-long-press'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 
 type Props = {
+  /** Lets the owner focus the field, e.g. after Edit moves a queued message into it. */
+  inputRef?: React.Ref<TextInput>
+  structuredCommands?: readonly AgentSessionConversationCommand[]
   /** Controlled composer text — owned by the parent so dictation can write to it. */
   value: string
   onChangeText: (text: string) => void
@@ -57,7 +64,7 @@ type Props = {
   onMicPress?: () => void
   micActive?: boolean
   /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
-  dictationMode?: 'toggle' | 'hold'
+  dictationMode?: string
   onMicPressIn?: () => void
   onMicPressOut?: () => void
   disabled?: boolean
@@ -67,6 +74,7 @@ type Props = {
 }
 
 export function MobileNativeChatComposer({
+  inputRef,
   value,
   onChangeText,
   onSend,
@@ -74,6 +82,7 @@ export function MobileNativeChatComposer({
   getSendCompletionGeneration,
   getComposerEditGeneration,
   agent,
+  structuredCommands,
   sessionOptions,
   onAttachImage,
   attachments = NO_ATTACHMENTS,
@@ -124,7 +133,12 @@ export function MobileNativeChatComposer({
       return []
     }
     if (trigger.kind === 'slash') {
-      const commands = agent ? getVerifiedNativeChatCommands(agent) : []
+      const commands =
+        structuredCommands !== undefined
+          ? structuredSlashCommands(structuredCommands, agent)
+          : agent
+            ? getMobileNativeChatCommands(agent)
+            : []
       // Why: Codex's catalog is 45 commands and this list is a plain ScrollView
       // (~5 rows visible), so an uncapped `/` would mount every row and
       // re-reconcile them on each streaming tick right above the transcript.
@@ -137,7 +151,7 @@ export function MobileNativeChatComposer({
       kind: 'file' as const,
       path
     }))
-  }, [trigger, filePaths, agent])
+  }, [trigger, filePaths, agent, structuredCommands])
 
   useEffect(() => {
     if (trigger?.kind === 'file') {
@@ -239,7 +253,8 @@ export function MobileNativeChatComposer({
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         <View style={styles.bar} testID="native-chat-composer">
           <TextInput
-            style={styles.input}
+            ref={inputRef}
+            style={mobileNativeChatInputStyles.input}
             value={value}
             onChangeText={handleChange}
             // Controlled only transiently right after an autocomplete insert.
@@ -287,17 +302,26 @@ export function MobileNativeChatComposer({
                 onPress={dictationMode === 'hold' ? undefined : onMicPress}
                 onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
                 onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
+                onLongPress={dictationMode === 'hold' ? keepHeldPressThroughLongPress : undefined}
                 disabled={disabled}
               >
+                {/* The icon swaps on press; as the page's touch target, its removal would send
+                    touchend to a detached node and lose the release. */}
                 {micActive ? (
                   <Square
+                    pointerEvents="none"
                     size={18}
                     color={colors.statusRed}
                     strokeWidth={2.4}
                     fill={colors.statusRed}
                   />
                 ) : (
-                  <Mic size={20} color={colors.textSecondary} strokeWidth={2} />
+                  <Mic
+                    pointerEvents="none"
+                    size={20}
+                    color={colors.textSecondary}
+                    strokeWidth={2}
+                  />
                 )}
               </Pressable>
             ) : null}
@@ -387,18 +411,6 @@ const styles = StyleSheet.create({
   },
   actionSpacer: {
     flex: 1
-  },
-  input: {
-    width: '100%',
-    maxHeight: 140,
-    minHeight: 40,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm
   },
   iconButton: {
     width: 40,

@@ -46,7 +46,7 @@ export class SparsePresetPersistence {
 }
 
 export function installSparsePresetPersistenceContext(
-  target: object,
+  target: SparsePresetPersistence,
   source: SparsePresetPersistence
 ): void {
   Object.defineProperty(target, sparsePresetPersistenceContext, {

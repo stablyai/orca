@@ -2,6 +2,8 @@ import {
   isClipboardTextTooLargeError,
   type ReadClipboardTextOptions
 } from '../../../../shared/clipboard-text'
+import { IMAGE_FILE_MIME_TYPES } from '../../../../shared/image-file-extensions'
+import { isWindowsUserAgent } from './pane-helpers'
 import {
   TERMINAL_PASTE_MAX_BYTES,
   type TerminalPasteTextOptions
@@ -42,6 +44,12 @@ export type TerminalClipboardPasteResult =
         | 'text-too-large'
     }
 
+// Why: Explorer-copied PNG/JPEG files keep the Windows clipboard image flow (#9640).
+function isWindowsClipboardImageFile(filePath: string): boolean {
+  const mimeType = IMAGE_FILE_MIME_TYPES[filePath.slice(filePath.lastIndexOf('.')).toLowerCase()]
+  return isWindowsUserAgent() && (mimeType === 'image/png' || mimeType === 'image/jpeg')
+}
+
 export async function pasteTerminalClipboard({
   readClipboardText,
   readClipboardFilePaths,
@@ -64,7 +72,7 @@ export async function pasteTerminalClipboard({
     } catch {
       // Why: an unreadable file flavor must not block ordinary text paste.
     }
-    if (filePaths.length > 0) {
+    if (filePaths.length > 0 && !filePaths.some(isWindowsClipboardImageFile)) {
       await pasteFilePaths(filePaths)
       return { status: 'pasted', kind: 'file-path' }
     }

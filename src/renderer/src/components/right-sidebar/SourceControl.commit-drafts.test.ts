@@ -8,7 +8,6 @@ import {
   shouldRenderCommitArea,
   writeCommitDraftForWorktree
 } from './SourceControl'
-import { getNextSourceControlViewMode } from './source-control/panel/header-toolbar'
 import {
   loadSessionCommitDrafts,
   saveSessionCommitDrafts
@@ -157,10 +156,5 @@ describe('SourceControl view mode preference', () => {
   it('preserves valid persisted view modes', () => {
     expect(normalizeSourceControlViewMode('list')).toBe('list')
     expect(normalizeSourceControlViewMode('tree')).toBe('tree')
-  })
-
-  it('derives the next persisted view mode from the current mode', () => {
-    expect(getNextSourceControlViewMode('list')).toBe('tree')
-    expect(getNextSourceControlViewMode('tree')).toBe('list')
   })
 })
