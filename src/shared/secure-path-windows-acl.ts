@@ -1,3 +1,5 @@
+import { getCurrentWindowsUserSid, getCurrentWindowsUserSidAsync } from './windows-current-user-sid'
+export { resetSecureFileWindowsUserSidForTests } from './windows-current-user-sid'
 import { randomBytes } from 'node:crypto'
 import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,8 +17,6 @@ const ACL_TIMEOUT_MS = 5000
 /** SYSTEM and the local Administrators group: they can take ownership regardless, so denying them buys nothing. */
 const LOCAL_SYSTEM_SID = 'S-1-5-18'
 const BUILTIN_ADMINISTRATORS_SID = 'S-1-5-32-544'
-
-const WINDOWS_SID_PATTERN = /^S-1-\d+(?:-\d+)+$/
 
 type AclPlan = {
   program: string
@@ -195,10 +195,49 @@ function reportSettlementThrow(targetPath: string, error: unknown): void {
   }
 }
 
-async function restrictAsync(targetPath: string, plan: AclPlan): Promise<boolean> {
+type AclOperation = { deadline: number; signal: AbortSignal }
+function aclProcessOptions(operation?: AclOperation): { timeoutMs: number; signal?: AbortSignal } {
+  if (operation && (operation.signal.aborted || Date.now() >= operation.deadline)) {
+    throw new Error('Private ACL operation cancelled')
+  }
+  return {
+    timeoutMs: Math.min(
+      ACL_TIMEOUT_MS,
+      operation ? operation.deadline - Date.now() : ACL_TIMEOUT_MS
+    ),
+    signal: operation?.signal
+  }
+}
+export async function restrictWindowsPath(
+  targetPath: string,
+  isDirectory: boolean,
+  operation: AclOperation
+): Promise<boolean> {
+  try {
+    const sid = await getCurrentWindowsUserSidAsync(aclProcessOptions(operation))
+    if (!sid) {
+      return false
+    }
+    const restricted = await restrictAsync(
+      targetPath,
+      buildAclPlan(targetPath, sid, isDirectory),
+      operation
+    )
+    aclProcessOptions(operation)
+    return restricted
+  } catch {
+    return false
+  }
+}
+
+async function restrictAsync(
+  targetPath: string,
+  plan: AclPlan,
+  operation?: AclOperation
+): Promise<boolean> {
   // Verify first: a path that already reads back correct needs no write at all. Re-running
   // `/reset` on a correct DACL would briefly restore the inherited (broader) one for no gain.
-  if ((await verifyAsync(plan)) === null) {
+  if ((await verifyAsync(plan, operation)) === null) {
     return true
   }
   for (const [stage, args] of [
@@ -206,7 +245,11 @@ async function restrictAsync(targetPath: string, plan: AclPlan): Promise<boolean
     ['grant', plan.grantArgs]
   ] as const) {
     try {
-      const result = await runProcess({ program: plan.program, args, timeoutMs: ACL_TIMEOUT_MS })
+      const result = await runProcess({
+        program: plan.program,
+        args,
+        ...aclProcessOptions(operation)
+      })
       if (result.code !== 0) {
         report(targetPath, stage, result.stderr || `icacls exited ${result.code}`)
         return false
@@ -216,7 +259,7 @@ async function restrictAsync(targetPath: string, plan: AclPlan): Promise<boolean
       return false
     }
   }
-  const invalid = await verifyAsync(plan)
+  const invalid = await verifyAsync(plan, operation)
   if (invalid) {
     report(targetPath, 'verify', invalid)
     return false
@@ -224,13 +267,13 @@ async function restrictAsync(targetPath: string, plan: AclPlan): Promise<boolean
   return true
 }
 
-async function verifyAsync(plan: AclPlan): Promise<string | null> {
+async function verifyAsync(plan: AclPlan, operation?: AclOperation): Promise<string | null> {
   const savePath = sddlSavePath()
   try {
     const result = await runProcess({
       program: plan.program,
       args: verifyArgs(plan, savePath),
-      timeoutMs: ACL_TIMEOUT_MS
+      ...aclProcessOptions(operation)
     })
     return evaluateSavedAcl(plan, result, savePath)
   } catch (error) {
@@ -304,55 +347,4 @@ function planFor(targetPath: string, isDirectory: boolean): AclPlan | null {
     return null
   }
   return buildAclPlan(targetPath, currentUserSid, isDirectory)
-}
-
-let cachedWindowsUserSid: string | null = null
-let sidLookupFailedAt: number | null = null
-const SID_LOOKUP_RETRY_MS = 60_000
-
-/**
- * Why monotonic and not `Date.now`: a backwards wall-clock step held this window open until the
- * clock caught up, and this latch is worse than the read-path budget's — a failed lookup makes
- * `planFor` return null, which disables the synchronous *write* path too, so the write-path
- * exemption that recovers from that one cannot recover from this.
- */
-const monotonicNowMs = (): number => performance.now()
-
-/**
- * Only a well-formed SID is cached for the process lifetime. A failure is cached for a minute:
- * caching it forever let one transient `whoami` hiccup disable hardening until restart.
- */
-function getCurrentWindowsUserSid(): string | null {
-  if (cachedWindowsUserSid) {
-    return cachedWindowsUserSid
-  }
-  if (sidLookupFailedAt !== null && monotonicNowMs() - sidLookupFailedAt < SID_LOOKUP_RETRY_MS) {
-    return null
-  }
-  try {
-    const result = runProcessSync({
-      program: windowsSystem32Binary('whoami.exe'),
-      args: ['/user', '/fo', 'csv', '/nh'],
-      timeoutMs: ACL_TIMEOUT_MS
-    })
-    const candidate = result.code === 0 ? parseCsvLine(result.stdout.trim())[1] : undefined
-    if (candidate && WINDOWS_SID_PATTERN.test(candidate)) {
-      cachedWindowsUserSid = candidate
-      sidLookupFailedAt = null
-      return candidate
-    }
-  } catch {
-    // Fall through to the failure record below.
-  }
-  sidLookupFailedAt = monotonicNowMs()
-  return null
-}
-
-function parseCsvLine(line: string): string[] {
-  return line.split(/","/).map((part) => part.replace(/^"/, '').replace(/"$/, ''))
-}
-
-export function resetSecureFileWindowsUserSidForTests(): void {
-  cachedWindowsUserSid = null
-  sidLookupFailedAt = null
 }

@@ -146,6 +146,7 @@ getWslGuestEnvironment(distro: string | undefined, budgetMs?: number, options?: 
 **Files:** Create `src/shared/secure-file-publication.ts`、`secure-file-publication.test.ts`。
 Modify/Test `src/shared/secure-file.ts`、`secure-path-windows-acl.ts`、
 `secure-file.test.ts`、`secure-path-windows-acl.win32.test.ts`。
+提取 `windows-current-user-sid.ts` 并增加对应测试，复用同步/异步 SID 缓存且保持 ACL 文件行数门禁。
 
 **Interfaces:** Consumes task 2 operation 的结构，复用既有 ACL 规划、SID 与验证。
 Produces `writeProtectedFileAtomic(path: string, contents: Buffer, operation: { deadline: number;
@@ -153,7 +154,7 @@ signal: AbortSignal }): Promise<void>` 和
 `restrictWindowsPath(path: string, isDirectory: boolean, operation: { deadline: number;
 signal: AbortSignal }): Promise<boolean>`；由 secure-file.ts 导出严格发布入口。
 
-- [ ] **Step 1: 写失败测试。** 临时目录内测试 Buffer 字节完整、唯一独占临时文件、短写、
+- [x] **Step 1: 写失败测试。** 临时目录内测试 Buffer 字节完整、唯一独占临时文件、短写、
   file fsync 失败、父目录保护 false、临时文件保护 false、提交前取消保留旧文件：
 
   ```ts
@@ -163,16 +164,16 @@ signal: AbortSignal }): Promise<boolean>`；由 secure-file.ts 导出严格发�
 
   另测 published ACL 验证失败返回“需核实”错误，不宣称旧文件保持；Windows 目录 fsync
   不支持时不误报全部操作失败。权限测试沿用当前管理员/SYSTEM 信任范围。
-- [ ] **Step 2: 验证失败。** `pnpm test src/shared/secure-file-publication.test.ts
+- [x] **Step 2: 验证失败。** `pnpm test src/shared/secure-file-publication.test.ts
   src/shared/secure-file.test.ts`；真实 Windows ACL 测试留到 Windows 环境执行。
-- [ ] **Step 3: 实现严格发布。** 从既有实现提取/复用权限与 staging 机制，不能另写 SDDL
+- [x] **Step 3: 实现严格发布。** 从既有实现提取/复用权限与 staging 机制，不能另写 SDDL
   parser。用 fs/promises 和异步 runProcess，SID 冷启动也不得同步阻塞主线程。
   把剩余 deadline 与 signal 贯穿每个 ACL 调用，核实父目录后独占创建临时文件，保护后
   写 Buffer、同步、替换、验证。旧 best-effort 入口保持默认语义；清理仅限本次临时文件。
-- [ ] **Step 4: 验证通过。** 重跑任务测试和 `pnpm test src/shared/secure-file-fsync-flags.test.ts
+- [x] **Step 4: 验证通过。** 重跑任务测试和 `pnpm test src/shared/secure-file-fsync-flags.test.ts
   src/shared/secure-file-coarse-ctime.test.ts`；测试取消后的后续 tick 不再发生 rename。
   `pnpm tc:node` 和变更代码检查通过。
-- [ ] **Step 5: 提交。** 提交 `feat(security): add protected asynchronous file publication`，仅包含本任务文件。
+- [x] **Step 5: 提交。** 提交 `feat(security): add protected asynchronous file publication`，仅包含本任务文件。
 
 ## Task 4: 让现有保险库和账号服务支持异步保护
 
