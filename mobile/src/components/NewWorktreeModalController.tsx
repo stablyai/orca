@@ -2,9 +2,11 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } fro
 
 import type { RpcClient } from '../transport/rpc-client'
 import { NewWorktreeModal } from './NewWorktreeModal'
+import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 
 export type NewWorktreeModalControllerHandle = {
-  open: () => void
+  /** Opens the form; a repo passed here is upserted and selected for the new session. */
+  open: (preselectedRepo?: MobileWorkspaceRepo) => void
 }
 
 type Props = {
@@ -35,18 +37,25 @@ export const NewWorktreeModalController = forwardRef<NewWorktreeModalControllerH
     ref
   ) {
     const [manualVisible, setManualVisible] = useState(false)
+    // Why: state, not an argument — the handle is a stable ref, so the preselection must
+    // survive to the render that flips `manualVisible` and mounts the session for it.
+    const [preselectedRepo, setPreselectedRepo] = useState<MobileWorkspaceRepo | null>(null)
     const visible = routeVisible || manualVisible
 
     useImperativeHandle(
       ref,
       () => ({
-        open: () => setManualVisible(true)
+        open: (repo) => {
+          setPreselectedRepo(repo ?? null)
+          setManualVisible(true)
+        }
       }),
       []
     )
 
     const close = useCallback(() => {
       setManualVisible(false)
+      setPreselectedRepo(null)
       if (routeVisible) {
         onRouteVisibleChange(false)
       }
@@ -56,6 +65,8 @@ export const NewWorktreeModalController = forwardRef<NewWorktreeModalControllerH
       onVisibleChange?.(visible)
     }, [onVisibleChange, visible])
 
+    // Why: pass the preselection only while a manual open is pending — a route-driven
+    // opening must keep the last-visited default rather than a stale handoff repo.
     return (
       <NewWorktreeModal
         visible={visible}
@@ -63,6 +74,7 @@ export const NewWorktreeModalController = forwardRef<NewWorktreeModalControllerH
         hostId={hostId}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={existingWorktrees}
+        preselectedRepo={manualVisible ? preselectedRepo : null}
         openExternalUrl={openExternalUrl}
         onCreated={onCreated}
         onClose={close}

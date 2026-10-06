@@ -10,14 +10,14 @@ export const RepoPath = z.object({
 })
 
 export const RepoCreate = z.object({
-  parentPath: requiredString('Missing parent path'),
+  parentPath: OptionalString,
   name: requiredString('Missing repo name'),
   kind: z.enum(['git', 'folder']).optional()
 })
 
 export const RepoClone = z.object({
   url: requiredString('Missing clone URL'),
-  destination: requiredString('Missing clone destination')
+  destination: OptionalString
 })
 
 export const RepoSetBaseRef = z.object({
