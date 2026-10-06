@@ -2,6 +2,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
+import { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { installTerminalPaneMountEvents } from './terminal-pane-mount-events'
+import type { PtyConnectionDeps } from './pty-connection-types'
 import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../terminal/background-terminal-worktree-visibility'
 import {
   _resetTerminalPaneSplitRequestRoutingForTests,
@@ -37,6 +40,79 @@ afterEach(() => {
 })
 
 describe('parked terminal split request routing', () => {
+  it('forwards the initial ratio through the actual mount handler and ignores a repeated leaf', () => {
+    const manager = new PaneManager(document.createElement('div'), { linkOpenHint: () => '' })
+    const ptyDeps: PtyConnectionDeps = {
+      tabId: 'tab-parked',
+      worktreeId: 'repo::/workspace',
+      mountFollowsTerminalPark: false,
+      paneTransportsRef: { current: new Map() },
+      paneMode2031Ref: { current: new Map() },
+      paneKittyKeyboardModesRef: { current: new Map() },
+      paneLastThemeModeRef: { current: new Map() },
+      replayingPanesRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      onPtyExitRef: { current: vi.fn() },
+      onAgentExitedRef: { current: vi.fn() },
+      clearTabPtyId: vi.fn(),
+      consumeSuppressedPtyExit: () => false,
+      isPtyShutdownPending: () => false,
+      updateTabTitle: vi.fn(),
+      setRuntimePaneTitle: vi.fn(),
+      clearRuntimePaneTitle: vi.fn(),
+      updateTabPtyId: vi.fn(),
+      markWorktreeUnread: vi.fn(),
+      markTerminalTabUnread: vi.fn(),
+      markTerminalPaneUnread: vi.fn(),
+      clearWorktreeUnread: vi.fn(),
+      clearTerminalTabUnread: vi.fn(),
+      clearTerminalPaneUnread: vi.fn(),
+      onShowSessionRestoredBanner: vi.fn(),
+      dispatchNotification: vi.fn(),
+      setCacheTimerStartedAt: vi.fn(),
+      syncPanePtyLayoutBinding: vi.fn(),
+      clearExitedPanePtyLayoutBinding: vi.fn()
+    }
+    let mounted = false
+    vi.spyOn(manager, 'getNumericIdForLeaf').mockImplementation((leaf) =>
+      leaf === SOURCE_LEAF_ID ? 7 : mounted ? 8 : null
+    )
+    const splitPane = vi.spyOn(manager, 'splitPane').mockImplementation(() => {
+      expect(ptyDeps.startup).toEqual({ command: 'printf startup-once' })
+      mounted = true
+      return null
+    })
+    const mountDeps = {
+      tabId: 'tab-parked',
+      worktreeId: 'repo::/workspace',
+      isActive: false,
+      managerRef: { current: manager },
+      persistLayoutSnapshot: vi.fn(),
+      syncCanExpandState: vi.fn(),
+      queueResizeAll: vi.fn()
+    }
+    const cleanup = installTerminalPaneMountEvents({ manager, ptyDeps, deps: mountDeps })
+    const request = {
+      ...splitRequest('tab-parked'),
+      worktreeId: 'repo::/workspace',
+      newLeafId: '22222222-2222-4222-8222-222222222222',
+      ptyId: 'pty-new',
+      ratio: 0.85,
+      command: 'printf startup-once'
+    }
+    dispatchTerminalPaneSplitRequest(request)
+    dispatchTerminalPaneSplitRequest(request)
+    expect(splitPane).toHaveBeenCalledExactlyOnceWith(7, 'vertical', {
+      ratio: 0.85,
+      leafId: request.newLeafId,
+      ptyId: 'pty-new'
+    })
+    expect(ptyDeps.startup).toBeNull()
+    cleanup()
+    manager.destroy()
+  })
+
   it('demonstrates that the legacy fire-and-forget event is lost before a parked pane mounts', () => {
     const handler = vi.fn()
 

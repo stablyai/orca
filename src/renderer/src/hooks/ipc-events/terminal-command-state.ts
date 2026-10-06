@@ -50,7 +50,8 @@ function insertLeafAfterSource(
   node: TerminalPaneLayoutNode,
   sourceLeafId: string,
   newLeafId: string,
-  direction: TerminalSplitDirection
+  direction: TerminalSplitDirection,
+  ratio?: number
 ): { node: TerminalPaneLayoutNode; inserted: boolean } {
   if (node.type === 'leaf') {
     if (node.leafId !== sourceLeafId) {
@@ -62,16 +63,16 @@ function insertLeafAfterSource(
         direction,
         first: node,
         second: { type: 'leaf', leafId: newLeafId },
-        ratio: 0.5
+        ratio: ratio ?? 0.5
       },
       inserted: true
     }
   }
-  const first = insertLeafAfterSource(node.first, sourceLeafId, newLeafId, direction)
+  const first = insertLeafAfterSource(node.first, sourceLeafId, newLeafId, direction, ratio)
   if (first.inserted) {
     return { node: { ...node, first: first.node }, inserted: true }
   }
-  const second = insertLeafAfterSource(node.second, sourceLeafId, newLeafId, direction)
+  const second = insertLeafAfterSource(node.second, sourceLeafId, newLeafId, direction, ratio)
   return second.inserted
     ? { node: { ...node, second: second.node }, inserted: true }
     : { node, inserted: false }
@@ -84,10 +85,18 @@ export function addSplitLeafToLayout(
   ptyId: string,
   direction: TerminalSplitDirection,
   title?: string | null,
-  activateNewLeaf = true
+  activateNewLeaf = true,
+  ratio?: number
 ): TerminalLayoutSnapshot {
   const root = layout?.root ?? { type: 'leaf', leafId: sourceLeafId }
   const existingLeafIds = collectLeafIdsInOrder(root)
+  if (
+    ratio !== undefined &&
+    !existingLeafIds.includes(newLeafId) &&
+    !existingLeafIds.includes(sourceLeafId)
+  ) {
+    throw new Error('terminal_split_source_not_found')
+  }
   const nextActiveLeafId =
     activateNewLeaf || !layout?.activeLeafId || !existingLeafIds.includes(layout.activeLeafId)
       ? newLeafId
@@ -95,7 +104,7 @@ export function addSplitLeafToLayout(
   const nextRoot = existingLeafIds.includes(newLeafId)
     ? root
     : (() => {
-        const inserted = insertLeafAfterSource(root, sourceLeafId, newLeafId, direction)
+        const inserted = insertLeafAfterSource(root, sourceLeafId, newLeafId, direction, ratio)
         if (inserted.inserted) {
           return inserted.node
         }

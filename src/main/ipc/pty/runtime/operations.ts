@@ -97,6 +97,7 @@ export async function probePtyLivenessFromRuntimeController(
     const startupPromise = deps.getLocalPtyProviderStartupPromise(connectionId)
     if (startupPromise) {
       await startupPromise
+      settledLocalPtyProviderStartups.add(startupPromise)
     }
     const provider = getProviderForPty(ptyId)
     if (provider.probePtyLiveness) {

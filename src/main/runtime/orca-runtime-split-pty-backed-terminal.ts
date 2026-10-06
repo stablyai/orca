@@ -8,12 +8,14 @@ import { recordPtySurface, spawnSurfaceClaimSequence } from './pty-recorded-surf
 import { randomUUID } from 'node:crypto'
 import { REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS, ownerSurfacing } from './orca-runtime-core'
 import type { Worktree } from '../../shared/worktree/types'
+import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 
 export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitTerminal {
   protected async splitPtyBackedTerminal(
     pty: RuntimePtyWorktreeRecord,
     opts: {
       direction?: 'horizontal' | 'vertical'
+      ratio?: number
       command?: string
       env?: Record<string, string>
       envToDelete?: string[]
@@ -23,7 +25,8 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
       surfaceOwner?: false
       telemetrySource?: TerminalPaneSplitSource
     } = {},
-    createdWorktree?: Worktree
+    createdWorktree?: Worktree,
+    sourceHandle?: string
   ): Promise<RuntimeTerminalSplit> {
     if (!this.ptyController?.spawn) {
       throw new Error('runtime_unavailable')
@@ -37,17 +40,71 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
       throw new Error('terminal_handle_stale')
     }
     const direction = opts.direction ?? 'horizontal'
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(
-      `id:${pty.worktreeId}`,
-      createdWorktree
-    )
+    const revalidateRatioHandle = (): void => {
+      if (
+        opts.ratio !== undefined &&
+        sourceHandle !== undefined &&
+        this.resolveLocalDesktopTerminalSplitPty(sourceHandle) !== pty
+      ) {
+        throw new Error('terminal_handle_stale')
+      }
+    }
+    revalidateRatioHandle()
+    const ratioAuthority =
+      opts.ratio !== undefined ? this.captureLocalDesktopTerminalSplitSource(pty) : undefined
+    const ratioSourceAuthority = ratioAuthority
+      ? this.resolveTerminalSplitSourceAuthority(
+          pty.worktreeId,
+          parentTabId,
+          parsedPaneKey.leafId,
+          pty.ptyId
+        )
+      : null
+    if (ratioAuthority && !ratioSourceAuthority) {
+      throw new Error('terminal_split_source_not_found')
+    }
+    if (ratioAuthority) {
+      if (!this.controllerKnowsPtyIsLive(pty.ptyId)) {
+        await this.verifyLocalDesktopTerminalSplitPty(pty.ptyId)
+        revalidateRatioHandle()
+      }
+      this.assertLocalDesktopTerminalSplit(pty, ratioAuthority)
+      const currentSource = this.resolveTerminalSplitSourceAuthority(
+        pty.worktreeId,
+        parentTabId,
+        parsedPaneKey.leafId,
+        pty.ptyId
+      )
+      if (!currentSource || (ratioSourceAuthority.persisted && !currentSource.persisted)) {
+        throw new Error('terminal_split_source_not_found')
+      }
+    }
+    const launchTarget = ratioAuthority
+      ? await this.resolveTerminalWorkspaceLaunchTarget(`id:${pty.worktreeId}`, createdWorktree)
+      : null
+    const workspace =
+      launchTarget?.scope ??
+      (await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`, createdWorktree))
+    if (ratioAuthority) {
+      revalidateRatioHandle()
+      this.assertLocalDesktopTerminalSplit(pty, ratioAuthority)
+      const routing = launchTarget?.managedWorktree
+        ? resolveWorktreeHostRouting(this.store?.getRepos() ?? [], launchTarget.managedWorktree)
+        : null
+      if (
+        workspace.connectionId !== null ||
+        (!workspace.folderWorkspace && (routing?.kind !== 'resolved' || routing.hostId !== 'local'))
+      ) {
+        throw new Error('--ratio requires affirmative native local launch ownership')
+      }
+    }
     const sourceAuthority = this.resolveTerminalSplitSourceAuthority(
       workspace.id,
       parentTabId,
       parsedPaneKey.leafId,
       pty.ptyId
     )
-    if (!sourceAuthority) {
+    if (!sourceAuthority || (ratioSourceAuthority?.persisted && !sourceAuthority.persisted)) {
       throw new Error('terminal_split_source_not_found')
     }
     const sourceIncarnationId =
@@ -88,24 +145,30 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
           }
         : {})
     })
-    this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-    if (result.wslDistro) {
-      this.preparePtyExecutionContext(result.id, result.wslDistro)
+    let createdPty: RuntimePtyWorktreeRecord | null = null
+    const registerSplitPty = (): void => {
+      this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
+      if (result.wslDistro) {
+        this.preparePtyExecutionContext(result.id, result.wslDistro)
+      }
+      this.registerPty(result.id, workspace.id, workspace.connectionId)
+      createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
+      if (createdPty) {
+        recordPtySurface(
+          createdPty,
+          parentTabId,
+          paneKey,
+          spawnSurfaceClaimSequence(this.graphSequence)
+        )
+        createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
+        this.setPairedRendererSessionOwnership(
+          createdPty.ptyId,
+          this.pairedRendererSessionOwnedPtyIds.has(pty.ptyId)
+        )
+      }
     }
-    this.registerPty(result.id, workspace.id, workspace.connectionId)
-    const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
-    if (createdPty) {
-      recordPtySurface(
-        createdPty,
-        parentTabId,
-        paneKey,
-        spawnSurfaceClaimSequence(this.graphSequence)
-      )
-      createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
-      this.setPairedRendererSessionOwnership(
-        createdPty.ptyId,
-        this.pairedRendererSessionOwnedPtyIds.has(pty.ptyId)
-      )
+    if (!ratioAuthority) {
+      registerSplitPty()
     }
 
     const revealSplit = async (): Promise<void> => {
@@ -118,12 +181,17 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
         leafId,
         splitFromLeafId: parsedPaneKey.leafId,
         splitDirection: direction,
+        ...(opts.ratio !== undefined ? { splitRatio: opts.ratio } : {}),
         splitTelemetrySource: opts.telemetrySource
       })
     }
 
     try {
       const revalidateSourceAuthority = (): void => {
+        if (ratioAuthority) {
+          revalidateRatioHandle()
+          this.assertLocalDesktopTerminalSplit(pty, ratioAuthority)
+        }
         const current = this.resolveTerminalSplitSourceAuthority(
           workspace.id,
           parentTabId,
@@ -138,6 +206,13 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
         ) {
           throw new Error('terminal_split_source_not_found')
         }
+      }
+      if (ratioAuthority) {
+        revalidateSourceAuthority()
+        if (result.wslDistro) {
+          throw new Error('--ratio requires a native local desktop PTY')
+        }
+        registerSplitPty()
       }
       revalidateSourceAuthority()
       if (!sourceAuthority.persisted) {
@@ -154,7 +229,8 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
           leafId,
           ptyId: createdPty.ptyId,
           splitFromLeafId: parsedPaneKey.leafId,
-          direction
+          direction,
+          ...(opts.ratio !== undefined ? { ratio: opts.ratio } : {})
         })
         if (sourceAuthority.persisted && !persisted) {
           throw new Error('workspace_session_unavailable')
@@ -164,8 +240,16 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
           leafId,
           title: null,
           activate: opts.activate !== false,
-          split: { splitFromLeafId: parsedPaneKey.leafId, direction }
+          split: {
+            splitFromLeafId: parsedPaneKey.leafId,
+            direction,
+            ...(opts.ratio !== undefined ? { ratio: opts.ratio } : {})
+          }
         })
+      }
+      if (ratioAuthority && sourceAuthority.persisted) {
+        await revealSplit()
+        revalidateSourceAuthority()
       }
     } catch (error) {
       this.setPairedRendererSessionOwnership(result.id, false)
@@ -200,7 +284,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
           pty.ptyId
         )
       : null
-    if (sourceAuthority.persisted && committedSourceAuthority?.rendererMounted) {
+    if (!ratioAuthority && sourceAuthority.persisted && committedSourceAuthority?.rendererMounted) {
       // Why: renderer adoption is a projection after the durable main commit; rejection cannot undo it.
       void revealSplit().catch(() => undefined)
     }

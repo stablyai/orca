@@ -157,6 +157,9 @@ export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 // shell must refuse rather than create the wrong one.
 export const TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY =
   'terminal.create-shell-selection.v1' as const
+// Older hosts discard the ratio and would silently create an equal split.
+export const TERMINAL_SPLIT_RATIO_LOCAL_DESKTOP_RUNTIME_CAPABILITY =
+  'terminal.split-ratio.local-desktop.v1' as const
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
 export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
   'session-tabs.authoritative-inventory.v1' as const

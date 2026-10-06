@@ -207,6 +207,7 @@ export const TerminalCreateParams = z.object({
 })
 
 export const TerminalSplit = TerminalHandle.extend({
+  ratio: z.number().finite().gt(0).lt(1).optional(),
   direction: z
     .unknown()
     .transform((v) => (v === 'vertical' || v === 'horizontal' ? v : undefined))

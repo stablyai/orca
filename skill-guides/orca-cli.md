@@ -176,6 +176,7 @@ ORCA terminal create --title "Worker" --json
 ORCA terminal create --worktree active --command "codex" --json
 ORCA terminal split --terminal <handle> --direction vertical --json
 ORCA terminal split --terminal <handle> --direction horizontal --command "npm test" --json
+ORCA terminal split --terminal <handle> --ratio 0.85 --json
 ORCA terminal rename --terminal <handle> --title "New Name" --json
 ORCA terminal switch --terminal <handle> --json
 ORCA terminal close --terminal <handle> --json
@@ -201,6 +202,9 @@ Terminal rules:
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
 - `--direction horizontal` splits left/right. `--direction vertical` splits top/bottom.
+- `terminal split --ratio <fraction>` sets the existing first pane's initial share of available split flex; `0.85` means 85%. Require a finite value greater than 0 and less than 1.
+- A supplied ratio requires an eligible live native local PTY in a Git worktree, registered non-Git folder repo or standalone folder workspace with a recorded folder-group root, with its available owning desktop renderer. Older runtimes, paired transport or ownership, headless/reloading desktops, WSL, SSH/runtime hosts and missing or ambiguous source ownership refuse before splitting.
+- Omit `--ratio` to retain existing routes and defaults without a status preflight. Supplying it adds one status preflight. Saved ratios usually round to three decimals, preserve fractions that would round to zero or one, and omit values within 0.005 of one half; dividers and minimum pane sizes can change the visible pixel share. Later resizing and ratio readback remain separate work.
 
 ## Artifacts
 

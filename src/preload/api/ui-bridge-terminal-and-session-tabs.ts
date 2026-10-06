@@ -37,6 +37,7 @@ export const uiTerminalAndSessionTabsApi = {
       leafId?: string
       splitFromLeafId?: string
       splitDirection?: 'horizontal' | 'vertical'
+      splitRatio?: number
       splitTelemetrySource?: TerminalPaneSplitSource
     }) => void
   ): (() => void) => {
@@ -63,6 +64,7 @@ export const uiTerminalAndSessionTabsApi = {
         leafId?: string
         splitFromLeafId?: string
         splitDirection?: 'horizontal' | 'vertical'
+        splitRatio?: number
         splitTelemetrySource?: TerminalPaneSplitSource
       }
     ) => callback(data)

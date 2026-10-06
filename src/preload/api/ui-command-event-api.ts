@@ -170,6 +170,7 @@ export type UiCommandEventApi = {
       leafId?: string
       splitFromLeafId?: string
       splitDirection?: 'horizontal' | 'vertical'
+      splitRatio?: number
       splitTelemetrySource?: TerminalPaneSplitSource
     }) => void
   ) => () => void

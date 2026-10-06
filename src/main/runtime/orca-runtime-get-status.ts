@@ -1,5 +1,6 @@
 import { OrcaRuntimeWithGetRuntimeId } from './orca-runtime-get-runtime-id'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
+import type { BrowserWindow } from 'electron'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserUnavailableCause
@@ -16,7 +17,8 @@ import {
   RUNTIME_PROTOCOL_VERSION,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
-  TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
+  TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
+  TERMINAL_SPLIT_RATIO_LOCAL_DESKTOP_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import {
   BROWSER_UNAVAILABLE_ERROR_CODE,
@@ -40,7 +42,7 @@ import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidato
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from './runtime-machine-name'
 
 type RuntimeStatusHost = {
-  getAvailableAuthoritativeWindow(): unknown
+  getAvailableAuthoritativeWindow(): BrowserWindow | null
   getRecordedTerminalSleepHandles(
     ptyIds: Iterable<string>,
     terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
@@ -71,7 +73,8 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     // additionally tells clients this host owns browser pages with no renderer,
     // so they must not fall back to a local desktop browser tab.
     const statusHost = this.asRuntimeStatusHost()
-    const hasRenderer = Boolean(statusHost.getAvailableAuthoritativeWindow())
+    const owningWindow = statusHost.getAvailableAuthoritativeWindow()
+    const hasRenderer = Boolean(owningWindow)
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
     const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen
@@ -93,6 +96,14 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
         (capability !== TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY ||
           supportsDurableTerminalPromptDelivery())
     )
+    if (
+      owningWindow &&
+      owningWindow.webContents?.isDestroyed?.() === false &&
+      this.graphStatus === 'ready' &&
+      this.notifier?.revealTerminalSession
+    ) {
+      capabilities.push(TERMINAL_SPLIT_RATIO_LOCAL_DESKTOP_RUNTIME_CAPABILITY)
+    }
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }

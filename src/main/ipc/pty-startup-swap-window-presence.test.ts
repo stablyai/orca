@@ -3,6 +3,7 @@ import { makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, registerSshPtyProvider } from './pty'
 import { ptyOwnership } from './pty/provider/ownership-state'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -60,11 +61,12 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
 
   const registerWithStartupBarrier = (
     barrier: Promise<void>,
-    runtime?: Record<string, unknown>
+    runtime?: OrcaRuntimeService
   ): void => {
     registerPtyHandlers(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the established IPC fixture supplies every window predicate and delivery method registerPtyHandlers reads.
       mainWindow as never,
-      runtime as never,
+      runtime,
       undefined,
       undefined,
       undefined,
@@ -73,24 +75,61 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
     )
   }
 
-  const installRuntimeControllerWithBarrier = (
-    barrier: Promise<void>
-  ): { hasPty: (ptyId: string) => boolean | null } => {
-    let controller: { hasPty: (ptyId: string) => boolean | null } | undefined
-    registerWithStartupBarrier(barrier, {
-      setPtyController: vi.fn((next) => {
-        controller = next
-      }),
-      registerPty: vi.fn(),
-      onPtySpawned: vi.fn(),
-      onPtyExit: vi.fn(),
-      onPtyData: vi.fn()
-    })
-    if (!controller) {
-      throw new Error('runtime controller was not installed')
+  const installRuntimeControllerWithBarrier = (barrier: Promise<void>) => {
+    const runtime = new OrcaRuntimeService()
+    const installed = vi.spyOn(runtime, 'setPtyController')
+    registerWithStartupBarrier(barrier, runtime)
+    const controller = installed.mock.calls[0]?.[0]
+    if (!controller?.hasPty || !controller.probePtyLiveness) {
+      throw new Error('runtime presence controller was not installed')
     }
-    return controller
+    return { hasPty: controller.hasPty, probePtyLiveness: controller.probePtyLiveness }
   }
+
+  it('first sync probe reads the live owner after an authoritative async probe awaited fulfilled startup', async () => {
+    const startup = Promise.resolve()
+    await startup
+    const controller = installRuntimeControllerWithBarrier(startup)
+    installDaemonTestProvider({ hasPty: () => true, probePtyLiveness: async () => true })
+    await expect(controller.probePtyLiveness('daemon-restored-pty')).resolves.toBe(true)
+    expect(controller.hasPty('daemon-restored-pty')).toBe(true)
+  })
+
+  it('async presence awaits pending startup and makes the first post-swap sync probe authoritative', async () => {
+    const barrier = makeDeferred()
+    const controller = installRuntimeControllerWithBarrier(barrier.promise)
+    const providerProbe = vi.fn(async () => true)
+    let settled = false
+    const pending = controller.probePtyLiveness('daemon-restored-pty').then((result) => {
+      settled = true
+      return result
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    installDaemonTestProvider({ hasPty: () => true, probePtyLiveness: providerProbe })
+    barrier.resolve()
+    await expect(pending).resolves.toBe(true)
+    expect(providerProbe).toHaveBeenCalledOnce()
+    expect(controller.hasPty('daemon-restored-pty')).toBe(true)
+  })
+
+  it('rejected startup leaves asynchronous presence unverifiable without consulting a non-owning provider', async () => {
+    const startup = Promise.reject(new Error('provider startup failed'))
+    const controller = installRuntimeControllerWithBarrier(startup)
+    const providerProbe = vi.fn(async () => true)
+    installDaemonTestProvider({ hasPty: () => true, probePtyLiveness: providerProbe })
+    await expect(controller.probePtyLiveness('daemon-restored-pty')).resolves.toBe(null)
+    expect(providerProbe).not.toHaveBeenCalled()
+  })
+
+  it('async paired-runtime presence never waits on or consults the local provider', async () => {
+    const barrier = makeDeferred()
+    const controller = installRuntimeControllerWithBarrier(barrier.promise)
+    const providerProbe = vi.fn(async () => true)
+    installDaemonTestProvider({ hasPty: () => true, probePtyLiveness: providerProbe })
+    await expect(controller.probePtyLiveness('remote:environment@@pty-1')).resolves.toBe(null)
+    expect(providerProbe).not.toHaveBeenCalled()
+  })
 
   it('pty:hasPty defers a restored daemon id until the provider swap lands instead of answering a pre-swap false', async () => {
     const barrier = makeDeferred()

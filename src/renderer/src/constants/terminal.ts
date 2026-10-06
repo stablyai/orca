@@ -48,6 +48,7 @@ export type PasteTerminalTextDetail = {
 }
 
 export type SplitTerminalPaneDetail = {
+  ratio?: number
   tabId: string
   worktreeId?: string
   paneRuntimeId: number

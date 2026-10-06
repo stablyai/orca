@@ -54,6 +54,34 @@ describe('orca cli worktree awareness', () => {
     spawnMock
   })
 
+  it.each(['', '0', '1', '-0.1', '1.1', 'NaN', 'Infinity', 'text'])(
+    'recognizes --ratio but refuses invalid public CLI value %s before RPC or spawn',
+    async (value) => {
+      const priorExitCode = process.exitCode
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      await main(['terminal', 'split', `--ratio=${value}`, '--json'], '/tmp/repo')
+      expect(callMock).not.toHaveBeenCalled()
+      expect(spawnMock).not.toHaveBeenCalled()
+      expect([...log.mock.calls, ...error.mock.calls].flat().join('\n')).toContain(
+        'invalid_argument'
+      )
+      expect(process.exitCode).toBe(1)
+      process.exitCode = priorExitCode
+    }
+  )
+
+  it('refuses valueless --ratio on the public CLI before RPC or spawn', async () => {
+    const priorExitCode = process.exitCode
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await main(['terminal', 'split', '--ratio', '--json'], '/tmp/repo')
+    expect(callMock).not.toHaveBeenCalled()
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
   it('passes explicit focus through terminal.create', async () => {
     queueFixtures(
       callMock,

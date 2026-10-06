@@ -25,6 +25,7 @@ export type TerminalCreateListenerPayload = {
   leafId?: string
   splitFromLeafId?: string
   splitDirection?: 'horizontal' | 'vertical'
+  splitRatio?: number
   splitTelemetrySource?: 'contextual_tour' | 'keyboard' | 'context_menu' | 'command' | 'unknown'
 }
 

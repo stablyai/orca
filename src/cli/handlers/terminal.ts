@@ -22,6 +22,7 @@ import {
   printResult
 } from '../format'
 import {
+  getOptionalNumberFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
@@ -35,7 +36,10 @@ import {
   isSupportedWindowsShellOverride,
   listSupportedWindowsShellOverrides
 } from '../../shared/windows-terminal-shell'
-import { TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
+  TERMINAL_SPLIT_RATIO_LOCAL_DESKTOP_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import {
   getBrowserWorktreeSelector,
   getOptionalWorktreeSelector,
@@ -206,6 +210,13 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'terminal switch': terminalFocusHandler,
   'terminal close': terminalCloseHandler,
   'terminal split': async ({ flags, client, cwd, json }) => {
+    const ratio = getOptionalNumberFlag(flags, 'ratio')
+    if (flags.has('ratio') && (ratio === undefined || ratio <= 0 || ratio >= 1)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--ratio must be greater than 0 and less than 1'
+      )
+    }
     const directionFlag = getOptionalStringFlag(flags, 'direction')
     if (
       directionFlag !== undefined &&
@@ -214,10 +225,36 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     ) {
       throw new RuntimeClientError('invalid_argument', '--direction must be horizontal or vertical')
     }
+    if (ratio !== undefined) {
+      if (client.isRemote) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--ratio requires a native local desktop terminal; paired transport is unsupported. No terminal was split.'
+        )
+      }
+      const status = await client.getCliStatus()
+      if (!status.result.runtime.reachable) {
+        throw new RuntimeClientError(
+          'runtime_unavailable',
+          'Orca could not verify --ratio support. No terminal was split; wait for the local desktop runtime and retry.'
+        )
+      }
+      if (
+        status.result.runtime.capabilities?.includes(
+          TERMINAL_SPLIT_RATIO_LOCAL_DESKTOP_RUNTIME_CAPABILITY
+        ) !== true
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca runtime cannot apply --ratio with its current local desktop renderer. No terminal was split; update Orca or wait for its desktop renderer.'
+        )
+      }
+    }
     const result = await client.call<{ split: RuntimeTerminalSplit }>('terminal.split', {
       terminal: await getTerminalHandle(flags, cwd, client),
       direction: directionFlag,
-      command: getOptionalStringFlag(flags, 'command')
+      command: getOptionalStringFlag(flags, 'command'),
+      ...(ratio !== undefined ? { ratio } : {})
     })
     printResult(result, json, formatTerminalSplit)
   }

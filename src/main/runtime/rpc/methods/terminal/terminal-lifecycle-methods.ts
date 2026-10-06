@@ -1,4 +1,4 @@
-import { defineMethod } from '../../core'
+import { defineMethod, InvalidArgumentError } from '../../core'
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
@@ -85,14 +85,20 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
     name: 'terminal.split',
     params: TerminalSplit,
-    handler: async (params, { runtime }) => ({
-      split: await runtime.splitTerminal(params.terminal, {
-        direction: params.direction,
-        command: params.command,
-        env: params.env,
-        telemetrySource: params.telemetrySource
-      })
-    })
+    handler: async (params, { runtime, clientKind }) => {
+      if (params.ratio !== undefined && clientKind !== undefined) {
+        throw new InvalidArgumentError('--ratio requires a local desktop CLI connection')
+      }
+      return {
+        split: await runtime.splitTerminal(params.terminal, {
+          direction: params.direction,
+          ...(params.ratio !== undefined ? { ratio: params.ratio } : {}),
+          command: params.command,
+          env: params.env,
+          telemetrySource: params.telemetrySource
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.stop',

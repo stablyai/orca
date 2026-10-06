@@ -26,6 +26,10 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'skills install': {
     agent: '--agent <names>        Comma-separated install targets; default is detected agents'
   },
+  'terminal split': {
+    ratio:
+      '--ratio <fraction>     Initial flex share for the existing first pane, greater than 0 and less than 1 (live native local PTY with owning desktop renderer)'
+  },
   'worktree set': {
     unread: '--unread               Mark the workspace unread in the sidebar',
     read: '--read                 Mark the workspace read, clearing the unread dot'

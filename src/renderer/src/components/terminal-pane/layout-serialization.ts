@@ -72,7 +72,9 @@ export function serializePaneTree(node: HTMLElement | null): TerminalPaneLayoutN
       const r = firstGrow / total
       // Only store if meaningfully different from 0.5 (default equal split)
       if (Math.abs(r - 0.5) > 0.005) {
-        ratio = Math.round(r * 1000) / 1000
+        const rounded = Math.round(r * 1000) / 1000
+        // A valid extreme share must not round to an endpoint that replay rejects.
+        ratio = rounded > 0 && rounded < 1 ? rounded : r
       }
     }
   }

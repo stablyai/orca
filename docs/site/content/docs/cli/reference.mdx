@@ -143,6 +143,7 @@ orca terminal send --terminal <handle> --text "continue" --enter --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
 orca terminal create --worktree active --title "tests" --command "npm test" --json
 orca terminal split --terminal <handle> --direction horizontal --command "npm run dev" --json
+orca terminal split --terminal <handle> --ratio 0.85 --json
 orca terminal rename --terminal <handle> --title "runner" --json
 orca terminal switch --terminal <handle> --json
 orca terminal close --terminal <handle> --json
@@ -150,6 +151,18 @@ orca terminal close --worktree active --all --json
 ```
 
 Omit `--terminal` to target the active terminal in the current worktree. Read before sending when you are not sure what the terminal is waiting for.
+
+`terminal split --ratio <fraction>` gives the existing first pane that initial share of the
+available split flex: `0.85` gives it 85%. The value must be finite, greater than 0 and less
+than 1. It requires an eligible live native local PTY in a Git worktree, registered non-Git
+folder repo or standalone folder workspace with a recorded folder-group root, and its
+available owning desktop renderer.
+Older runtimes, paired transport or ownership, headless/reloading desktops, WSL,
+SSH/runtime hosts and missing or ambiguous source ownership refuse before splitting.
+Omitting `--ratio` keeps existing routes and defaults and adds no status preflight.
+Supplying it adds one status preflight. Saved ratios usually round to three decimals, preserving fractions that would round to zero or
+one, and omit values within 0.005 of one half; dividers and minimum pane sizes can change the visible pixel share.
+This sets initial geometry only; later resizing and ratio readback remain separate work.
 
 Close stops the process as part of removing the terminal. Use `--terminal <handle>` for one
 terminal, or `--worktree <selector> --all` to durably close every terminal in exactly that
