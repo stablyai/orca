@@ -173,9 +173,10 @@ export function useMobileStructuredAgentSession(args: {
     // Off: the phone hands a rejected message back to its composer, so a row would show it twice.
     () =>
       projectStructuredAgentSessionMessages(transcriptItems, [], state.submissions, {
-        rejectedInPlace: false
+        rejectedInPlace: false,
+        showsFailedStartsSentElsewhere: hostSupport?.retryMessage === true
       }),
-    [transcriptItems, state.submissions]
+    [transcriptItems, state.submissions, hostSupport?.retryMessage]
   )
   const turnId = activeStructuredAgentSessionTurnId(state.items)
   const turnTiming = useMobileStructuredAgentTurnTiming(

@@ -1,4 +1,5 @@
-// A failed start's one row is keyed by the start, so a reader finds it by identity, not by its words.
+// Older hosts wrote a failed start as one row keyed by the start; a reader finds it by identity, not
+// by its words. Nothing writes one now: the failure sits on the message it was for.
 
 import { parseAgentJournalItemKey } from './agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from './agent-session-journal-types'

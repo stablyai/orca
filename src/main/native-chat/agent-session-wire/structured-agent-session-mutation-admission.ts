@@ -67,8 +67,11 @@ export function refuseAgentSessionMutation(refusal: AgentSessionWireRefusal): {
 }
 
 export type AgentSessionMutationSessionPreparation =
-  | { ok: true }
-  | { ok: false; refusal: AgentSessionWireRefusal }
+  /** `startPending`: the agent the call needs is still proving its start, which the call waits
+   *  for outside the session's queue. */
+  { ok: true; startPending?: true } | { ok: false; refusal: AgentSessionWireRefusal }
+/** Never `startPending`: `serializeAwaitingAgentStart` waits a start out before the call admits. */
+type AdmittedPreparation = AgentSessionMutationSessionPreparation & { startPending?: never }
 
 export type AgentSessionMutationRequest<TValue> = {
   store: AgentSessionRecordStore
@@ -84,7 +87,7 @@ export type AgentSessionMutationRequest<TValue> = {
   prepareSession?: (
     ledger: Exclude<AgentSessionOperationDecision['decision'], 'refused'>,
     record: AgentSessionRecord
-  ) => Promise<AgentSessionMutationSessionPreparation>
+  ) => Promise<AdmittedPreparation>
   publish: (journal: AgentSessionJournal) => void
   providerChildPhase?: AgentSessionTurnContext['providerChildPhase']
   now: () => number

@@ -1,11 +1,22 @@
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
-import { createCodexStructuredLaunchResolver } from './codex-structured-launch-resolution'
+import {
+  createCodexStructuredLaunchResolver,
+  openCodexStructuredChild
+} from './codex-structured-launch-resolution'
 import { codexStructuredPermissionPolicyForSettings } from './codex-structured-permission-policy'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+
+// The host's own install directories are this machine's; each case names the only places it has.
+vi.mock('../../shared/system-cli-install-dirs', () => ({
+  getSystemCliInstallDirectories: () => []
+}))
 
 const SESSION_ID = 'session-1'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -262,5 +273,72 @@ describe('codex structured launch resolution', () => {
         throw new Error('workspace-1 is gone')
       })({ identity: IDENTITY })
     ).rejects.toThrow('workspace-1 is gone')
+  })
+})
+
+describe('a Codex CLI the host cannot find', () => {
+  function executable(dir: string, name: string): void {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, name), '')
+    chmodSync(join(dir, name), 0o755)
+  }
+
+  /** The real child with the resolver's bare name; `env` is what the spawn itself gets. Its spawn
+   *  is stubbed, so reaching it means the check let the start through. */
+  function open(env: Record<string, string>) {
+    const spawned = new Error('spawned')
+    return {
+      spawned,
+      opened: openCodexStructuredChild({ command: 'codex', args: ['app-server'], env }, {}, () => {
+        throw spawned
+      })
+    }
+  }
+
+  it.skipIf(process.platform === 'win32')(
+    'is refused as missing before any spawn when neither PATH nor an install directory has it',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-codex-missing-'))
+
+      await expect(
+        open({ PATH: join(root, 'bin'), HOME: join(root, 'home') }).opened
+      ).rejects.toMatchObject({
+        name: 'AgentSessionPreSpawnError',
+        reason: 'providerMissing',
+        needsUser: true
+      })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    "spawns one only the spawn's PATH or a version manager has",
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-codex-found-'))
+      executable(join(root, 'shell-bin'), 'codex')
+      executable(join(root, 'home', '.volta', 'bin'), 'codex')
+
+      for (const env of [
+        { PATH: join(root, 'shell-bin'), HOME: join(root, 'empty-home') },
+        { PATH: join(root, 'bin'), HOME: join(root, 'home') }
+      ]) {
+        const { spawned, opened } = open(env)
+        await expect(opened).rejects.toBe(spawned)
+      }
+    }
+  )
+
+  // The launch is only the record's: whether the CLI is there is the spawn's to find, so a host
+  // that opens its own connection never reads this machine's PATH.
+  it('resolves the launch whether or not this machine has codex', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-codex-launch-'))
+    await expect(
+      createCodexStructuredLaunchResolver({
+        store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+        resolveWorkspacePath: async (id) => `/repos/${id}`,
+        resolveCommand: () => 'codex',
+        resolveEnvironment: async () => ({ PATH: join(root, 'bin'), HOME: join(root, 'home') }),
+        isWindowsProcessStartTimeAvailable: () => true
+      })({ identity: IDENTITY })
+    ).resolves.toMatchObject({ command: 'codex' })
   })
 })

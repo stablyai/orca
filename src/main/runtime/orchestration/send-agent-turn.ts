@@ -165,3 +165,17 @@ async function sendStructuredSessionTurn(
     submission: agentSessionSendSubmission(settled?.value) ?? answered
   }
 }
+
+/** A structured send the host still holds for its agent: how it settles for good, if it does within
+ *  `budgetMs`. A wait that fails or runs out answers undefined, which proves neither outcome. */
+export async function structuredAgentTurnVerdict(
+  host: StructuredAgentTurnHost,
+  sessionId: string,
+  clientMessageId: string,
+  budgetMs: number
+): Promise<AgentJournalSubmission | undefined> {
+  const settled = await host
+    .waitForSendSettlement(sessionId, clientMessageId, { until: 'verdict', budgetMs })
+    .catch(() => undefined)
+  return agentSessionSendSubmission(settled?.value)
+}

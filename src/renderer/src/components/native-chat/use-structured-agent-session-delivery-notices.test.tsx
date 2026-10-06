@@ -67,6 +67,8 @@ it('keeps the same notices across batches in a chat whose only rejection a Stop 
         failedHere: NONE,
         queuedMessageIds: NO_CARDS,
         retry: () => {},
+        retriesInPlace: false,
+        retryWaitsForHost: NONE,
         agentName: 'Claude'
       }),
     { initialProps: { submissions: [withdrawn('stopped')] } }
@@ -89,6 +91,8 @@ function renderNotices(submissions: readonly AgentJournalSubmission[]) {
         failedHere: NONE,
         queuedMessageIds: NO_CARDS,
         retry: () => {},
+        retriesInPlace: false,
+        retryWaitsForHost: NONE,
         agentName: 'Claude'
       }),
     { initialProps: { submissions } }

@@ -23,6 +23,11 @@ export function createCoordinatorMailObservationClock(
       await getHost().flushStreamedEvents(sessionId)
       await new Promise<void>((resolve) => setImmediate(resolve))
     },
+    /** Moves the wall clock `ms` ahead until mocks are restored, with timers left real. */
+    jumpWallClock(ms: number): void {
+      const realNow = Date.now.bind(Date)
+      vi.spyOn(Date, 'now').mockImplementation(() => realNow() + ms)
+    },
     async edgesAnswered(
       runtime: Pick<OrcaRuntimeService, 'onStructuredSessionStatusForMail'>,
       wait: { timeout: number }

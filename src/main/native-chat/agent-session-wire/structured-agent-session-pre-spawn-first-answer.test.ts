@@ -108,6 +108,16 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
   }
 }
 
+/** The options its throw site passes: a refusal only the person can clear carries the marker. */
+function thrownWith(
+  reason: AgentSessionPreSpawnReason | undefined
+): ConstructorParameters<typeof AgentSessionPreSpawnError>[1] {
+  if (reason === undefined || reason === 'accountSwitchInProgress') {
+    return reason ? { reason } : {}
+  }
+  return { reason, needsUser: true }
+}
+
 describe('a create that fails before any process spawns', () => {
   it.each<[string, string, AgentSessionPreSpawnReason | undefined, string]>([
     [
@@ -138,7 +148,7 @@ describe('a create that fails before any process spawns', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
     const { first, replay } = await firstAnswerAndReplay(
-      new AgentSessionPreSpawnError(new Error(raw), reason ? { reason } : {})
+      new AgentSessionPreSpawnError(new Error(raw), thrownWith(reason))
     )
 
     // Thrown as before: the wire code is unchanged, only the words are the replay's.

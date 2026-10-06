@@ -17,13 +17,19 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
+import { STRUCTURED_AGENT_SESSION_START_RETRY_DELAYS_MS } from '../../../../shared/structured-agent-session-start-retry'
+import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { mintAgentSessionOperationId } from '../../orchestration/structured-pointer-operation-id'
 import { structuredPointerCallerKey } from '../../orchestration/structured-mailbox-pointer-host'
-import { sendAgentTurn, type StructuredAgentTurnHost } from '../../orchestration/send-agent-turn'
+import {
+  sendAgentTurn,
+  structuredAgentTurnVerdict,
+  type StructuredAgentTurnHost
+} from '../../orchestration/send-agent-turn'
 import { retireSettledStructuredWorkerTab } from '../../structured-agent-session-tab-retirement'
 import {
   mintStructuredWorkerHandle,
@@ -209,13 +215,32 @@ type StructuredWorkerPreambleHost = StructuredAgentTurnHost & {
   deps: { store: { getRecord: (sessionId: string) => { lease: { runtimeFence: number } } | null } }
 }
 
+/** How long a held preamble is watched for its own verdict: every try of its start, each of which
+ *  may take a whole start. */
+const PREAMBLE_VERDICT_WAIT_MS =
+  STRUCTURED_AGENT_SESSION_START_RETRY_DELAYS_MS.reduce((total, delay) => total + delay, 0) +
+  (STRUCTURED_AGENT_SESSION_START_RETRY_DELAYS_MS.length + 1) *
+    STRUCTURED_AGENT_SESSION_START_WAIT_MS
+
+/** Why a preamble provably did not happen, as `dispatch_preamble_undelivered` says it. */
+function preambleUndeliveredReason(submission: {
+  reason?: string | null
+  rejection?: { kind: string }
+}): string {
+  return `The dispatch preamble was not delivered${
+    submission.rejection ? ` (${submission.rejection.kind})` : ''
+  }: ${reasonClause(submission.reason)}.`
+}
+
 /** Delivers the dispatch preamble as the worker's first turn. `pending`: the worker's agent had
- *  not taken it within the wait; the host still holds it for that agent, and never re-sends it. */
+ *  not taken it within the wait; the host still holds it for that agent, and never re-sends it.
+ *  `whenUndelivered` hears it if the host later rejects it for good, its start's tries spent. */
 export async function sendStructuredWorkerPreamble(args: {
   host: StructuredWorkerPreambleHost
   sessionId: string
   dispatchId: string
   preamble: string
+  whenUndelivered?: (reason: string) => void
 }): Promise<'accepted' | 'pending'> {
   const body: AgentJournalMessageItem = {
     kind: 'message',
@@ -245,8 +270,29 @@ export async function sendStructuredWorkerPreamble(args: {
       // Never for a `now` send; a held draft proves nothing about the worker taking it.
       return preambleDispatchState(undefined)
     case 'sent':
+      if (outcome.submission?.dispatchState === 'pending' && args.whenUndelivered) {
+        watchHeldPreamble(args, outcome.submission.clientMessageId, args.whenUndelivered)
+      }
       return preambleDispatchState(outcome.submission)
   }
+}
+
+/** Reports a held preamble the host later rejects for good, its start's tries spent. */
+function watchHeldPreamble(
+  args: { host: StructuredWorkerPreambleHost; sessionId: string },
+  clientMessageId: string,
+  whenUndelivered: (reason: string) => void
+): void {
+  void structuredAgentTurnVerdict(
+    args.host,
+    args.sessionId,
+    clientMessageId,
+    PREAMBLE_VERDICT_WAIT_MS
+  ).then((verdict) => {
+    if (verdict?.dispatchState === 'rejected') {
+      whenUndelivered(preambleUndeliveredReason(verdict))
+    }
+  })
 }
 
 function preambleDispatchState(
@@ -263,9 +309,7 @@ function preambleDispatchState(
     // pending receipt; only this one lets the caller retry knowing nothing landed.
     throw new OrchestrationError(
       'dispatch_preamble_undelivered',
-      `The dispatch preamble was not delivered${
-        submission.rejection ? ` (${submission.rejection.kind})` : ''
-      }: ${reasonClause(submission.reason)}.`
+      preambleUndeliveredReason(submission)
     )
   }
   // Only `accepted` is an acknowledgement — the same rule the mail lane already applies. A thrown

@@ -104,8 +104,12 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   // Receipt of the exit is the one end time the host may record for a running turn.
   const observedAt = exit.observedAt ?? context.now()
   // The host's own phase decides, so a provider that omits the flag still gets a start that
-  // failed told as one: the row says so.
+  // failed told as one.
   const exitedDuringStartup = exit.startupUnproven === true || child.phase === 'starting'
+  // A start that died, or that the host stopped, before it proved itself took nothing: the delivery
+  // loop, the one writer of a failed start, rejects what it was for and was handed. A person's Stop
+  // or close of one settles as any close does.
+  const unprovenStart = exitedDuringStartup && (!expected || close?.cause === 'host-stop')
   const endChild = (): void => {
     endProviderChild(session, {
       generation: child.generation,
@@ -153,20 +157,16 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       // Only a turn no adapter settled. Whether a close ended a person's turn is the Stop event's to
       // say (`turnEndAfterStop`); a death of its own interrupted it.
       verdict: { state: 'interrupted', completedAt: expected ? context.now() : observedAt },
-      failureTextContext: structuredAgentSessionFailureWordsContext(record, session.journal),
-      // A failed start always says why: no response was running to carry the reason.
+      failureTextContext: structuredAgentSessionFailureWordsContext(record),
       showUnexpectedExitOutcome:
         !expected &&
-        (exitedDuringStartup ||
-          unfinishedStructuredAgentSessionWorkWasInterrupted(
-            unfinishedWork,
-            session.journal,
-            observedAt
-          )),
+        unfinishedStructuredAgentSessionWorkWasInterrupted(
+          unfinishedWork,
+          session.journal,
+          observedAt
+        ),
       ...(!expected && exit.failure ? { exitFailure: exit.failure } : {}),
-      ...(!expected && exitedDuringStartup && child.generation
-        ? { exitedDuringStartup: { generation: child.generation } }
-        : {})
+      ...(unprovenStart ? { unprovenStart: true as const } : {})
     })
     if (!settled.ok) {
       logExitFailure(context, sessionId, 'exit-settlement', settled.error)

@@ -1,6 +1,6 @@
-// A Claude chat whose CLI exits before it finishes starting leaves one red row per start. A view
-// opening, or coming back to, a chat whose last start failed used to start the CLI again, so every
-// look at the chat added an identical row. Only a send retries a failed start: it is the user asking.
+// A Claude chat whose CLI exits before it finishes starting. A view opening, or coming back to, a
+// chat whose last start failed used to start the CLI again, so every look at the chat added an
+// identical row. Only a message starts again, and the failure is recorded on the message it was for.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -103,11 +103,9 @@ afterEach(async () => {
 
 /** Waits until the adapter has published every exit it saw and the host settled each one. */
 async function settleExits(): Promise<void> {
-  await eventually(async () => {
-    await adapter.drainObservedExits()
-    await Promise.all(lifecycle)
-    expect((await host.journalSnapshot(SESSION)).items.length).toBeGreaterThan(0)
-  })
+  await adapter.drainObservedExits()
+  await Promise.all(lifecycle)
+  await host.flushStreamedEvents(SESSION)
   await Promise.all(lifecycle)
 }
 
@@ -152,7 +150,7 @@ describe('a fresh chat whose Claude start fails', () => {
     ['after the create already died', false],
     ['while the create is still starting', true]
   ] as const)(
-    'starts once for the open and once for a send, one row each, when the view binds %s',
+    'starts once for the open and once for a send, which says why on its message, when the view binds %s',
     async (_when, createStillStarting) => {
       // Released only once the views bound, so no runner is slow enough to let the create die first.
       let releaseCreate = (): void => {}
@@ -187,30 +185,32 @@ describe('a fresh chat whose Claude start fails', () => {
         releaseCreate()
       }
       await settleExits()
-      // The row says the provider stopped; its stderr stays out of the sentence.
-      const startFailure =
+      // The message says the provider stopped; its stderr stays out of the sentence.
+      const startRetry =
         'Claude stopped before it finished starting. Send your message to try again.'
-      // Opening the chat: the create's start, once, and its row.
+      // Opening the chat: the create's start, once. No message waited on it, so nothing is said.
       expect(claude.connections).toHaveLength(1)
-      expect(await timeline()).toEqual([startFailure])
+      expect(await timeline()).toEqual([])
 
       const sent = await send('reply with exactly: alpha')
+      const message = async () =>
+        (await host.journalSnapshot(SESSION)).submissions.find((s) => s.clientMessageId === sent)
+      // The start ran and failed, so the message is rejected at once; no later try is booked.
       await eventually(async () =>
-        expect(
-          (await host.journalSnapshot(SESSION)).submissions.find((s) => s.clientMessageId === sent)
-        ).toMatchObject({ dispatchState: 'rejected', reason: startFailure })
+        expect(await message()).toMatchObject({ dispatchState: 'rejected', reason: startRetry })
       )
+      expect((await message())?.startRetry).toBeUndefined()
       await settleExits()
-      // The send's own start, once, and one row for it below the message.
+      // The send's own start, once; the message carries why, with no row beside it.
       expect(claude.connections).toHaveLength(2)
-      expect(await timeline()).toEqual([startFailure, 'message', startFailure])
+      expect(await timeline()).toEqual(['message'])
 
       // Switching away and back re-subscribes; it starts nothing and adds no row.
       unsubscribe()
       await view(SURFACE)
       await settleExits()
       expect(claude.connections).toHaveLength(2)
-      expect(await timeline()).toEqual([startFailure, 'message', startFailure])
+      expect(await timeline()).toEqual(['message'])
     }
   )
 })

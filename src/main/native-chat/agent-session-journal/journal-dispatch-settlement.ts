@@ -9,7 +9,8 @@ import { classifyDispatchRejection } from '../../../shared/structured-agent-sess
 import type { JournalDispatchRow } from './journal-row-schema'
 
 /** `rejected` and `accepted` are terminal; a late row for an absent or settled
- *  submission must not reopen the answer. */
+ *  submission must not reopen the answer. The one way back from `rejected` is the
+ *  person's Retry, a `requeued` row the reducer applies before this check. */
 export function journalDispatchRowApplies(
   submission: Pick<AgentJournalSubmission, 'dispatchState'> | undefined
 ): boolean {

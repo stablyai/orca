@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-delivery-loop'
+import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 import type {
   StructuredAgentSessionChildEndCause,
   StructuredAgentSessionEndedChild

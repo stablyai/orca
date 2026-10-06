@@ -2754,7 +2754,8 @@
         "imageUnsupported": "Image paste is not supported for this agent."
       },
       "failureWords": {
-        "accountSwitchInProgress": "A Claude account switch is in progress. Try again after it finishes.",
+        "accountSwitchInProgress": "A Claude account switch is in progress.",
+        "tryAgainAfterSwitch": "Try again after it finishes.",
         "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
         "attachmentAtMost": "{{agent}} accepts at most {{limit}} images in one message, so this message was not sent.",
         "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
@@ -2787,6 +2788,9 @@
         "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
         "hostRestarted": "Orca restarted before this message was sent.",
         "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
+        "installThenRetry": "Install it, then retry.",
+        "installThenRunCommand": "Install it, then run /{{command}} again.",
+        "installThenSend": "Install it, then send your message again.",
         "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
         "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
         "noTurnToStop": "{{agent}} had no turn running to stop.",
@@ -2796,6 +2800,7 @@
         "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
         "providerExitedRejection": "{{agent}} stopped before this message was sent.",
         "providerExitedRow": "{{agent}} stopped while this response was in progress. You can continue in this conversation.",
+        "providerMissing": "{{agent}} isn't installed.",
         "providerRateLimited": "{{agent}} is rate-limited and retrying.",
         "providerRejected": "The provider did not accept this message.",
         "providerRejectedQuoted": "The provider did not accept this message: {{detail}}.",

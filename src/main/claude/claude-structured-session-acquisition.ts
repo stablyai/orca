@@ -5,7 +5,6 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../claude-accounts/environment'
 import { isClaudeAuthSwitchInProgress } from '../claude-accounts/live-pty-gate'
-import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
@@ -41,6 +40,7 @@ import { readClaudeTranscriptEntryUuid } from './claude-transcript-entry-uuid'
 import { persistClaudeTurnResumePoint } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
 import { resolveClaudeAcquisitionLaunch } from './claude-structured-acquisition-launch'
+import { openClaudeStructuredChild } from './claude-structured-launch-resolution'
 import { agentModelCatalogSessionAccess } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import {
   bindClaudeConnectionJournalControls,
@@ -170,7 +170,7 @@ export async function acquireClaudeSession({
     })
     expectedProviderSessionId = launch.providerSessionId
     observedLeafUuid = launch.resumeLeafUuid
-    const open = deps.openConnection ?? openClaudeStreamJsonConnection
+    const open = deps.openConnection ?? openClaudeStructuredChild
     const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
       open(
         {

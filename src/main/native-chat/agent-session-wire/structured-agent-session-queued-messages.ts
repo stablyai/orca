@@ -64,9 +64,9 @@ export function pendingPromptExists(journal: Pick<AgentSessionJournal, 'visitIte
   return pending
 }
 
-/** Waiting, not held on its own, and not positioned behind a returned card or a
- *  card the queue's pause holds: the queue never reorders. The admission rule
- *  (§accept) and the drain's selection both read it. */
+/** Waiting, not held on its own, and not positioned behind a returned card that holds the queue
+ *  (`queuedCardHoldsQueue`) or a card the queue's pause holds: the queue never reorders. The
+ *  admission rule (§accept) and the drain's selection both read it. */
 function oldestActionableQueuedMessage(
   journal: Pick<AgentSessionJournal, 'queuedMessages'>
 ): QueuedMessageRow | null {

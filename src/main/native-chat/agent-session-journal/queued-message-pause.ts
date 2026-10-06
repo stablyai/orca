@@ -11,6 +11,7 @@
 // continuation, a launch prompt and the queue's own drain are `host` and never lift it.
 
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import { queuedCardHoldsQueue } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
 
 export type QueuePauseReason = 'stopped' | 'cleared' | 'restarted'
@@ -38,6 +39,8 @@ type QueueCard = {
   hostInstance: string
   carriedFrom: string | null
   queuedAt: AgentJournalCursor | null
+  returnedReason?: string | null
+  returnedRejection?: unknown
 }
 
 export function createJournalQueuePauseMarks(): JournalQueuePauseMarks {
@@ -170,14 +173,14 @@ export function queuePauseHolding(
 }
 
 /** The card the queue sends next: the oldest waiting one with no hold of its own, unless a
- *  returned card or a held one comes first. The queue never reorders, so a newer card never
+ *  returned card that holds the queue or a held one comes first. The queue never reorders, so a newer card never
  *  overtakes a held one. The drain's pick and its consume both read this. */
 export function nextSendableQueuedCard<T extends QueueCard>(
   pauses: readonly DerivedQueuePause[],
   cards: readonly T[]
 ): T | null {
   for (const card of cards) {
-    if (card.state === 'returned' || queuePauseHolding(pauses, card)) {
+    if (queuedCardHoldsQueue(card) || queuePauseHolding(pauses, card)) {
       return null
     }
     if (card.state === 'waiting' && card.holdReason === null) {
@@ -188,14 +191,14 @@ export function nextSendableQueuedCard<T extends QueueCard>(
 }
 
 /** The pause to PUBLISH: the one holding the first card Resume would send, not behind a returned
- *  card, which blocks everything after it until the user acts. None otherwise, so its header
- *  never offers a Resume that sends nothing. */
+ *  card that holds the queue (`queuedCardHoldsQueue`) until the user acts. None otherwise, so its
+ *  header never offers a Resume that sends nothing. */
 export function resumableQueuePause(
   pauses: readonly DerivedQueuePause[],
   cards: readonly QueueCard[]
 ): DerivedQueuePause | null {
   for (const card of cards) {
-    if (card.state === 'returned') {
+    if (queuedCardHoldsQueue(card)) {
       return null
     }
     const holding = queuePauseHolding(pauses, card)

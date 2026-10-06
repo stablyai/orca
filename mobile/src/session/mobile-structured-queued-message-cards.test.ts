@@ -45,6 +45,7 @@ describe('mobileQueuedMessageCards', () => {
       state: 'waiting',
       paused: false,
       needsAttention: false,
+      holdsQueue: false,
       caption: null
     })
   })
@@ -137,6 +138,21 @@ describe('mobileQueuedMessageCards', () => {
     expect(cards[0]?.needsAttention).toBe(true)
     expect(cards[1]?.caption).toBe('Waiting — a message ahead needs attention')
     expect(cards[1]?.needsAttention).toBe(false)
+  })
+
+  it('holds nothing behind a card returned because its agent failed to start', () => {
+    const drafts = [
+      draft({ messageId: 'a', ...returnedAs(agentSessionFailureFact('providerStartFailed')) }),
+      draft({ messageId: 'b', position: 2 })
+    ]
+    const cards = mobileQueuedMessageCards(drafts, [], { pendingPrompt: false })
+    expect(cards[0]).toMatchObject({ state: 'returned', needsAttention: true, holdsQueue: false })
+    expect(cards[1]?.caption).toBeNull()
+    expect(
+      mobileQueueHasResumableCard(
+        mobileQueuedMessageCards(drafts, [], { pendingPrompt: false, queuePaused: true })
+      )
+    ).toBe(true)
   })
 
   it('hides a waiting card once its hand-off arrived, never a returned one', () => {

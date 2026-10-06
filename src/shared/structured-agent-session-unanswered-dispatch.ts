@@ -1,5 +1,6 @@
 import type { AgentJournalSubmission } from './agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
+import { isRetryingStructuredAgentSessionStart } from './structured-agent-session-start-retry'
 
 /** One send the provider has neither opened a turn for nor refused; the rule is explained on
  *  `hasUnansweredStructuredAgentSessionDispatch`, which asks it of every send. */
@@ -8,8 +9,9 @@ export function isUnansweredStructuredAgentSessionDispatch(
   currentFence?: number | null
 ): boolean {
   if (isQueuedAgentJournalSubmission(submission)) {
-    // Accepted and still owed to whichever child the host starts next, whatever the fence.
-    return true
+    // Accepted and still owed to whichever child the host starts next, whatever the fence. One
+    // waiting out a refused start has nothing running for it: the start failed, as the message says.
+    return !isRetryingStructuredAgentSessionStart(submission)
   }
   return (
     (currentFence == null || submission.fence >= currentFence) &&

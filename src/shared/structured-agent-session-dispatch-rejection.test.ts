@@ -12,7 +12,9 @@ import {
   DISPATCH_REJECTED_HOST_RESTARTED,
   DISPATCH_REJECTED_PROVIDER_CLOSED,
   DISPATCH_REJECTED_QUEUE_FULL,
-  isWriteFailureSubmission
+  isFailedStartRejection,
+  isWriteFailureSubmission,
+  queuedCardHoldsQueue
 } from './structured-agent-session-dispatch-rejection'
 
 describe('classifyDispatchRejection', () => {
@@ -138,5 +140,44 @@ describe('isWriteFailureSubmission', () => {
     expect(isWriteFailureSubmission({ reason: DISPATCH_REJECTED_QUEUE_FULL })).toBe(false)
     expect(isWriteFailureSubmission({ reason: 'x', rejection: { kind: 'queueFull' } })).toBe(false)
     expect(isWriteFailureSubmission({ reason: null })).toBe(false)
+  })
+})
+
+describe('a rejection because the agent never started', () => {
+  const STARTS = [
+    'providerStartFailed',
+    'startFailed',
+    'restartFailed',
+    'notSignedIn',
+    'providerMissing',
+    'historyTooLarge',
+    'managedAccountEnvOverride',
+    'accountSwitchInProgress',
+    'managedAccountUnsupported',
+    'hostStopped',
+    'providerExited'
+  ] as const
+
+  it('is every failed start, and nothing else', () => {
+    for (const kind of AGENT_SESSION_FAILURE_KINDS.filter(isSubmissionRejectionKind)) {
+      expect(isFailedStartRejection({ reason: 'Written by the host.', rejection: { kind } })).toBe(
+        STARTS.some((start) => start === kind)
+      )
+    }
+    // An older host's sentence with no fact says nothing about a start.
+    expect(isFailedStartRejection({ reason: "Codex couldn't start." })).toBe(false)
+  })
+
+  it('holds no queued card behind it; any other returned card holds the queue', () => {
+    const returned = (kind: string) => ({
+      state: 'returned',
+      returnedReason: 'Written by the host.',
+      returnedRejection: { kind }
+    })
+    expect(queuedCardHoldsQueue(returned('providerStartFailed'))).toBe(false)
+    expect(queuedCardHoldsQueue(returned('queueFull'))).toBe(true)
+    expect(queuedCardHoldsQueue(returned('writeFailed'))).toBe(true)
+    expect(queuedCardHoldsQueue(returned('providerRejected'))).toBe(true)
+    expect(queuedCardHoldsQueue({ state: 'waiting' })).toBe(false)
   })
 })

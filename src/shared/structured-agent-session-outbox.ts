@@ -18,7 +18,8 @@ import { parseStructuredAgentSessionOutboxQueueFields } from './structured-agent
 
 /** `rejected`: settled as not delivered. The drain never sends it again and nothing queues behind
  *  it. One the host refused unrecorded waits for the user's Retry. One it recorded owes no delivery
- *  and leaves on the batch or page that loads its row (`structured-agent-session-outbox-reconcile`). */
+ *  and leaves on the batch or page that loads its row (`structured-agent-session-outbox-reconcile`);
+ *  if no agent took it, a host that can queues it again under its own id on the user's Retry. */
 export type StructuredAgentSessionOutboxState =
   | 'queued'
   | 'dispatching'

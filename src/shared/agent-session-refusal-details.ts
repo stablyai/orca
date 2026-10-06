@@ -45,6 +45,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'providerRejected',
     'providerStartFailed',
     'notSignedIn',
+    /** The agent's command is not installed where this host looks for it. */
+    'providerMissing',
     'historyTooLarge',
     /** The launch's own Anthropic sign-in variables would override the managed Claude account. */
     'managedAccountEnvOverride',

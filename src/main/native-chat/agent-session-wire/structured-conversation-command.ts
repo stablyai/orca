@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import { serializeAwaitingAgentStart } from './structured-agent-session-mutation-context'
 import { sendPreparation } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import {
@@ -97,7 +98,7 @@ export function runStructuredConversationCommand(
       ? record
       : null
   }
-  return context.serialize(sessionId, async () => {
+  return serializeAwaitingAgentStart(context, sessionId, async (prepare) => {
     const committed = await answerFromCommittedClear(context, caller, params)
     if (committed) {
       return committed
@@ -109,7 +110,7 @@ export function runStructuredConversationCommand(
       callerKey: caller.callerKey,
       envelope,
       // Starts the agent only to settle a rewind in doubt, as a send does; a /clear itself starts nothing.
-      prepareSession: sendPreparation(context, envelope),
+      prepareSession: prepare(sendPreparation(context, envelope)),
       journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
       now: context.now,

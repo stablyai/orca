@@ -1,7 +1,6 @@
 // Append-only journal store for one agent session. It owns the chat's fold and write queue, and no
 // connection: every statement goes through the host's one journal database.
 
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import type {
   AgentJournalAcceptanceReceipt,
@@ -30,8 +29,8 @@ import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader, type JournalLoad } from './journal-open'
 import {
   markJournalPendingSubmissionsUnknown,
-  rejectJournalPendingSubmissions,
-  rejectJournalQueuedSubmissions
+  rejectJournalQueuedSubmissions,
+  type JournalQueuedRejection
 } from './journal-pending-submission-recovery'
 import {
   applyJournalRow,
@@ -343,18 +342,10 @@ export class AgentSessionJournal {
     return markJournalPendingSubmissionsUnknown(this, fence, reason)
   }
 
-  /** Reject unanswered sends after an owner that never proved its start ended: none was written. */
-  async rejectPendingSubmissions(
-    fence: number,
-    rejection: AgentJournalDispatchRejection
-  ): Promise<string[]> {
-    return rejectJournalPendingSubmissions(this, fence, rejection)
-  }
-
   /** Reject sends accepted but never handed over, optionally only those `which` names. */
   async rejectQueuedSubmissions(
     fence: number,
-    rejection: AgentJournalDispatchRejection,
+    rejection: JournalQueuedRejection,
     which?: (submission: AgentJournalSubmission) => boolean
   ): Promise<string[]> {
     return rejectJournalQueuedSubmissions(this, fence, rejection, which)

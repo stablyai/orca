@@ -17,7 +17,10 @@ import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-w
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import {
+  AgentSessionPreSpawnError,
+  type StructuredAgentSessionAdapter
+} from './structured-agent-session-adapter'
 import { structuredAgentSessionCommandTurn } from './structured-agent-session-command-turn'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import {
@@ -369,44 +372,69 @@ it('refuses the command at handover when the provider opened a turn meanwhile (B
   })
 })
 
-it('leaves a command whose start failed not sent, beside one start-failure row (B3)', async () => {
+it('rejects a command whose start failed, saying why on the answer and its message (B3)', async () => {
   await attach()
   await state.host.close(SESSION, 'evict')
   state.acquire.mockRejectedValue(new Error('not signed in'))
   const params = compactParams()
 
-  // The next step is the command again, not a message.
-  await expect(state.host.conversationCommand(CALLER, params)).resolves.toMatchObject({
+  // The start ran here and failed: answered at once with the cause, and no later try is booked.
+  const restartFailed = expect.objectContaining({ kind: 'restartFailed' })
+  const answered = await state.host.conversationCommand(CALLER, params)
+  expect(answered).toMatchObject({
     ok: true,
     value: {
+      command: 'compact',
       state: 'completed',
       error: "Codex couldn't restart. Run /compact again.",
-      failure: { kind: 'restartFailed' }
+      failure: restartFailed
     }
   })
   const snapshot = await journal()
   expect(snapshot.items.filter((item) => readAgentJournalTurn(item.body))).toEqual([])
-  // The start's own row, in the words the command's message was refused with.
   expect(
-    snapshot.items
-      .filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
-      .map((item) => item.body)
-  ).toEqual([
-    {
-      kind: 'status',
-      text: "Codex couldn't restart. Run /compact again.",
-      failure: expect.objectContaining({ kind: 'restartFailed' }),
-      tone: 'error'
-    }
-  ])
-  expect(
-    snapshot.submissions.find(
-      (entry) => entry.clientMessageId === params.envelope.clientOperationId
-    )
-  ).toMatchObject({
+    snapshot.items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
+  ).toEqual([])
+  // The next step is the command again, not a message.
+  const message = snapshot.submissions.find(
+    (entry) => entry.clientMessageId === params.envelope.clientOperationId
+  )
+  expect(message).toMatchObject({
     dispatchState: 'rejected',
-    reason: "Codex couldn't restart. Run /compact again."
+    reason: "Codex couldn't restart. Run /compact again.",
+    rejection: restartFailed
   })
+  expect(message?.startRetry).toBeUndefined()
+  expect(compact).not.toHaveBeenCalled()
+})
+
+// Like a goal, a rewind or /clear, a command does not wait out a refused start: its failure is the
+// person's to Retry at once.
+it('rejects a command whose start was refused before it ran at once, with no countdown', async () => {
+  await attach()
+  await state.host.close(SESSION, 'evict')
+  state.acquire.mockRejectedValue(
+    new AgentSessionPreSpawnError(new Error('account switch in progress'), {
+      reason: 'accountSwitchInProgress'
+    })
+  )
+  const params = compactParams()
+
+  const answered = await state.host.conversationCommand(CALLER, params)
+
+  // Answered with why, as any refused command is: the composer offers it again.
+  expect(answered).toMatchObject({
+    ok: true,
+    value: { command: 'compact', state: 'completed', error: expect.any(String) }
+  })
+  const message = (await journal()).submissions.find(
+    (entry) => entry.clientMessageId === params.envelope.clientOperationId
+  )
+  expect(message).toMatchObject({
+    dispatchState: 'rejected',
+    rejection: { kind: 'accountSwitchInProgress' }
+  })
+  expect(message).not.toHaveProperty('startRetry')
   expect(compact).not.toHaveBeenCalled()
 })
 

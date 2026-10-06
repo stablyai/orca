@@ -61,6 +61,22 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       ),
     signInThenSend: () =>
       translate('components.native-chat.failureWords.signInThenSend', COPY.signInThenSend),
+    providerMissing: (values) =>
+      translate(
+        'components.native-chat.failureWords.providerMissing',
+        COPY.providerMissing,
+        values
+      ),
+    installThenRetry: () =>
+      translate('components.native-chat.failureWords.installThenRetry', COPY.installThenRetry),
+    installThenRunCommand: (values) =>
+      translate(
+        'components.native-chat.failureWords.installThenRunCommand',
+        COPY.installThenRunCommand,
+        values
+      ),
+    installThenSend: () =>
+      translate('components.native-chat.failureWords.installThenSend', COPY.installThenSend),
     historyTooLarge: () =>
       translate('components.native-chat.failureWords.historyTooLarge', COPY.historyTooLarge),
     managedAccountEnvOverride: () =>
@@ -72,6 +88,11 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate(
         'components.native-chat.failureWords.accountSwitchInProgress',
         COPY.accountSwitchInProgress
+      ),
+    tryAgainAfterSwitch: () =>
+      translate(
+        'components.native-chat.failureWords.tryAgainAfterSwitch',
+        COPY.tryAgainAfterSwitch
       ),
     managedAccountUnsupported: () =>
       translate(

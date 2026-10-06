@@ -13,7 +13,9 @@
 //
 //   accepted/pending — the send happened. The id is spent; a later identical
 //     message is a new message and must carry a new id.
-//   rejected — a terminal refusal or rejected submission spends a fresh id. A
+//   rejected — a terminal refusal or rejected submission spends a fresh id (a
+//     desktop's Retry may queue that same message again on the host; the phone
+//     never resends under it). A
 //     pending-admission refusal, or any refusal after earlier transport doubt,
 //     keeps it because neither proves a retained delivery did not happen. Two
 //     exceptions spend it anyway, because the host can never accept the replay

@@ -13,6 +13,8 @@ import type { ResumeFailure } from './native-chat-resume-on-restart-grouping'
 export type RestartContinuationOutcome = {
   sessionId: string
   outcome: 'continued' | 'pending' | 'unknown' | 'refused'
+  /** Its agent did not start for it; the chat's message says why. Absent from an older host. */
+  startFailed?: true
 }
 
 function announceContinued(count: number): void {
@@ -160,15 +162,26 @@ export function announceRestartResults(
 ): void {
   const notContinued = restartChatsNotContinued(requested, results)
   const failed = new Map(hostFailed?.map((failure) => [failure.sessionId, failure.outcome]))
+  const outcomes = new Map(results.map((result) => [result.sessionId, result.outcome]))
+  // The host files no failed start; its chat says why, and one still waiting to start again says so.
+  const startFailed = new Set(
+    results.flatMap((result) => (result.startFailed ? [result.sessionId] : []))
+  )
   // A host that lists failures has already dropped chats that moved on by themselves or that the
   // user answered; counting those would report a failure nothing on screen can show.
   const reported =
     hostFailed === undefined
-      ? notContinued
-      : notContinued.filter((sessionId) => failed.has(sessionId))
-  const outcomes = new Map(results.map((result) => [result.sessionId, result.outcome]))
+      ? notContinued.filter(
+          (sessionId) => !startFailed.has(sessionId) || outcomes.get(sessionId) === 'refused'
+        )
+      : notContinued.filter(
+          (sessionId) =>
+            failed.has(sessionId) ||
+            (startFailed.has(sessionId) && outcomes.get(sessionId) === 'refused')
+        )
   const sentUnconfirmed = (sessionId: string): boolean =>
-    outcomes.get(sessionId) === 'pending' || outcomes.get(sessionId) === 'unknown'
+    !startFailed.has(sessionId) &&
+    (outcomes.get(sessionId) === 'pending' || outcomes.get(sessionId) === 'unknown')
   // An unconfirmed send the host no longer lists was seen carrying on (or answered by the user), so
   // it was resumed and asked to continue; left out of both counts, the action would say nothing.
   const seenCarryingOn = notContinued.filter(

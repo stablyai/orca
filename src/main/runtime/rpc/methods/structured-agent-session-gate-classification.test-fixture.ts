@@ -66,6 +66,10 @@ export const WORK_METHODS = [
   },
   { method: 'agentSession.queuedMessagesResume', params: { envelope: envelope() } },
   {
+    method: 'agentSession.retryMessage',
+    params: { envelope: envelope(), clientMessageId: 'message-1' }
+  },
+  {
     method: 'agentSession.rewind',
     params: { envelope: envelope(), itemId: 'chosen', expectedEpoch: 'epoch' }
   },

@@ -122,6 +122,8 @@ export function NativeChatStructuredSession(
     failedHere: controller.failedHere,
     queuedMessageIds: controller.queuedMessageIds,
     retry: controller.retry,
+    retriesInPlace: controller.retriesInPlace,
+    retryWaitsForHost: controller.retryWaitsForHost,
     agentName: agentLabel
   })
   // Nothing reads an unread history, so its pane stays blank beside the Retry line.

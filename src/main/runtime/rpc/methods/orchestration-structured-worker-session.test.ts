@@ -374,4 +374,39 @@ describe('structured worker dispatch preamble', () => {
     expect((error as { code?: string }).code).toBe('dispatch_preamble_undelivered')
     expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(false)
   })
+
+  it('tells the worker start a held preamble the host later rejected for good, and nothing else', async () => {
+    const verdicts: unknown[] = []
+    const heldThen = (verdict: Settled): PreambleHost => ({
+      ...hostWithSubmission({ dispatchState: 'pending', reason: null }),
+      waitForSendSettlement: async (_session, _id, options) =>
+        options?.until === 'verdict'
+          ? {
+              cursor: { epoch: 'epoch-1', sequence: 3 },
+              value: { clientMessageId: 'c1', submission: submissionOf(verdict) }
+            }
+          : undefined
+    })
+    const heard = vi.fn()
+    for (const verdict of [
+      { dispatchState: 'rejected', reason: 'Codex never finished starting, so Orca stopped it.' },
+      { dispatchState: 'accepted', reason: null }
+    ] as const) {
+      verdicts.push(
+        await sendStructuredWorkerPreamble({
+          host: heldThen(verdict),
+          sessionId: 's1',
+          dispatchId: 'd1',
+          preamble: 'spec',
+          whenUndelivered: heard
+        })
+      )
+    }
+
+    expect(verdicts).toEqual(['pending', 'pending'])
+    await vi.waitFor(() => expect(heard).toHaveBeenCalledOnce())
+    expect(heard).toHaveBeenCalledWith(
+      'The dispatch preamble was not delivered: Codex never finished starting, so Orca stopped it.'
+    )
+  })
 })

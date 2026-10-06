@@ -255,8 +255,8 @@ export function createStructuredAgentSessionRestartResume(
       )
       if ('done' in started) {
         continued.push(started.done)
-        const { outcome, reason, refusal } = started.done
-        if (outcome === 'refused') {
+        const { reason, refusal } = started.done
+        if (continuationFailureOutcome(started.done) === 'refused') {
           // Thrown as a refusal so the filed failure keeps its details beside the code.
           throw refusal
             ? new AgentSessionRefusalError(agentSessionRefusalFromReference(refusal, refusal.code))
@@ -274,7 +274,7 @@ export function createStructuredAgentSessionRestartResume(
         markers: action.markers,
         failureAfterResume: (sessionId) => {
           const outcome = continued.find((entry) => entry.sessionId === sessionId)
-          return outcome ? continuationFailureOutcome(outcome.outcome) : null
+          return outcome ? continuationFailureOutcome(outcome) : null
         },
         failureReason: (sessionId) => {
           const outcome = continued.find((entry) => entry.sessionId === sessionId)

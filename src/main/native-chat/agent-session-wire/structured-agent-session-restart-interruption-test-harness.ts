@@ -1,3 +1,4 @@
+import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
@@ -241,4 +242,10 @@ export async function supersededRefusal(userAnswers?: 'before' | 'after') {
     writing.mockRestore()
     admitting.mockRestore()
   }
+}
+
+/** A start refusal whose own words send the person to a new chat: the continuation is not tried
+ *  again, and its message says why. */
+export function terminalStartRefusal(): AgentSessionAcquisitionRefusal {
+  return AgentSessionAcquisitionRefusal.historyTooLarge('the conversation is too large to restore')
 }

@@ -316,13 +316,15 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       expect(await pointerSends()).toHaveLength(1)
       expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
 
-      // Fixed, the person's next message starts the agent, and the pointer follows its turn.
+      // Fixed, the person's next message starts the agent and goes ahead of the pointer, which
+      // waits for its own next try after its failed start.
       providerFaults.refuseStart = null
       expect(await sendUserMessage(COORDINATOR, 'again')).toMatchObject({ ok: true })
       await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
       const revived = connectionFor(COORDINATOR)
-      await vi.waitFor(() => expect(revived.turns.length).toBeGreaterThanOrEqual(1), WAIT)
-      expect(revived.turns[0]!.text).toContain('again')
+      await vi.waitFor(() => expect(revived.turns[0]?.text).toContain('again'), WAIT)
+      // The pointer's try comes due; the turn's end is the commit that wakes delivery.
+      observationClock.jumpWallClock(16_000)
       await settleTurn(COORDINATOR, 0)
       await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
       expect(revived.turns[1]!.text).toMatch(POINTER)

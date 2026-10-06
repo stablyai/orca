@@ -12,7 +12,10 @@ import type {
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import {
+  AgentSessionPreSpawnError,
+  type StructuredAgentSessionAdapter
+} from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { CodexAppServerRequestError } from '../../codex/codex-app-server-request-error'
 import {
@@ -131,13 +134,26 @@ async function submission(clientMessageId: string) {
   )
 }
 
-/** The submission once delivery is done with it: handed over, or rejected unwritten. */
+/** The submission once delivery is done with it: handed over, rejected unwritten, or waiting for
+ *  its next start, which reads as `retrying` with that start's words. */
 async function settled(clientMessageId: string) {
   await eventually(async () => {
     const current = await submission(clientMessageId)
-    expect(current?.dispatchState !== 'pending' || current.handedOverAt !== undefined).toBe(true)
+    expect(
+      current?.dispatchState !== 'pending' ||
+        current.handedOverAt !== undefined ||
+        current.startRetry !== undefined
+    ).toBe(true)
   })
-  return submission(clientMessageId)
+  const current = await submission(clientMessageId)
+  return current?.startRetry
+    ? {
+        ...current,
+        dispatchState: 'retrying',
+        reason: current.startRetry.reason,
+        rejection: current.startRetry.rejection
+      }
+    : current
 }
 
 /** The failure rows a start the chat needed left, oldest first. */
@@ -400,7 +416,7 @@ describe('a send with no live owner', () => {
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
   })
 
-  it("rejects the accepted message with the restart's own cause, and says so in the chat once", async () => {
+  it("records the restart's own cause on the accepted message, and no row beside it", async () => {
     await loseOwner()
     acquire.mockRejectedValue(new Error('Not signed in. Run codex login'))
     const params = sendParams('while signed out')
@@ -410,18 +426,20 @@ describe('a send with no live owner', () => {
 
     const id = await accept(params)
 
+    // It ran here and failed, so it is the person's to send again: no later try is booked.
     expect(await settled(id)).toMatchObject({
       dispatchState: 'rejected',
       reason: cause,
       rejection: { kind: 'restartFailed' }
     })
+    expect((await submission(id))?.startRetry).toBeUndefined()
     expect(dispatch).not.toHaveBeenCalled()
-    // Accepted, so the ledger answers a resend with the rejection rather than a second attempt.
+    // Accepted, so the ledger answers a resend with the message rather than a second attempt.
     expect(
       store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)
     ).toMatchObject({ outcome: { status: 'succeeded' } })
-    // One row, in the error tone, so the reason outlives the error strip.
-    expect(await errorStatuses()).toEqual([cause])
+    // The message carries the reason; the chat gets no row of its own for it.
+    expect(await errorStatuses()).toEqual([])
   })
 
   it("keeps Codex's own words behind a refused resume without saying the provider stopped", async () => {
@@ -443,9 +461,7 @@ describe('a send with no live owner', () => {
       reason: "Codex couldn't restart. Send your message to try again.",
       rejection
     })
-    expect(await errorStatuses()).toEqual([
-      "Codex couldn't restart. Send your message to try again."
-    ])
+    expect(await errorStatuses()).toEqual([])
     // Orca's own text is logged once where the start failed.
     expect(
       hostErrors.filter(
@@ -461,21 +477,20 @@ describe('a send with no live owner', () => {
     await settled(await accept(params))
     expect(acquire).toHaveBeenCalledTimes(1)
 
-    // A client that resends the same id gets the recorded rejection, and the chat no second row.
+    // A client that resends the same id gets the recorded answer, and nothing starts again.
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
       ok: true,
       replayed: true,
-      value: { submission: { dispatchState: 'rejected' } }
+      value: { submission: { dispatchState: 'rejected', rejection: { kind: 'restartFailed' } } }
     })
     expect(acquire).toHaveBeenCalledTimes(1)
-    expect(await errorStatuses()).toHaveLength(1)
 
-    // The outbox's Retry rotates the id: a fresh attempt, with its own row.
+    // The outbox's Retry rotates the id: a fresh attempt.
     expect(await settled(await accept(sendParams('while signed out')))).toMatchObject({
       dispatchState: 'rejected'
     })
     expect(acquire).toHaveBeenCalledTimes(2)
-    expect(await errorStatuses()).toHaveLength(2)
+    expect(await errorStatuses()).toEqual([])
     expect(dispatch).not.toHaveBeenCalled()
   })
 
@@ -493,6 +508,68 @@ describe('a send with no live owner', () => {
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
   })
 
+  // Where it was refused before spawn decides: only these three say the person must act.
+  it.each(['providerMissing', 'managedAccountEnvOverride', 'managedAccountUnsupported'] as const)(
+    'rejects the message at once, with no try booked, when refused before spawn for %s',
+    async (reason) => {
+      await loseOwner()
+      acquire.mockRejectedValueOnce(
+        new AgentSessionPreSpawnError(new Error(reason), { reason, needsUser: true })
+      )
+
+      const id = await accept(sendParams('before the person acts'))
+
+      expect(await settled(id)).toMatchObject({
+        dispatchState: 'rejected',
+        rejection: { kind: reason }
+      })
+      expect((await submission(id))?.startRetry).toBeUndefined()
+      expect(acquire).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('says to install the CLI found missing before any spawn, beside its Retry', async () => {
+    await loseOwner()
+    acquire.mockRejectedValueOnce(
+      new AgentSessionPreSpawnError(new Error('codex is not on PATH'), {
+        reason: 'providerMissing',
+        needsUser: true
+      })
+    )
+
+    expect(await settled(await accept(sendParams('before installing it')))).toMatchObject({
+      reason: "Codex isn't installed. Install it, then send your message again."
+    })
+  })
+
+  it("tries again at 15 s a start refused before spawn for Orca's own reason", async () => {
+    await loseOwner()
+    acquire.mockRejectedValueOnce(new AgentSessionPreSpawnError(new Error('state unreadable')))
+
+    const id = await accept(sendParams('while Orca cannot read the account'))
+
+    expect(await settled(id)).toMatchObject({ dispatchState: 'retrying' })
+    expect((await submission(id))?.startRetry?.nextAttemptAt).toBe(NOW + 15_000)
+  })
+
+  it('rejects the message at once for a spawn that failed after the CLI was found', async () => {
+    await loseOwner()
+    acquire.mockRejectedValueOnce(
+      Object.assign(new Error('spawn /usr/local/bin/codex ENOENT'), { code: 'ENOENT' })
+    )
+
+    const id = await accept(sendParams('while the install is moving'))
+
+    // The spawn ran here and failed: the person's to send again, so no later try is booked.
+    expect(await settled(id)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: "Codex couldn't restart. Send your message to try again.",
+      rejection: { kind: 'restartFailed', refusal: { code: 'agent_session_operation_invalid' } }
+    })
+    expect((await submission(id))?.startRetry).toBeUndefined()
+    expect(acquire).toHaveBeenCalledOnce()
+  })
+
   it('suggests a new chat only when this host has nothing to restart the chat from', async () => {
     await loseOwner()
     acquire.mockRejectedValue(new Error('Not signed in'))
@@ -500,7 +577,8 @@ describe('a send with no live owner', () => {
     expect(failed).toMatchObject({ dispatchState: 'rejected' })
     expect(failed?.reason).not.toMatch(/new chat/)
 
-    // The adapter cannot run this record where it lives: no retry would bring it back.
+    // The adapter cannot run this record where it lives: no retry would bring it back, so the
+    // message is not tried again.
     host.deps.adapter.supportsLocation = () => false
     const unresumable = await settled(await accept(sendParams('cannot resume here')))
 
@@ -517,7 +595,7 @@ describe('a send with no live owner', () => {
     })
   })
 
-  it('rejects the message with the cause when the restart met a lease someone else is settling', async () => {
+  it('records the cause on the message when the restart met a lease someone else is settling', async () => {
     await loseOwner()
     vi.spyOn(
       host['conversationDelivery'].loop['deps'],
@@ -527,23 +605,25 @@ describe('a send with no live owner', () => {
       refusal: {
         code: 'execution_owner_reconciling',
         message: 'Another runtime is still adjudicating this lease.'
-      }
+      },
+      beforeSpawn: { needsUser: false }
     })
 
     const id = await accept(sendParams('owner being settled'))
 
-    // The refusal's prose stays out of the chat; its code rides in the fact.
-    const cause = "Codex couldn't restart. Send your message to try again."
+    // Refused before any start, so Orca tries it again on its own: the words name no step for the
+    // person. The refusal's prose stays out of the chat; its code rides in the fact.
     expect(await settled(id)).toMatchObject({
-      dispatchState: 'rejected',
-      reason: cause,
+      dispatchState: 'retrying',
+      reason: "Codex couldn't restart.",
       rejection: { kind: 'restartFailed', refusal: { code: 'execution_owner_reconciling' } }
     })
+    expect((await submission(id))?.startRetry?.nextAttemptAt).toBe(NOW + 15_000)
     expect(acquire).not.toHaveBeenCalled()
-    expect(await errorStatuses()).toEqual([cause])
+    expect(await errorStatuses()).toEqual([])
   })
 
-  it('rejects the message, and reports the fault, when the restart itself faults', async () => {
+  it('records the fault on the message, and reports it, when the restart itself faults', async () => {
     await loseOwner()
     vi.spyOn(
       host['conversationDelivery'].loop['deps'],
@@ -561,7 +641,7 @@ describe('a send with no live owner', () => {
     expect(hostErrors).toContainEqual(
       expect.objectContaining({ message: 'spawn-token mint failed' })
     )
-    expect(await errorStatuses()).toHaveLength(1)
+    expect(await errorStatuses()).toEqual([])
   })
 
   it('exits the recovery stage a failed attempt latched before its delivery resumes it', async () => {
@@ -619,9 +699,9 @@ describe('a write fenced to an owner the pane has not seen replaced', () => {
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(seenFence + 1)
   })
 
-  // Clients resend a refused message when the fence they hold moves. A failed start is a
-  // rejected message now, never a refused send, and the pane keeps the fence it subscribed under.
-  it("keeps the pane's fence on the rows a failed start publishes, and rejects the message", async () => {
+  // Clients resend a refused message when the fence they hold moves. A failed start is recorded on
+  // the message, never a refused send, and the pane keeps the fence it subscribed under.
+  it("keeps the pane's fence on the rows a failed start publishes, and records it on the message", async () => {
     const seenFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     const frames: AgentSessionSubscribeEvent[] = []
     await host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => frames.push(event) })

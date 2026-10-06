@@ -155,10 +155,39 @@ describe('the line under the composer after a conversation command failed', () =
         agentName: 'Claude',
         pending: { current: false },
         blocked: false,
-        startFailures: () => [START_FAILED],
+        startFailures: () => [{ itemId: 'start-row', fact: START_FAILED, observedAt: 1 }],
         send: async () => ({ kind: 'done', value: result })
       })
     ).toEqual({ accepted: false, error })
+  })
+
+  // An older host wrote a failed start as a row of its own, which already says why.
+  it("leaves the why to the row its own start wrote, never to an older start's", async () => {
+    const result = hostResult('compact', { kind: 'notSignedIn' })
+    const stated = (itemId: string) => ({
+      itemId,
+      fact: { kind: 'notSignedIn' } as const,
+      observedAt: 1
+    })
+    const run = (before: string[], after: string[]) => {
+      let rows = before.map(stated)
+      return sendStructuredConversationCommand({
+        command: 'compact',
+        agentName: 'Claude',
+        pending: { current: false },
+        blocked: false,
+        startFailures: () => rows,
+        send: async () => {
+          rows = after.map(stated)
+          return { kind: 'done', value: result }
+        }
+      })
+    }
+    expect(await run([], ['this-start'])).toEqual({ accepted: false, error: null })
+    expect(await run(['older-start'], ['older-start'])).toEqual({
+      accepted: false,
+      error: result.error
+    })
   })
 
   it("shows an older host's sentence as written when it sent no fact", async () => {

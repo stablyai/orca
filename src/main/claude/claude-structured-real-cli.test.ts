@@ -4,7 +4,6 @@ import { homedir, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
-import * as claudeConnection from './claude-stream-json-connection'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
@@ -32,7 +31,8 @@ function realAdapter(
   events: ClaudeStructuredSessionEvent[] = [],
   cwd = process.cwd(),
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate'],
-  env = realClaudeLaunchHome().env
+  env = realClaudeLaunchHome().env,
+  openConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
 ): ClaudeStructuredSessionAdapter {
   const adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -48,6 +48,7 @@ function realAdapter(
     }),
     onEvent: (event) => events.push(event),
     ...(onDispatchSettledLate ? { onDispatchSettledLate } : {}),
+    ...(openConnection ? { openConnection } : {}),
     readProcessStartTime: async () => 1,
     now: () => 2
   })
@@ -96,12 +97,13 @@ describe('real CLI fixture authentication isolation', () => {
         vi.stubEnv(key, 'unusable-fixture-auth-value')
       }
       let childEnv: Record<string, string> | undefined
-      const open = vi
-        .spyOn(claudeConnection, 'openClaudeStreamJsonConnection')
-        .mockImplementation(async (launch) => {
+      // Supplied, so the spawn's own check for an installed `claude` never runs: CI has none.
+      const open = vi.fn<NonNullable<ClaudeStructuredSessionAdapterDeps['openConnection']>>(
+        async (launch) => {
           childEnv = buildClaudeChildProcessEnv(launch.env)
           throw new Error('fixture stopped before spawning a CLI')
-        })
+        }
+      )
       const providerSessionId = randomUUID()
       const adapter = realAdapter(
         providerSessionId,
@@ -109,7 +111,8 @@ describe('real CLI fixture authentication isolation', () => {
         [],
         process.cwd(),
         undefined,
-        mode === 'signed-out' ? {} : undefined
+        mode === 'signed-out' ? {} : undefined,
+        open
       )
       try {
         await expect(

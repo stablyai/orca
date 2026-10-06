@@ -30,7 +30,11 @@ import {
   structuredClaudeMatchesActiveManagedAccount,
   type ClaudeManagedAccountGateSettings
 } from '../native-chat/claude-structured-managed-account-support'
-import { resolveClaudeCommand } from '../codex-cli/command'
+import { isCliCommandMissing, resolveClaudeCommand } from '../codex-cli/command'
+import {
+  openClaudeStreamJsonConnection,
+  type ClaudeStreamJsonConnection
+} from './claude-stream-json-connection'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
@@ -178,7 +182,8 @@ export async function resolveClaudeStructuredInvocation(
   // use, so an explicit override is refused rather than silently beating the pin.
   if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(overlay)) {
     throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE), {
-      reason: 'managedAccountEnvOverride'
+      reason: 'managedAccountEnvOverride',
+      needsUser: true
     })
   }
   // Why the overlay merges onto the inherited env rather than replacing it: the child
@@ -261,7 +266,9 @@ export function createClaudeStructuredLaunchResolver(
       // Unreadable account state names no situation a person can act on, so only the log reads it.
       throw new AgentSessionPreSpawnError(
         'structured Claude is not offered under the active managed Claude account',
-        gate && hasWslBoundClaudeAccount(gate) ? { reason: 'managedAccountUnsupported' } : {}
+        gate && hasWslBoundClaudeAccount(gate)
+          ? { reason: 'managedAccountUnsupported', needsUser: true }
+          : {}
       )
     }
     // A Claude record's chain holds only Claude handles; the record store refuses anything else.
@@ -318,4 +325,22 @@ export function createClaudeStructuredLaunchResolver(
       continuesChain
     }
   }
+}
+
+/**
+ * The real Claude child: refused before it spawns when the spawn's own environment holds no
+ * `claude` to run. Part of the spawn, so a host that supplies its own connection never reads this
+ * machine's PATH.
+ */
+export async function openClaudeStructuredChild(
+  ...[launch, ...rest]: Parameters<typeof openClaudeStreamJsonConnection>
+): Promise<ClaudeStreamJsonConnection> {
+  // The SDK spawns with this environment whole when it is given, as it always is here.
+  if (isCliCommandMissing('claude', launch.pathToClaudeCodeExecutable, launch.env ?? process.env)) {
+    throw new AgentSessionPreSpawnError(
+      new Error('claude is not on PATH or in the usual install directories'),
+      { reason: 'providerMissing', needsUser: true }
+    )
+  }
+  return openClaudeStreamJsonConnection(launch, ...rest)
 }

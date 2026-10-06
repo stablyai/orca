@@ -83,8 +83,9 @@ function dropEntry(input: SendDispositionInput): StructuredAgentSessionOutboxEnt
  * the outbox. Nothing is lost from the conversation: the durable submission row
  * already renders the message.
  *
- * A `rejected` submission is the host's to show, with no Retry: the reconcile
- * drops its entry once the journal carries it.
+ * A `rejected` submission is the host's to show: the reconcile drops its entry
+ * once the journal carries it. Its Retry, only where no agent took it and the
+ * host can, queues that same message again (`agentSession.retryMessage`).
  */
 function refusedRedelivery(
   entry: StructuredAgentSessionOutboxEntry,

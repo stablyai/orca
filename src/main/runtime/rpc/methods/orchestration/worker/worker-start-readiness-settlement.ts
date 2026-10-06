@@ -3,6 +3,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
 import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
+import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import {
   describeUnobservedWorkerTurnStart,
@@ -48,6 +49,9 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const { runtime, db, run, task, structuredSession, terminalHandle, effects } = args
 
   args.onStage('dispatch_input')
+  // Heard only once the start is settled as unknown below; a preamble the host rejects for good
+  // after that fails it as a rejection before then would have.
+  const undelivered = Promise.withResolvers<string>()
   const delivery = await deliverWorkerDispatchPreamble({
     runtime,
     db,
@@ -60,6 +64,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     coordinatorHandle: args.coordinatorHandle,
     devMode: args.devMode,
     requestId: args.requestId,
+    whenUndelivered: undelivered.resolve,
     launchedAgent: args.launchedAgent
   })
   effects.push({
@@ -106,6 +111,19 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       'turn_start_unobserved',
       reason,
       effects
+    )
+    void undelivered.promise.then((undeliveredReason) =>
+      failUndeliveredWorkerStart({
+        runtime,
+        db,
+        run,
+        task,
+        dispatchId: args.dispatchId,
+        structuredSession,
+        terminalHandle,
+        coordinatorHandle: args.coordinatorHandle,
+        reason: undeliveredReason
+      })
     )
     return {
       runId: run.id,
@@ -155,5 +173,57 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     ...(deliveredPrompt ? { prompt: deliveredPrompt } : {}),
     residualResources: [],
     ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})
+  }
+}
+
+/**
+ * A start left unknown whose preamble the host later rejected for good: the worker never had its
+ * task. Settled as a preamble rejected during the start is (its session torn down, the start
+ * failed) and the coordinator told, since it was left to look. Nothing if the worker moved on
+ * meanwhile: it reported, or was stopped or abandoned.
+ */
+async function failUndeliveredWorkerStart(args: {
+  runtime: OrcaRuntimeService
+  db: OrchestrationDb
+  run: RunRow
+  task: TaskRow
+  dispatchId: string
+  structuredSession: Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>> | null
+  terminalHandle: string
+  coordinatorHandle: string
+  reason: string
+}): Promise<void> {
+  const { db, dispatchId } = args
+  if (db.getWorkerDispatch(dispatchId)?.state !== 'start_unknown') {
+    return
+  }
+  try {
+    await tearDownFailedWorkerStart({
+      runtime: args.runtime,
+      structuredSession: args.structuredSession,
+      dispatchId
+    })
+    db.failWorkerStart(dispatchId, 'dispatch_input', args.reason)
+    const escalation = db.insertMessage({
+      from: args.terminalHandle,
+      to: args.run.legacy !== 1 ? `run:${args.run.id}` : args.coordinatorHandle,
+      subject: 'Worker never received its task (dispatch_preamble_undelivered)',
+      body: `${args.reason} The task is ready to be dispatched again.`,
+      type: 'escalation',
+      priority: 'high',
+      payload: JSON.stringify({
+        taskId: args.task.id,
+        dispatchId,
+        code: 'dispatch_preamble_undelivered',
+        handle: args.terminalHandle
+      }),
+      runId: args.run.id
+    })
+    args.runtime.notifyMessageArrived(escalation.to_handle, escalation.type)
+  } catch (error) {
+    console.warn('[orchestration] failed to settle an undelivered worker preamble', {
+      dispatchId,
+      error
+    })
   }
 }

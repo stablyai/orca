@@ -11,10 +11,6 @@ import {
   type AgentJournalMessageItem
 } from '../../../shared/agent-session-journal-types'
 import {
-  readAgentSessionFailureFact,
-  type UnreadAgentSessionFailureFact
-} from '../../../shared/agent-session-failure'
-import {
   agentSessionRefusalReference,
   type AgentSessionRefusalReference
 } from '../../../shared/agent-session-wire-refusals'
@@ -36,6 +32,11 @@ import {
 import { AgentSessionPreDispatchError } from './structured-agent-session-operation-settlement'
 import { restartContinuationEnvelope } from './structured-agent-session-restart-continuation-envelope'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import {
+  continuationVerdict,
+  handedOverContinuationOutcome,
+  type ContinuationSubmission
+} from './structured-agent-session-continuation-verdict'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /**
@@ -56,6 +57,10 @@ export type StructuredAgentSessionContinuationOutcome = {
   reason?: string
   /** The refusal that kept the agent from starting; `reason` is then its code. */
   refusal?: AgentSessionRefusalReference
+  /** Its agent did not start for it: the message says why in the chat, as any message's failed
+   *  start does, so the restart list files nothing and the chat gets no note. `pending` while the
+   *  message waits for its next try. */
+  startFailed?: true
 }
 
 /** The slice of the host one continuation needs. Structural so this module never imports the host. */
@@ -154,12 +159,6 @@ export class RestartContinuationSupersededError extends AgentSessionPreDispatchE
   }
 }
 
-type ContinuationSubmission = {
-  dispatchState?: string
-  reason?: string | null
-  rejection?: UnreadAgentSessionFailureFact
-}
-
 export type StructuredAgentSessionContinuationDeps = {
   /** Runtime fence as it stands now; null when this host has no record of the session. */
   currentFence: (sessionId: string) => number | null
@@ -227,7 +226,9 @@ export async function startStructuredAgentSessionContinuation(
     throw error
   }
   if ('done' in started) {
-    await noteOutcome(deps, sessionId, started.done)
+    if (!started.done.startFailed) {
+      await noteOutcome(deps, sessionId, started.done)
+    }
     return started
   }
   const { verdict } = started
@@ -326,12 +327,13 @@ async function sendContinuation(
   }
   const clientMessageId = envelope.clientOperationId
   const handedOver = await deps.awaitHandedOver(sessionId, clientMessageId).catch(() => undefined)
-  if (handedOver?.dispatchState === 'rejected') {
-    return { done: refusedBy(sessionId, handedOver) }
+  const settled = handedOverContinuationOutcome(sessionId, handedOver)
+  if (settled) {
+    return { done: settled }
   }
   return {
     verdict: async () =>
-      verdictOf(
+      continuationVerdict(
         sessionId,
         // The send result carries the dispatch as it stood when Orca took the message, which for
         // a normal successful send is `pending`, so the settled value is what decides.
@@ -340,39 +342,6 @@ async function sendContinuation(
           sent.value?.submission
       )
   }
-}
-
-function refusedBy(
-  sessionId: string,
-  submission: ContinuationSubmission
-): StructuredAgentSessionContinuationOutcome {
-  // A start the agent was refused files that refusal's code, which the failure guidance keys on.
-  const refusal = readAgentSessionFailureFact(submission.rejection)?.refusal
-  return {
-    sessionId,
-    outcome: 'refused',
-    reason: refusal?.code ?? submission.reason ?? 'agent_session_dispatch_rejected',
-    ...(refusal ? { refusal } : {})
-  }
-}
-
-function verdictOf(
-  sessionId: string,
-  submission: ContinuationSubmission | undefined
-): StructuredAgentSessionContinuationOutcome {
-  const dispatch = submission?.dispatchState
-  if (submission && dispatch === 'rejected') {
-    return refusedBy(sessionId, submission)
-  }
-  if (dispatch === 'pending') {
-    // Still pending after settlement gave up: handed off, never confirmed.
-    return { sessionId, outcome: 'pending' }
-  }
-  // `unknown`, or a peer that reported no state at all: delivery is unverifiable, so this claims
-  // neither success nor failure — and writes no note saying the agent was asked to continue.
-  return dispatch === 'accepted'
-    ? { sessionId, outcome: 'continued' }
-    : { sessionId, outcome: 'unknown' }
 }
 
 /** Without the error: a failed append can carry the chat's private recovery payload. */

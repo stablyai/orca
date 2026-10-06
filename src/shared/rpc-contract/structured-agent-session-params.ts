@@ -227,6 +227,13 @@ export const QueuedMessageActionParams = z
  *  restart's) so the cards send again. Gated like the draft actions above. */
 export const QueuedMessagesResumeParams = z.object({ envelope: MutationEnvelope }).strict()
 
+/** `agentSession.retryMessage`: the person's Retry of a message no agent ever took, which queues
+ *  that same message again. Its own operation id, never the message's. Gated on
+ *  `agent-session.retry-message.v1`; an older host lacks the method. */
+export const RetryMessageParams = z
+  .object({ envelope: MutationEnvelope, clientMessageId: Identifier('Invalid message id') })
+  .strict()
+
 export const RespondParams = z
   .object({
     envelope: MutationEnvelope,

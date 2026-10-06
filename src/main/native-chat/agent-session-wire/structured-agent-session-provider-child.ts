@@ -62,18 +62,48 @@ export function endProviderChild(
   session.lastEndedChild = {
     ...ended,
     ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),
+    // Its failed start is already on the message it was for.
+    ...(child.startFailed ? { startFailureRecorded: true as const } : {}),
     endedAt: ended.endedAt ?? session.journal.cursor()
   }
   return true
 }
 
-/** The conversation's last start died before it proved itself, and nothing started since. Only a
- *  send retries it: a view or an exit recovery would respawn into the same failure, adding a row. */
+/** The adapter settled this child's start without proving it; its end follows. */
+export function markProviderChildStartFailed(
+  session: ChildBearer,
+  identity: StructuredAgentSessionProviderChildIdentity
+): void {
+  const child = matchingChild(session, identity)
+  if (child) {
+    child.startFailed = true
+  }
+}
+
+/** The conversation's last start died before it proved itself, nothing started since, and the
+ *  delivery loop has not yet recorded it on a message. Only a message's next try starts again: a
+ *  view or an exit recovery would respawn into the same failure. */
 export function failedProviderChildStart(
   session: Pick<ChildBearer, 'child' | 'lastEndedChild'>
 ): StructuredAgentSessionEndedChild | null {
   const ended = session.lastEndedChild
-  return !session.child && ended?.duringStartup && ended.cause !== 'user-stop' ? ended : null
+  return !session.child &&
+    ended?.duringStartup &&
+    ended.cause !== 'user-stop' &&
+    !ended.startFailureRecorded
+    ? ended
+    : null
+}
+
+/** Whoever ends that start next, its failure is recorded once. */
+export function markProviderChildStartFailureRecorded(
+  session: Pick<ChildBearer, 'lastEndedChild'>,
+  identity: StructuredAgentSessionProviderChildIdentity
+): void {
+  const ended = session.lastEndedChild
+  if (ended?.generation === identity.generation && ended.fence === identity.fence) {
+    ended.startFailureRecorded = true
+  }
 }
 
 export function sameProviderChild(

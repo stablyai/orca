@@ -258,4 +258,21 @@ describe('a message the provider answered after the running turn', () => {
       expect(membership.liveTurnKey).toBe('u2')
     }
   )
+
+  // Nothing runs for a message waiting for its next start, so no "Worked for" bar settles on it.
+  it.each([
+    ['states each row turn', THREAD],
+    ['states no turn scope', null]
+  ] as const)(
+    'puts a message waiting for its next start in no turn, never the live one (host %s)',
+    (_host, scope) => {
+      const items = [user('u1', scope), turn('t1', 'u1', scope), user('u2', scope)]
+      const messages = rows(items).map((message) =>
+        message.id === 'u2' ? { ...message, waitingToStart: true as const } : message
+      )
+      const membership = nativeChatTurnMembership(messages, { items, submissions: [] })
+      expect(membership.turnKeys).toEqual(['u1', undefined])
+      expect(membership.liveTurnKey).toBe('u1')
+    }
+  )
 })

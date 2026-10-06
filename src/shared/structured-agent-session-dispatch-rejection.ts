@@ -6,8 +6,10 @@
 // `classifyDispatchRejection` is the only place a reader judges either.
 //
 // Every rejection makes the one claim that state exists to make: this message did not reach the
-// provider. None is ever re-delivered under its own id — `rejected` is terminal in the reducer — so
-// a retry rotates the client message id, which is a new message and cannot duplicate.
+// provider. `rejected` is terminal in the reducer, with one exception: the person's Retry of a
+// message no agent ever took (`isRequeueableAgentJournalSubmission`) queues that same message again
+// under its own id, through its own operation. Any other retry rotates the client message id, which
+// is a new message and cannot duplicate.
 
 import {
   isSubmissionRejectionKind,
@@ -86,6 +88,7 @@ const KIND_CATEGORY = {
   providerStartFailed: 'startFailed',
   startFailed: 'startFailed',
   notSignedIn: 'startFailed',
+  providerMissing: 'startFailed',
   historyTooLarge: 'startFailed',
   managedAccountEnvOverride: 'startFailed',
   accountSwitchInProgress: 'startFailed',
@@ -111,6 +114,7 @@ const KIND_VERDICT = {
   providerStartFailed: 'failure',
   startFailed: 'failure',
   notSignedIn: 'failure',
+  providerMissing: 'failure',
   historyTooLarge: 'failure',
   managedAccountEnvOverride: 'failure',
   accountSwitchInProgress: 'failure',
@@ -166,6 +170,76 @@ export function classifyDispatchRejection(
     return { category: 'content', verdict: 'failure' }
   }
   return { category: KIND_CATEGORY[kind], verdict: KIND_VERDICT[kind], kind }
+}
+
+/** Rejected because the agent it waited on never took it: what a failed start writes, whatever
+ *  the person may have to do first. Orca stopping a start that hung is one, and so is the agent
+ *  ending before it was handed the message. */
+export function isFailedStartRejection(
+  submission: Pick<AgentJournalSubmission, 'reason'> & { rejection?: unknown }
+): boolean {
+  const { category, kind } = classifyDispatchRejection(submission)
+  return category === 'startFailed' || kind === 'hostStopped' || kind === 'providerExited'
+}
+
+/** Structural, so a reader holding only these fields of a submission — a restart continuation's
+ *  verdict — asks the same question. */
+type FailedBeforeHandoverFields = {
+  dispatchState?: string
+  reason?: string | null
+  handedOverAt?: number
+  handoverRecorded?: boolean
+  rejection?: unknown
+}
+
+/** Rejected on its way to an agent, which never took it: a failed start, or Orca's own fault before
+ *  any handover. The one rule for where it is drawn, when its failure is announced, whether another
+ *  device shows it, and whether a Retry queues it again. */
+export function failedBeforeHandover(submission: FailedBeforeHandoverFields): boolean {
+  return (
+    submission.dispatchState === 'rejected' &&
+    submission.handedOverAt === undefined &&
+    submission.handoverRecorded === true &&
+    isFailedStartOrHostFault({ reason: submission.reason ?? null, rejection: submission.rejection })
+  )
+}
+
+function isFailedStartOrHostFault(
+  submission: Pick<AgentJournalSubmission, 'reason'> & { rejection?: unknown }
+): boolean {
+  return (
+    isFailedStartRejection(submission) || classifyDispatchRejection(submission).kind === 'hostFault'
+  )
+}
+
+/** Whether the person's Retry may queue this same message again: `failedBeforeHandover`, and no
+ *  queued card's, whose card is its Retry. */
+export function isRequeueableAgentJournalSubmission(
+  submission: FailedBeforeHandoverFields & Pick<AgentJournalSubmission, 'queuedMessageId'>
+): boolean {
+  return submission.queuedMessageId === undefined && failedBeforeHandover(submission)
+}
+
+/**
+ * Whether a queued card holds every card behind it until the person acts: one returned for
+ * something about it that only they can resolve — the provider or Orca refused its content or
+ * attachments, its command did not run, the queue was full, Orca could not hand it over or faulted.
+ * One returned because its agent failed to start holds nothing: each card behind it starts the
+ * agent again for itself. Orca's fault is not `failedBeforeHandover` here on purpose: a card is
+ * returned for it, and the queue waits on the person.
+ */
+export function queuedCardHoldsQueue(card: {
+  state: string
+  returnedReason?: string | null
+  returnedRejection?: unknown
+}): boolean {
+  return (
+    card.state === 'returned' &&
+    !isFailedStartRejection({
+      reason: card.returnedReason ?? null,
+      rejection: card.returnedRejection
+    })
+  )
 }
 
 /** A Stop withdrew it before it ran: it will not land, and only its sender can send it again. */

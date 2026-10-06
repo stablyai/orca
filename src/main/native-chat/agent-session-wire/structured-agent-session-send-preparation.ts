@@ -13,10 +13,6 @@ import {
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
 import { journalOpenRefusal } from '../agent-session-journal/journal-open-failure'
-import {
-  structuredAgentSessionAwaitedCommand,
-  type StructuredAgentSessionAwaitedCommandJournal
-} from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import {
   AGENT_SESSION_NOT_ATTACHED,
@@ -165,15 +161,9 @@ export function sendPreparation(
   }
 }
 
-/** Who a failure sentence names: the chat's agent, when the record says; and, given the journal,
- *  the command a failed start leaves to run again. */
+/** Who a failure sentence names: the chat's agent, when the record says. */
 export function structuredAgentSessionFailureWordsContext(
-  record: AgentSessionRecord | null,
-  journal?: StructuredAgentSessionAwaitedCommandJournal
+  record: AgentSessionRecord | null
 ): AgentSessionFailureWordsContext {
-  const command = journal && structuredAgentSessionAwaitedCommand(journal)
-  return {
-    ...(record ? { agentName: TUI_AGENT_DISPLAY_NAMES[record.provider] } : {}),
-    ...(command ? { command } : {})
-  }
+  return record ? { agentName: TUI_AGENT_DISPLAY_NAMES[record.provider] } : {}
 }

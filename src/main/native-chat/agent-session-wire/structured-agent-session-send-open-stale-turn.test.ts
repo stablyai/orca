@@ -116,13 +116,12 @@ it.each(PROBES)(
     await expect(host.send(CALLER, { envelope: sendEnvelope, body })).resolves.toMatchObject({
       ok: true
     })
-    await eventually(async () =>
-      expect(
-        (await host.journalSnapshot(SESSION)).submissions.find(
-          (entry) => entry.clientMessageId === sendEnvelope.clientOperationId
-        )
-      ).toMatchObject({ dispatchState: 'rejected' })
-    )
+    const sent = async () =>
+      (await host.journalSnapshot(SESSION)).submissions.find(
+        (entry) => entry.clientMessageId === sendEnvelope.clientOperationId
+      )
+    await eventually(async () => expect(await sent()).toMatchObject({ dispatchState: 'rejected' }))
+    expect((await sent())?.startRetry).toBeUndefined()
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(await turnStates(host)).toEqual([settled])

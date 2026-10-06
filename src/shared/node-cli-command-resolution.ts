@@ -300,6 +300,30 @@ export function resolveCliCommands(
   return resolved
 }
 
+/**
+ * Whether `resolved`, the resolver's answer for `commandName`, names nothing the spawn could run: the
+ * resolver fell back to the bare name, and the spawn's own PATH and home hold no such command
+ * either. Only then is the CLI missing; one the spawn's environment can reach is not.
+ */
+export function isCliCommandMissing(
+  commandName: string,
+  resolved: string,
+  spawnEnv: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (resolved !== commandName) {
+    return false
+  }
+  const homePath = spawnEnv.HOME ?? spawnEnv.USERPROFILE
+  return (
+    resolveCliCommand(commandName, {
+      pathEnv: spawnEnv[platform === 'win32' ? firstWindowsPathEnvKey(spawnEnv) : 'PATH'] ?? '',
+      platform,
+      ...(homePath ? { homePath } : {})
+    }) === commandName
+  )
+}
+
 export function resolveCodexCommand(options: ResolveCommandOptions = {}): string {
   return resolveCliCommand('codex', options)
 }

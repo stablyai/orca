@@ -28,6 +28,7 @@ import {
   type AgentJournalItemBody,
   type AgentJournalMessageItem,
   type AgentJournalProducerLinkage,
+  type AgentJournalRejectionCause,
   type AgentJournalTurnScope,
   type AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-types'
@@ -160,11 +161,28 @@ export type JournalDispatchRow = JournalRowBase & {
   /** On `rejected`: why, typed. Older readers keep the key and ignore it; a malformed one is
    *  dropped when read, never the row. */
   rejection?: AgentSessionFailureFact
+  /** On `pending`: the message waits in the queue because the start it was for was refused. An
+   *  older reader ignores the key and reads the row as a handover, so the message ends in doubt,
+   *  never as sent or failed. A malformed one is dropped when read, never the row. */
+  startRetry?: JournalStartRetryRecord
+  /** On `pending`: the person's Retry of a message rejected before any agent took it, which queues
+   *  the same message again. An older reader, for which `rejected` is final, ignores the row. */
+  requeued?: true
+  /** On `rejected`: `AgentJournalSubmission.rejectionCause`. Older readers keep the key and ignore
+   *  it. */
+  rejectionCause?: AgentJournalRejectionCause
   /** On `rejected`: the turn a Codex send was answered into, and how it joined it, when that
    *  turn's end settled the send; null on every other rejection. Absent on other rows and on rows
    *  written before it. `via` stays a string: a newer build may write another. Older readers keep
    *  the key and ignore it; one this build cannot read is read as null, never dropping the row. */
   answeredInTurn?: { turnItemId: string; via: string } | null
+}
+
+/** What a failed start's row records; the attempt count and the time are the reducer's. */
+export type JournalStartRetryRecord = {
+  reason: string
+  rejection: AgentSessionFailureFact
+  nextAttemptAt: number
 }
 
 /** An item mutation may name its own producer, because one batch can CREATE

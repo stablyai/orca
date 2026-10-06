@@ -192,6 +192,17 @@ describe('what a user message says about its delivery', () => {
     expect(onRetry).toHaveBeenCalledOnce()
   })
 
+  it('shows a Retry already pressed as pending, taking no second press', () => {
+    const onRetry = vi.fn()
+    renderUser({ text: 'Codex stopped.', onRetry, retryPending: true })
+
+    const retry = screen.getByRole('button', { name: 'Retry' })
+    expect(retry).toBeDisabled()
+    expect(retry).toHaveAttribute('aria-busy', 'true')
+    fireEvent.click(retry)
+    expect(onRetry).not.toHaveBeenCalled()
+  })
+
   it('offers no Retry where the surface cannot send it again', () => {
     renderUser({ text: 'Not delivered — check the terminal' })
 

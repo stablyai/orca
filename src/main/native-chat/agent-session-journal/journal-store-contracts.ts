@@ -6,6 +6,7 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
   AgentJournalProducerLinkage,
+  AgentJournalRejectionCause,
   AgentJournalResetReason,
   AgentJournalRowAttribution,
   AgentJournalTurnScope,
@@ -13,7 +14,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
-import type { JournalRow } from './journal-row-schema'
+import type { JournalRow, JournalStartRetryRecord } from './journal-row-schema'
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
@@ -39,10 +40,15 @@ export type ResolveDispatchInput = {
     | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity | null }
     /** The turn the message is handed into — the live root turn, or `thread` when none runs. */
     | { state: 'pending'; turnScope: AgentJournalTurnScope }
+    /** Still queued: the start it was for was refused, and its next try is booked. */
+    | { state: 'pending'; startRetry: JournalStartRetryRecord }
+    /** Queued again by the person's Retry; see `JournalDispatchRow.requeued`. */
+    | { state: 'pending'; requeued: true }
     /** `reason` is what released clients print, `rejection` what newer ones read: both from
      *  `agentSessionFailureWords`, never written by hand. */
     | ({
         state: 'rejected'
+        rejectionCause?: AgentJournalRejectionCause
         answeredInTurn?: AgentJournalAnsweredTurnIdentity
       } & AgentJournalDispatchRejection)
     | { state: 'unknown'; reason?: string | null }
@@ -74,10 +80,6 @@ export type JournalLifecycleBatchInput = {
   mutations: readonly JournalLifecycleMutationInput[]
   fence: number
   recovered?: true
-  /** Rejects the sends still queued with this first, in the same append: a failed start's row
-   *  follows the messages it failed, and no reader meets one without the other. With none still
-   *  queued, the batch is not written either. */
-  rejectsQueued?: AgentJournalDispatchRejection
 }
 
 export type JournalSubmissionInput = {

@@ -165,16 +165,19 @@ describe('an open chat receives every row its journal commits', () => {
 
     await exitBeforeProof()
 
-    // The exit ends the child; the delivery loop, which reads why, rejects what it had queued.
+    // The exit ends the child; the delivery loop, which reads why, records it on what it had queued.
     await vi.waitFor(() =>
       expect(pane.received().submissions).toContainEqual(
-        expect.objectContaining({ clientMessageId: held, dispatchState: 'rejected' })
+        expect.objectContaining({
+          clientMessageId: held,
+          dispatchState: 'rejected',
+          reason: 'Codex stopped before it finished starting. Send your message to try again.',
+          rejection: expect.objectContaining({ kind: 'providerStartFailed' })
+        })
       )
     )
-    // One row, however many of its writers reported the start.
-    expect(pane.received().statusRows).toEqual([
-      'Codex stopped before it finished starting. Send your message to try again.'
-    ])
+    // The message says why; the chat gets no row of its own for it.
+    expect(pane.received().statusRows).toEqual([])
   })
 
   it('shows a revision the provider queued with no publish behind it', async () => {

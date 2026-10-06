@@ -226,7 +226,6 @@ describe('dead structured-session generation settlement', () => {
       | 'snapshot'
       | 'submissions'
       | 'markPendingSubmissionsUnknown'
-      | 'rejectPendingSubmissions'
       | 'rejectQueuedSubmissions'
       | 'appendLifecycleBatch'
     > = {
@@ -236,9 +235,6 @@ describe('dead structured-session generation settlement', () => {
       }),
       submissions: () => [],
       markPendingSubmissionsUnknown: async () => {
-        throw new Error('journal_closed')
-      },
-      rejectPendingSubmissions: async () => {
         throw new Error('journal_closed')
       },
       rejectQueuedSubmissions: async () => {
@@ -298,38 +294,41 @@ describe('dead structured-session generation settlement', () => {
     ])
   })
 
-  it('rejects a send a child that never started left pending with its diagnostic, in words', async () => {
+  it('writes nothing for a child that never proved its start: the delivery loop records it', async () => {
     await journal.appendSubmission({
       clientMessageId: 'client-held',
       payloadFingerprint: 'fingerprint',
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello?' }] },
-      fence: 7
-    })
-
-    await settleStructuredAgentSessionDeadGeneration({
-      journal,
-      sessionId: SESSION,
       fence: 7,
-      settlementId: `provider-exit:${SESSION}:7:generation-1`,
-      pendingSubmissionReason: 'provider_closed_before_acknowledgement',
-      verdict: { state: 'interrupted', completedAt: 1_000 },
-      exitFailure: agentSessionFailureFact('providerExited', {
-        detail: providerDiagnostic('code 1\nnot signed in', 'log')
-      }),
-      exitedDuringStartup: { generation: 'generation-1' }
+      handoverRecorded: true
     })
+    await journal.resolveDispatch({
+      clientMessageId: 'client-held',
+      state: 'pending',
+      fence: 7,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    const before = journal.cursor()
 
-    // The sentence is Orca's; the stderr the exit carried rides as a log detail only.
-    expect(journal.submissions()).toEqual([
-      expect.objectContaining({
-        clientMessageId: 'client-held',
-        dispatchState: 'rejected',
-        reason: 'The agent stopped before it finished starting. Send your message to try again.',
-        rejection: {
-          kind: 'providerStartFailed',
-          detail: { text: 'code 1\nnot signed in', audience: 'log' }
-        }
+    await expect(
+      settleStructuredAgentSessionDeadGeneration({
+        journal,
+        sessionId: SESSION,
+        fence: 7,
+        settlementId: `provider-exit:${SESSION}:7:generation-1`,
+        pendingSubmissionReason: 'provider_closed_before_acknowledgement',
+        verdict: { state: 'interrupted', completedAt: 1_000 },
+        exitFailure: agentSessionFailureFact('providerExited', {
+          detail: providerDiagnostic('code 1\nnot signed in', 'log')
+        }),
+        unprovenStart: true
       })
+    ).resolves.toEqual({ ok: true })
+
+    // Handed to a child that took nothing, it is neither rejected nor left in doubt here.
+    expect(journal.cursor()).toEqual(before)
+    expect(journal.submissions()).toEqual([
+      expect.objectContaining({ clientMessageId: 'client-held', dispatchState: 'pending' })
     ])
   })
 

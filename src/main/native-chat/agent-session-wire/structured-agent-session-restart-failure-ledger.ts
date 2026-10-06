@@ -66,11 +66,19 @@ export type StructuredAgentSessionRestartFailureLedger = {
   ) => Promise<number>
 }
 
-/** Which continuation outcomes count as the agent not carrying on, and how each is filed. */
-export function continuationFailureOutcome(
-  outcome: StructuredAgentSessionContinuationOutcome['outcome']
-): AgentSessionResumeFailureOutcome | null {
-  return outcome === 'continued' ? null : outcome === 'refused' ? 'refused' : 'unconfirmed'
+/** Which continuation outcomes count as the agent not carrying on, and how each is filed. A failed
+ *  start is the chat message's to report, not this list's. */
+export function continuationFailureOutcome({
+  outcome,
+  startFailed
+}: Pick<
+  StructuredAgentSessionContinuationOutcome,
+  'outcome' | 'startFailed'
+>): AgentSessionResumeFailureOutcome | null {
+  if (startFailed || outcome === 'continued') {
+    return null
+  }
+  return outcome === 'refused' ? 'refused' : 'unconfirmed'
 }
 
 export function createStructuredAgentSessionRestartFailureLedger(deps: {

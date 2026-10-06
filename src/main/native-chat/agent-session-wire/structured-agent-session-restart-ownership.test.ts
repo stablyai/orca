@@ -19,6 +19,7 @@ import {
   startAgent,
   statusNotes,
   supersededRefusal,
+  terminalStartRefusal,
   throwAfterContinuationAccepted
 } from './structured-agent-session-restart-interruption-test-harness'
 import {
@@ -167,23 +168,33 @@ it('keeps a continuation unconfirmed when its send throws after acceptance', asy
   ).toMatchObject({ outcome: { status: 'succeeded' } })
 })
 
-// The continuation is accepted, then its start fails: the message is rejected with the cause and
-// the failure is filed, and nothing is stopped because nothing started.
-it('rejects the continuation when its start fails, and files a retryable refusal', async () => {
+// The continuation is accepted, then its agent fails to start: like any message whose start failed,
+// it is rejected with the cause and says why itself, so the restart list files nothing, the chat
+// gets no note, and nothing is stopped because nothing started.
+it('rejects the continuation with its cause when its agent cannot start, filing and noting nothing', async () => {
   const { host, acquire, dispatch, closeSession } = await interruptedRestart()
-  acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  acquire.mockRejectedValueOnce(terminalStartRefusal())
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
-  expect(result.resumed).toMatchObject([{ outcome: 'refused' }])
-  expect(result.continued).toMatchObject([{ outcome: 'refused' }])
-  // Nothing ran, so the offer stands as a failure a retry can act on.
-  expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'refused', retryable: true }])
-  expect(await statusNotes(host)).toContainEqual({
+  const { reason } = agentSessionFailureWords(agentSessionFailureFact('historyTooLarge'), {
+    surface: 'rejection'
+  })
+  expect(result.continued).toEqual([
+    { sessionId: SESSION, outcome: 'refused', reason, startFailed: true }
+  ])
+  expect(result.failed).toEqual([])
+  expect(await host.restartResume.listFailures()).toEqual([])
+  expect(await statusNotes(host)).not.toContainEqual({
     text: AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
     tone: 'error'
   })
   expect((await host.journalSnapshot(SESSION)).submissions).toMatchObject([
-    { dispatchState: 'rejected' }
+    {
+      dispatchState: 'rejected',
+      reason,
+      rejection: { kind: 'historyTooLarge' }
+    }
   ])
+  expect((await host.journalSnapshot(SESSION)).submissions[0]).not.toHaveProperty('startRetry')
   expect(acquire).toHaveBeenCalledTimes(1)
   expect(dispatch).not.toHaveBeenCalled()
   expect(closeSession).not.toHaveBeenCalled()
@@ -359,12 +370,35 @@ it("refuses a continuation quietly when the user's own message was accepted firs
   expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
 })
 
-/** A continuation whose start failed, filed as a retryable failure. */
+/** A continuation the agent it started refused, filed as a retryable failure. That agent has since
+ *  exited, so the chat's next send starts one again. */
 async function failedContinuation() {
   const state = await interruptedRestart()
-  state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  const acquire = state.acquire.getMockImplementation()
+  if (!acquire) {
+    throw new Error('the harness acquire has no implementation')
+  }
+  state.acquire.mockImplementationOnce(async (input) => ({
+    ...(await acquire(input)),
+    acquisitionGeneration: 'generation-continuation'
+  }))
+  state.dispatch.mockResolvedValueOnce({
+    state: 'rejected',
+    ...agentSessionFailureWords(agentSessionFailureFact('providerRejected'), {
+      surface: 'rejection'
+    })
+  })
   const result = await state.host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'refused' }])
+  await state.host.handleAdapterEvent({
+    type: 'ended',
+    sessionId: SESSION,
+    fence: state.store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
+    acquisitionGeneration: 'generation-continuation',
+    reason: 'codex app-server exited',
+    cause: 'unexpected-exit'
+  })
+  state.dispatch.mockClear()
   return state
 }
 
@@ -465,9 +499,9 @@ it('logs teardown capsule publication failure and still releases the provider', 
   await rm(capsulePath, { recursive: true })
 })
 
-// The resume ledger's reason stays the refusal code, which is what every renderer's guidance keys
-// on; the details are filed beside it, never in its place.
-it('files a restart refused by a conflicted claim under its code, with its details beside it', async () => {
+// A conflicted claim may be released, so the continuation waits for its next try like any message:
+// its words and its refusal code and details ride on the message, and the restart list files nothing.
+it('keeps a conflicted claim on the continuation that waits for its next try, filing nothing', async () => {
   // The terminal agent that holds the claim is still running, so nothing may take it over.
   const { host, store } = await interruptedRestart('turn', true, async () => ({
     outcome: 'identity-matched',
@@ -485,8 +519,51 @@ it('files a restart refused by a conflicted claim under its code, with its detai
   await host.restartResume.continueAfterRestart([SESSION], 'modal')
 
   await vi.waitFor(async () =>
-    expect(await host.restartResume.listFailures()).toMatchObject([
-      { reason: 'agent_session_conflict', details: { reason: 'claimConflicted' } }
+    expect((await host.journalSnapshot(SESSION)).submissions).toMatchObject([
+      {
+        dispatchState: 'pending',
+        startRetry: {
+          rejection: {
+            refusal: { code: 'agent_session_conflict', details: { reason: 'claimConflicted' } }
+          }
+        }
+      }
     ])
   )
+  expect(await host.restartResume.listFailures()).toEqual([])
+})
+
+// A start refused for good is the message's to report: it keeps the refusal's code with its details
+// beside it, the outcome carries both for the action's report, and the restart list files nothing.
+it('keeps a start refused for good on the message under its code, with its details beside it', async () => {
+  const { host } = await interruptedRestart()
+  // This host cannot run the record where it lives: no later try would either.
+  vi.spyOn(host['conversationDelivery'].loop['deps'], 'ensureProviderChild').mockResolvedValueOnce({
+    ok: false,
+    refusal: {
+      code: 'structured_agent_session_unsupported',
+      details: { reason: 'hostUnsupported' },
+      message: 'This execution host cannot resume the requested structured agent session.'
+    }
+  })
+
+  const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
+
+  const refusal = {
+    code: 'structured_agent_session_unsupported',
+    details: { reason: 'hostUnsupported' }
+  }
+  expect(result.continued).toMatchObject([
+    {
+      sessionId: SESSION,
+      outcome: 'refused',
+      reason: 'structured_agent_session_unsupported',
+      refusal,
+      startFailed: true
+    }
+  ])
+  expect((await host.journalSnapshot(SESSION)).submissions).toMatchObject([
+    { dispatchState: 'rejected', rejection: { refusal } }
+  ])
+  expect(await host.restartResume.listFailures()).toEqual([])
 })

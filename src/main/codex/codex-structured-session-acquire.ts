@@ -16,7 +16,7 @@ import { CodexBackgroundTaskTracker, codexChildWorkSink } from './codex-backgrou
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { openCodexAppServerConnection } from './codex-app-server-connection'
+import { openCodexStructuredChild } from './codex-structured-launch-resolution'
 import {
   codexProviderHandleLink,
   codexSpawnedProcessIdentity
@@ -107,7 +107,7 @@ export async function acquireCodexStructuredSession(input: {
         }
       })
     : null
-  const open = deps.openConnection ?? openCodexAppServerConnection
+  const open = deps.openConnection ?? openCodexStructuredChild
   const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
   try {
     await stopSupersededCodexAcquisition({

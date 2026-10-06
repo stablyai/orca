@@ -33,6 +33,34 @@ function item(index: number): AgentJournalRenderItem {
 }
 
 describe('structured agent session message projection', () => {
+  it('marks a message waiting for its next start, and only that one, as waiting to start', () => {
+    const queued = (index: number, startRetry?: AgentJournalSubmission['startRetry']) => ({
+      ...submission(index),
+      dispatchState: 'pending' as const,
+      providerItemId: null,
+      resolvedAt: null,
+      handoverRecorded: true as const,
+      ...(startRetry ? { startRetry } : {})
+    })
+    const waiting = queued(0, {
+      attempts: 1,
+      reason: 'A Claude account switch is in progress.',
+      rejection: { kind: 'accountSwitchInProgress' },
+      failedAt: 1,
+      nextAttemptAt: 15_001
+    })
+    const items = [0, 1].map((index) => ({
+      ...item(index),
+      itemId: agentJournalSubmissionKey(`client-${index}`)
+    }))
+    expect(
+      projectStructuredAgentSessionMessages(items, [], [waiting, queued(1)], NO_CARDS)
+    ).toEqual([
+      expect.objectContaining({ id: items[0]!.itemId, queued: true, waitingToStart: true }),
+      expect.not.objectContaining({ waitingToStart: true })
+    ])
+  })
+
   // The host recorded it, so its row is the message from here; the outbox copy gives way.
   it("draws a send the host rejected from the host's row, not the outbox copy", () => {
     const rejected = { ...submission(0), dispatchState: 'rejected' as const, providerItemId: null }

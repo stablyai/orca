@@ -128,21 +128,39 @@ export type AgentSessionAcquisition = {
 /** A refusal before spawn that a person can act on; the site that refused names it. */
 export type AgentSessionPreSpawnReason = Extract<
   AgentSessionRefusalReason<'agent_session_operation_invalid'>,
-  'managedAccountEnvOverride' | 'accountSwitchInProgress' | 'managedAccountUnsupported'
+  | 'managedAccountEnvOverride'
+  | 'accountSwitchInProgress'
+  | 'managedAccountUnsupported'
+  | 'providerMissing'
 >
+
+/** Those only the person can clear: a start refused for one is not tried again on its own. */
+type AgentSessionPreSpawnReasonNeedingUser = Extract<
+  AgentSessionPreSpawnReason,
+  'providerMissing' | 'managedAccountEnvOverride' | 'managedAccountUnsupported'
+>
+
+type AgentSessionPreSpawnErrorOptions = { message?: string } & (
+  | { reason: AgentSessionPreSpawnReasonNeedingUser; needsUser: true }
+  | {
+      reason?: Exclude<AgentSessionPreSpawnReason, AgentSessionPreSpawnReasonNeedingUser>
+      needsUser?: never
+    }
+)
 
 /** Acquisition failed with first-hand proof that no provider process existed. */
 export class AgentSessionPreSpawnError extends Error {
   /** Absent: Orca's own reason, which only the log reads. A wrapped pre-spawn error keeps its. */
   readonly reason: AgentSessionPreSpawnReason | undefined
+  /** The site that refused said only the person can clear it, so Orca does not try it again. */
+  readonly needsUser: boolean
 
-  constructor(
-    cause: unknown,
-    options: { reason?: AgentSessionPreSpawnReason; message?: string } = {}
-  ) {
+  constructor(cause: unknown, options: AgentSessionPreSpawnErrorOptions = {}) {
     super(options.message ?? (cause instanceof Error ? cause.message : String(cause)), { cause })
     this.name = 'AgentSessionPreSpawnError'
-    this.reason = options.reason ?? (isAgentSessionPreSpawnError(cause) ? cause.reason : undefined)
+    const wrapped = isAgentSessionPreSpawnError(cause) ? cause : undefined
+    this.reason = options.reason ?? wrapped?.reason
+    this.needsUser = options.needsUser ?? wrapped?.needsUser ?? false
   }
 }
 

@@ -27,7 +27,10 @@ import {
   queuePauseHolding,
   resumableQueuePause
 } from './queued-message-pause'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  type SubmissionRejectionFact
+} from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
@@ -594,6 +597,32 @@ describe('which cards the pauses in force hold', () => {
       ['after', 'restarted']
     ])
     expect(resumableQueuePause(pausesOver(cards), cards)?.reason).toBe('stopped')
+  })
+
+  it('a card returned because its agent failed to start blocks nothing behind it; any other return does', () => {
+    const failedStart = agentSessionFailureFact('providerMissing')
+    const returned = (rejection: SubmissionRejectionFact) =>
+      card('returned', 1, {
+        state: 'returned',
+        returnedRejection: rejection,
+        returnedReason: agentSessionFailureWords(rejection, { surface: 'rejection' }).reason
+      })
+    const held = card('held', 2)
+    const fresh = card('fresh', 6)
+
+    // Each card behind it starts the agent again for itself.
+    const afterFailedStart = [returned(failedStart), fresh]
+    expect(nextSendableQueuedCard(pausesOver(afterFailedStart), afterFailedStart)).toBe(fresh)
+    const pausedAfterFailedStart = [returned(failedStart), held]
+    expect(resumableQueuePause(pausesOver(pausedAfterFailedStart), pausedAfterFailedStart)).toEqual(
+      expect.objectContaining({ reason: 'stopped' })
+    )
+
+    const refused = agentSessionFailureFact('queueFull')
+    const afterRefused = [returned(refused), fresh]
+    expect(nextSendableQueuedCard(pausesOver(afterRefused), afterRefused)).toBeNull()
+    const pausedAfterRefused = [returned(refused), held]
+    expect(resumableQueuePause(pausesOver(pausedAfterRefused), pausedAfterRefused)).toBeNull()
   })
 
   it("a /clear's pause that holds nothing never hides a restart's", () => {

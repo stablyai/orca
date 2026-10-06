@@ -560,47 +560,58 @@ describe("the replacement's first send", () => {
     expect(start?.options).toMatchObject({ model: 'picked-model' })
   })
 
-  it.each([
-    {
-      name: 'not signed in',
-      error: () => new AgentSessionAcquisitionRefusal('Codex is not signed in.', 'notSignedIn'),
-      words:
-        'Codex is not signed in for the selected account. Sign in, then send your message again.',
-      kind: 'notSignedIn'
-    },
-    {
-      name: 'a generic refusal',
-      error: () => new Error('spawn codex ENOENT'),
-      words: "Codex couldn't start.",
-      kind: 'startFailed'
-    }
-  ])(
-    'fails on the message when the start fails ($name): one row, the message kept as not sent, and Retry starts it',
-    async ({ error, words, kind }) => {
-      const replacement = await clearCommits()
-      vi.mocked(adapter.acquire).mockRejectedValueOnce(error())
-      const sent = await sendTo(replacement, 'first message')
-      expect(sent).toMatchObject({ ok: true })
-      const clientMessageId = sent.ok ? sent.value.clientMessageId : ''
-      await vi.waitFor(async () =>
-        expect(await submissionOf(replacement, clientMessageId)).toMatchObject({
-          dispatchState: 'rejected',
-          rejection: { kind }
-        })
-      )
-      const rows = await errorRows(replacement)
-      expect(rows).toHaveLength(1)
-      expect(rows[0]).toContain(words)
-      expect(rows.join(' ')).not.toContain('/clear')
-      expect((await submissionOf(replacement, clientMessageId))?.reason).not.toContain('/clear')
-      expect(adapter.dispatch).not.toHaveBeenCalled()
+  it('fails on the message when the start fails for good: no row, the message kept as not sent, and Retry starts it', async () => {
+    const replacement = await clearCommits()
+    vi.mocked(adapter.acquire).mockRejectedValueOnce(
+      new AgentSessionAcquisitionRefusal('Codex is not signed in.', 'notSignedIn')
+    )
+    const sent = await sendTo(replacement, 'first message')
+    expect(sent).toMatchObject({ ok: true })
+    const clientMessageId = sent.ok ? sent.value.clientMessageId : ''
+    await vi.waitFor(async () =>
+      expect(await submissionOf(replacement, clientMessageId)).toMatchObject({
+        dispatchState: 'rejected',
+        rejection: { kind: 'notSignedIn' }
+      })
+    )
+    expect(await errorRows(replacement)).toEqual([])
+    const reason = (await submissionOf(replacement, clientMessageId))?.reason
+    expect(reason).toContain('Codex is not signed in for the selected account.')
+    expect(reason).not.toContain('/clear')
+    expect(adapter.dispatch).not.toHaveBeenCalled()
 
-      // Retry resends the same words, which starts the agent and delivers them.
-      expect(await sendTo(replacement, 'first message')).toMatchObject({ ok: true })
-      await vi.waitFor(() => expect(adapter.dispatch).toHaveBeenCalledTimes(1))
-      expect(startsFor(replacement)).toBe(2)
-    }
-  )
+    // Retry resends the same words, which starts the agent and delivers them.
+    expect(await sendTo(replacement, 'first message')).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(adapter.dispatch).toHaveBeenCalledTimes(1))
+    expect(startsFor(replacement)).toBe(2)
+  })
+
+  it('rejects the message at once with why its agent could not start, and Retry starts it', async () => {
+    const replacement = await clearCommits()
+    vi.mocked(adapter.acquire).mockRejectedValueOnce(new Error('spawn codex ENOENT'))
+    const sent = await sendTo(replacement, 'first message')
+    expect(sent).toMatchObject({ ok: true })
+    const clientMessageId = sent.ok ? sent.value.clientMessageId : ''
+    await vi.waitFor(async () =>
+      expect(await submissionOf(replacement, clientMessageId)).toMatchObject({
+        dispatchState: 'rejected',
+        // Never ran, so it failed to start, not restart.
+        rejection: { kind: 'startFailed' }
+      })
+    )
+    // The spawn ran here and failed, so no later try is booked.
+    expect((await submissionOf(replacement, clientMessageId))?.startRetry).toBeUndefined()
+    expect(await errorRows(replacement)).toEqual([])
+    const reason = (await submissionOf(replacement, clientMessageId))?.reason
+    expect(reason).toContain("Codex couldn't start.")
+    expect(reason).not.toContain('/clear')
+    expect(adapter.dispatch).not.toHaveBeenCalled()
+
+    // Retry resends the same words, which starts the agent and delivers them.
+    expect(await sendTo(replacement, 'first message')).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(adapter.dispatch).toHaveBeenCalledTimes(1))
+    expect(startsFor(replacement)).toBe(2)
+  })
 
   it('starts after a restart between the /clear and the first send', async () => {
     const replacement = await clearCommits()

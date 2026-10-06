@@ -14,7 +14,10 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AgentSessionJournalError } from '../agent-session-journal/journal-write-guards'
-import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
+import {
+  interruptedRestart,
+  throwAfterContinuationAccepted
+} from './structured-agent-session-restart-interruption-test-harness'
 import { attachParams, CALLER, hostTestState } from './structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW as NOW,
@@ -116,9 +119,11 @@ it('keeps the offer and files nothing when the send is refused as a newer Orca c
 
 // A failure filed before the chat became a newer Orca's stays for that Orca, and is not shown here.
 it('keeps a failure already filed for a chat a newer Orca saved since, but does not show it', async () => {
-  const { host, root, acquire } = await interruptedRestart()
+  const { host, root } = await interruptedRestart()
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   await host.restartResume.list()
-  acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  // A send Orca may have taken is filed; a failed start is not, its message saying why instead.
+  throwAfterContinuationAccepted()
   await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(await host.restartResume.listFailures()).toMatchObject([{ sessionId: SESSION }])
   await host.close(SESSION, 'evict')

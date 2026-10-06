@@ -50,7 +50,8 @@ export function failWorkerStart(
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
-    if (!dispatch || !worker || worker.state !== 'starting') {
+    // A start left unknown fails the same way once something proves it never ran the task.
+    if (!dispatch || !worker || (worker.state !== 'starting' && worker.state !== 'start_unknown')) {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not starting.`)
     }
     const now = new Date().toISOString()
@@ -68,7 +69,7 @@ export function failWorkerStart(
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
-      from: 'starting',
+      from: worker.state,
       to: 'failed',
       projection: { stage, last_error: reason, updated_at: now }
     })

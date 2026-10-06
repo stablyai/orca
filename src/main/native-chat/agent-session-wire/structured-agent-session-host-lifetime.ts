@@ -10,8 +10,7 @@
 
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { leftoverRejection } from './structured-agent-session-start-attempt-failure'
 import {
   snapshotBeforeStructuredAgentSessionStop,
   StructuredAgentSessionEvictionError
@@ -61,9 +60,10 @@ type ConversationCloseDeps = Pick<StructuredAgentSessionHostDeps, 'logger'> & {
 }
 
 /** A conversation's handle closes with nothing queued: what is still queued when the chat closes,
- *  or the app quits, will not be handed over. Best effort: the next open's delivery loop rejects a
- *  leftover itself. `which` narrows it to the messages a close that did not complete closed.
- *  Resolves false when the rejection failed; the failure is reported, never thrown. */
+ *  or the app quits, will not be handed over. One waiting out a refused start keeps that failure, so
+ *  it reads as failed. Best effort: the next open's delivery loop rejects a leftover itself. `which`
+ *  narrows it to the messages a close that did not complete closed. Resolves false when the
+ *  rejection failed; the failure is reported, never thrown. */
 export async function abandonQueuedStructuredAgentSessionMessages(
   deps: ConversationCloseDeps,
   sessionId: string,
@@ -73,7 +73,7 @@ export async function abandonQueuedStructuredAgentSessionMessages(
   return journal
     .rejectQueuedSubmissions(
       structuredAgentSessionConversationFence(deps.store, sessionId),
-      agentSessionFailureWords(agentSessionFailureFact('chatClosed'), { surface: 'rejection' }),
+      leftoverRejection(journal, deps.store.getRecord(sessionId), 'chatClosed'),
       which
     )
     .then(

@@ -37,6 +37,8 @@ export async function deliverWorkerDispatchPreamble(args: {
   coordinatorHandle: string
   devMode: boolean | undefined
   requestId: string
+  /** A structured preamble the host held, then rejected for good: why. */
+  whenUndelivered?: (reason: string) => void
   /** The agent this worker start launched into `terminalHandle`; absent for a caller's terminal. */
   launchedAgent?: string | null
 }): Promise<{
@@ -66,7 +68,8 @@ export async function deliverWorkerDispatchPreamble(args: {
       host: structuredSession.host,
       sessionId: structuredSession.identity.sessionId,
       dispatchId: args.dispatchId,
-      preamble
+      preamble,
+      ...(args.whenUndelivered ? { whenUndelivered: args.whenUndelivered } : {})
     })
     return {
       structuredTurnStart:
@@ -77,7 +80,8 @@ export async function deliverWorkerDispatchPreamble(args: {
               reason:
                 'The dispatch preamble was accepted, but the agent had not started to take it. It ' +
                 'is delivered when the agent starts; if the worker then reports, this Dispatch ' +
-                'settles normally.'
+                'settles normally. If Orca cannot start the agent, this Dispatch fails and its ' +
+                'Run is told.'
             }
     }
   }

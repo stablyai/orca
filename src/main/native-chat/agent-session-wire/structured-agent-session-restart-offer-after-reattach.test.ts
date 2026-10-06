@@ -5,21 +5,28 @@ import { expect, it } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../shared/agent-session-restart-continuation'
 import { restartContinuationBody } from './structured-agent-session-restart-continuation-envelope'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
 } from './structured-agent-session-host-test-data'
 
-// The first attempt's start failed, so its continuation was rejected and never reached the agent.
+// The agent refused the first attempt's continuation, so it was rejected.
 // A retry is a new action with a new message, not a replay of the rejected one, and it is
 // delivered with the same body.
-it("delivers a retry as a new continuation after the first one's start failed", async () => {
-  const { host, acquire, dispatch, marker } = await interruptedRestart('children')
+it('delivers a retry as a new continuation after the agent refused the first one', async () => {
+  const { host, dispatch, marker } = await interruptedRestart('children')
   if (!marker) {
     throw new Error('missing interrupted restart marker')
   }
-  acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  dispatch.mockResolvedValueOnce({
+    state: 'rejected',
+    ...agentSessionFailureWords(agentSessionFailureFact('providerRejected'), {
+      surface: 'rejection'
+    })
+  })
   const first = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(first.failed).toMatchObject([{ sessionId: SESSION, outcome: 'refused', retryable: true }])
   const [rejected] = (await host.journalSnapshot(SESSION)).submissions
@@ -28,8 +35,9 @@ it("delivers a retry as a new continuation after the first one's start failed", 
   const retried = await host.restartResume.continueAfterRestart([SESSION], 'retry')
 
   expect(retried.continued).toMatchObject([{ outcome: 'continued' }])
-  expect(dispatch).toHaveBeenCalledOnce()
-  const sent = dispatch.mock.calls[0]?.[0]
+  expect(dispatch).toHaveBeenCalledTimes(2)
+  expect(dispatch.mock.calls[0]?.[0].clientMessageId).toBe(rejected?.clientMessageId)
+  const sent = dispatch.mock.calls[1]?.[0]
   expect(sent?.clientMessageId).not.toBe(rejected?.clientMessageId)
   expect(sent?.body).toEqual(restartContinuationBody(marker))
   expect((await host.journalSnapshot(SESSION)).submissions).toMatchObject([

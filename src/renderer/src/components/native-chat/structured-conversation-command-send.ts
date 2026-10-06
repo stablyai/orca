@@ -3,14 +3,14 @@ import {
   type AgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
 } from '../../../../shared/agent-session-conversation-command'
-import {
-  readWholeAgentSessionFailureFact,
-  type AgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
+import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
 import { translate } from '@/i18n/i18n'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
-import { agentSessionFailureStatedByStartRow } from './structured-agent-session-delivery-notices'
+import {
+  agentSessionFailureStatedByStartRow,
+  type StatedStartFailure
+} from './structured-agent-session-delivery-notices'
 import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
 
 export async function sendStructuredConversationCommand(input: {
@@ -19,8 +19,9 @@ export async function sendStructuredConversationCommand(input: {
   agentName: string
   pending: { current: boolean }
   blocked: boolean
-  /** What the chat's loaded start-failure rows state, read when the reply lands. */
-  startFailures: () => readonly AgentSessionFailureFact[]
+  /** What the chat's loaded start-failure rows state, read before the send and when the reply
+   *  lands. */
+  startFailures: () => readonly StatedStartFailure[]
   send: (
     command: AgentSessionConversationCommand
   ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>>
@@ -35,6 +36,8 @@ export async function sendStructuredConversationCommand(input: {
     }
   }
   input.pending.current = true
+  // Only a row this command's own start wrote says why it failed; one already loaded is another's.
+  const loadedBefore = new Set(input.startFailures().map((stated) => stated.itemId))
   try {
     const outcome = await input.send(input.command)
     if (outcome.kind === 'not-done') {
@@ -45,13 +48,16 @@ export async function sendStructuredConversationCommand(input: {
       return { accepted: false, error: null }
     }
     const { value } = outcome
-    // The chat's own start failed and its loaded row already says why, as for a message that start
-    // rejected. A /clear's failed start is its new chat's, whose row this pane never shows, and a
-    // command this build doesn't know may be either, so its host's words are shown.
+    // An older host wrote a failed start as a row of its own: when the chat's loaded row already
+    // says why, it is not said twice. A /clear's failed start is its new chat's, whose row this pane
+    // never shows, and a command this build doesn't know may be either, so its host's words show.
     if (
       isAgentSessionConversationCommand(value.command) &&
       value.command !== 'clear' &&
-      agentSessionFailureStatedByStartRow(value.failure, input.startFailures())
+      agentSessionFailureStatedByStartRow(
+        value.failure,
+        input.startFailures().filter((stated) => !loadedBefore.has(stated.itemId))
+      )
     ) {
       return { accepted: false, error: null }
     }

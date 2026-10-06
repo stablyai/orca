@@ -15,6 +15,7 @@ import type { AgentSessionMutationResult } from '../../../shared/agent-session-w
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import { serializeAwaitingAgentStart } from './structured-agent-session-mutation-context'
 import { openWithAgent } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
@@ -32,7 +33,7 @@ export async function rewindStructuredAgentSession(
 ): Promise<AgentSessionMutationResult<AgentSessionRewindResult>> {
   const { sessionId, clientOperationId } = params.envelope
   const store = context.deps.store
-  return context.serialize(sessionId, async () => {
+  return serializeAwaitingAgentStart(context, sessionId, async (prepare) => {
     const result = await admitAndRunAgentSessionMutation<AgentSessionRewindResult>({
       store,
       adapter: context.deps.adapter,
@@ -40,7 +41,7 @@ export async function rewindStructuredAgentSession(
       callerKey: caller.callerKey,
       envelope: params.envelope,
       // Only the provider can do this, so an agent at rest is started first.
-      prepareSession: openWithAgent(context, params.envelope),
+      prepareSession: prepare(openWithAgent(context, params.envelope)),
       journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
       now: context.now,

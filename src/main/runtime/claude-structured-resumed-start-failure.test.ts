@@ -1,6 +1,6 @@
 // A reopened Claude chat is published as soon as its child spawns, so a CLI that dies before it
-// answers initialize fails a session the user is already looking at. That chat must say why, in
-// the transcript, exactly as a failed first start does.
+// answers initialize fails a session the user is already looking at. That chat must say why, on the
+// message the start was for, exactly as a failed first start does.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
@@ -24,12 +24,18 @@ afterEach(async () => {
   claude = createScriptedClaudeRuntime([SESSION])
 })
 
-/** Status rows the open chat was sent, whether in a batch or in the snapshot a fence change sends. */
-function statusTexts(events: AgentSessionSubscribeEvent[]): string[] {
+/** The rejection reasons the open chat was sent on its messages, in a batch or a snapshot. */
+function rejectionTexts(events: AgentSessionSubscribeEvent[]): string[] {
   return events.flatMap((event) => {
-    const items =
-      event.type === 'batch' ? event.batch.items : event.type === 'snapshot' ? event.page.items : []
-    return items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
+    const submissions =
+      event.type === 'batch'
+        ? event.batch.submissions
+        : event.type === 'snapshot'
+          ? event.page.submissions
+          : []
+    return submissions.flatMap((entry) =>
+      entry.dispatchState === 'rejected' && entry.reason ? [entry.reason] : []
+    )
   })
 }
 
@@ -69,8 +75,8 @@ describe('a reopened Claude chat whose CLI dies before initialize', () => {
     claude.child(SESSION).exit(scriptedClaudeExitError(DIAGNOSTIC))
     await waitForStructuredAgentSessionRecovery()
 
-    await vi.waitFor(() => expect(statusTexts(events)).toContainEqual(STARTUP_TEXT))
-    // Never written, so it did not happen: refused, not left in doubt.
+    await vi.waitFor(() => expect(rejectionTexts(events)).toContainEqual(STARTUP_TEXT))
+    // Never written, so it did not happen: rejected with the cause, not left in doubt.
     const submission = (await host.journalSnapshot(SESSION)).submissions.find(
       (entry) => entry.clientMessageId === (sent.ok && sent.value.clientMessageId)
     )
@@ -80,5 +86,6 @@ describe('a reopened Claude chat whose CLI dies before initialize', () => {
       reason: STARTUP_TEXT,
       rejection: { kind: 'providerStartFailed', detail: { text: DIAGNOSTIC, audience: 'log' } }
     })
+    expect(submission).not.toHaveProperty('startRetry')
   })
 })

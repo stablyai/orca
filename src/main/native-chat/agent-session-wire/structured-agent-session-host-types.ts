@@ -67,6 +67,9 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   /** The queued message whose delivery started this child, fixed when the start is made; absent
    *  for any other start. In memory only: it tells a restart offer its own start from another. */
   readonly startedFor?: string
+  /** The adapter settled its start without proving it, and the delivery loop recorded that; the
+   *  child's end is still to come. In memory only. */
+  startFailed?: true
   close?: StructuredAgentSessionChildClose
 }
 
@@ -88,6 +91,8 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     /** What the chat records about this end; absent reads as a provider exit with no detail. */
     failure?: SubmissionRejectionFact
     duringStartup: boolean
+    /** The delivery loop recorded this failed start on the messages it was for. */
+    startFailureRecorded?: true
     startedFor?: string
     /** Where the conversation's journal stood when the child ended, to order the end against a
      *  message's acceptance. A close's end stands where its stop was asked for. */
@@ -130,6 +135,9 @@ export type StructuredAgentSessionHostDeps = {
     provider: AgentSessionRecord['provider']
   ) => Promise<Record<string, string> | undefined> | Record<string, string> | undefined
   now?: () => number
+  /** Books the wake for a message's next try after a failed start; answers how to cancel it.
+   *  Tests drive it; production takes a timer. */
+  setStartRetryTimer?: (delayMs: number, run: () => void) => () => void
   /** The idle sweep's period and window. Tests drive these; production takes the defaults. */
   idleSweep?: { intervalMs?: number; idleMs?: number }
   /** Whether an orchestration dispatch still owns this session's worker; absent answers no. */

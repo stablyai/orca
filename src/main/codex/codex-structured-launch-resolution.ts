@@ -9,12 +9,17 @@
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { resolveCodexCommand } from '../codex-cli/command'
+import { isCliCommandMissing, resolveCodexCommand } from '../codex-cli/command'
+import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
+import {
+  openCodexAppServerConnection,
+  type CodexAppServerConnection
+} from './codex-app-server-connection'
 
 export type CodexStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
@@ -121,4 +126,25 @@ export function createCodexStructuredLaunchResolver(
         : {})
     }
   }
+}
+
+/**
+ * The real Codex child: refused before it spawns when the spawn's own environment holds no `codex`
+ * to run. Part of the spawn, so a host that supplies its own connection never reads this machine's
+ * PATH.
+ */
+export async function openCodexStructuredChild(
+  ...[launch, ...rest]: Parameters<typeof openCodexAppServerConnection>
+): Promise<CodexAppServerConnection> {
+  const spawnEnv: NodeJS.ProcessEnv = { ...process.env, ...launch.env }
+  for (const key of launch.envToDelete ?? []) {
+    delete spawnEnv[key]
+  }
+  if (isCliCommandMissing('codex', launch.command, spawnEnv)) {
+    throw new AgentSessionPreSpawnError(
+      new Error('codex is not on PATH or in the usual install directories'),
+      { reason: 'providerMissing', needsUser: true }
+    )
+  }
+  return openCodexAppServerConnection(launch, ...rest)
 }

@@ -194,7 +194,8 @@ describe('a message the host accepted and then rejected, on the desktop', () => 
       'Claude',
       () => {},
       [failedStart],
-      [{ kind: 'notSignedIn' }],
+      // An older host's row, written with the rejection it states.
+      [{ itemId: 'orca:start-failure', fact: { kind: 'notSignedIn' }, observedAt: 3 }],
       new Set()
     )
 

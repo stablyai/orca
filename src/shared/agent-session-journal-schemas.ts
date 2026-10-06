@@ -29,6 +29,7 @@ import { z } from 'zod'
 import { AgentSessionContextUsageSchema } from './agent-session-context-usage-schema'
 import { AgentSessionFailureFactSchema } from './agent-session-failure-fact-schema'
 import { AgentJournalAnsweredTurnSchema } from './agent-session-answered-turn-schema'
+import { AgentJournalStartRetrySchema } from './agent-session-journal-start-retry-schema'
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
 import type {
   AgentJournalItemBody,
@@ -329,6 +330,8 @@ export const AgentJournalSubmissionSchema = z.object({
   handoverRecorded: z.literal(true).optional(),
   handedOverAt: z.number().optional(),
   rejection: AgentSessionFailureFactSchema.optional(),
+  // A malformed one drops the field, never the submission.
+  startRetry: AgentJournalStartRetrySchema.optional().catch(undefined),
   // Listed, or the parse strips it: this schema drops unknown keys.
   queuedMessageId: z.string().min(1).optional()
 })

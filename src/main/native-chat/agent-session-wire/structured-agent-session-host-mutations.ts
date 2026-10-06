@@ -42,6 +42,7 @@ import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-p
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
 export type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
+import { retryStructuredAgentSessionMessage } from './structured-agent-session-retry-in-place'
 import {
   readStructuredAgentSessionOptions,
   recordStructuredAgentSessionOptionIntent
@@ -204,6 +205,10 @@ export function structuredAgentSessionMutationDelegates(
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof changeStructuredAgentSessionThreadGoal>[2]
     ) => changeStructuredAgentSessionThreadGoal(context(), caller, params),
-    readOptions: (sessionId: string) => readStructuredAgentSessionOptions(context(), sessionId)
+    readOptions: (sessionId: string) => readStructuredAgentSessionOptions(context(), sessionId),
+    retryMessage: (
+      caller: StructuredAgentSessionCaller,
+      params: Parameters<typeof retryStructuredAgentSessionMessage>[2]
+    ) => retryStructuredAgentSessionMessage(context(), caller, params)
   }
 }

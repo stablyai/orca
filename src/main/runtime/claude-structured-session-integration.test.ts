@@ -403,23 +403,45 @@ describe('a structured Claude session over agentSession.*', () => {
     expect(claude.connections).toHaveLength(0)
   })
 
-  it('publishes, then ends the session with sign-in guidance when initialization has no credentials', async () => {
+  it('publishes, then ends the session quietly when initialization has no credentials', async () => {
     claude.setInitializeAccount({ apiProvider: 'firstParty', tokenSource: 'none' })
 
     // The create answers once the child is spawned; the missing credentials arrive after.
     await ok<{ fence: number }>('agentSession.create', createIntentParams())
     await waitForStructuredAgentSessionRecovery()
 
-    const guidance = itemsOf(await subscribe()).find((item) => item.body?.kind === 'status')
-    // The adapter typed the refusal, so the row names the situation rather than quoting Orca.
-    expect(guidance?.body).toMatchObject({
-      kind: 'status',
-      text: 'Claude is not signed in for the selected account. Sign in, then send your message again.',
-      failure: { kind: 'notSignedIn' }
-    })
+    // No message waited on this start, so the empty chat says nothing.
+    expect(itemsOf(await subscribe()).filter((item) => item.body?.kind === 'status')).toEqual([])
     expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
     // A failed start is not auto-resumed into the same failure.
     expect(claude.connections).toHaveLength(1)
+
+    // The first message starts it again and says why; signing in is the person's to do, so it is
+    // not tried again on a timer and adds no row.
+    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
+    const sent = await ok<{ clientMessageId: string }>('agentSession.send', {
+      envelope: envelope('agentSession.send', { body }, leaseOf(SESSION).runtimeFence),
+      body
+    })
+    await waitForStructuredAgentSessionRecovery()
+    await vi.waitFor(async () => {
+      const frames = await subscribe()
+      const snapshot = frames.find((frame) => frame.type === 'snapshot')
+      expect(
+        snapshot?.type === 'snapshot'
+          ? snapshot.page.submissions.find(
+              (entry) => entry.clientMessageId === sent.clientMessageId
+            )
+          : undefined
+      ).toMatchObject({
+        dispatchState: 'rejected',
+        reason:
+          'Claude is not signed in for the selected account. Sign in, then send your message again.',
+        rejection: { kind: 'notSignedIn' }
+      })
+      expect(itemsOf(frames).filter((item) => item.body?.kind === 'status')).toEqual([])
+    })
+    expect(claude.connections).toHaveLength(2)
   })
 
   // The root's death is first-hand. Its descendants were never snapshottable, or one was seen

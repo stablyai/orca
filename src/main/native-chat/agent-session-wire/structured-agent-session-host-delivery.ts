@@ -3,7 +3,10 @@
 // with a message queued has a delivery loop — and the open is where a loop for leftovers wakes.
 
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { abandonQueuedStructuredAgentSessionMessages } from './structured-agent-session-host-lifetime'
+import {
+  abandonQueuedStructuredAgentSessionMessages,
+  stopStructuredAgentSessionAgentUnderSerialize
+} from './structured-agent-session-host-lifetime'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   openStructuredAgentSessionConversation,
@@ -13,8 +16,13 @@ import {
 } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
+import {
+  nextDeliverableSubmission,
+  setStartRetryTimer
+} from './structured-agent-session-start-attempt-failure'
 import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
-import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
+import { ensureStructuredAgentSessionAgent } from './structured-agent-session-agent-start'
+import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -48,11 +56,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   sessions: Map<string, StructuredAgentSessionHostSession>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   trackStart: <T>(start: Promise<T>) => Promise<T>
-  /** Starts a child for `startedFor`, the queued message at the head, if the session has none. */
-  ensureProviderChild: (
-    sessionId: string,
-    startedFor: string
-  ) => Promise<StructuredAgentSessionResumeOutcome>
+  /** For starting a child for the queued message at the head, and ending one whose start failed. */
+  attachContext: () => StructuredAgentSessionAttachContext
   clientDelivery: Pick<StructuredAgentSessionClientDelivery, 'publishRestored' | 'readChildWork'>
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
@@ -61,7 +66,12 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     adapter: deps.adapter,
     serialize: input.serialize,
     trackStart: input.trackStart,
-    ensureProviderChild: input.ensureProviderChild,
+    ensureProviderChild: (sessionId, startedFor) =>
+      ensureStructuredAgentSessionAgent(input.attachContext(), sessionId, startedFor),
+    endFailedStart: (sessionId) =>
+      stopStructuredAgentSessionAgentUnderSerialize(input.attachContext(), sessionId, {
+        cause: 'host-stop'
+      }),
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(deps.store, sessionId),
     abandonQueued: async (sessionId, which) => {
@@ -71,14 +81,12 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         : true
     },
     failureTextContext: (sessionId) =>
-      structuredAgentSessionFailureWordsContext(
-        deps.store.getRecord(sessionId),
-        sessions.get(sessionId)?.journal
-      ),
+      structuredAgentSessionFailureWordsContext(deps.store.getRecord(sessionId)),
     logger: deps.logger,
     record: (sessionId) => deps.store.getRecord(sessionId),
     readChildWork: input.clientDelivery.readChildWork,
-    now: () => deps.now?.() ?? Date.now()
+    now: () => deps.now?.() ?? Date.now(),
+    setTimer: (delayMs, run) => (deps.setStartRetryTimer ?? setStartRetryTimer)(delayMs, run)
   })
   const adoptOpened = async (
     sessionId: string,
@@ -94,10 +102,12 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   }
   const wakesQueued = new Set<string>()
   const afterCommit = (sessionId: string, journal: AgentSessionJournal): void => {
+    // A message waiting out a refused start has its own wake booked; only one that may go now needs
+    // this one.
     if (
       wakesQueued.has(sessionId) ||
       structuredAgentSessionCommandRunning(journal) ||
-      !journal.submissions().some(isQueuedAgentJournalSubmission)
+      !nextDeliverableSubmission(journal, deps.now?.() ?? Date.now())
     ) {
       return
     }
