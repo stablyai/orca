@@ -128,7 +128,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       // remote-create pipeline still reads `repo.connectionId!` at every depth. See the workaround
       // note in worktree-create-execution-host-route.ts.
       const result = await this.createManagedRemoteWorktree(createRoute.repo, {
-        ...args,
+        ...this.inheritParentWorkspaceStatus(args, lineageResolution),
         activate: args.activate,
         ...(effectiveStartup ? { startup: effectiveStartup } : {}),
         ...(effectiveStartupFollowup ? { startupFollowup: effectiveStartupFollowup } : {}),
@@ -163,7 +163,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     }
     const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
       await createRuntimeLocalManagedWorktree({
-        request: args,
+        request: this.inheritParentWorkspaceStatus(args, lineageResolution),
         repo,
         store: this.requireStore(),
         createdWithAgent: effectiveCreatedWithAgent,

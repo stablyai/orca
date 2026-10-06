@@ -1,6 +1,8 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from './orca-runtime-resolve-browser-network-execution-host-for-worktree'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
+import { withParentWorkspaceStatus } from './runtime-worktree-create-inherited-status'
 import { splitWorktreeIdForFilesystem, worktreeIdComparisonKey } from '../../shared/worktree/id'
 import { branchSelectorMatches, runtimePathsEqual } from './runtime-worktree-path-identity'
 import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../../shared/execution-host'
@@ -109,6 +111,13 @@ export class OrcaRuntimeWithResolveWorktreeSelector extends OrcaRuntimeWithResol
     input?: WorktreeLineageInput
   ): Promise<WorktreeLineageResolution> {
     return this.worktreeLineage.resolveCreate(input)
+  }
+
+  protected inheritParentWorkspaceStatus(
+    args: RuntimeManagedWorktreeCreateArgs,
+    lineage: WorktreeLineageResolution
+  ): RuntimeManagedWorktreeCreateArgs {
+    return withParentWorkspaceStatus(args, lineage, this.store)
   }
 
   protected getOrchestrationDbIfAvailable(): OrchestrationDb | null {

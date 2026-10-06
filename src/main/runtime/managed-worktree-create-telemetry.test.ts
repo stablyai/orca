@@ -83,7 +83,10 @@ function makeRuntime(repo: Record<string, unknown> = gitRepo): OrcaRuntimeServic
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the named members all exist on the service; the cast only exposes non-public ones to the spies.
   const internals = runtime as unknown as RuntimeInternals
   vi.spyOn(internals, 'resolveRepoSelector').mockResolvedValue(repo)
-  vi.spyOn(internals, 'resolveLineageForWorktreeCreate').mockResolvedValue(null)
+  vi.spyOn(internals, 'resolveLineageForWorktreeCreate').mockResolvedValue({
+    kind: 'none',
+    warnings: []
+  })
   vi.spyOn(internals, 'recordCreatedWorktreeLineage').mockReturnValue({
     lineage: null,
     workspaceLineage: null,
