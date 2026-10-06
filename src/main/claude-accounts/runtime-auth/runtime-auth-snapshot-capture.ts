@@ -12,7 +12,7 @@ export class ClaudeRuntimeAuthSnapshotCapture extends ClaudeRuntimeAuthReadback 
   ): Promise<void> {
     const snapshotPath = this.getSystemDefaultSnapshotPath()
     const existingSnapshot = this.readSystemDefaultSnapshot(snapshotPath)
-    if (runtimeCredentialsJson !== managedCredentialsJson) {
+    if (!this.accountCredentialFieldsEqual(runtimeCredentialsJson, managedCredentialsJson)) {
       await this.captureSystemDefaultSnapshot({
         force: true,
         previousSnapshot: existingSnapshot,

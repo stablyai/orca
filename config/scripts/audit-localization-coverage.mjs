@@ -10,6 +10,7 @@ import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
 const LOCALIZATION_CALL_NAMES = new Set(['t', 'translate'])
+const CLASS_PROPERTY_NAMES = new Set(['className', 'classNames'])
 const USER_VISIBLE_JSX_ATTRIBUTES = new Set([
   'ariaLabel',
   'aria-label',
@@ -314,7 +315,7 @@ function isUserVisibleCallArgument(node) {
 }
 
 function classifyStringNode(node) {
-  if (hasAncestorObjectPropertyName(node, new Set(['className', 'classNames']))) {
+  if (hasAncestorObjectPropertyName(node, CLASS_PROPERTY_NAMES)) {
     return undefined
   }
 
@@ -424,10 +425,16 @@ export function collectLocalizationCandidates(filePath, sourceText, root = proce
       return
     }
 
-    const kind = classifyStringNode(node)
-    if (kind) {
-      for (const part of stringParts(node)) {
-        pushReport(node, kind, part.text, part.dynamic)
+    if (
+      ts.isStringLiteralLike(node) ||
+      ts.isNoSubstitutionTemplateLiteral(node) ||
+      ts.isTemplateExpression(node)
+    ) {
+      const kind = classifyStringNode(node)
+      if (kind) {
+        for (const part of stringParts(node)) {
+          pushReport(node, kind, part.text, part.dynamic)
+        }
       }
     }
 

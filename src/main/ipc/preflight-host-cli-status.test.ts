@@ -129,6 +129,7 @@ describe('preflight', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -585,6 +586,7 @@ describe('preflight', () => {
   })
 
   it('uses the persisted Windows Path when probing host CLIs', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
