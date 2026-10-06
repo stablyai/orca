@@ -13,9 +13,11 @@ import { newWorktreeFormStyles as formStyles } from './new-worktree-form-styles'
  * `files.browseServerDir` listing the desktop folder picker uses.
  *
  * The listing is directory-only: a project has to be a folder, so files are never selectable.
+ * Symlinks stay visible because the browse RPC follows them when it opens the target; a file or
+ * broken symlink therefore refuses in the same request and leaves this listing intact.
  */
 
-type FolderEntry = { name: string; isDirectory: boolean }
+type FolderEntry = { name: string; isDirectory: boolean; isSymlink?: boolean }
 
 type FolderListing = { path: string; entries: FolderEntry[] }
 
@@ -92,7 +94,7 @@ export function AddProjectFolderBrowser({ client, busy, error, onBack, onPick }:
         }
         setListing({
           path: verdict.value.resolvedPath,
-          entries: verdict.value.entries.filter((entry) => entry.isDirectory)
+          entries: verdict.value.entries.filter((entry) => entry.isDirectory || entry.isSymlink)
         })
       } catch (error) {
         // Why: a transport rejection mid-browse must land as copy, not leave the spinner up forever.
