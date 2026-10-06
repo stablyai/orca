@@ -28,11 +28,13 @@ import { useWorktreeCardLifecycleEffects } from '../sidebar/use-worktree-card-li
 import { useWorktreeCardSecondaryDetails } from '../sidebar/use-worktree-card-secondary-details'
 import { getReviewLabel } from '../sidebar/worktree-review-helpers'
 import { ActivityThreadHoverCardSummary } from './activity-thread-hover-card-summary'
+import { useActivityThreadHoverCardIntent } from './activity-thread-hover-card-intent'
 import type { AgentPaneThread } from './activity-thread-types'
 
 export type ActivityThreadHoverCardProps = {
   thread: AgentPaneThread
   children: React.ReactElement
+  // Keyboard focus only; pointer hover opens on rest (see activity-thread-hover-card-intent).
   openDelay?: number
   closeDelay?: number
   onJumpToWorkspace?: (thread: AgentPaneThread) => void
@@ -52,6 +54,10 @@ export function ActivityThreadHoverCard({
 }: ActivityThreadHoverCardProps): React.JSX.Element {
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const open = detailsHoverControl.hoverOpen && !suppressed
+  const intent = useActivityThreadHoverCardIntent({
+    open,
+    onOpenChange: detailsHoverControl.handleHoverOpenChange
+  })
 
   return (
     <HoverCard
@@ -60,7 +66,13 @@ export function ActivityThreadHoverCard({
       openDelay={openDelay}
       closeDelay={closeDelay}
     >
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardTrigger
+        asChild
+        data-hover-card-resting={intent.resting ? '' : undefined}
+        {...intent.triggerHandlers}
+      >
+        {children}
+      </HoverCardTrigger>
       {open ? (
         <ActivityThreadHoverCardContent
           thread={thread}
@@ -105,8 +117,6 @@ function ActivityThreadHoverCardContent({
     prDisplay: review.prDisplay
   })
 
-  const hoverDetailsOpen = detailsHoverControl.hoverOpen
-
   useWorktreeCardLifecycleEffects({
     worktree,
     repo: repo ?? undefined,
@@ -121,7 +131,7 @@ function ActivityThreadHoverCardContent({
     fetchHostedReviewForBranch: foundation.fetchHostedReviewForBranch,
     shouldRefreshHostedReview: false,
     newCardStyle: true,
-    hoverDetailsOpen,
+    hoverDetailsOpen: detailsHoverControl.hoverOpen,
     showIssue: true,
     issueCacheKey: review.issueCacheKey,
     fetchIssue: foundation.fetchIssue,
