@@ -82,7 +82,14 @@ async function guestChmod(spec: WslSpec): Promise<WslResult> {
   expect(separator).toBe('--')
   const from = `${guest.root}${reference.replace(/^--reference=/, '')}`
   chmodSync(`${guest.root}${target}`, statSync(from).mode & 0o7777)
-  return { environmentResolved: true, code: 0, stdout: '', stderr: '', timedOut: false }
+  return {
+    environmentResolved: true,
+    code: 0,
+    stdout: '',
+    stderr: '',
+    timedOut: false,
+    outputTruncated: false
+  }
 }
 
 const originalPlatform = process.platform
@@ -121,7 +128,8 @@ describe.skipIf(originalPlatform === 'win32')('grantClaudeFolderTrust on a WSL g
       code: 1,
       stdout: '',
       stderr: "chmod: unrecognized option '--reference'",
-      timedOut: false
+      timedOut: false,
+      outputTruncated: false
     })
     await expect(
       grantClaudeFolderTrust({ configFile: guestFile, folderKeys: ['/home/u/wt'] })

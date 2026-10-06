@@ -83,12 +83,13 @@ ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/antigravity src/main/wsl/wsl-runner.
 ## Task 1: 给 WSL 执行器增加独立数据 stdin
 
 **Files:** Modify `src/main/wsl/wsl-runner.ts`；Test `src/main/wsl/wsl-runner.test.ts`。
+同步更新 Claude、Codex accounts、skill discovery 三处既有 WslResult 测试工厂，补充 outputTruncated。
 
 **Interfaces:** Consumes 既有 ProcessSpec.input/signal/killOnOutputLimit。
 Produces WslSpec 的 `input?: string`、`signal?: AbortSignal`、`killOnOutputLimit?: boolean`，
 WslResult 的 `outputTruncated: boolean`；runWslProcess 的签名与已有默认行为保持。
 
-- [ ] **Step 1: 写失败测试。** 以现有 runProcessMock 测试为基础，增加普通程序和短脚本
+- [x] **Step 1: 写失败测试。** 以现有 runProcessMock 测试为基础，增加普通程序和短脚本
   传 input、无 input 长脚本、带 input 超长脚本、取消、stdout/stderr 截断各项断言：
 
   ```ts
@@ -98,14 +99,14 @@ WslResult 的 `outputTruncated: boolean`；runWslProcess 的签名与已有默�
   expect(lastArgv()).not.toContain('payload\n')
   ```
 
-- [ ] **Step 2: 验证失败。** `pnpm test src/main/wsl/wsl-runner.test.ts`；预期新增 input 或
+- [x] **Step 2: 验证失败。** `pnpm test src/main/wsl/wsl-runner.test.ts`；预期新增 input 或
   outputTruncated 断言失败，而不是因为原生安装或测试启动失败。
-- [ ] **Step 3: 实现传输。** 保留无 input 的脚本 stdin 降级；有 input 时脚本必须放 argv，
+- [x] **Step 3: 实现传输。** 保留无 input 的脚本 stdin 降级；有 input 时脚本必须放 argv，
   超预算在 spawn 前失败。input 不参与 fullLine、env、日志，signal/超限终止显式下传。
   outputTruncated 使用底层结果，不从输出长度猜测。
-- [ ] **Step 4: 验证通过。** 重跑任务测试并执行 `pnpm tc:node`；确认既有 cwd、环境、长脚本
+- [x] **Step 4: 验证通过。** 重跑任务测试并执行 `pnpm tc:node`；确认既有 cwd、环境、长脚本
   和 --exec 用例仍通过，对新增路径跑变更代码质量检查。
-- [ ] **Step 5: 提交。** 只暂存本任务两文件与计划勾选；提交 `feat(wsl): support separate stdin payloads`。
+- [x] **Step 5: 提交。** 只暂存本任务两文件与计划勾选；提交 `feat(wsl): support separate stdin payloads`。
 
 ## Task 2: 解析 WSL 账号目标和操作预算
 

@@ -72,6 +72,9 @@ export type WslSpec = WslCommand & {
   env?: Readonly<Record<string, string>>
   timeoutMs?: number
   maxOutputBytes?: number
+  input?: string
+  signal?: AbortSignal
+  killOnOutputLimit?: boolean
 }
 
 export type WslResult = {
@@ -90,6 +93,7 @@ export type WslResult = {
   stdout: string
   stderr: string
   timedOut: boolean
+  outputTruncated: boolean
 }
 
 export const DEFAULT_WSL_TIMEOUT_MS = 30_000
@@ -232,6 +236,9 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     spec.script !== undefined && commandLineLength(fullLine) > MAX_COMMAND_LINE_CHARS
       ? 'stdin'
       : 'argv'
+  if (delivery === 'stdin' && spec.input !== undefined) {
+    throw new Error('WSL script exceeds the command line budget while stdin carries data')
+  }
   const argv = delivery === 'argv' ? argvForm : buildGuestArgv(environment, spec, 'stdin')
 
   // One budget for the whole call: the probe used to run on its own 10s timer
@@ -245,9 +252,11 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     // (#16463). Never the guest cwd -- withGuestCwd still cds inside.
     cwd: resolveWslInteropSpawnCwd(),
     env: buildHostEnv(spec.env),
-    input: delivery === 'stdin' ? spec.script : undefined,
+    input: delivery === 'stdin' ? spec.script : spec.input,
     timeoutMs: remainingMs,
-    maxOutputBytes: spec.maxOutputBytes
+    maxOutputBytes: spec.maxOutputBytes,
+    signal: spec.signal,
+    killOnOutputLimit: spec.killOnOutputLimit
   })
 
   return {
@@ -255,6 +264,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     code: result.code,
     stdout: result.stdout,
     stderr: result.stderr,
-    timedOut: result.timedOut
+    timedOut: result.timedOut,
+    outputTruncated: result.outputTruncated ?? false
   }
 }
