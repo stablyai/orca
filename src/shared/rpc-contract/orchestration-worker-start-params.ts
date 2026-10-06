@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LaunchAccountParam } from './launch-account-param'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 
 export const OptionalWorkerLaunchPreference = z
@@ -27,6 +28,7 @@ export const WorkerStartParams = z
     setup: z.enum(['run', 'skip', 'inherit']).optional(),
     terminal: OptionalString,
     agent: OptionalString,
+    account: LaunchAccountParam.optional(),
     model: OptionalWorkerLaunchPreference,
     effort: OptionalWorkerLaunchPreference,
     retryOf: OptionalString,

@@ -1,5 +1,6 @@
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -23,6 +24,7 @@ export type LegacyWorkerRecoveryResolution = {
 }
 
 export type TerminalWorkspaceLaunchScope = {
+  executionHostId?: ExecutionHostId
   id: string
   path: string
   connectionId: string | null

@@ -17,7 +17,12 @@ export async function prepareCodexRuntimeHomeForLaunch(
     throw new Error('Codex runtime home service is not initialized')
   }
   const ensureRealHomeHooksIfSelected = async (): Promise<boolean> => {
-    if (target?.runtime === 'wsl' || !runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv)) {
+    if (
+      target?.runtime === 'wsl' ||
+      (launchContext?.pinnedAccountId !== undefined
+        ? launchContext.pinnedAccountId !== null
+        : !runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv))
+    ) {
       return false
     }
     // Why (flag ON, system default): the hook entry must exist, appended last, in
@@ -32,13 +37,22 @@ export async function prepareCodexRuntimeHomeForLaunch(
     })
     return true
   }
+  if (launchContext?.pinnedAccountId !== undefined && target?.runtime === 'wsl') {
+    throw new Error('--account supports native host execution only.')
+  }
   let realHomeHooksPrepared = await ensureRealHomeHooksIfSelected()
   // Why: a ManagedCodexHomeTemporarilyUnavailableError must escape uncaught —
   // the fallbacks below all key off `null`, which means "system default", so
   // swallowing the refusal would launch the wrong account (#STA-4422).
-  let runtimeHomePath = await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
-    unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
-  })
+  let runtimeHomePath =
+    launchContext?.pinnedAccountId !== undefined
+      ? runtimeHome.prepareForPinnedCodexLaunch(launchContext.pinnedAccountId)
+      : await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
+          unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+        })
+  if (launchContext?.pinnedAccountId === null) {
+    return runtimeHomePath
+  }
   if (runtimeHomePath === null && !realHomeHooksPrepared) {
     // Why: launch prep can reject an untrusted managed home and clear its
     // selection. Establish hook capability for that newly selected lane, then

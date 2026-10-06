@@ -1,4 +1,5 @@
 import type { WorktreeCatalogVersion } from './catalog-version'
+import type { AgentLaunchAccountReceipt } from '../agent-launch-account'
 import type { ExecutionHostId } from '../execution-host'
 import type { ArchiveHookOverride } from './archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace-source'
@@ -161,6 +162,7 @@ export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
 }
 
 export type CreateWorktreeResult = {
+  account?: AgentLaunchAccountReceipt
   /** The catalog this create produced; additive, older hosts omit it. */
   catalogVersion?: WorktreeCatalogVersion
   worktree: Worktree & {

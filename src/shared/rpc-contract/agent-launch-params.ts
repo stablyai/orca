@@ -12,6 +12,7 @@
  */
 
 import { z } from 'zod'
+import { LaunchAccountParam } from './launch-account-param'
 import { parseAgentSessionOperationTimestamp } from '../agent-session-host-authority'
 import { parsePaneKey } from '../stable-pane-id'
 import { isValidHostTerminalTabId } from '../terminal-tab-id'
@@ -37,6 +38,7 @@ const LaunchAgent = z
  *  every receiver parses `AgentLaunch` or `AgentLaunchReplay`. */
 export const AgentLaunchFields = z.object({
   agent: LaunchAgent,
+  account: LaunchAccountParam.optional(),
   /**
    * Names this launch so a retry replays instead of starting a second agent.
    *
@@ -126,11 +128,49 @@ function refuseSessionIdForAnotherAgent(
   }
 }
 
+function refusePinnedLegacyReplay(
+  launch: z.infer<typeof AgentLaunchFields>,
+  ctx: z.RefinementCtx
+): void {
+  if (
+    launch.account !== undefined &&
+    launch.operationId === undefined &&
+    launch.target.kind === 'create-worktree' &&
+    launch.target.create.clientMutationId !== undefined
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['operationId'],
+      message:
+        'Explicit accounts require an operationId for replay; legacy clientMutationId is unsupported.'
+    })
+  }
+}
+
+function refuseNestedLaunchAccount(
+  launch: z.infer<typeof AgentLaunchFields>,
+  ctx: z.RefinementCtx
+): void {
+  if (
+    launch.target.kind === 'create-worktree' &&
+    launch.target.create.startupAccount !== undefined
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['target', 'create', 'startupAccount'],
+      message:
+        'agent.launch requires account at the launch level, not target.create.startupAccount.'
+    })
+  }
+}
+
 export const AgentLaunch = AgentLaunchFields.superRefine(refuseSessionIdForAnotherAgent)
+  .superRefine(refusePinnedLegacyReplay)
+  .superRefine(refuseNestedLaunchAccount)
 
 export type AgentLaunchParams = z.infer<typeof AgentLaunch>
 
 // A distinct method prevents an older receiver from silently dropping the replay requirement.
-export const AgentLaunchReplay = AgentLaunchFields.required({ operationId: true }).superRefine(
-  refuseSessionIdForAnotherAgent
-)
+export const AgentLaunchReplay = AgentLaunchFields.required({ operationId: true })
+  .superRefine(refuseSessionIdForAnotherAgent)
+  .superRefine(refuseNestedLaunchAccount)

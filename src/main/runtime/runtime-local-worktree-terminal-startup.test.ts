@@ -71,6 +71,32 @@ async function startupTerminalOptions(startupPaneKey?: string) {
 }
 
 describe('startRuntimeLocalWorktreeTerminals reserved startup pane', () => {
+  it('propagates the pin and refuses an unpinned fallback when startup fails', async () => {
+    const { createTerminal, ports } = createPorts()
+    createTerminal.mockRejectedValue(new Error('pinned auth unavailable'))
+    await expect(
+      startRuntimeLocalWorktreeTerminals({
+        request: {
+          repoSelector: `id:${repo.id}`,
+          name: 'pinned',
+          startupAccount: 'account-b',
+          startupCodexAccountId: 'account-b',
+          activate: true
+        },
+        repo,
+        worktree,
+        createdWithAgent: 'codex',
+        startup: { command: 'codex' },
+        ports
+      })
+    ).rejects.toThrow('pinned auth unavailable')
+    expect(createTerminal).toHaveBeenCalledWith(
+      `id:${worktree.id}`,
+      expect.objectContaining({ codexAccountId: 'account-b', launchAgent: 'codex' })
+    )
+    expect(ports.activate).not.toHaveBeenCalled()
+  })
+
   // The local, folder and remote creates each forward this separately, so nothing above them
   // catches the one that stops.
   it('creates the startup terminal under the pane the caller reserved', async () => {

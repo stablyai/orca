@@ -22,6 +22,7 @@ export type AgentLaunchSurfaceFactory = {
     tabId?: string
   }): Promise<AgentLaunchStructuredSurface>
   createTerminalAgent(args: {
+    codexAccountId?: string | null
     worktreeId: string
     agent: TuiAgent
     options?: Readonly<Record<string, unknown>>
@@ -98,6 +99,7 @@ export class AgentLaunchStructuredSessionRefusedError extends Error {
  *  its own worktree stages and residual-resource effects around the same call. */
 export type AgentLaunchWorkspaceFactory = {
   createWorktree(args: {
+    codexAccountId?: string | null
     create: Readonly<Record<string, unknown>>
     /** Set only when the settled mode is a terminal agent: agent-first creation sequences the
      *  agent's startup command behind the setup runner, which is how a PTY launch gets its

@@ -27,6 +27,7 @@
 
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { assertCodexAccountLaunchRequest } from '../../shared/agent-launch-account'
 import type {
   AgentLaunchIntent,
   AgentLaunchResult,
@@ -81,6 +82,13 @@ export async function executeAgentLaunch(
   execution: AgentLaunchExecution
 ): Promise<AgentLaunchResult> {
   const { intent, runtime } = execution
+  if (intent.account) {
+    assertCodexAccountLaunchRequest({
+      account: intent.account.requested,
+      agent: intent.agent,
+      terminal: intent.reuseTerminal?.handle
+    })
+  }
   if (intent.reuseTerminal || intent.target.kind === 'create-worktree') {
     assertOpenCodeModelLaunchPreferencesAbsent(intent.agent, intent.sessionOptions)
   }
@@ -89,6 +97,7 @@ export async function executeAgentLaunch(
   const preflight = decideAgentLaunchMode({
     placement: {
       agent: intent.agent,
+      ...(intent.account ? { account: intent.account.requested } : {}),
       workspaceKind: launchWorkspaceKind(intent.target),
       ...(intent.reuseTerminal ? { terminal: intent.reuseTerminal.handle } : {}),
       ...(intent.cwd ? { cwd: intent.cwd } : {}),
@@ -110,6 +119,7 @@ export async function executeAgentLaunch(
     return {
       ...reused,
       receipt: preflight,
+      ...(intent.account ? { account: intent.account } : {}),
       ...promptReceipt(
         intent,
         await deliverTerminalLaunchPrompt(execution, intent.reuseTerminal.handle, {
@@ -133,6 +143,7 @@ export async function executeAgentLaunch(
     return {
       ...startup,
       receipt: preflight,
+      ...(intent.account ? { account: intent.account } : {}),
       ...(placed.warning ? { warning: placed.warning } : {}),
       ...promptReceipt(
         intent,
@@ -187,6 +198,7 @@ export async function executeAgentLaunch(
   return {
     ...surface,
     receipt: settled,
+    ...(intent.account ? { account: intent.account } : {}),
     ...(warning ? { warning } : {}),
     ...promptReceipt(intent, await settleLaunchPromptDisposal(execution, created))
   }
@@ -318,6 +330,7 @@ function ignoredStructuredAgentArgsWarning(
  *  workspace and the terminal of an existing one start the same agent. */
 function terminalLaunchInputs(intent: AgentLaunchIntent) {
   return {
+    ...(intent.account ? { codexAccountId: intent.account.effective.id } : {}),
     ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
     // `null` is a value the caller meant, so this tests for absence rather than falsiness.
     ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),

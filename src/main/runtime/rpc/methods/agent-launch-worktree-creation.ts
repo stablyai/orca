@@ -37,6 +37,7 @@ export function agentLaunchWorkspaceFactory(
 ): AgentLaunchWorkspaceFactory {
   return {
     createWorktree: async ({
+      codexAccountId,
       create,
       startupAgent,
       startupPrompt,
@@ -65,6 +66,9 @@ export function agentLaunchWorkspaceFactory(
             {
               ...params,
               ...(startupAgent ? { startupAgent } : {}),
+              ...(codexAccountId !== undefined
+                ? { startupAccount: codexAccountId ?? 'system' }
+                : {}),
               // Only ever set alongside `startupAgent`, which is what the create requires; the
               // executor offers it only to an agent that takes its prompt on argv, and it rides only
               // when the typed line can carry it.

@@ -132,6 +132,9 @@ export async function createRuntimeFolderWorktree(args: {
     try {
       const terminal = await deps.createTerminal(`id:${worktree.id}`, {
         command: args.startup.command,
+        ...(request.startupCodexAccountId !== undefined
+          ? { codexAccountId: request.startupCodexAccountId }
+          : {}),
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
         env: args.startup.env,
@@ -158,6 +161,9 @@ export async function createRuntimeFolderWorktree(args: {
         surface: 'background'
       }
     } catch (error) {
+      if (request.startupAccount !== undefined) {
+        throw error
+      }
       const message = error instanceof Error ? error.message : String(error)
       warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
       console.warn(`[worktree-create] ${warning}`)

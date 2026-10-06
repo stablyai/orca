@@ -92,14 +92,19 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
 
   protected async resolveTerminalWorkspaceLaunchScope(
     selector: string,
-    createdWorktree?: Worktree
+    createdWorktree?: Worktree,
+    options?: { preparePushTarget: false }
   ): Promise<TerminalWorkspaceLaunchScope> {
-    return (await this.resolveTerminalWorkspaceLaunchTarget(selector, createdWorktree)).scope
+    const target = options
+      ? this.resolveTerminalWorkspaceLaunchTarget(selector, createdWorktree, options)
+      : this.resolveTerminalWorkspaceLaunchTarget(selector, createdWorktree)
+    return (await target).scope
   }
 
   protected async resolveTerminalWorkspaceLaunchTarget(
     selector: string,
-    createdWorktree?: Worktree
+    createdWorktree?: Worktree,
+    options?: { preparePushTarget: false }
   ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
     const floatingTerminalSelector =
       selector === FLOATING_TERMINAL_WORKTREE_ID ||
@@ -142,20 +147,25 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     }
     // Metadata only (display name, hook settings); the routing decision is `resolution.connectionId`.
     const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId) ?? null
-    triggerTerminalSpawnPushTargetMaterialization(
-      worktree.path,
-      worktree.pushTarget,
-      repo,
-      this.store,
-      worktree.repoId,
-      worktree.id
-    )
+    if (options?.preparePushTarget !== false) {
+      triggerTerminalSpawnPushTargetMaterialization(
+        worktree.path,
+        worktree.pushTarget,
+        repo,
+        this.store,
+        worktree.repoId,
+        worktree.id
+      )
+    }
     return {
       scope: {
         id: worktree.id,
         path: worktree.path,
         connectionId: resolution.connectionId,
         repo,
+        ...(options
+          ? { executionHostId: getWorktreeExecutionHostId(worktree, repo ?? undefined) }
+          : {}),
         folderWorkspace: null
       },
       managedWorktree: worktree

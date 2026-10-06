@@ -13,6 +13,7 @@ import {
   type WithAnnotatedHostScope
 } from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
+import { getCodexLaunchAccountFlag } from './codex-launch-account-flag'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -168,6 +169,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree create': async ({ flags, client, cwd, json }) => {
+    const account = await getCodexLaunchAccountFlag(flags, client)
     assertWorktreeParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
     const reviewLinks = getReviewTargetLinkFlags(flags)
@@ -233,6 +235,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(startupAgent
         ? {
             startupAgent,
+            ...(account !== undefined ? { startupAccount: account } : {}),
             startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? '',
             launchSource: 'cli'
           }

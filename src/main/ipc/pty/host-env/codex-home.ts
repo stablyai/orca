@@ -211,16 +211,22 @@ export function recordCodexPaneAccountForSpawn(args: {
   isDaemonHostSpawn: boolean
   isReattach: boolean
   pinnedByResume: boolean
+  pinnedAccountId?: string | null
   launchCodexHomePath: string | null
   target: CodexAccountSelectionTarget
   settings: GlobalSettings | undefined
 }): void {
-  if (!args.ptyId || !args.isDaemonHostSpawn || args.isReattach) {
+  if (
+    !args.ptyId ||
+    (!args.isDaemonHostSpawn && args.pinnedAccountId === undefined) ||
+    args.isReattach
+  ) {
     return
   }
   const record = args.settings
     ? resolveCodexPaneLaunchAccount({
         pinnedByResume: args.pinnedByResume,
+        ...(args.pinnedAccountId !== undefined ? { pinnedAccountId: args.pinnedAccountId } : {}),
         launchCodexHomePath: args.launchCodexHomePath,
         systemCodexHomePath: getSystemCodexHomePath(),
         settings: args.settings,

@@ -1,4 +1,5 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { assertCodexAccountLaunchRequest } from '../../../../../../shared/agent-launch-account'
 import { defineMethod } from '../../../core'
 import { startFederatedWorker } from '../federation/federated-worker-start'
 import { startLocalWorker } from './local-worker-start'
@@ -22,6 +23,7 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
       params,
       { runtime, orchestrationMutation, orchestrationCompatibilityEvidence, orchestrationCaller }
     ) => {
+      assertCodexAccountLaunchRequest(params)
       if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
         throw new OrchestrationError(
           'invalid_argument',

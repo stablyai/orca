@@ -28,20 +28,25 @@ type CodexPaneLaunchAccountSettings = Pick<
  */
 export function resolveCodexPaneLaunchAccount(args: {
   pinnedByResume: boolean
+  pinnedAccountId?: string | null
   launchCodexHomePath: string | null
   systemCodexHomePath: string
   settings: CodexPaneLaunchAccountSettings
   target: CodexAccountSelectionTarget
 }): CodexPaneAccountRecord | null {
-  const accountId = args.pinnedByResume
-    ? resolveCodexHomeOwnerAccountId(args)
-    : getSelectedCodexAccountIdForTarget(args.settings, args.target)
+  const accountId =
+    args.pinnedAccountId !== undefined
+      ? args.pinnedAccountId
+      : args.pinnedByResume
+        ? resolveCodexHomeOwnerAccountId(args)
+        : getSelectedCodexAccountIdForTarget(args.settings, args.target)
   if (accountId === undefined) {
     return null
   }
   return {
     selectionKey: getCodexSelectionLaneKey(args.target),
     accountId,
+    ...(args.pinnedAccountId !== undefined ? { pinned: true as const } : {}),
     homeRoute: resolveCodexPaneHomeRoute(args)
   }
 }

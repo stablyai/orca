@@ -48,6 +48,44 @@ afterEach(() => {
 })
 
 describe('codex pane account registry', () => {
+  it('persists explicit pins and excludes them from global-selection restart notices', () => {
+    recordCodexPaneAccount('existing-a', {
+      selectionKey: 'host',
+      accountId: 'account-a',
+      homeRoute: 'account-home'
+    })
+    recordCodexPaneAccount('pinned-b', {
+      selectionKey: 'host',
+      accountId: 'account-b',
+      homeRoute: 'account-home',
+      pinned: true
+    })
+    recordCodexPaneAccount('pinned-system', {
+      selectionKey: 'host',
+      accountId: null,
+      homeRoute: 'real-home',
+      pinned: true
+    })
+    const existing = getCodexPaneAccount('existing-a')
+    _internals.resetCache()
+    expect(getCodexPaneAccount('pinned-b')).toEqual({
+      selectionKey: 'host',
+      accountId: 'account-b',
+      homeRoute: 'account-home',
+      pinned: true
+    })
+    expect(getCodexPaneAccount('existing-a')).toEqual(existing)
+    const ptyIds = ['existing-a', 'pinned-b', 'pinned-system']
+    expect(listStaleCodexPanes({ ptyIds, settings: settingsWithSelection('account-a') })).toEqual(
+      []
+    )
+    expect(
+      listStaleCodexPanes({ ptyIds, settings: settingsWithSelection('account-c') }).map(
+        (pane) => pane.ptyId
+      )
+    ).toEqual(['existing-a'])
+  })
+
   it.each([
     ['real-home', true],
     ['account-home', true],

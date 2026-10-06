@@ -1,5 +1,11 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithRemoveManagedWorktree } from './orca-runtime-remove-managed-worktree'
+import {
+  assertPinnedCodexTerminalOptions,
+  prepareRuntimeWorktreeLaunchAccount,
+  resolveRuntimeAgentLaunchAccount,
+  type RuntimeAgentLaunchAccountArgs
+} from './runtime-agent-launch-account'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   RemoveManagedWorktreeOptions,
@@ -35,6 +41,7 @@ import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-table'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { resolveQoderTerminalCommandForWorkspace } from './qoder-terminal-command-resolution'
 import { buildRuntimeAgentTerminalStartupOptions } from './runtime-agent-terminal-startup'
+import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 
 export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected async resolveWorktreeRemovalTarget(
@@ -241,12 +248,34 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     workspace: TerminalWorkspaceLaunchScope,
     opts: TerminalCreateOptions
   ): Promise<TerminalCreateOptions> {
+    if (opts.codexAccountId !== undefined) {
+      assertPinnedCodexTerminalOptions(workspace, opts, this.requireStore())
+    }
     const launch = await this.buildAgentTerminalCreateOptions(workspace, opts)
     return resolveQoderTerminalCommandForWorkspace(
       launch,
       workspace,
       this.store,
       this.getAgentLaunchPlatformForWorkspace(workspace)
+    )
+  }
+
+  async resolveAgentLaunchAccount(args: RuntimeAgentLaunchAccountArgs) {
+    return resolveRuntimeAgentLaunchAccount(args, {
+      resolveAccount: (selector) => this.resolveCodexLaunchAccount(selector),
+      resolveWorkspace: (selector) =>
+        this.resolveTerminalWorkspaceLaunchScope(selector, undefined, { preparePushTarget: false }),
+      showRepo: (selector) => this.showRepo(selector),
+      getStore: () => this.requireStore(),
+      canSpawn: () => Boolean(this.ptyController?.spawn)
+    })
+  }
+
+  protected prepareWorktreeLaunchAccount(request: RuntimeManagedWorktreeCreateArgs) {
+    return prepareRuntimeWorktreeLaunchAccount(
+      request,
+      (args) => this.resolveAgentLaunchAccount(args),
+      Boolean(this.ptyController?.spawn)
     )
   }
 

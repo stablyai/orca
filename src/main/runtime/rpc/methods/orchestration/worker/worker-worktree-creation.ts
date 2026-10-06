@@ -36,6 +36,7 @@ export async function createWorkerWorktree(args: {
    *  bracketed paste. The renderer's own structured worktree create skips both the same way. */
   withAgentTerminal: boolean
   launchPreferences?: AgentLaunchPreferences
+  codexAccountId?: string | null
   effects: WorkerEffect[]
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
@@ -61,6 +62,9 @@ export async function createWorkerWorktree(args: {
     ...(args.withAgentTerminal
       ? {
           startupAgent: args.agent,
+          ...(args.codexAccountId !== undefined
+            ? { startupAccount: args.codexAccountId ?? 'system' }
+            : {}),
           startupLaunchSource: 'orchestration',
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
         }

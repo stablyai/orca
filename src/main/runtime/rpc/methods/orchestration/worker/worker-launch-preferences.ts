@@ -9,6 +9,8 @@ import {
 } from '../../../../../../shared/agent-session-option-launch'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { AgentLaunchAccountReceipt } from '../../../../../../shared/agent-launch-account'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 
 export type OrchestrationWorkerLaunchSelection = {
@@ -18,8 +20,21 @@ export type OrchestrationWorkerLaunchSelection = {
 }
 
 export type OrchestrationWorkerLaunchReceipt = {
+  account?: AgentLaunchAccountReceipt
   requested: OrchestrationWorkerLaunchSelection
   effective: OrchestrationWorkerLaunchSelection | null
+}
+
+export async function resolveWorkerLaunchAccount(
+  runtime: Pick<OrcaRuntimeService, 'resolveAgentLaunchAccount'>,
+  account: string | undefined,
+  agent: TuiAgent | undefined,
+  placement: { repo: string } | { worktree: string }
+) {
+  if (account === undefined) {
+    return undefined
+  }
+  return runtime.resolveAgentLaunchAccount({ account, agent, ...placement })
 }
 
 export function createWorkerLaunchReceipt(args: {

@@ -40,6 +40,7 @@ export type BuildPtyHostEnvOptions = {
 
 export type CodexHomeLaunchContext = {
   unavailableManagedHomePath?: string
+  pinnedAccountId?: string | null
 }
 
 // Why (#16441): Codex launch prep grants hook trust through a codex app-server

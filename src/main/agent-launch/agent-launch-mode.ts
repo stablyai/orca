@@ -64,6 +64,7 @@ export type AgentLaunchModeSettings = Partial<
 /** The placement facts the decision reads. `worktree`, `model` and `effort` are deliberately not
  *  here: a structured launch honours all three, and a placement flag must never imply a mode. */
 export type AgentLaunchModePlacement = {
+  account?: string
   agent?: string
   /** A connected execution server; absent means local. */
   on?: string
@@ -92,7 +93,8 @@ const DOWNGRADE_DETAIL: Record<Exclude<AgentLaunchModeReason, 'user_default'>, s
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
-  structured_unsupported_on_host: 'the execution host cannot create one here'
+  structured_unsupported_on_host: 'the execution host cannot create one here',
+  pinned_codex_account: 'an explicit Codex account requires a native terminal launch'
 }
 
 const BLOCKER_REASON: Record<
@@ -143,6 +145,9 @@ export function decideAgentLaunchMode(args: {
   // only; this host cannot answer for that runtime's structured support.
   if (placement.on) {
     return downgraded('remote_execution_host', vocabulary)
+  }
+  if (placement.account !== undefined) {
+    return downgraded('pinned_codex_account', vocabulary)
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; isAgentSessionHandleProvider rejects it and the launch downgrades to a terminal.
   const agent = placement.agent as TuiAgent

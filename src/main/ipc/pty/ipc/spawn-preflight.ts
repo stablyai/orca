@@ -21,6 +21,11 @@ import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
+  if (args.codexAccountId !== undefined) {
+    throw new Error(
+      '--account requires a native runtime terminal; renderer PTY launches are unsupported.'
+    )
+  }
   // Establish daemon identity before the first await so hidden delivery is gated before byte zero.
   ctx.provider = getProvider(args.connectionId)
   ctx.isDaemonHostSpawn =

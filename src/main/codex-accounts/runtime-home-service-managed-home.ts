@@ -112,13 +112,17 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     this.lastHostAccountUsedSelfContainedHome = true
     this.sharedAuthRefreshBlockedByManagedTransition = true
     this.markSharedRuntimeAuthManaged(account.id)
+    this.prepareManagedHomeResourcesForLaunch(perAccountHome)
+    return perAccountHome
+  }
+
+  protected prepareManagedHomeResourcesForLaunch(perAccountHome: string): void {
     syncSystemCodexResourcesIntoManagedHome(perAccountHome)
     syncSystemConfigIntoManagedCodexHome({
       runtimeHomePath: perAccountHome,
       systemHomePath: getSystemCodexHomePath()
     })
     this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
-    return perAccountHome
   }
 
   // Why: Codex's own `/resume` picker only lists rollouts under the launch

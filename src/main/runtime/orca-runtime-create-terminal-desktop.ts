@@ -12,6 +12,11 @@ export async function createDesktopTerminal(
   rendererWindow: Electron.BrowserWindow | null,
   createdWorktree?: Worktree
 ): Promise<dependencies.RuntimeTerminalCreate> {
+  if (opts.codexAccountId !== undefined) {
+    throw new Error(
+      '--account requires a native runtime terminal; renderer-backed launch is unsupported.'
+    )
+  }
   runtime.assertGraphReady()
   const win = rendererWindow ?? runtime.getAuthoritativeWindow()
   const workspace = worktreeSelector

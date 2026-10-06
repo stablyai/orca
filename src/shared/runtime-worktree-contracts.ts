@@ -126,6 +126,7 @@ export type RuntimeWorktreeCreateResult = {
   warnings: WorktreeLineageWarning[]
   warning?: string
   startupTerminal?: CreateWorktreeResult['startupTerminal']
+  account?: CreateWorktreeResult['account']
   agentTerminalHandle?: string
 }
 

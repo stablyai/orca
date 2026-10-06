@@ -95,6 +95,9 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     try {
       const terminal = await ports.createTerminal(`id:${worktree.id}`, {
         command: sequencedStartup.command,
+        ...(request.startupCodexAccountId !== undefined
+          ? { codexAccountId: request.startupCodexAccountId }
+          : {}),
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
@@ -118,6 +121,9 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       startupTerminalPaneKey = terminal.paneKey ?? null
       startupTerminalPtyId = terminal.ptyId ?? null
     } catch (error) {
+      if (request.startupAccount !== undefined) {
+        throw error
+      }
       warning = appendFailure(warning, worktree.path, 'startup', error)
     }
   }
