@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import type { Repo } from '../../../shared/repo-types'
+import { makeFolderWorkspace, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
   getExecutionHostIdForWorktree,
@@ -414,22 +416,47 @@ describe('getLocalOpenRuntimeOwnerForWorktree', () => {
   })
 
   it('reads the SSH owner from the same route, so a card can name its own host', () => {
-    const sshState: WorktreeRuntimeOwnerState = {
-      repos: [{ id: 'ssh-repo', connectionId: 'ssh-1', executionHostId: null }],
-      worktreesByRepo: { 'ssh-repo': [{ id: 'ssh-repo::wt', repoId: 'ssh-repo' }] },
-      // Why: same-id folder rows on two hosts; a host-blind lookup takes the local row.
+    const repo = (id: string, projectGroupId: string, connectionId: string | null): Repo => ({
+      id,
+      path: `/${id}`,
+      displayName: id,
+      badgeColor: '',
+      addedAt: 0,
+      projectGroupId,
+      connectionId,
+      executionHostId: connectionId ? null : 'local'
+    })
+    const sshState = {
+      repos: [
+        repo('ssh-repo', 'ssh-group', 'ssh-1'),
+        repo('mixed-ssh', 'mixed-group', 'ssh-1'),
+        repo('mixed-local', 'mixed-group', null)
+      ],
+      projectGroups: [],
+      worktreesByRepo: {
+        'ssh-repo': [makeWorktree({ id: 'ssh-repo::wt', repoId: 'ssh-repo' })],
+        'mixed-local': [makeWorktree({ id: 'mixed-local::wt', repoId: 'mixed-local' })]
+      },
       folderWorkspaces: [
-        { id: 'twin', projectGroupId: 'group', executionHostId: 'local' },
-        { id: 'twin', projectGroupId: 'group', executionHostId: 'ssh:ssh-1' }
+        // Why: same-id folder rows on two hosts; a host-blind lookup takes the local row.
+        makeFolderWorkspace({ id: 'twin', executionHostId: 'local' }),
+        makeFolderWorkspace({ id: 'twin', executionHostId: 'ssh:ssh-1' }),
+        // Why: unpinned folders infer their host from their repos, which the route skips.
+        makeFolderWorkspace({ id: 'legacy-ssh', projectGroupId: 'ssh-group' }),
+        makeFolderWorkspace({ id: 'legacy-mixed', projectGroupId: 'mixed-group' })
       ]
     }
 
     expect(getLocalOpenSshOwnerForWorktree(sshState, 'ssh-repo::wt')).toBe('ssh-1')
-    expect(getLocalOpenSshOwnerForWorktree(state, 'local-repo::wt-a')).toBeNull()
+    expect(getLocalOpenSshOwnerForWorktree(sshState, 'mixed-local::wt')).toBeNull()
     expect(getLocalOpenSshOwnerForWorktree(sshState, 'folder:twin', 'ssh:ssh-1')).toBe('ssh-1')
     expect(getLocalOpenSshOwnerForWorktree(sshState, 'folder:twin', 'local')).toBeNull()
     // Why: an unqualified twin is unresolved, which the runtime sentinel already blocks.
     expect(getLocalOpenRuntimeOwnerForWorktree(sshState, 'folder:twin')).toBe('unresolved-owner')
+    expect(getLocalOpenSshOwnerForWorktree(sshState, 'folder:legacy-ssh')).toBe('ssh-1')
+    expect(getLocalOpenSshOwnerForWorktree(sshState, 'folder:legacy-mixed')).toBe(
+      'unresolved-owner'
+    )
   })
 })
 

@@ -17,6 +17,7 @@ import {
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
+import { getConnectionIdFromState } from './connection-owner-resolution'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
@@ -152,9 +153,10 @@ export function getLocalOpenRuntimeOwnerForWorktree(
 /**
  * SSH connection owning a workspace path, read from the same route as
  * {@link getLocalOpenRuntimeOwnerForWorktree} so both owner dimensions name one host.
+ * A route that reads local must also read local to the File Explorer's connection lookup.
  */
 export function getLocalOpenSshOwnerForWorktree(
-  state: WorktreeRuntimeOwnerState,
+  state: WorktreeRuntimeOwnerState & Parameters<typeof getConnectionIdFromState>[0],
   worktreeId: string | null | undefined,
   executionHostId?: ExecutionHostId
 ): string | null {
@@ -163,9 +165,16 @@ export function getLocalOpenSshOwnerForWorktree(
   }
   const resolution = resolveLocalOpenRoute(state, worktreeId, executionHostId)
   // Why: an unresolved route is already blocked by the runtime owner's sentinel.
-  return resolution.kind === 'resolved'
-    ? getSshTargetIdForExecutionHost(resolution.route.executionHostId)
-    : null
+  if (resolution.kind !== 'resolved') {
+    return null
+  }
+  const routeOwner = getSshTargetIdForExecutionHost(resolution.route.executionHostId)
+  if (routeOwner || resolution.route.runtimeEnvironmentId) {
+    return routeOwner
+  }
+  // Why: the route skips the folder resolver's repo inference; an ambiguous host stays blocked.
+  const connectionId = getConnectionIdFromState(state, worktreeId)
+  return connectionId === undefined ? UNRESOLVED_LOCAL_OPEN_OWNER : connectionId
 }
 
 export function getExplicitRuntimeEnvironmentIdForWorktree(
