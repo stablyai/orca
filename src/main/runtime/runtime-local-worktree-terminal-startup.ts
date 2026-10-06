@@ -1,4 +1,5 @@
 import { paneIdentity } from './runtime-terminal-pane-identity'
+import { WorktreeStartupError } from '../../shared/worktree/worktree-startup-error'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -122,7 +123,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       startupTerminalPtyId = terminal.ptyId ?? null
     } catch (error) {
       if (request.startupAccount !== undefined) {
-        throw error
+        throw new WorktreeStartupError(worktree.id, error)
       }
       warning = appendFailure(warning, worktree.path, 'startup', error)
     }

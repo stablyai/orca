@@ -8,6 +8,7 @@
  */
 
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
+import { WorktreeStartupError } from '../../../../../../shared/worktree/worktree-startup-error'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
@@ -46,49 +47,60 @@ export async function createWorkerWorktree(args: {
   const { runtime, db, dispatchId, requestedWorktree, coordinatorWorktree, params, effects } = args
   const setupDecision = params.setup ?? 'run'
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
-  const created = await runtime.createManagedWorktree({
-    repoSelector: params.repo ?? coordinatorWorktree.repoId,
-    name: params.name as string,
-    baseBranch: params.baseBranch,
-    displayName: params.displayName,
-    ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
-    comment: params.comment,
-    // setupDecision runs setup without the legacy runHooks activation side effect.
-    runHooks: false,
-    setupDecision,
-    awaitTerminalProvisioning: true,
-    observeSetupCompletion: true,
-    createdWithAgent: args.agent,
-    ...(args.withAgentTerminal
-      ? {
-          startupAgent: args.agent,
-          ...(args.codexAccountId !== undefined
-            ? { startupAccount: args.codexAccountId ?? 'system' }
-            : {}),
-          startupLaunchSource: 'orchestration',
-          ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
-        }
-      : {}),
-    activate: false,
-    lineage: {
-      parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,
-      noParent: requestedWorktree === 'new-top-level',
-      callerTerminalHandle: params.from
-    }
-  })
+  const recordCreatedWorktree = (worktreeId: string): void => {
+    effects.push({
+      kind: 'worktree',
+      action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
+      id: worktreeId
+    })
+    db.recordWorkerStage({
+      dispatchId,
+      stage: 'worktree_created',
+      worktreeId,
+      effects,
+      residualResources: effects
+    })
+  }
+  const created = await runtime
+    .createManagedWorktree({
+      repoSelector: params.repo ?? coordinatorWorktree.repoId,
+      name: params.name as string,
+      baseBranch: params.baseBranch,
+      displayName: params.displayName,
+      ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
+      comment: params.comment,
+      // setupDecision runs setup without the legacy runHooks activation side effect.
+      runHooks: false,
+      setupDecision,
+      awaitTerminalProvisioning: true,
+      observeSetupCompletion: true,
+      createdWithAgent: args.agent,
+      ...(args.withAgentTerminal
+        ? {
+            startupAgent: args.agent,
+            ...(args.codexAccountId !== undefined
+              ? { startupAccount: args.codexAccountId ?? 'system' }
+              : {}),
+            startupLaunchSource: 'orchestration',
+            ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
+          }
+        : {}),
+      activate: false,
+      lineage: {
+        parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,
+        noParent: requestedWorktree === 'new-top-level',
+        callerTerminalHandle: params.from
+      }
+    })
+    .catch((error: unknown) => {
+      if (error instanceof WorktreeStartupError) {
+        recordCreatedWorktree(error.worktreeId)
+        throw error.cause
+      }
+      throw error
+    })
   const terminalHandle = created.startupTerminal?.handle
-  effects.push({
-    kind: 'worktree',
-    action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
-    id: created.worktree.id
-  })
-  db.recordWorkerStage({
-    dispatchId,
-    stage: 'worktree_created',
-    worktreeId: created.worktree.id,
-    effects,
-    residualResources: effects
-  })
+  recordCreatedWorktree(created.worktree.id)
   const setupReceipt = {
     requested: setupDecision,
     effective: setupDecision,

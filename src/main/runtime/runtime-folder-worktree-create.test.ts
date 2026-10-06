@@ -58,6 +58,46 @@ async function startupTerminalOptions(startupPaneKey?: string): Promise<Record<s
 }
 
 describe('a folder workspace create with a startup agent', () => {
+  it.each([
+    { selector: 'account-b', accountId: 'account-b' },
+    { selector: 'system', accountId: null }
+  ])(
+    'retains folder registration after pinned startup fails for $selector',
+    async ({ selector, accountId }) => {
+      const { createTerminal, deps } = createDeps()
+      const registration = vi.spyOn(deps.store, 'setWorktreeMeta')
+      const failure = new Error('pinned auth unavailable')
+      createTerminal.mockRejectedValue(failure)
+      const creation = createRuntimeFolderWorktree({
+        request: {
+          repoSelector: `id:${repo.id}`,
+          name: 'pinned',
+          startupAccount: selector,
+          startupCodexAccountId: accountId,
+          activate: true
+        },
+        repo,
+        createdWithAgent: 'codex',
+        startup: { command: 'codex' },
+        deps
+      })
+      await expect(creation).rejects.toMatchObject({
+        worktreeId: expect.any(String),
+        cause: failure
+      })
+      const worktreeId = registration.mock.calls[0][0]
+      await expect(creation).rejects.toMatchObject({ worktreeId })
+      expect(registration).toHaveBeenCalledTimes(1)
+      expect(deps.emitCreated).toHaveBeenCalledWith(expect.objectContaining({ worktreeId }))
+      expect(createTerminal).toHaveBeenCalledTimes(1)
+      expect(createTerminal).toHaveBeenCalledWith(
+        `id:${worktreeId}`,
+        expect.objectContaining({ codexAccountId: accountId })
+      )
+      expect(deps.activate).not.toHaveBeenCalled()
+    }
+  )
+
   it('creates the startup terminal under the pane the caller reserved', async () => {
     expect(await startupTerminalOptions(`${TAB_ID}:${LEAF_ID}`)).toMatchObject({
       tabId: TAB_ID,

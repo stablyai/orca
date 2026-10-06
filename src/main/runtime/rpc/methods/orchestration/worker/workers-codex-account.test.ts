@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationRpcState } from '../rpc-test-harness'
 import { resolveCodexLaunchAccount } from '../../../../../codex-accounts/codex-launch-account'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import { startRuntimeLocalWorktreeTerminals } from '../../../../runtime-local-worktree-terminal-startup'
+import { WorktreeStartupError } from '../../../../../../shared/worktree/worktree-startup-error'
 
 const h = createOrchestrationRpcHarness()
 let state: OrchestrationRpcState
@@ -14,6 +17,14 @@ const accounts = [
 beforeEach(() => {
   state = h.setup()
   const { runtime } = state
+  vi.spyOn(runtime, 'showRepo').mockResolvedValue({
+    id: 'repo',
+    path: '/repo',
+    displayName: 'Repo',
+    badgeColor: 'blue',
+    addedAt: 1,
+    kind: 'git'
+  })
   vi.spyOn(state.db, 'createStartingWorkerDispatch')
   vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
     handle === 'term_coord'
@@ -72,6 +83,127 @@ function start(params: Record<string, unknown>) {
 }
 
 describe('worker-start account plumbing and durable receipts', () => {
+  it.each(['new-child', 'new-top-level'] as const)(
+    'preserves the created %s when pinned terminal startup fails',
+    async (requestedWorktree) => {
+      const { db, runtime } = state
+      const createdWorktree: Worktree = {
+        id: 'repo::created',
+        repoId: 'repo',
+        path: '/created',
+        head: 'abc',
+        branch: 'pinned-worker',
+        isBare: false,
+        isMainWorktree: false,
+        displayName: 'pinned-worker',
+        comment: '',
+        linkedIssue: null,
+        linkedPR: null,
+        linkedLinearIssue: null,
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 1
+      }
+      vi.spyOn(runtime, 'resolveAgentLaunchAccount').mockResolvedValue({
+        provider: 'codex',
+        requested: 'account-b',
+        effective: { id: 'account-b', email: 'b@example.com' }
+      })
+      vi.mocked(runtime.createTerminal).mockRejectedValue(new Error('pinned auth unavailable'))
+      const activate = vi.fn()
+      const provision = vi.fn()
+      vi.spyOn(runtime, 'removeManagedWorktree')
+      vi.spyOn(runtime, 'createManagedWorktree').mockImplementation(async (request) => {
+        await startRuntimeLocalWorktreeTerminals({
+          request: { ...request, startupCodexAccountId: 'account-b' },
+          repo: { id: 'repo', path: '/repo', displayName: 'repo', badgeColor: 'blue', addedAt: 1 },
+          worktree: createdWorktree,
+          createdWithAgent: 'codex',
+          startup: { command: 'codex' },
+          ports: {
+            canSpawn: true,
+            createTerminal: (selector, options) => runtime.createTerminal(selector, options),
+            pasteDraft: vi.fn(),
+            sendFollowup: vi.fn(),
+            provision,
+            activate
+          }
+        })
+        throw new Error('Pinned startup must reject before this point')
+      })
+
+      const result = await start({
+        worktree: requestedWorktree,
+        account: 'account-b',
+        name: 'pinned-worker'
+      })
+      const effect = {
+        kind: 'worktree',
+        action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
+        id: createdWorktree.id
+      }
+      expect(result).toMatchObject({
+        state: 'failed',
+        failedStage: 'worktree_create',
+        lastError: 'pinned auth unavailable',
+        effects: [effect],
+        residualResources: [effect],
+        launch: { account: { effective: { id: 'account-b' } } }
+      })
+      if (
+        !result ||
+        typeof result !== 'object' ||
+        !('dispatchId' in result) ||
+        typeof result.dispatchId !== 'string'
+      ) {
+        throw new Error('Missing failed Dispatch receipt')
+      }
+      const worker = db.getWorkerDispatch(result.dispatchId)!
+      expect(worker.worktree_id).toBe(createdWorktree.id)
+      expect(JSON.parse(worker.effects)).toEqual([effect])
+      expect(JSON.parse(worker.residual_resources)).toEqual([effect])
+      expect(worker.agent_terminal_handle).toBeNull()
+      expect(db.getWorkerTerminalResourceByOwner(result.dispatchId)).toBeUndefined()
+      expect(db.listTasks()[0]?.status).toBe('failed')
+      expect(result).not.toHaveProperty('recovery')
+      expect(runtime.createTerminal).toHaveBeenCalledTimes(1)
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        `id:${createdWorktree.id}`,
+        expect.objectContaining({ codexAccountId: 'account-b' })
+      )
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+      expect(runtime.removeManagedWorktree).not.toHaveBeenCalled()
+      expect(activate).not.toHaveBeenCalled()
+      expect(provision).not.toHaveBeenCalled()
+    }
+  )
+
+  it('preserves the known worktree while pinned terminal acceptance remains unknown', async () => {
+    const { runtime } = state
+    vi.spyOn(runtime, 'createManagedWorktree').mockRejectedValue(
+      new WorktreeStartupError(
+        'repo::created',
+        Object.assign(new Error('terminal acceptance uncertain'), { code: 'operation_unknown' })
+      )
+    )
+    const result = await start({
+      worktree: 'new-child',
+      name: 'pinned-worker',
+      account: 'account-b'
+    })
+    expect(result).toMatchObject({
+      state: 'outcome_unknown',
+      failedStage: 'worktree_create',
+      lastError: 'terminal acceptance uncertain',
+      effects: [expect.objectContaining({ kind: 'worktree', id: 'repo::created' })],
+      residualResources: [expect.objectContaining({ kind: 'worktree', id: 'repo::created' })]
+    })
+    expect(result).not.toHaveProperty('recovery')
+    expect(runtime.createTerminal).not.toHaveBeenCalled()
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
   it.each(['account-b', 'B@EXAMPLE.COM', 'system'])(
     'pins %s through current-workspace launch and records its receipt',
     async (account) => {

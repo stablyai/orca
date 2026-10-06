@@ -33,6 +33,7 @@ import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker
 import { WORKTREE_CREATE_COLLISION_CODE } from '../../../shared/new-workspace/worktree-create-collision'
 import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launch-pane-already-live'
 import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch-session-already-exists'
+import { WorktreeStartupError } from '../../../shared/worktree/worktree-startup-error'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -164,6 +165,26 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
+  if (error instanceof WorktreeStartupError) {
+    const failure = mapRuntimeError(id, meta, error.cause)
+    const data = failure.error.data
+    const details = data !== null && typeof data === 'object' ? data : {}
+    const worktree = { kind: 'worktree', action: 'created', id: error.worktreeId }
+    return errorResponse(id, meta, failure.error.code, failure.error.message, {
+      ...details,
+      worktreeId: error.worktreeId,
+      effects: [
+        worktree,
+        ...('effects' in details && Array.isArray(details.effects) ? details.effects : [])
+      ],
+      residualResources: [
+        worktree,
+        ...('residualResources' in details && Array.isArray(details.residualResources)
+          ? details.residualResources
+          : [])
+      ]
+    })
+  }
   const message = error instanceof Error ? error.message : String(error)
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
