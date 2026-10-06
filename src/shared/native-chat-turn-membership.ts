@@ -237,6 +237,16 @@ export function nativeChatMessagesWaitingBehindLiveTurn(
   )
 }
 
+/** Whether a row belongs to the turn running now. Liveness is the owning turn's, not the newest
+ *  prompt's: a running turn's rows stay live while a newer message waits behind it. */
+export function isNativeChatRowInLiveWorkingTurn(
+  turnKey: string | undefined,
+  liveTurnKey: string | undefined,
+  working: boolean
+): boolean {
+  return working && (liveTurnKey ? turnKey === liveTurnKey : turnKey === undefined)
+}
+
 function commandTurnRunning(items: readonly AgentJournalRenderItem[]): boolean {
   const running = liveStructuredAgentSessionTurnScope(items)
   const bodyOf = (itemId: string) => items.find((item) => item.itemId === itemId)?.body

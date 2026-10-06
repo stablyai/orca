@@ -44,6 +44,8 @@ export type NativeChatToolIconName =
    *  it names no tool category, because that row stands for a question rather
    *  than for the call that asked it. */
   | 'message-square-more'
+  /** The reasoning row's glyph, carried for the same aligned slot; it names no tool category. */
+  | 'brain'
 
 /** Category to glyph. */
 export const NATIVE_CHAT_TOOL_ICON_NAMES: Record<NativeChatToolCategory, NativeChatToolIconName> = {
