@@ -85,6 +85,7 @@ export type ProviderRateLimits = {
     | 'antigravity'
     | 'cursor'
     | 'zcode'
+    | 'copilot'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
@@ -169,6 +170,7 @@ export type RateLimitState = {
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
+  copilot: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the

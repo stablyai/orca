@@ -37,6 +37,7 @@ type UsageProviderSnapshots = {
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
+  copilot?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -191,7 +192,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
-    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode))
+    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode)) ||
+    (providers.copilot !== undefined && isProviderSnapshotPending(providers.copilot))
   ) {
     return false
   }
@@ -206,6 +208,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
-    !isProviderConfigured(providers.zcode)
+    !isProviderConfigured(providers.zcode) &&
+    !isProviderConfigured(providers.copilot)
   )
 }

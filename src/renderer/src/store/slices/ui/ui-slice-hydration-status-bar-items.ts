@@ -9,6 +9,7 @@ const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
 const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 const DEFAULT_ON_CURSOR_STATUS_BAR_ITEM: StatusBarItem = 'cursor'
 const DEFAULT_ON_ZCODE_STATUS_BAR_ITEM: StatusBarItem = 'zcode'
+const DEFAULT_ON_COPILOT_STATUS_BAR_ITEM: StatusBarItem = 'copilot'
 
 export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
   let items = migrateStatusBarItems(ui.statusBarItems)
@@ -19,7 +20,8 @@ export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
     ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
     ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM],
     ['_cursorStatusBarDefaultAdded', DEFAULT_ON_CURSOR_STATUS_BAR_ITEM],
-    ['_zcodeStatusBarDefaultAdded', DEFAULT_ON_ZCODE_STATUS_BAR_ITEM]
+    ['_zcodeStatusBarDefaultAdded', DEFAULT_ON_ZCODE_STATUS_BAR_ITEM],
+    ['_copilotStatusBarDefaultAdded', DEFAULT_ON_COPILOT_STATUS_BAR_ITEM]
   ] as const
   for (const [flag, item] of defaults) {
     if (!ui[flag] && !items.includes(item)) {

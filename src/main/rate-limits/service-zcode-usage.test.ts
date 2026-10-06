@@ -41,6 +41,17 @@ vi.mock('./zcode-usage-fetcher', () => ({
   fetchZcodeRateLimits: vi.fn(),
   hasZcodeCliPlanCredentials: vi.fn(() => false)
 }))
+vi.mock('./copilot-usage-fetcher', () => ({
+  fetchCopilotRateLimits: vi.fn(async () => ({
+    provider: 'copilot',
+    session: null,
+    weekly: null,
+    monthly: null,
+    updatedAt: 0,
+    error: null,
+    status: 'unavailable'
+  }))
+}))
 
 vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()

@@ -205,7 +205,8 @@
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
-        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage."
+        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
+        "copilotToggleDescription": "Show GitHub Copilot premium request usage."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3941,7 +3942,8 @@
             "codexSignInError": "Codex sign-in failed. Please try again.",
             "cursorUsageMenu": "Cursor Usage",
             "hiddenUsageProviders": "Also: {{value0}}",
-            "zcodeUsageMenu": "ZCode Usage"
+            "zcodeUsageMenu": "ZCode Usage",
+            "copilotUsageMenu": "Copilot Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -4100,6 +4102,9 @@
           "tooltip": {
             "zcode": {
               "mcp": "MCP"
+            },
+            "copilot": {
+              "premium": "Premium requests"
             },
             "cedb7b99e3": "% used",
             "6d6df77f41": "No data available",
@@ -9295,6 +9300,15 @@
                 "codingPlan": "coding plan",
                 "rateLimit": "rate limit"
               }
+            },
+            "copilot": {
+              "title": "GitHub Copilot Usage",
+              "description": "Uses your existing Copilot login to show monthly premium request usage.",
+              "kw": {
+                "copilot": "copilot",
+                "github": "github",
+                "premium": "premium requests"
+              }
             }
           }
         },
@@ -9553,6 +9567,11 @@
             "usagePercentageDisplayTitle": "Usage percentages",
             "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
             "zcodeUsageTitle": "ZCode Usage",
+            "copilotUsageTitle": "Copilot Usage",
+            "copilotUsageDescription": "Show GitHub Copilot premium request usage in the status bar.",
+            "copilot": "copilot",
+            "github": "github",
+            "premiumRequests": "premium requests",
             "zcodeUsageDescription": "Show ZCode Coding Plan quota usage in the status bar.",
             "zcode": "zcode",
             "zai": "zai",
@@ -12478,6 +12497,19 @@
           "offCount": "{{count}} off",
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+        },
+        "CopilotAccountsSection": {
+          "title": "GitHub Copilot",
+          "description": "Uses your existing Copilot login (Copilot CLI keychain item, or ~/.config/github-copilot from copilot.vim, Zed, or JetBrains) to show monthly premium request usage.",
+          "loading": "Loading…",
+          "plan": "Copilot {{plan}}",
+          "signedIn": "Signed in",
+          "notSignedIn": "No Copilot login found",
+          "signInHint": "Run copilot and use /login, then click Refresh usage here.",
+          "refresh": "Refresh usage",
+          "premiumTitle": "Premium requests",
+          "premiumDescription": "Monthly premium request allowance, as shown in VS Code.",
+          "resets": "Resets {{when}}"
         }
       },
       "right": {
