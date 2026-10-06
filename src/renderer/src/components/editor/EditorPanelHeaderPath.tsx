@@ -49,13 +49,18 @@ export function EditorPanelHeaderPath({
   const canCopyHeaderPath = headerCopyState.copyText !== null
   // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
   const isVirtualEditorTab = activeFile.mode === 'check-details'
-  const revealBlocked = useAppStore((s) =>
-    isRevealInFileManagerBlocked(s.settings, {
-      connectionId:
-        activeFile.externalSshTargetId ?? getConnectionIdFromState(s, activeFile.worktreeId),
-      runtimeEnvironmentId: activeFile.runtimeEnvironmentId
-    })
-  )
+  const revealBlocked = useAppStore((s) => {
+    const connectionId =
+      activeFile.externalSshTargetId ?? getConnectionIdFromState(s, activeFile.worktreeId)
+    // Why: an undeterminable host must not read as local (#17799).
+    return (
+      connectionId === undefined ||
+      isRevealInFileManagerBlocked(s.settings, {
+        connectionId,
+        runtimeEnvironmentId: activeFile.runtimeEnvironmentId
+      })
+    )
+  })
   const markdownPreviewShortcutLabel = useShortcutLabel('editor.markdownPreview')
   const {
     canRename,

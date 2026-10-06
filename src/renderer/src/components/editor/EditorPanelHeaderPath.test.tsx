@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 
@@ -261,6 +262,18 @@ describe('EditorPanelHeaderPath reveal in file manager', () => {
   beforeEach(() => {
     openInFileManager.mockReset().mockResolvedValue({ ok: true })
     Object.assign(window, { api: { shell: { openInFileManager } } })
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'wt-1',
+          path: '/repo',
+          displayName: 'repo',
+          badgeColor: '',
+          addedAt: 0,
+          executionHostId: 'local'
+        }
+      ]
+    })
   })
 
   it('reveals the open file through the shared reveal action', () => {
@@ -273,7 +286,11 @@ describe('EditorPanelHeaderPath reveal in file manager', () => {
 
   it.each([
     ['a remote runtime owns', { runtimeEnvironmentId: 'env-1' }],
-    ['opened from an SSH host outside the workspace', { externalSshTargetId: 'ssh-1' }]
+    ['opened from an SSH host outside the workspace', { externalSshTargetId: 'ssh-1' }],
+    [
+      'in a folder workspace whose host cannot be determined',
+      { worktreeId: 'folder:fw-unknown', runtimeEnvironmentId: null }
+    ]
   ])('disables reveal as local-only for a file %s', (_owner, overrides) => {
     renderPath(baseFile(overrides))
 

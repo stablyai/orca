@@ -101,15 +101,17 @@ export function EditorFileTabContextMenu({
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
   // Why: matches the editor header; a folder workspace's synthetic repo has no connectionId.
-  const revealBlocked = useAppStore((s) =>
-    isRevealInFileManagerBlocked(s.settings, {
-      connectionId:
-        file.externalSshTargetId ??
-        getConnectionIdFromState(s, file.worktreeId) ??
-        repoConnectionId,
-      runtimeEnvironmentId: file.runtimeEnvironmentId
-    })
-  )
+  const revealBlocked = useAppStore((s) => {
+    const connectionId = file.externalSshTargetId ?? getConnectionIdFromState(s, file.worktreeId)
+    // Why: an undeterminable host must not read as local (#17799).
+    return (
+      connectionId === undefined ||
+      isRevealInFileManagerBlocked(s.settings, {
+        connectionId: connectionId ?? repoConnectionId,
+        runtimeEnvironmentId: file.runtimeEnvironmentId
+      })
+    )
+  })
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>

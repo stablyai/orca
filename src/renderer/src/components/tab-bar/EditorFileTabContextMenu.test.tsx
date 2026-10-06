@@ -108,6 +108,7 @@ const useAppStoreMock = Object.assign(
       unifiedTabsByWorktree: Record<string, unknown[]>
       groupsByWorktree: Record<string, unknown[]>
       folderWorkspaces: { id: string; executionHostId: string }[]
+      repos: { id: string; executionHostId: string }[]
     }) => unknown
   ) =>
     selector({
@@ -118,7 +119,8 @@ const useAppStoreMock = Object.assign(
       groupsByWorktree: {
         'wt-1': [{ id: 'group-1', tabOrder: ['tab-1', 'tab-2'] }]
       },
-      folderWorkspaces: [{ id: 'fw-1', executionHostId: 'ssh:ssh-1' }]
+      folderWorkspaces: [{ id: 'fw-1', executionHostId: 'ssh:ssh-1' }],
+      repos: [{ id: 'wt-1', executionHostId: 'local' }]
     }),
   {
     getState: () => ({
@@ -413,7 +415,11 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
     ['owned by a remote runtime', { runtimeEnvironmentId: 'env-1' }],
     ['opened from an SSH host outside the workspace', { externalSshTargetId: 'ssh-1' }],
     // Why: a folder workspace's synthetic repo has no connectionId, and SSH is not a runtime.
-    ['in an SSH folder workspace', { worktreeId: 'folder:fw-1', runtimeEnvironmentId: null }]
+    ['in an SSH folder workspace', { worktreeId: 'folder:fw-1', runtimeEnvironmentId: null }],
+    [
+      'in a folder workspace whose host cannot be determined',
+      { worktreeId: 'folder:fw-unknown', runtimeEnvironmentId: null }
+    ]
   ])('disables reveal as local-only for a file %s', async (_owner, overrides) => {
     const reveal = await renderRevealItem(overrides)
 
