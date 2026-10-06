@@ -46,7 +46,7 @@ describe('registerNotificationHandlers', () => {
     resetNotificationDispatchMocks()
   })
 
-  it('focuses the originating terminal pane in the main window when a dashboard popout is open', async () => {
+  it('sends an originating-pane navigation intent to the main window when a dashboard popout is open', async () => {
     const popoutSend = vi.fn()
     const popoutFocus = vi.fn()
     const webContentsSend = vi.fn()
@@ -86,7 +86,15 @@ describe('registerNotificationHandlers', () => {
     const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
     const handler = getDispatchHandler()
     expect(
-      await handler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1', paneKey })
+      await handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          paneKey,
+          executionHostId: 'ssh:build-box'
+        }
+      )
     ).toEqual({ delivered: true })
     expect(vi.getTimerCount()).toBe(1)
 
@@ -102,16 +110,59 @@ describe('registerNotificationHandlers', () => {
     expect(notificationRemoveListenerMock).toHaveBeenCalledWith('click', expect.any(Function))
     expect(webContentsSend).toHaveBeenCalledWith('ui:activateWorktree', {
       repoId: 'repo',
-      worktreeId: 'repo::wt1'
-    })
-    expect(webContentsSend).toHaveBeenCalledWith('ui:focusTerminal', {
-      tabId: 'tab-1',
       worktreeId: 'repo::wt1',
-      leafId: '11111111-1111-4111-8111-111111111111',
-      ackPaneKeyOnSuccess: paneKey,
-      flashFocusedPane: true,
-      scrollToBottomIfOutputSinceLastView: true
+      notificationPaneKey: paneKey,
+      executionHostId: 'ssh:build-box'
     })
+    // Why: the split focus event is what raced workspace activation; one intent replaces it.
+    expect(webContentsSend).not.toHaveBeenCalledWith('ui:focusTerminal', expect.anything())
+  })
+
+  it('binds folder-workspace notifications to one navigation intent', async () => {
+    const webContentsSend = vi.fn()
+    const mainWindow = {
+      isDestroyed: () => false,
+      isMinimized: () => false,
+      restore: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn(),
+      webContents: { send: webContentsSend }
+    }
+    getTrustedUIRendererWindowMock.mockReturnValue(mainWindow)
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    const handler = getDispatchHandler()
+    expect(
+      await handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'folder:folder-1',
+          paneKey,
+          executionHostId: 'runtime:folder-host'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    getNotificationEventHandler('click')()
+
+    // Why: a folder workspace has no repoId to extract, and must still bind click-to-navigate.
+    expect(webContentsSend).toHaveBeenCalledWith('ui:activateWorktree', {
+      worktreeId: 'folder:folder-1',
+      notificationPaneKey: paneKey,
+      executionHostId: 'runtime:folder-host'
+    })
+    expect(webContentsSend).toHaveBeenCalledTimes(1)
   })
 
   it('reveals the chat tab for a structured session click, where no PTY leaf exists', async () => {
@@ -146,6 +197,7 @@ describe('registerNotificationHandlers', () => {
         {
           source: 'agent-task-complete',
           surface: 'agent-session',
+          executionHostId: 'local',
           worktreeId: 'repo::wt1',
           paneKey
         }
@@ -154,14 +206,12 @@ describe('registerNotificationHandlers', () => {
 
     getNotificationEventHandler('click')()
 
-    expect(webContentsSend).toHaveBeenCalledWith('ui:activateWorktree', {
+    expect(webContentsSend).toHaveBeenCalledExactlyOnceWith('ui:activateWorktree', {
       repoId: 'repo',
-      worktreeId: 'repo::wt1'
-    })
-    expect(webContentsSend).toHaveBeenCalledWith('ui:focusEditorTab', {
-      tabId: 'chat-tab',
       worktreeId: 'repo::wt1',
-      userInitiated: true
+      notificationPaneKey: paneKey,
+      notificationSurface: 'agent-session',
+      executionHostId: 'local'
     })
     expect(webContentsSend).not.toHaveBeenCalledWith('ui:focusTerminal', expect.anything())
   })
@@ -193,18 +243,19 @@ describe('registerNotificationHandlers', () => {
       {
         source: 'agent-task-complete',
         surface: 'agent-session',
+        executionHostId: 'local',
         worktreeId: 'folder:fw-1',
         paneKey: structuredAgentSessionPaneKey('chat-tab', 'session-abc')
       }
     )
     getNotificationEventHandler('click')()
 
-    expect(webContentsSend).toHaveBeenCalledWith('ui:focusEditorTab', {
-      tabId: 'chat-tab',
+    expect(webContentsSend).toHaveBeenCalledExactlyOnceWith('ui:activateWorktree', {
       worktreeId: 'folder:fw-1',
-      userInitiated: true
+      notificationPaneKey: structuredAgentSessionPaneKey('chat-tab', 'session-abc'),
+      notificationSurface: 'agent-session',
+      executionHostId: 'local'
     })
-    expect(webContentsSend).not.toHaveBeenCalledWith('ui:activateWorktree', expect.anything())
   })
 
   it('clears the retained notification fallback timer when the native notification closes', async () => {

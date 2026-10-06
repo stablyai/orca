@@ -1,15 +1,11 @@
 import { ipcRenderer } from 'electron'
 import { admitCloseActiveTabPayload } from '../close-active-tab-payload-admission'
-import type { CloseActiveTabPayload } from '../api/ui-command-event-api'
+import type { CloseActiveTabPayload, UiActivateWorktreePayload } from '../api/ui-command-event-api'
 import type {
   BrowserHistoryNavigateCommand,
   BrowserPageCommandTarget
 } from '../../shared/browser-page-command-target'
 import type { BrowserPageZoomCommand } from '../../shared/browser-page-zoom'
-import type {
-  WorktreeDefaultTabsLaunch,
-  WorktreeSetupLaunch
-} from '../../shared/worktree/launch-types'
 import { browserFindSubscriptions } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
 
@@ -191,25 +187,9 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:dictationKeyDown', listener)
     return () => ipcRenderer.removeListener('ui:dictationKeyDown', listener)
   },
-  onActivateWorktree: (
-    callback: (data: {
-      repoId: string
-      worktreeId: string
-      setup?: WorktreeSetupLaunch
-      startup?: { command: string; env?: Record<string, string> }
-      defaultTabs?: WorktreeDefaultTabsLaunch
-    }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: {
-        repoId: string
-        worktreeId: string
-        setup?: WorktreeSetupLaunch
-        startup?: { command: string; env?: Record<string, string> }
-        defaultTabs?: WorktreeDefaultTabsLaunch
-      }
-    ) => callback(data)
+  onActivateWorktree: (callback: (data: UiActivateWorktreePayload) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: UiActivateWorktreePayload) =>
+      callback(data)
     ipcRenderer.on('ui:activateWorktree', listener)
     return () => ipcRenderer.removeListener('ui:activateWorktree', listener)
   }

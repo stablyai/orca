@@ -1,4 +1,8 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import type { NotificationWorkspaceOwner } from '../../../shared/notification-source'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -25,6 +29,14 @@ type SubjectOwnerState = WorktreeRuntimeOwnerState &
       'tabsByWorktree' | 'unifiedTabsByWorktree' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId'
     >
   >
+
+export function notificationExecutionHostForOwner(
+  owner: NotificationWorkspaceOwner | null
+): ExecutionHostId | undefined {
+  return owner?.runtimeEnvironmentId
+    ? toRuntimeExecutionHostId(owner.runtimeEnvironmentId)
+    : (owner?.executionHostId ?? undefined)
+}
 
 export function resolveNotificationTabOwner(
   state: WorktreeRuntimeOwnerState,

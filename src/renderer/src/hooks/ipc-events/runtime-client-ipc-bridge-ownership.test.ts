@@ -83,7 +83,7 @@ function createHarness() {
     const unsubs: (() => void)[] = []
     const unsubscribeStore = registerRuntimeClientIpcBridge(unsubs, {
       worktreeChangeRefreshQueue: { enqueue: vi.fn(), dispose: vi.fn() },
-      activateNotifiedWorktree: vi.fn(async () => {})
+      activateNotifiedWorktree: vi.fn(async () => true)
     })
     const stop = (): void => {
       unsubscribeStore()

@@ -1,5 +1,7 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { assertSerializedNotificationClickRace } from './notification-click-navigation-race.test-scenario'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 
 describe('useIpcEvents CLI-created worktree activation', () => {
   beforeEach(() => {
@@ -7,26 +9,43 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     vi.unstubAllGlobals()
   })
 
-  // Why: regression guard. The CLI "create agent" flow emits
-  // `ui:activateWorktree` to switch the user to the new workspace. A prior
-  // implementation hand-rolled the activation (setActiveRepo + setActiveView
-  // + setActiveWorktree + ensureWorktreeHasInitialTerminal +
-  // revealWorktreeInSidebar), which bypassed recordWorktreeVisit and left
-  // the back/forward buttons ignoring the CLI-driven switch. This test pins
-  // the handler to the canonical `activateAndRevealWorktree` helper, which
-  // is the single place that records the visit in history.
-  it('uses immediate reveal only for newly fetched ui:activateWorktree targets', async () => {
-    const activateAndRevealWorktree = vi.fn()
+  // Canonical activation records CLI-created workspaces in back/forward history.
+  it('routes ui:activateWorktree intents through their workspace activation paths', async () => {
+    const callOrder: string[] = []
+    const activateAndRevealWorktree = vi.fn(() => {
+      callOrder.push('activate project')
+      return { primaryTabId: 'tab-native' }
+    })
+    const activateAndRevealWorkspace = vi.fn((): { primaryTabId: string } | false => {
+      callOrder.push('activate workspace')
+      return { primaryTabId: 'tab-folder' }
+    })
+    const activateTabAndFocusPane = vi.fn(() => {
+      callOrder.push('focus pane')
+    })
+    const activateNotificationRuntimeTarget = vi.fn().mockResolvedValue(true)
+    const settings: { activeRuntimeEnvironmentId: string | null; terminalFontSize: number } = {
+      activeRuntimeEnvironmentId: null,
+      terminalFontSize: 13
+    }
+    const nativeChatTab = { id: 'tab-native', ptyId: 'pty-native', viewMode: 'chat' }
+    let tabsByWorktree: Record<string, (typeof nativeChatTab)[]> = {
+      'wt-existing': [nativeChatTab]
+    }
+    let terminalLayoutsByTabId: Record<string, unknown> = {}
     let worktreeKnown = false
     const fetchWorktrees = vi.fn().mockImplementation(async () => {
+      callOrder.push('fetch')
       worktreeKnown = true
     })
     const activateWorktreeListenerRef: {
       current:
         | ((data: {
-            repoId: string
+            repoId?: string
             worktreeId: string
             setup?: { runnerScriptPath: string; envVars: Record<string, string> }
+            notificationPaneKey?: string | null
+            executionHostId?: string
           }) => void)
         | null
     } = { current: null }
@@ -77,7 +96,10 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           clearTabPtyId: vi.fn(),
-          settings: { terminalFontSize: 13 }
+          tabsByWorktree,
+          terminalLayoutsByTabId,
+          suppressedPtyExitIds: {},
+          settings
         })
       }
     }))
@@ -87,7 +109,18 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     }))
     vi.doMock('@/lib/worktree-activation', () => ({
       activateAndRevealWorktree,
+      activateAndRevealWorkspace,
       ensureWorktreeHasInitialTerminal: vi.fn()
+    }))
+    vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane }))
+    vi.doMock('./ipc-events/notification-runtime-navigation', () => ({
+      activateNotificationRuntimeTarget
+    }))
+    vi.doMock('@/runtime/web-runtime-session', () => ({
+      closeWebRuntimeSessionTab: vi.fn(),
+      createWebRuntimeSessionTerminal: vi.fn(),
+      isWebRuntimeSessionActive: (environmentId: string | null | undefined) =>
+        Boolean(environmentId?.trim())
     }))
     vi.doMock('@/components/sidebar/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
@@ -132,9 +165,11 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: (
             listener: (data: {
-              repoId: string
+              repoId?: string
               worktreeId: string
               setup?: { runnerScriptPath: string; envVars: Record<string, string> }
+              notificationPaneKey?: string | null
+              executionHostId?: string
             }) => void
           ) => {
             activateWorktreeListenerRef.current = listener
@@ -242,16 +277,10 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    // Worktrees must be fetched first so activateAndRevealWorktree can resolve
-    // the CLI-created worktree out of store state.
+    // Fetch the newly created workspace before resolving its activation target.
     expect(fetchWorktrees).toHaveBeenCalledWith('repo-1')
 
-    // The core regression guard: the handler must delegate to the canonical
-    // activation helper (which records the visit in history) rather than
-    // hand-rolling the activation steps and skipping recordWorktreeVisit.
-    // `setup` must be passed through the `setup` opt — not positionally
-    // mis-aliased into `startup`, which was a latent bug in the original
-    // hand-rolled path.
+    // Preserve visit history and pass setup without mistaking it for startup.
     expect(activateAndRevealWorktree).toHaveBeenCalledTimes(1)
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-new', {
       setup,
@@ -274,13 +303,303 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-existing', {
       notifyHostRuntime: false
     })
+
+    // Why: a folder workspace has no repo to fetch — it activates by workspace id alone.
+    activateAndRevealWorktree.mockClear()
+    fetchWorktrees.mockClear()
+    activateWorktreeListenerRef.current({ worktreeId: 'folder:folder-1' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('folder:folder-1', {})
+
+    // Why: the ordering this feature exists for — pane focus lands only after activation resolves.
+    activateAndRevealWorktree.mockClear()
+    fetchWorktrees.mockClear()
+    callOrder.length = 0
+    const paneKey = 'tab-native:123e4567-e89b-42d3-a456-426614174000'
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing',
+      notificationPaneKey: paneKey,
+      executionHostId: 'local'
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(callOrder).toEqual(['activate project', 'focus pane'])
+    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('wt-existing', {
+      executionHostId: 'local',
+      notifyHostRuntime: false,
+      providesInitialSurface: true,
+      restoreSessions: false
+    })
+    expect(activateTabAndFocusPane).toHaveBeenCalledWith(
+      'tab-native',
+      '123e4567-e89b-42d3-a456-426614174000',
+      {
+        ackPaneKeyOnSuccess: paneKey,
+        flashFocusedPane: true,
+        scrollToBottomIfOutputSinceLastView: true
+      }
+    )
+
+    // Why: a null pane key is the project-only fallback — activate, never focus.
+    vi.clearAllMocks()
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing',
+      notificationPaneKey: null,
+      executionHostId: 'local'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(activateAndRevealWorktree).toHaveBeenCalledOnce()
+    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('wt-existing', {
+      executionHostId: 'local',
+      notifyHostRuntime: false,
+      providesInitialSurface: true,
+      restoreSessions: false
+    })
+    expect(activateTabAndFocusPane).not.toHaveBeenCalled()
+
+    // Why: a closed session keeps its project open — it is never recreated.
+    activateAndRevealWorktree.mockClear()
+    tabsByWorktree = { 'wt-existing': [] }
+    terminalLayoutsByTabId = {}
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing',
+      notificationPaneKey: paneKey,
+      executionHostId: 'local'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(activateAndRevealWorktree).toHaveBeenCalledOnce()
+    expect(activateTabAndFocusPane).not.toHaveBeenCalled()
+
+    // Why: the tab survived but the notifying leaf did not.
+    activateAndRevealWorktree.mockClear()
+    tabsByWorktree = { 'wt-existing': [nativeChatTab] }
+    terminalLayoutsByTabId = {
+      'tab-native': {
+        root: { type: 'leaf', leafId: '123e4567-e89b-42d3-a456-426614174001' }
+      }
+    }
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing',
+      notificationPaneKey: paneKey,
+      executionHostId: 'local'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(activateAndRevealWorktree).toHaveBeenCalledOnce()
+    expect(activateTabAndFocusPane).not.toHaveBeenCalled()
+
+    // Why: the pane must belong to the notifying workspace, not merely exist somewhere.
+    activateAndRevealWorktree.mockClear()
+    tabsByWorktree = { 'wt-other': [nativeChatTab] }
+    terminalLayoutsByTabId = {}
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing',
+      notificationPaneKey: paneKey,
+      executionHostId: 'local'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(activateAndRevealWorktree).toHaveBeenCalledOnce()
+    expect(activateTabAndFocusPane).not.toHaveBeenCalled()
+
+    // Why: folder workspaces get the same ordered focus, without a fetch.
+    activateAndRevealWorkspace.mockClear()
+    activateTabAndFocusPane.mockClear()
+    fetchWorktrees.mockClear()
+    callOrder.length = 0
+    tabsByWorktree = { 'folder:folder-1': [nativeChatTab] }
+    activateWorktreeListenerRef.current({
+      worktreeId: 'folder:folder-1',
+      notificationPaneKey: paneKey,
+      executionHostId: 'local'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(callOrder).toEqual(['activate workspace', 'focus pane'])
+    expect(activateAndRevealWorkspace).toHaveBeenLastCalledWith('folder:folder-1', {
+      executionHostId: 'local',
+      providesInitialSurface: true,
+      restoreSessions: false
+    })
+    expect(activateTabAndFocusPane).toHaveBeenCalledWith(
+      'tab-native',
+      '123e4567-e89b-42d3-a456-426614174000',
+      expect.anything()
+    )
+
+    // Why: a refused activation (missing/unmounted path) must not focus anything.
+    activateAndRevealWorkspace.mockReturnValueOnce(false)
+    activateTabAndFocusPane.mockClear()
+    activateWorktreeListenerRef.current({
+      worktreeId: 'folder:folder-1',
+      notificationPaneKey: paneKey,
+      executionHostId: 'local'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(activateTabAndFocusPane).not.toHaveBeenCalled()
+
+    // Why: fail closed — a notification intent without a resolvable owner is dropped.
+    activateAndRevealWorktree.mockClear()
+    fetchWorktrees.mockClear()
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing',
+      notificationPaneKey: null
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing',
+      notificationPaneKey: null,
+      executionHostId: 'bogus'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+
+    // Why: an ordinary CLI intent stays blocked while a runtime environment owns the window.
+    settings.activeRuntimeEnvironmentId = 'env-1'
+    activateAndRevealWorktree.mockClear()
+    activateWorktreeListenerRef.current({ repoId: 'repo-1', worktreeId: 'wt-existing' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing',
+      notificationPaneKey: null
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+
+    // Why: a host-qualified notification may cross that gate, and scopes its own fetch.
+    activateAndRevealWorktree.mockClear()
+    fetchWorktrees.mockClear()
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing',
+      notificationPaneKey: null,
+      executionHostId: 'local'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('wt-existing', {
+      executionHostId: 'local',
+      notifyHostRuntime: false,
+      providesInitialSurface: true,
+      restoreSessions: false
+    })
+
+    activateAndRevealWorktree.mockClear()
+    fetchWorktrees.mockClear()
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing',
+      notificationPaneKey: null,
+      executionHostId: 'ssh:notification-origin'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('wt-existing', {
+      executionHostId: 'ssh:notification-origin',
+      notifyHostRuntime: false,
+      providesInitialSurface: true,
+      restoreSessions: false
+    })
+
+    activateAndRevealWorkspace.mockClear()
+    activateWorktreeListenerRef.current({
+      worktreeId: 'folder:folder-1',
+      notificationPaneKey: null,
+      executionHostId: 'ssh:folder-origin'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(activateAndRevealWorkspace).toHaveBeenLastCalledWith('folder:folder-1', {
+      executionHostId: 'ssh:folder-origin',
+      providesInitialSurface: true,
+      restoreSessions: false
+    })
+
+    // Why: a runtime pane is selected on the host before the client focuses it.
+    tabsByWorktree = { 'wt-existing': [nativeChatTab] }
+    const runtimeIntent = {
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing',
+      notificationPaneKey: paneKey,
+      executionHostId: 'runtime:env-1' as const
+    }
+    nativeChatTab.ptyId = toRemoteRuntimePtyId('pty-native', 'env-1')
+    await assertSerializedNotificationClickRace({
+      listener: activateWorktreeListenerRef.current,
+      runtimeIntent,
+      activateNotificationRuntimeTarget,
+      activateTabAndFocusPane,
+      addNewestTab: () => {
+        tabsByWorktree['wt-newest'] = [
+          {
+            id: 'tab-newest',
+            ptyId: toRemoteRuntimePtyId('pty-newest', 'env-1'),
+            viewMode: 'terminal'
+          }
+        ]
+      }
+    })
+
+    // Why: latest click wins — a slower earlier intent must not steal focus when it lands.
+    const oldFetch = Promise.withResolvers<void>()
+    const newFetch = Promise.withResolvers<void>()
+    nativeChatTab.ptyId = 'pty-native'
+    tabsByWorktree = { 'wt-new-intent': [nativeChatTab] }
+    fetchWorktrees.mockImplementation((repoId: string) =>
+      repoId === 'repo-old' ? oldFetch.promise : newFetch.promise
+    )
+    vi.clearAllMocks()
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-old',
+      worktreeId: 'wt-old-intent',
+      notificationPaneKey: paneKey,
+      executionHostId: 'local'
+    })
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-new',
+      worktreeId: 'wt-new-intent',
+      notificationPaneKey: paneKey,
+      executionHostId: 'local'
+    })
+    newFetch.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    oldFetch.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(activateAndRevealWorktree).toHaveBeenCalledTimes(1)
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-new-intent', {
+      executionHostId: 'local',
+      notifyHostRuntime: false,
+      providesInitialSurface: true,
+      restoreSessions: false
+    })
+    expect(activateTabAndFocusPane).toHaveBeenCalledTimes(1)
+    expect(activateTabAndFocusPane).toHaveBeenCalledWith(
+      'tab-native',
+      '123e4567-e89b-42d3-a456-426614174000',
+      expect.anything()
+    )
   })
 
   it('routes local and runtime worktree events to their owning hosts', async () => {
     const fetchWorktrees = vi.fn()
     const fetchWorktreeLineage = vi.fn()
-    // Mutable so the test can drop the runtime mid-run and prove the local flag
-    // is origin-based, not a sample of runtime state.
+    // Local origin survives a runtime disconnect during the refresh.
     const mockSettings: { activeRuntimeEnvironmentId: string | null; terminalFontSize: number } = {
       activeRuntimeEnvironmentId: 'env-1',
       terminalFontSize: 13
@@ -513,8 +832,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
 
     fetchWorktrees.mockClear()
     fetchWorktreeLineage.mockClear()
-    // With no runtime active the flag must still be true — it marks the event's
-    // local origin; sampling runtime state here would regress to false.
+    // Local origin is independent of the active runtime.
     mockSettings.activeRuntimeEnvironmentId = null
     localWorktreesOnChanged({ repoId: 'repo-1' })
     await new Promise((resolve) => setTimeout(resolve, 0))

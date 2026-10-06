@@ -138,7 +138,8 @@ describe('web runtime session tab actions', () => {
     await expect(
       activateWebRuntimeSessionTab({
         worktreeId: WORKTREE_ID,
-        tabId: 'local-browser-unified'
+        tabId: 'local-browser-unified',
+        leafId: 'leaf-1'
       })
     ).resolves.toBe(true)
     await expect(
@@ -156,6 +157,7 @@ describe('web runtime session tab actions', () => {
         worktree: `id:${WORKTREE_ID}`,
         tabId: 'host-browser-unified',
         notifyClients: false,
+        leafId: 'leaf-1',
         navigation: 'caller',
         intent: 'user'
       },

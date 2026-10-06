@@ -25,7 +25,10 @@
  */
 import { notificationSourceForOwner } from '../../../../shared/notification-source'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
-import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
+import {
+  notificationExecutionHostForOwner,
+  resolveNotificationTabOwner
+} from '@/attention/notification-subject-owner'
 import { AGENT_JOURNAL_TURN_OUTCOMES } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
@@ -90,6 +93,10 @@ export function dispatchStructuredTurnCompletionAttention(
     paneKey,
     stateStartedAt: row?.stateStartedAt
   })
+  const notificationOwner =
+    subscriptionTarget?.kind === 'environment'
+      ? { executionHostId: null, runtimeEnvironmentId: subscriptionTarget.environmentId }
+      : resolveNotificationTabOwner(state, tab)
   const sound = readAgentAttentionNotificationSound(state.settings ?? {})
   applyAgentAttention(decision, {
     unread: {
@@ -103,17 +110,12 @@ export function dispatchStructuredTurnCompletionAttention(
         {
           source: 'agent-task-complete',
           surface: 'agent-session',
+          executionHostId: notificationExecutionHostForOwner(notificationOwner),
           ...(notificationId ? { notificationId } : {}),
           worktreeId: request.workspaceId,
           paneKey: request.subjectKey ?? undefined,
           ...getNotificationWorkspaceLabels(state, request.workspaceId, tab.label),
-          notificationSourceId: notificationSourceForOwner(
-            // The receiving subscription identifies the paired source even when tab ownership is ambiguous.
-            subscriptionTarget?.kind === 'environment'
-              ? { executionHostId: null, runtimeEnvironmentId: subscriptionTarget.environmentId }
-              : resolveNotificationTabOwner(state, tab),
-            state
-          ),
+          notificationSourceId: notificationSourceForOwner(notificationOwner, state),
           terminalTitle: tab.label,
           isActiveWorktree: request.workspaceIsActive,
           ...(row?.agentType ? { agentType: row.agentType } : {}),

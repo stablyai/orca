@@ -1,5 +1,6 @@
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
@@ -41,6 +42,19 @@ import type {
 } from '../../shared/session-tab-close'
 
 export type CloseActiveTabPayload = { sourceId: string }
+
+export type UiActivateWorktreePayload = {
+  repoId?: string
+  worktreeId: string
+  setup?: WorktreeSetupLaunch
+  startup?: WorktreeStartupLaunch
+  defaultTabs?: WorktreeDefaultTabsLaunch
+  /** Present only for native-notification navigation; null means project-only fallback. */
+  notificationSurface?: 'terminal' | 'agent-session'
+  notificationPaneKey?: string | null
+  /** Captured native-notification owner; absent for legacy and ordinary CLI intents. */
+  executionHostId?: ExecutionHostId
+}
 
 export type UiCommandEventApi = {
   get: () => Promise<PersistedUIState>
@@ -139,15 +153,7 @@ export type UiCommandEventApi = {
   onAppMenuPaste: (callback: () => void) => () => void
   onAppMenuSelectionAction: (callback: (action: 'copy' | 'select-all') => void) => () => void
   onEditableContextPaste: (callback: (data: { plainTextOnly: boolean }) => void) => () => void
-  onActivateWorktree: (
-    callback: (data: {
-      repoId: string
-      worktreeId: string
-      setup?: WorktreeSetupLaunch
-      startup?: WorktreeStartupLaunch
-      defaultTabs?: WorktreeDefaultTabsLaunch
-    }) => void
-  ) => () => void
+  onActivateWorktree: (callback: (data: UiActivateWorktreePayload) => void) => () => void
   onCreateTerminal: (
     callback: (data: {
       requestId?: string

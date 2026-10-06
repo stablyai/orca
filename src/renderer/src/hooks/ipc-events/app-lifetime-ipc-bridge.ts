@@ -6,6 +6,8 @@ import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { remoteRuntimeTerminalColorPush } from '@/runtime/remote-runtime-terminal-color-push'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import { focusNotificationPaneAfterActivation } from './notification-pane-focus'
 import { registerAgentStatusIpcBridge } from './agent-status-ipc-bridge'
 import { registerBackgroundWorktreeRemovalBridge } from './background-worktree-removal-bridge'
 import { registerBrowserRequestIpcBridge } from './browser-request-ipc-bridge'
@@ -97,22 +99,65 @@ export function installAppLifetimeIpcEvents(
   registerOrcaProfileAuthIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
+  // Why: latest click wins — an earlier intent must not steal focus after a newer one resolves.
+  let latestActivateWorktreeIntent = 0
+  let activationQueue = Promise.resolve()
+  unsubs.push(() => {
+    latestActivateWorktreeIntent++
+  })
   unsubs.push(
-    window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup, defaultTabs }) => {
-      void worktreeRuntime
-        .activateNotifiedWorktree(
-          {
-            type: 'activateWorktree',
-            repoId,
-            worktreeId,
-            ...(setup ? { setup } : {}),
-            ...(startup ? { startup } : {}),
-            ...(defaultTabs ? { defaultTabs } : {})
-          },
-          { allowRuntimeEnvironment: false }
-        )
-        .catch((error) => console.error('Failed to activate CLI-created worktree:', error))
-    })
+    window.api.ui.onActivateWorktree(
+      ({
+        repoId,
+        worktreeId,
+        setup,
+        startup,
+        defaultTabs,
+        notificationPaneKey,
+        notificationSurface,
+        executionHostId
+      }) => {
+        const intent = ++latestActivateWorktreeIntent
+        const notificationExecutionHostId = normalizeExecutionHostId(executionHostId)
+        // Finish an in-flight host selection before sending the newest click.
+        activationQueue = activationQueue
+          .then(async () => {
+            if (intent !== latestActivateWorktreeIntent) {
+              return
+            }
+            const activated = await worktreeRuntime.activateNotifiedWorktree(
+              {
+                type: 'activateWorktree',
+                worktreeId,
+                ...(repoId ? { repoId } : {}),
+                ...(setup ? { setup } : {}),
+                ...(startup ? { startup } : {}),
+                ...(defaultTabs ? { defaultTabs } : {}),
+                ...(notificationPaneKey !== undefined ? { notificationPaneKey } : {}),
+                ...(notificationExecutionHostId
+                  ? { executionHostId: notificationExecutionHostId }
+                  : {})
+              },
+              {
+                // Why: a notification click names its own host, so it may target a runtime workspace.
+                allowRuntimeEnvironment: notificationPaneKey !== undefined,
+                isCurrentLocalIntent: () => intent === latestActivateWorktreeIntent
+              }
+            )
+            if (!activated || intent !== latestActivateWorktreeIntent) {
+              return
+            }
+            await focusNotificationPaneAfterActivation({
+              worktreeId,
+              notificationPaneKey,
+              notificationSurface,
+              executionHostId: notificationExecutionHostId,
+              isCurrentIntent: () => intent === latestActivateWorktreeIntent
+            })
+          })
+          .catch((error) => console.error('Failed to activate requested workspace:', error))
+      }
+    )
   )
 
   registerTerminalPresentationIpcBridge(unsubs)

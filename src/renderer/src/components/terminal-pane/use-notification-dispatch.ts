@@ -18,6 +18,7 @@ import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
+import { getNotificationNavigationTarget } from './notification-navigation-target'
 import { getNotificationWorkspaceLabels } from './terminal-notification-state'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
 import {
@@ -172,7 +173,12 @@ export function dispatchTerminalNotification(
         source: event.source,
         ...(notificationId ? { notificationId } : {}),
         worktreeId: request.workspaceId,
-        paneKey: request.subjectKey ?? undefined,
+        ...getNotificationNavigationTarget(
+          state,
+          request.workspaceId,
+          request.subjectKey ?? undefined,
+          event.workspaceOwner
+        ),
         ...getNotificationWorkspaceLabels(state, request.workspaceId, event.terminalTitle),
         notificationSourceId: notificationSourceForOwner(
           resolveTerminalNotificationOwner(state, worktreeId, event),

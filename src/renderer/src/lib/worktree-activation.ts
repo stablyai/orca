@@ -140,13 +140,14 @@ export function activateAndRevealFolderWorkspace(
   }
   // Why: same ordering as the worktree path — gate first, then resume only when not deferring.
   const shouldGateAgentActivation =
+    opts?.restoreSessions !== false &&
     !opts?.startup &&
     (workspaceHasSleepingAgentSessions(state, workspaceKey) ||
       (canInspectAgentActivationInventory() &&
         shouldAutoCreateInitialTerminal(
           state.reconcileWorktreeTabModel(workspaceKey).renderableTabCount
         )))
-  if (!shouldGateAgentActivation) {
+  if (!shouldGateAgentActivation && opts?.restoreSessions !== false) {
     resumeSleepingAgentSessionsForWorktree(workspaceKey)
   }
   if (shouldGateAgentActivation) {
@@ -245,13 +246,14 @@ export function activateAndRevealWorktree(
   // agent inventory hydrates asynchronously too, so an empty tab model can otherwise authorize a
   // fallback terminal beside a chat that is about to appear.
   const shouldGateAgentActivation =
+    opts?.restoreSessions !== false &&
     !hasActivationWork &&
     (workspaceHasSleepingAgentSessions(postActivationState, worktreeId) ||
       (canInspectAgentActivationInventory() &&
         shouldAutoCreateInitialTerminal(
           postActivationState.reconcileWorktreeTabModel(worktreeId).renderableTabCount
         )))
-  if (!shouldGateAgentActivation) {
+  if (!shouldGateAgentActivation && opts?.restoreSessions !== false) {
     // Why: sleeping destroys the local PTY but preserves the provider session id, so waking should
     // restore those CLI sessions. Ordering is load-bearing: resuming synchronously creates the
     // session's tab first, so the seeding below doesn't add a bare shell next to it.

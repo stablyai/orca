@@ -15,6 +15,8 @@ export type WorktreeActivationSurfaceSelection = {
   providesInitialSurface?: boolean
   /** Set only where the user deliberately opened this existing workspace; absent keeps the shell seed. */
   navigationIntent?: 'user-open'
+  /** Notification navigation selects existing surfaces without recovering closed sessions. */
+  restoreSessions?: boolean
 }
 
 export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {

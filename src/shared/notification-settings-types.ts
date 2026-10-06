@@ -1,5 +1,6 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
+import type { ExecutionHostId } from './execution-host'
 import type { NotificationSourceId } from './notification-source'
 
 export type NotificationSettings = {
@@ -37,6 +38,8 @@ export type NotificationDispatchRequest = {
   notificationSourceId?: NotificationSourceId
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
   paneKey?: string
+  /** Execution owner captured with the pane so duplicate workspace ids stay unambiguous. */
+  executionHostId?: ExecutionHostId
   repoLabel?: string
   worktreeLabel?: string
   /** Legacy senders may still provide this; project labels are now always shown. */
