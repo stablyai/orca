@@ -3,6 +3,7 @@ import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitLabProjectRef, GitLabWorkItem } from '../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../shared/jira-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoBackedTaskProvider } from '../../../shared/task-providers'
 import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
 import {
   type TaskSourceContext,
@@ -65,7 +66,7 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
 }
 export function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,
-  provider: 'github' | 'gitlab',
+  provider: RepoBackedTaskProvider,
   gitlabProjectRef?: GitLabProjectRef | null
 ): TaskSourceContext | null {
   if (!repo) {

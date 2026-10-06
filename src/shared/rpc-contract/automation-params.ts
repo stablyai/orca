@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../tui-agent-config'
+import { TASK_PROVIDERS } from '../task-providers'
 import {
   OptionalBoolean,
   OptionalPlainString,
@@ -108,7 +109,7 @@ export const TaskProviderIdentity = z
 export const TaskSourceContext = z
   .object({
     kind: z.literal('task-source'),
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
+    provider: z.enum(TASK_PROVIDERS),
     projectId: requiredString('Missing source project id'),
     hostId: ExecutionHostId,
     projectHostSetupId: OptionalNullablePlainString,

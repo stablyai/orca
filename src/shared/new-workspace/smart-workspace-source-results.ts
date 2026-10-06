@@ -4,6 +4,7 @@ import type { JiraIssue } from '../jira-types'
 import type { LinearIssue } from '../linear/issue-types'
 import type { LinearCollectionResult } from '../linear/workspace-types'
 import type { BaseRefSearchResult } from '../repo-types'
+import type { RepoBackedTaskProvider } from '../task-providers'
 import { parseJiraIssueUrl } from '../jira-issue-url'
 import { buildJiraTextMatchJql } from '../jira-search-input-jql'
 import type { GitHubIssueOrPRLink } from '../github/links'
@@ -63,7 +64,7 @@ export function isBlockingTaskUrlResolution({
   githubLoading,
   gitlabLoading
 }: {
-  sourceIntent: 'github' | 'gitlab' | null
+  sourceIntent: RepoBackedTaskProvider | null
   isQueryStale: boolean
   githubLoading: boolean
   gitlabLoading: boolean

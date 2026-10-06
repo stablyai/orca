@@ -1,6 +1,5 @@
 import { translate } from '@/i18n/i18n'
-
-export type RepoBackedTaskEmptyStateProvider = 'github' | 'gitlab'
+import type { RepoBackedTaskProvider } from '../../../shared/task-providers'
 
 export type RepoBackedTaskEmptyState = {
   title: string
@@ -8,7 +7,7 @@ export type RepoBackedTaskEmptyState = {
 }
 
 export function getRepoBackedTaskEmptyState(args: {
-  provider: RepoBackedTaskEmptyStateProvider
+  provider: RepoBackedTaskProvider
   selectedRepoCount: number
   gitlabView?: 'issues' | 'mrs' | 'todos'
 }): RepoBackedTaskEmptyState {

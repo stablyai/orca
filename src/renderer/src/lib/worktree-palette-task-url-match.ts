@@ -15,6 +15,7 @@ import { parseGitLabIssueOrMRLink } from '../../../shared/new-workspace/gitlab-l
 import { parseJiraIssueUrl, type ParsedJiraIssueUrl } from '../../../shared/jira-issue-url'
 import { parseLinearIssueUrlIntent, type LinearIssueUrlIntent } from '../../../shared/linear/links'
 import type { Repo } from '../../../shared/repo-types'
+import type { TaskProvider } from '../../../shared/task-providers'
 import type { Worktree } from '../../../shared/worktree/types'
 import { normalizeLinearIdentifier } from './linear-issue-workspace-attachment'
 import {
@@ -33,7 +34,7 @@ export type CmdJTaskSourceUrl =
   | { provider: 'jira'; parsed: ParsedJiraIssueUrl }
 
 export type CmdJTaskUrlCreatePreview = {
-  provider: 'github' | 'gitlab' | 'jira'
+  provider: Exclude<TaskProvider, 'linear'>
   identifier: string
   subtitle: string
   createLabel: string

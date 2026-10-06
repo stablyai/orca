@@ -4,9 +4,10 @@ import type { Automation } from '../../../../shared/automations-types'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
+import type { RepoBackedTaskProvider } from '../../../../shared/task-providers'
 
 export type RepoBackedAutomationSourceContext = TaskSourceContext & {
-  provider: 'github' | 'gitlab'
+  provider: RepoBackedTaskProvider
 }
 
 export function getRepoBackedAutomationSourceContext(

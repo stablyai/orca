@@ -2,6 +2,9 @@ export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
 
 export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
 
+// Task providers that get items from a repo remote, not from a connected account.
+export type RepoBackedTaskProvider = Extract<TaskProvider, 'github' | 'gitlab'>
+
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
 export function isTaskProvider(value: unknown): value is TaskProvider {

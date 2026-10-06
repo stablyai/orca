@@ -1,3 +1,5 @@
+import type { TaskProvider } from '../task-providers'
+
 export type SmartWorkspaceCommandRowKind =
   | 'use-name'
   | 'create-branch'
@@ -13,7 +15,7 @@ export type SmartWorkspaceCommandRow = {
   value: string
 }
 
-export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'linear' | 'jira' | null
+export type SmartWorkspaceSourceIntent = TaskProvider | null
 
 export function resolveSmartWorkspaceCommandValue({
   currentValue,

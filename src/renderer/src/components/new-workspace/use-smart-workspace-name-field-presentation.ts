@@ -13,7 +13,10 @@ import {
   searchWorkspaceEmojiShortcodes,
   type WorkspaceEmojiSuggestion
 } from '@/lib/workspace-emoji-shortcodes'
-import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
+import {
+  resolveSmartWorkspaceCommandValue,
+  type SmartWorkspaceSourceIntent
+} from './smart-workspace-command-value'
 import {
   buildSmartWorkspaceSourceRows,
   getVisibleBranchResults,
@@ -180,7 +183,7 @@ export function useSmartWorkspaceNameFieldPresentation(
   const isQueryStale =
     !linearUrlIntentOwnsInput && trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
   // Why: unambiguous refs highlight their source row instead of the typed-text fallback.
-  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | null>(() => {
+  const sourceIntent = useMemo<SmartWorkspaceSourceIntent>(() => {
     if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
       return null
     }

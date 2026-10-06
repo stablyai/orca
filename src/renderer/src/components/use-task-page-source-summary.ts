@@ -1,6 +1,6 @@
 import type { TaskPageSourceAvailabilityPreludeModel } from './use-task-page-source-availability'
 import { useMemo } from 'react'
-import type { TaskProvider } from '../../../shared/task-providers'
+import type { RepoBackedTaskProvider, TaskProvider } from '../../../shared/task-providers'
 import type {
   TaskSourceAvailabilityNotice,
   TaskSourceHostAvailability
@@ -38,7 +38,7 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     Partial<Record<TaskProvider, TaskSourceAvailabilityNotice>>
   >(() => {
     const availabilityForContexts = (
-      provider: Extract<TaskProvider, 'github' | 'gitlab'>,
+      provider: RepoBackedTaskProvider,
       contexts: readonly TaskSourceContext[]
     ): TaskSourceHostAvailability[] => [
       ...contexts.flatMap((context) => {
