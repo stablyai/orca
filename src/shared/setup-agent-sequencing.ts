@@ -15,9 +15,11 @@ const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
+export const SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV = 'ORCA_SEQUENCED_SETUP_SCRIPT'
 
 export type SequencedSetupAgentCommands = {
   setupCommand: string
+  setupEnv?: Record<string, string>
   startupCommand: string
   startupEnv?: Record<string, string>
 }
@@ -78,7 +80,14 @@ export function createSequencedSetupAgentCommands(args: {
     waitTimeoutSeconds
   )
   return {
-    setupCommand: buildPosixSetupCommand(resolution.command, markerPath, nonce),
+    setupCommand: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"'`,
+    setupEnv: {
+      [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: buildPosixSetupScript(
+        resolution.command,
+        markerPath,
+        nonce
+      )
+    },
     // Why: long worktree paths can push the gate past a PTY's canonical input cap and drop its submit byte.
     startupCommand: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}"'`,
     startupEnv: {
@@ -88,12 +97,12 @@ export function createSequencedSetupAgentCommands(args: {
   }
 }
 
-function buildPosixSetupCommand(setupCommand: string, markerPath: string, nonce: string): string {
+function buildPosixSetupScript(setupCommand: string, markerPath: string, nonce: string): string {
   const marker = quotePosixArg(markerPath)
   const tmp = quotePosixArg(`${markerPath}.tmp`)
   const nonceValue = quotePosixArg(nonce)
 
-  const script = [
+  return [
     `rm -f ${marker} ${tmp} 2>/dev/null`,
     `( ${setupCommand} )`,
     'status=$?',
@@ -101,8 +110,6 @@ function buildPosixSetupCommand(setupCommand: string, markerPath: string, nonce:
     `mv -f ${tmp} ${marker}`,
     'exit "$status"'
   ].join('; ')
-
-  return `bash -lc ${quotePosixArg(script)}`
 }
 
 function buildPosixStartupScript(

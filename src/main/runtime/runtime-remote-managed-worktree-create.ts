@@ -62,7 +62,7 @@ export async function createRuntimeRemoteManagedWorktree(
     throw new Error('runtime_unavailable')
   }
 
-  const result = await requestRuntimeRemoteWorktree(repo, args, deps.store)
+  let result = await requestRuntimeRemoteWorktree(repo, args, deps.store)
 
   deps.invalidateResolvedWorktrees()
   deps.invalidateWorktreeScan(repo.id)
@@ -96,6 +96,13 @@ export async function createRuntimeRemoteManagedWorktree(
       ...(sequenced.startupEnv ? { env: { ...args.startup.env, ...sequenced.startupEnv } } : {})
     }
     wrappedSetupCommandStr = sequenced.setupCommand
+    result = {
+      ...result,
+      setup: {
+        ...result.setup,
+        envVars: { ...result.setup.envVars, ...sequenced.setupEnv }
+      }
+    }
   }
 
   if (sequencedStartup && deps.canSpawn()) {

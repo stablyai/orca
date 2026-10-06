@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../shared/setup-agent-sequencing'
 
 const requestRuntimeRemoteWorktree = vi.hoisted(() =>
   vi.fn(
@@ -68,6 +69,43 @@ async function startupTerminalOptions(startupPaneKey?: string): Promise<Record<s
 }
 
 describe('a remote managed create with a startup agent', () => {
+  it.each([true, false])(
+    'preserves setup script through remote provisioning and fallback (activate=%s)',
+    async (activate) => {
+      requestRuntimeRemoteWorktree.mockResolvedValueOnce({
+        worktree: { id: 'wt-remote', path: '/remote/wt' },
+        setup: {
+          runnerScriptPath: '/remote/repo/.git/orca/setup-runner.sh',
+          envVars: { ORCA_ROOT_PATH: '/remote/repo' },
+          waitForAgentStartup: true
+        }
+      })
+      const { deps } = createDeps()
+      const result = await createRuntimeRemoteManagedWorktree(
+        repo,
+        {
+          name: 'task',
+          createdWithAgent: 'codex',
+          startup: { command: 'printf agent-ready' },
+          activate,
+          awaitTerminalProvisioning: true
+        },
+        deps
+      )
+      const provisioned = vi.mocked(deps.provision).mock.calls[0]?.[0]
+      expect(provisioned?.wrappedSetupCommand).toBe(
+        `bash -lc 'eval "$ORCA_SEQUENCED_SETUP_SCRIPT"'`
+      )
+      expect(provisioned?.setup?.envVars).toEqual({
+        ORCA_ROOT_PATH: '/remote/repo',
+        [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(
+          'bash /remote/repo/.git/orca/setup-runner.sh'
+        )
+      })
+      expect(result.setup?.envVars).toEqual(provisioned?.setup?.envVars)
+      expect(result.setup?.command).toBe(provisioned?.wrappedSetupCommand)
+    }
+  )
   it('creates the startup terminal under the pane the caller reserved', async () => {
     expect(await startupTerminalOptions(`${TAB_ID}:${LEAF_ID}`)).toMatchObject({
       tabId: TAB_ID,

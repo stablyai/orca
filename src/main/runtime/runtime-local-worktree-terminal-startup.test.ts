@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../shared/setup-agent-sequencing'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -52,6 +53,44 @@ function createPorts() {
 
 const TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
 const LEAF_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
+
+describe('sequenced setup terminal environment', () => {
+  it.each([true, false])(
+    'preserves setup script through provisioning and fallback (activate=%s)',
+    async (activate) => {
+      const { ports } = createPorts()
+      const result = await startRuntimeLocalWorktreeTerminals({
+        request: {
+          repoSelector: `id:${repo.id}`,
+          name: worktree.displayName,
+          activate,
+          awaitTerminalProvisioning: true
+        },
+        repo,
+        worktree,
+        startup: { command: 'printf agent-ready' },
+        setup: {
+          runnerScriptPath: '/repo/.git/orca/setup-runner.sh',
+          envVars: { ORCA_ROOT_PATH: '/repo' },
+          waitForAgentStartup: true
+        },
+        ports
+      })
+      const provisioned = vi.mocked(ports.provision).mock.calls[0]?.[0]
+      expect(provisioned?.wrappedSetupCommand).toBe(
+        `bash -lc 'eval "$ORCA_SEQUENCED_SETUP_SCRIPT"'`
+      )
+      expect(provisioned?.setup?.envVars).toEqual({
+        ORCA_ROOT_PATH: '/repo',
+        [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(
+          'bash /repo/.git/orca/setup-runner.sh'
+        )
+      })
+      expect(result.returnedSetup?.envVars).toEqual(provisioned?.setup?.envVars)
+      expect(result.returnedSetup?.command).toBe(provisioned?.wrappedSetupCommand)
+    }
+  )
+})
 
 async function startupTerminalOptions(startupPaneKey?: string) {
   const { createTerminal, ports } = createPorts()

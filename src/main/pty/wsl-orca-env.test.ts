@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { isAbsolute } from 'node:path'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 import {
+  createSequencedSetupAgentCommands,
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
@@ -46,6 +48,35 @@ describe('addOrcaWslInteropEnv', () => {
       `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`
     ])
   })
+
+  it.each([undefined, `USER_SETTING/u:${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}/p`])(
+    'imports the generated setup script into WSL unchanged (inherited WSLENV=%s)',
+    (inheritedWslenv) => {
+      const commands = createSequencedSetupAgentCommands({
+        runnerScriptPath: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\setup-runner.sh',
+        startupCommand: 'codex',
+        platform: 'windows',
+        nonce: 'wsl-setup'
+      })
+      const env: Record<string, string> = {
+        ...commands.setupEnv,
+        ...(inheritedWslenv ? { WSLENV: inheritedWslenv } : {})
+      }
+      const setupScript = env[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]
+
+      addOrcaWslInteropEnv(env)
+
+      const entries = env.WSLENV?.split(':') ?? []
+      expect(
+        entries.filter((entry) => entry.startsWith(`${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}/`))
+      ).toEqual([`${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}/u`])
+      expect(setupScript).toContain('status=$?')
+      expect(env[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toBe(setupScript)
+      if (inheritedWslenv) {
+        expect(entries).toContain('USER_SETTING/u')
+      }
+    }
+  )
 
   it('preserves existing WSLENV entries and does not duplicate the handle entry', () => {
     const env: Record<string, string> = {
