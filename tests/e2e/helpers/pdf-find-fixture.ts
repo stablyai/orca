@@ -18,6 +18,10 @@ export function createPdfFindFixture(): Buffer {
     const stream = `BT /F1 20 Tf 60 700 Td 40 TL ${lines.map((line) => `(${line}) Tj T*`).join(' ')} ET\n`
     objects.push(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}endstream`)
   }
+  return serializePdfObjects(objects)
+}
+
+export function serializePdfObjects(objects: string[]): Buffer {
   let pdf = '%PDF-1.4\n'
   const offsets = [0]
   for (const [index, object] of objects.entries()) {

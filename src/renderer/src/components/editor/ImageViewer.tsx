@@ -35,6 +35,7 @@ type ImageViewerProps = {
   // Why: absent means "no PDF scroll memory" — diff and conflict-review callers
   // mount several viewers on one path, so they deliberately pass nothing.
   scrollCacheKey?: string | null
+  onOpenRelativeFileLink?: (href: string) => void
 }
 
 export default function ImageViewer({
@@ -43,7 +44,8 @@ export default function ImageViewer({
   mimeType = FALLBACK_IMAGE_MIME_TYPE,
   layout = 'fill',
   preferenceKey,
-  scrollCacheKey = null
+  scrollCacheKey = null,
+  onOpenRelativeFileLink
 }: ImageViewerProps): JSX.Element {
   const [isPopupOpen, setIsPopupOpen] = useState(false)
   const [inlineZoom, setInlineZoom] = useState(1)
@@ -224,6 +226,7 @@ export default function ImageViewer({
         filePath={filePath}
         preferenceKey={preferenceKey}
         scrollCacheKey={scrollCacheKey}
+        onOpenRelativeFileLink={onOpenRelativeFileLink}
       />
     )
   }
