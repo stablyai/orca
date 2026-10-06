@@ -84,8 +84,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   providerRateLimited: '{{agent}} is rate-limited and retrying.',
   providerRetrying: '{{agent}} hit a temporary problem and is retrying.',
   providerRetryingQuoted: '{{agent}} is retrying: {{detail}}.',
-  providerRetryAttempt: 'Attempt {{attempt}}.',
-  providerRetryAttemptOf: 'Attempt {{attempt}} of {{maxAttempts}}.',
+  providerRetryNumber: 'Retry {{attempt}}.',
+  providerRetryNumberOf: 'Retry {{attempt}} of {{maxRetries}}.',
   providerRetryLastError: 'Last error: {{detail}}.',
   previousExitUnverifiable: "Couldn't stop {{agent}} from before."
 } as const
@@ -100,7 +100,7 @@ export type AgentSessionFailureCopyValues = {
   limit?: string
   size?: string
   attempt?: string
-  maxAttempts?: string
+  maxRetries?: string
 }
 
 /** One piece in the reader's language, placeholders filled. */

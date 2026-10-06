@@ -17601,8 +17601,8 @@
         "providerRateLimited": "{{agent}} 已被限流，正在重试。",
         "providerRetrying": "{{agent}} 遇到临时问题，正在重试。",
         "providerRetryingQuoted": "{{agent}} 正在重试：{{detail}}。",
-        "providerRetryAttempt": "第 {{attempt}} 次尝试。",
-        "providerRetryAttemptOf": "第 {{attempt}} 次尝试，共 {{maxAttempts}} 次。",
+        "providerRetryNumber": "第 {{attempt}} 次重试。",
+        "providerRetryNumberOf": "第 {{attempt}} 次重试，共 {{maxRetries}} 次。",
         "providerRetryLastError": "上次错误：{{detail}}。",
         "previousExitUnverifiable": "无法停止之前的 {{agent}}。"
       },

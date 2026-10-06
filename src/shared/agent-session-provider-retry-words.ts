@@ -1,4 +1,4 @@
-// The words for a provider retry: which attempt it is on and what last failed, from the provider's
+// The words for a provider retry: which retry it is and what last failed, from the provider's
 // own fields, for a provider that wrote none of its own for a person.
 
 import type { AgentSessionProviderRetry } from './agent-session-failure'
@@ -26,13 +26,13 @@ export function providerRetryWords(
           : 'providerRetrying',
         agent
       ),
-      ...retryAttempt(say, retry)
+      ...retryNumber(say, retry)
     ]),
     retry?.cause ?? retryLastError(say, retry)
   )
 }
 
-function retryAttempt(
+function retryNumber(
   say: AgentSessionFailureSay,
   retry: AgentSessionProviderRetry | undefined
 ): string[] {
@@ -41,9 +41,9 @@ function retryAttempt(
   }
   const attempt = String(retry.attempt)
   return [
-    retry.maxAttempts
-      ? say('providerRetryAttemptOf', { attempt, maxAttempts: String(retry.maxAttempts) })
-      : say('providerRetryAttempt', { attempt })
+    retry.maxRetries
+      ? say('providerRetryNumberOf', { attempt, maxRetries: String(retry.maxRetries) })
+      : say('providerRetryNumber', { attempt })
   ]
 }
 

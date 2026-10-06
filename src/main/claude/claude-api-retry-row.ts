@@ -17,7 +17,7 @@ export function claudeApiRetryRowBody(message: Record<string, unknown>): AgentJo
     error: message.error,
     status: message.error_status,
     attempt: message.attempt,
-    maxAttempts: message.max_retries
+    maxRetries: message.max_retries
   })
   const words = agentSessionFailureWords(
     agentSessionFailureFact('providerRetrying', {

@@ -48,7 +48,7 @@ function factsFor(kind: AgentSessionFailureKind): AgentSessionFailureFact[] {
     facts.push({ kind, retry: { error: 'rate_limit', status: 429 } })
     facts.push({ kind, retry: { error: 'overloaded', status: 529 } })
     facts.push({ kind, retry: { status: 500 } })
-    facts.push({ kind, retry: { error: 'server_error', status: 502, attempt: 3, maxAttempts: 10 } })
+    facts.push({ kind, retry: { error: 'server_error', status: 502, attempt: 3, maxRetries: 10 } })
     facts.push({ kind, retry: { attempt: 1 } })
   }
   if (kind === 'attachmentInvalid') {
@@ -261,20 +261,20 @@ describe('the words written beside a failure fact', () => {
     )
   })
 
-  it("says which attempt a retry is on, and the provider's codes when it wrote no account", () => {
+  it("says which retry it is, and the provider's codes when it wrote no account", () => {
     const retrying = (retry: AgentSessionFailureFact['retry']) =>
       agentSessionFailureSentence({ kind: 'providerRetrying', retry }, 'row', {
         agentName: 'Claude'
       })
-    expect(retrying({ error: 'server_error', status: 502, attempt: 3, maxAttempts: 10 })).toBe(
-      'Claude hit a temporary problem and is retrying. Attempt 3 of 10.\nLast error: HTTP 502 server error.'
+    expect(retrying({ error: 'server_error', status: 502, attempt: 3, maxRetries: 10 })).toBe(
+      'Claude hit a temporary problem and is retrying. Retry 3 of 10.\nLast error: HTTP 502 server error.'
     )
     expect(retrying({ status: 502, attempt: 3 })).toBe(
-      'Claude hit a temporary problem and is retrying. Attempt 3.\nLast error: HTTP 502.'
+      'Claude hit a temporary problem and is retrying. Retry 3.\nLast error: HTTP 502.'
     )
     // The provider's own account outranks its codes.
-    expect(retrying({ status: 429, cause: 'Too many requests', attempt: 2, maxAttempts: 5 })).toBe(
-      'Claude is rate-limited and retrying. Attempt 2 of 5.\nToo many requests'
+    expect(retrying({ status: 429, cause: 'Too many requests', attempt: 2, maxRetries: 5 })).toBe(
+      'Claude is rate-limited and retrying. Retry 2 of 5.\nToo many requests'
     )
     // A provider that words its own progress is quoted alone, never counted twice.
     expect(
@@ -282,7 +282,7 @@ describe('the words written beside a failure fact', () => {
         {
           kind: 'providerRetrying',
           detail: { text: 'Reconnecting... 2/5', audience: 'person' },
-          retry: { status: 502, attempt: 2, maxAttempts: 5 }
+          retry: { status: 502, attempt: 2, maxRetries: 5 }
         },
         'row',
         { agentName: 'Codex' }

@@ -105,14 +105,14 @@ describe('reading a failure fact', () => {
     ).toEqual({ kind: 'restartFailed', refusal: { code: 'agent_session_conflict' } })
   })
 
-  it("keeps a retry's attempt, and its maximum only where it bounds that attempt", () => {
-    expect(readProviderRetry({ attempt: 3, maxAttempts: 10 })).toEqual({
+  it('keeps which retry it is, and its maximum only where it bounds that retry', () => {
+    expect(readProviderRetry({ attempt: 3, maxRetries: 10 })).toEqual({
       attempt: 3,
-      maxAttempts: 10
+      maxRetries: 10
     })
-    expect(readProviderRetry({ status: 502, maxAttempts: 10 })).toEqual({ status: 502 })
-    expect(readProviderRetry({ attempt: 12, maxAttempts: 10 })).toEqual({ attempt: 12 })
-    expect(readProviderRetry({ attempt: 0, maxAttempts: 10 })).toBeUndefined()
+    expect(readProviderRetry({ status: 502, maxRetries: 10 })).toEqual({ status: 502 })
+    expect(readProviderRetry({ attempt: 12, maxRetries: 10 })).toEqual({ attempt: 12 })
+    expect(readProviderRetry({ attempt: 0, maxRetries: 10 })).toBeUndefined()
     expect(readProviderRetry({ attempt: 2.5, status: 502 })).toEqual({ status: 502 })
   })
 })
@@ -137,7 +137,7 @@ describe('reading all of a failure fact', () => {
           error: 'server_error',
           status: 502,
           attempt: 3,
-          maxAttempts: 10
+          maxRetries: 10
         })
       })
     ]) {

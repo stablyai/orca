@@ -122,10 +122,10 @@ export type AgentSessionProviderRetry = {
   status?: number
   /** The provider's own account of what failed, written for a person: the row's second line. */
   cause?: string
-  /** Which attempt this is, counted by the provider from 1. */
+  /** Which retry this is, counted from 1. */
   attempt?: number
-  /** The most attempts the provider makes before it gives up. */
-  maxAttempts?: number
+  /** The most retries the provider makes before it gives up. */
+  maxRetries?: number
 }
 
 export type AgentSessionFailureFact = {
@@ -222,18 +222,16 @@ export function readProviderRetry(value: unknown): AgentSessionProviderRetry | u
   const cause =
     typeof value.cause === 'string' ? providerDiagnostic(value.cause, 'person')?.text : undefined
   const attempt = positiveInteger(value.attempt)
-  // A maximum bounds an attempt; alone, or below the attempt it bounds, it says nothing.
-  const maxAttempts =
-    attempt && (positiveInteger(value.maxAttempts) ?? 0) >= attempt
-      ? positiveInteger(value.maxAttempts)
-      : undefined
+  // A maximum bounds a retry; alone, or below the retry it bounds, it says nothing.
+  const max = positiveInteger(value.maxRetries)
+  const maxRetries = attempt && max && max >= attempt ? max : undefined
   return error || status || cause || attempt
     ? {
         ...(error ? { error } : {}),
         ...(status ? { status } : {}),
         ...(cause ? { cause } : {}),
         ...(attempt ? { attempt } : {}),
-        ...(maxAttempts ? { maxAttempts } : {})
+        ...(maxRetries ? { maxRetries } : {})
       }
     : undefined
 }
