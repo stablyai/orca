@@ -55,7 +55,8 @@ describe('the record store slot', () => {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory,
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
-      resolveEnvironment: async () => ({})
+      resolveEnvironment: async () => ({}),
+      resolveLaunchArgs: () => []
     })
     expect(host.deps.store).toBe(store)
 
