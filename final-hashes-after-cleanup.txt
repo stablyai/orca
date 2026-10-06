@@ -1,0 +1,2 @@
+78922a784ee78e9e50587e93628cd3b9d4dfbe49087adc4514e6781cea38cbb9  /Users/m4air/.codex/hooks.json
+b4aa2f152347bca26ebb40af765786530f757aba234f0cfd97d945aae9d32e48  /Users/m4air/.codex/config.toml

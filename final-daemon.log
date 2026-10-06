@@ -1,0 +1,7 @@
+{"src":"daemon","ts":"2026-10-06T03:18:50.081Z","pid":8030,"event":"startup","protocolVersion":40,"socketPath":"/Users/m4air/orca-qa/pr-25658/remote-released-parent/final-profile/user-data/daemon/daemon-v40.sock"}
+{"src":"daemon","ts":"2026-10-06T03:18:50.097Z","pid":8030,"event":"ready"}
+{"src":"daemon","ts":"2026-10-06T03:18:50.101Z","pid":8030,"event":"client-hello-accepted","role":"control","clientId":"419ecf02-97c1-4cf9-a265-3dc4ddc926de"}
+{"src":"daemon","ts":"2026-10-06T03:18:50.104Z","pid":8030,"event":"client-hello-accepted","role":"stream","clientId":"419ecf02-97c1-4cf9-a265-3dc4ddc926de"}
+{"src":"daemon","ts":"2026-10-06T03:18:50.108Z","pid":8030,"event":"client-hello-accepted","role":"control","clientId":"94376c13-0aee-4019-954c-3206ea8e0f41"}
+{"src":"daemon","ts":"2026-10-06T03:18:50.109Z","pid":8030,"event":"client-hello-accepted","role":"stream","clientId":"94376c13-0aee-4019-954c-3206ea8e0f41"}
+{"src":"daemon","ts":"2026-10-06T03:18:50.189Z","pid":8030,"event":"login-session-watch-armed","trigger":"startup"}
