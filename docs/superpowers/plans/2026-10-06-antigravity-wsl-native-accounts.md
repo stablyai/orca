@@ -226,7 +226,7 @@ nonce: string): WslCommand`。
 成功输出固定为 `ORCA_AGY_WSL_REPLY_V1 <nonce>\n<missing/present/written>\n<base64 或空行>\n`。
 协议完整性、code=0、未超时与未截断共同决定成功；错误 status 不承载凭据。
 
-- [ ] **Step 1: 写失败测试。** codec 测试 canonical base64、nonce、精确行数、UTF-8、末尾
+- [x] **Step 1: 写失败测试。** codec 测试 canonical base64、nonce、精确行数、UTF-8、末尾
   换行、64 KiB 边界和 192 KiB 输入/输出。backend 测试只发送 input 且不把 token 加到
   argv/env/error；系统级 WSL 错误不能变成 null。
   真实隔离 shell fixtures 测试 0600 普通文件、0644/0400/0700 拒绝、错误所有者、
@@ -237,20 +237,20 @@ nonce: string): WslCommand`。
   expect(await readFile(nativePath, 'utf8')).toBe(credential('a'))
   ```
 
-- [ ] **Step 2: 验证失败。** `pnpm test src/main/antigravity/native-wsl-credential-protocol.test.ts
+- [x] **Step 2: 验证失败。** `pnpm test src/main/antigravity/native-wsl-credential-protocol.test.ts
   src/main/antigravity/native-wsl-credential-script.test.ts src/main/antigravity/native-wsl-credential-backend.test.ts`。
   Linux shell fixtures 是脚本证据，不是 WSL 集成证据。
-- [ ] **Step 3: 实现固定协议与脚本。** 使用系统工具的已验证选项及固定 PATH，缺少工具
+- [x] **Step 3: 实现固定协议与脚本。** 使用系统工具的已验证选项及固定 PATH，缺少工具
   明确拒绝。所有 guest 操作确认当前发行版、UID、HOME 与绑定一致；拒绝不安全路径。
   先拒绝 FIFO/链接等，再打开描述符并验证其元数据，限量读取并比对前后元数据，避免阻塞。
   读取/写入共享 0600 flock，等待上限 2 秒；缺失目录读取不建目录。
   写入使用私密唯一临时目录、严格解码、cmp、同步、复核旧字节、同目录替换、回读。
   原始 JSON 只由现有 codec 验证，shell 不改 JSON。trap 清理正常退出，遗留清理只检查
   本实现精确命名、所有者与私密权限，不提升遗留文件、不无界扫描。
-- [ ] **Step 4: 验证通过。** 重跑任务测试及 `pnpm test src/main/antigravity/native-credential-codec.test.ts`。
+- [x] **Step 4: 验证通过。** 重跑任务测试及 `pnpm test src/main/antigravity/native-credential-codec.test.ts`。
   加入受控外部写入、原地 truncate/刷新、锁占用和同步失败用例；不把局部锁描述为 agy CAS。
   `pnpm tc:node` 与变更门禁通过，逐项检查捕获的 child spec/错误中没有合成 token。
-- [ ] **Step 5: 提交。** 提交 `feat(antigravity): add WSL native credential backend`。
+- [x] **Step 5: 提交。** 提交 `feat(antigravity): add WSL native credential backend`。
 
 ## Task 6: 目标服务注册表、动作分发与结果核实
 
