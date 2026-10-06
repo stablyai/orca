@@ -104,6 +104,27 @@ export async function callAgentSession<TResult>(
   return response.result as TResult
 }
 
+export function openAgentSessionTranscript(
+  client: RpcClient,
+  sessionId: string,
+  held: Promise<unknown>,
+  onFrame: (raw: unknown) => void
+): () => void {
+  let ended = false
+  let close = (): void => {}
+  void held
+    .catch(() => undefined)
+    .then(() => {
+      if (!ended) {
+        close = client.subscribe('agentSession.subscribe', { sessionId }, onFrame)
+      }
+    })
+  return () => {
+    ended = true
+    close()
+  }
+}
+
 export function timeoutForDeadline(deadline: number | undefined): number | null {
   if (deadline === undefined) {
     return STRUCTURED_SEND_TIMEOUT_MS

@@ -41,6 +41,7 @@ import {
   useMobileStructuredQueuedMessageControls,
   type MobileStructuredQueuedMessageControls
 } from './use-mobile-structured-queued-message-controls'
+import type { MobileProviderSessions } from './mobile-structured-provider-session'
 
 type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
@@ -63,6 +64,8 @@ type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
     /** The queued-draft cards and their actions, from any host that publishes them. */
     queued: MobileStructuredQueuedMessageControls
+    /** Provider sessions read so far, by chat id; the terminal hand-off's own source. */
+    providerSessions: MobileProviderSessions
   }
 
 export function useMobileStructuredAgentSession(args: {
@@ -106,8 +109,15 @@ export function useMobileStructuredAgentSession(args: {
   // Against a host that predates the quiet repeated Stop, a Stop of a turn still being stopped joins it.
   const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
-  const { state, stateRef, queuedMessages, queuePause, loadingOlder, loadEarlier } =
-    useMobileStructuredAgentState(stateArgs)
+  const {
+    state,
+    stateRef,
+    queuedMessages,
+    queuePause,
+    providerSessions,
+    loadingOlder,
+    loadEarlier
+  } = useMobileStructuredAgentState(stateArgs)
   useMobileStructuredSendOperationReconciliation(state.submissions, queuedMessages)
 
   const mutate = useMobileStructuredAgentMutate({
@@ -258,6 +268,7 @@ export function useMobileStructuredAgentSession(args: {
     question: projectStructuredQuestion(questionPrompt, groupedDraft),
     respondPermission,
     respondQuestion,
-    queued
+    queued,
+    providerSessions
   }
 }

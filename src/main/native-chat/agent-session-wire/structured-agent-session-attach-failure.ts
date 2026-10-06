@@ -6,6 +6,35 @@ import {
 } from './structured-agent-session-adapter'
 import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
 
+export async function settleUnsupportedReservation(
+  input: AttachFlowInput,
+  record: AgentSessionRecord
+): Promise<void> {
+  const spawnToken = record.lease.reservedSpawnToken
+  if (!spawnToken) {
+    return
+  }
+  try {
+    await input.store.settleFailedAcquisition({
+      sessionId: record.sessionId,
+      fence: record.lease.runtimeFence,
+      spawnToken,
+      callerKey: input.callerKey,
+      operationId: input.params.envelope.clientOperationId,
+      outcome: {
+        status: 'failed',
+        code: 'structured_agent_session_unsupported',
+        details: { reason: 'hostUnsupported' },
+        message: 'Structured session support changed before the provider could start.'
+      },
+      exitProof: 'processless',
+      now: input.now()
+    })
+  } catch (error) {
+    throw new AggregateError([error], 'agent session unsupported reservation settlement failed')
+  }
+}
+
 export async function settlePostAcquisitionAttachFailure(
   input: AttachFlowInput,
   record: AgentSessionRecord,

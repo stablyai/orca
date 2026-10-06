@@ -90,6 +90,7 @@ export type StructuredAgentSessionRuntimeDeps = {
   hostId: string
   /** Key id this host's claims are minted under. */
   claimKeyId: string
+  findTerminalAgentSessionOwner?: StructuredAgentSessionHostDeps['findTerminalAgentSessionOwner']
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCodexCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
   resolveClaudeCommand?: () => string
@@ -278,6 +279,9 @@ async function installOnJournal(
     recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
     journalDatabase,
     claimKeyId: deps.claimKeyId,
+    ...(deps.findTerminalAgentSessionOwner
+      ? { findTerminalAgentSessionOwner: deps.findTerminalAgentSessionOwner }
+      : {}),
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
     ...(deps.resolveLaunchArgs

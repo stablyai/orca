@@ -118,6 +118,10 @@ export type StructuredAgentSessionHostDeps = {
   /** The host's one chat journal database. */
   journalDatabase: JournalHostDatabase
   claimKeyId: string
+  /** Checks a provider conversation against the terminal owner registry on this execution host. */
+  findTerminalAgentSessionOwner?: (
+    params: AgentSessionAttachParams
+  ) => Promise<'available' | 'owned' | 'unknown'>
   probeOwner?: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
   probeOwners?: (
     records: readonly AgentSessionRecord[]

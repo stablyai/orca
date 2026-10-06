@@ -110,6 +110,7 @@ export function buildMobileNativeChatControllerResult(args: {
       ? args.structuredNativeChatSend.sendWithOutcome
       : args.handleNativeChatSendWithOutcome,
     readSeededLaunchDraft: args.readSeededLaunchDraft,
-    nativeChatSessionOptions: args.nativeChatSessionOptions
+    nativeChatSessionOptions: args.nativeChatSessionOptions,
+    chatProviderSessions: structuredNativeChat.providerSessions
   }
 }
