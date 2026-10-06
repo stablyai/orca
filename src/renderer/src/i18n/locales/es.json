@@ -17878,6 +17878,12 @@
     },
     "native-chat": {
       "reasoning": "Razonamiento",
+      "contextMenu": {
+        "copyOrcaSessionId": "Copiar ID de sesión de Orca",
+        "orcaSessionIdCopied": "ID de sesión de Orca copiado",
+        "orcaSessionIdCopyFailed": "No se pudo copiar el ID de sesión de Orca",
+        "orcaSessionIdTooltip": "El ID de Orca para este chat, distinto del ID de sesión propio de la CLI del agente. Los agentes lo usan para referirse entre sí a través de Orca."
+      },
       "failureWords": {
         "theAgent": "El agente",
         "providerStartFailed": "{{agent}} se detuvo antes de terminar de iniciarse.",
@@ -18002,43 +18008,6 @@
         "chatNotFound": "Orca no encuentra este chat.",
         "startNewChat": "Inicie un chat nuevo para continuar.",
         "tryAgain": "Vuelva a intentarlo."
-      },
-      "taskList": {
-        "title": "Tareas",
-        "completed": "Completado",
-        "inProgress": "En curso",
-        "pending": "Pendiente",
-        "empty": "No hay tareas",
-        "progress": "{{completed}} de {{total}} tareas completadas",
-        "added": "Se añadió {{task}}",
-        "removed": "Se eliminó {{task}}",
-        "started": "Se inició {{task}}",
-        "finished": "Se completó {{task}}",
-        "reset": "Marcada como pendiente: {{task}}",
-        "updated": "Se actualizó {{task}}",
-        "unchanged": "Sin cambios en las tareas",
-        "showAll": "Lista completa de tareas"
-      },
-      "turnDiff": {
-        "one": "1 archivo modificado",
-        "many": "{{count}} archivos modificados",
-        "partial": "Diff parcial",
-        "recorded": "Totales de las ediciones registradas en este turno."
-      },
-      "receipt": {
-        "unavailable": "La respuesta seleccionada no está disponible",
-        "cancelled": "Cancelado",
-        "resolved": "Resuelto",
-        "resolver": "Respondido en {{device}}",
-        "cancelledBy": "Cancelado en {{device}}"
-      },
-      "notices": {
-        "compaction": "Contexto compactado",
-        "details": "Detalles",
-        "plan": "Plan",
-        "historyRepaired": "No se pudo cargar parte del historial de este chat.",
-        "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla.",
-        "stoppedBeforeStart": "Detenido antes de que el agente empezara"
       },
       "composer": {
         "imageUnsupported": "Este agente no admite pegar imágenes.",
@@ -18207,9 +18176,6 @@
         "runLiveToolOne": "Usando 1 herramienta",
         "runLiveToolMany": "Usando {{value0}} herramientas"
       },
-      "providerFrame": {
-        "byteLength": "{{value0}} bytes"
-      },
       "status": {
         "responding": "El agente está respondiendo",
         "stopping": "Deteniendo…",
@@ -18222,6 +18188,136 @@
         "workingFor": "Trabajando durante {{value0}}",
         "workedFor": "Trabajó durante {{value0}}",
         "toggleDetails": "Alternar detalles del turno"
+      },
+      "jumpToLatest": "Saltar a lo último",
+      "toggle": {
+        "showTerminal": "Mostrar terminal",
+        "showChat": "Mostrar vista de chat"
+      },
+      "state": {
+        "loading": {
+          "label": "Cargando chat",
+          "title": "Cargando conversación…",
+          "subtitle": "Leyendo la transcripción del agente."
+        },
+        "error": {
+          "title": "No se pudo cargar la conversación",
+          "subtitle": "No se pudo leer la transcripción. Vuelva a la terminal para seguir trabajando."
+        },
+        "reconnecting": "Reconectando con este chat…",
+        "pairHost": "Empareje un host para ver el historial de chat del agente.",
+        "notAgent": {
+          "title": "No hay conversación aquí",
+          "subtitle": "Este terminal no está ejecutando un agente de código reconocido."
+        },
+        "empty": {
+          "title": "Iniciar un chat con {{value0}}",
+          "subtitle": "Pídale a {{value0}} que inspeccione el código, explique el resultado o realice un cambio."
+        }
+      },
+      "stop": "Detener el agente",
+      "copyMessage": {
+        "copied": "Copiado",
+        "copy": "Copiar mensaje"
+      },
+      "scrollMessageToTop": "Desplazar este mensaje hacia arriba",
+      "loadingEarlier": "Cargando…",
+      "loadEarlier": "Cargar mensajes anteriores",
+      "loadingEarlierMessages": "Cargando mensajes anteriores…",
+      "prompt": {
+        "collapse": "Contraer",
+        "expand": "Expandir"
+      },
+      "question": {
+        "step": "Paso {{value0}}",
+        "other": "Otro…",
+        "otherPlaceholder": "Escribe tu respuesta",
+        "cancel": "Cancelar",
+        "send": "Enviar",
+        "next": "Siguiente",
+        "skip": "Omitir",
+        "sending": "Enviando…"
+      },
+      "approval": {
+        "title": "¿Permitir {{value0}}?",
+        "allow": "Permitir",
+        "deny": "Denegar",
+        "cancel": "Cancelar",
+        "reason": "Motivo",
+        "needsAccess": "Necesita acceso a",
+        "needsNewerOrca": "Esta solicitud necesita una versión más reciente de Orca.",
+        "plan": {
+          "file": "Archivo del plan"
+        }
+      },
+      "launchPromptNotDelivered": "No entregado — revisa la terminal",
+      "fileLinks": {
+        "notFound": "No se encontró el archivo: {{value0}}",
+        "unverifiable": "No se pudo comprobar {{value0}}: {{value1}}",
+        "unresolved": "No se pudo resolver {{value0}} en este espacio de trabajo"
+      },
+      "contextUsage": {
+        "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
+        "title": "Contexto",
+        "estimated": "Estimado a partir de la última respuesta."
+      },
+      "dismissDeliveryNotice": "Descartar",
+      "messageNotSent": "Mensaje no enviado",
+      "deliveryUnconfirmed": "Entrega sin confirmar — revisa el chat antes de reintentar",
+      "messageSending": "Enviando…",
+      "subagents": {
+        "state": {
+          "completed": "completado",
+          "working": "trabajando",
+          "idle": "inactivo",
+          "failed": "con error",
+          "stopped": "detenido",
+          "unverifiable": "no verificable",
+          "workingCount": "{{value0}} trabajando",
+          "idleCount": "{{value0}} inactivos",
+          "failedCount": "{{value0}} con error",
+          "stoppedCount": "{{value0}} detenidos",
+          "unverifiableCount": "{{value0}} no verificables"
+        },
+        "startedOne": "Se inició 1 subagente",
+        "startedN": "Se iniciaron {{value0}} subagentes",
+        "ranOne": "Se ejecutó 1 subagente",
+        "ranN": "Se ejecutaron {{value0}} subagentes",
+        "tokens": "{{value0}} tokens",
+        "unnamed": "Subagente"
+      },
+      "queuedMessages": {
+        "alreadySent": "Este mensaje ya se envió.",
+        "editAlreadySent": "Ya se envió — tu texto sigue en el cuadro de mensaje.",
+        "listLabel": "Mensajes en cola",
+        "behindReturnedHold": "En espera: un mensaje anterior necesita atención",
+        "awaitingAnswerHold": "Esperando tu respuesta",
+        "steer": "Enviar ahora",
+        "send": "Enviar",
+        "steerHint": "Enviar sin interrumpir al modelo",
+        "sendHint": "Enviar este mensaje ahora",
+        "delete": "Eliminar",
+        "moreActions": "Más acciones",
+        "editMessage": "Editar mensaje",
+        "turnOffQueueing": "Desactivar la cola",
+        "withdrawnHold": "Detenido antes de enviarse",
+        "pausedSendFailed": "No se pudo enviar. Pulsa Enviar para reintentar.",
+        "pausedKept": "Aún no se ha enviado. Pulsa Enviar para enviarlo.",
+        "paused": "En pausa",
+        "queuePausedStopped": "Cola en pausa porque interrumpiste",
+        "queuePausedRestarted": "Cola en pausa porque Orca se reinició",
+        "queuePausedCleared": "Cola en pausa después de que borraste la conversación",
+        "queuePaused": "Cola en pausa",
+        "resume": "Reanudar"
+      },
+      "thought": "Pensó",
+      "thoughtForDuration": "Pensó durante {{duration}}",
+      "receipt": {
+        "unavailable": "La respuesta seleccionada no está disponible",
+        "cancelled": "Cancelado",
+        "resolved": "Resuelto",
+        "resolver": "Respondido en {{device}}",
+        "cancelledBy": "Cancelado en {{device}}"
       },
       "backgroundTasks": {
         "monitoring": "Supervisando tareas en segundo plano",
@@ -18269,121 +18365,50 @@
         "groupWorkflows": "Flujos de trabajo",
         "groupTasks": "Tareas"
       },
-      "jumpToLatest": "Saltar a lo último",
-      "toggle": {
-        "showTerminal": "Mostrar terminal",
-        "showChat": "Mostrar vista de chat"
+      "taskList": {
+        "title": "Tareas",
+        "completed": "Completado",
+        "inProgress": "En curso",
+        "pending": "Pendiente",
+        "empty": "No hay tareas",
+        "progress": "{{completed}} de {{total}} tareas completadas",
+        "added": "Se añadió {{task}}",
+        "removed": "Se eliminó {{task}}",
+        "started": "Se inició {{task}}",
+        "finished": "Se completó {{task}}",
+        "reset": "Marcada como pendiente: {{task}}",
+        "updated": "Se actualizó {{task}}",
+        "unchanged": "Sin cambios en las tareas",
+        "showAll": "Lista completa de tareas"
       },
-      "state": {
-        "loading": {
-          "label": "Cargando chat",
-          "title": "Cargando conversación…",
-          "subtitle": "Leyendo la transcripción del agente."
-        },
-        "error": {
-          "title": "No se pudo cargar la conversación",
-          "subtitle": "No se pudo leer la transcripción. Vuelva a la terminal para seguir trabajando."
-        },
-        "reconnecting": "Reconectando con este chat…",
-        "pairHost": "Empareje un host para ver el historial de chat del agente.",
-        "notAgent": {
-          "title": "No hay conversación aquí",
-          "subtitle": "Este terminal no está ejecutando un agente de código reconocido."
-        },
-        "empty": {
-          "title": "Iniciar un chat con {{value0}}",
-          "subtitle": "Pídale a {{value0}} que inspeccione el código, explique el resultado o realice un cambio."
-        }
+      "turnDiff": {
+        "one": "1 archivo modificado",
+        "many": "{{count}} archivos modificados",
+        "partial": "Diff parcial",
+        "recorded": "Totales de las ediciones registradas en este turno."
       },
-      "stop": "Detener el agente",
-      "copyMessage": {
-        "copied": "Copiado",
-        "copy": "Copiar mensaje"
+      "notices": {
+        "compaction": "Contexto compactado",
+        "details": "Detalles",
+        "plan": "Plan",
+        "historyRepaired": "No se pudo cargar parte del historial de este chat.",
+        "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla.",
+        "stoppedBeforeStart": "Detenido antes de que el agente empezara"
       },
-      "scrollMessageToTop": "Desplazar este mensaje hacia arriba",
-      "loadingEarlier": "Cargando…",
-      "loadEarlier": "Cargar mensajes anteriores",
-      "loadingEarlierMessages": "Cargando mensajes anteriores…",
+      "providerFrame": {
+        "byteLength": "{{value0}} bytes"
+      },
       "railLabel": "Tus mensajes",
       "railImageMessage": "Imagen adjunta",
       "railEmptyMessage": "Mensaje",
-      "prompt": {
-        "collapse": "Contraer",
-        "expand": "Expandir"
-      },
-      "question": {
-        "step": "Paso {{value0}}",
-        "other": "Otro…",
-        "otherPlaceholder": "Escribe tu respuesta",
-        "cancel": "Cancelar",
-        "send": "Enviar",
-        "next": "Siguiente",
-        "skip": "Omitir",
-        "sending": "Enviando…"
-      },
       "ask": {
         "awaiting": "Esperando respuesta del usuario:",
         "awaitingUnnamed": "Esperando entrada del usuario",
         "asked": "Preguntado:",
         "questionCount": "{{value0}} preguntas"
       },
-      "approval": {
-        "title": "¿Permitir {{value0}}?",
-        "allow": "Permitir",
-        "deny": "Denegar",
-        "cancel": "Cancelar",
-        "reason": "Motivo",
-        "needsAccess": "Necesita acceso a",
-        "needsNewerOrca": "Esta solicitud necesita una versión más reciente de Orca.",
-        "plan": {
-          "file": "Archivo del plan"
-        }
-      },
-      "launchPromptNotDelivered": "No entregado — revisa la terminal",
-      "subagents": {
-        "state": {
-          "completed": "completado",
-          "working": "trabajando",
-          "idle": "inactivo",
-          "failed": "con error",
-          "stopped": "detenido",
-          "unverifiable": "no verificable",
-          "workingCount": "{{value0}} trabajando",
-          "idleCount": "{{value0}} inactivos",
-          "failedCount": "{{value0}} con error",
-          "stoppedCount": "{{value0}} detenidos",
-          "unverifiableCount": "{{value0}} no verificables"
-        },
-        "startedOne": "Se inició 1 subagente",
-        "startedN": "Se iniciaron {{value0}} subagentes",
-        "ranOne": "Se ejecutó 1 subagente",
-        "ranN": "Se ejecutaron {{value0}} subagentes",
-        "tokens": "{{value0}} tokens",
-        "unnamed": "Subagente"
-      },
       "conversationCommand": {
         "pendingWork": "Espera a que terminen el trabajo y los mensajes pendientes antes de usar este comando."
-      },
-      "rewind": {
-        "unsupported": "Este chat no puede volver a un mensaje anterior.",
-        "historyNotPaginated": "Este chat antiguo de Codex no puede volver a un mensaje anterior. Inicia un chat nuevo para usar Volver hasta aquí.",
-        "busy": "Disponible cuando el agente esté inactivo y no haya nada pendiente de tu respuesta en este chat.",
-        "staleEpoch": "La conversación ha cambiado. Revisa los últimos mensajes e inténtalo de nuevo.",
-        "invalidTarget": "La conversación no puede volver a este mensaje. No se ha cambiado nada.",
-        "historyLimit": "Esta conversación es demasiado larga para retroceder en ella. No se ha cambiado nada.",
-        "providerRefused": "El agente no pudo volver a este mensaje.",
-        "proofMismatch": "El historial del agente no coincidía con este chat. Revisa la conversación antes de continuar.",
-        "outcomeUnknown": "Orca no pudo confirmar si la conversación volvió a un mensaje anterior. Lo comprobará antes de enviar tu próximo mensaje.",
-        "outcomeUnknownReturned": "Orca no pudo confirmar si la conversación volvió a este mensaje. Tu mensaje está de nuevo en el cuadro de texto y Orca comprobará la conversación antes de enviar el siguiente.",
-        "timeout": "El chat no se actualizó tras volver a este mensaje. Ábrelo de nuevo para ver los últimos cambios.",
-        "refused": "Orca no pudo volver a este mensaje. Revisa la conversación antes de continuar.",
-        "unavailable": "Espera a que el chat termine de conectarse.",
-        "pending": "Espera a que la conversación vuelva al mensaje anterior.",
-        "title": "¿Volver hasta aquí?",
-        "confirmation": "¿Descartar este mensaje y todos los posteriores? El mensaje vuelve al cuadro de texto para que puedas editarlo y reenviarlo. Se conservan los cambios en los archivos del disco.",
-        "confirm": "Volver atrás",
-        "cancel": "Cancelar",
-        "action": "Volver hasta aquí"
       },
       "drop": {
         "title": "Suelta para adjuntar a este chat",
@@ -18412,56 +18437,31 @@
         "limited": "Objetivo limitado",
         "attachmentsUnsupported": "Quita los adjuntos antes de establecer un objetivo."
       },
-      "fileLinks": {
-        "notFound": "No se encontró el archivo: {{value0}}",
-        "unverifiable": "No se pudo comprobar {{value0}}: {{value1}}",
-        "unresolved": "No se pudo resolver {{value0}} en este espacio de trabajo"
-      },
-      "contextUsage": {
-        "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
-        "title": "Contexto",
-        "estimated": "Estimado a partir de la última respuesta."
-      },
-      "contextMenu": {
-        "copyOrcaSessionId": "Copiar ID de sesión de Orca",
-        "orcaSessionIdCopied": "ID de sesión de Orca copiado",
-        "orcaSessionIdCopyFailed": "No se pudo copiar el ID de sesión de Orca",
-        "orcaSessionIdTooltip": "El ID de Orca para este chat, distinto del ID de sesión propio de la CLI del agente. Los agentes lo usan para referirse entre sí a través de Orca."
-      },
-      "dismissDeliveryNotice": "Descartar",
-      "messageNotSent": "Mensaje no enviado",
-      "deliveryUnconfirmed": "Entrega sin confirmar — revisa el chat antes de reintentar",
-      "messageSending": "Enviando…",
-      "queuedMessages": {
-        "alreadySent": "Este mensaje ya se envió.",
-        "editAlreadySent": "Ya se envió — tu texto sigue en el cuadro de mensaje.",
-        "listLabel": "Mensajes en cola",
-        "behindReturnedHold": "En espera: un mensaje anterior necesita atención",
-        "awaitingAnswerHold": "Esperando tu respuesta",
-        "steer": "Enviar ahora",
-        "send": "Enviar",
-        "steerHint": "Enviar sin interrumpir al modelo",
-        "sendHint": "Enviar este mensaje ahora",
-        "delete": "Eliminar",
-        "moreActions": "Más acciones",
-        "editMessage": "Editar mensaje",
-        "turnOffQueueing": "Desactivar la cola",
-        "withdrawnHold": "Detenido antes de enviarse",
-        "pausedSendFailed": "No se pudo enviar. Pulsa Enviar para reintentar.",
-        "pausedKept": "Aún no se ha enviado. Pulsa Enviar para enviarlo.",
-        "paused": "En pausa",
-        "queuePausedStopped": "Cola en pausa porque interrumpiste",
-        "queuePausedRestarted": "Cola en pausa porque Orca se reinició",
-        "queuePausedCleared": "Cola en pausa después de que borraste la conversación",
-        "queuePaused": "Cola en pausa",
-        "resume": "Reanudar"
-      },
-      "thought": "Pensó",
-      "thoughtForDuration": "Pensó durante {{duration}}",
       "structuredSessionHostDeclined": "Se abrió {{value0}} en una terminal",
       "structuredSessionHostDeclinedDescription": "Este servidor no puede ejecutar un chat de {{value0}} en este espacio de trabajo.",
       "structuredSessionHostUnreachable": "No se pudo contactar con {{value0}}",
-      "structuredSessionHostUnreachableDescription": "Orca no abrió un chat de {{value0}}. Comprueba la conexión con el servidor y vuelve a intentarlo."
+      "structuredSessionHostUnreachableDescription": "Orca no abrió un chat de {{value0}}. Comprueba la conexión con el servidor y vuelve a intentarlo.",
+      "rewind": {
+        "unsupported": "Este chat no puede volver a un mensaje anterior.",
+        "historyNotPaginated": "Este chat antiguo de Codex no puede volver a un mensaje anterior. Inicia un chat nuevo para usar Volver hasta aquí.",
+        "busy": "Disponible cuando el agente esté inactivo y no haya nada pendiente de tu respuesta en este chat.",
+        "staleEpoch": "La conversación ha cambiado. Revisa los últimos mensajes e inténtalo de nuevo.",
+        "invalidTarget": "La conversación no puede volver a este mensaje. No se ha cambiado nada.",
+        "historyLimit": "Esta conversación es demasiado larga para retroceder en ella. No se ha cambiado nada.",
+        "providerRefused": "El agente no pudo volver a este mensaje.",
+        "proofMismatch": "El historial del agente no coincidía con este chat. Revisa la conversación antes de continuar.",
+        "outcomeUnknown": "Orca no pudo confirmar si la conversación volvió a un mensaje anterior. Lo comprobará antes de enviar tu próximo mensaje.",
+        "outcomeUnknownReturned": "Orca no pudo confirmar si la conversación volvió a este mensaje. Tu mensaje está de nuevo en el cuadro de texto y Orca comprobará la conversación antes de enviar el siguiente.",
+        "timeout": "El chat no se actualizó tras volver a este mensaje. Ábrelo de nuevo para ver los últimos cambios.",
+        "refused": "Orca no pudo volver a este mensaje. Revisa la conversación antes de continuar.",
+        "unavailable": "Espera a que el chat termine de conectarse.",
+        "pending": "Espera a que la conversación vuelva al mensaje anterior.",
+        "title": "¿Volver hasta aquí?",
+        "confirmation": "¿Descartar este mensaje y todos los posteriores? El mensaje vuelve al cuadro de texto para que puedas editarlo y reenviarlo. Se conservan los cambios en los archivos del disco.",
+        "confirm": "Volver atrás",
+        "cancel": "Cancelar",
+        "action": "Volver hasta aquí"
+      }
     },
     "tab": {
       "bar": {
