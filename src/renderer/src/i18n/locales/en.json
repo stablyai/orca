@@ -231,7 +231,14 @@
         "full": "Full",
         "pixels": "px",
         "reset": "Reset",
-        "summary": "{{fontSize}}px · {{width}} width"
+        "summary": "{{fontSize}}px · {{width}} width",
+        "preview": "Preview",
+        "previewSample": {
+          "question": "Why does `pnpm dev` exit right after it starts on Windows?",
+          "explanation": "Use Node instead of **Unix-only** syntax.",
+          "toolSummary": "Searched 1 pattern, read 1 file",
+          "followUp": "Then run `pnpm dev` again."
+        }
       }
     },
     "browser": {

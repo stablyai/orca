@@ -68,7 +68,14 @@
         "full": "全宽",
         "pixels": "px",
         "reset": "重置",
-        "summary": "{{fontSize}}px · {{width}}宽度"
+        "summary": "{{fontSize}}px · {{width}}宽度",
+        "preview": "预览",
+        "previewSample": {
+          "question": "为什么 `pnpm dev` 在 Windows 上刚启动就退出了？",
+          "explanation": "使用 Node，而不是 **Unix 专用**语法。",
+          "toolSummary": "搜索了 1 个模式，读取了 1 个文件",
+          "followUp": "然后再次运行 `pnpm dev`。"
+        }
       }
     },
     "browser": {

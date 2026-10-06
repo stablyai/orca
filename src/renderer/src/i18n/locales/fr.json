@@ -167,7 +167,14 @@
         "full": "Pleine",
         "pixels": "px",
         "reset": "Réinitialiser",
-        "summary": "{{fontSize}}px · Largeur {{width}}"
+        "summary": "{{fontSize}}px · Largeur {{width}}",
+        "preview": "Aperçu",
+        "previewSample": {
+          "question": "Pourquoi `pnpm dev` se ferme-t-il juste après son démarrage sous Windows ?",
+          "explanation": "Utilisez Node, pas la syntaxe **propre à Unix**.",
+          "toolSummary": "1 motif recherché, 1 fichier lu",
+          "followUp": "Puis relancez `pnpm dev`."
+        }
       }
     },
     "browser": {

@@ -13,6 +13,7 @@ import { NumberField, SettingsRow, SettingsSegmentedControl } from './SettingsFo
 import { getChatAppearanceEntriesByKey, getChatWidthOptions } from './chat-appearance-search'
 import { writeNativeChatAppearance } from '../native-chat/native-chat-appearance-write'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { NativeChatAppearancePreview } from '../native-chat/NativeChatAppearancePreview'
 
 export type AppearanceChatSectionProps = {
   settings: GlobalSettings
@@ -38,6 +39,7 @@ export function AppearanceChatSection({
   }
   return (
     <div className="divide-y divide-border/40">
+      <NativeChatAppearancePreview settings={settings} />
       <SearchableSetting {...entries.textSize} forceVisible={forceVisiblePrimary}>
         <NumberField
           label={entries.textSize.title}

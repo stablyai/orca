@@ -68,7 +68,14 @@
         "full": "전체",
         "pixels": "px",
         "reset": "초기화",
-        "summary": "{{fontSize}}px · {{width}} 너비"
+        "summary": "{{fontSize}}px · {{width}} 너비",
+        "preview": "미리보기",
+        "previewSample": {
+          "question": "Windows에서 `pnpm dev`가 시작 직후 종료되는 이유는 무엇인가요?",
+          "explanation": "**Unix 전용** 구문 대신 Node를 사용하세요.",
+          "toolSummary": "패턴 1개 검색, 파일 1개 읽음",
+          "followUp": "그런 다음 `pnpm dev`를 다시 실행하세요."
+        }
       }
     },
     "browser": {

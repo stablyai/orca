@@ -68,7 +68,14 @@
         "full": "全幅",
         "pixels": "px",
         "reset": "リセット",
-        "summary": "{{fontSize}}px · 幅: {{width}}"
+        "summary": "{{fontSize}}px · 幅: {{width}}",
+        "preview": "プレビュー",
+        "previewSample": {
+          "question": "Windows で `pnpm dev` が起動直後に終了するのはなぜですか？",
+          "explanation": "**Unix 専用**の構文ではなく Node を使います。",
+          "toolSummary": "1 件のパターンを検索、1 件のファイルを読み取り",
+          "followUp": "その後、`pnpm dev` を再実行してください。"
+        }
       }
     },
     "browser": {

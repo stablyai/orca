@@ -68,7 +68,14 @@
         "full": "Completo",
         "pixels": "px",
         "reset": "Restablecer",
-        "summary": "{{fontSize}}px · Ancho {{width}}"
+        "summary": "{{fontSize}}px · Ancho {{width}}",
+        "preview": "Vista previa",
+        "previewSample": {
+          "question": "¿Por qué `pnpm dev` se cierra justo después de iniciarse en Windows?",
+          "explanation": "Usa Node, no sintaxis **exclusiva de Unix**.",
+          "toolSummary": "Se buscó 1 patrón y se leyó 1 archivo",
+          "followUp": "Después, ejecuta `pnpm dev` de nuevo."
+        }
       }
     },
     "browser": {
