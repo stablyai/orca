@@ -93,6 +93,15 @@ it('preserves current seed metadata and ordered live output', async () => {
   expect(snapshot.modes.kittyKeyboardFlags).toBe(3)
 })
 
+it('restores kitty keyboard flags from the provider snapshot after replacement', async () => {
+  const { runtime, snapshot } = prepareProvider()
+  runtime.replaceExecutionContext()
+  const model = runtime.model()
+  snapshot.resolve({ ...PROVIDER_SNAPSHOT, kittyKeyboardFlags: 1 })
+  await model.writeChain
+  expect(runtime.model().emulator.kittyKeyboardFlags()).toBe(1)
+})
+
 it('does not acquire a provider snapshot for a model retired before its callback', async () => {
   const { runtime, snapshot, serialize } = prepareProvider()
   runtime.replaceExecutionContext()

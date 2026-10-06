@@ -130,6 +130,14 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
+        // The provider snapshot omits kitty pushes, same as a renderer rehydrate.
+        // Reapply the flags after the seed so a later interrupt still encodes Ctrl+C.
+        if (typeof snapshot.kittyKeyboardFlags === 'number') {
+          await state.emulator.applyKittyKeyboardFlags(snapshot.kittyKeyboardFlags)
+          if (this.headlessTerminals.get(ptyId) !== state) {
+            return
+          }
+        }
         if (snapshot.cwd !== undefined) {
           state.emulator.setCwd(snapshot.cwd)
           if (!this.terminalCwdByPtyId.has(ptyId) && snapshot.cwd?.trim()) {

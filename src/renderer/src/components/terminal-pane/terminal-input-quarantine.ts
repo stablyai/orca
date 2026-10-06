@@ -11,6 +11,11 @@
 // destroys the xterm that was being typed into, and the successor pane is the
 // one that receives the tail.
 
+import {
+  TERMINAL_INTERRUPT_ETX,
+  TERMINAL_INTERRUPT_KITTY_CTRL_C
+} from '../../../../shared/terminal-interrupt-bytes'
+
 /** Absolute cap from arming. A safety valve only — input must never wedge,
  *  even if the terminator never arrives and the pane keeps receiving data. */
 const QUARANTINE_MAX_MS = 5_000
@@ -21,7 +26,7 @@ const QUARANTINE_IDLE_MS = 700
 
 /** CR/LF submit the line; Ctrl-C abandons it. Dropping the terminator itself is
  *  the point — it is the byte that would have submitted the mangled line. */
-const LINE_TERMINATORS = ['\r', '\n', '\x03']
+const LINE_TERMINATORS = ['\r', '\n', TERMINAL_INTERRUPT_ETX, TERMINAL_INTERRUPT_KITTY_CTRL_C]
 
 type QuarantineEntry = {
   armedAt: number

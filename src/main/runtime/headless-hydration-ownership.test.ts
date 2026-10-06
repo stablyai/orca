@@ -1,4 +1,8 @@
 import { expect, it, vi } from 'vitest'
+import {
+  TERMINAL_INTERRUPT_KITTY_CTRL_C,
+  terminalInterruptBytes
+} from '../../shared/terminal-interrupt-bytes'
 import { deferred, makeDeferred } from './orca-runtime-test-fixtures.spec'
 import {
   createHydrationRuntime,
@@ -25,6 +29,31 @@ function prepare() {
   })
   return { runtime, snapshot, serialize }
 }
+
+it('reapplies kitty keyboard flags proven by the renderer buffer', async () => {
+  const { runtime, snapshot } = prepare()
+  runtime.onPtyData(PTY_ID, 'LIVE', 1)
+  const current = runtime.model()
+  snapshot.resolve({ ...RETIRED_SNAPSHOT, seq: 4, kittyKeyboardFlags: 1 })
+  await current.writeChain
+  expect(current.emulator.kittyKeyboardFlags()).toBe(1)
+  expect(terminalInterruptBytes(current.emulator.kittyKeyboardFlags())).toBe(
+    TERMINAL_INTERRUPT_KITTY_CTRL_C
+  )
+})
+
+it('applies kitty keyboard flags when the renderer buffer is empty', async () => {
+  const { runtime, snapshot } = prepare()
+  runtime.onPtyData(PTY_ID, 'LIVE', 1)
+  const current = runtime.model()
+  snapshot.resolve({ ...RETIRED_SNAPSHOT, data: '', seq: 4, kittyKeyboardFlags: 1 })
+  await current.writeChain
+  expect(current.emulator.kittyKeyboardFlags()).toBe(1)
+  expect(terminalInterruptBytes(current.emulator.kittyKeyboardFlags())).toBe(
+    TERMINAL_INTERRUPT_KITTY_CTRL_C
+  )
+  expect(current.emulator.getVisibleLines().join('\n')).not.toContain('RETIRED-SEED')
+})
 
 it('does not start renderer hydration after the model retires before its callback', async () => {
   const { runtime, snapshot, serialize } = prepare()

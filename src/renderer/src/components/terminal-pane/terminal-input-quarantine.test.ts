@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
+  TERMINAL_INTERRUPT_ETX,
+  TERMINAL_INTERRUPT_KITTY_CTRL_C
+} from '../../../../shared/terminal-interrupt-bytes'
+import {
   _resetTerminalInputQuarantineForTests,
   armTerminalInputQuarantine,
   isTerminalInputQuarantined,
@@ -43,7 +47,8 @@ describe('terminal input quarantine', () => {
   it.each([
     ['carriage return', '\r'],
     ['newline', '\n'],
-    ['ctrl-c', '\x03']
+    ['ctrl-c', TERMINAL_INTERRUPT_ETX],
+    ['kitty ctrl-c', TERMINAL_INTERRUPT_KITTY_CTRL_C]
   ])('treats %s as the line terminator', (_label, terminator) => {
     armTerminalInputQuarantine(TAB, 0)
     expect(shouldDropQuarantinedTerminalInput(TAB, terminator, REATTACH_MS)).toBe(true)
@@ -53,6 +58,18 @@ describe('terminal input quarantine', () => {
   it('drops a pasted tail that carries its terminator mid-chunk', () => {
     armTerminalInputQuarantine(TAB, 0)
     expect(shouldDropQuarantinedTerminalInput(TAB, 'cho hi; rm -rf x\r', REATTACH_MS)).toBe(true)
+    expect(isTerminalInputQuarantined(TAB)).toBe(false)
+  })
+
+  it('recognizes Kitty Ctrl+C inside the surviving tail chunk', () => {
+    armTerminalInputQuarantine(TAB, 0)
+    expect(
+      shouldDropQuarantinedTerminalInput(
+        TAB,
+        `partial line${TERMINAL_INTERRUPT_KITTY_CTRL_C}`,
+        REATTACH_MS
+      )
+    ).toBe(true)
     expect(isTerminalInputQuarantined(TAB)).toBe(false)
   })
 

@@ -34,7 +34,9 @@ export class RuntimeTerminalWriter {
       await this.writeChunks(ptyId, text, options)
     }
     if (hasSuffix) {
-      const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
+      // The payload already chose the interrupt bytes. Reading the flags again
+      // after the write delay can send a different sequence than the one counted.
+      const suffix = payload.slice(text.length)
       if (text) {
         // Why: same hazard as the agent-prompt path -- Enter must not overtake text the
         // execution host is still ingesting, and a flat 500 ms cannot cover 16 MB.

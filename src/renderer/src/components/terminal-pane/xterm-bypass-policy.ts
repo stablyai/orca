@@ -1,4 +1,5 @@
 import { keybindingMatchesInput } from '../../../../shared/keybindings'
+import { terminalInterruptBytes } from '../../../../shared/terminal-interrupt-bytes'
 import { isHangulJamoKeyText } from './hangul-jamo-key'
 import { getLayoutBaseCharacterForCode } from '../../lib/keyboard-layout/layout-base-character'
 import {
@@ -73,7 +74,11 @@ export type XtermImeKeyboardOptions = {
   isLinux: boolean
 }
 
-export const TERMINAL_INTERRUPT_INPUT = '\x03'
+/** Encodes Ctrl+C using the shared bytes for the pane's current kitty flags. */
+export function resolveTerminalInterruptKeyboardInput(kittyKeyboardFlags: number): string {
+  return terminalInterruptBytes(kittyKeyboardFlags)
+}
+
 const TERMINAL_MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift'])
 const TERMINAL_IME_OWNED_KEYS = new Set([
   'ArrowDown',
@@ -300,8 +305,8 @@ export function isAppOwnedCopyChord(
 }
 
 /**
- * Decide whether plain Ctrl+C should bypass xterm's kitty CSI-u encoder and
- * be sent as ETX through Terminal.input() instead.
+ * Decide whether plain Ctrl+C should bypass xterm's key encoder so the shared
+ * interrupt encoder can select ETX or Kitty CSI-u for the pane's negotiated flags.
  */
 export function shouldHandleTerminalInterruptKeyboardEvent(
   event: XtermBypassEvent,

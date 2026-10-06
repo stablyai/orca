@@ -422,6 +422,62 @@ describe('connectPanePty', () => {
     })
   })
 
+  it('infers Kitty Ctrl+C from a non-Latin key path without captured intent', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { pasteTerminalText } = await import('./terminal-bracketed-paste')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    vi.useFakeTimers()
+    vi.setSystemTime(1_100)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      state: 'working',
+      prompt: 'stop from a non-Latin keyboard layout',
+      updatedAt: 1_000,
+      stateStartedAt: 900,
+      agentType: 'custom-agent',
+      paneKey,
+      terminalTitle: 'Codex working',
+      stateHistory: []
+    }
+    const terminalTarget = createKeyboardEventTarget()
+    const pane = createPane(1)
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    pane.terminal.modes.bracketedPasteMode = true
+    const observedIgnoreValues: (boolean | undefined)[] = []
+    pane.terminal.paste.mockImplementation(() => {
+      observedIgnoreValues.push(pane.terminal.options.ignoreBracketedPasteMode)
+    })
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    terminalTarget.dispatch(keyEvent({ key: 'ㅊ', code: 'KeyC', ctrlKey: true }))
+    ;(onDataHandler as unknown as (data: string) => void)('\x1b[99;5u')
+    await flushAsyncTicks()
+    vi.advanceTimersByTime(500)
+    await flushAsyncTicks()
+    pasteTerminalText(pane.terminal as never, 'a69ce28e1d092e0c8825cd1a109ac36409962bc1')
+
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x1b[99;5u', 'query-reply')
+    expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalledWith({
+      paneKey,
+      baselineUpdatedAt: 1_000,
+      baselineStateStartedAt: 900,
+      baselinePrompt: 'stop from a non-Latin keyboard layout',
+      baselineAgentType: 'custom-agent',
+      intent: 'ctrl-c'
+    })
+    expect(observedIgnoreValues).toEqual([true])
+    expect(pane.terminal.options.ignoreBracketedPasteMode).toBe(false)
+  })
+
   it('marks bracketed paste as stale after acknowledged Ctrl+C input', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { pasteTerminalText } = await import('./terminal-bracketed-paste')

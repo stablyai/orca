@@ -2,12 +2,17 @@ import {
   isTerminalInputTooLargeWithYield,
   TERMINAL_INPUT_TOO_LARGE_ERROR
 } from '../../shared/terminal-input'
+import { terminalInterruptBytes } from '../../shared/terminal-interrupt-bytes'
 
-export function buildTerminalSendPayload(action: {
-  text?: string
-  enter?: boolean
-  interrupt?: boolean
-}): string | null {
+/** Builds terminal.send bytes using the PTY's current kitty flags for Ctrl+C. */
+export function buildTerminalSendPayload(
+  action: {
+    text?: string
+    enter?: boolean
+    interrupt?: boolean
+  },
+  kittyKeyboardFlags = 0
+): string | null {
   let payload = ''
   if (typeof action.text === 'string' && action.text.length > 0) {
     payload += action.text
@@ -16,7 +21,7 @@ export function buildTerminalSendPayload(action: {
     payload += '\r'
   }
   if (action.interrupt) {
-    payload += '\x03'
+    payload += terminalInterruptBytes(kittyKeyboardFlags)
   }
   return payload.length > 0 ? payload : null
 }

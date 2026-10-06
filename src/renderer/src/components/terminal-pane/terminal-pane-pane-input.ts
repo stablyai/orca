@@ -26,7 +26,7 @@ import {
   shouldSuppressTerminalImeKeyboardEvent,
   shouldSuppressTerminalInterruptKeyup,
   shouldSuppressTerminalModifierKeyboardEvent,
-  TERMINAL_INTERRUPT_INPUT
+  resolveTerminalInterruptKeyboardInput
 } from './xterm-bypass-policy'
 import { markTerminalPinnedViewport } from '@/lib/pane-manager/terminal-scroll-intent'
 import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll-intent-settle'
@@ -139,7 +139,11 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     ) {
       if (event.type === 'keydown') {
         pendingTerminalInterruptKeyup = true
-        pane.terminal.input(TERMINAL_INTERRUPT_INPUT)
+        pane.terminal.input(
+          resolveTerminalInterruptKeyboardInput(
+            paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
+          )
+        )
       } else {
         pendingTerminalInterruptKeyup = false
       }

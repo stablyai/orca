@@ -4,6 +4,7 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import { createAgentInterruptInference } from '../agent-interrupt-inference'
 import { createAgentQuestionAnsweredInference } from '../agent-question-answered-inference'
 import type { AgentInterruptInputIntent } from '../../../../../shared/agent-interrupt-intent'
+import { isTerminalInterruptInput } from '../../../../../shared/terminal-interrupt-bytes'
 import { markTerminalBracketedPasteInterrupted } from '../terminal-bracketed-paste'
 
 import { REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS } from './foreground-output-scan'
@@ -121,11 +122,12 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
   }
   session.inputMatchesIntent = (intent: AgentInterruptInputIntent, data: string): boolean => {
     return (
-      (intent === 'plain-escape' && data === '\x1b') || (intent === 'ctrl-c' && data === '\x03')
+      (intent === 'plain-escape' && data === '\x1b') ||
+      (intent === 'ctrl-c' && isTerminalInterruptInput(data))
     )
   }
   session.inferIntentFromExactTerminalInput = (data: string): AgentInterruptInputIntent | null => {
-    if (data === '\x03') {
+    if (isTerminalInterruptInput(data)) {
       return 'ctrl-c'
     }
     if (data === '\x1b') {
@@ -146,7 +148,7 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
     data: string,
     intent: AgentInterruptInputIntent | null = null
   ): void => {
-    if (intent === 'ctrl-c' || data === '\x03') {
+    if (intent === 'ctrl-c' || isTerminalInterruptInput(data)) {
       markTerminalBracketedPasteInterrupted(session.pane.terminal)
     }
     // Why: every delivered-input path funnels through here, so this is where a

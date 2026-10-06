@@ -2,6 +2,10 @@ import { detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
 import type { AgentType } from '../../../../../shared/agent-status-types'
 import { AGENT_INTERRUPT_SETTLE_MS } from '../../../../../shared/agent-interrupt-intent'
+import {
+  containsTerminalInterruptInput,
+  TERMINAL_INTERRUPT_KITTY_CTRL_C
+} from '../../../../../shared/terminal-interrupt-bytes'
 import { resolvePaneAgentOwner } from '../../../../../shared/pane-agent-owner'
 
 import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
@@ -13,86 +17,131 @@ import {
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-export function installShellCommandInference(session: ConnectPanePtySession): void {
-  session.observeAcceptedShellCommandInput = (data: string): void => {
-    if (
-      data.includes('\r') ||
-      data.includes('\n') ||
-      data.includes('\x03') ||
-      data.includes('\x04')
-    ) {
-      // Why: shells without OSC 133 give no command/exit boundary. An accepted
-      // submit or interrupt revokes stale trusted Shift+Enter routing and confirms once.
-      session.requestKnownWindowsShiftEnterReconfirmation()
-    }
-    if (session.commandInferredPaneAgent) {
-      return
-    }
-    // Why: bytes typed inside a live agent TUI are prompt text, not shell
-    // commands, even if they spell another agent binary name.
-    if (session.hasFreshPaneAgentSurface()) {
+type ShellCommandInputState = {
+  commandInferredPaneAgent: unknown
+  requestKnownWindowsShiftEnterReconfirmation: () => void
+  hasFreshPaneAgentSurface: () => boolean
+  shellCommandInferenceSuspendedUntilCommandEnd: boolean
+  resetPendingShellCommandLine: () => void
+  rememberCommandInferredPaneAgent: () => void
+  deletePendingShellCommandCharacter: () => void
+  deletePendingShellCommandWord: () => void
+  consumeShellCommandCsiSequence: (data: string, index: number) => number | null
+  appendPendingShellCommandInput: (text: string) => void
+}
+
+export function observeAcceptedShellCommandInput(
+  session: ShellCommandInputState,
+  data: string
+): void {
+  if (
+    data.includes('\r') ||
+    data.includes('\n') ||
+    containsTerminalInterruptInput(data) ||
+    data.includes('\x04')
+  ) {
+    // Why: shells without OSC 133 give no command/exit boundary. An accepted
+    // submit or interrupt revokes stale trusted Shift+Enter routing and confirms once.
+    session.requestKnownWindowsShiftEnterReconfirmation()
+  }
+  if (session.commandInferredPaneAgent) {
+    return
+  }
+  // Why: bytes typed inside a live agent TUI are prompt text, not shell
+  // commands, even if they spell another agent binary name.
+  if (session.hasFreshPaneAgentSurface()) {
+    session.resetPendingShellCommandLine()
+    return
+  }
+  if (session.shellCommandInferenceSuspendedUntilCommandEnd) {
+    if (containsTerminalInterruptInput(data) || data.includes('\x15')) {
+      session.shellCommandInferenceSuspendedUntilCommandEnd = false
       session.resetPendingShellCommandLine()
-      return
     }
-    if (session.shellCommandInferenceSuspendedUntilCommandEnd) {
-      if (data.includes('\x03') || data.includes('\x15')) {
-        session.shellCommandInferenceSuspendedUntilCommandEnd = false
-        session.resetPendingShellCommandLine()
-      }
-      if (data.includes('\r') || data.includes('\n')) {
-        session.shellCommandInferenceSuspendedUntilCommandEnd = false
-      }
-      return
+    if (data.includes('\r') || data.includes('\n')) {
+      session.shellCommandInferenceSuspendedUntilCommandEnd = false
     }
-    if (data.length > MANUAL_AGENT_COMMAND_MAX_CHARS) {
+    return
+  }
+  if (data.length > MANUAL_AGENT_COMMAND_MAX_CHARS) {
+    session.resetPendingShellCommandLine()
+    session.shellCommandInferenceSuspendedUntilCommandEnd =
+      !data.includes('\r') && !data.includes('\n')
+    return
+  }
+  for (let index = 0; index < data.length; index += 1) {
+    const char = data[index]!
+    if (char === '\r' || char === '\n') {
+      session.shellCommandInferenceSuspendedUntilCommandEnd = false
+      session.rememberCommandInferredPaneAgent()
+      if (session.commandInferredPaneAgent) {
+        return
+      }
+      continue
+    }
+    if (char === '\x7f' || char === '\b') {
+      session.deletePendingShellCommandCharacter()
+      continue
+    }
+    if (char === '\x17') {
+      session.deletePendingShellCommandWord()
+      continue
+    }
+    if (char === '\x03' || char === '\x15') {
       session.resetPendingShellCommandLine()
-      session.shellCommandInferenceSuspendedUntilCommandEnd =
-        !data.includes('\r') && !data.includes('\n')
-      return
+      continue
     }
-    for (let index = 0; index < data.length; index += 1) {
-      const char = data[index]!
-      if (char === '\r' || char === '\n') {
-        session.shellCommandInferenceSuspendedUntilCommandEnd = false
-        session.rememberCommandInferredPaneAgent()
-        if (session.commandInferredPaneAgent) {
-          return
-        }
-        continue
-      }
-      if (char === '\x7f' || char === '\b') {
-        session.deletePendingShellCommandCharacter()
-        continue
-      }
-      if (char === '\x17') {
-        session.deletePendingShellCommandWord()
-        continue
-      }
-      if (char === '\x03' || char === '\x15') {
+    if (char === '\x1b') {
+      if (data.startsWith(TERMINAL_INTERRUPT_KITTY_CTRL_C, index)) {
         session.resetPendingShellCommandLine()
+        index += TERMINAL_INTERRUPT_KITTY_CTRL_C.length - 1
         continue
       }
-      if (char === '\x1b') {
-        const nextIndex = session.consumeShellCommandCsiSequence(data, index)
-        if (nextIndex !== null) {
-          index = nextIndex - 1
-          continue
-        }
-        session.resetPendingShellCommandLine()
+      const nextIndex = session.consumeShellCommandCsiSequence(data, index)
+      if (nextIndex !== null) {
+        index = nextIndex - 1
         continue
       }
-      if (char < ' ') {
-        session.resetPendingShellCommandLine()
-        continue
-      }
-      if (char >= ' ') {
-        session.appendPendingShellCommandInput(char)
-        if (session.shellCommandInferenceSuspendedUntilCommandEnd) {
-          return
-        }
+      session.resetPendingShellCommandLine()
+      continue
+    }
+    if (char < ' ') {
+      session.resetPendingShellCommandLine()
+      continue
+    }
+    if (char >= ' ') {
+      session.appendPendingShellCommandInput(char)
+      if (session.shellCommandInferenceSuspendedUntilCommandEnd) {
+        return
       }
     }
   }
+}
+
+export function installShellCommandInference(session: ConnectPanePtySession): void {
+  const inputState: ShellCommandInputState = {
+    get commandInferredPaneAgent() {
+      return session.commandInferredPaneAgent
+    },
+    requestKnownWindowsShiftEnterReconfirmation: () =>
+      session.requestKnownWindowsShiftEnterReconfirmation(),
+    hasFreshPaneAgentSurface: () => session.hasFreshPaneAgentSurface(),
+    get shellCommandInferenceSuspendedUntilCommandEnd() {
+      return session.shellCommandInferenceSuspendedUntilCommandEnd
+    },
+    set shellCommandInferenceSuspendedUntilCommandEnd(value: boolean) {
+      session.shellCommandInferenceSuspendedUntilCommandEnd = value
+    },
+    resetPendingShellCommandLine: () => session.resetPendingShellCommandLine(),
+    rememberCommandInferredPaneAgent: () => session.rememberCommandInferredPaneAgent(),
+    deletePendingShellCommandCharacter: () => session.deletePendingShellCommandCharacter(),
+    deletePendingShellCommandWord: () => session.deletePendingShellCommandWord(),
+    consumeShellCommandCsiSequence: (data: string, index: number) =>
+      session.consumeShellCommandCsiSequence(data, index),
+    appendPendingShellCommandInput: (text: string) => session.appendPendingShellCommandInput(text)
+  }
+  session.observeAcceptedShellCommandInput = (data: string): void =>
+    observeAcceptedShellCommandInput(inputState, data)
   /**
    * Resolves the authoritative owner agent type for this pane, checking tab launch,
    * pane startup, typed command ownership, and store state configuration.
