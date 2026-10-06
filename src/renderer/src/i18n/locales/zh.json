@@ -18437,7 +18437,9 @@
     "settings": {
       "TerminalInteraction": {
         "copyTrimsGutter": "修剪副本上的装订线",
-        "copyTrimsGutterDescription": "将左侧装订线智能体输出绘制在后面，因此复制的文本不会缩进。仅删除每个选定行共享的缩进。"
+        "copyTrimsGutterDescription": "将左侧装订线智能体输出绘制在后面，因此复制的文本不会缩进。仅删除每个选定行共享的缩进。",
+        "smoothScrolling": "平滑滚动",
+        "smoothScrollingDescription": "使用鼠标滚轮滚动终端回滚内容时显示动画。触控板和全屏终端应用不受影响。"
       },
       "terminal": {
         "clipboard": {
@@ -18449,6 +18451,10 @@
             "whitespace": "空白",
             "spaces": "空间"
           }
+        },
+        "search": {
+          "smooth": "平滑",
+          "animation": "动画"
         }
       },
       "nativeChat": {

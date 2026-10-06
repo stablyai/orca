@@ -10,6 +10,7 @@ import {
   getTerminalScrollIntentKind,
   markTerminalFollowOutput
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import { ensureImmediateTerminalScroll } from '@/lib/pane-manager/terminal-wheel-smooth-scroll'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
 
@@ -123,6 +124,7 @@ export function useTerminalScrollVisibilityMemory({
         if (getTerminalScrollIntentKind(pane.terminal) === 'followOutput') {
           cancelDeferredScrollRestore(pane.terminal)
           markTerminalFollowOutput(pane.terminal)
+          ensureImmediateTerminalScroll(pane.terminal)
           pane.terminal.scrollToBottom()
           didScroll = true
         }

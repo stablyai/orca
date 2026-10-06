@@ -121,7 +121,8 @@ function subscribeScrollIntentUserInputResync(
 export function attachTerminalScrollIntentTracking(
   terminal: TerminalScrollIntentTarget,
   host: HTMLElement,
-  intentKey?: TerminalScrollIntentKey
+  intentKey?: TerminalScrollIntentKey,
+  options: { wheelScrollAnimationMs?: (event: WheelEvent) => number } = {}
 ): IDisposable {
   if (!bindTerminalScrollIntentKey(terminal, intentKey)) {
     syncTerminalScrollIntentFromViewport(terminal)
@@ -133,6 +134,7 @@ export function attachTerminalScrollIntentTracking(
   let nextInteractionRevision = 0
   let latestCommittedInteractionRevision = 0
   let postRebuildSync: { revision: number; mode: 'sample' | 'preservePinnedAtBottom' } | null = null
+  let latestWheelRevision = 0
   const captureInteractionRevision = (): number => (nextInteractionRevision += 1)
 
   const syncFromViewportOrAfterRebuild = (
@@ -198,15 +200,23 @@ export function attachTerminalScrollIntentTracking(
     if (!syncFromViewportOrAfterRebuild(event.deltaY < 0 ? 'preservePinnedAtBottom' : 'sample')) {
       return
     }
+    // Why: a smooth wheel animation is still moving the viewport at the default settle tick.
+    const scrollAnimationMs = options.wheelScrollAnimationMs?.(event) ?? 0
+    const wheelRevision = (latestWheelRevision += 1)
+    // Why: an animated wheel has not moved the viewport yet when an earlier wheel's settle
+    // fires, so that stale settle would overwrite this wheel's intent.
+    const shouldSync =
+      scrollAnimationMs > 0 ? () => isActive() && wheelRevision === latestWheelRevision : isActive
     if (event.deltaY < 0) {
       markTerminalPinnedViewport(terminal)
       syncTerminalScrollIntentSoon(terminal, {
         preservePinnedAtBottom: true,
-        shouldSync: isActive
+        shouldSync,
+        scrollAnimationMs
       })
       return
     }
-    syncTerminalScrollIntentSoon(terminal, { shouldSync: isActive })
+    syncTerminalScrollIntentSoon(terminal, { shouldSync, scrollAnimationMs })
   }
 
   const onPointerDown = (event: PointerEvent): void => {

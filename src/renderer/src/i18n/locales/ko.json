@@ -18437,7 +18437,9 @@
     "settings": {
       "TerminalInteraction": {
         "copyTrimsGutter": "복사 시 여백 자르기",
-        "copyTrimsGutterDescription": "왼쪽 배수구 에이전트 출력이 뒤에 그려지므로 복사된 텍스트가 들여쓰기되지 않습니다. 선택한 모든 줄 공유의 들여쓰기만 제거됩니다."
+        "copyTrimsGutterDescription": "왼쪽 배수구 에이전트 출력이 뒤에 그려지므로 복사된 텍스트가 들여쓰기되지 않습니다. 선택한 모든 줄 공유의 들여쓰기만 제거됩니다.",
+        "smoothScrolling": "부드러운 스크롤",
+        "smoothScrollingDescription": "마우스 휠로 터미널 스크롤백을 스크롤할 때 애니메이션을 적용합니다. 트랙패드와 전체 화면 터미널 앱에는 영향을 주지 않습니다."
       },
       "terminal": {
         "clipboard": {
@@ -18449,6 +18451,10 @@
             "whitespace": "공백",
             "spaces": "공백"
           }
+        },
+        "search": {
+          "smooth": "부드러운",
+          "animation": "애니메이션"
         }
       },
       "nativeChat": {

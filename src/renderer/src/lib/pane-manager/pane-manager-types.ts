@@ -71,6 +71,7 @@ export type PaneManagerOptions = {
    *  enabled. Resolved per pane open and toggleable at runtime. */
   terminalInlineImagesEnabled?: () => boolean
   terminalTuiScrollSensitivity?: () => number | undefined
+  terminalSmoothScrolling?: () => boolean
   onLinkClick?: (paneId: number, event: MouseEvent | undefined, url: string) => void
   /** Resolved per hover so link-routing setting changes apply without recreating panes. */
   // Why: required so dropping the wiring is a compile error — an optional hint with a
@@ -153,6 +154,7 @@ export type ManagedPaneInternal = {
   xtermContainer: HTMLElement
   linkTooltip: HTMLElement
   terminalTuiScrollSensitivity?: () => number | undefined
+  terminalSmoothScrolling?: () => boolean
   terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration']
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
@@ -201,6 +203,8 @@ export type ManagedPaneInternal = {
   // Stored so disposePane() can remove DOM-renderer focus synchronization.
   focusClassSyncCleanup?: (() => void) | null
   domBlockFillCleanup?: (() => void) | null
+  // Stored so disposePane() can remove the smooth-scroll wheel and output listeners.
+  wheelSmoothScrollDisposable?: IDisposable | null
   // Stored so disposePane() can remove user-scroll intent listeners.
   terminalScrollIntentDisposable?: IDisposable | null
   // Stored so disposePane() can drop the mouse-encoding parser handlers.

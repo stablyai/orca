@@ -677,12 +677,84 @@ describe('openTerminal — addon and provider wiring', () => {
     openTerminal(pane)
     const disposable = pane.linkifierHoverResetDisposable
     expect(disposable?.dispose).toBeTypeOf('function')
-    expect(pane.terminal.onWriteParsed).toHaveBeenCalledTimes(1)
+    // One subscription each: this hover reset and wheel smooth-scroll output tracking.
+    expect(pane.terminal.onWriteParsed).toHaveBeenCalledTimes(2)
 
     const disposeSpy = vi.spyOn(disposable!, 'dispose')
     disposePane(pane, new Map([[pane.id, pane]]))
     expect(disposeSpy).toHaveBeenCalledTimes(1)
     expect(pane.linkifierHoverResetDisposable).toBeNull()
+  })
+
+  /** The wheel listener the code under test registered on a mocked element. */
+  function registeredWheelListener(target: HTMLElement): {
+    options: unknown
+    wheel: (deltaY: number, wheelDeltaY?: number) => void
+  } {
+    const call = vi.mocked(target.addEventListener).mock.calls.find(([type]) => type === 'wheel')
+    const listener = call?.[1]
+    if (typeof listener !== 'function') {
+      throw new Error('no wheel listener registered')
+    }
+    return {
+      options: call?.[2],
+      wheel: (deltaY, wheelDeltaY = -deltaY * 120) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wheel listeners under test read only deltaY and wheelDeltaY.
+        listener({ deltaY, wheelDeltaY } as unknown as Event)
+      }
+    }
+  }
+
+  it('arms wheel smooth scrolling before xterm handles the wheel', () => {
+    const { pane } = createOpenTerminalHarness()
+    let smoothScrolling = false
+    pane.terminalSmoothScrolling = () => smoothScrolling
+
+    openTerminal(pane)
+
+    const { options, wheel } = registeredWheelListener(pane.terminal.element!)
+    expect(options).toEqual({ capture: true, passive: true })
+    Object.assign(pane.terminal, {
+      buffer: { active: { type: 'normal', viewportY: 10, baseY: 50 } },
+      modes: { mouseTrackingMode: 'none' },
+      options: { smoothScrollDuration: 0 }
+    })
+    wheel(-1)
+    expect(pane.terminal.options.smoothScrollDuration).toBe(0)
+    smoothScrolling = true
+    wheel(-1)
+    expect(pane.terminal.options.smoothScrollDuration).toBe(125)
+
+    const element = pane.terminal.element!
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(vi.mocked(element.removeEventListener)).toHaveBeenCalledWith(
+      'wheel',
+      expect.any(Function),
+      { capture: true }
+    )
+    expect(pane.wheelSmoothScrollDisposable).toBeNull()
+  })
+
+  it('waits out the wheel animation before settling scroll intent only when enabled', () => {
+    vi.useFakeTimers()
+    try {
+      const { pane } = createOpenTerminalHarness()
+      let smoothScrolling = false
+      pane.terminalSmoothScrolling = () => smoothScrolling
+      Object.assign(pane.terminal.buffer.active, { type: 'normal', viewportY: 50, baseY: 50 })
+      openTerminal(pane)
+      const { wheel } = registeredWheelListener(pane.xtermContainer)
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+
+      wheel(1)
+      smoothScrolling = true
+      wheel(1)
+
+      const settleDelays = setTimeoutSpy.mock.calls.map(([, ms]) => ms)
+      expect(settleDelays).toEqual([80, 205])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('installs the mouseleave linkifier hover reset and disposes it', () => {

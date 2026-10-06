@@ -18390,7 +18390,9 @@
       },
       "TerminalInteraction": {
         "copyTrimsGutter": "Recortar margen al copiar",
-        "copyTrimsGutterDescription": "Elimina el margen izquierdo tras el que se dibuja la salida del agente, para que el texto copiado no quede indentado. Solo se quita la indentación que comparten todas las líneas seleccionadas."
+        "copyTrimsGutterDescription": "Elimina el margen izquierdo tras el que se dibuja la salida del agente, para que el texto copiado no quede indentado. Solo se quita la indentación que comparten todas las líneas seleccionadas.",
+        "smoothScrolling": "Desplazamiento suave",
+        "smoothScrollingDescription": "Anima el desplazamiento con la rueda del ratón por el historial de la terminal. Los trackpads y las aplicaciones de terminal a pantalla completa no se ven afectados."
       },
       "terminal": {
         "clipboard": {
@@ -18402,6 +18404,10 @@
             "whitespace": "espacios en blanco",
             "spaces": "espacios"
           }
+        },
+        "search": {
+          "smooth": "suave",
+          "animation": "animación"
         }
       }
     },

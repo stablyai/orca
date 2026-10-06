@@ -18536,7 +18536,9 @@
     "settings": {
       "TerminalInteraction": {
         "copyTrimsGutter": "Couper la gouttière lors de la copie",
-        "copyTrimsGutterDescription": "Déposez la sortie de l'agent de gouttière gauche qui est peinte derrière, donc le texte copié n'est pas en retrait. Seul le retrait de chaque partage de ligne sélectionnée est supprimé."
+        "copyTrimsGutterDescription": "Déposez la sortie de l'agent de gouttière gauche qui est peinte derrière, donc le texte copié n'est pas en retrait. Seul le retrait de chaque partage de ligne sélectionnée est supprimé.",
+        "smoothScrolling": "Défilement fluide",
+        "smoothScrollingDescription": "Anime le défilement à la molette de la souris dans l'historique du terminal. Les pavés tactiles et les applications de terminal en plein écran ne sont pas concernés."
       },
       "terminal": {
         "clipboard": {
@@ -18548,6 +18550,10 @@
             "whitespace": "espace",
             "spaces": "espaces"
           }
+        },
+        "search": {
+          "smooth": "fluide",
+          "animation": "animation"
         }
       },
       "nativeChat": {

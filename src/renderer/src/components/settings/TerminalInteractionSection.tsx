@@ -185,6 +185,35 @@ export function TerminalInteractionSection({
           </div>
         </SearchableSetting>
 
+        <SearchableSetting
+          title={translate(
+            'components.settings.TerminalInteraction.smoothScrolling',
+            'Smooth Scrolling'
+          )}
+          description={translate(
+            'components.settings.TerminalInteraction.smoothScrollingDescription',
+            'Animate mouse-wheel scrolling through terminal scrollback. Trackpads and full-screen terminal apps are unaffected.'
+          )}
+          keywords={['terminal', 'scroll', 'scrolling', 'smooth', 'animation', 'wheel', 'mouse']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'components.settings.TerminalInteraction.smoothScrolling',
+              'Smooth Scrolling'
+            )}
+            description={translate(
+              'components.settings.TerminalInteraction.smoothScrollingDescription',
+              'Animate mouse-wheel scrolling through terminal scrollback. Trackpads and full-screen terminal apps are unaffected.'
+            )}
+            checked={settings.terminalSmoothScrolling}
+            onChange={() =>
+              updateSettings({
+                terminalSmoothScrolling: !settings.terminalSmoothScrolling
+              })
+            }
+          />
+        </SearchableSetting>
+
         {matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry()) ? (
           <SearchableSetting
             title={translate(

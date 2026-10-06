@@ -9,6 +9,7 @@ import {
   buildKittyKeyboardRestore
 } from '../../../../../shared/terminal-mode-reset-profiles'
 import { buildFreshShellViewportBlankingSequence } from '../terminal-restored-viewport'
+import { ensureImmediateTerminalScroll } from '@/lib/pane-manager/terminal-wheel-smooth-scroll'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import {
   getTerminalScrollIntentKind,
@@ -40,6 +41,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
         return
       }
       try {
+        ensureImmediateTerminalScroll(session.pane.terminal)
         session.pane.terminal.scrollToBottom()
         nativeFollowResetComplete = true
         session.cancelFreshSpawnFollowReset()

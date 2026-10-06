@@ -18437,7 +18437,9 @@
     "settings": {
       "TerminalInteraction": {
         "copyTrimsGutter": "コピー時に余白をトリミングする",
-        "copyTrimsGutterDescription": "左側のガターをドロップすると、Agent の出力が後ろに描画されるため、コピーされたテキストはインデントされません。選択した行ごとに共有されるインデントのみが削除されます。"
+        "copyTrimsGutterDescription": "左側のガターをドロップすると、Agent の出力が後ろに描画されるため、コピーされたテキストはインデントされません。選択した行ごとに共有されるインデントのみが削除されます。",
+        "smoothScrolling": "スムーズスクロール",
+        "smoothScrollingDescription": "ターミナルのスクロールバックをマウスホイールでスクロールするときにアニメーションします。トラックパッドと全画面のターミナルアプリには影響しません。"
       },
       "terminal": {
         "clipboard": {
@@ -18449,6 +18451,10 @@
             "whitespace": "空白",
             "spaces": "スペース"
           }
+        },
+        "search": {
+          "smooth": "スムーズ",
+          "animation": "アニメーション"
         }
       },
       "nativeChat": {

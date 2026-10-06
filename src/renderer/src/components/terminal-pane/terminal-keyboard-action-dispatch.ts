@@ -1,4 +1,5 @@
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import { ensureImmediateTerminalScroll } from '@/lib/pane-manager/terminal-wheel-smooth-scroll'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { PtyTransport } from './pty-transport'
 import { copyTerminalSelection } from './terminal-selection-copy'
@@ -124,6 +125,7 @@ export function dispatchTerminalShortcutAction(
     if (!pane) {
       return
     }
+    ensureImmediateTerminalScroll(pane.terminal)
     if (action.position === 'top') {
       markTerminalPinnedViewport(pane.terminal)
       pane.terminal.scrollToLine(0)
