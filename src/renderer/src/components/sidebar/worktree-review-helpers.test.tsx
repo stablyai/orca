@@ -75,6 +75,50 @@ describe('ReviewIcon', () => {
     expect(draft).not.toBe(closed)
   })
 
+  it('shows a queued open PR with the merge-queue glyph in the attention tone', () => {
+    const queuedReview: WorktreeCardPrDisplay = {
+      provider: 'github',
+      number: 1,
+      title: 'Queued',
+      state: 'open',
+      status: 'failure',
+      mergeQueueEntry: { position: 3, state: 'AWAITING_CHECKS' }
+    }
+    const queued = renderToStaticMarkup(<ReviewIcon review={queuedReview} className="size-3" />)
+    const unmergeable = renderToStaticMarkup(
+      <ReviewIcon
+        review={{ ...queuedReview, mergeQueueEntry: { position: 3, state: 'UNMERGEABLE' } }}
+        className="size-3"
+      />
+    )
+    const open = renderToStaticMarkup(
+      <ReviewIcon review={{ ...queuedReview, mergeQueueEntry: null }} className="size-3" />
+    )
+
+    expect(queued).toContain('text-status-warning')
+    expect(queued).not.toContain('text-rose-500/85')
+    expect(queued).not.toBe(open)
+    expect(unmergeable).toContain('text-destructive')
+  })
+
+  it('ignores a stale queue entry once the PR is merged', () => {
+    const merged = renderToStaticMarkup(
+      <ReviewIcon
+        review={{
+          provider: 'github',
+          number: 1,
+          title: 'Merged',
+          state: 'merged',
+          mergeQueueEntry: { position: 1, state: 'MERGEABLE' }
+        }}
+        className="size-3"
+      />
+    )
+
+    expect(merged).toContain('lucide-git-merge')
+    expect(merged).not.toContain('text-status-warning')
+  })
+
   it('keeps check tones on open reviews so failing checks still stand out', () => {
     const failing = renderToStaticMarkup(
       <ReviewIcon

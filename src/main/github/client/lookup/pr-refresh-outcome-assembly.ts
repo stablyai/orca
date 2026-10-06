@@ -4,6 +4,7 @@ import type {
   PRMergeableState,
   GitHubPRStack
 } from '../../../../shared/github/pull-request-types'
+import type { ReviewMergeQueueEntry } from '../../../../shared/review-merge-queue-entry'
 import { deriveCheckStatus, mapPRState } from '../../mappers'
 import type { OwnerRepo } from '../../gh-utils'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
@@ -15,6 +16,7 @@ export function assemblePRRefreshFoundOutcome(args: {
   stack: GitHubPRStack | undefined
   mergeable: PRMergeableState
   stackMergeQueueRequired: boolean | null | undefined
+  mergeQueueEntry?: ReviewMergeQueueEntry | null
   confirmedContainedHeadOid: string | null
   headDivergedFromMergedPRAtOid: string | null
   conflictSummary: PRConflictSummary | undefined
@@ -26,6 +28,7 @@ export function assemblePRRefreshFoundOutcome(args: {
     stack,
     mergeable,
     stackMergeQueueRequired,
+    mergeQueueEntry,
     confirmedContainedHeadOid,
     headDivergedFromMergedPRAtOid,
     conflictSummary
@@ -52,6 +55,7 @@ export function assemblePRRefreshFoundOutcome(args: {
                 : data.mergeQueueRequired
           }
         : {}),
+      ...(mergeQueueEntry !== undefined ? { mergeQueueEntry } : {}),
       ...(data.mergeMethodSettings !== undefined
         ? { mergeMethodSettings: data.mergeMethodSettings }
         : {}),

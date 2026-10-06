@@ -172,7 +172,11 @@ export function WorktreeCardReviewDetailSection({
         </div>
         {(review.state || (review.status && review.status !== 'neutral')) && (
           <div className="flex flex-wrap gap-1">
-            <ReviewStateBadge state={review.state} label={reviewLabel} />
+            <ReviewStateBadge
+              state={review.state}
+              label={reviewLabel}
+              mergeQueueEntry={review.mergeQueueEntry}
+            />
             <ReviewChecksBadge status={review.status} />
           </div>
         )}

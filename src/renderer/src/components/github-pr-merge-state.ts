@@ -5,6 +5,8 @@ import type {
   PRState,
   ProviderCheckSummary
 } from '../../../shared/github/pull-request-types'
+import type { ReviewMergeQueueEntry } from '../../../shared/review-merge-queue-entry'
+import { presentReviewMergeQueueEntry } from './review-merge-queue-presentation'
 import { canEnableGitHubPRAutoMerge } from '../../../shared/github/pull-request-auto-merge-availability'
 import { translate } from '@/i18n/i18n'
 
@@ -18,6 +20,7 @@ export type GitHubPRMergeStateInput = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  mergeQueueEntry?: ReviewMergeQueueEntry | null
 }
 
 export type GitHubPRAutoMergeAction = {
@@ -166,6 +169,12 @@ export function presentGitHubPRMergeState(
       directMergeAvailable: false,
       autoMergeAction
     }
+  }
+  // Why: a queued PR is past review/check gates; GitHub owns the merge, so offer no merge action.
+  if (item.mergeQueueEntry) {
+    const { label, tooltip, blocked } = presentReviewMergeQueueEntry(item.mergeQueueEntry)
+    const tone = blocked ? DANGER_TONE : WARNING_TONE
+    return { label, tone, tooltip, directMergeAvailable: false, autoMergeAction: null }
   }
   if (item.reviewDecision === 'REVIEW_REQUIRED') {
     return {

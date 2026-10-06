@@ -19223,5 +19223,18 @@
   "projectField": {
     "updateFailed": "Failed to update project field"
   },
-  "settings.appearance.chat.title": "Chat"
+  "settings.appearance.chat.title": "Chat",
+  "reviewMergeQueue": {
+    "label": "In merge queue",
+    "positionLabel": "#{{position}} in merge queue",
+    "tooltip": {
+      "queued": "Waiting in the merge queue",
+      "awaitingChecks": "Merge queue checks are running for this pull request",
+      "mergeable": "Merge queue checks passed; this pull request merges when it reaches the front",
+      "unmergeable": "The merge queue reports this pull request cannot merge",
+      "locked": "The merge queue has locked this pull request while it merges",
+      "unknown": "This pull request is in the merge queue"
+    },
+    "stateBadge": "State: {{queueLabel}}"
+  }
 }
