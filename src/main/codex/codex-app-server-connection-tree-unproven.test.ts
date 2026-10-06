@@ -7,7 +7,7 @@ import { openCodexAppServerConnection } from './codex-app-server-connection'
 
 const teardown = vi.hoisted(() => {
   const state: { verdict: ProviderProcessTeardownVerdict; rootExits: () => void } = {
-    verdict: null,
+    verdict: { tree: null, providerKilled: false },
     rootExits: () => {}
   }
   return state
@@ -48,7 +48,7 @@ describe('Codex process-tree diagnostic after a forced close', () => {
     [null, false]
   ] as const)('teardown observing %s reads unproven=%s', async (verdict, unproven) => {
     vi.useFakeTimers()
-    teardown.verdict = verdict
+    teardown.verdict = { tree: verdict, providerKilled: false }
     const { child, spawnImpl } = stubChild()
     teardown.rootExits = () => child.emit('exit', null, 'SIGKILL')
     const connection = await openCodexAppServerConnection(
@@ -63,5 +63,26 @@ describe('Codex process-tree diagnostic after a forced close', () => {
     // A repeat close answers from the memo and keeps the diagnostic.
     await expect(connection.close()).resolves.toBe(true)
     expect(connection.processTreeUnproven).toBe(unproven)
+  })
+
+  it('reports a kill that reached the app-server until its exit is seen', async () => {
+    vi.useFakeTimers()
+    teardown.verdict = { tree: null, providerKilled: true }
+    const { child, spawnImpl } = stubChild()
+    teardown.rootExits = () => {}
+    const connection = await openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      {},
+      spawnImpl
+    )
+    const closing = connection.close()
+    await vi.advanceTimersByTimeAsync(10_000)
+    await expect(closing).resolves.toBe(false)
+    expect(connection.providerKilled).toBe(true)
+
+    child.emit('exit', null, 'SIGKILL')
+    // Seen at last, the exit is the answer; the kill no longer stands in for it.
+    expect(connection.providerKilled).toBe(false)
+    await expect(connection.close()).resolves.toBe(true)
   })
 })

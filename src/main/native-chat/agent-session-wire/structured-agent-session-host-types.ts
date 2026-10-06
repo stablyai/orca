@@ -73,8 +73,9 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
 }
 
 /** What ending a child established about its provider root. A stop's comes only from
- *  `stopAgentSessionProviderRoot`; an observed exit's root is gone by definition. */
-export type StructuredAgentSessionStopVerdict = { rootGone: boolean }
+ *  `stopAgentSessionProviderRoot`; an observed exit's root is gone by definition. `providerKilled`:
+ *  the root's exit was not seen, but Orca's kill reached the process that writes the conversation. */
+export type StructuredAgentSessionStopVerdict = { rootGone: boolean; providerKilled?: true }
 
 export type { StructuredAgentSessionChildEndCause }
 

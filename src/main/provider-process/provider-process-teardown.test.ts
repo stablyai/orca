@@ -5,6 +5,7 @@ import {
   resetSelfInitiatedTreeKillLogForTest
 } from '../crash-reporting/self-initiated-tree-kill-log'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
+import type { DescendantSnapshot, ProcessTableRow } from '../pty-descendant-termination'
 import { terminateProviderProcessTree } from './provider-process-teardown'
 
 /** Above pid_max on every supported POSIX host, so the group signal is a real ESRCH. */
@@ -17,12 +18,30 @@ function child() {
   }
 }
 
+function row(pid: number, ppid: number, pgid: number): ProcessTableRow {
+  return { pid, ppid, pgid, startedAt: 'Mon Oct  5 10:00:00 2026' }
+}
+
+/** A paused supervisor's walk: its provider (pid 1235) leads a group of its own. */
+function supervisorWalk(provider = 1235): DescendantSnapshot {
+  return {
+    root: { pid: 1234, startedAt: 'Mon Oct  5 09:59:00 2026' },
+    rootPgid: 1234,
+    descendants: [row(provider, 1234, provider)],
+    capturedAtMs: 1
+  }
+}
+
+function signals(target: ReturnType<typeof child>): unknown[] {
+  return target.kill.mock.calls.map(([signal]) => signal)
+}
+
 describe('terminateProviderProcessTree', () => {
   beforeEach(() => {
     resetSelfInitiatedTreeKillLogForTest()
   })
 
-  it('waits for the Windows tree kill before releasing the wrapper, and claims no observation', async () => {
+  it('waits for the Windows tree kill, then reports the root kill as the provider kill', async () => {
     const target = child()
     const release = Promise.withResolvers<void>()
     const terminateWindowsTree = vi.fn(() => release.promise)
@@ -34,11 +53,23 @@ describe('terminateProviderProcessTree', () => {
     })
     expect(target.kill).not.toHaveBeenCalled()
     release.resolve()
-    // taskkill resolves alike on success, failure and timeout.
-    await expect(teardown).resolves.toBeNull()
+    // taskkill resolves alike on success, failure and timeout; TerminateProcess of the root is
+    // the provider's own kill, since Windows runs it without a supervisor.
+    await expect(teardown).resolves.toEqual({ tree: null, providerKilled: true })
 
     expect(terminateWindowsTree).toHaveBeenCalledWith(1234, { site: 'codex-app-server-teardown' })
     expect(target.kill).toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('claims no Windows provider kill when TerminateProcess was not delivered', async () => {
+    const target = { pid: 1234, kill: vi.fn<ChildProcess['kill']>(() => false) }
+    await expect(
+      terminateProviderProcessTree(target, {
+        site: 'codex-app-server-teardown',
+        platform: 'win32',
+        terminateWindowsTree: async () => undefined
+      })
+    ).resolves.toEqual({ tree: null, providerKilled: false })
   })
 
   it('passes a non-Codex diagnostic label to Windows teardown', async () => {
@@ -53,23 +84,101 @@ describe('terminateProviderProcessTree', () => {
     expect(terminateWindowsTree).toHaveBeenCalledWith(1234, { site: 'provider-test-teardown' })
   })
 
-  it('waits for an owned POSIX snapshot before killing the wrapper', async () => {
+  it("kills the provider's group, then the supervisor, before judging the rest of the tree", async () => {
     const target = child()
-    const snapshot = { rootPgid: 1234, descendants: [], capturedAtMs: 1 }
+    const order: string[] = []
+    target.kill.mockImplementation((signal) => {
+      order.push(`supervisor ${String(signal)}`)
+      return true
+    })
+    const walk = supervisorWalk()
     const release = Promise.withResolvers<DescendantTreeVerdict>()
+    const terminateDescendants = vi.fn((snapshot: DescendantSnapshot) => {
+      order.push(`verify ${snapshot.descendants.length}`)
+      return release.promise
+    })
 
     const teardown = terminateProviderProcessTree(target, {
       site: 'codex-app-server-teardown',
       platform: 'darwin',
-      captureDescendants: async () => snapshot,
-      terminateDescendants: () => release.promise
+      captureDescendants: async () => walk,
+      terminateDescendants,
+      signalProcessGroup: (pgid, signal) => order.push(`group ${pgid} ${signal}`)
     })
-    await vi.waitFor(() => expect(target.kill).toHaveBeenCalledWith('SIGSTOP'))
-    expect(target.kill).not.toHaveBeenCalledWith('SIGKILL')
+    await vi.waitFor(() => expect(terminateDescendants).toHaveBeenCalledWith(walk))
     release.resolve('exited')
-    await expect(teardown).resolves.toBe('exited')
+    await expect(teardown).resolves.toEqual({ tree: 'exited', providerKilled: true })
+
+    expect(order).toEqual([
+      'supervisor SIGSTOP',
+      'group 1235 SIGKILL',
+      'supervisor SIGKILL',
+      'verify 1'
+    ])
+    expect(findSelfInitiatedTreeKills(Date.now())).toEqual([
+      expect.objectContaining({
+        pid: 1235,
+        site: 'codex-app-server-teardown',
+        scope: 'posix-process-group'
+      })
+    ])
+  })
+
+  it.each(['live', 'unverifiable'] as const)(
+    'reports a %s descendant left outside the killed group as-is, and still counts the provider killed',
+    async (observed) => {
+      const target = child()
+      await expect(
+        terminateProviderProcessTree(target, {
+          site: 'codex-app-server-teardown',
+          platform: 'darwin',
+          captureDescendants: async () => supervisorWalk(),
+          terminateDescendants: async () => observed,
+          signalProcessGroup: () => {}
+        })
+      ).resolves.toEqual({ tree: observed, providerKilled: true })
+      expect(signals(target)).toEqual(['SIGSTOP', 'SIGKILL'])
+    }
+  )
+
+  // Before: an unreadable table SIGKILLed the paused supervisor, orphaning the provider in its own
+  // group with nobody left to stop it, and the root's exit then read as the provider gone.
+  it('never kills the supervisor without the group kill when the process table cannot be read', async () => {
+    const target = child()
+    const signalProcessGroup = vi.fn()
+    await expect(
+      terminateProviderProcessTree(target, {
+        site: 'codex-app-server-teardown',
+        platform: 'darwin',
+        captureDescendants: async () => null,
+        signalProcessGroup
+      })
+    ).resolves.toEqual({ tree: null, providerKilled: false })
+    expect(signals(target)).toEqual(['SIGSTOP', 'SIGCONT'])
+    expect(signalProcessGroup).not.toHaveBeenCalled()
+  })
+
+  /**
+   * `selfInitiatedTreeKillCount` decides whether a `render-process-gone` was
+   * ours. A group that had already exited was killed by nobody, so crediting it
+   * puts a suspect in the five-second window that Orca never issued. Exercised
+   * through the real `process.kill(-pgid)` because the swallow being tested
+   * lives in the production default, not in an injectable seam.
+   */
+  it('does not claim a provider group that was already gone, yet knows nothing in it runs', async () => {
+    const target = child()
+
+    await expect(
+      terminateProviderProcessTree(target, {
+        site: 'codex-app-server-teardown',
+        platform: 'darwin',
+        captureDescendants: async () => supervisorWalk(UNREACHABLE_PGID),
+        terminateDescendants: async () => 'exited'
+      })
+    ).resolves.toEqual({ tree: 'exited', providerKilled: true })
 
     expect(target.kill).toHaveBeenLastCalledWith('SIGKILL')
+    expect(findSelfInitiatedTreeKills(Date.now())).toEqual([])
   })
 
   it('signals a proven dedicated POSIX process group without scanning descendants', async () => {
@@ -85,7 +194,7 @@ describe('terminateProviderProcessTree', () => {
         captureDescendants,
         signalProcessGroup
       })
-    ).resolves.toBeNull()
+    ).resolves.toEqual({ tree: null, providerKilled: true })
 
     expect(signalProcessGroup).toHaveBeenCalledWith(1234, 'SIGKILL')
     expect(captureDescendants).not.toHaveBeenCalled()
@@ -107,91 +216,9 @@ describe('terminateProviderProcessTree', () => {
           throw Object.assign(new Error('denied'), { code: 'EPERM' })
         }
       })
-    ).resolves.toBe('unverifiable')
+    ).resolves.toEqual({ tree: 'unverifiable', providerKilled: false })
 
     expect(target.kill).not.toHaveBeenCalled()
-  })
-
-  /**
-   * `selfInitiatedTreeKillCount` decides whether a `render-process-gone` was
-   * ours. A group that had already exited was killed by nobody, so crediting it
-   * puts a suspect in the five-second window that Orca never issued. Exercised
-   * through the real `process.kill(-pgid)` because the swallow being tested
-   * lives in the production default, not in an injectable seam.
-   */
-  it('does not claim a snapshot group that was already gone', async () => {
-    const target = { pid: UNREACHABLE_PGID, kill: vi.fn<ChildProcess['kill']>(() => true) }
-
-    await expect(
-      terminateProviderProcessTree(target, {
-        site: 'codex-app-server-teardown',
-        platform: 'darwin',
-        captureDescendants: async () => ({
-          rootPgid: UNREACHABLE_PGID,
-          descendants: [],
-          capturedAtMs: 1
-        }),
-        terminateDescendants: async () => 'exited'
-      })
-    ).resolves.toBe('exited')
-
-    expect(target.kill).toHaveBeenLastCalledWith('SIGKILL')
-    expect(findSelfInitiatedTreeKills(Date.now())).toEqual([])
-  })
-
-  it('claims a snapshot group the signal actually reached', async () => {
-    const target = child()
-    const signalProcessGroup = vi.fn()
-
-    await expect(
-      terminateProviderProcessTree(target, {
-        site: 'codex-app-server-teardown',
-        platform: 'darwin',
-        captureDescendants: async () => ({ rootPgid: 1234, descendants: [], capturedAtMs: 1 }),
-        terminateDescendants: async () => 'exited',
-        signalProcessGroup
-      })
-    ).resolves.toBe('exited')
-
-    expect(signalProcessGroup).toHaveBeenCalledWith(1234, 'SIGKILL')
-    expect(findSelfInitiatedTreeKills(Date.now())).toEqual([
-      expect.objectContaining({
-        pid: 1234,
-        site: 'codex-app-server-teardown',
-        scope: 'posix-process-group'
-      })
-    ])
-  })
-
-  it.each([
-    ['live', 'live'],
-    ['unverifiable', 'unverifiable']
-  ] as const)(
-    'reports a %s descendant snapshot as-is and leaves the stopped root resumable',
-    async (observed, verdict) => {
-      const target = child()
-      await expect(
-        terminateProviderProcessTree(target, {
-          site: 'codex-app-server-teardown',
-          platform: 'darwin',
-          captureDescendants: async () => ({ rootPgid: 1234, descendants: [], capturedAtMs: 1 }),
-          terminateDescendants: async () => observed
-        })
-      ).resolves.toBe(verdict)
-      expect(target.kill).toHaveBeenLastCalledWith('SIGCONT')
-    }
-  )
-
-  it('claims no observation when the POSIX process table cannot be read', async () => {
-    const target = child()
-    await expect(
-      terminateProviderProcessTree(target, {
-        site: 'codex-app-server-teardown',
-        platform: 'darwin',
-        captureDescendants: async () => null
-      })
-    ).resolves.toBeNull()
-    expect(target.kill).toHaveBeenLastCalledWith('SIGKILL')
   })
 
   it('claims no observation from an ESRCH dedicated group and reports a spawnless child as unverifiable', async () => {
@@ -204,11 +231,11 @@ describe('terminateProviderProcessTree', () => {
           throw Object.assign(new Error('gone'), { code: 'ESRCH' })
         }
       })
-    ).resolves.toBeNull()
+    ).resolves.toEqual({ tree: null, providerKilled: false })
     const spawnless = { pid: undefined, kill: vi.fn<ChildProcess['kill']>(() => true) }
     await expect(
       terminateProviderProcessTree(spawnless, { site: 'provider-test-teardown', platform: 'linux' })
-    ).resolves.toBe('unverifiable')
+    ).resolves.toEqual({ tree: 'unverifiable', providerKilled: false })
   })
 
   it('tears down 40 dedicated groups without process-table scans or cross-group fanout', async () => {
@@ -232,7 +259,9 @@ describe('terminateProviderProcessTree', () => {
       )
     )
 
-    expect(results).toEqual(Array.from({ length: targets.length }, () => null))
+    expect(results).toEqual(
+      Array.from({ length: targets.length }, () => ({ tree: null, providerKilled: true }))
+    )
     expect(signalProcessGroup.mock.calls).toEqual(targets.map((target) => [target.pid, 'SIGKILL']))
     expect(captureDescendants).not.toHaveBeenCalled()
     expect(killMocks.every((kill) => kill.mock.calls.length === 0)).toBe(true)

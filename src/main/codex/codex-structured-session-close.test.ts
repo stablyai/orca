@@ -15,7 +15,10 @@ import { handleCodexSessionExit } from './codex-structured-session-close'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import type { CodexSession } from './codex-structured-session-state'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  AgentSessionProviderKilledError,
+  type StructuredAgentSessionAdapter
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { claudeAndCodexRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
@@ -230,5 +233,33 @@ describe('Codex structured session close lifecycle', () => {
     expect(events.filter((event) => event.type === 'ended')).toMatchObject([
       { cause: 'unexpected-exit', reason: 'journal sink failed', fence: 7 }
     ])
+  })
+
+  it("ends a session whose close killed the app-server, though its exit wasn't seen", async () => {
+    const { adapter, connections, events } = adapterFixture()
+    await adapter.acquire({ identity: identity('session-1'), fence: 7, spawnToken: 'spawn-1' })
+    const current = connections[0]!
+    Object.assign(current.connection, { providerKilled: true, close: async () => false })
+
+    await expect(adapter.closeSession('session-1')).rejects.toBeInstanceOf(
+      AgentSessionProviderKilledError
+    )
+    expect(events.filter((event) => event.type === 'ended')).toMatchObject([
+      { cause: 'requested-close', fence: 7, rootExitUnobserved: true }
+    ])
+    // The late exit of that process ends nothing: the session already left.
+    current.handlers.onExit?.(new Error('codex exited'), { expected: true })
+    expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
+    // A later close has nothing left to stop.
+    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
+  })
+
+  it('keeps a session whose close neither saw the exit nor reached the app-server', async () => {
+    const { adapter, connections, events } = adapterFixture()
+    await adapter.acquire({ identity: identity('session-1'), fence: 7, spawnToken: 'spawn-1' })
+    Object.assign(connections[0]!.connection, { close: async () => false })
+
+    await expect(adapter.closeSession('session-1')).resolves.toBe(false)
+    expect(events.filter((event) => event.type === 'ended')).toEqual([])
   })
 })

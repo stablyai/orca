@@ -147,7 +147,11 @@ export function spawnManagedProviderProcess(
       return exitProof.run(async () => {
         // The one already-exited guard. It observed nothing, so an earlier close's findings stay.
         if (observed && !tree) {
-          const result: ProviderProcessCloseResult = { root: 'exited', tree: null }
+          const result: ProviderProcessCloseResult = {
+            root: 'exited',
+            tree: null,
+            providerKilled: false
+          }
           lastCloseResult ??= result
           return result
         }

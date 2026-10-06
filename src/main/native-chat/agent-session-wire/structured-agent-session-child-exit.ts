@@ -1,5 +1,6 @@
 // The one handler that ends a provider child's record, whether its exit was expected (a close this
-// host asked for) or not (the child died on its own). The exit was seen or proven first-hand, so
+// host asked for) or not (the child died on its own). The exit was seen or proven first-hand, or
+// Orca's kill reached the provider so nothing of it can write again, so
 // every step after it is bookkeeping: each is attempted and reported, none keeps the child on
 // record, and the record ends in `finally`. `expected` changes only what the chat is told.
 
@@ -37,6 +38,9 @@ export type StructuredAgentSessionChildExit = {
   /** Host receipt of the exit: the end time of a turn it interrupted. */
   observedAt?: number
   startupUnproven?: true
+  /** Orca's kill reached the provider but its root's exit was not seen: the record ends, and the
+   *  lease is released without exit evidence. */
+  rootExitUnobserved?: true
 }
 
 export type StructuredAgentSessionChildExitSession = Pick<
@@ -81,7 +85,8 @@ export function settleStructuredAgentSessionChildExit<
       reason: event.reason,
       ...(event.failure ? { failure: event.failure } : {}),
       ...(event.observedAt === undefined ? {} : { observedAt: event.observedAt }),
-      ...(event.startupUnproven ? { startupUnproven: event.startupUnproven } : {})
+      ...(event.startupUnproven ? { startupUnproven: event.startupUnproven } : {}),
+      ...(event.rootExitUnobserved ? { rootExitUnobserved: event.rootExitUnobserved } : {})
     })
   })
 }
@@ -115,8 +120,9 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       reason: expected ? (close?.reason ?? null) : exit.reason,
       ...(!expected && exit.failure ? { failure: exit.failure } : {}),
       duringStartup: exitedDuringStartup,
-      // The adapter publishes an exit only once it saw the root go, first-hand or proven.
-      rootGone: true,
+      // The adapter publishes an exit only once it saw the root go, or once its kill reached the
+      // provider (`rootExitUnobserved`).
+      ...(exit.rootExitUnobserved ? { rootGone: false, providerKilled: true } : { rootGone: true }),
       ...(expected && close ? { endedAt: close.requestedAt } : {})
     })
     context.publishStatus?.(sessionId)
@@ -183,7 +189,8 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
         expectedFence: child.fence,
         now: context.now(),
         exitObservedAt: observedAt,
-        exitReason: exit.reason
+        exitReason: exit.reason,
+        ...(exit.rootExitUnobserved ? { rootExitUnobserved: true as const } : {})
       })
       released = true
     } catch (error) {

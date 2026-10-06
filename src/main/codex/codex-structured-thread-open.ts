@@ -63,6 +63,43 @@ async function resumeCodexThread(
   }
 }
 
+/** Waits between resumes Codex refused because another process still holds the thread. */
+export const CODEX_ACTIVE_WRITER_RETRY_DELAYS_MS = [100, 400, 1_000] as const
+
+/**
+ * Codex's own refusal to open a thread another app-server still writes. It locks each thread's
+ * rollout per process, and the OS drops that lock the moment the holder dies, so a refusal right
+ * after Orca killed the previous process clears within moments. Codex releases without the lock
+ * never answer this.
+ */
+function isCodexActiveWriterError(error: unknown, threadId: string): boolean {
+  return (
+    isCodexAppServerRequestError(error) &&
+    error.method === 'thread/resume' &&
+    error.code === -32600 &&
+    error.message.endsWith(`thread ${threadId} already has an active writer`)
+  )
+}
+
+/** A resume that meets the previous process's lock tries again a few times, then fails. */
+async function resumeAfterPreviousWriter(
+  connection: Pick<CodexAppServerConnection, 'request'>,
+  params: Record<string, unknown> & { threadId: string },
+  timeoutMs: number | undefined
+): Promise<unknown> {
+  for (const retryDelayMs of CODEX_ACTIVE_WRITER_RETRY_DELAYS_MS) {
+    try {
+      return await resumeCodexThread(connection, params, timeoutMs)
+    } catch (error) {
+      if (!isCodexActiveWriterError(error, params.threadId)) {
+        throw error
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
+    }
+  }
+  return resumeCodexThread(connection, params, timeoutMs)
+}
+
 /**
  * Codex's own answer that it holds no rollout for this exact thread: the thread was started but
  * never given input, so there is no conversation to lose. Codex matches the same exact text
@@ -114,7 +151,7 @@ export async function openCodexThread(
       ...(launch.resumePath ? { path: launch.resumePath } : {})
     }
     try {
-      opened = await resumeCodexThread(connection, resumeParams, timeoutMs)
+      opened = await resumeAfterPreviousWriter(connection, resumeParams, timeoutMs)
     } catch (error) {
       if (!launch.supersedeIfUnsaved || !isCodexNoRolloutError(error, resumeThreadId)) {
         throw error

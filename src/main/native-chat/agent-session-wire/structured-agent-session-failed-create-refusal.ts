@@ -21,6 +21,7 @@ import {
   AgentSessionAcquisitionRefusal,
   AgentSessionAcquisitionRootExitObservedError,
   AgentSessionPreSpawnError,
+  AgentSessionProviderKilledError,
   isAgentSessionPreSpawnError
 } from './structured-agent-session-adapter'
 import {
@@ -70,7 +71,9 @@ export function failedAcquisitionSettlement(
     ? 'processless'
     : error instanceof AgentSessionAcquisitionRootExitObservedError
       ? 'root-exit-observed'
-      : 'exit-proven'
+      : error instanceof AgentSessionProviderKilledError
+        ? 'killed'
+        : 'exit-proven'
   const raw = error instanceof Error ? error.message : String(error)
   const details = failedAcquisitionDetails(error)
   const message =
@@ -90,11 +93,12 @@ export function failedAcquisitionSettlement(
   }
 }
 
-/** Cleanup proved the child gone after the start failed, whatever failed it. */
+/** Cleanup proved the child gone, or killed it, after the start failed, whatever failed it. */
 function isExitProvenAcquisitionFailure(error: unknown): error is Error {
   return (
     error instanceof AgentSessionAcquisitionRootExitObservedError ||
-    error instanceof AgentSessionAcquisitionExitProvenError
+    error instanceof AgentSessionAcquisitionExitProvenError ||
+    error instanceof AgentSessionProviderKilledError
   )
 }
 

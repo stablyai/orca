@@ -10,7 +10,8 @@ import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError,
-  AgentSessionPreSpawnError
+  AgentSessionPreSpawnError,
+  AgentSessionProviderKilledError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
@@ -38,8 +39,12 @@ export function claudeAcquisitionCleanupError(
   if (verdict?.processless === true) {
     return new AgentSessionPreSpawnError(cause)
   }
-  return claudeRootExitObserved(connection)
-    ? new AgentSessionAcquisitionRootExitObservedError(cause)
+  if (claudeRootExitObserved(connection)) {
+    return new AgentSessionAcquisitionRootExitObservedError(cause)
+  }
+  // The kill reached Claude itself: it cannot write again, though its exit was not seen yet.
+  return verdict?.providerKilled === true
+    ? new AgentSessionProviderKilledError(cause)
     : new AgentSessionAcquisitionExitUnprovenError(cause)
 }
 
@@ -110,9 +115,10 @@ async function finalizeClaudePublishedSession(
       session.connection,
       new Error('provider close unproven')
     )
-    // Only a genuinely unknown exit stays indexed for a retry. A proven root exit or processless
-    // close is final — the owner releases the lease on it — so the session finalizes like a proven
-    // close and still reports the verdict; kept indexed, it refused every later start of the chat.
+    // Only a genuinely unknown exit stays indexed for a retry. A proven root exit, a processless
+    // close or a kill that reached Claude is final — the owner releases the lease on it — so the
+    // session finalizes like a proven close and still reports the verdict; kept indexed, it refused
+    // every later start of the chat.
     if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
       return false
     }
@@ -126,8 +132,9 @@ async function finalizeClaudePublishedSession(
   }
   session.childWork.clear()
   session.backgroundTasks.clear()
-  // The exit is proven, so the session ends now. Saving its resume point is bookkeeping that
-  // follows, reported on failure; it never holds the close or reads as an unproven exit.
+  // The exit is proven, or Claude killed, so the session ends now. Saving its resume point is
+  // bookkeeping that follows, reported on failure; it never holds the close or reads as an
+  // unproven exit.
   session.closeFinalized = true
   input.sessions.delete(input.sessionId)
   let callbackError: unknown
@@ -150,7 +157,10 @@ async function finalizeClaudePublishedSession(
       cause: 'requested-close',
       fence: session.fence,
       acquisitionGeneration: session.acquisitionGeneration,
-      observedAt: Date.now()
+      observedAt: Date.now(),
+      ...(rootExitVerdict instanceof AgentSessionProviderKilledError
+        ? { rootExitUnobserved: true as const }
+        : {})
     } as const
     try {
       try {

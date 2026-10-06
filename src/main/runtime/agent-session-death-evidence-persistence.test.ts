@@ -219,4 +219,40 @@ describe('a failed acquisition', () => {
       expect(settled.lease.deathEvidence).toMatchObject({ ownerFence: fence })
     }
   )
+
+  it.each([
+    ['before the owner proved its handle', false],
+    ['after the owner proved its handle', true]
+  ] as const)(
+    'releases a failed start whose cleanup killed the provider, with no exit evidence, %s',
+    async (_when, proved) => {
+      const store = await open()
+      const fence = await spawnedOwner(store)
+      const killed = { ...unproven(fence, NOW + 60_000), exitProof: 'killed' as const }
+      if (proved) {
+        await store.proveOwner({
+          sessionId: SESSION,
+          fence,
+          link: {
+            linkId: 'link-1',
+            handle: claudeProviderHandle('provider-session-1', null),
+            origin: 'created',
+            mintedAtFence: fence,
+            observedAt: NOW
+          },
+          now: NOW
+        })
+        await store.settleFailedPostAcquisitionAttachment(killed)
+      } else {
+        await store.settleFailedAcquisition(killed)
+      }
+      // Released, never parked in recovery: nothing it reached can write again.
+      expect(store.getRecord(SESSION)?.lease).toMatchObject({
+        claimStatus: 'released',
+        handoffStage: null,
+        ownerProcess: null,
+        deathEvidence: null
+      })
+    }
+  )
 })

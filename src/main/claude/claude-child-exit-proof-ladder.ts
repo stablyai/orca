@@ -1,11 +1,11 @@
 import type { ManagedProviderProcess } from '../provider-process/managed-provider-process'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
+import { SUPERVISED_PROVIDER_GRACEFUL_EXIT_MS } from '../provider-process/provider-process-supervisor'
 import type { ProviderProcessClosePolicy } from '../provider-process/provider-process-close'
 import type { ClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 
 export const GRACEFUL_EXIT_MS = 1_500
 // A signalled supervisor escalates on its own; forcing it sooner kills it and orphans Claude.
-export const SUPERVISED_GRACEFUL_EXIT_MS = PROVIDER_SUPERVISOR_MAX_STOP_MS + 500
+export const SUPERVISED_GRACEFUL_EXIT_MS = SUPERVISED_PROVIDER_GRACEFUL_EXIT_MS
 const FORCED_EXIT_MS = 1_000
 
 export function claudeChildClosePolicy(supervised: boolean): ProviderProcessClosePolicy {

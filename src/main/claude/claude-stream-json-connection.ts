@@ -86,6 +86,8 @@ export type ClaudeChildExitVerdict = {
   root: DescendantTreeVerdict
   tree: DescendantTreeVerdict
   processless?: boolean
+  /** A close's kill reached Claude itself, so it cannot write again even before its exit is seen. */
+  providerKilled?: true
 }
 
 export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
@@ -185,7 +187,10 @@ export async function openClaudeStreamJsonConnection(
   const waitUntilReadable = (): Promise<void> => readingBarrier ?? Promise.resolve()
   // One reaper per child: every close attempt and error-path reap shares its proof.
   const rootSettled = (): boolean => managed.rootVerdict === 'exited'
-  const tree = createClaudeChildTreeReaper(child, { exited: rootSettled })
+  const tree = createClaudeChildTreeReaper(child, {
+    exited: rootSettled,
+    supervised: managed.supervised
+  })
 
   // Arm lazily on actual child output instead of issuing a process-table scan for
   // every session at startup. A natural SDK exit can race a later close, while
@@ -349,7 +354,8 @@ export async function openClaudeStreamJsonConnection(
       return {
         root: managed.rootVerdict,
         tree: tree.treeVerdict,
-        ...(managed.processless ? { processless: true } : {})
+        ...(managed.processless ? { processless: true } : {}),
+        ...(tree.providerKilled ? { providerKilled: true as const } : {})
       } as const
     },
     pauseReading,

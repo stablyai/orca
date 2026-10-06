@@ -19,8 +19,8 @@ type RootTerminationInput = {
  * nothing. A probe here could only let an unreadable process table cost the tree
  * the one fallback that still works once every table read has failed.
  *
- * On POSIX the root is the provider supervisor, killed only after its own stop had
- * its whole bound; Claude, in its own group, is reached by the descendant kill.
+ * Used only for a root that is Claude itself. A POSIX supervisor is killed by the reaper's
+ * forced step, after its own stop had its whole bound and only after Claude's own group.
  *
  * False means no signal was sent, because the root had already left.
  */
@@ -43,7 +43,7 @@ type WindowsRootTerminationInput = {
  */
 export async function terminateClaudeWindowsRoot(
   input: WindowsRootTerminationInput
-): Promise<{ rootVerified: boolean }> {
+): Promise<{ rootVerified: boolean; rootKilled: boolean }> {
   const { snapshot, exited, verifyRoot, terminateTree, killRoot } = input
   let rootVerified = false
   if (!exited() && snapshot) {
@@ -52,6 +52,5 @@ export async function terminateClaudeWindowsRoot(
       await terminateTree(snapshot.root).catch(() => {})
     }
   }
-  killRoot()
-  return { rootVerified }
+  return { rootVerified, rootKilled: killRoot() }
 }

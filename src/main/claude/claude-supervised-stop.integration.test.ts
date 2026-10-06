@@ -171,7 +171,11 @@ describe.runIf(process.platform !== 'win32')('Claude under the POSIX provider su
 
     const startedAt = Date.now()
     await expect(close()).resolves.toBe(true)
-    expect(managed.lastCloseResult).toEqual({ root: 'exited', tree: 'exited' })
+    expect(managed.lastCloseResult).toEqual({
+      root: 'exited',
+      tree: 'exited',
+      providerKilled: false
+    })
     await expect(close()).resolves.toBe(true)
 
     // Claude's own SIGTERM reap ran at once, not after the supervisor's stdin-end grace.
@@ -189,7 +193,11 @@ describe.runIf(process.platform !== 'win32')('Claude under the POSIX provider su
 
     const startedAt = Date.now()
     await expect(close()).resolves.toBe(true)
-    expect(managed.lastCloseResult).toEqual({ root: 'exited', tree: 'exited' })
+    expect(managed.lastCloseResult).toEqual({
+      root: 'exited',
+      tree: 'exited',
+      providerKilled: false
+    })
     await expect(close()).resolves.toBe(true)
 
     const elapsed = Date.now() - startedAt

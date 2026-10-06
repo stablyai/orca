@@ -1,14 +1,21 @@
 import type { ChildProcessHandle } from '../../shared/child-process/run-process'
-import { captureDescendantSnapshot, type DescendantSnapshot } from '../pty-descendant-termination'
+import type { DescendantSnapshot } from '../pty-descendant-termination'
 import {
   terminateDescendantSnapshotWithVerdict,
   type DescendantTreeVerdict
 } from '../pty-descendant-exit-verification'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { killSupervisedProviderGroup } from './provider-supervised-group-kill'
 
-/** What the teardown observed of the descendants; null when it signalled but observed nothing. */
-export type ProviderProcessTeardownVerdict = DescendantTreeVerdict | null
+/** What a forced teardown established. */
+export type ProviderProcessTeardownVerdict = {
+  /** What it observed of the descendants; null when it made no observation. */
+  tree: DescendantTreeVerdict | null
+  /** The kill reached the provider, the process that writes the conversation: SIGKILL to its own
+   *  group on POSIX, TerminateProcess of the root on Windows. Never an observed exit. */
+  providerKilled: boolean
+}
 
 const activeTeardowns = new WeakMap<object, Promise<ProviderProcessTeardownVerdict>>()
 
@@ -36,7 +43,8 @@ function terminateDedicatedPosixGroup(
   } catch (error) {
     // ESRCH says only that the group is empty; a descendant that left it, or a root that never led it, may live.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Node process.kill errors expose an optional errno code; only that field is read.
-    return (error as NodeJS.ErrnoException).code === 'ESRCH' ? null : 'unverifiable'
+    const tree = (error as NodeJS.ErrnoException).code === 'ESRCH' ? null : 'unverifiable'
+    return { tree, providerKilled: false }
   }
   // Outside the try: that catch is the ESRCH contract, not a breadcrumb handler.
   recordSelfInitiatedTreeKill({
@@ -45,7 +53,7 @@ function terminateDedicatedPosixGroup(
     scope: 'posix-process-group'
   })
   // A delivered signal is not an observed exit.
-  return null
+  return { tree: null, providerKilled: true }
 }
 
 async function terminatePosixTree(
@@ -53,53 +61,21 @@ async function terminatePosixTree(
   rootPid: number,
   deps: ProviderProcessTeardownDeps
 ): Promise<ProviderProcessTeardownVerdict> {
-  child.kill('SIGSTOP')
-  const capture = deps.captureDescendants ?? captureDescendantSnapshot
-  const snapshot = await capture(rootPid).catch(() => null)
-  if (!snapshot) {
-    // No observation rather than the reaper's `unverifiable`: Codex's diagnostic treated this as accepted.
-    // The reaper-move follow-up maps it to `unverifiable` and takes that Codex change deliberately.
-    child.kill('SIGKILL')
-    return null
+  const forced = await killSupervisedProviderGroup(child, rootPid, {
+    site: deps.site,
+    ...(deps.captureDescendants ? { captureDescendants: deps.captureDescendants } : {}),
+    ...(deps.signalProcessGroup ? { signalProcessGroup: deps.signalProcessGroup } : {})
+  })
+  if (forced.provider === 'unknown' || !forced.snapshot) {
+    // Nothing was killed; the resumed supervisor's own stop is still under way.
+    return { tree: null, providerKilled: false }
   }
+  // Descendants that left the provider's group are judged by identity from the paused read.
   const terminate =
     deps.terminateDescendants ??
-    ((captured: DescendantSnapshot) => terminateDescendantSnapshotWithVerdict(captured))
-  const verdict = await terminate(snapshot)
-  const descendantsExited = verdict === 'exited'
-  // A detached POSIX launch is the leader of its own process group. Group
-  // signalling reaches grandchildren even after they daemonise/reparent,
-  // while the stopped root and captured pgid make the ownership proof exact.
-  // The identity-gated descendant sweep remains the fallback for older hosts
-  // or launches that could not establish a dedicated group.
-  if (descendantsExited && snapshot.rootPgid === rootPid) {
-    const signalGroup =
-      deps.signalProcessGroup ??
-      ((pgid: number, signal: NodeJS.Signals) => process.kill(-pgid, signal))
-    let groupSignalled = false
-    try {
-      signalGroup(snapshot.rootPgid, 'SIGKILL')
-      groupSignalled = true
-    } catch {
-      // Already-gone is still the desired outcome, but nothing here killed it,
-      // and a crumb for a kill we never landed is a false render-process-gone suspect.
-    }
-    if (groupSignalled) {
-      // Outside the try, as in terminateDedicatedPosixGroup: that catch is the
-      // already-gone contract, not a breadcrumb handler.
-      recordSelfInitiatedTreeKill({
-        pid: snapshot.rootPgid,
-        site: deps.site,
-        scope: 'posix-process-group'
-      })
-    }
-  }
-  if (!descendantsExited) {
-    child.kill('SIGCONT')
-    return verdict
-  }
-  child.kill('SIGKILL')
-  return 'exited'
+    ((captured: DescendantSnapshot) =>
+      terminateDescendantSnapshotWithVerdict(captured, { requireIdentityBeforeSignal: true }))
+  return { tree: await terminate(forced.snapshot), providerKilled: true }
 }
 
 /** Stops every process owned by one provider launch before releasing its wrapper. */
@@ -110,15 +86,16 @@ async function terminateOnce(
   const rootPid = child.pid
   if (!rootPid) {
     child.kill('SIGKILL')
-    return 'unverifiable'
+    return { tree: 'unverifiable', providerKilled: false }
   }
   if ((deps.platform ?? process.platform) === 'win32') {
     const terminate = deps.terminateWindowsTree ?? terminateWindowsProcessTree
     await terminate(rootPid, { site: deps.site })
-    // taskkill owns the tree; this preserves the prior direct-child fallback when it fails.
-    child.kill('SIGKILL')
+    // taskkill owns the tree; TerminateProcess of the root is the provider's own kill, since
+    // Windows runs it without a supervisor.
+    const providerKilled = child.kill('SIGKILL')
     // taskkill resolves alike on success, failure and timeout, so nothing was observed.
-    return null
+    return { tree: null, providerKilled }
   }
   if (deps.dedicatedProcessGroup) {
     return terminateDedicatedPosixGroup(rootPid, deps)
@@ -135,9 +112,10 @@ export function terminateProviderProcessTree(
   if (active) {
     return active
   }
-  const attempt = terminateOnce(child, deps).catch(
-    (): ProviderProcessTeardownVerdict => 'unverifiable'
-  )
+  const attempt = terminateOnce(child, deps).catch((): ProviderProcessTeardownVerdict => ({
+    tree: 'unverifiable',
+    providerKilled: false
+  }))
   activeTeardowns.set(key, attempt)
   void attempt.then(() => {
     if (activeTeardowns.get(key) === attempt) {

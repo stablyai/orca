@@ -55,7 +55,8 @@ function fakeTree(initial: DescendantTreeVerdict = 'unverifiable') {
     reap: vi.fn(async () => verdict),
     get treeVerdict() {
       return verdict
-    }
+    },
+    providerKilled: false
   }
   return {
     tree,
@@ -220,13 +221,26 @@ describe('managed provider process', () => {
     fixture.child.emit('exit', 0, null)
     await expect(managed.close(proof.tree)).resolves.toEqual({
       root: 'exited',
-      tree: 'unverifiable'
+      tree: 'unverifiable',
+      providerKilled: false
     })
     proof.setVerdict('live')
-    await expect(managed.close(proof.tree)).resolves.toEqual({ root: 'exited', tree: 'live' })
+    await expect(managed.close(proof.tree)).resolves.toEqual({
+      root: 'exited',
+      tree: 'live',
+      providerKilled: false
+    })
     proof.setVerdict('exited')
-    await expect(managed.close(proof.tree)).resolves.toEqual({ root: 'exited', tree: 'exited' })
-    await expect(managed.close(proof.tree)).resolves.toEqual({ root: 'exited', tree: 'exited' })
+    await expect(managed.close(proof.tree)).resolves.toEqual({
+      root: 'exited',
+      tree: 'exited',
+      providerKilled: false
+    })
+    await expect(managed.close(proof.tree)).resolves.toEqual({
+      root: 'exited',
+      tree: 'exited',
+      providerKilled: false
+    })
     expect(proof.tree.capture).toHaveBeenCalledTimes(3)
   })
 
@@ -241,7 +255,11 @@ describe('managed provider process', () => {
     const close = managed.close()
     await vi.advanceTimersByTimeAsync(150)
     await expect(close).resolves.toMatchObject({ root: 'exited' })
-    expect(managed.lastCloseResult).toEqual({ root: 'exited', tree: 'unverifiable' })
+    expect(managed.lastCloseResult).toEqual({
+      root: 'exited',
+      tree: 'unverifiable',
+      providerKilled: false
+    })
   })
 
   it('keeps the cleanup diagnostic tied to the close that finished before a late root exit', async () => {
@@ -254,7 +272,11 @@ describe('managed provider process', () => {
     await expect(close).resolves.toMatchObject({ root: 'live' })
     fixture.child.emit('exit', null, 'SIGKILL')
     await expect(managed.close()).resolves.toMatchObject({ root: 'exited' })
-    expect(managed.lastCloseResult).toEqual({ root: 'live', tree: 'unverifiable' })
+    expect(managed.lastCloseResult).toEqual({
+      root: 'live',
+      tree: 'unverifiable',
+      providerKilled: false
+    })
   })
 
   it('lets a supervised caller signal immediately and waits its configured grace before forcing', async () => {

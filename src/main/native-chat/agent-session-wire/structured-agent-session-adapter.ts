@@ -106,6 +106,19 @@ export class AgentSessionAcquisitionExitProvenError extends Error {
   }
 }
 
+/**
+ * Orca's kill reached the provider, the process that writes the conversation, but its root's exit
+ * was not seen in time. A killed process never runs its own code again, so it cannot write another
+ * turn: the session is over and a new process may start. Nothing claims the exit, so no exit
+ * evidence is recorded. Like a root exit, the provider's own diagnostic is the message.
+ */
+export class AgentSessionProviderKilledError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause })
+    this.name = 'AgentSessionProviderKilledError'
+  }
+}
+
 export class AgentSessionAcquisitionExitUnprovenError extends Error {
   constructor(cause: unknown) {
     super('agent_session_acquisition_exit_unproven', { cause })
@@ -201,6 +214,9 @@ export type StructuredAgentSessionEndedEvent = {
   observedAt?: number
   /** The provider ended before it finished starting, so resuming it would repeat the failure. */
   startupUnproven?: true
+  /** Orca's kill reached the provider but its root's exit was not seen: the session ended without
+   *  exit evidence (`AgentSessionProviderKilledError`). */
+  rootExitUnobserved?: true
 }
 
 /** The child a publish-first acquire handed over has now proven its start: startup facts applied
@@ -257,7 +273,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** Reaps an acquired provider when the host cannot commit or prove its lease.
    *  Returns true only after provider child exit is proven. Throws
    *  `AgentSessionAcquisitionRootExitObservedError` when the provider root's own
-   *  exit was observed first-hand but its descendants were not proven gone. */
+   *  exit was observed first-hand but its descendants were not proven gone, and
+   *  `AgentSessionProviderKilledError` when its kill reached the provider unseen. */
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
   dispatch(input: {
     sessionId: string
@@ -375,8 +392,9 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     accountHome: AgentSessionAccountHome
   }): Promise<ProviderHistoryWindow | null>
   /** Gracefully stops the structured owner after its event stream is drained. */
-  /** Returns true only after the provider child exit is proven. A root-exit or processless verdict
-   *  is thrown only once the session is finalized; read it through `stopAgentSessionProviderRoot`. */
+  /** Returns true only after the provider child exit is proven. A root-exit, killed or processless
+   *  verdict is thrown only once the session is finalized; read it through
+   *  `stopAgentSessionProviderRoot`. */
   closeSession?(sessionId: string): Promise<boolean>
   /** Stops a provider after a sink failure; the resulting exit is recovered as unexpected. */
   forceCloseSession?(sessionId: string): Promise<boolean>

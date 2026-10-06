@@ -17,6 +17,8 @@ export function handleCodexSessionExit(input: {
   error: Error
   /** Set for the end of a close Orca began: by that close, or by the root's own exit report. */
   closedByOrca?: true
+  /** The close's kill reached the app-server, but its exit was not seen. */
+  rootExitUnobserved?: true
   prompts?: CodexSession['prompts']
   onEvent?: (event: CodexStructuredSessionEvent) => void
   logger?: StructuredAgentSessionLogger
@@ -41,7 +43,8 @@ export function handleCodexSessionExit(input: {
     cause: session.orcaClose?.requested ? 'requested-close' : 'unexpected-exit',
     fence: session.fence,
     acquisitionGeneration: session.acquisitionGeneration,
-    observedAt: session.exitObservedAt
+    observedAt: session.exitObservedAt,
+    ...(input.rootExitUnobserved ? { rootExitUnobserved: true as const } : {})
   } as const
   // A synchronous sink rejection (usually backpressure) leaves the terminal rows to the host's
   // exit settlement, which writes its own bounded fallback. The exit itself is observed, so the
@@ -97,10 +100,11 @@ export async function closeCodexPublishedSession(
     requested: options?.requestedClose ?? true,
     reason: options?.unexpectedReason ?? new Error('codex session closed')
   }
-  // Keep the session indexed until the child exit is observed. A timeout or
-  // failed kill must leave the live connection available for a safe retry.
+  // Keep the session indexed until the child exit is observed or the kill reached the app-server
+  // itself. A failed kill must leave the live connection available for a safe retry.
   const exited = await session.connection.close()
-  if (exited !== true) {
+  const killed = exited !== true && session.connection.providerKilled === true
+  if (exited !== true && !killed) {
     return false
   }
   if (!session.ended) {
@@ -110,6 +114,7 @@ export async function closeCodexPublishedSession(
       connection: session.connection,
       error: session.orcaClose.reason,
       closedByOrca: true,
+      ...(killed ? { rootExitUnobserved: true as const } : {}),
       prompts: session.prompts,
       ...(onEvent ? { onEvent } : {}),
       ...(options?.logger ? { logger: options.logger } : {})

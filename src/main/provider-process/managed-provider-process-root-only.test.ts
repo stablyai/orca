@@ -5,9 +5,13 @@ import type { spawnProcess } from '../../shared/child-process/run-process'
 import { spawnManagedProviderProcess } from './managed-provider-process'
 import { ROOT_ONLY_GRACEFUL_EXIT_MS } from './provider-process-close'
 import type { ProviderProcessTeardownVerdict } from './provider-process-teardown'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from './provider-process-supervisor'
 
 const teardown = vi.hoisted(() => ({
-  terminate: vi.fn(async (): Promise<ProviderProcessTeardownVerdict> => 'exited')
+  terminate: vi.fn(async (): Promise<ProviderProcessTeardownVerdict> => ({
+    tree: 'exited',
+    providerKilled: true
+  }))
 }))
 vi.mock('./provider-process-teardown', () => ({
   terminateProviderProcessTree: teardown.terminate
@@ -46,7 +50,11 @@ describe('root-only managed provider close', () => {
     const fixture = fakeChild()
     fixture.child.stdin.once('finish', () => fixture.child.emit('exit', 0, null))
     const managed = rootOnly(fixture)
-    await expect(managed.close()).resolves.toEqual({ root: 'exited', tree: null })
+    await expect(managed.close()).resolves.toEqual({
+      root: 'exited',
+      tree: null,
+      providerKilled: false
+    })
     expect(teardown.terminate).not.toHaveBeenCalled()
   })
 
@@ -56,19 +64,45 @@ describe('root-only managed provider close', () => {
       vi.useFakeTimers()
       teardown.terminate.mockImplementationOnce(async () => {
         fixture.child.emit('exit', null, 'SIGKILL')
-        return tree
+        return { tree, providerKilled: true }
       })
       const fixture = fakeChild()
       const managed = rootOnly(fixture)
       const closing = managed.close()
       await vi.advanceTimersByTimeAsync(ROOT_ONLY_GRACEFUL_EXIT_MS)
-      await expect(closing).resolves.toEqual({ root: 'exited', tree })
+      await expect(closing).resolves.toEqual({ root: 'exited', tree, providerKilled: true })
       // The root is gone, so the close is done: a repeat answers from the memo, not a second teardown.
-      await expect(managed.close()).resolves.toEqual({ root: 'exited', tree })
+      await expect(managed.close()).resolves.toEqual({ root: 'exited', tree, providerKilled: true })
       expect(teardown.terminate).toHaveBeenCalledOnce()
-      expect(managed.lastCloseResult).toEqual({ root: 'exited', tree })
+      expect(managed.lastCloseResult).toEqual({ root: 'exited', tree, providerKilled: true })
     }
   )
+
+  it('reports a kill that reached the provider while the root is still not seen to exit', async () => {
+    vi.useFakeTimers()
+    teardown.terminate.mockResolvedValueOnce({ tree: null, providerKilled: true })
+    const fixture = fakeChild()
+    const managed = rootOnly(fixture)
+    const closing = managed.close()
+    await vi.advanceTimersByTimeAsync(ROOT_ONLY_GRACEFUL_EXIT_MS + 1_000)
+    await expect(closing).resolves.toEqual({ root: 'live', tree: null, providerKilled: true })
+  })
+
+  // Forcing a supervisor at its own worst case races its exit on a loaded host, and the forced
+  // step then pauses a supervisor that was about to report its provider gone.
+  it("gives a supervised root the supervisor's whole stop plus half a second before forcing", async () => {
+    vi.useFakeTimers()
+    const fixture = fakeChild()
+    const managed = spawnManagedProviderProcess(
+      { command: 'fixture-provider', args: [] },
+      { spawnImpl: fixture.spawn, platform: 'linux', site: 'fixture-provider-teardown' }
+    )
+    void managed.close()
+    await vi.advanceTimersByTimeAsync(PROVIDER_SUPERVISOR_MAX_STOP_MS + 499)
+    expect(teardown.terminate).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(teardown.terminate).toHaveBeenCalledOnce()
+  })
 
   it('waits the default root-only grace before forcing', async () => {
     vi.useFakeTimers()
@@ -85,8 +119,9 @@ describe('root-only managed provider close', () => {
     const fixture = fakeChild()
     const managed = rootOnly(fixture)
     fixture.child.emit('exit', 0, null)
-    await expect(managed.close()).resolves.toEqual({ root: 'exited', tree: null })
-    expect(managed.lastCloseResult).toEqual({ root: 'exited', tree: null })
+    const answer = { root: 'exited', tree: null, providerKilled: false }
+    await expect(managed.close()).resolves.toEqual(answer)
+    expect(managed.lastCloseResult).toEqual(answer)
     expect(fixture.child.stdin.writableEnded).toBe(false)
     expect(fixture.child.kill).not.toHaveBeenCalled()
   })

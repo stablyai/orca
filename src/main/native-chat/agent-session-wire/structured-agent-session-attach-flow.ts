@@ -49,6 +49,7 @@ import {
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { StructuredAgentSessionStopVerdict } from './structured-agent-session-host-types'
 
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
@@ -79,8 +80,8 @@ export type AttachFlowInput = {
   /** The conversation's own open journal, which the attach adopts: it never opens one itself. */
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
   /** A failure after acquisition released the session's acquisition; `cause` is that failure and
-   *  `rootGone` whether the release saw the provider root go. */
-  onAcquisitionReleased?: (cause: unknown, verdict: { rootGone: boolean }) => void
+   *  `verdict` whether the release saw the provider root go, or killed the provider. */
+  onAcquisitionReleased?: (cause: unknown, verdict: StructuredAgentSessionStopVerdict) => void
   /** The error an acquisition failed with, for a host-side reader of the provider's words; the
    *  refusal never carries them. */
   onAcquisitionFailed?: (error: unknown) => void

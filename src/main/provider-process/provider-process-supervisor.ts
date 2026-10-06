@@ -16,6 +16,9 @@ export const PROVIDER_GROUP_REAP_TIMEOUT_MS = 1_500
  */
 export const PROVIDER_SUPERVISOR_MAX_STOP_MS =
   PROVIDER_STDIN_END_GRACE_MS + PROVIDER_SIGTERM_GRACE_MS + PROVIDER_GROUP_REAP_TIMEOUT_MS
+/** How long a close waits for a supervisor before forcing it: its own worst case, plus room for a
+ *  loaded host to schedule its exit. */
+export const SUPERVISED_PROVIDER_GRACEFUL_EXIT_MS = PROVIDER_SUPERVISOR_MAX_STOP_MS + 500
 
 /** Inline supervisor source kept dependency-free for the spawned Node child. */
 export const POSIX_PROVIDER_SUPERVISOR_SCRIPT = `

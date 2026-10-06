@@ -2,7 +2,8 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import {
   AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError
+  AgentSessionAcquisitionRootExitObservedError,
+  AgentSessionProviderKilledError
 } from './structured-agent-session-adapter'
 import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
 
@@ -12,7 +13,7 @@ export async function settlePostAcquisitionAttachFailure(
   cause: unknown
 ): Promise<never> {
   let cleanupError: unknown = cause
-  let exitProof: 'exit-proven' | 'root-exit-observed' | 'unproven' = 'unproven'
+  let exitProof: 'exit-proven' | 'root-exit-observed' | 'killed' | 'unproven' = 'unproven'
   try {
     await rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, cause)
   } catch (error) {
@@ -22,9 +23,16 @@ export async function settlePostAcquisitionAttachFailure(
         ? 'unproven'
         : error instanceof AgentSessionAcquisitionRootExitObservedError
           ? 'root-exit-observed'
-          : 'exit-proven'
+          : error instanceof AgentSessionProviderKilledError
+            ? 'killed'
+            : 'exit-proven'
   }
-  input.onAcquisitionReleased?.(cause, { rootGone: exitProof !== 'unproven' })
+  input.onAcquisitionReleased?.(
+    cause,
+    exitProof === 'killed'
+      ? { rootGone: false, providerKilled: true }
+      : { rootGone: exitProof !== 'unproven' }
+  )
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,

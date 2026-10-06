@@ -18,6 +18,7 @@ import {
 } from '../windows-descendant-exit-verification'
 import { mergeClaudeCapturedTrees, type ClaudeCapturedTree } from './claude-child-tree-snapshot'
 import { terminateClaudeRoot, terminateClaudeWindowsRoot } from './claude-child-root-termination'
+import { killSupervisedProviderGroup } from '../provider-process/provider-supervised-group-kill'
 import {
   proveClaudeChildExitWithReaper,
   type ClaudeChildExitProofInput
@@ -61,6 +62,9 @@ export type ClaudeChildTreeReaperDeps = {
   platform?: NodeJS.Platform
   /** Whether the root's exit has been observed; only a live root can be walked. */
   exited?: () => boolean
+  /** The root is the POSIX provider supervisor, whose provider runs in a group of its own. */
+  supervised?: boolean
+  signalProcessGroup?: (pgid: number, signal: NodeJS.Signals) => void
   captureDescendants?: (rootPid: number) => Promise<DescendantSnapshot | null>
   terminateDescendants?: (snapshot: DescendantSnapshot) => Promise<DescendantTreeVerdict>
   terminateWindowsTree?: (root: WindowsProcessIdentity) => Promise<void>
@@ -93,6 +97,8 @@ export type ClaudeChildTreeReaper = {
    * which no later caller may collapse into "unknown".
    */
   readonly treeVerdict: DescendantTreeVerdict
+  /** Latched once a reap's kill reached Claude itself; never an observed exit. */
+  readonly providerKilled: boolean
 }
 
 /**
@@ -119,6 +125,7 @@ export function createClaudeChildTreeReaper(
   let queuedRefresh: Promise<void> | null = null
   let inFlight: Promise<DescendantTreeVerdict> | null = null
   let treeVerdict: DescendantTreeVerdict = 'unverifiable'
+  let providerKilled = false
 
   // Consulted only on win32: POSIX signals descendants by revalidated identity
   // and reaches the root solely through Node's handle, so neither needs a probe.
@@ -262,7 +269,10 @@ export function createClaudeChildTreeReaper(
 
   /** The only source of a tree verdict: every `exited` here is an observation. */
   async function judgeTree(): Promise<DescendantTreeVerdict> {
-    const killRoot = (): boolean => terminateClaudeRoot({ child, exited })
+    // Only an unsupervised root is Claude itself; a supervisor is killed by the forced step below.
+    const killRoot = (): void => {
+      providerKilled ||= terminateClaudeRoot({ child, exited })
+    }
     const rootPid = child.pid
     if (!rootPid) {
       // Never spawned, so the OS never created a tree to orphan.
@@ -272,7 +282,7 @@ export function createClaudeChildTreeReaper(
     if (platform === 'win32') {
       // Why taskkill's own outcome is never the verdict: it resolves identically
       // on a timeout, an access denial, a recycled root and a real kill.
-      const { rootVerified } = await terminateClaudeWindowsRoot({
+      const { rootVerified, rootKilled } = await terminateClaudeWindowsRoot({
         snapshot: snapshot?.platform === 'win32' ? snapshot.tree : null,
         exited,
         verifyRoot: (root) => verifyRoot(root),
@@ -282,8 +292,10 @@ export function createClaudeChildTreeReaper(
             : terminateIdentifiedWindowsProcessTree(root, {
                 ownsRoot: () => !exited()
               }).then(() => undefined),
-        killRoot
+        // Windows runs Claude without a supervisor: the root is Claude.
+        killRoot: () => terminateClaudeRoot({ child, exited })
       })
+      providerKilled ||= rootKilled
       if (!rootVerified && !exited()) {
         return 'unverifiable'
       }
@@ -293,30 +305,44 @@ export function createClaudeChildTreeReaper(
           )
         : 'unverifiable'
     }
+    if (deps.supervised && !exited()) {
+      // Killing the supervisor alone would orphan Claude in its own group; this kills that group
+      // first, and leaves the supervisor running its own stop when the group cannot be named.
+      const forced = await killSupervisedProviderGroup(child, rootPid, {
+        site: 'claude-provider-teardown',
+        ...(deps.captureDescendants ? { captureDescendants: deps.captureDescendants } : {}),
+        ...(deps.signalProcessGroup ? { signalProcessGroup: deps.signalProcessGroup } : {})
+      })
+      providerKilled ||= forced.provider !== 'unknown'
+    }
     if (snapshot?.platform !== 'posix') {
-      killRoot()
+      if (!deps.supervised) {
+        killRoot()
+      }
       return 'unverifiable'
     }
     if (snapshot.tree.descendants.length === 0) {
       // Read while the root was alive and childless: a later table read has no
       // row it could match, so it would add nothing to this observation.
-      killRoot()
+      if (!deps.supervised) {
+        killRoot()
+      }
       return 'exited'
     }
-    // Why the root is killed while verification is already running, and never
-    // SIGSTOPped first the way the Codex non-group path does: measured on macOS, a
-    // killed child of a stopped parent stays a zombie row in ps with its lstart
-    // and pgid intact, so verification cannot pass until the root is dead. The
-    // descendants are signalled by the verifier as soon as it revalidates their
-    // identities; the root's death then reparents any zombies to init, which
-    // reaps them. After a root exit the kill is a no-op: Node drops the handle
-    // on exit and never signals a possibly recycled pid.
+    // Why an unsupervised root is killed while verification is already running: measured on
+    // macOS, a killed child of a stopped or living parent that has not reaped it stays a zombie row
+    // in ps with its lstart and pgid intact, so verification cannot pass until the root is dead.
+    // A supervised root is already dead here when the forced step killed Claude's group. Either
+    // way the root's death reparents zombies to init, which reaps them. After a root exit the
+    // kill is a no-op: Node drops the handle on exit and never signals a possibly recycled pid.
     const verdictPromise = deps.terminateDescendants
       ? deps.terminateDescendants(snapshot.tree)
       : terminateDescendantSnapshotWithVerdict(snapshot.tree, {
           requireIdentityBeforeSignal: true
         })
-    killRoot()
+    if (!deps.supervised) {
+      killRoot()
+    }
     // What the verification observed is the verdict: a kill that reports no
     // signal means the handle was already gone, never that the tree survived.
     return verdictPromise
@@ -346,6 +372,9 @@ export function createClaudeChildTreeReaper(
     },
     get treeVerdict() {
       return treeVerdict
+    },
+    get providerKilled() {
+      return providerKilled
     }
   }
 }
@@ -362,7 +391,8 @@ export function createClaudeChildTreeReaper(
 export function proveClaudeChildExit(input: ClaudeChildExitProofInput): Promise<boolean> {
   return proveClaudeChildExitWithReaper(input, () =>
     createClaudeChildTreeReaper(input.managed.child, {
-      exited: () => input.managed.rootVerdict === 'exited'
+      exited: () => input.managed.rootVerdict === 'exited',
+      supervised: input.managed.supervised
     })
   )
 }

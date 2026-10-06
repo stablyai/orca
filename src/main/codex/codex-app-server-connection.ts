@@ -209,6 +209,9 @@ export async function openCodexAppServerConnection(
     get closed() {
       return closing || managed.rootVerdict === 'exited' || terminalError !== null
     },
+    get providerKilled() {
+      return managed.rootVerdict !== 'exited' && managed.lastCloseResult?.providerKilled === true
+    },
     get processTreeUnproven() {
       const tree = managed.lastCloseResult?.tree
       return (

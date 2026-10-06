@@ -91,7 +91,8 @@ export async function abandonQueuedStructuredAgentSessionMessages(
 
 /**
  * The agent goes to rest; the conversation stays. Begins the child's close, or joins the one
- * already begun, and waits for the exit's proof as long as a caller may. Still unproven, it throws
+ * already begun, and waits for the exit's proof, or the provider's kill, as long as a caller may.
+ * Neither, it throws
  * and the close keeps running: a later proof, or the next asker's attempt, ends the record.
  * `ending` is how the child's end is told: a user's Stop, the host stopping it for a cause (with
  * its text), or an eviction the conversation's close follows. The first stop's ending decides.
@@ -139,11 +140,13 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         () => context.restartWitness?.beforeStop(sessionId)
       )
     }
-    if ((await joinStructuredAgentSessionChildClose(context, sessionId, child)) !== 'exited') {
+    if (
+      (await joinStructuredAgentSessionChildClose(context, sessionId, child)) === 'unverifiable'
+    ) {
       throw new StructuredAgentSessionEvictionError(
         'stop-provider-child',
         sessionId,
-        new Error('provider child exit was not proven')
+        new Error('provider child was neither proven exited nor killed')
       )
     }
   } finally {

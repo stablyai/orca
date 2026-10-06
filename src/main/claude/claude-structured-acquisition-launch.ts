@@ -45,7 +45,7 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     const closed = await stopAgentSessionProviderRoot(() =>
       closeClaudePublishedSessionForDeps(sessions, sessionId, deps)
     )
-    if (!closed) {
+    if (closed === 'unproven') {
       throw new AgentSessionAcquisitionExitUnprovenError(
         new Error(`claude session ${sessionId} could not be stopped`)
       )

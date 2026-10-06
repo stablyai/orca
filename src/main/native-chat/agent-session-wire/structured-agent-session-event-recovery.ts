@@ -64,7 +64,9 @@ export class StructuredAgentSessionEventRecovery {
         const child = this.context.sessions.get(sessionId)?.child
         const stop =
           this.context.deps.adapter.forceCloseSession ?? this.context.deps.adapter.closeSession
-        if (!child || !stop || !(await stopAgentSessionProviderRoot(() => stop(sessionId)))) {
+        const stopped =
+          child && stop ? await stopAgentSessionProviderRoot(() => stop(sessionId)) : 'unproven'
+        if (!child || stopped === 'unproven') {
           return
         }
         // Ended in the same step as the stop, so no report of that close can end it first as a
@@ -72,7 +74,8 @@ export class StructuredAgentSessionEventRecovery {
         await this.endExitedChildUnderSerialize(sessionId, child, {
           expected: false,
           reason: `journal sink failure: ${error instanceof Error ? error.message : String(error)}`,
-          failure: agentSessionFailureFact('hostFault')
+          failure: agentSessionFailureFact('hostFault'),
+          ...(stopped === 'killed' ? { rootExitUnobserved: true as const } : {})
         })
       })
       .catch((error: unknown) =>

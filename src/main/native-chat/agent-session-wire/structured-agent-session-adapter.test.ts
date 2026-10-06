@@ -4,9 +4,15 @@ import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRefusal,
-  AgentSessionAcquisitionRootExitObservedError
+  AgentSessionAcquisitionRootExitObservedError,
+  AgentSessionPreSpawnError,
+  AgentSessionProviderKilledError
 } from './structured-agent-session-adapter'
-import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
+import {
+  rethrowAfterAgentSessionAcquisitionCleanup,
+  stopAgentSessionProviderRoot
+} from './structured-agent-session-provider-exit-proof'
+import { failedAcquisitionSettlement } from './structured-agent-session-failed-create-refusal'
 
 describe('failed agent-session acquisition cleanup', () => {
   it('names a failure exit-proven after proven cleanup, keeping its diagnostic and cause', async () => {
@@ -79,5 +85,69 @@ describe('failed agent-session acquisition cleanup', () => {
 
     expect(error).toBeInstanceOf(AgentSessionAcquisitionExitUnprovenError)
     expect(error).toMatchObject({ cause: expect.any(AggregateError) })
+  })
+})
+
+describe('a kill that reached the provider, its exit unseen', () => {
+  it('keeps the killed verdict through acquisition cleanup, with the provider diagnostic', async () => {
+    const cause = new Error('handshake failed')
+    const killed = new AgentSessionProviderKilledError(new Error('codex stopped responding'))
+    const error = await rethrowAfterAgentSessionAcquisitionCleanup(
+      {
+        releaseAcquisition: vi.fn(async () => {
+          throw killed
+        })
+      },
+      'session-1',
+      cause
+    ).catch((thrown: unknown) => thrown)
+
+    expect(error).toBeInstanceOf(AgentSessionProviderKilledError)
+    expect(error).toMatchObject({
+      message: 'codex stopped responding',
+      cause: { errors: [cause, killed] }
+    })
+  })
+
+  it('settles the failed start as a start failure with nothing proven exited', () => {
+    const settled = failedAcquisitionSettlement(
+      new AgentSessionProviderKilledError(new Error('codex stopped responding')),
+      { record: null, newSession: false }
+    )
+
+    expect(settled.exitProof).toBe('killed')
+    // A failed start, worded as one: never "the previous agent may still be running".
+    expect(settled.outcome).toMatchObject({
+      status: 'failed',
+      code: 'agent_session_operation_invalid'
+    })
+  })
+
+  it.each([
+    ['a proven close', async () => true, 'exited'],
+    ['an unproven close', async () => false, 'unproven'],
+    [
+      'a delivered kill',
+      async () => {
+        throw new AgentSessionProviderKilledError(new Error('killed'))
+      },
+      'killed'
+    ],
+    [
+      'a root exit',
+      async () => {
+        throw new AgentSessionAcquisitionRootExitObservedError(new Error('exited'))
+      },
+      'exited'
+    ],
+    [
+      'a processless child',
+      async () => {
+        throw new AgentSessionPreSpawnError(new Error('ENOENT'))
+      },
+      'exited'
+    ]
+  ] as const)('reads %s as %s', async (_label, stop, verdict) => {
+    await expect(stopAgentSessionProviderRoot(stop)).resolves.toBe(verdict)
   })
 })

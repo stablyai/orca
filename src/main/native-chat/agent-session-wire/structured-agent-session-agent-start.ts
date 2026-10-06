@@ -64,7 +64,7 @@ export async function ensureStructuredAgentSessionAgent(
   startedFor?: string
 ): Promise<StructuredAgentSessionResumeOutcome> {
   // A child a stop began closing takes no input, and none may start beside it: the start waits on
-  // that close, and is refused while its exit stays unverifiable.
+  // that close, and is refused while its provider is neither proven gone nor killed.
   const closed = await joinClosingStructuredAgentSessionChild(context, sessionId)
   if (!closed.ok) {
     return closed

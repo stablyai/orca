@@ -12,7 +12,8 @@ function fakeTree(): ClaudeChildTreeReaper & { reap: ReturnType<typeof vi.fn> } 
     capture: vi.fn(async () => {}),
     refresh: vi.fn(async () => {}),
     reap: vi.fn(async () => 'exited' as const),
-    treeVerdict: 'exited'
+    treeVerdict: 'exited',
+    providerKilled: false
   }
 }
 
@@ -59,7 +60,11 @@ describe('Claude child exit proof ladder', () => {
     await expect(proof).resolves.toBe(true)
     expect(root.child.stdin.writableEnded).toBe(true)
     expect(root.child.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM')
-    expect(root.managed.lastCloseResult).toEqual({ root: 'exited', tree: 'exited' })
+    expect(root.managed.lastCloseResult).toEqual({
+      root: 'exited',
+      tree: 'exited',
+      providerKilled: false
+    })
     expect(tree.reap).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -74,7 +79,11 @@ describe('Claude child exit proof ladder', () => {
     expect(root.child.stdin.writableEnded).toBe(true)
     expect(root.child.kill).not.toHaveBeenCalledWith('SIGTERM')
     expect(tree.reap).toHaveBeenCalledOnce()
-    expect(root.managed.lastCloseResult).toEqual({ root: 'live', tree: 'exited' })
+    expect(root.managed.lastCloseResult).toEqual({
+      root: 'live',
+      tree: 'exited',
+      providerKilled: false
+    })
     expect(vi.getTimerCount()).toBe(0)
   })
 })

@@ -1,7 +1,7 @@
 import type { SpawnedProcess } from '../../shared/child-process/run-process'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import { waitForProcessExitUntil } from './provider-process-exit-deadline'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from './provider-process-supervisor'
+import { SUPERVISED_PROVIDER_GRACEFUL_EXIT_MS } from './provider-process-supervisor'
 import type { ProviderProcessTeardownVerdict } from './provider-process-teardown'
 
 export type ProviderProcessTree = {
@@ -9,6 +9,8 @@ export type ProviderProcessTree = {
   refresh?: () => Promise<void>
   reap(): Promise<DescendantTreeVerdict>
   readonly treeVerdict: DescendantTreeVerdict
+  /** Whether a reap's kill reached the provider; see `ProviderProcessTeardownVerdict`. */
+  readonly providerKilled: boolean
 }
 
 export type ProviderProcessClosePolicy = {
@@ -31,6 +33,8 @@ export type ProviderProcessCloseResult = {
   root: DescendantTreeVerdict
   /** Null when this close made no observation of the descendants. */
   tree: DescendantTreeVerdict | null
+  /** This close's kill reached the provider, whether or not the root's exit was seen after it. */
+  providerKilled: boolean
 }
 
 export const ROOT_ONLY_GRACEFUL_EXIT_MS = 1_500
@@ -39,7 +43,7 @@ const ROOT_ONLY_FORCED_EXIT_MS = 1_000
 /** Default for providers without a descendant reaper: end stdin, wait, then the fallback teardown. */
 export function rootOnlyProviderClosePolicy(supervised: boolean): ProviderProcessClosePolicy {
   return {
-    gracefulExitMs: supervised ? PROVIDER_SUPERVISOR_MAX_STOP_MS : ROOT_ONLY_GRACEFUL_EXIT_MS,
+    gracefulExitMs: supervised ? SUPERVISED_PROVIDER_GRACEFUL_EXIT_MS : ROOT_ONLY_GRACEFUL_EXIT_MS,
     forcedExitMs: ROOT_ONLY_FORCED_EXIT_MS
   }
 }
@@ -66,7 +70,7 @@ export async function closeProviderProcess(
     child.kill('SIGTERM')
   }
   let reaped = false
-  let fallbackTree: DescendantTreeVerdict | null = null
+  let fallback: ProviderProcessTeardownVerdict | null = null
   if (input.rootVerdict() !== 'exited') {
     await waitForProcessExitUntil(input.exitPromise, policy.gracefulExitMs)
     if (input.rootVerdict() !== 'exited') {
@@ -75,7 +79,7 @@ export async function closeProviderProcess(
       if (tree) {
         await tree.reap()
       } else {
-        fallbackTree = await input.terminateTree()
+        fallback = await input.terminateTree()
       }
       await waitForProcessExitUntil(input.exitPromise, policy.forcedExitMs)
     }
@@ -83,5 +87,9 @@ export async function closeProviderProcess(
   if (!reaped && input.rootVerdict() === 'exited' && tree && tree.treeVerdict !== 'exited') {
     await tree.reap()
   }
-  return { root: input.rootVerdict(), tree: tree ? tree.treeVerdict : fallbackTree }
+  return {
+    root: input.rootVerdict(),
+    tree: tree ? tree.treeVerdict : (fallback?.tree ?? null),
+    providerKilled: tree ? tree.providerKilled : fallback?.providerKilled === true
+  }
 }

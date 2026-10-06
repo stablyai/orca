@@ -3,7 +3,8 @@
 // Every other release in the wire needs a probe, because every other release is about a process
 // somebody else started and nobody watched die. This one is different: the host stopped its own
 // lease-owning provider root through the adapter. Its observed exit is sufficient because the
-// lease follows that root, even when descendants remain `unverifiable`.
+// lease follows that root, even when descendants remain `unverifiable`; so is a kill the host
+// delivered to the provider itself, which never writes again, released with no exit evidence.
 //
 // The fence still moves, so the next owner is a new generation: an attach or settlement still
 // holding the stopped owner's fence is refused as stale rather than acting on its successor.
@@ -37,6 +38,9 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   exitObservedAt?: number
   /** Why the provider exited, when the host saw it die on its own. */
   exitReason?: string
+  /** The host's kill reached the provider but no exit was seen: nothing to record as evidence,
+   *  the same release recovery writes for an owner it could not prove gone. */
+  rootExitUnobserved?: true
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
@@ -51,15 +55,17 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
     claimStatus: 'released',
     handoffStage: null,
     lastRenewedAt: args.now,
-    deathEvidence: {
-      kind: 'exit-observed',
-      // A provider's exit reason can carry kilobytes of stderr; a longer detail fails the write.
-      detail: args.exitReason
-        ? args.exitReason.slice(0, MAX_AGENT_SESSION_DEATH_DETAIL_CHARS)
-        : 'the last surface holding this session released it',
-      observedAt: args.exitObservedAt ?? args.now,
-      ownerFence: record.lease.runtimeFence
-    }
+    deathEvidence: args.rootExitUnobserved
+      ? null
+      : {
+          kind: 'exit-observed',
+          // A provider's exit reason can carry kilobytes of stderr; a longer detail fails the write.
+          detail: args.exitReason
+            ? args.exitReason.slice(0, MAX_AGENT_SESSION_DEATH_DETAIL_CHARS)
+            : 'the last surface holding this session released it',
+          observedAt: args.exitObservedAt ?? args.now,
+          ownerFence: record.lease.runtimeFence
+        }
   })
 }
 
@@ -72,6 +78,7 @@ export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
     now: number
     exitObservedAt?: number
     exitReason?: string
+    rootExitUnobserved?: true
   }
 ): Promise<AgentSessionRecord> {
   return store.transitionHandoff(args.sessionId, (record) =>

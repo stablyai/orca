@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { spawnProcess } from '../../shared/child-process/run-process'
 import type { DescendantSnapshot } from '../pty-descendant-termination'
 import { spawnManagedProviderProcess } from './managed-provider-process'
+import { SUPERVISED_PROVIDER_GRACEFUL_EXIT_MS } from './provider-process-supervisor'
+
+/** Above pid_max on every supported POSIX host, so the real group signal is ESRCH. */
+const UNREACHABLE_PGID = 2_147_483_647
+const SUPERVISED_LADDER_MS = SUPERVISED_PROVIDER_GRACEFUL_EXIT_MS + 1_000
 
 // The real fallback teardown; only the primitives that touch the OS are faked.
 const os = vi.hoisted(() => ({
@@ -52,25 +57,32 @@ describe('fallback teardown never claims descendants it did not observe', () => 
     vi.useFakeTimers()
     const closing = rootOnly('win32').close()
     await vi.advanceTimersByTimeAsync(1_500)
-    await expect(closing).resolves.toEqual({ root: 'exited', tree: null })
+    await expect(closing).resolves.toEqual({ root: 'exited', tree: null, providerKilled: true })
     expect(os.taskkill).toHaveBeenCalledOnce()
   })
 
-  it('reports no observation when the POSIX process table cannot be read', async () => {
+  it('reports no observation, and kills nothing, when the POSIX process table cannot be read', async () => {
     vi.useFakeTimers()
     const closing = rootOnly('darwin').close()
-    await vi.advanceTimersByTimeAsync(5_500)
-    await expect(closing).resolves.toEqual({ root: 'exited', tree: null })
+    await vi.advanceTimersByTimeAsync(SUPERVISED_LADDER_MS)
+    // The supervisor is resumed to finish its own stop; killing it alone would orphan the provider.
+    await expect(closing).resolves.toEqual({ root: 'live', tree: null, providerKilled: false })
     expect(os.capture).toHaveBeenCalledOnce()
     expect(os.verifySnapshot).not.toHaveBeenCalled()
   })
 
   it('reports exited only when the captured descendants were verified gone', async () => {
     vi.useFakeTimers()
-    os.capture.mockResolvedValueOnce({ rootPgid: 1, descendants: [], capturedAtMs: 1 })
+    os.capture.mockResolvedValueOnce({
+      rootPgid: 4242,
+      descendants: [
+        { pid: UNREACHABLE_PGID, ppid: 4242, pgid: UNREACHABLE_PGID, startedAt: 'Mon Oct  5' }
+      ],
+      capturedAtMs: 1
+    })
     const closing = rootOnly('darwin').close()
-    await vi.advanceTimersByTimeAsync(5_500)
-    await expect(closing).resolves.toEqual({ root: 'exited', tree: 'exited' })
+    await vi.advanceTimersByTimeAsync(SUPERVISED_LADDER_MS)
+    await expect(closing).resolves.toEqual({ root: 'exited', tree: 'exited', providerKilled: true })
     expect(os.verifySnapshot).toHaveBeenCalledOnce()
   })
 })

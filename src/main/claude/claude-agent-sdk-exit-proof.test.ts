@@ -144,7 +144,8 @@ function mockTree(verdicts: DescendantTreeVerdict[]): ClaudeChildTreeReaper & {
     }),
     get treeVerdict() {
       return treeVerdict
-    }
+    },
+    providerKilled: false
   }
 }
 

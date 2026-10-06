@@ -11,11 +11,34 @@ import {
   type CodexAppServerConnection,
   type CodexAppServerConnectionHandlers
 } from './codex-app-server-connection'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
+import { SUPERVISED_PROVIDER_GRACEFUL_EXIT_MS } from '../provider-process/provider-process-supervisor'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import type * as PtyDescendantTermination from '../pty-descendant-termination'
+import type * as PtyDescendantExitVerification from '../pty-descendant-exit-verification'
 
 // close() waits out the supervisor's own stop before forcing the tree.
-const GRACEFUL_EXIT_MS = process.platform === 'win32' ? 1_500 : PROVIDER_SUPERVISOR_MAX_STOP_MS
+const GRACEFUL_EXIT_MS = process.platform === 'win32' ? 1_500 : SUPERVISED_PROVIDER_GRACEFUL_EXIT_MS
+
+// A stub root is in no process table, so the forced step reads it as the paused supervisor of a
+// provider whose group is already empty (an unreachable pgid answers the real group signal ESRCH).
+const processTable = vi.hoisted(() => ({
+  walk: (rootPid: number) => ({
+    root: { pid: rootPid, startedAt: 'Mon Oct  5 09:59:00 2026' },
+    rootPgid: rootPid,
+    descendants: [
+      { pid: 2_147_483_647, ppid: rootPid, pgid: 2_147_483_647, startedAt: 'Mon Oct  5' }
+    ],
+    capturedAtMs: 1
+  })
+}))
+vi.mock('../pty-descendant-termination', async (importOriginal) => ({
+  ...(await importOriginal<typeof PtyDescendantTermination>()),
+  captureDescendantSnapshot: async (rootPid: number) => processTable.walk(rootPid)
+}))
+vi.mock('../pty-descendant-exit-verification', async (importOriginal) => ({
+  ...(await importOriginal<typeof PtyDescendantExitVerification>()),
+  terminateDescendantSnapshotWithVerdict: async () => 'exited'
+}))
 
 const originalCodexHome = process.env.CODEX_HOME
 
@@ -98,7 +121,7 @@ function stubChild(options: { exitOnStdinEnd?: boolean } = {}): {
   // Keep the synthetic pid outside any real process table so teardown never
   // mistakes an unrelated process for this stub.
   child.pid = 9_999_999
-  child.kill = vi.fn()
+  child.kill = vi.fn(() => true)
   const written: Record<string, unknown>[] = []
   child.stdin.on('data', (chunk: Buffer) => {
     for (const line of chunk.toString('utf8').split('\n')) {
@@ -490,6 +513,7 @@ describe('openCodexAppServerConnection', () => {
         if (signal === 'SIGKILL') {
           resolve()
         }
+        return true
       })
     })
     const closing = connection.close()

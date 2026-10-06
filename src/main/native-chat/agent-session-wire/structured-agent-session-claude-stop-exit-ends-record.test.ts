@@ -617,3 +617,52 @@ it('runs the stop again for every ask after a close that came back unproven', as
   await resumedWith(connection, 'Third.')
   expect(connection.closeCount).toBe(4)
 })
+
+/** Stops a running turn; the close's kill reaches Claude itself, but its exit is never seen. */
+async function stopWithKilledClose(): Promise<FakeConnection> {
+  const connection = claude.connections[0]!
+  await openTurn(connection)
+  connection.exitVerdict = { root: 'live', tree: 'unverifiable', providerKilled: true }
+  connection.close = async () => {
+    connection.closeCount += 1
+    connection.closed = true
+    return false
+  }
+  refuseWritesOnceClosed(connection)
+  await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  frame(connection, INTERRUPTED_RESULT)
+  await laneDrained()
+  return connection
+}
+
+it("sends the next message to a fresh Claude once the Stop's kill reached the old one, its exit unseen", async () => {
+  const connection = await stopWithKilledClose()
+  // Ended at the Stop: nothing is left for a send to join, and no exit is claimed.
+  expect(child()).toBeNull()
+  expect(lease()).toMatchObject({ claimStatus: 'released', deathEvidence: null })
+  expect(host['sessions'].get(SESSION)?.lastEndedChild).toMatchObject({
+    cause: 'user-stop',
+    rootGone: false,
+    providerKilled: true
+  })
+
+  const next = await send('Carry on.')
+  const resumed = await resumedWith(connection, 'Carry on.')
+  expect(connection.closeCount).toBe(1)
+  expect((await submission(next))?.rejection).toBeUndefined()
+  expect(scopes()).not.toContain('provider-close-unproven')
+
+  // The old process's exit, seen at last, ends nothing: its record already ended.
+  connection.handlers.onExit?.(new Error('claude exited'), { expected: true })
+  await laneDrained()
+  expect(child()).not.toBeNull()
+  expect(claude.connections.at(-1)).toBe(resumed)
+})
+
+it("takes an option change at rest once the Stop's kill reached Claude", async () => {
+  const connection = await stopWithKilledClose()
+
+  await expect(setModel('claude-opus-5')).resolves.toMatchObject({ ok: true })
+  expect(connection.calls.some((call) => call.subtype === 'set_model')).toBe(false)
+  expect(store.getRecord(SESSION)?.options).toMatchObject({ model: 'claude-opus-5' })
+})

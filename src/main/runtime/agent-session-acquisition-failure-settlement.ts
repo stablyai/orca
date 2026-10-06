@@ -18,6 +18,8 @@ import type { AgentSessionStoreState } from './agent-session-record-store-file'
  *   identity this lease is keyed on is dead, but its descendants were not proven
  *   gone. Releases the lease and says exactly that, claiming nothing more.
  * - `processless`: the attempt failed before a process existed.
+ * - `killed`: cleanup's kill reached the provider but its exit was not seen. Nothing it reached can
+ *   write again, so the lease is released, with no evidence since no exit was observed.
  * - `unproven`: nothing about the process was observed. A recorded owner goes to recovery, which
  *   concludes about it; a reservation that recorded none is released, since the adapter already
  *   closed the stdio of anything it spawned.
@@ -26,6 +28,7 @@ export type AgentSessionAcquisitionExitProof =
   | 'exit-proven'
   | 'root-exit-observed'
   | 'processless'
+  | 'killed'
   | 'unproven'
 
 export type AgentSessionFailedAcquisitionSettlement = {
@@ -103,15 +106,18 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
           claimStatus: 'released',
           lastRenewedAt: args.now,
           handoffOperationId: null,
-          deathEvidence: {
-            kind: 'exit-observed',
-            detail:
-              args.exitProof === 'root-exit-observed'
-                ? 'the provider process exited; its descendants were not proven gone'
-                : 'post-acquisition cleanup proved no provider child remains',
-            observedAt: args.now,
-            ownerFence: record.lease.runtimeFence
-          }
+          deathEvidence:
+            args.exitProof === 'killed'
+              ? null
+              : {
+                  kind: 'exit-observed',
+                  detail:
+                    args.exitProof === 'root-exit-observed'
+                      ? 'the provider process exited; its descendants were not proven gone'
+                      : 'post-acquisition cleanup proved no provider child remains',
+                  observedAt: args.now,
+                  ownerFence: record.lease.runtimeFence
+                }
         })
   state.records.set(args.sessionId, next)
   state.operations = settleAgentSessionOperation(state.operations, args)
@@ -164,7 +170,7 @@ function acquisitionDeathEvidence(
   observedAt: number,
   ownerFence: number
 ): AgentSessionDeathEvidence | null {
-  if (exitProof === 'unproven') {
+  if (exitProof === 'unproven' || exitProof === 'killed') {
     return null
   }
   const proof = { observedAt, ownerFence }

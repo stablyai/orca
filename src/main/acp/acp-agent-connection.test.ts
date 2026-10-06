@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { spawnProcess } from '../../shared/child-process/run-process'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
+import { SUPERVISED_PROVIDER_GRACEFUL_EXIT_MS } from '../provider-process/provider-process-supervisor'
 import { ROOT_ONLY_GRACEFUL_EXIT_MS } from '../provider-process/provider-process-close'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import {
@@ -12,8 +12,9 @@ import {
 } from './acp-agent-connection'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
 
+const UNOBSERVED = { tree: 'unverifiable', providerKilled: false } as const
 const teardown = vi.hoisted(() =>
-  vi.fn<typeof terminateProviderProcessTree>(async () => 'unverifiable')
+  vi.fn<typeof terminateProviderProcessTree>(async () => UNOBSERVED)
 )
 vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: teardown
@@ -21,7 +22,7 @@ vi.mock('../provider-process/provider-process-teardown', () => ({
 
 const opened: { connection: AcpAgentConnection; exit: () => void }[] = []
 const grace =
-  process.platform === 'win32' ? ROOT_ONLY_GRACEFUL_EXIT_MS : PROVIDER_SUPERVISOR_MAX_STOP_MS
+  process.platform === 'win32' ? ROOT_ONLY_GRACEFUL_EXIT_MS : SUPERVISED_PROVIDER_GRACEFUL_EXIT_MS
 const start = { cwd: '/execution-host/folder', mcpServers: [] }
 const prompt = [{ type: 'text', text: 'hello' }] as const
 
@@ -66,7 +67,7 @@ afterEach(async () => {
     exit()
     await connection.close()
   }
-  teardown.mockReset().mockResolvedValue('unverifiable')
+  teardown.mockReset().mockResolvedValue(UNOBSERVED)
   vi.useRealTimers()
 })
 
@@ -93,7 +94,11 @@ describe('ACP process-owning connection', () => {
     connection.resumeReading()
     expect(child.stdout.isPaused()).toBe(false)
     expect(await connection.close()).toBe(true)
-    expect(connection.lastCloseResult).toEqual({ root: 'exited', tree: null })
+    expect(connection.lastCloseResult).toEqual({
+      root: 'exited',
+      tree: null,
+      providerKilled: false
+    })
   })
 
   it('settles prompts and permission signals on proven exit with stdout still open', async () => {
@@ -187,7 +192,7 @@ describe('ACP process-owning connection', () => {
     expect(teardown).toHaveBeenCalledOnce()
     teardown.mockImplementationOnce(async () => {
       child.emit('exit', null, 'SIGKILL')
-      return 'unverifiable'
+      return UNOBSERVED
     })
     const retry = connection.close()
     await vi.advanceTimersByTimeAsync(grace + 1_000)
@@ -203,7 +208,7 @@ describe('ACP process-owning connection', () => {
     async (tree) => {
       vi.useFakeTimers()
       const { connection, child } = fixture({}, { exitOnEnd: false })
-      teardown.mockResolvedValueOnce(tree)
+      teardown.mockResolvedValueOnce({ tree, providerKilled: false })
       const close = connection.close()
       await vi.advanceTimersByTimeAsync(grace + 1_000)
       expect(await close).toBe(false)
@@ -211,7 +216,7 @@ describe('ACP process-owning connection', () => {
       expect(connection.processTreeUnproven).toBe(true)
       expect(await connection.close()).toBe(true)
       expect(connection.processTreeUnproven).toBe(true)
-      expect(connection.lastCloseResult).toEqual({ root: 'live', tree })
+      expect(connection.lastCloseResult).toEqual({ root: 'live', tree, providerKilled: false })
       expect(teardown).toHaveBeenCalledOnce()
     }
   )

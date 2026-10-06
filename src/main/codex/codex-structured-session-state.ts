@@ -253,13 +253,21 @@ export class CodexAcquisitionRegistry {
     }
   }
 
-  async closeFailedAttempt(sessionId: string, attempt: CodexAcquisitionAttempt): Promise<boolean> {
-    const stopped = (await attempt.window.connection?.close()) ?? true
+  /** `killed`: the close's kill reached the app-server but its exit was not seen. */
+  async closeFailedAttempt(
+    sessionId: string,
+    attempt: CodexAcquisitionAttempt
+  ): Promise<'exited' | 'killed' | 'unproven'> {
+    const connection = attempt.window.connection
+    const stopped = (await connection?.close()) ?? true
     if (stopped) {
       attempt.exitProven = true
+    }
+    const verdict = stopped ? 'exited' : connection?.providerKilled ? 'killed' : 'unproven'
+    if (verdict !== 'unproven') {
       this.deleteIfCurrent(sessionId, attempt)
     }
-    return stopped
+    return verdict
   }
 
   sessionIds(): IterableIterator<string> {

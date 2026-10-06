@@ -34,4 +34,7 @@ export type CodexAppServerConnection = {
   close: () => Promise<boolean>
   /** The root exited, but the forced kill of its process tree could not prove the tree gone. */
   readonly processTreeUnproven?: boolean
+  /** The last close's kill reached the app-server itself and its exit has not been seen: it
+   *  cannot write again, so its thread may be resumed elsewhere. */
+  readonly providerKilled?: boolean
 }

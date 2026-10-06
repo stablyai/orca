@@ -535,4 +535,53 @@ describe('a message after a Codex Stop whose exit was unproven', () => {
     expect(log.entries.map((entry) => entry.fields.scope)).toContain('provider-close-after-exit')
     expect(host['sessions'].get(SESSION)?.lastEndedChild).toMatchObject({ rootGone: true })
   })
+
+  it("goes to a fresh Codex once the Stop's kill reached the old one, waiting out its thread lock", async () => {
+    await runningTurn()
+    codex.routes['turn/interrupt'] = () => {
+      throw interruptFailure('internal error')
+    }
+    const old = codex.connections.at(-1)!
+    const request = old.request
+    // The close's kill reached the app-server; its exit is never seen.
+    old.close = async () => {
+      old.closed = true
+      return false
+    }
+    Object.defineProperty(old, 'providerKilled', { get: () => old.closed })
+    old.request = (method, params) =>
+      old.closed
+        ? Promise.reject(new Error('codex app-server is closing'))
+        : request(method, params)
+    await stop()
+    await host.flushStreamedEvents(SESSION)
+    expect(host['sessions'].get(SESSION)?.child).toBeNull()
+    expect(host.deps.store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      deathEvidence: null
+    })
+    // Codex still holds the old writer's lock on the thread for a moment after the kill.
+    launch.resumeThreadId = THREAD
+    const resume = codex.routes['thread/resume']!
+    let locked = 1
+    codex.routes['thread/resume'] = (params) => {
+      if (locked-- > 0) {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          `codex app-server thread/resume failed: thread ${THREAD} already has an active writer`
+        )
+      }
+      return resume(params)
+    }
+
+    expect(await send('carry on')).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(codex.connections).toHaveLength(2))
+    await vi.waitFor(() => expect(startedWith(codex.connections[1]!, 'carry on')).toBe(true))
+    expect(
+      codex.connections[1]!.calls.filter((call) => call.method === 'thread/resume')
+    ).toHaveLength(2)
+    expect(startedWith(old, 'carry on')).toBe(false)
+    expect(log.entries.map((entry) => entry.fields.scope)).not.toContain('provider-close-unproven')
+  })
 })

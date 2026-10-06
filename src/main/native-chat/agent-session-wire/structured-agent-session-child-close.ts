@@ -4,33 +4,43 @@
 // it is about. Joining it is asking the adapter to close: the adapter runs one close per child at
 // a time and bounds it by its own kill escalation, so every caller waits on the same attempt, and
 // a caller that comes after an attempt ended unproven runs it again. The verdict is the root's
-// exit alone. Proven, the one exit handler ends the record; a proof that lands with no caller
-// waiting reaches that handler as the adapter's report of the exit.
+// exit, or a kill that reached the provider: a killed process never writes again, so a new one may
+// start beside nothing. Either way the one exit handler ends the record, a kill with no exit
+// evidence; a proof that lands with no caller waiting reaches that handler as the adapter's report
+// of the exit, and a late exit after a kill finds the record already ended.
 
 import { refuse } from '../../../shared/agent-session-wire-refusals'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
-import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
+import {
+  stopAgentSessionProviderRoot,
+  type AgentSessionProviderStop
+} from './structured-agent-session-provider-exit-proof'
 import { releaseStoredStructuredAgentSessionOwnerAfterExit } from './structured-agent-session-lease-release'
 import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session-surface-release-transition'
 
-/** What a caller learned about the child's exit: proven, or not. A root still there after the
- *  close's kill reads `unverifiable`, never `exited`. */
-export type StructuredAgentSessionChildCloseVerdict = 'exited' | 'unverifiable'
+/** What a caller learned about the child: its exit proven, its provider `killed` without the exit
+ *  seen, or neither. A provider the close could not kill reads `unverifiable`. */
+export type StructuredAgentSessionChildCloseVerdict = 'exited' | 'killed' | 'unverifiable'
 
-/** Joins the child's close and, once its root's exit is proven, ends the record. */
+/** Joins the child's close and, once its exit is proven or its provider killed, ends the record. */
 export async function joinStructuredAgentSessionChildClose(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
   child: StructuredAgentSessionProviderChild
 ): Promise<StructuredAgentSessionChildCloseVerdict> {
-  if (!(await closeProviderRoot(context, sessionId))) {
+  const stopped = await closeProviderRoot(context, sessionId)
+  if (stopped === 'unproven') {
     return 'unverifiable'
   }
-  await context.endExitedChild(sessionId, child, { expected: true, reason: 'closed by Orca' })
+  await context.endExitedChild(sessionId, child, {
+    expected: true,
+    reason: 'closed by Orca',
+    ...(stopped === 'killed' ? { rootExitUnobserved: true as const } : {})
+  })
   context.restartWitness?.stopped(sessionId)
-  return 'exited'
+  return stopped
 }
 
 /** The refusal of an operation that met a child whose close is still unproven. */
@@ -43,8 +53,8 @@ export function previousExitUnverifiableRefusal(): AgentSessionWireRefusal {
 }
 
 /** For an operation that reaches the provider: a child a stop began closing takes no input and
- *  none may start beside it, so the operation joins that close and is refused while it is still
- *  unproven. */
+ *  none may start beside it, so the operation joins that close and is refused while its provider
+ *  is neither proven gone nor killed. */
 export async function joinClosingStructuredAgentSessionChild(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string
@@ -53,11 +63,11 @@ export async function joinClosingStructuredAgentSessionChild(
   if (!child?.close) {
     return { ok: true }
   }
-  if ((await joinStructuredAgentSessionChildClose(context, sessionId, child)) === 'exited') {
+  if ((await joinStructuredAgentSessionChildClose(context, sessionId, child)) !== 'unverifiable') {
     return { ok: true }
   }
   // A stop reports this through its own failure; here the refusal is the only trace.
-  context.deps.logger.warn("the agent's process did not exit after Orca stopped and killed it", {
+  context.deps.logger.warn("Orca's kill did not reach the agent's process, and it did not exit", {
     scope: 'provider-close-unproven',
     sessionId
   })
@@ -67,12 +77,12 @@ export async function joinClosingStructuredAgentSessionChild(
 function closeProviderRoot(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string
-): Promise<boolean> {
+): Promise<AgentSessionProviderStop> {
   const { adapter, logger } = context.deps
-  // An adapter with no close has nothing to stop; anything else must PROVE the exit.
+  // An adapter with no close has nothing to stop; anything else must prove the exit or the kill.
   const stop = adapter.disposeSession ?? adapter.closeSession
   if (!stop) {
-    return Promise.resolve(true)
+    return Promise.resolve('exited')
   }
   return stopAgentSessionProviderRoot(
     () => stop.call(adapter, sessionId),
@@ -89,12 +99,13 @@ function closeProviderRoot(
       sessionId,
       error
     })
-    return false
+    return 'unproven' as const
   })
 }
 
-/** Whether the lease still names the child this host last proved gone, unreleased: only that
- *  in-memory proof lets this host release it without a probe, so the handle carrying it stays. */
+/** Whether the lease still names the child this host last proved gone or killed, unreleased: only
+ *  that in-memory proof lets this host release it without a probe, so the handle carrying it
+ *  stays. */
 export function structuredAgentSessionEndedChildHoldsLease(
   context: Pick<StructuredAgentSessionLifetimeContext, 'deps' | 'sessions'>,
   sessionId: string
@@ -102,7 +113,7 @@ export function structuredAgentSessionEndedChildHoldsLease(
   const ended = context.sessions.get(sessionId)?.lastEndedChild
   const record = context.deps.store.getRecord(sessionId)
   return (
-    ended?.rootGone === true &&
+    (ended?.rootGone === true || ended?.providerKilled === true) &&
     record !== null &&
     isSurfaceReleasableAgentSessionRecord(record) &&
     record.lease.runtimeFence === ended.fence
@@ -125,7 +136,8 @@ export async function releaseLeaseOfEndedStructuredAgentSessionChild(
     sessionId,
     expectedFence: ended.fence,
     now: context.now(),
-    ...(ended.reason ? { exitReason: ended.reason } : {})
+    ...(ended.reason ? { exitReason: ended.reason } : {}),
+    ...(ended.rootGone ? {} : { rootExitUnobserved: true as const })
   }).catch((error: unknown) =>
     context.deps.logger.warn("releasing an exited agent's lease failed", {
       scope: 'ended-child-lease-release',

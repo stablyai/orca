@@ -2,9 +2,12 @@
 //
 // Every path funnels through `settled` so the ephemeral surfaces a closed
 // session owns are cleared exactly once, and only when the child was actually
-// proven stopped — a refused close leaves the session indexed for a retry.
+// proven stopped or killed — a refused close leaves the session indexed for a retry.
 
-import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  AgentSessionAcquisitionRootExitObservedError,
+  AgentSessionProviderKilledError
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import {
   closeAllCodexSessions,
@@ -40,6 +43,12 @@ export class CodexStructuredSessionTeardown {
         this.deps.logger
       )
     )
+    if (closed && connection?.providerKilled) {
+      // Ended without its exit seen; the host releases the lease with no exit evidence.
+      throw new AgentSessionProviderKilledError(
+        new Error("codex app-server was killed, but its exit wasn't seen yet")
+      )
+    }
     if (closed && connection?.processTreeUnproven) {
       // The root exited, so the close is proven; its owner reports the children left unconfirmed.
       throw new AgentSessionAcquisitionRootExitObservedError(
