@@ -54,16 +54,22 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   // config. Seed only what is verified; discovery supplies the rest.
   models: [
     {
+      id: 'grok-4.7',
+      label: 'Grok 4.7',
+      description: 'xAI frontier model',
+      options: [grokEffort('xhigh')]
+    },
+    {
       id: 'grok-4.6',
       label: 'Grok 4.6',
-      description: "xAI's latest frontier model",
+      description: 'xAI frontier model',
       isDefault: true,
       options: [grokEffort('xhigh')]
     },
     {
       id: 'grok-4.5',
       label: 'Grok 4.5',
-      description: "xAI's previous frontier model",
+      description: 'Earlier xAI frontier model',
       options: [grokEffort('high')]
     }
   ],
