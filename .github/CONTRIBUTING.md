@@ -49,6 +49,12 @@ pnpm test
 pnpm build
 ```
 
+To run one test file with the repository's Vitest configuration, use
+`pnpm test:one path/to/file.test.ts`. Running `vitest run path/to/file.test.ts`
+directly from the repository root does not load that configuration and can fail
+with misleading alias-resolution errors. When launching tests from an agent,
+set `ORCA_BACKGROUND_LAUNCH=1` in the environment.
+
 Add high-quality tests for behavior changes and bug fixes. Prefer tests that would actually catch a regression, not shallow coverage that only exercises the happy path.
 
 If your change affects UI or interaction behavior, verify it on the platforms it could impact.
