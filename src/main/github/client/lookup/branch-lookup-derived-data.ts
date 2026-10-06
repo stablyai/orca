@@ -1,7 +1,13 @@
 import { getPRConflictSummary } from '../../conflict-summary'
 import type { ghRepoExecOptions, OwnerRepo } from '../../gh-utils'
 import { hydrateGitHubPRStack } from '../../github-pr-stack'
+import type { ReviewMergeQueueEntry } from '../../../../shared/review-merge-queue-entry'
+import { mapPRState } from '../../mappers'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
+import {
+  fetchPullRequestMergeQueueEntry,
+  shouldFetchPullRequestMergeQueueEntry
+} from './../detect/pull-request-merge-queue-entry'
 import { derivePullRequestMergeable, type PullRequestLookupData } from './pull-request-lookup-data'
 import { getCachedGitHubPRStackSummary } from './pr-stack-summary-cache'
 
@@ -18,6 +24,7 @@ export async function derivePRRefreshData(args: {
   mergeable: ReturnType<typeof derivePullRequestMergeable>
   stack: PullRequestLookupData['stack']
   stackMergeQueueRequired: boolean | null | undefined
+  mergeQueueEntry: ReviewMergeQueueEntry | null | undefined
   conflictSummary: Awaited<ReturnType<typeof getPRConflictSummary>>
 }> {
   const { data, dataRepo, repoPath, connectionId, localGitOptions, ghOptions, executionScope } =
@@ -58,6 +65,15 @@ export async function derivePRRefreshData(args: {
           )
         ).mergeQueueRequired
       : undefined
+  const mergeQueueEntry =
+    dataRepo &&
+    shouldFetchPullRequestMergeQueueEntry({
+      state: mapPRState(data.state, data.isDraft),
+      mergeQueueRequired:
+        stackMergeQueueRequired !== undefined ? stackMergeQueueRequired : data.mergeQueueRequired
+    })
+      ? await fetchPullRequestMergeQueueEntry(dataRepo, data.number, ghOptions)
+      : undefined
   const conflictSummary =
     !connectionId &&
     mergeable === 'CONFLICTING' &&
@@ -72,5 +88,5 @@ export async function derivePRRefreshData(args: {
           localGitOptions
         )
       : undefined
-  return { mergeable, stack, stackMergeQueueRequired, conflictSummary }
+  return { mergeable, stack, stackMergeQueueRequired, mergeQueueEntry, conflictSummary }
 }

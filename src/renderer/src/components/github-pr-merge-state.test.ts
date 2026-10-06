@@ -254,4 +254,47 @@ describe('presentGitHubPRMergeState', () => {
       presentGitHubPRMergeState(pr({ state: 'draft', mergeQueueRequired: true })).autoMergeAction
     ).toBeNull()
   })
+
+  it('shows the merge queue position for a queued open PR and offers no merge action', () => {
+    expect(
+      presentGitHubPRMergeState(
+        pr({
+          mergeQueueRequired: true,
+          mergeQueueEntry: { position: 3, state: 'AWAITING_CHECKS' }
+        })
+      )
+    ).toMatchObject({
+      label: '#3 in merge queue',
+      tooltip: 'Merge queue checks are running for this pull request',
+      directMergeAvailable: false,
+      autoMergeAction: null
+    })
+    expect(
+      presentGitHubPRMergeState(
+        pr({ mergeQueueRequired: true, mergeQueueEntry: { position: null, state: null } })
+      )
+    ).toMatchObject({ label: 'In merge queue', autoMergeAction: null })
+  })
+
+  it('flags a queued PR that GitHub reports as unmergeable', () => {
+    const presentation = presentGitHubPRMergeState(
+      pr({ mergeQueueRequired: true, mergeQueueEntry: { position: 1, state: 'UNMERGEABLE' } })
+    )
+
+    expect(presentation.tooltip).toBe('The merge queue reports this pull request cannot merge')
+    expect(presentation.tone).toContain('rose')
+  })
+
+  it('ignores a stale queue entry once the PR is merged or closed', () => {
+    const mergeQueueEntry = { position: 1, state: 'LOCKED' as const }
+
+    expect(presentGitHubPRMergeState(pr({ state: 'merged', mergeQueueEntry })).label).toBe('Merged')
+    expect(presentGitHubPRMergeState(pr({ state: 'closed', mergeQueueEntry })).label).toBe('Closed')
+  })
+
+  it('keeps the normal state when the PR is checked and not queued', () => {
+    expect(
+      presentGitHubPRMergeState(pr({ mergeQueueRequired: true, mergeQueueEntry: null })).label
+    ).toBe('Merge when ready')
+  })
 })

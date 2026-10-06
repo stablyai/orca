@@ -221,6 +221,29 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('data-tooltip-root')
   })
 
+  it('names the merge queue position ahead of check status for a queued PR', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        prDisplay={{
+          ...review,
+          status: 'pending',
+          mergeQueueEntry: { position: 3, state: 'AWAITING_CHECKS' }
+        }}
+        newCardStyle
+      />
+    )
+
+    expect(markup).toContain('PR: #3 in merge queue')
+    expect(markup).not.toContain('PR checks: Pending')
+  })
+
   it('uses the unified compact review glyph for GitLab MR status', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot

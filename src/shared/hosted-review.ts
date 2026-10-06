@@ -5,6 +5,7 @@ import type {
   PRMergeableState,
   PRReviewDecision
 } from './github/pull-request-types'
+import type { ReviewMergeQueueEntry } from './review-merge-queue-entry'
 
 export type HostedReviewProvider =
   | 'github'
@@ -40,6 +41,7 @@ export type HostedReviewInfo = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  mergeQueueEntry?: ReviewMergeQueueEntry | null
   mergeStateStatus?: string | null
   headSha?: string
   /** GitHub repository that owns the PR; absent on older runtimes and other providers. */

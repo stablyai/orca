@@ -10,6 +10,7 @@ import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 import { useIsSleepingWorktree } from './use-worktree-sleep-state'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
+import { getReviewMergeQueueLabel } from '../review-merge-queue-presentation'
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
@@ -80,6 +81,9 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
   }
   if (review.state === 'draft') {
     return `${label}: Draft`
+  }
+  if (review.state === 'open' && review.mergeQueueEntry) {
+    return `${label}: ${getReviewMergeQueueLabel(review.mergeQueueEntry)}`
   }
   if (review.status === 'failure') {
     return `${label} checks: Failed`

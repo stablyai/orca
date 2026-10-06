@@ -29,4 +29,14 @@ describe('hostedReviewInfoFromGitHubPRInfo', () => {
       githubRepository
     })
   })
+
+  it('carries the merge queue entry, including an explicit not-queued null', () => {
+    expect(
+      hostedReviewInfoFromGitHubPRInfo({ ...pr, mergeQueueEntry: { position: 2, state: 'QUEUED' } })
+    ).toMatchObject({ mergeQueueEntry: { position: 2, state: 'QUEUED' } })
+    expect(hostedReviewInfoFromGitHubPRInfo({ ...pr, mergeQueueEntry: null })).toMatchObject({
+      mergeQueueEntry: null
+    })
+    expect(hostedReviewInfoFromGitHubPRInfo(pr)).not.toHaveProperty('mergeQueueEntry')
+  })
 })

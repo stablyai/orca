@@ -12,6 +12,7 @@ import type {
   PRReviewDecision,
   ProviderCheckSummary
 } from './pull-request-types'
+import type { ReviewMergeQueueEntry } from '../review-merge-queue-entry'
 
 export type GitHubWorkItem = {
   id: string
@@ -46,6 +47,7 @@ export type GitHubWorkItem = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  mergeQueueEntry?: ReviewMergeQueueEntry | null
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean

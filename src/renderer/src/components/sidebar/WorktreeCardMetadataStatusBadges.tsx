@@ -1,11 +1,12 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
-import { CircleCheck, CircleDot, CircleX, Clock, GitMerge } from 'lucide-react'
+import { CircleCheck, CircleDot, CircleX, Clock, GitMerge, ListOrdered } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon, checksLabel } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
+import { getReviewMergeQueueLabel } from '../review-merge-queue-presentation'
 
 function MetadataStatusBadge({
   label,
@@ -88,10 +89,12 @@ export function LinearStateBadge({ stateName }: { stateName: string }): React.JS
 
 export function ReviewStateBadge({
   state,
-  label
+  label,
+  mergeQueueEntry
 }: {
   state: WorktreeCardPrDisplay['state']
   label: 'MR' | 'PR'
+  mergeQueueEntry?: WorktreeCardPrDisplay['mergeQueueEntry']
 }): React.JSX.Element | null {
   if (!state) {
     return null
@@ -136,6 +139,18 @@ export function ReviewStateBadge({
         className="border-border bg-muted/30 text-muted-foreground"
       >
         <CircleDot />
+      </MetadataStatusBadge>
+    )
+  }
+
+  if (state === 'open' && mergeQueueEntry) {
+    return (
+      <MetadataStatusBadge
+        label={translate('reviewMergeQueue.stateBadge', 'State: {{queueLabel}}', {
+          queueLabel: getReviewMergeQueueLabel(mergeQueueEntry)
+        })}
+      >
+        <ListOrdered />
       </MetadataStatusBadge>
     )
   }

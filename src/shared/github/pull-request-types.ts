@@ -1,3 +1,5 @@
+import type { ReviewMergeQueueEntry } from '../review-merge-queue-entry'
+
 export type PRState = 'open' | 'closed' | 'merged' | 'draft'
 export type IssueState = 'open' | 'closed'
 export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
@@ -60,6 +62,8 @@ export type PRInfo = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  /** Set only for open PRs on merge-queue branches; absent when unchecked. */
+  mergeQueueEntry?: ReviewMergeQueueEntry | null
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   /** GitHub-registered stack metadata. Absent for ordinary dependent PR chains. */

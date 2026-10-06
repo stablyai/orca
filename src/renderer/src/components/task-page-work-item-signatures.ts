@@ -38,6 +38,7 @@ export function taskPageWorkItemStatusSignature(item: GitHubWorkItem): string {
     item.autoMergeEnabled ?? null,
     item.autoMergeAllowed ?? null,
     item.mergeQueueRequired ?? null,
+    item.mergeQueueEntry ?? null,
     item.mergeStateStatus ?? null,
     item.updatedAt
   ])

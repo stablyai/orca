@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
-import { PullRequestIcon } from './WorktreeCardHelpers'
+import { MergeQueueIcon, PullRequestIcon } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 
 export function getReviewLabel(review: WorktreeCardPrDisplay): 'MR' | 'PR' {
@@ -71,6 +71,14 @@ export function ReviewIcon({
   className?: string
   variant?: 'provider' | 'generic'
 }): React.JSX.Element {
+  if (review.state === 'open' && review.mergeQueueEntry) {
+    return createElement(MergeQueueIcon, {
+      className: cn(
+        className,
+        review.mergeQueueEntry.state === 'UNMERGEABLE' ? 'text-destructive' : 'text-status-warning'
+      )
+    })
+  }
   const providerIcon =
     variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const Icon = getReviewStateIcon(review.state) ?? providerIcon
