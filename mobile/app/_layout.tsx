@@ -25,6 +25,7 @@ import { loadHostCatalog } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
+import { refreshDefaultSessionView } from '../src/storage/default-session-view-store'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -69,6 +70,10 @@ export default function RootLayout() {
   // Cold start, then foreground and timer checks on the desktop updater's cadence.
   useEffect(() => appUpdateChecker.start(), [])
   useEffect(() => startAndroidForegroundPushPresentation(), [])
+  // Why at boot: a launch sends this device's default view only once it has loaded.
+  useEffect(() => {
+    void refreshDefaultSessionView()
+  }, [])
 
   // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,

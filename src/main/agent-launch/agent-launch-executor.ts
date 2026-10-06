@@ -300,7 +300,8 @@ function terminalLaunchInputs(intent: AgentLaunchIntent) {
     ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
     ...(intent.cwd ? { cwd: intent.cwd } : {}),
     ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
-    ...(intent.paneKey ? { paneKey: intent.paneKey } : {})
+    ...(intent.paneKey ? { paneKey: intent.paneKey } : {}),
+    ...(intent.launcherDefaultView ? { launcherDefaultView: intent.launcherDefaultView } : {})
   }
 }
 

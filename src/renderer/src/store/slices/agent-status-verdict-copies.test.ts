@@ -23,11 +23,13 @@ import {
 // A copy that kept only `interrupted` would read a failure as a clean finish.
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
 const FAILED_MAIN_AGENT = { state: 'done', outcome: 'failure', stateStartedAt: 2_000 } as const
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these readers touch only the three maps given; every tab lookup is answered by the tab the caller passes.
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these readers touch only the maps given; every tab lookup is answered by the tab the caller passes.
 const STATE = {
   sleepingAgentSessionsByPaneKey: {},
   migrationUnsupportedByPtyId: {},
-  tabsByWorktree: {}
+  tabsByWorktree: {},
+  unifiedTabsByWorktree: {},
+  terminalLayoutsByTabId: {}
 } as unknown as AppState
 
 function failedDone(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {

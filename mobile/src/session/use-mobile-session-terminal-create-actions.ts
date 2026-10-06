@@ -3,6 +3,7 @@ import {
   type MobileQuickCommandLaunch
 } from '../terminal/quick-commands'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { phoneLauncherDefaultView } from '../tasks/agent-launch-request'
 import { sessionTabCreateTerminal } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import { buildTerminalSendParams } from '../terminal/terminal-send-request'
@@ -132,6 +133,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         }
       }
       const afterTabId = activeSessionTabId ?? undefined
+      const launcherDefaultView = agent ? phoneLauncherDefaultView(hostCapabilities) : undefined
       const hostSupportsGroupedPlacement =
         hostCapabilities?.includes(SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY) === true
       const response = await sessionTabCreateTerminal.request(client, {
@@ -144,6 +146,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           : {}),
         ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
         ...(agent ? { agent } : {}),
+        ...(launcherDefaultView ? { launcherDefaultView } : {}),
         activate: false,
         select: true,
         navigation: 'caller'

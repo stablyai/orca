@@ -171,6 +171,8 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     })
     .optional(),
   viewMode: z.enum(['terminal', 'chat']).optional(),
+  // The launching device's Chat UI default for an agent tab, applied like the host's own.
+  launcherDefaultView: z.enum(['terminal', 'chat']).optional().catch(undefined),
   activate: z.boolean().optional(),
   select: z.boolean().optional(),
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),

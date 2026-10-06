@@ -20,6 +20,8 @@ export type WorktreeStartupLaunch = {
   launchToken?: string
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'
+  /** The launching device's Chat UI default for this agent tab; the host applies it like its own. */
+  launcherDefaultView?: 'terminal' | 'chat'
   startupCommandDelivery?: StartupCommandDelivery
   telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
 }

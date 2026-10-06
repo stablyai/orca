@@ -15,7 +15,8 @@ import {
   markManualSleepLazyRestore,
   normalizeSleepingAgentSessionCollectOptions,
   sleepingRecordFromEntry,
-  type CollectSleepingAgentSessionRecordsOptions
+  type CollectSleepingAgentSessionRecordsOptions,
+  withSleepingPaneView
 } from './agent-status-sleeping-records'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
 import { agentTurnEndedOnPurpose } from '../../../../shared/agent-main-agent-verdict'
@@ -56,13 +57,13 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       }
       // Why: Pi identity is resumable with no turn row and while idle after done, so manual
       // sleep must promote both instead of deleting the checkpoint.
-      records[existing.paneKey] = {
+      records[existing.paneKey] = withSleepingPaneView(state, {
         ...existing,
         state: 'working',
         capturedAt,
         updatedAt: capturedAt,
         origin: 'worktree-sleep'
-      }
+      })
       promotedLiveRecoveryPaneKeys.add(existing.paneKey)
     }
   }

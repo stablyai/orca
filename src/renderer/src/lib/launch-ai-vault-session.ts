@@ -2,6 +2,10 @@ import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
+import { hostLaunchViewRequest, hostStampsLaunchView } from '@/lib/agent-launch-host-view-request'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
@@ -33,6 +37,13 @@ export function launchAiVaultSessionInNewTab(args: {
   const store = useAppStore.getState()
   let targetGroupId = args.targetGroupId
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, args.worktreeId)
+  // Why: a resume is launched from this device, so this device's Chat UI setting decides its view.
+  const viewOptions = {
+    agent: args.agent,
+    nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+      getConnectionIdFromState(store, args.worktreeId)
+    )
+  }
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     const runtimeLaunch = createWebRuntimeSessionTerminal({
       worktreeId: args.worktreeId,
@@ -47,6 +58,9 @@ export function launchAiVaultSessionInNewTab(args: {
       ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
       ...(args.providerSession ? { providerSession: args.providerSession } : {}),
       ...(args.launchConfig ? { agentArgs: args.launchConfig.agentArgs } : {}),
+      ...(hostStampsLaunchView(store, args.worktreeId)
+        ? hostLaunchViewRequest(store.settings, viewOptions)
+        : {}),
       activate: true
     })
     const observedRuntimeLaunch = runtimeLaunch.then((outcome) => {
@@ -68,9 +82,13 @@ export function launchAiVaultSessionInNewTab(args: {
       targetGroupId
   }
 
-  const tab = args.cwd
-    ? store.createTab(args.worktreeId, targetGroupId, undefined, { startupCwd: args.cwd })
-    : store.createTab(args.worktreeId, targetGroupId)
+  // Why agent and view at insertion: the first record must already say what it runs and shows.
+  const { viewMode } = initialAgentTabViewModeProps(store.settings, viewOptions)
+  const tab = store.createTab(args.worktreeId, targetGroupId, undefined, {
+    launchAgent: args.agent,
+    ...(viewMode ? { viewMode } : {}),
+    ...(args.cwd ? { startupCwd: args.cwd } : {})
+  })
   store.queueTabStartupCommand(tab.id, {
     command: args.command,
     ...(args.env ? { env: args.env } : {}),

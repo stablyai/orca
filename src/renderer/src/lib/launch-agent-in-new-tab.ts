@@ -8,6 +8,7 @@ import {
   deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab
 } from '@/lib/agent-launch-prompt-delivery'
+import { hostLaunchViewRequest, hostStampsLaunchView } from '@/lib/agent-launch-host-view-request'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -226,9 +227,10 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       pastePromptAfterReady: pasteDraftAfterLaunch,
       submitPastedPrompt,
       agentArgs,
-      // Why: omission means terminal locally, but would let a paired host apply
-      // its own default; send the client's resolved terminal choice explicitly.
-      viewMode: initialViewModeProps.viewMode ?? 'terminal',
+      // Why: omission would let a paired host apply its own default instead of this device's.
+      ...(hostStampsLaunchView(store, worktreeId)
+        ? hostLaunchViewRequest(store.settings, initialViewModeOptions)
+        : { viewMode: initialViewModeProps.viewMode ?? 'terminal' }),
       onPromptDelivered
     })
     return {

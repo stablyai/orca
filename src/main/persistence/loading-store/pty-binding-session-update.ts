@@ -23,6 +23,8 @@ export function applyPtyBinding(
     args.expectedBinding !== undefined && args.incarnationId !== args.expectedBinding.incarnationId
   let terminalMembershipChanged = false
   let hostAdmittedTabCreated = false
+  // Why: only the admission that creates the record may stamp a starting view; an adopted tab keeps its own.
+  let startingViewMode: 'terminal' | 'chat' | undefined
   const advanceTopologyFence = (): void => {
     const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
     const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
@@ -67,11 +69,13 @@ export function applyPtyBinding(
   } else {
     terminalMembershipChanged = true
     hostAdmittedTabCreated = args.hostAdmittedMembership === true
+    startingViewMode = args.startingViewMode
     // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
     const nextTabs = [
       ...(tabs ?? []),
       createMinimalPersistedTerminalTab({
         ...args,
+        startingViewMode,
         worktreeId: bindingWorktreeId,
         existingTabCount: tabs?.length ?? 0
       })
@@ -115,6 +119,9 @@ export function applyPtyBinding(
       layout.root = { type: 'leaf', leafId: args.leafId }
       layout.activeLeafId = args.leafId
       layout.expandedLeafId = null
+      if (startingViewMode === 'chat' && !layout.chatLeafId) {
+        layout.chatLeafId = args.leafId
+      }
     } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
       terminalMembershipChanged = true
       // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
@@ -158,7 +165,8 @@ export function applyPtyBinding(
         root: { type: 'leaf', leafId: args.leafId },
         activeLeafId: args.leafId,
         expandedLeafId: null,
-        ptyIdsByLeafId: { [args.leafId]: args.ptyId }
+        ptyIdsByLeafId: { [args.leafId]: args.ptyId },
+        ...(startingViewMode === 'chat' ? { chatLeafId: args.leafId } : {})
       }
     }
   }

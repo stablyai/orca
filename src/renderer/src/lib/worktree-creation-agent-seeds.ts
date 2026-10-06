@@ -7,6 +7,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { nativeChatRequiresLocalTranscript } from '@/lib/native-chat-supported-agent'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { hostStampsLaunchView } from '@/lib/agent-launch-host-view-request'
 import { toWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -45,6 +46,7 @@ function resolveLaunchAgentTabId(
   return stamped ?? args.primaryTabId ?? args.startupTerminalTabId ?? null
 }
 
+/** Temporary: only for a paired host that predates launch-presentation stamping. */
 function applyBackendSpawnedDraftViewMode(args: {
   state: AppStoreSnapshot
   request: SeedRequest
@@ -54,7 +56,7 @@ function applyBackendSpawnedDraftViewMode(args: {
   backendSpawned: boolean
 }): void {
   const { state, request, agent, tabId, worktreeId, backendSpawned } = args
-  if (!backendSpawned || !request.launchDraftPrompt) {
+  if (!backendSpawned || !request.launchDraftPrompt || hostStampsLaunchView(state, worktreeId)) {
     return
   }
   const desiredViewMode =

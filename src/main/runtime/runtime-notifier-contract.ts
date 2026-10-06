@@ -63,6 +63,8 @@ export type RuntimeNotifier = {
       launchToken?: string
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
+      /** This launch created the tab record, so a reused renderer tab may fill in a missing view. */
+      freshLaunchView?: true
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false

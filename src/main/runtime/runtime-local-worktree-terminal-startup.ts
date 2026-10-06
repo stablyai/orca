@@ -102,6 +102,9 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
+        ...(sequencedStartup.launcherDefaultView
+          ? { launcherDefaultView: sequencedStartup.launcherDefaultView }
+          : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
         ...ownerSurfacing(shouldActivate)

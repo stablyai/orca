@@ -18,6 +18,7 @@ import {
   buildMaterializedHeadlessParentLayout,
   getHeadlessMobileSessionGroupId
 } from './mobile-session-layout-projection'
+import { readHeadlessChatPairState } from './session-tab-chat-pair'
 
 const OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS = 15 * 60_000
 
@@ -55,6 +56,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       createMutation?: { clientIdentity: string; id: string }
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
+      launcherDefaultView?: 'terminal' | 'chat'
       targetGroupId?: string
       supportsSplitGroupPlacement?: boolean
       launchConfig?: SleepingAgentLaunchConfig
@@ -110,6 +112,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
         ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
         ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+        ...(opts.launcherDefaultView ? { launcherDefaultView: opts.launcherDefaultView } : {}),
         startupCommandDelivery: opts.startupCommandDelivery,
         ...(opts.identity
           ? {
@@ -179,11 +182,20 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
     }
     const parentTabId = livePty.pty.tabId ?? `pty:${livePty.pty.ptyId}`
     const leafId = parsePaneKey(livePty.pty.paneKey ?? '')?.leafId ?? randomUUID()
-    if (opts.viewMode) {
-      // Why: the runtime-owned binding must survive a serve restart with the same initial mode, not a later client's local default.
-      this.persistHeadlessSessionTabProps(worktreeId, parentTabId, { viewMode: opts.viewMode })
-    }
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    // Why: the PTY admission already committed the fresh tab's view; an adopted or deduped tab keeps
+    // its own (absence included), so raw request options are never persisted over it.
+    const committed = readHeadlessChatPairState(
+      this.getWorkspaceSessionForWorktree(worktreeId),
+      existing,
+      worktreeId,
+      parentTabId
+    )
+    const startingView = committed
+      ? committed.pair
+      : opts.viewMode
+        ? { viewMode: opts.viewMode, ...(opts.viewMode === 'chat' ? { chatLeafId: leafId } : {}) }
+        : {}
     const existingSurface =
       existing?.tabs.find(
         (candidate): candidate is RuntimeMobileSessionTerminalTab =>
@@ -191,11 +203,17 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
           candidate.parentTabId === parentTabId &&
           candidate.leafId === leafId
       ) ?? null
-    const parentLayout = buildMaterializedHeadlessParentLayout(
+    const builtLayout = buildMaterializedHeadlessParentLayout(
       leafId,
       livePty.pty.ptyId,
       existingSurface?.parentLayout
     )
+    const parentLayout =
+      !existingSurface?.parentLayout &&
+      startingView.chatLeafId === leafId &&
+      !builtLayout.chatLeafId
+        ? { ...builtLayout, chatLeafId: leafId }
+        : builtLayout
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${parentTabId}::${leafId}`,
@@ -206,7 +224,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
       ...(cwd ? { startupCwd: cwd } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
-      ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+      ...(startingView.viewMode ? { viewMode: startingView.viewMode } : {}),
       parentLayout,
       isActive: activate
     }

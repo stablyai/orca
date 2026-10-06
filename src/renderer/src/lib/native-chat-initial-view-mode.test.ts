@@ -146,7 +146,8 @@ describe('decideInitialAgentTabViewMode', () => {
     ).toBeUndefined()
   })
 
-  it('returns tab creation props only when chat should be the initial mode', () => {
+  // Why nothing for a terminal default: a tab nobody switched opens in each viewer's own default.
+  it('returns chat, a terminal pin for an unmirrorable draft, or nothing', () => {
     expect(
       initialAgentTabViewModeProps(
         {
@@ -164,6 +165,18 @@ describe('decideInitialAgentTabViewMode', () => {
         },
         { agent: 'claude' }
       )
+    ).toEqual({})
+    expect(
+      initialAgentTabViewModeProps(
+        { experimentalNativeChat: false, openAgentTabsInChatByDefault: false },
+        { agent: 'claude', promptDelivery: 'draft', launchDraftText: 'one\u2028two' }
+      )
+    ).toEqual({ viewMode: 'terminal' })
+    expect(
+      initialAgentTabViewModeProps({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      })
     ).toEqual({})
   })
 })

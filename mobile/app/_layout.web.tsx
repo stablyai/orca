@@ -1,10 +1,11 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { StyleSheet, useWindowDimensions, View } from 'react-native'
 import { Slot } from 'expo-router'
 import { SafeAreaFrameContext, SafeAreaInsetsContext } from 'react-native-safe-area-context'
 import { ZERO_SAFE_AREA_INSETS } from '../src/mobile-web-shell/bridge/bridge-safe-area-insets'
 import { usePageBridgeClient } from '../src/transport/client-context.web'
 import { colors } from '../src/theme/mobile-theme'
+import { refreshDefaultSessionView } from '../src/storage/default-session-view-store'
 
 /**
  * The page's root layout, standing where the native `_layout.tsx` does. Without one expo-router
@@ -14,6 +15,10 @@ import { colors } from '../src/theme/mobile-theme'
  */
 export default function PageRootLayout() {
   const client = usePageBridgeClient()
+  // Why at boot: a launch sends this device's default view only once it has loaded.
+  useEffect(() => {
+    void refreshDefaultSessionView()
+  }, [])
   const insets = useSyncExternalStore(
     client.onSafeAreaInsetsUpdate,
     () => client.getShellSession()?.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS

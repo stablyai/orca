@@ -168,6 +168,8 @@ export type UiCommandEventApi = {
       launchToken?: string
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
+      /** This launch created the tab record, so a reused renderer tab may fill in a missing view. */
+      freshLaunchView?: true
       title?: string
       ptyId?: string
       activate?: boolean

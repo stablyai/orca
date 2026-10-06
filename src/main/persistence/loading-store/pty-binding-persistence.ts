@@ -40,6 +40,8 @@ export type PersistPtyBindingArgs = {
   expectedSourceBinding?: PtyBindingSourceExpectation
   /** Set by host-initiated creates, which have no renderer session writer behind them. */
   hostAdmittedMembership?: boolean
+  /** A fresh agent tab's final starting view, written only if this binding creates the tab. */
+  startingViewMode?: 'terminal' | 'chat'
   /**
    * Defaults true, which is what `pty:spawn` needs — it can beat the debounced layout writer
    * and must be able to mint the surface it is binding. A reattach is the opposite: the pane

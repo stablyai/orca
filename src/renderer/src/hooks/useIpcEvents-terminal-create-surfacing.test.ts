@@ -228,11 +228,11 @@ describe('useIpcEvents updater integration', () => {
       activate: false
     })
 
+    // Why no 'chat': main finalizes the starting view; the renderer never adds its own default.
     expect(createTab).toHaveBeenCalledWith('wt-2', 'group-left', undefined, {
       activate: false,
       recordInteraction: false,
       launchAgent: 'codex',
-      viewMode: 'chat',
       startupCwd: '/repo/packages/app'
     })
     expect(setActiveView).not.toHaveBeenCalled()
@@ -478,11 +478,11 @@ describe('useIpcEvents updater integration', () => {
       launchAgent: 'codex'
     })
 
+    // Why no 'chat': a reveal without a committed view is an unswitched record; never re-default it.
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
       initialPtyId: 'pty-bg',
       activate: false,
-      launchAgent: 'codex',
-      viewMode: 'chat'
+      launchAgent: 'codex'
     })
     expect(setActiveView).not.toHaveBeenCalled()
     expect(setActiveWorktree).not.toHaveBeenCalled()

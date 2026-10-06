@@ -34,7 +34,11 @@ vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
 vi.mock('lucide-react-native', () => ({ MessageSquare: 'chat-icon', SquareTerminal: 'term-icon' }))
 vi.mock('../storage/session-view-preferences', () => ({
   DEFAULT_SESSION_VIEW: 'terminal',
-  loadDefaultSessionView: vi.fn(async () => storage.defaultView),
+  readDefaultSessionViewPreference: vi.fn(async () => ({
+    value: storage.defaultView,
+    loaded: true,
+    hasStoredValue: true
+  })),
   saveDefaultSessionView: vi.fn(async () => {}),
   readSessionViewOverridesPreference: vi.fn(async () => ({
     overrides: new Map(storage.overrides),

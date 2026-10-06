@@ -71,6 +71,10 @@ export type SleepingAgentSessionRecord = {
   mainAgent?: AgentMainAgentStatus
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
+  /** The view the captured pane showed (chat only if it owned the tab's chat). A fresh wake tab
+   *  is minted from the record alone, so without it the view is lost; absent = an old record or
+   *  an unswitched tab, which resumes as before. */
+  viewMode?: 'terminal' | 'chat'
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.
    *  Quit/live records describe panes that still exist in the restored session,

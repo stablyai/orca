@@ -11,7 +11,11 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { terminalLayoutNodeLeafIds } from '../../../../shared/native-chat-leaf-ownership'
+import { isComposerChatTarget } from '../../../../shared/native-chat-target-read'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
+import { readTerminalChatPair } from './tabs/terminal-chat-pair-state'
 
 export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
   return {
@@ -20,6 +24,33 @@ export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAge
     agentEnv: { ...config.agentEnv },
     ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
   }
+}
+
+/**
+ * The view this pane showed, so a wake restores it: chat only for the pane that owned the tab's
+ * chat (a sibling of a split chat tab showed terminal), absent for a tab nobody switched.
+ */
+function sleepingPaneViewMode(
+  state: AppState,
+  tabId: string,
+  paneKey: string
+): SleepingAgentSessionRecord['viewMode'] {
+  const pair = readTerminalChatPair(state, tabId)
+  if (!pair?.viewMode) {
+    return undefined
+  }
+  const leafId = parsePaneKey(paneKey)?.leafId
+  const ownsChat =
+    pair.viewMode === 'chat' &&
+    leafId !== undefined &&
+    isComposerChatTarget({
+      viewMode: 'chat',
+      chatLeafId: pair.chatLeafId ?? undefined,
+      launchAgent: undefined,
+      leafIds: terminalLayoutNodeLeafIds(state.terminalLayoutsByTabId[tabId]?.root),
+      leafId
+    })
+  return ownsChat ? 'chat' : 'terminal'
 }
 
 export function sleepingRecordFromEntry(args: {
@@ -43,6 +74,11 @@ export function sleepingRecordFromEntry(args: {
     return null
   }
   const tab = args.tab ?? findTabForAgentEntry(args.state, args.worktreeId, args.entry)
+  // Why not on live checkpoints: they are rebuilt only on status events, so a view switch would go stale.
+  const viewMode =
+    tab && args.origin !== 'live'
+      ? sleepingPaneViewMode(args.state, tab.id, args.entry.paneKey)
+      : undefined
   return {
     paneKey: args.entry.paneKey,
     ...(tab ? { tabId: tab.id } : {}),
@@ -61,9 +97,32 @@ export function sleepingRecordFromEntry(args: {
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
     ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
+    ...(viewMode ? { viewMode } : {}),
     ...agentVerdictFields(args.entry),
     ...(args.origin ? { origin: args.origin } : {})
   }
+}
+
+/** A record made durable from a checkpoint takes its view from the tab now; a gone tab keeps none. */
+export function withSleepingPaneView(
+  state: AppState,
+  record: SleepingAgentSessionRecord
+): SleepingAgentSessionRecord {
+  const tabId = record.tabId
+  const tabExists =
+    tabId !== undefined &&
+    state.tabsByWorktree[record.worktreeId]?.some((tab) => tab.id === tabId) === true
+  const viewMode = tabExists ? sleepingPaneViewMode(state, tabId, record.paneKey) : undefined
+  if (viewMode === record.viewMode) {
+    return record
+  }
+  const next = { ...record }
+  if (viewMode) {
+    next.viewMode = viewMode
+  } else {
+    delete next.viewMode
+  }
+  return next
 }
 
 export type CollectSleepingAgentSessionRecordsOptions = {

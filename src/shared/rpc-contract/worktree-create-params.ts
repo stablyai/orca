@@ -107,6 +107,10 @@ export const WorktreeCreate = z
     startupEnv: z.record(z.string(), z.string()).optional(),
     startupLaunchConfig: sleepingAgentLaunchConfigSchema,
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
+    // A decided starting view for the startup agent tab (a pin); the host finalizes it.
+    startupViewMode: z.enum(['terminal', 'chat']).optional().catch(undefined),
+    // The launching device's Chat UI default for that tab, applied like the host's own.
+    launcherDefaultView: z.enum(['terminal', 'chat']).optional().catch(undefined),
     // Why: CLI clients should not hardcode agent launch quoting because SSH
     // workspaces execute in a different shell than the client process.
     startupAgent: OptionalTuiAgent,

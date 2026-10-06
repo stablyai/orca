@@ -46,6 +46,7 @@ export type RuntimePtySpawnState = {
         worktreeId: string
         tabId: string
         leafId: string
+        startingViewMode?: 'terminal' | 'chat'
         expectedSourceBinding?: PtyBindingSourceExpectation
       }
     | undefined
@@ -108,6 +109,8 @@ export type RuntimePtySpawnArgs = {
   /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
   initiallyHidden?: boolean
   persistHostSessionBinding?: boolean
+  /** Stamped only when this spawn's admission creates the tab record. */
+  startingViewMode?: 'terminal' | 'chat'
   expectedSourceBinding?: PtyBindingSourceExpectation
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: { foreground?: string; background?: string }

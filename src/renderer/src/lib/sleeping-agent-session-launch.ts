@@ -14,6 +14,9 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { finalizeAgentTabStartingView } from '../../../shared/native-chat-starting-view'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 import { translate } from '@/i18n/i18n'
 
 export type ResumeSleepingAgentSessionsOptions = {
@@ -39,6 +42,24 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
     executionHostId: getExecutionHostIdForWorktree(state, worktreeId),
     worktreePath: worktree?.path,
     terminalWindowsShell: state.settings?.terminalWindowsShell
+  })
+}
+
+/** The saved view, through the shared gates; a record without one resumes as it always did. */
+function resumedSleepingViewMode(
+  record: SleepingAgentSessionRecord
+): SleepingAgentSessionRecord['viewMode'] {
+  if (!record.viewMode) {
+    return undefined
+  }
+  const state = useAppStore.getState()
+  return finalizeAgentTabStartingView({
+    viewMode: record.viewMode,
+    settings: state.settings,
+    agent: record.agent,
+    nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+      getConnectionIdFromState(state, record.worktreeId)
+    )
   })
 }
 
@@ -98,6 +119,7 @@ export function launchSleepingAgentSession(
     return false
   }
 
+  const viewMode = resumedSleepingViewMode(record)
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
     launchAgent: record.agent,
     pendingStartup: {
@@ -122,6 +144,7 @@ export function launchSleepingAgentSession(
       launchAgent: record.agent,
       providerSession: record.providerSession
     },
+    ...(viewMode ? { viewMode } : {}),
     ...(options?.suppressNavigation ? { activate: false, recordInteraction: false } : {})
   })
   state.clearSleepingAgentSession(record.paneKey)

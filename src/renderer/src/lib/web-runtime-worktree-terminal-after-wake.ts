@@ -18,6 +18,7 @@ import {
 } from '@/lib/worktree-startup-payload'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
+import { hostLaunchViewRequest, hostStampsLaunchView } from '@/lib/agent-launch-host-view-request'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getConnectionId } from '@/lib/connection-context'
 import { toast } from 'sonner'
@@ -94,15 +95,18 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
   }
 
   const startup = opts?.startup
-  const viewModeProps = launchAgent
-    ? initialAgentTabViewModeProps(state.settings, {
-        agent: launchAgent,
-        ...draftViewModeProps(resolveStartupLaunchDraftText(startup)),
-        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-          getConnectionId(worktreeId)
-        )
-      })
-    : {}
+  const viewOptions = {
+    agent: launchAgent,
+    ...draftViewModeProps(resolveStartupLaunchDraftText(startup)),
+    nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+      getConnectionId(worktreeId)
+    )
+  }
+  const viewModeProps = !launchAgent
+    ? {}
+    : hostStampsLaunchView(state, worktreeId)
+      ? hostLaunchViewRequest(state.settings, viewOptions)
+      : initialAgentTabViewModeProps(state.settings, viewOptions)
   // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
   void createWebRuntimeSessionTerminal({
     worktreeId,

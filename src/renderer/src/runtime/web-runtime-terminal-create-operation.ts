@@ -2,7 +2,6 @@ import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-op
 import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
@@ -34,10 +33,8 @@ import type {
   CreateWebRuntimeSessionTerminalArgs
 } from './web-runtime-session-types'
 import {
-  readActiveWorkspaceSelection,
   restoreActiveWorkspaceSelection,
-  selectWebRuntimeSessionWorktree,
-  type WebRuntimeSessionWorkspaceSelectionRollback
+  selectWebRuntimeSessionWorktreeForCreate
 } from './web-runtime-session-workspace-selection'
 import {
   createdTerminalLeafId,
@@ -64,20 +61,16 @@ export async function createWebRuntimeSessionTerminalResult(
     }
   }
   const intentOwner = captureWebSessionIntentOwner(environmentId)
+  const launcherDefault = args.launcherDefaultView
+    ? { launcherDefaultView: args.launcherDefaultView }
+    : {}
+  const launchView = { ...(args.viewMode ? { viewMode: args.viewMode } : {}), ...launcherDefault }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
-  let workspaceSelectionRollback: WebRuntimeSessionWorkspaceSelectionRollback | null = null
-  if (args.selectWorktree !== false) {
-    const previous = readActiveWorkspaceSelection()
-    selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
-    workspaceSelectionRollback = {
-      previous,
-      applied: {
-        worktreeId: args.worktreeId,
-        executionHostId: toRuntimeExecutionHostId(environmentId)
-      }
-    }
-  }
+  const workspaceSelectionRollback =
+    args.selectWorktree !== false
+      ? selectWebRuntimeSessionWorktreeForCreate(args.worktreeId, environmentId)
+      : null
   let hostCreated = false
   let createdTabId: string | undefined
   let createdLeafId: string | undefined
@@ -118,6 +111,7 @@ export async function createWebRuntimeSessionTerminalResult(
                         ...(args.launchPreferences
                           ? { launchPreferences: args.launchPreferences }
                           : {}),
+                        ...launcherDefault,
                         presentation: 'background'
                       },
                       timeoutMs: 15_000
@@ -145,7 +139,7 @@ export async function createWebRuntimeSessionTerminalResult(
                             ? { launchPreferences: args.launchPreferences }
                             : {}),
                           ...(args.cwd ? { startupCwd: args.cwd } : {}),
-                          ...(args.viewMode ? { viewMode: args.viewMode } : {}),
+                          ...launchView,
                           presentation: 'background'
                         },
                         clientOperationId
@@ -181,7 +175,7 @@ export async function createWebRuntimeSessionTerminalResult(
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
               ...(args.agent ? { agent: args.agent } : {}),
               ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
-              ...(args.viewMode ? { viewMode: args.viewMode } : {}),
+              ...launchView,
               // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
               activate: false,
               select: args.activate !== false,
@@ -232,7 +226,7 @@ export async function createWebRuntimeSessionTerminalResult(
           startupCommandDelivery: args.startupCommandDelivery,
           ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
           ...(args.launchToken ? { launchToken: args.launchToken } : {}),
-          ...(args.viewMode ? { viewMode: args.viewMode } : {}),
+          ...launchView,
           // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
           activate: false,
           select: args.activate !== false,

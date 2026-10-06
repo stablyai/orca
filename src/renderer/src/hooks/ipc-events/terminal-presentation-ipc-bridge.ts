@@ -6,9 +6,6 @@ import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
-import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { tryMakePaneKey } from './agent-status-routing'
 import { useAppStore } from '../../store'
 import {
@@ -18,6 +15,26 @@ import {
   focusTerminalInitiatedTab,
   resolveTerminalPresentation
 } from './terminal-command-state'
+
+/**
+ * A reveal that reused a tab this same fresh launch created (the renderer saw its record first)
+ * fills in the launch's view only where the tab has none; an existing choice is never replaced.
+ */
+function fillInFreshLaunchView(
+  tabId: string,
+  leafId: string | null,
+  viewMode: 'terminal' | 'chat'
+): void {
+  const store = useAppStore.getState()
+  const unified = Object.values(store.unifiedTabsByWorktree)
+    .flat()
+    .find((candidate) => candidate.contentType === 'terminal' && candidate.entityId === tabId)
+  if (!unified || unified.viewMode !== undefined) {
+    return
+  }
+  // Why no intent: a launch stamp on its own fresh record is not a user's switch.
+  store.applyTerminalChatPair(tabId, viewMode === 'chat' ? leafId : null, viewMode)
+}
 
 export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -33,6 +50,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         launchToken,
         launchAgent,
         viewMode,
+        freshLaunchView,
         title,
         ptyId,
         activate,
@@ -86,21 +104,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
               ? store.createTab(worktreeId, undefined, undefined, {
                   initialPtyId: ptyId,
                   activate: shouldActivate,
-                  ...(launchAgent
-                    ? {
-                        launchAgent,
-                        // Why: a paired client resolved explicit mode before PTY materialization; only omitted mode uses host defaults.
-                        ...(viewMode
-                          ? { viewMode }
-                          : initialAgentTabViewModeProps(store.settings, {
-                              agent: launchAgent,
-                              nativeChatTranscriptIsLocalReadable:
-                                isNativeChatTranscriptLocalReadable(
-                                  getConnectionIdFromState(store, worktreeId)
-                                )
-                            }))
-                      }
-                    : {}),
+                  // Why no local default: main finalized the view and sends what the record committed.
+                  ...(launchAgent ? { launchAgent, ...(viewMode ? { viewMode } : {}) } : {}),
                   ...(cwd ? { startupCwd: cwd } : {}),
                   // Why: CLI-spawned PTYs bake the pane key into env; adopt the same tab id so hook-event attribution keeps working.
                   ...(tabId !== undefined ? { id: tabId } : {})
@@ -200,6 +205,10 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                 store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, title))
               }
             }
+          }
+          // Why after the layout: the owner leaf must already be in the reused tab's tree.
+          if (reusedTab && freshLaunchView && viewMode) {
+            fillInFreshLaunchView(reusedTab.id, leafId ?? null, viewMode)
           }
           if (command) {
             store.queueTabStartupCommand(tab.id, {

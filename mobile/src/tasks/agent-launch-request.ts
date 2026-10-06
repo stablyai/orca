@@ -23,9 +23,12 @@ import {
 } from '../../../src/shared/agent-launch-intent'
 import {
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_TAB_LAUNCH_PRESENTATION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TerminalTabViewMode } from '../../../src/shared/terminal-tab-view-mode'
+import { settledLaunchSessionView } from '../storage/default-session-view-state'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 
@@ -34,6 +37,21 @@ import type { WorkspaceCreateParams } from './workspace-create-params'
 export type AgentLaunchSupport = {
   /** The host deduplicates operationId durably and refuses unknown or expired outcomes. */
   replay: boolean
+  /** The host applies a launcher's default view; absent on a host that would ignore it. */
+  launchPresentation?: true
+}
+
+/**
+ * This phone's Chat UI default, sent only to a host that applies it like its own default. Nothing
+ * while it has not loaded, so the host's default applies and a preference read never blocks a
+ * launch. Read once per launch so a replay resends the same value.
+ */
+export function phoneLauncherDefaultView(
+  capabilities: readonly string[] | null | undefined
+): TerminalTabViewMode | undefined {
+  return capabilities?.includes(AGENT_TAB_LAUNCH_PRESENTATION_RUNTIME_CAPABILITY)
+    ? settledLaunchSessionView()
+    : undefined
 }
 
 /** Reads the host's advertised capabilities; unsupported stays plain `false`. */
@@ -43,7 +61,12 @@ export function readAgentLaunchSupport(
   if (!capabilities?.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
     return false
   }
-  return { replay: capabilities.includes(AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY) }
+  return {
+    replay: capabilities.includes(AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY),
+    ...(capabilities.includes(AGENT_TAB_LAUNCH_PRESENTATION_RUNTIME_CAPABILITY)
+      ? { launchPresentation: true as const }
+      : {})
+  }
 }
 
 export type WorktreeCreateAgentLaunch = {
@@ -62,12 +85,14 @@ export type AgentLaunchCreateOutcome = {
 export function agentLaunchCreateParams(
   agent: TuiAgent,
   create: WorkspaceCreateParams,
-  operationId?: string | null
+  operationId?: string | null,
+  launcherDefaultView?: TerminalTabViewMode
 ): RpcSendParams<'agent.launch'> {
   return {
     agent,
     ...(operationId ? { operationId } : {}),
-    target: { kind: 'create-worktree', create: withoutReservedAgentCreateFields(create) }
+    target: { kind: 'create-worktree', create: withoutReservedAgentCreateFields(create) },
+    ...(launcherDefaultView ? { launcherDefaultView } : {})
   }
 }
 
@@ -84,6 +109,7 @@ export function agentLaunchExistingParams(args: {
   launchSource?: string
   paneKey?: string
   sessionId?: string
+  launcherDefaultView?: TerminalTabViewMode
 }): RpcSendParams<'agent.launchReplay'> {
   return {
     agent: args.agent,
@@ -92,7 +118,8 @@ export function agentLaunchExistingParams(args: {
     ...(args.prompt ? { prompt: args.prompt } : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.paneKey ? { paneKey: args.paneKey } : {}),
-    ...(args.sessionId ? { sessionId: args.sessionId } : {})
+    ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+    ...(args.launcherDefaultView ? { launcherDefaultView: args.launcherDefaultView } : {})
   }
 }
 

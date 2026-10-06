@@ -27,6 +27,7 @@ const initialGetKnownWorktreeById = useAppStore.getState().getKnownWorktreeById
 const initialSettings = useAppStore.getState().settings!
 const initialWorktreesByRepo = useAppStore.getState().worktreesByRepo
 const initialRepos = useAppStore.getState().repos
+const initialRuntimeStatuses = useAppStore.getState().runtimeStatusByEnvironmentId
 
 const DRAFT = 'https://github.com/o/r/issues/12'
 
@@ -131,8 +132,9 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
     )
   })
 
-  it('moves a backend-spawned non-mirrorable draft out of an inherited chat view', () => {
+  it('makes no post-create view write on a local host, which stamped the view at creation', () => {
     setTabs([{ id: 'agent-tab', launchAgent: 'claude', viewMode: 'chat' }])
+    const setTabViewMode = vi.spyOn(useAppStore.getState(), 'setTabViewMode')
 
     seedAgentTabStateAfterWorktreeCreate({
       request: { ...request, launchDraftPrompt: 'note\u2028https://github.com/o/r/issues/12' },
@@ -142,79 +144,35 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
       backendSpawned: true
     })
 
-    expect(tabViewMode('agent-tab')).toBe('terminal')
+    expect(setTabViewMode).not.toHaveBeenCalled()
+    expect(tabViewMode('agent-tab')).toBe('chat')
+    expect(seededTabIds()).toEqual(['agent-tab'])
   })
 
-  it('opens a backend-spawned mirrorable draft in chat after host reconciliation', async () => {
-    setTabs([{ id: 'agent-tab', launchAgent: 'claude', viewMode: 'terminal' }])
-    const runtimeCall = vi.fn(async ({ method }: { method: string }) => {
-      if (method === 'agentSession.handoffStatus') {
-        return {
-          id: 'status',
-          ok: true,
-          result: { owner: 'native', direction: null, phase: 'idle' },
-          _meta: { runtimeId: 'runtime-1' }
-        }
-      }
-      throw new Error(`Unexpected runtime method: ${method}`)
-    })
-    const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
-    Object.defineProperty(globalThis, 'window', {
-      configurable: true,
-      value: { api: { runtime: { call: runtimeCall } } }
-    })
+  it('makes no post-create view write on a paired host that stamps launch views', async () => {
+    setTabs([], 'runtime-1')
     useAppStore.setState({
-      terminalLayoutsByTabId: {
-        'agent-tab': {
-          activeLeafId: 'leaf-1',
-          ptyIdsByLeafId: { 'leaf-1': 'pty-1' }
-        } as never
-      },
-      agentStatusByPaneKey: {
-        'agent-tab:leaf-1': {
-          agentType: 'claude',
-          providerSession: { id: 'claude-session-1' }
-        } as never
-      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seed reads only status.capabilities.
+      runtimeStatusByEnvironmentId: new Map([
+        ['runtime-1', { status: { capabilities: ['agent-tab.launch-presentation.v1'] } }]
+      ]) as never
     })
-
-    try {
-      seedAgentTabStateAfterWorktreeCreate({
-        request,
-        worktreeId: 'wt-1',
-        primaryTabId: 'agent-tab',
-        startupTerminalTabId: 'agent-tab',
-        backendSpawned: true
-      })
-
-      await vi.waitFor(() => expect(tabViewMode('agent-tab')).toBe('chat'))
-    } finally {
-      if (previousWindow) {
-        Object.defineProperty(globalThis, 'window', previousWindow)
-      } else {
-        Reflect.deleteProperty(globalThis, 'window')
-      }
-    }
-  })
-
-  it('still opens a local omp draft in chat, despite the local-transcript gate', () => {
-    // Why: omp discloses no hook transcript path, so it joins Grok in requiring a
-    // locally readable sessions root. This call site must therefore SUPPLY that
-    // readability flag for omp too — gating on Grok alone left it undefined and
-    // parked every omp draft in the terminal view, local workspace or not.
-    setTabs([{ id: 'agent-tab', launchAgent: 'omp', viewMode: 'terminal' }])
 
     seedAgentTabStateAfterWorktreeCreate({
-      request: { ...request, agent: 'omp' as const },
+      request,
       worktreeId: 'wt-1',
-      primaryTabId: 'agent-tab',
-      startupTerminalTabId: 'agent-tab',
+      primaryTabId: null,
+      startupTerminalTabId: 'host-agent-tab',
       backendSpawned: true
     })
 
-    expect(tabViewMode('agent-tab')).toBe('chat')
+    expect(seededTabIds()).toEqual(['web-terminal-host-agent-tab'])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mocks.setWebRuntimeTabProps).not.toHaveBeenCalled()
+    useAppStore.setState({ runtimeStatusByEnvironmentId: initialRuntimeStatuses })
   })
 
+  // Temporary compatibility: a paired host without launch-presentation stamping still gets the patch.
   it('keys a raw backend tab id and updates the host before its tab mirror lands', async () => {
     setTabs([], 'runtime-1')
 

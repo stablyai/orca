@@ -73,6 +73,43 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   )
 
+  // The view part is adapted from community PR #19704 (Minhoi Goo).
+  it.each([
+    ['chat', 'chat'],
+    ['terminal', 'terminal'],
+    ['holographic', undefined]
+  ])('keeps a saved view %s across hydration as %s, never dropping the record', (saved, kept) => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 9,
+          origin: 'worktree-sleep',
+          viewMode: saved
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const parsed = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
+      expect(parsed?.paneKey).toBe('tab1:pane-1')
+      expect(parsed?.viewMode).toBe(kept)
+    }
+  })
+
   it('hydrates a persisted Kimi sleeping agent record', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

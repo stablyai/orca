@@ -423,6 +423,9 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
         ...(isTuiAgent(createdWithAgent) ? { launchAgent: createdWithAgent } : {}),
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
+        ...(sequencedStartup.launcherDefaultView
+          ? { launcherDefaultView: sequencedStartup.launcherDefaultView }
+          : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
         // Why: the submitting renderer decides whether to open the workspace; activating here yanked users who moved on (#9944).

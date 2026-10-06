@@ -96,6 +96,8 @@ export type AgentLaunchIntent = {
   /** The caller-minted id of the chat session a structured launch creates. Not a route input;
    *  refused when that session already exists. */
   sessionId?: string
+  /** The launching device's Chat UI default for a terminal agent tab. Not a route input. */
+  launcherDefaultView?: 'terminal' | 'chat'
 }
 
 /** The surface the host actually created. */
@@ -306,6 +308,8 @@ export const AGENT_LAUNCH_RESERVED_CREATE_FIELDS = [
   'startupLaunchConfig',
   'startupEnv',
   'startupCommandDelivery',
+  'startupViewMode',
+  'launcherDefaultView',
   // The launch carries its own; a create's copy would be a second, possibly contradicting, answer.
   'launchSource'
 ] as const

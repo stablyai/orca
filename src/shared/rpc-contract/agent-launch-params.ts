@@ -76,6 +76,12 @@ export const AgentLaunchFields = z.object({
   reuseTerminal: z.object({ handle: z.string().min(1, 'Missing terminal handle') }).optional(),
   /** Nullable on purpose: `null` is "no arguments", absent is "use the settings default". */
   agentArgs: z.string().nullable().optional(),
+  /**
+   * The launching device's Chat UI default for a terminal agent tab, applied like the host's own
+   * (chat, or no recorded view); absent means the host's default. A launch preference, not a route:
+   * a structured chat ignores it. An unknown value degrades to the host default.
+   */
+  launcherDefaultView: z.enum(['terminal', 'chat']).optional().catch(undefined),
   /** A start directory other than the workspace root. Terminal-only, and the host downgrades a
    *  structured launch that carries one rather than ignoring it. */
   cwd: z.string().min(1, 'Empty launch cwd').optional(),

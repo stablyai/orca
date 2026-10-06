@@ -15,7 +15,11 @@ import {
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
 vi.mock('../storage/session-view-preferences', () => ({
   DEFAULT_SESSION_VIEW: 'terminal',
-  loadDefaultSessionView: vi.fn(async () => 'terminal'),
+  readDefaultSessionViewPreference: vi.fn(async () => ({
+    value: 'terminal',
+    loaded: true,
+    hasStoredValue: true
+  })),
   saveDefaultSessionView: vi.fn(async () => {}),
   readSessionViewOverridesPreference: vi.fn(async () => ({ overrides: new Map(), loaded: true })),
   updateSessionViewOverride: vi.fn(async () => {})

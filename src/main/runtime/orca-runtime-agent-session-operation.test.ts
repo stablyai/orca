@@ -285,6 +285,42 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).not.toHaveBeenCalled()
   })
 
+  it("forwards a paired device's default view on create and resume, for createTerminal to apply", async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    await runtime.createAgentSession(
+      CreateAgentSessionParams.parse(request(operationId(), { launcherDefaultView: 'terminal' }))
+    )
+    await runtime.ensureAgentSession(
+      EnsureAgentSessionParams.parse({
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' },
+        launcherDefaultView: 'chat'
+      })
+    )
+    expect(createTerminal.mock.calls.map((call) => call[1]?.launcherDefaultView)).toEqual([
+      'terminal',
+      'chat'
+    ])
+  })
+
+  it('keeps the create digest of an operation that sent no default view', async () => {
+    const runtime = createRuntime()
+    vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const id = operationId()
+    await runtime.createAgentSession(request(id), { clientId: 'device-a' })
+    await expect(
+      runtime.createAgentSession(request(id, { launcherDefaultView: 'chat' }), {
+        clientId: 'device-a'
+      })
+    ).rejects.toThrow('agent_session_operation_conflict')
+    await expect(
+      runtime.createAgentSession(request(id), { clientId: 'device-a' })
+    ).resolves.toMatchObject({ disposition: 'replayed' })
+  })
+
   it('replays the same completed operation without spawning again', async () => {
     const runtime = createRuntime()
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())

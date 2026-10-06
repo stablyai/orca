@@ -45,6 +45,7 @@ export function launchAgentInWebHostTab(args: {
   submitPastedPrompt: boolean
   agentArgs?: string | null
   viewMode?: Tab['viewMode']
+  launcherDefaultView?: Tab['viewMode']
   onPromptDelivered?: () => void
 }): Promise<{ delivered: boolean; failureNotified: boolean }> {
   const {
@@ -60,6 +61,7 @@ export function launchAgentInWebHostTab(args: {
     submitPastedPrompt,
     agentArgs,
     viewMode,
+    launcherDefaultView,
     onPromptDelivered
   } = args
   const hasPrompt = prompt.length > 0
@@ -74,6 +76,7 @@ export function launchAgentInWebHostTab(args: {
     activate: true,
     ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
+    ...(launcherDefaultView ? { launcherDefaultView } : {}),
     agentSessionKind: 'fresh',
     ...(hasPrompt
       ? {

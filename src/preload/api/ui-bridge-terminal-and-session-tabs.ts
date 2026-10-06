@@ -27,6 +27,7 @@ export const uiTerminalAndSessionTabsApi = {
       launchToken?: string
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
+      freshLaunchView?: true
       title?: string
       ptyId?: string
       activate?: boolean
@@ -53,6 +54,7 @@ export const uiTerminalAndSessionTabsApi = {
         launchToken?: string
         launchAgent?: TuiAgent
         viewMode?: 'terminal' | 'chat'
+        freshLaunchView?: true
         title?: string
         ptyId?: string
         activate?: boolean

@@ -173,6 +173,7 @@ export async function prepareRuntimePtySpawn(
       worktreeId: args.worktreeId,
       tabId: args.tabId,
       leafId: args.leafId,
+      ...(args.startingViewMode ? { startingViewMode: args.startingViewMode } : {}),
       ...(args.expectedSourceBinding ? { expectedSourceBinding: args.expectedSourceBinding } : {})
     }
   }

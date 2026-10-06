@@ -137,13 +137,15 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   }
   if (ctx.hostSessionBinding && !ctx.stablePaneBindingPersisted) {
     try {
-      const { store, worktreeId, tabId, leafId, expectedSourceBinding } = ctx.hostSessionBinding
+      const { store, worktreeId, tabId, leafId, startingViewMode, expectedSourceBinding } =
+        ctx.hostSessionBinding
       const binding = {
         worktreeId,
         tabId,
         leafId,
         ptyId: ctx.result.id,
         hostAdmittedMembership: true,
+        ...(startingViewMode ? { startingViewMode } : {}),
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
         ...(expectedSourceBinding ? { expectedSourceBinding } : {}),

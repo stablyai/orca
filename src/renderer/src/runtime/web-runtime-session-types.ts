@@ -38,6 +38,8 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   launchPreferences?: AgentLaunchPreferences
   providerSession?: AgentProviderSessionMetadata
   viewMode?: 'terminal' | 'chat'
+  /** The launching device's Chat UI default, for a host that stamps launch views. */
+  launcherDefaultView?: 'terminal' | 'chat'
   activate?: boolean
   selectWorktree?: boolean
 }

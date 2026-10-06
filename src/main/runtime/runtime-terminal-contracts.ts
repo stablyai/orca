@@ -62,7 +62,10 @@ export type TerminalCreateOptions = {
   launchPreferences?: AgentLaunchPreferences
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
+  /** A decided starting view (genuine choice or pin); the host finalizes it (`withFinalAgentTabStartingView`). */
   viewMode?: 'terminal' | 'chat'
+  /** The launching device's Chat UI default, applied like the host's own when no view was decided. */
+  launcherDefaultView?: 'terminal' | 'chat'
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
   /** The surface that asked for this `startupAgent` launch; the runtime attributes every one it

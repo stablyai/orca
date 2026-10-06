@@ -167,6 +167,7 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
+      launcherDefaultView: request.launcherDefaultView,
       agentSessionClaim: claim,
       signal: _caller.signal
     })

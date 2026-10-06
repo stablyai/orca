@@ -44,6 +44,7 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.lastAssistantMessage === next.lastAssistantMessage &&
     agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     existing.origin === next.origin &&
+    existing.viewMode === next.viewMode &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
 }

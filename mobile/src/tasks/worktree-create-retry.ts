@@ -1,4 +1,6 @@
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TerminalTabViewMode } from '../../../src/shared/terminal-tab-view-mode'
+import { settledLaunchSessionView } from '../storage/default-session-view-state'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
@@ -90,7 +92,7 @@ export async function createWorktreeWithNameRetry(
     const launchOperationId = launch?.replay ? mintLaunchOperationId() : null
     const sent = await sendWorktreeCreateResilient(
       client,
-      launch?.agent ?? null,
+      launch,
       launchOperationId,
       params,
       worktreeCreateIdempotency
@@ -135,14 +137,29 @@ export async function createWorktreeWithNameRetry(
   return { error: lastError ?? 'Failed to create workspace' }
 }
 
+type ResolvedAgentLaunchRoute = {
+  agent: TuiAgent
+  replay: boolean
+  launcherDefaultView?: TerminalTabViewMode
+}
+
 async function resolveAgentLaunchRoute(
   launch: WorktreeCreateAgentLaunch | undefined
-): Promise<{ agent: TuiAgent; replay: boolean } | null> {
+): Promise<ResolvedAgentLaunchRoute | null> {
   if (!launch) {
     return null
   }
   const support = await launch.supported
-  return support ? { agent: launch.agent, replay: support.replay } : null
+  if (!support) {
+    return null
+  }
+  // Why read here: frozen before the first create, so a replay never re-reads a changed default.
+  const launcherDefaultView = support.launchPresentation ? settledLaunchSessionView() : undefined
+  return {
+    agent: launch.agent,
+    replay: support.replay,
+    ...(launcherDefaultView ? { launcherDefaultView } : {})
+  }
 }
 
 // A launch receipt carries no display name, so the candidate stands in; the session route
@@ -187,13 +204,13 @@ function readCreateResult(
 // A definite failure (never sent, or a server error response) is returned to the caller untouched.
 function sendWorktreeCreateResilient(
   client: RpcClient,
-  launchAgent: TuiAgent | null,
+  launch: ResolvedAgentLaunchRoute | null,
   launchOperationId: string | null,
   params: WorkspaceCreateParams,
   worktreeCreateIdempotency: WorktreeCreateIdempotencySupport | false
 ): Promise<{ response: RpcResponse; replayed: boolean }> {
   // Only the selected method's receipt can authorize replay after an ambiguous delivery.
-  const replay: AmbiguousDeliveryReplay | null = launchAgent
+  const replay: AmbiguousDeliveryReplay | null = launch
     ? launchOperationId
       ? { kind: 'durable' }
       : null
@@ -203,19 +220,24 @@ function sendWorktreeCreateResilient(
   return sendReplayingAmbiguousDelivery(
     client,
     () =>
-      launchAgent
+      launch
         ? launchOperationId
           ? agentLaunchReplayRun.request(
               client,
               {
-                ...agentLaunchCreateParams(launchAgent, params),
+                ...agentLaunchCreateParams(launch.agent, params, null, launch.launcherDefaultView),
                 operationId: launchOperationId
               },
               { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
             )
           : agentLaunchRun.request(
               client,
-              agentLaunchCreateParams(launchAgent, params, launchOperationId),
+              agentLaunchCreateParams(
+                launch.agent,
+                params,
+                launchOperationId,
+                launch.launcherDefaultView
+              ),
               { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
             )
         : worktreeCreateRun.request(client, params, {

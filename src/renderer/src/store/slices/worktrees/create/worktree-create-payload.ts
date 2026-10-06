@@ -13,6 +13,10 @@ export type CreateWorktreeCallOptions = {
   linkedTaskSourceContext?: TaskSourceContext | null
   /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
   startupDraft?: string
+  /** A terminal pin for the host-built `startupDraft` agent tab (a draft chat cannot mirror). */
+  startupViewMode?: 'terminal' | 'chat'
+  /** This device's Chat UI default for that tab, applied by the host like its own. */
+  launcherDefaultView?: 'terminal' | 'chat'
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
   displayNameKind?: CreateWorktreeArgs['displayNameKind']
@@ -123,6 +127,12 @@ export function buildRuntimeWorktreeCreateParams(
     // Why: the host defaults a bare `parentWorkspace` to CLI provenance; app picks are manual.
     ...(attempt.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
     ...(options?.startupDraft ? { startupDraft: options.startupDraft } : {}),
+    ...((startup?.viewMode ?? options?.startupViewMode)
+      ? { startupViewMode: startup?.viewMode ?? options?.startupViewMode }
+      : {}),
+    ...((startup?.launcherDefaultView ?? options?.launcherDefaultView)
+      ? { launcherDefaultView: startup?.launcherDefaultView ?? options?.launcherDefaultView }
+      : {}),
     ...(startup
       ? {
           startupCommand: startup.command,

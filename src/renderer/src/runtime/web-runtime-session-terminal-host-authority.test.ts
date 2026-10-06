@@ -179,6 +179,7 @@ describe('createWebRuntimeSessionTerminal', () => {
                 providerSession: { key: 'session_id' as const, id: 'session-1' }
               }
             : {}),
+          launcherDefaultView: 'chat',
           activate
         })
       ).resolves.toEqual({ status: 'created' })
@@ -191,7 +192,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       expect(authorityRequest).toMatchObject({
         selector: ENVIRONMENT_ID,
         method: authorityMethod,
-        params: { presentation: 'background' }
+        params: { presentation: 'background', launcherDefaultView: 'chat' }
       })
       if (keyboardSupported) {
         expect(authorityRequest).toHaveProperty('params.terminalKittyKeyboardProtocol', true)

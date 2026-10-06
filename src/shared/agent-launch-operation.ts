@@ -47,6 +47,9 @@ export type AgentLaunchFingerprintInput = {
   /** In: a retry that minted another session is a different request, since replaying would answer
    *  with a conversation this caller did not mint. */
   sessionId?: string
+  /** In: the launching device's Chat UI default, frozen per launch, so a retry that sent another
+   *  conflicts. The host's default is not (a mutable setting); an absent key keeps older digests. */
+  launcherDefaultView?: string
   /**
    * `launchSource` is deliberately absent, and this is the reasoned exclusion rather than an
    * oversight: it is telemetry, so two launches differing only in which button produced them do the
@@ -71,7 +74,8 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     cwd: input.cwd,
     // Absent keys are dropped by the canonical form, so every digest without one is unchanged.
     paneKey: input.paneKey,
-    sessionId: input.sessionId
+    sessionId: input.sessionId,
+    launcherDefaultView: input.launcherDefaultView
   })
 }
 

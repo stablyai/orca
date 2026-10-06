@@ -14,6 +14,19 @@ export type WebRuntimeSessionWorkspaceSelectionRollback = {
   applied: WebRuntimeSessionWorkspaceSelection
 }
 
+/** Selects the worktree for a create and returns what a failed create rolls back. */
+export function selectWebRuntimeSessionWorktreeForCreate(
+  worktreeId: string,
+  environmentId: string
+): WebRuntimeSessionWorkspaceSelectionRollback {
+  const previous = readActiveWorkspaceSelection()
+  selectWebRuntimeSessionWorktree(worktreeId, environmentId)
+  return {
+    previous,
+    applied: { worktreeId, executionHostId: toRuntimeExecutionHostId(environmentId) }
+  }
+}
+
 export function readActiveWorkspaceSelection(): WebRuntimeSessionWorkspaceSelection {
   const state = useAppStore.getState()
   return {

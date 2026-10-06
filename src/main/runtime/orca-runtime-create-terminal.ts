@@ -42,6 +42,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       let { tabId, leafId, paneKey } = dependencies.allocateTerminalPaneIdentity(launchOpts)
+      const startingViewProbe = this.probeLaunchStartingView(workspace.id, tabId)
       const claimedStablePaneCreate = this.ptyController.claimStablePaneCreate?.({
         worktreeId: workspace.id,
         connectionId: workspace.connectionId,
@@ -77,11 +78,9 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           ...launchOpts.env,
           ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
         }
-        let agentTeamsPlan: Awaited<ReturnType<typeof dependencies.buildClaudeAgentTeamsLaunchPlan>>
-        let sequencedStartupCommand: string | undefined
-        let effectiveLaunchConfig = launchOpts.launchConfig
+        let agentTeams
         try {
-          const agentTeams = await buildRuntimeAgentTeamsLaunchPlan({
+          agentTeams = await buildRuntimeAgentTeamsLaunchPlan({
             launchConfig: launchOpts.launchConfig,
             command: launchOpts.command,
             claudeAgentTeamsSourceCommand: launchOpts.claudeAgentTeamsSourceCommand,
@@ -96,13 +95,11 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
                 shimBin
               }).env
           })
-          agentTeamsPlan = agentTeams.plan
-          sequencedStartupCommand = agentTeams.sequencedStartupCommand
-          effectiveLaunchConfig = agentTeams.effectiveLaunchConfig
         } catch (error) {
           releaseStablePaneCreate?.()
           throw error
         }
+        const { plan: agentTeamsPlan, sequencedStartupCommand, effectiveLaunchConfig } = agentTeams
         const env = await this.buildTerminalWorkspaceEnv(
           workspace,
           {
@@ -131,6 +128,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
               ? launchOpts.command
               : (agentTeamsPlan?.command ?? launchOpts.command),
             launchAgent: launchOpts.launchAgent,
+            ...(launchOpts.viewMode ? { startingViewMode: launchOpts.viewMode } : {}),
             commandDelivery: 'provider',
             startupCommandDelivery: launchOpts.startupCommandDelivery,
             env,
@@ -235,6 +233,8 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence))
         }
         const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
+        // Why: publish and reveal what the record committed, so an adopted tab is never re-defaulted.
+        const view = startingViewProbe.read(tabId, leafId, launchOpts.viewMode, !!adoptedStablePane)
         if (pty && !adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
           this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
             tabId,
@@ -242,7 +242,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             title: launchOpts.title ?? null,
             activate: presentation === 'focused',
             selectIfNoActiveTab: presentation !== 'background',
-            ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
+            ...view.publish,
             ...(cwd !== workspace.path ? { startupCwd: cwd } : {})
           })
         }
@@ -257,7 +257,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
               ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
               ...(launchToken ? { launchToken } : {}),
               ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
-              ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
+              ...view.reveal,
               activate: presentation === 'focused',
               ...(presentation ? { presentation } : {}),
               ...dependencies.ownerSurfacing(opts.surfaceOwner !== false),

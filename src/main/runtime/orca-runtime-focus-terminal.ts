@@ -4,6 +4,7 @@ import type { RuntimeTerminalFocus } from '../../shared/runtime-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { getLatestPtyTitle } from './runtime-worktree-status-projection'
 import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution'
+import { readHeadlessChatPairState } from './session-tab-chat-pair'
 
 export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyId {
   async focusTerminal(
@@ -75,6 +76,16 @@ export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyI
             }
           }
           const parsedPaneKey = parsePaneKey(live.pty.paneKey ?? '')
+          // Why: a tab the renderer must re-mint keeps its record's view, never the viewer's default.
+          const committedViewMode =
+            live.pty.tabId !== null
+              ? readHeadlessChatPairState(
+                  this.getWorkspaceSessionForWorktree(live.pty.worktreeId),
+                  undefined,
+                  live.pty.worktreeId,
+                  live.pty.tabId
+                )?.pair.viewMode
+              : undefined
           const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
             ptyId: live.pty.ptyId,
             title: getLatestPtyTitle(this.getPtyDisplayRecord(live.pty)),
@@ -83,6 +94,7 @@ export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyI
               : {}),
             ...(live.pty.launchToken ? { launchToken: live.pty.launchToken } : {}),
             ...(live.pty.launchAgent ? { launchAgent: live.pty.launchAgent } : {}),
+            ...(committedViewMode ? { viewMode: committedViewMode } : {}),
             ...(live.pty.tabId !== null ? { tabId: live.pty.tabId } : {}),
             ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {})
           })

@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { settledLaunchSessionView } from '../storage/default-session-view-state'
 import type {
   CreateSparseCheckoutRequest,
   SetupDecision
@@ -108,6 +109,7 @@ export function buildTaskWorkspaceCreateParams(args: {
     nameIsAutoManaged = true
   } = args
   const shouldLaunchAgent = agent !== 'blank'
+  const launcherDefaultView = settledLaunchSessionView()
   const createdWithAgent = shouldLaunchAgent ? (agent as TuiAgent) : undefined
   const comment = note?.trim()
   const selectedBaseBranch = baseBranch || hostedStartPoint?.baseBranch
@@ -133,6 +135,8 @@ export function buildTaskWorkspaceCreateParams(args: {
     setupDecision,
     activate: true,
     ...(shouldLaunchAgent ? { startupDraft: item.source.url } : {}),
+    // Why ungated: an older host strips the unknown field and applies its own default as before.
+    ...(shouldLaunchAgent && launcherDefaultView ? { launcherDefaultView } : {}),
     ...(createdWithAgent ? { createdWithAgent } : {}),
     ...(selectedBaseBranch ? { baseBranch: selectedBaseBranch } : {}),
     ...(compareBaseRef ? { compareBaseRef } : {}),

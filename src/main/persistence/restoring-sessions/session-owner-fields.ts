@@ -25,6 +25,7 @@ export function createMinimalPersistedTerminalTab(args: {
   ptyId: string
   existingTabCount: number
   startupCwd?: string
+  startingViewMode?: TerminalTab['viewMode']
 }): TerminalTab {
   const ordinal = args.existingTabCount + 1
   const defaultTitle = `Terminal ${ordinal}`
@@ -39,6 +40,7 @@ export function createMinimalPersistedTerminalTab(args: {
     sortOrder: args.existingTabCount,
     createdAt: Date.now(),
     ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
+    ...(args.startingViewMode ? { viewMode: args.startingViewMode } : {}),
     pendingActivationSpawn: true
   }
 }

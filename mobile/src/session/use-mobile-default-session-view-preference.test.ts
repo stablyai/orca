@@ -2,8 +2,9 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  loadDefaultSessionView,
+  readDefaultSessionViewPreference,
   saveDefaultSessionView,
+  type DefaultSessionViewPreference,
   type MobileSessionView
 } from '../storage/session-view-preferences'
 import { resetDefaultSessionViewStoreForTests } from '../storage/default-session-view-store'
@@ -22,9 +23,13 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 vi.mock('../storage/session-view-preferences', () => ({
   DEFAULT_SESSION_VIEW: 'terminal',
-  loadDefaultSessionView: vi.fn(),
+  readDefaultSessionViewPreference: vi.fn(),
   saveDefaultSessionView: vi.fn()
 }))
+
+function stored(view: MobileSessionView): DefaultSessionViewPreference {
+  return { value: view, loaded: true, hasStoredValue: true }
+}
 
 describe('useMobileDefaultSessionViewPreference', () => {
   let renderer: ReactTestRenderer | null = null
@@ -32,7 +37,7 @@ describe('useMobileDefaultSessionViewPreference', () => {
 
   beforeEach(() => {
     resetDefaultSessionViewStoreForTests()
-    vi.mocked(loadDefaultSessionView).mockReset().mockResolvedValue('terminal')
+    vi.mocked(readDefaultSessionViewPreference).mockReset().mockResolvedValue(stored('terminal'))
     vi.mocked(saveDefaultSessionView).mockReset().mockResolvedValue(undefined)
   })
 
@@ -54,15 +59,15 @@ describe('useMobileDefaultSessionViewPreference', () => {
   }
 
   it('keeps a fast toggle authoritative over the initial read', async () => {
-    const initialLoad = deferred<MobileSessionView>()
-    vi.mocked(loadDefaultSessionView).mockReturnValue(initialLoad.promise)
+    const initialLoad = deferred<DefaultSessionViewPreference>()
+    vi.mocked(readDefaultSessionViewPreference).mockReturnValue(initialLoad.promise)
     await mount()
 
     act(() => preference?.setDefaultView('chat'))
     expect(preference?.defaultView).toBe('chat')
 
     await act(async () => {
-      initialLoad.resolve('terminal')
+      initialLoad.resolve(stored('terminal'))
       await initialLoad.promise
     })
 
@@ -99,9 +104,9 @@ describe('useMobileDefaultSessionViewPreference', () => {
   })
 
   it('reloads the persisted value when the latest write fails', async () => {
-    vi.mocked(loadDefaultSessionView)
-      .mockResolvedValueOnce('terminal')
-      .mockResolvedValueOnce('terminal')
+    vi.mocked(readDefaultSessionViewPreference)
+      .mockResolvedValueOnce(stored('terminal'))
+      .mockResolvedValueOnce(stored('terminal'))
     vi.mocked(saveDefaultSessionView).mockRejectedValue(new Error('storage unavailable'))
     await mount()
 
@@ -113,13 +118,13 @@ describe('useMobileDefaultSessionViewPreference', () => {
     })
 
     expect(preference?.defaultView).toBe('terminal')
-    expect(loadDefaultSessionView).toHaveBeenCalledTimes(2)
+    expect(readDefaultSessionViewPreference).toHaveBeenCalledTimes(2)
   })
 
   it('does not let an older failed write roll back a newer choice', async () => {
-    const recoveryLoad = deferred<MobileSessionView>()
-    vi.mocked(loadDefaultSessionView)
-      .mockResolvedValueOnce('terminal')
+    const recoveryLoad = deferred<DefaultSessionViewPreference>()
+    vi.mocked(readDefaultSessionViewPreference)
+      .mockResolvedValueOnce(stored('terminal'))
       .mockReturnValueOnce(recoveryLoad.promise)
     vi.mocked(saveDefaultSessionView)
       .mockRejectedValueOnce(new Error('storage unavailable'))
@@ -134,7 +139,7 @@ describe('useMobileDefaultSessionViewPreference', () => {
     act(() => preference?.setDefaultView('terminal'))
 
     await act(async () => {
-      recoveryLoad.resolve('chat')
+      recoveryLoad.resolve(stored('chat'))
       await recoveryLoad.promise
       await Promise.resolve()
     })

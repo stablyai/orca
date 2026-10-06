@@ -1,23 +1,16 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { agentTabsDefaultToNativeChat } from '../../../shared/structured-native-chat-launch-route'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
 import {
-  isNativeChatSupportedAgent,
-  nativeChatRequiresLocalTranscript
-} from '@/lib/native-chat-supported-agent'
+  finalizeAgentTabStartingView,
+  type NativeChatLaunchPromptDelivery
+} from '../../../shared/native-chat-starting-view'
 
-export type NativeChatLaunchPromptDelivery = 'auto-submit' | 'draft' | 'submit-after-ready'
+export type { NativeChatLaunchPromptDelivery }
 
 /**
- * Decide the initial `viewMode` for a newly launched agent tab from the
- * opt-in `openAgentTabsInChatByDefault` setting.
- *
- * Returns `'chat'` only when the setting is explicitly on and the launched
- * agent has a native-chat renderer. A draft launch opens in chat only when its
- * unsent context can be mirrored into the composer — gated on the same
- * predicate as seeding so the view never opens empty beside a filled TUI input.
+ * Whether this device's `openAgentTabsInChatByDefault` default opens a newly launched agent tab
+ * in chat: `'chat'`, or `undefined` for every other answer (the shared starting-view policy).
  */
 export function decideInitialAgentTabViewMode(args: {
   experimentalNativeChat?: boolean
@@ -28,27 +21,13 @@ export function decideInitialAgentTabViewMode(args: {
   launchDraftText?: string
   nativeChatTranscriptIsLocalReadable?: boolean
 }): Tab['viewMode'] {
-  if (!agentTabsDefaultToNativeChat(args)) {
-    return undefined
-  }
-  if (!isNativeChatSupportedAgent(args.agent)) {
-    return undefined
-  }
-  if (
-    nativeChatRequiresLocalTranscript(args.agent) &&
-    args.nativeChatTranscriptIsLocalReadable !== true
-  ) {
-    return undefined
-  }
-  if (
-    args.promptDelivery === 'draft' &&
-    !canMirrorLaunchDraftToNativeChat(args.launchDraftText ?? '')
-  ) {
-    return undefined
-  }
-  return 'chat'
+  return finalizeAgentTabStartingView({ ...args, settings: args }) === 'chat' ? 'chat' : undefined
 }
 
+/**
+ * The starting view this device stamps on an agent tab it mints: chat, a terminal pin for a draft
+ * chat cannot mirror, or nothing (a tab nobody switched).
+ */
 export function initialAgentTabViewModeProps(
   settings:
     | Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'>
@@ -61,13 +40,6 @@ export function initialAgentTabViewModeProps(
     nativeChatTranscriptIsLocalReadable?: boolean
   } = {}
 ): { viewMode?: Tab['viewMode'] } {
-  const viewMode = decideInitialAgentTabViewMode({
-    experimentalNativeChat: settings?.experimentalNativeChat,
-    openAgentTabsInChatByDefault: settings?.openAgentTabsInChatByDefault,
-    agent: options.agent,
-    promptDelivery: options.promptDelivery,
-    launchDraftText: options.launchDraftText,
-    nativeChatTranscriptIsLocalReadable: options.nativeChatTranscriptIsLocalReadable
-  })
+  const viewMode = finalizeAgentTabStartingView({ ...options, settings })
   return viewMode ? { viewMode } : {}
 }

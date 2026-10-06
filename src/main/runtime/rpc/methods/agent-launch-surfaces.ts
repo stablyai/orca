@@ -118,6 +118,7 @@ export function agentLaunchSurfaceFactory(
       cwd,
       launchSource,
       paneKey,
+      launcherDefaultView,
       options
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
@@ -135,6 +136,7 @@ export function agentLaunchSurfaceFactory(
         // A live reserved pane would be attached, not launched into, so the runtime refuses it.
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),
+        ...(launcherDefaultView ? { launcherDefaultView } : {}),
         onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
       })
       const terminal = await created.catch(terminalSpawn.rethrow)

@@ -35,6 +35,7 @@ import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-table'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { resolveQoderTerminalCommandForWorkspace } from './qoder-terminal-command-resolution'
 import { buildRuntimeAgentTerminalStartupOptions } from './runtime-agent-terminal-startup'
+import { withFinalAgentTabStartingView } from './agent-tab-starting-view'
 
 export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected async resolveWorktreeRemovalTarget(
@@ -243,12 +244,14 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     opts: TerminalCreateOptions
   ): Promise<TerminalCreateOptions> {
     const launch = await this.buildAgentTerminalCreateOptions(workspace, opts)
-    return resolveQoderTerminalCommandForWorkspace(
+    const resolved = await resolveQoderTerminalCommandForWorkspace(
       launch,
       workspace,
       this.store,
       this.getAgentLaunchPlatformForWorkspace(workspace)
     )
+    // Why last: every create lane passes here, so the starting view is decided once, on the host.
+    return withFinalAgentTabStartingView(resolved, workspace, this.store?.getSettings?.() ?? null)
   }
 
   protected async buildAgentTerminalCreateOptions(

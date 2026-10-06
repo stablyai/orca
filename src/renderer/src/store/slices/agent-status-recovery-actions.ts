@@ -4,7 +4,8 @@ import type { AgentStatusRuntime } from './agent-status-runtime'
 import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-recovery-collection'
 import {
   removeSleepingRecordsReplacedByManualWorktreeSleep,
-  sleepingRecordFromEntry
+  sleepingRecordFromEntry,
+  withSleepingPaneView
 } from './agent-status-sleeping-records'
 import {
   recoveryRecordTargetsSameSession,
@@ -68,7 +69,8 @@ export function createAgentStatusRecoveryActions(
             ) {
               continue
             }
-            const record = { ...existing, capturedAt, origin }
+            const promoted = { ...existing, capturedAt, origin }
+            const record = origin === 'quit' ? withSleepingPaneView(s, promoted) : promoted
             if (!sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {
               next[entry.paneKey] = record
               changed = true

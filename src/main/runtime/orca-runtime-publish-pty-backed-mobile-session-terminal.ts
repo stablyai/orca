@@ -15,6 +15,7 @@ import {
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
 } from './mobile-session-tab-merge'
+import { probeAgentTabStartingView } from './agent-tab-starting-view'
 
 export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding {
   /**
@@ -32,6 +33,8 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       selectIfNoActiveTab?: boolean
       startupCwd?: string
       viewMode?: 'terminal' | 'chat'
+      /** The committed owner of a fresh chat tab; never applied over an existing layout. */
+      chatLeafId?: string
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
       notify?: boolean
     }
@@ -75,12 +78,16 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
           candidate.parentTabId === args.tabId &&
           candidate.viewMode !== undefined
       )?.viewMode
-    const parentLayout = buildMaterializedHeadlessParentLayout(
+    const builtLayout = buildMaterializedHeadlessParentLayout(
       args.leafId,
       pty.ptyId,
       baseLayout,
       args.split && viewMode ? { ...args.split, chatViewMode: viewMode } : args.split
     )
+    const parentLayout =
+      !baseLayout && args.chatLeafId === args.leafId
+        ? { ...builtLayout, chatLeafId: args.chatLeafId }
+        : builtLayout
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${args.tabId}::${args.leafId}`,
@@ -147,6 +154,15 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
     if (args.notify !== false) {
       this.notifyMobileSessionTabsChanged(worktreeId)
     }
+  }
+
+  /** Before a launch's spawn: probes whether this launch creates its tab's record. */
+  protected probeLaunchStartingView(worktreeId: string, tabId: string) {
+    return probeAgentTabStartingView(
+      () => this.getWorkspaceSessionForWorktree(worktreeId),
+      worktreeId,
+      tabId
+    )
   }
 
   protected touchMobileSessionSnapshotsForPty(

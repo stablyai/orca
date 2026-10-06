@@ -12,6 +12,7 @@ import {
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
 import { useReducedMotionEnabled } from '../src/onboarding/use-reduced-motion'
 import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
+import { refreshDefaultSessionView } from '../src/storage/default-session-view-store'
 import {
   saveDefaultSessionView,
   type MobileSessionView
@@ -101,6 +102,8 @@ function MobileOnboardingFlow({
       setError(null)
       try {
         await saveDefaultSessionView(view)
+        // Why: the store loaded at boot as "never chosen"; launches must see this choice.
+        await refreshDefaultSessionView()
         advanceOrContinue()
       } catch {
         setError('Your choice could not be saved. Try again.')

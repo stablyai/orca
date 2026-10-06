@@ -65,6 +65,8 @@ export type RuntimePtyController = {
     /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
     initiallyHidden?: boolean
     persistHostSessionBinding?: boolean
+    /** Stamped only when this spawn's admission creates the tab record; an existing tab keeps its view. */
+    startingViewMode?: 'terminal' | 'chat'
     expectedSourceBinding?: PtyBindingSourceExpectation
     terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }

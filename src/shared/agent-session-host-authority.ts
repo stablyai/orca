@@ -117,6 +117,8 @@ export type RuntimeEnsureAgentSessionRequest =
       launchPreferences?: AgentLaunchPreferences
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
+      /** The launching device's Chat UI default; sent only to a host that stamps launch views. */
+      launcherDefaultView?: 'terminal' | 'chat'
     }
 
 export type RuntimeEnsureAgentSessionResult = {
@@ -138,6 +140,8 @@ export type RuntimeCreateAgentSessionRequest = {
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }
   viewMode?: 'terminal' | 'chat'
+  /** The launching device's Chat UI default; sent only to a host that stamps launch views. */
+  launcherDefaultView?: 'terminal' | 'chat'
 }
 
 export type RuntimeCreateAgentSessionResult = {

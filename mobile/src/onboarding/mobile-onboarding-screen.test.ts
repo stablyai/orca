@@ -2,6 +2,11 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MobileOnboardingScreen from '../../app/mobile-onboarding'
+import { settledLaunchSessionView } from '../storage/default-session-view-state'
+import {
+  refreshDefaultSessionView,
+  resetDefaultSessionViewStoreForTests
+} from '../storage/default-session-view-store'
 
 const mocks = vi.hoisted(() => ({
   params: { hostId: 'paired-host', steps: 'session-view,notifications' },
@@ -12,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   saveDefaultSessionView: vi.fn(),
   setRemotePushEnabled: vi.fn()
 }))
+
+const stored = vi.hoisted(() => {
+  const state: { view: 'terminal' | 'chat' | null } = { view: null }
+  return state
+})
 
 vi.mock('react-native', () => ({
   AccessibilityInfo: {
@@ -46,6 +56,12 @@ vi.mock('../notifications/mobile-notifications', () => ({
   ensureNotificationPermissions: mocks.ensureNotificationPermissions
 }))
 vi.mock('../storage/session-view-preferences', () => ({
+  DEFAULT_SESSION_VIEW: 'terminal',
+  readDefaultSessionViewPreference: async () => ({
+    value: stored.view,
+    loaded: true,
+    hasStoredValue: stored.view !== null
+  }),
   saveDefaultSessionView: mocks.saveDefaultSessionView
 }))
 vi.mock('../notifications/push-registration', () => ({
@@ -63,7 +79,11 @@ describe('MobileOnboardingScreen', () => {
       start: (callback: (result: { finished: boolean }) => void) => callback({ finished: true })
     })
     mocks.ensureNotificationPermissions.mockReset().mockResolvedValue(true)
-    mocks.saveDefaultSessionView.mockReset().mockResolvedValue(undefined)
+    stored.view = null
+    mocks.saveDefaultSessionView.mockReset().mockImplementation(async (view) => {
+      stored.view = view
+    })
+    resetDefaultSessionViewStoreForTests()
     mocks.setRemotePushEnabled.mockReset().mockResolvedValue(undefined)
   })
 
@@ -102,6 +122,16 @@ describe('MobileOnboardingScreen', () => {
     expect(mocks.ensureNotificationPermissions).not.toHaveBeenCalled()
     expect(mocks.setRemotePushEnabled).toHaveBeenCalledWith(false)
     expect(mocks.replace).toHaveBeenCalledWith('/h/paired-host')
+  })
+
+  it('makes the chosen view what the next launch sends, after the store loaded "never chosen"', async () => {
+    await refreshDefaultSessionView()
+    expect(settledLaunchSessionView()).toBeUndefined()
+    await renderScreen()
+
+    await act(async () => pages()[0].props.onSessionChoice('chat'))
+
+    expect(settledLaunchSessionView()).toBe('chat')
   })
 
   it.each([true, false])(

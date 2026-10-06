@@ -551,3 +551,21 @@ describe('caller-supplied launch inputs', () => {
     expect(result.warning).toBeUndefined()
   })
 })
+
+describe("the launcher's starting view", () => {
+  it('reaches the terminal surface of a launch into an existing workspace', async () => {
+    const h = harness({})
+    await h.run({
+      agent: 'grok',
+      target: { kind: 'existing', worktree: 'wt-7' },
+      launcherDefaultView: 'chat'
+    })
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({ launcherDefaultView: 'chat' })
+  })
+
+  it('reaches the startup terminal of an agent-first worktree create', async () => {
+    const h = harness({ settings: null })
+    await h.run({ ...CREATE_INTENT, launcherDefaultView: 'terminal' })
+    expect(h.createWorktree.mock.calls[0]?.[0]).toMatchObject({ launcherDefaultView: 'terminal' })
+  })
+})

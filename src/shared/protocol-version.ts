@@ -354,8 +354,14 @@ export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
   'agentSession.create.tab-id.v1' as const
 
+// Why: older hosts' terminal.createAgentSession / ensureAgentSession refuse unknown fields, so
+// `launcherDefaultView` goes there only when advertised; lenient methods may carry it to any host.
+export const AGENT_TAB_LAUNCH_PRESENTATION_RUNTIME_CAPABILITY =
+  'agent-tab.launch-presentation.v1' as const
+
 export const RUNTIME_CAPABILITIES = [
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
+  AGENT_TAB_LAUNCH_PRESENTATION_RUNTIME_CAPABILITY,
   ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
