@@ -164,6 +164,8 @@ export type ClosedEditorTabSnapshot = Omit<
 > & {
   reopenId?: string
   position?: RecentlyClosedTabPosition
+  // Why: stamped when the tab closes so a later file stat cannot jump ahead of tabs closed after it.
+  closeOrder?: number
 }
 
 export const MAX_RECENT_CLOSED_EDITOR_TABS = 10

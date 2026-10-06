@@ -6,30 +6,36 @@ import { getDiskBaselineSignature } from '@/components/editor/diff-content-signa
 import {
   deleteRuntimePath,
   deleteRuntimeRelativePath,
+  isMissingRuntimePathError,
   statRuntimePath
 } from '@/runtime/runtime-file-client'
 
-export function deleteUntouchedUntitledFile(state: AppState, file: OpenFile): void {
+export function deleteUntouchedUntitledFile(state: AppState, file: OpenFile): Promise<boolean> {
   const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
   const owningRuntimeEnvironmentId = file.runtimeEnvironmentId?.trim()
   let context: ReturnType<typeof getEditorFileOperationContext>
   try {
     context = getEditorFileOperationContext(state, file, worktree?.path ?? null)
   } catch {
-    return
+    return Promise.resolve(false)
   }
   // Why: agents, external editors, and paired clients can fill the file without this window seeing it, so delete only a still-empty placeholder.
-  void statRuntimePath(context, file.filePath)
+  return statRuntimePath(context, file.filePath)
     .then(async (stat) => {
       if (stat.size !== 0) {
-        return
+        return false
       }
       const deletedRemotely = await deleteRuntimeRelativePath(context, file.relativePath)
       if (!deletedRemotely && !owningRuntimeEnvironmentId) {
         await deleteRuntimePath(context, file.filePath)
       }
+      return true
     })
-    .catch(() => {})
+    .catch((error: unknown) => {
+      // A missing path was already removed. Callers treat false as "kept", which
+      // would offer Cmd+Shift+T for a file that is gone.
+      return isMissingRuntimePathError(error)
+    })
 }
 
 const EMPTY_DISK_SIGNATURE = getDiskBaselineSignature('')

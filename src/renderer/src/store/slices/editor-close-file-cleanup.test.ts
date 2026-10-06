@@ -115,6 +115,17 @@ describe('createEditorSlice untitled cleanup routing', () => {
     } as Partial<AppState>)
   }
 
+  function openRemoteNote(store: StoreApi<AppState>, name: string, untitled = false): void {
+    store.getState().openFile({
+      filePath: `/remote/wt/${name}`,
+      relativePath: name,
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit',
+      ...(untitled ? { isUntitled: true as const } : {})
+    })
+  }
+
   it('closeFile deletes untouched remote untitled files through runtime file RPC', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
@@ -144,6 +155,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       })
     })
     expect(localDeletePathMock).not.toHaveBeenCalled()
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 
   it('closeAllFiles deletes untouched remote untitled files through runtime file RPC', async () => {
@@ -203,6 +215,215 @@ describe('createEditorSlice untitled cleanup routing', () => {
       expect.objectContaining({ method: 'files.delete' })
     )
     expect(localDeletePathMock).not.toHaveBeenCalled()
+    expect(
+      store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.map((entry) => entry.filePath)
+    ).toEqual(['/remote/wt/untitled.md'])
+  })
+
+  it('closeFile does not reopen an untitled note another client already removed', async () => {
+    runtimeEnvironmentCallMock.mockImplementation(async (args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'files.stat'
+        ? { ok: false, error: { code: 'not_found', message: 'ENOENT: not found' } }
+        : { ok: true, result: { deleted: true } }
+    )
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    openRemoteNote(store, 'untitled.md', true)
+    store.getState().closeFile('/remote/wt/untitled.md')
+    await vi.waitFor(() =>
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'files.stat' })
+      )
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.delete' })
+    )
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1'] ?? []).toEqual([])
+  })
+
+  it('closeFile does not write reopen history after the worktree id is gone', async () => {
+    let releaseStat: (() => void) | undefined
+    runtimeEnvironmentCallMock.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'files.stat') {
+        return new Promise((resolve) => {
+          releaseStat = () =>
+            resolve({ ok: true, result: { size: 42, isDirectory: false, mtime: 0 } })
+        })
+      }
+      return { ok: true, result: { deleted: true } }
+    })
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    openRemoteNote(store, 'untitled.md', true)
+    store.getState().closeFile('/remote/wt/untitled.md')
+    await vi.waitFor(() => expect(releaseStat).toBeTypeOf('function'))
+    store.setState({ worktreesByRepo: { repo1: [] } })
+
+    releaseStat?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toBeUndefined()
+  })
+
+  it('closeAllFiles starts untitled file checks without waiting for the previous one', async () => {
+    const started: string[] = []
+    let releaseStats: (() => void) | undefined
+    const gate = new Promise<void>((resolve) => {
+      releaseStats = resolve
+    })
+    runtimeEnvironmentCallMock.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'files.stat') {
+        const relativePath = (args.params as { relativePath?: string } | undefined)?.relativePath
+        started.push(relativePath ?? '')
+        await gate
+        return { ok: true, result: { size: 42, isDirectory: false, mtime: 0 } }
+      }
+      return { ok: true, result: { deleted: true } }
+    })
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    openRemoteNote(store, 'first.md', true)
+    openRemoteNote(store, 'second.md', true)
+
+    store.getState().closeAllFiles()
+    await vi.waitFor(() => expect(started.slice().sort()).toEqual(['first.md', 'second.md']))
+    releaseStats?.()
+    await vi.waitFor(() =>
+      expect(
+        store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.map((entry) => entry.filePath)
+      ).toEqual(['/remote/wt/first.md', '/remote/wt/second.md'])
+    )
+  })
+
+  it('closeFile keeps a retained untitled note behind a tab closed while its file check was still running', async () => {
+    let releaseStat: (() => void) | undefined
+    runtimeEnvironmentCallMock.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'files.stat') {
+        return new Promise((resolve) => {
+          releaseStat = () =>
+            resolve({ ok: true, result: { size: 42, isDirectory: false, mtime: 0 } })
+        })
+      }
+      return { ok: true, result: { deleted: true } }
+    })
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+    const untitledId = store.getState().openFiles[0]?.id
+    store.getState().closeFile(untitledId!)
+    await vi.waitFor(() => expect(releaseStat).toBeTypeOf('function'))
+    expect(
+      store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.map((entry) => entry.filePath) ??
+        []
+    ).toEqual([])
+
+    store.getState().openFile({
+      filePath: '/remote/wt/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const notesId = store.getState().openFiles[0]?.id
+    store.getState().closeFile(notesId!)
+
+    releaseStat?.()
+    await vi.waitFor(() =>
+      expect(
+        store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.map((entry) => entry.filePath)
+      ).toEqual(['/remote/wt/notes.md', '/remote/wt/untitled.md'])
+    )
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+    expect(store.getState().openFiles.map((file) => file.filePath)).toEqual(['/remote/wt/notes.md'])
+  })
+
+  it('closeFile keeps a retained untitled note behind a preview replaced while its file check was still running', async () => {
+    let releaseStat: (() => void) | undefined
+    runtimeEnvironmentCallMock.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'files.stat') {
+        return new Promise((resolve) => {
+          releaseStat = () =>
+            resolve({ ok: true, result: { size: 42, isDirectory: false, mtime: 0 } })
+        })
+      }
+      return { ok: true, result: { deleted: true } }
+    })
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile(
+      {
+        filePath: '/remote/wt/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+    const untitledId = store.getState().openFiles.find((file) => file.isUntitled)?.id
+    store.getState().closeFile(untitledId!)
+    await vi.waitFor(() => expect(releaseStat).toBeTypeOf('function'))
+
+    store.getState().openFile(
+      {
+        filePath: '/remote/wt/guide.md',
+        relativePath: 'guide.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true, recordReplacedPreview: true }
+    )
+    releaseStat?.()
+    await vi.waitFor(() =>
+      expect(
+        store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.map((entry) => entry.filePath)
+      ).toEqual(['/remote/wt/notes.md', '/remote/wt/untitled.md'])
+    )
+  })
+
+  it('closeAllFiles keeps a retained untitled note in close order with the tabs closed beside it', async () => {
+    remoteUntitledFileSize = 42
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+
+    store.getState().closeAllFiles()
+    await flushAsyncRemoteRefresh()
+    await vi.waitFor(() =>
+      expect(
+        store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.map((entry) => entry.filePath)
+      ).toEqual(['/remote/wt/notes.md', '/remote/wt/untitled.md'])
+    )
   })
 
   it('closeFile does not delete when worktree ownership metadata is missing', async () => {

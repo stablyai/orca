@@ -1,14 +1,14 @@
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
-import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
-import type { AppState } from '../../../types'
 import {
-  type ClosedEditorTabSnapshot,
-  type EditorTabSelection,
-  MAX_RECENT_CLOSED_EDITOR_TABS,
-  type OpenFile
-} from '../types/open-file'
+  getRecentlyClosedTabPosition,
+  pushRecentlyClosedTabKind,
+  takeClosedTabOrder
+} from '../../recently-closed-tabs'
+import type { AppState } from '../../../types'
+import type { ClosedEditorTabSnapshot, EditorTabSelection, OpenFile } from '../types/open-file'
+import { placeClosedEditorSnapshot } from './remember-kept-untitled-editor'
 import {
   canReuseLocalWslAlias,
   getReusableOpenFileModes,
@@ -229,21 +229,22 @@ export function applyOpenFileToState(
         } = replacedPreview
         const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
         const position = getRecentlyClosedTabPosition(s, worktreeId, replacedPreview.id)
+        const closeOrder = takeClosedTabOrder()
         nextRecentlyClosed = {
           ...s.recentlyClosedEditorTabsByWorktree,
-          [worktreeId]: [
-            {
-              ...(snap as ClosedEditorTabSnapshot),
-              reopenId: replacedPreview.id,
-              ...(position ? { position } : {})
-            },
-            ...stack
-          ].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
+          [worktreeId]: placeClosedEditorSnapshot(stack, {
+            ...(snap as ClosedEditorTabSnapshot),
+            reopenId: replacedPreview.id,
+            closeOrder,
+            ...(position ? { position } : {})
+          })
         }
         nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
           s.recentlyClosedTabKindsByWorktree,
           worktreeId,
-          'editor'
+          'editor',
+          1,
+          closeOrder
         )
       }
       return {

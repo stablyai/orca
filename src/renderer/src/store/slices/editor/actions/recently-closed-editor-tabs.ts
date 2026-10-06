@@ -3,15 +3,25 @@ import type { EditorSlice } from '../types/editor-slice'
 import {
   createRecentlyClosedTabPositionIndex,
   pushRecentlyClosedTabKind,
-  restoreRecentlyClosedTabPosition
+  restoreRecentlyClosedTabPosition,
+  takeClosedTabOrder
 } from '../../recently-closed-tabs'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
-import { type ClosedEditorTabSnapshot, MAX_RECENT_CLOSED_EDITOR_TABS } from '../types/open-file'
+import type { ClosedEditorTabSnapshot } from '../types/open-file'
 import {
   deleteUntouchedUntitledFile,
   shouldDeleteUntouchedUntitledFile
 } from '../tabs/untitled-file-cleanup'
 import { unifiedTabsKeepWorktreeSelected } from './unified-tabs-keep-worktree-selected'
+import {
+  placeClosedEditorSnapshot,
+  rememberKeptUntitledEditor
+} from './remember-kept-untitled-editor'
+import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
+
+// Why: files.stat waits up to 15s, but the runtime drops calls once 256 are
+// pending. Four at a time still overlaps the slow checks without filling that queue.
+const UNTITLED_CLOSE_STAT_CONCURRENCY = 4
 
 export function createRecentlyClosedEditorTabs(
   set: EditorSet,
@@ -30,7 +40,7 @@ export function createRecentlyClosedEditorTabs(
           [worktreeId]: (s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []).slice(1)
         }
       }))
-      const { position, reopenId, ...file } = next
+      const { position, reopenId, closeOrder: _closeOrder, ...file } = next
       const restoredFileId = get().openFile(file, {
         targetGroupId: position?.groupId,
         reopenId
@@ -49,9 +59,32 @@ export function createRecentlyClosedEditorTabs(
           shouldDeleteUntouchedUntitledFile(f, !!state.editorDrafts[f.id]) &&
           (!activeWorktreeId || f.worktreeId === activeWorktreeId)
       )
+      const untitledReopenPosition = new Map<
+        string,
+        ReturnType<ReturnType<typeof createRecentlyClosedTabPositionIndex>['positionFor']>
+      >()
+      for (const worktreeId of new Set(untitledToDelete.map((file) => file.worktreeId))) {
+        if (!worktreeId) {
+          continue
+        }
+        const positionIndex = createRecentlyClosedTabPositionIndex(state, worktreeId)
+        for (const file of untitledToDelete) {
+          if (file.worktreeId === worktreeId) {
+            untitledReopenPosition.set(file.id, positionIndex.positionFor(file.id))
+          }
+        }
+      }
       const closingFiles = state.openFiles.filter(
         (file) => !activeWorktreeId || file.worktreeId === activeWorktreeId
       )
+      // Why: stamp in close order before any file stat, including notes we might keep after the check.
+      const closeOrderByFileId = new Map<string, number>()
+      for (const file of [...closingFiles].toReversed()) {
+        if (file.mode === 'markdown-preview' || !file.worktreeId) {
+          continue
+        }
+        closeOrderByFileId.set(file.id, takeClosedTabOrder())
+      }
       // Why: close-all bypasses closeFile, so notify mirrored host-owned editors here or the next host snapshot reopens them.
       for (const file of closingFiles) {
         notifyHostOfMirroredEditorClose(state, file.worktreeId, file.id)
@@ -146,28 +179,36 @@ export function createRecentlyClosedEditorTabs(
 
         const closingFiles = s.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
         let nextRecentClosed = s.recentlyClosedEditorTabsByWorktree[activeWorktreeId] ?? []
-        let capturedCloseCount = 0
+        let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
         // Why: one shared index — a per-file position lookup rescans tab order and group membership, making close-all cubic.
         const positionIndex = createRecentlyClosedTabPositionIndex(s, activeWorktreeId)
         for (const f of [...closingFiles].toReversed()) {
           // Why: skip untitled non-dirty files (deleted from disk after close) and ephemeral preview tabs so the reopen stack has no vanished/junk paths.
+          if (f.mode === 'markdown-preview') {
+            continue
+          }
+          const closeOrder = closeOrderByFileId.get(f.id)
           if (
-            shouldDeleteUntouchedUntitledFile(f, !!s.editorDrafts[f.id]) ||
-            f.mode === 'markdown-preview'
+            closeOrder === undefined ||
+            shouldDeleteUntouchedUntitledFile(f, !!s.editorDrafts[f.id])
           ) {
             continue
           }
           const { id: _id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snap } = f
           const position = positionIndex.positionFor(f.id)
-          nextRecentClosed = [
-            {
-              ...(snap as ClosedEditorTabSnapshot),
-              reopenId: f.id,
-              ...(position ? { position } : {})
-            },
-            ...nextRecentClosed
-          ].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
-          capturedCloseCount += 1
+          nextRecentClosed = placeClosedEditorSnapshot(nextRecentClosed, {
+            ...(snap as ClosedEditorTabSnapshot),
+            reopenId: f.id,
+            closeOrder,
+            ...(position ? { position } : {})
+          })
+          nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
+            nextRecentlyClosedKinds,
+            activeWorktreeId,
+            'editor',
+            1,
+            closeOrder
+          )
         }
 
         return {
@@ -203,19 +244,30 @@ export function createRecentlyClosedEditorTabs(
             ...s.recentlyClosedEditorTabsByWorktree,
             [activeWorktreeId]: nextRecentClosed
           },
-          recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
-            s.recentlyClosedTabKindsByWorktree,
-            activeWorktreeId,
-            'editor',
-            capturedCloseCount
-          )
+          recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds
         }
       })
       if (typeof window !== 'undefined') {
         const postCloseState = get()
-        for (const f of untitledToDelete) {
-          deleteUntouchedUntitledFile(postCloseState, f)
-        }
+        void (async () => {
+          // A remote stat can take the full timeout, so the checks overlap. The
+          // runtime rejects calls past its pending-request cap, and a rejected
+          // check looks like a kept file. Stay under that cap.
+          const files = [...untitledToDelete].toReversed()
+          await mapWithConcurrency(files, UNTITLED_CLOSE_STAT_CONCURRENCY, async (file) => {
+            const deleted = await deleteUntouchedUntitledFile(postCloseState, file)
+            if (deleted) {
+              return deleted
+            }
+            rememberKeptUntitledEditor(
+              set,
+              file,
+              untitledReopenPosition.get(file.id),
+              closeOrderByFileId.get(file.id) ?? takeClosedTabOrder()
+            )
+            return deleted
+          })
+        })()
       }
       for (const itemId of closingItemIds) {
         get().closeUnifiedTab?.(itemId)
