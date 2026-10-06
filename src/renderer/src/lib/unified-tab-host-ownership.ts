@@ -75,20 +75,18 @@ export function isOpenFileOwnedByWorktree(
   if (file.worktreeId !== worktree.id) {
     return false
   }
-  const operationHost = file.operationProvenance?.generation.route.executionHostId
-  if (operationHost) {
-    return isExecutionHostAliasForWorktree(operationHost, worktree)
-  }
-  if (file.externalSshTargetId) {
-    return isExecutionHostAliasForWorktree(toSshExecutionHostId(file.externalSshTargetId), worktree)
-  }
-  if (file.runtimeEnvironmentId) {
-    return isExecutionHostAliasForWorktree(
-      toRuntimeExecutionHostId(file.runtimeEnvironmentId),
-      worktree
-    )
-  }
-  return isExecutionHostAliasForWorktree(LOCAL_EXECUTION_HOST_ID, worktree)
+  return isExecutionHostAliasForWorktree(getOpenFileExecutionHostId(file), worktree)
+}
+
+export function getOpenFileExecutionHostId(
+  file: Pick<OpenFile, 'externalSshTargetId' | 'operationProvenance' | 'runtimeEnvironmentId'>
+): ExecutionHostId {
+  return (
+    file.operationProvenance?.generation.route.executionHostId ??
+    (file.externalSshTargetId ? toSshExecutionHostId(file.externalSshTargetId) : null) ??
+    (file.runtimeEnvironmentId ? toRuntimeExecutionHostId(file.runtimeEnvironmentId) : null) ??
+    LOCAL_EXECUTION_HOST_ID
+  )
 }
 
 export function hasOpenFileExecutionHostEvidence(

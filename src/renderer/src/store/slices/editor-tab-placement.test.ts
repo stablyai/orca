@@ -1,8 +1,10 @@
 import type { StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore, createEditorTabsStore } from './editor-slice-test-harness'
+import { makeWorktree, TEST_REPO } from './store-test-helpers'
 import type { AppState } from '../types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -122,6 +124,47 @@ describe('createEditorSlice floating editor activation', () => {
     expect(store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
       store.getState().openFiles[1]?.id
     )
+  })
+})
+
+describe('createEditorSlice editor host ownership', () => {
+  it('keeps an editor tab on its local file owner while another host is focused', () => {
+    const store = createEditorTabsStore()
+    store.setState({
+      repos: [{ ...TEST_REPO, id: 'repo-1', path: '/repo', displayName: 'Repo' }],
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })]
+      },
+      activeWorktreeId: 'wt-1',
+      activeWorkspaceExecutionHostId: 'runtime:hub-b',
+      settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId: null })
+    })
+
+    store.getState().openFile({
+      filePath: '/repo/local.ts',
+      relativePath: 'local.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        filePath: '/repo/local.ts',
+        runtimeEnvironmentId: null,
+        operationProvenance: expect.objectContaining({
+          generation: expect.objectContaining({
+            route: { executionHostId: 'local', runtimeEnvironmentId: null }
+          })
+        })
+      })
+    )
+    expect(
+      store
+        .getState()
+        .unifiedTabsByWorktree['wt-1']?.find((tab) => tab.entityId === '/repo/local.ts')
+        ?.executionHostId
+    ).toBe('local')
   })
 })
 

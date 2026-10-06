@@ -1,4 +1,5 @@
 import type { AppState } from '../../../types'
+import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorTabSelection, OpenFile } from '../types/open-file'
 import { resolveEditorOpenTargetGroupId } from './editor-open-target-group'
@@ -34,10 +35,18 @@ export function openWorkspaceEditorItem(
       return existing.id
     }
   }
+  // Why: editable files carry an owner captured at open time; virtual diff and review tabs retain their existing host selection.
+  const file =
+    contentType === 'editor'
+      ? state.openFiles.find(
+          (candidate) => candidate.id === fileId && candidate.worktreeId === worktreeId
+        )
+      : undefined
   const created = state.createUnifiedTab?.(worktreeId, contentType, {
     entityId: fileId,
     label,
     isPreview,
+    ...(file ? { executionHostId: getOpenFileExecutionHostId(file) } : {}),
     ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {}),
     ...(selection === 'none' ? { activate: false } : {}),
     ...(selection === 'background' ? { recordFocus: false } : {})
