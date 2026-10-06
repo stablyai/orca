@@ -11,7 +11,6 @@ import { useStructuredAgentSessionMessages } from './use-structured-agent-sessio
 
 afterEach(cleanup)
 const EMPTY: never[] = []
-const NO_CARDS: readonly string[] = []
 function tool(id: string, sequence: number): AgentJournalRenderItem {
   return {
     itemId: id,
@@ -26,8 +25,7 @@ it('retains only unchanged item projections across updates, reorder, deletion, a
   const first = tool('first', 1)
   const second = tool('second', 2)
   const { result, rerender } = renderHook(
-    (items: AgentJournalRenderItem[]) =>
-      useStructuredAgentSessionMessages(items, EMPTY, EMPTY, NO_CARDS),
+    (items: AgentJournalRenderItem[]) => useStructuredAgentSessionMessages(items, EMPTY, EMPTY),
     { initialProps: [first, second] }
   )
   const initial = result.current
@@ -52,9 +50,7 @@ it('retains only unchanged item projections across updates, reorder, deletion, a
     [structuredClone(completed)]
   ]) {
     rerender(items)
-    expect(result.current).toEqual(
-      projectStructuredAgentSessionMessages(items, EMPTY, EMPTY, NO_CARDS)
-    )
+    expect(result.current).toEqual(projectStructuredAgentSessionMessages(items, EMPTY, EMPTY))
     expect(result.current.find((message) => message.id === 'second')).not.toBe(initial[1])
   }
   const replacement = {
@@ -66,9 +62,7 @@ it('retains only unchanged item projections across updates, reorder, deletion, a
     }
   }
   rerender([replacement])
-  expect(result.current).toEqual(
-    projectStructuredAgentSessionMessages([replacement], EMPTY, EMPTY, NO_CARDS)
-  )
+  expect(result.current).toEqual(projectStructuredAgentSessionMessages([replacement], EMPTY, EMPTY))
   expect(result.current[0]).not.toBe(initial[0])
 })
 
@@ -97,14 +91,14 @@ it('keeps optimistic sends and their settlement identical to uncached projection
     }: {
       items: AgentJournalRenderItem[]
       submissions: AgentJournalSubmission[]
-    }) => useStructuredAgentSessionMessages(items, [entry], submissions, NO_CARDS),
+    }) => useStructuredAgentSessionMessages(items, [entry], submissions),
     { initialProps: { items: [tool('tool', 1)], submissions: [submission] } }
   )
   for (const dispatchState of ['pending', 'unknown', 'accepted'] as const) {
     const props = { items: [tool('tool', 1)], submissions: [{ ...submission, dispatchState }] }
     rerender(props)
     expect(result.current).toEqual(
-      projectStructuredAgentSessionMessages(props.items, [entry], props.submissions, NO_CARDS)
+      projectStructuredAgentSessionMessages(props.items, [entry], props.submissions)
     )
   }
 })
@@ -112,7 +106,7 @@ it('keeps optimistic sends and their settlement identical to uncached projection
 it('does no transcript projection work on a status-only render', () => {
   const items = [tool('tool', 1)]
   const { result, rerender } = renderHook(() =>
-    useStructuredAgentSessionMessages(items, EMPTY, EMPTY, NO_CARDS)
+    useStructuredAgentSessionMessages(items, EMPTY, EMPTY)
   )
   const initial = result.current
   rerender()

@@ -164,8 +164,6 @@ export function structuredAgentSessionDeliveryNotices(
   startFailures: readonly AgentSessionFailureFact[],
   /** Ids whose send failed or was refused while this chat was open: only they word their cause. */
   failedHere: ReadonlySet<string>,
-  /** The queue's live cards, which the transcript leaves a rejected message to. */
-  queuedMessageIds: readonly string[] = [],
   /** The loaded commands, from `structuredAgentSessionCommandItemIds`: they report their own. */
   commandItemIds: ReadonlySet<string> = NO_COMMANDS,
   /** The loaded rows: a rejected message's outbox copy leaves once its row is here. */
@@ -214,11 +212,7 @@ export function structuredAgentSessionDeliveryNotices(
     }
   }
   // After the outbox's: in the host's words, whether its row or the outbox's copy draws it.
-  const shown = structuredAgentSessionRejectedShownInPlace(
-    submissions,
-    queuedMessageIds,
-    commandItemIds
-  )
+  const shown = structuredAgentSessionRejectedShownInPlace(submissions, commandItemIds)
   for (const submission of rejected.values()) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
     if (shown.has(id)) {

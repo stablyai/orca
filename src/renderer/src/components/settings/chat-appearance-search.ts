@@ -7,10 +7,12 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
   () =>
     ({
       textSize: {
+        targetSectionId: 'chat-text-size',
         title: translate('settings.appearance.chat.textSize', 'Text size'),
         keywords: [translate('settings.appearance.chat.title', 'Chat')]
       },
       codeTextSize: {
+        targetSectionId: 'chat-code-text-size',
         title: translate('settings.appearance.chat.codeTextSize', 'Code text size'),
         description: translate(
           'settings.appearance.chat.codeTextSizeDescription',
@@ -19,6 +21,7 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
         keywords: [translate('settings.appearance.chat.title', 'Chat')]
       },
       width: {
+        targetSectionId: 'chat-width',
         title: translate('settings.appearance.chat.width', 'Width'),
         description: translate(
           'settings.appearance.chat.widthDescription',
@@ -30,6 +33,7 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
         ]
       },
       reset: {
+        targetSectionId: 'chat-reset',
         title: translate('settings.appearance.chat.resetAppearance', 'Reset chat appearance'),
         description: translate(
           'settings.appearance.chat.resetDescription',
@@ -58,7 +62,12 @@ export function getChatAppearanceEntriesByKey(shortcuts?: { increase: string; de
 }
 
 export function getChatAppearanceSearchEntries(): SettingsSearchEntry[] {
-  return Object.values(getChatAppearanceEntriesByKey())
+  return [
+    {
+      title: translate('auto.components.settings.Settings.2b4474780a', 'Appearance')
+    },
+    ...Object.values(getChatAppearanceEntriesByKey())
+  ]
 }
 
 export function getChatWidthOptions() {

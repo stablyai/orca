@@ -20,6 +20,7 @@
 //     and keeping the id would only refuse every later send of the same text:
 //     a host that refuses the replay's request shape itself (an older host's
 //     strict schema turning `delivery` away), and an id the host has expired.
+//     A rejection the host kept as a card answers as `queued`: the card holds the text.
 //   unknown — the one answer that KEEPS its id, whether it came from the host or
 //     from an ack-loss on the way back. The message may be with the provider, so
 //     the retry has to stay a replay. Rotating here is what sent one message to a
@@ -95,6 +96,11 @@ export function mobileStructuredSendDelivery(
   }
   if (!submission || submission.dispatchState === 'unknown') {
     return { outcome: 'unknown', operationIdSpent: false, error: null }
+  }
+  if (submission.dispatchState === 'rejected' && submission.keptAsQueuedMessageId !== undefined) {
+    // The host kept it as a card, which holds the text: no error, and nothing handed back to the
+    // composer, so the words never show twice.
+    return { outcome: 'queued', operationIdSpent: true, error: null }
   }
   if (submission.dispatchState === 'rejected') {
     return {

@@ -61,7 +61,7 @@ type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions
     respondPermission: (optionId: string) => Promise<boolean>
     respondQuestion: (answer: string) => Promise<boolean>
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
-    /** The queued-draft cards and their actions; empty and inert off capable hosts. */
+    /** The queued-draft cards and their actions, from any host that publishes them. */
     queued: MobileStructuredQueuedMessageControls
   }
 
@@ -97,7 +97,7 @@ export function useMobileStructuredAgentSession(args: {
     onSendError,
     hostSupport
   } = args
-  // Old host ⇒ exactly today's behavior: no delivery field, no cards, plain Stop.
+  // Only a host that queues sends gets the delivery field; any host's published cards show.
   const queueCapable = hostSupport?.queuedMessages === true
   const promptCancelSupported = hostSupport?.promptCancel ?? null
   const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
@@ -196,7 +196,6 @@ export function useMobileStructuredAgentSession(args: {
     [state.items]
   )
   const queued = useMobileStructuredQueuedMessageControls({
-    queueCapable,
     sessionKey,
     queuedMessages,
     queuePause,

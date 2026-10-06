@@ -25,7 +25,6 @@ import {
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
-const NO_CARDS: readonly string[] = []
 const MESSAGE_ID = agentJournalSubmissionKey('m')
 const WORDS = 'Orca restarted before this message was sent.'
 
@@ -122,7 +121,7 @@ function shown(
     state.submissions,
     state.items
   )
-  const rows = projectStructuredAgentSessionMessages(state.items, kept, state.submissions, NO_CARDS)
+  const rows = projectStructuredAgentSessionMessages(state.items, kept, state.submissions)
     .filter((message) => message.role === 'user')
     .map(({ id, unsent }) => ({ id, unsent }))
   const notice = structuredAgentSessionDeliveryNotices(

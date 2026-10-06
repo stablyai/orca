@@ -3,10 +3,8 @@
 // was open before the command saw, or the journal a client would load.
 
 import { beforeEach, expect, it, vi, type Mock } from 'vitest'
-import {
-  AgentJournalSubmissionSchema,
-  isAdmissibleAgentJournalItemBody
-} from '../../../shared/agent-session-journal-schemas'
+import { isAdmissibleAgentJournalItemBody } from '../../../shared/agent-session-journal-schemas'
+import { AgentJournalSubmissionSchema } from '../../../shared/agent-session-journal-submission-schema'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,

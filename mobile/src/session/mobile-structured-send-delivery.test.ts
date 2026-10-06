@@ -125,6 +125,34 @@ describe('mobileStructuredSendDelivery', () => {
     })
   })
 
+  it('answers a send the host kept as a card like a queued one, first send or replay', () => {
+    // The card shows the text, so neither an error nor a composer hand-back may repeat it.
+    const kept: StructuredAgentSessionMutationCallResult<AgentSessionSendResult> = {
+      status: 'accepted',
+      value: {
+        clientMessageId: 'msg-1',
+        submission: {
+          clientMessageId: 'msg-1',
+          fence: 3,
+          payloadFingerprint: 'fingerprint',
+          dispatchState: 'rejected',
+          providerItemId: null,
+          reason: 'Orca restarted before this was sent.',
+          submittedAt: 10,
+          resolvedAt: 10,
+          keptAsQueuedMessageId: 'msg-1'
+        }
+      }
+    }
+    for (const retained of [false, true]) {
+      expect(mobileStructuredSendDelivery(kept, retained)).toEqual({
+        outcome: 'queued',
+        operationIdSpent: true,
+        error: null
+      })
+    }
+  })
+
   it('shows a provider content rejection verbatim', () => {
     expect(
       mobileStructuredSendDelivery(accepted('rejected', 'Claude does not support .bmp'))

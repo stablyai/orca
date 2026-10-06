@@ -98,3 +98,12 @@ it('returns the list it was given when nothing changes', () => {
     entries
   )
 })
+
+// The card carries the text from here; the copy would draw a "Not sent" row the transcript hides.
+it('drops the copy of a send the host kept as a card, with its row not yet loaded', () => {
+  const kept = { ...submission('kept', 'rejected'), keptAsQueuedMessageId: 'kept' }
+  expect(reconcileStructuredAgentSessionOutbox([entry('kept')], [kept], [])).toEqual([])
+  expect(
+    reconcileStructuredAgentSessionOutbox([entry('kept')], [submission('kept', 'rejected')], [])
+  ).toEqual([expect.objectContaining({ clientMessageId: 'kept', state: 'rejected' })])
+})

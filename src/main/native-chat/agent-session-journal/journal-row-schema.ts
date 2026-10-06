@@ -144,6 +144,9 @@ export type JournalSubmissionRow = JournalRowBase & {
    *  continuation, a launch prompt, the queue's automatic drain. Absent on rows from before it
    *  was recorded. Older readers keep the key and ignore it. */
   origin?: JournalSubmissionOrigin
+  /** Who it is from: its `AgentSessionMessageSource`'s kind only (`AgentJournalSubmission`).
+   *  Absent on rows from before it was recorded. Older readers keep the key and ignore it. */
+  source?: { kind: string }
 }
 
 export type JournalSubmissionOrigin = 'client' | 'host'
@@ -160,6 +163,9 @@ export type JournalDispatchRow = JournalRowBase & {
   /** On `rejected`: why, typed. Older readers keep the key and ignore it; a malformed one is
    *  dropped when read, never the row. */
   rejection?: AgentSessionFailureFact
+  /** On `rejected`: the card the host kept this send as (`AgentJournalSubmission`). Older readers
+   *  keep the key and ignore it. */
+  keptAsQueuedMessageId?: string
   /** On `rejected`: the turn a Codex send was answered into, and how it joined it, when that
    *  turn's end settled the send; null on every other rejection. Absent on other rows and on rows
    *  written before it. `via` stays a string: a newer build may write another. Older readers keep
