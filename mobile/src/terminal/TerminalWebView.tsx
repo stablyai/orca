@@ -4,6 +4,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
+import { TERMINAL_LATENCY_PROBES } from '../diagnostics/terminal-latency-probes'
 import { xtermWebViewSource } from './terminal-webview-html'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { useTerminalWebViewController } from './use-terminal-webview-controller'
@@ -39,7 +40,11 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     // Why: in the page source rather than injected: Android can run an injected script after the
     // document's own, which then starts without them.
     const [source] = useState(() =>
-      xtermWebViewSource({ textScale: props.textScale ?? 1, shown: props.shownAtMount ?? true })
+      xtermWebViewSource({
+        textScale: props.textScale ?? 1,
+        shown: props.shownAtMount ?? true,
+        latencyProbes: TERMINAL_LATENCY_PROBES
+      })
     )
 
     const handleMessage = useCallback(

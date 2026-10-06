@@ -102,7 +102,7 @@ function createPageWebglAddon(onFallback: (reason: string) => void) {
 export function mountTerminalWebDocument(
   host: HTMLElement,
   receive: (message: Record<string, unknown>) => void,
-  start: TerminalDocumentStart = { textScale: 1, shown: true }
+  start: TerminalDocumentStart = { textScale: 1, shown: true, latencyProbes: false }
 ): TerminalWebDocument {
   ensureDocumentStyle()
   host.classList.add(HOST_CLASS)

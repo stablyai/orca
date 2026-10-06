@@ -1,0 +1,16 @@
+{
+  "hasCompletedOnboarding": true,
+  "lastOnboardingVersion": "2.1.289",
+  "theme": "dark",
+  "customApiKeyResponses": {
+    "approved": ["00000000000000000000"],
+    "rejected": []
+  },
+  "projects": {
+    "/home/agent/demo-repo": {
+      "hasTrustDialogAccepted": true,
+      "hasCompletedProjectOnboarding": true,
+      "projectOnboardingSeenCount": 5
+    }
+  }
+}

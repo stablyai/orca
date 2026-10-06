@@ -21630,6 +21630,79 @@
         "Collect CI soak with zero unexplained GC flakes and retain callback-order, overflow-carry and reentrancy assertions."
       ],
       "demotionRule": "Keep experimental; investigate delivery, coalescing, error-path or pending-reference regressions without weakening the retention or fidelity oracle."
+    },
+    {
+      "id": "e2e-network.impaired-link-fidelity",
+      "title": "The impaired network helper shapes, cuts and restores a container's packets as asked",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "docker-e2e",
+      "surfaces": ["e2e network impairment helper", "travel network profiles", "phone and desktop latency harness"],
+      "platforms": ["macos", "linux"],
+      "providers": ["ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["ssh", "remote-runtime"],
+      "coverageNotes": "Runs only with ORCA_RUN_DOCKER_NETWORK_LINK_E2E=1 and Docker that can run a privileged host-network container (OrbStack on macOS; Linux). Verified locally on macOS; not yet run on a CI runner, whose kernel must provide sch_netem and ifb.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/18957",
+        "https://github.com/stablyai/orca/issues/23595",
+        "https://github.com/stablyai/orca/pull/25447"
+      ],
+      "invariant": "A profile's delay, loss, rate and queue apply to the container's own packets in both directions, exactly as given and nothing from an earlier shape; a cut drops everything until the next shape; stopping removes every device and qdisc the helper created and nothing else.",
+      "oracle": "An echo through a 100 ms-each-way shape takes over 190 ms; bursty loss delivers late, not never; a cut times out; reshaping to no rate removes the rate cap; a scheduled outage reports its start and end; a container on two networks is refused without a network name; the same checks hold for the forwarding link.",
+      "commands": [
+        "ORCA_RUN_DOCKER_NETWORK_LINK_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/impaired-network-link.docker.unit.test.ts"
+      ],
+      "testFiles": ["tests/e2e/impaired-network-link.docker.unit.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/impaired-network-link.docker.unit.test.ts",
+          "assertions": [
+            "delays the TCP handshake itself, so the client stack is on the impaired path",
+            "turns packet loss into late delivery, never missing bytes",
+            "leaves nothing of the previous shape behind when reshaped",
+            "runs a profile's timed outages and reports each one",
+            "refuses a container on several networks unless one is named"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_RUN_DOCKER_NETWORK_LINK_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/impaired-network-link.docker.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 95,
+          "summary": "12 cases passed under OrbStack. A separate bulk-transfer probe measured 879 and 1295 bytes per packet in the two directions, so loss acts on packets, not GSO bundles."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "Twelve Docker cases including container starts, one scheduled outage and one cut timeout; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local runs only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Before the review fixes, reshaping kept the earlier rate cap and queued packets (the no-rate reshape case failed) and loss acted on GSO bundles (the per-packet probe showed 10 kB packets)."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The helper is test tooling; its cost is container start time."
+      },
+      "knownGaps": [
+        "Not run in CI: the job needs a privileged container and the runner kernel's sch_netem and ifb modules.",
+        "The Simulator and the desktop app both use the Mac's TCP stack; no iOS radio behaviour is modelled.",
+        "The relay topology is a TCP forwarder, not Orca's cloud relay."
+      ],
+      "promotionCriteria": [
+        "Add a CI job that runs the Docker test on a Linux runner and collect soak runs with zero unexplained flakes."
+      ],
+      "demotionRule": "Keep experimental; a flake in the timing assertions is investigated against the shaper, never loosened past the profile's own delay."
     }
   ]
 }

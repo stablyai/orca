@@ -108,6 +108,8 @@ export type TerminalDocumentState = {
   userScale: number
   /** `write-queue`: whether a chunk ended mid-selector, so the next one starts inside it. */
   statusDotPendingSelector: boolean
+  /** The last screen signature the latency probe reported, so it reports only changes. */
+  latencyScreenSignature: string
   /** `write-queue`: chunks and boundaries waiting for xterm. */
   writeQueue: TerminalWriteQueueEntry[]
   /** `write-queue`: how far the queue has been consumed, before compaction. */
@@ -279,6 +281,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     currentScale: 1,
     userScale: 1,
     statusDotPendingSelector: false,
+    latencyScreenSignature: '',
     writeQueue: [],
     writeQueueHead: 0,
     writesDraining: false,

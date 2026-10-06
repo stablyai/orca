@@ -25,10 +25,15 @@ export const XTERM_HTML = [
  * The WebView's document, starting as its view mounted: at this text scale, and whether it was
  * shown. Written into the page ahead of the document script, which reads them as it starts.
  */
-export function xtermWebViewSource(start: { textScale: number; shown: boolean }) {
+export function xtermWebViewSource(start: {
+  textScale: number
+  shown: boolean
+  latencyProbes: boolean
+}) {
   const startValues =
     `window.__orcaTerminalTextScale = ${JSON.stringify(start.textScale)};\n` +
-    `window.__orcaTerminalShown = ${JSON.stringify(start.shown)};\n`
+    `window.__orcaTerminalShown = ${JSON.stringify(start.shown)};\n` +
+    `window.__orcaTerminalLatencyProbes = ${JSON.stringify(start.latencyProbes)};\n`
   return {
     html: [
       TERMINAL_HTML_DOCUMENT_SHELL,

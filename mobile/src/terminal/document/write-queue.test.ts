@@ -56,6 +56,10 @@ function requireDocumentModule(specifier: string) {
   if (specifier === './escape-introducers') {
     return escapeIntroducers
   }
+  if (specifier === './latency-probe') {
+    // The probe reports nothing unless the page started with probes on; the queue is the subject.
+    return { reportLatencyScreen: () => {} }
+  }
   throw new Error(`the write-queue harness has no module for ${specifier}`)
 }
 

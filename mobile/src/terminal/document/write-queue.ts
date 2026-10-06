@@ -1,5 +1,6 @@
 import type { TerminalDocumentScope } from './document-scope'
 import { C1_CSI, ESC } from './escape-introducers'
+import { reportLatencyScreen } from './latency-probe'
 
 /** Claude's record dot, which iOS WebKit would otherwise promote to a colourful emoji glyph. */
 const CLAUDE_STATUS_DOT = '\u23fa'
@@ -131,6 +132,7 @@ export function pumpWrites(scope: TerminalDocumentScope, gen: number): void {
     if (typeof next === 'function') {
       return (next(), pumpWrites(scope, gen))
     }
+    reportLatencyScreen(scope)
     const callbacks = scope.afterDrainCallbacks
     scope.afterDrainCallbacks = []
     for (let i = 0; i < callbacks.length; i++) {

@@ -2,6 +2,7 @@ import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import type { SendRequestOptions } from './rpc-client'
 import type { ConnectionState, RpcResponse } from './types'
+import { probeTerminalSend } from '../diagnostics/terminal-latency-probes'
 
 const REQUEST_TIMEOUT_MS = 30_000
 
@@ -42,10 +43,15 @@ export class RpcClientRequestTracker {
       })
     }
 
-    return this.sendConnectedRequest(
+    // Why here: the probe stamps the send as it goes on the wire, after any wait for a connection.
+    return probeTerminalSend(
       method,
       params,
-      resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
+      this.sendConnectedRequest(
+        method,
+        params,
+        resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
+      )
     )
   }
 

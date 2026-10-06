@@ -58,7 +58,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     // was shown — as the native WebView's pre-content script does; later scales arrive with init.
     const [atMount] = useState(() => ({
       textScale: props.textScale ?? 1,
-      shown: props.shownAtMount ?? true
+      shown: props.shownAtMount ?? true,
+      // The web page has no Metro console to read; the probes are for the native app.
+      latencyProbes: false
     }))
 
     useImperativeHandle(ref, () => handle, [handle])

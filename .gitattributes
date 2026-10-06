@@ -88,3 +88,6 @@
 /mobile/web-entry/**/*.otf -text
 /mobile/web-entry/**/*.woff -text
 /mobile/web-entry/**/*.woff2 -text
+# Why: these run inside a Linux image; a CRLF shebang kills them and changes the image hash.
+/tests/e2e/fixtures/impaired-network-link/*.sh text eol=lf
+/tests/e2e/fixtures/agent-terminal-host/*.sh text eol=lf

@@ -3,6 +3,7 @@ import { scheduleDocumentFrame } from './document-frame-registry'
 import { touchesInRoot } from './document-host-seams'
 import { clampPan, getCellHeight } from './fit-scale'
 import { notify } from './host-notify'
+import { reportLatencyTouch } from './latency-probe'
 import { attachSurfaceMouseClickDragHandler } from './mouse-click-drag'
 import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import {
@@ -99,6 +100,7 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchstart',
     function (e) {
+      reportLatencyTouch(scope, 'touchstart')
       if (dispatcherShouldBlockSurface(scope)) {
         return
       }
@@ -210,6 +212,7 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchend',
     function (e) {
+      reportLatencyTouch(scope, 'touchend')
       if (dispatcherShouldBlockSurface(scope)) {
         return
       }

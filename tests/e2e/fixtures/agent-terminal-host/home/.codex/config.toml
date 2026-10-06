@@ -1,0 +1,26 @@
+model = "gpt-6-sol"
+model_provider = "stub"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+check_for_update_on_startup = false
+
+[model_providers.stub]
+name = "Local stub"
+base_url = "http://127.0.0.1:8089/v1"
+env_key = "STUB_OPENAI_API_KEY"
+wire_api = "responses"
+requires_openai_auth = false
+supports_websockets = false
+
+[analytics]
+enabled = false
+
+[tui]
+alternate_screen = "always"
+show_tooltips = false
+
+[notice]
+hide_full_access_warning = true
+
+[projects."/home/agent/demo-repo"]
+trust_level = "trusted"

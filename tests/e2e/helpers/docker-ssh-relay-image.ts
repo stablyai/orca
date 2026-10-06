@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 
-function hashDockerFixtureDirectory(fixtureDir: string): string {
+export function hashDockerFixtureDirectory(fixtureDir: string): string {
   const hash = createHash('sha256')
   const pending = [fixtureDir]
   while (pending.length > 0) {

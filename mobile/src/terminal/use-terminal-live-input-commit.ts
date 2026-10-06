@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import { reportedLiveInputComposing } from '../platform/live-input-composing-range'
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
+import { reportTerminalLatencyProbe } from '../diagnostics/terminal-latency-probes'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
@@ -137,6 +138,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   const handleLiveInputChange = useCallback(
     ({ nativeEvent }: TerminalLiveInputChangeEvent) => {
+      reportTerminalLatencyProbe('key', JSON.stringify(nativeEvent.text))
       if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         clearPendingLiveInputCommit()
         return

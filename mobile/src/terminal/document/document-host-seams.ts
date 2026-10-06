@@ -46,7 +46,12 @@ export type TerminalDocumentErrorReporter = (
 export type TerminalDocumentHostFrame = string | Record<string, unknown> | undefined
 
 /** How a document starts, as its view mounted. */
-export type TerminalDocumentStart = { textScale: number; shown: boolean }
+export type TerminalDocumentStart = {
+  textScale: number
+  shown: boolean
+  /** Whether the document reports screen changes and touches for latency measurement. */
+  latencyProbes: boolean
+}
 
 /**
  * The ten host seams, kept apart from the state because the host sets them once when it builds
@@ -140,6 +145,7 @@ declare global {
      */
     __orcaTerminalTextScale?: unknown
     __orcaTerminalShown?: unknown
+    __orcaTerminalLatencyProbes?: unknown
   }
   const Terminal: new (options: Record<string, unknown>) => TerminalDocumentTerminal
 }
@@ -237,7 +243,8 @@ export function windowStart(): TerminalDocumentStart {
   const scale = window.__orcaTerminalTextScale
   return {
     textScale: typeof scale === 'number' && scale > 0 ? scale : 1,
-    shown: window.__orcaTerminalShown !== false
+    shown: window.__orcaTerminalShown !== false,
+    latencyProbes: window.__orcaTerminalLatencyProbes === true
   }
 }
 

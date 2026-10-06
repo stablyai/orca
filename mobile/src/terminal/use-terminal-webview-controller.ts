@@ -14,6 +14,7 @@ import { dispatchTerminalWebViewNotification } from './terminal-webview-notifica
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promises'
 import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
+import { relayTerminalDocumentLatencyProbe } from '../diagnostics/terminal-latency-probes'
 
 /**
  * Everything `TerminalWebView` does that is not about `react-native-webview`.
@@ -154,6 +155,7 @@ export function useTerminalWebViewController(
   const receive = useCallback(
     (msg: Record<string, unknown>) => {
       routeTerminalQueryReply(msg, onTerminalQueryReply)
+      relayTerminalDocumentLatencyProbe(msg)
 
       if (msg.type === 'web-ready') {
         // Why: nothing subscribes before ready, so a ready's box only sizes the subscribe after it.
