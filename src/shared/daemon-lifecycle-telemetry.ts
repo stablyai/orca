@@ -13,8 +13,11 @@ export const DAEMON_REPLACE_REASONS = [
 ] as const
 export type DaemonReplaceReason = (typeof DAEMON_REPLACE_REASONS)[number]
 
-// Adapter observed the daemon die and forked a replacement.
-export const DAEMON_RETIRE_REASONS = ['died_respawn'] as const
+// Adapter observed the daemon die and forked a replacement, OR the generation
+// retirement scheduler (daemon-generation-retirement.ts) sent it SIGTERM/SIGKILL
+// after every session it owned was either handed off to `current` or exited on its
+// own -- kept distinct from `died_respawn` since the daemon here did not crash.
+export const DAEMON_RETIRE_REASONS = ['died_respawn', 'generation_handoff_complete'] as const
 export type DaemonRetireReason = (typeof DAEMON_RETIRE_REASONS)[number]
 
 export const DAEMON_LIFECYCLE_TRANSITIONS = ['replaced', 'retired'] as const

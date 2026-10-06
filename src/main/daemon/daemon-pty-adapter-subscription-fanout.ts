@@ -4,7 +4,9 @@ import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 
 export class DaemonPtyAdapterSubscriptionFanout {
-  private unsubscribers: (() => void)[] = []
+  // Why a per-adapter map, not one flat array: retireLegacyAdapter() must unsubscribe
+  // exactly one adapter's listeners without touching its surviving siblings'.
+  private unsubscribersByAdapter = new Map<DaemonPtyAdapter, (() => void)[]>()
   private dataListeners: ((payload: DaemonPtyRouterDataEvent) => void)[] = []
   private exitListeners: ((payload: DaemonPtyRouterExitEvent) => void)[] = []
 
@@ -14,7 +16,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
     onAdapterIdentityChanged?: (adapter: DaemonPtyAdapter) => void
   ) {
     for (const adapter of adapters) {
-      this.unsubscribers.push(
+      this.unsubscribersByAdapter.set(adapter, [
         adapter.onData((payload) => {
           for (const listener of this.dataListeners) {
             listener(payload)
@@ -29,7 +31,20 @@ export class DaemonPtyAdapterSubscriptionFanout {
         ...(onAdapterIdentityChanged && typeof adapter.onDaemonIdentityChanged === 'function'
           ? [adapter.onDaemonIdentityChanged(() => onAdapterIdentityChanged(adapter))]
           : [])
-      )
+      ])
+    }
+  }
+
+  // Why: a retired legacy adapter must stop fanning out data/exit events without
+  // disturbing its still-live siblings, which a global dispose() would do.
+  removeAdapter(adapter: DaemonPtyAdapter): void {
+    const unsubscribers = this.unsubscribersByAdapter.get(adapter)
+    if (!unsubscribers) {
+      return
+    }
+    this.unsubscribersByAdapter.delete(adapter)
+    for (const unsubscribe of unsubscribers) {
+      unsubscribe()
     }
   }
 
@@ -70,8 +85,9 @@ export class DaemonPtyAdapterSubscriptionFanout {
   }
 
   dispose(): void {
-    for (const unsubscribe of this.unsubscribers.splice(0)) {
-      unsubscribe()
+    const adapters = [...this.unsubscribersByAdapter.keys()]
+    for (const adapter of adapters) {
+      this.removeAdapter(adapter)
     }
   }
 }

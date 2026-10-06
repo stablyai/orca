@@ -19,6 +19,7 @@ const {
   importFresh,
   mockOnlyDaemonSocketAlive,
   installDefaultNetConnectStub,
+  defaultListSessionsSessions,
   moduleFactories
 } = await vi.hoisted(async () =>
   (await import('./daemon-init-test-harness')).createDaemonInitMocks()
@@ -318,6 +319,30 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const { DaemonPtyRouter } = await import('./daemon-pty-router')
     expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyRouter)
     expect(adapterInstances.some((instance) => instance.protocolVersion === 9)).toBe(true)
+  })
+
+  // Why: feature-request item 1 ("surface the split") reads this registry off the
+  // router at real startup, not off a unit test's own construction of the router.
+  it('threads the discovered legacy generation registry into the router at real startup', async () => {
+    const mod = await importFresh()
+    probeSocketExistsMock.mockImplementation((p?: string) => p?.endsWith('daemon-v9.sock') ?? false)
+    mockOnlyDaemonSocketAlive('daemon-v9.sock')
+    defaultListSessionsSessions.push({ sessionId: 'legacy-session' })
+
+    await mod.initDaemonPtyProvider()
+
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DaemonPtyRouter)
+    const router = provider as InstanceType<typeof DaemonPtyRouter>
+    expect(router.getLegacyGenerationRegistry()).toEqual([
+      {
+        protocolVersion: 9,
+        pid: null,
+        socketPath: '/fake/daemon/daemon-v9.sock',
+        sessions: [{ sessionId: 'legacy-session', busy: false }]
+      }
+    ])
   })
 
   it('restart path with no legacy adapters yields a bare DaemonPtyAdapter (not wrapped in a router)', async () => {
