@@ -26,6 +26,11 @@ import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell
 import { claudeStructuredPermissionModeForSettings } from '../claude/claude-structured-permission-mode'
 import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-structured-permission-policy'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
+import {
+  agentSessionOwners,
+  reconcileAgentSessionOwnerListings
+} from '../ipc/pty/pane/agent-session-owners'
+import { canonicalizeAgentSessionIdentity } from './agent-session-claim-identity'
 
 export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   async getWorktreePs(
@@ -144,6 +149,38 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       stateDirectory: getProfileUserDataPath(),
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,
+      findTerminalAgentSessionOwner: async (params) => {
+        const providerHandle = params.adopt?.providerHandle ?? params.providerHandle
+        if (!providerHandle) {
+          return 'available'
+        }
+        if (params.location.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+          return 'unknown'
+        }
+        const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+          `id:${params.location.workspaceId}`
+        )
+        const namespace = this.getAgentSessionExecutionNamespace(workspace, params.agent)
+        if (!namespace) {
+          return 'unknown'
+        }
+        const providerSession =
+          providerHandle.kind === 'claude'
+            ? { key: 'session_id' as const, id: providerHandle.sessionId }
+            : { key: 'session_id' as const, id: providerHandle.threadId }
+        const identity = canonicalizeAgentSessionIdentity(params.agent, providerSession)
+        const claim = this.agentSessionClaimSigner.createClaim({
+          namespace,
+          identity,
+          canonicalWorktreeId: workspace.id
+        })
+        try {
+          await reconcileAgentSessionOwnerListings()
+        } catch {
+          return 'unknown'
+        }
+        return agentSessionOwners.hasIdentityOwner(claim) ? 'owned' : 'available'
+      },
       // The host's local trace file (the desktop's or orcad's own), plus the console.
       logger: createStructuredAgentSessionLogger(),
       // Resolves folder workspaces as well as git worktrees, so a chat session

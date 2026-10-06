@@ -1,6 +1,7 @@
 import { Platform } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
 import { Copy, FileText, Globe, RefreshCw, SquareTerminal } from 'lucide-react-native'
+import { useMobileAgentSessionTerminalAction } from './use-mobile-agent-session-terminal-action'
 import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
 import { QuickCommandsSheet } from './QuickCommandsSheet'
 import { triggerSuccess, triggerError } from '../platform/haptics'
@@ -91,6 +92,13 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     showChecksAction
   } = controller
   const clipboard = useClipboardWriter()
+  const agentSessionTerminalActions = useMobileAgentSessionTerminalAction({
+    client,
+    worktreeId,
+    chatProviderSessions: nativeChatController.chatProviderSessions,
+    showToast,
+    onDismiss: () => setAgentSessionActionTarget(null)
+  })
   return (
     <>
       <MobileSessionHeaderMoreActionsSheet
@@ -273,9 +281,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       <ActionSheetModal
         visible={agentSessionActionTarget != null}
         title={agentSessionActionTarget?.title || 'Chat'}
-        actions={closeWithBulkActions(agentSessionActionTarget, () =>
-          setAgentSessionActionTarget(null)
-        )}
+        actions={[
+          ...agentSessionTerminalActions(agentSessionActionTarget),
+          ...closeWithBulkActions(agentSessionActionTarget, () => setAgentSessionActionTarget(null))
+        ]}
         onClose={() => setAgentSessionActionTarget(null)}
       />
       <ActionSheetModal

@@ -11,6 +11,7 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
   serializeRemoteRuntimePayload
@@ -198,6 +199,41 @@ describe('AgentSessionSubscribers', () => {
       emit: (event) => events.push(event)
     })
     expect(events[2]).toMatchObject({ type: 'batch', commands })
+  })
+
+  it('carries the provider session on the opening snapshot, absent when there is none', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: codexProviderHandle('thread-1')
+      },
+      stateDirectory: join(root, 'provider-session-journal')
+    })
+    const providerSession: AgentProviderSessionMetadata = { key: 'session_id', id: 'thread-1' }
+    const named: AgentSessionSubscribeEvent[] = []
+    new AgentSessionSubscribers({ readProviderSession: () => providerSession }).open({
+      id: 'one',
+      sessionId: SESSION,
+      journal,
+      fence: 1,
+      emit: (event) => named.push(event)
+    })
+    expect(named[0]).toMatchObject({ type: 'snapshot', providerSession })
+
+    // No record: the key must be ABSENT, not present-with-undefined.
+    const bare: AgentSessionSubscribeEvent[] = []
+    new AgentSessionSubscribers({ readProviderSession: () => undefined }).open({
+      id: 'one',
+      sessionId: SESSION,
+      journal,
+      fence: 1,
+      emit: (event) => bare.push(event)
+    })
+    expect(bare[0]).toMatchObject({ type: 'snapshot' })
+    expect(bare[0]).not.toHaveProperty('providerSession')
   })
 
   it('reports every content publication to the journal hook, subscribed or not', async () => {

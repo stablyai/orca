@@ -13,6 +13,7 @@ import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
+import { buildMobileNativeChatControllerResult } from './mobile-native-chat-controller-result'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { useMobileBridgeChatPromptWrites } from './use-mobile-bridge-chat-prompt-writes'
@@ -279,59 +280,42 @@ export function useMobileNativeChatController(args: {
     onSendResolved
   )
 
-  return {
+  return buildMobileNativeChatControllerResult({
     isTabChatView,
     toggleTabChatView,
     showNativeChat,
     showNativeChatRef,
-    nativeChatAgent: activeChatResolution?.agent ?? null,
+    activeChatResolution,
+    activeChatStructured,
+    nativeChatAgentWorking,
     chatComposerText,
     setChatComposerText,
     getChatComposerEditGeneration,
     chatPending,
     chatImagePreviewsByMessageId,
     nativeChatSession,
-    /** Structured lane: drives the per-turn status row and live tool progress. */
-    nativeChatStructured: activeChatStructured,
-    nativeChatAgentWorking,
-    nativeChatTurnIndicator: activeChatStructured ? structuredNativeChat.turnIndicator : null,
-    nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
-    nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
-    nativeChatTurnJournal: activeChatStructured ? structuredNativeChat.turnJournal : null,
-    nativeChatCanStop: activeChatStructured
-      ? structuredNativeChat.turnId !== null
-      : nativeChatAgentWorking,
+    structuredNativeChat,
     nativeChatStreamingText,
     nativeChatStreamLive,
-    nativeChatStreamScopeKey: streamScopeKey,
-    nativeChatPermission: activeChatStructured
-      ? structuredNativeChat.permission
-      : legacyNativeChatPermission,
-    nativeChatQuestion: activeChatStructured ? structuredNativeChat.question : legacyQuestion,
-    nativeChatAsk: !activeChatStructured && showNativeChatAsk ? nativeChatAskPrompt : null,
+    streamScopeKey,
+    legacyNativeChatPermission,
+    legacyQuestion,
+    nativeChatAskPrompt,
+    showNativeChatAsk,
     nativeChatAskKey,
     dismissNativeChatAsk,
-    handleNativeChatAnswerAsk: answerAsk,
-    handleNativeChatCancelAsk: cancelAsk,
-    // Heuristic/legacy cards have no durable prompt identity, so keep their
-    // cancel affordance absent instead of exposing a dead action.
-    handleNativeChatCancelPrompt: activeChatStructured ? structuredCancelPrompt : undefined,
-    handleNativeChatRespondPermission: respond,
-    handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop,
-    // The inactive lane's session is starved of identity, so its cards stay empty.
-    nativeChatQueued: structuredNativeChat.queued,
+    answerAsk,
+    cancelAsk,
+    respondPermission: respond,
+    cancelPrompt: structuredCancelPrompt,
+    handleNativeChatStop,
     nativeChatFilePaths,
     loadNativeChatFiles,
-    handleNativeChatQuestionAnswer: activeChatStructured
-      ? structuredNativeChat.respondQuestion
-      : legacyHandleNativeChatQuestionAnswer,
-    handleNativeChatSend: activeChatStructured
-      ? structuredNativeChatSend.send
-      : handleNativeChatSend,
-    handleNativeChatSendWithOutcome: activeChatStructured
-      ? structuredNativeChatSend.sendWithOutcome
-      : handleNativeChatSendWithOutcome,
+    legacyHandleNativeChatQuestionAnswer,
+    handleNativeChatSend,
+    handleNativeChatSendWithOutcome,
+    structuredNativeChatSend,
     readSeededLaunchDraft,
     nativeChatSessionOptions
-  }
+  })
 }

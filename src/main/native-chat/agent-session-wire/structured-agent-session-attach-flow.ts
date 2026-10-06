@@ -1,5 +1,8 @@
 import { refuse } from '../../../shared/agent-session-wire-refusals'
-import { settlePostAcquisitionAttachFailure } from './structured-agent-session-attach-failure'
+import {
+  settlePostAcquisitionAttachFailure,
+  settleUnsupportedReservation
+} from './structured-agent-session-attach-failure'
 import {
   failedAcquisitionRefusal,
   failedAcquisitionSettlement,
@@ -49,6 +52,10 @@ import {
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
+import { withAgentSessionConversationGate } from '../../runtime/rpc/methods/agent-session-explicit-resume-hold'
+import { agentSessionProviderHandleRoot } from '../../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleFromWire } from '../../../shared/agent-session-provider-handle-encoding'
 
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
@@ -84,9 +91,23 @@ export type AttachFlowInput = {
   /** The error an acquisition failed with, for a host-side reader of the provider's words; the
    *  refusal never carries them. */
   onAcquisitionFailed?: (error: unknown) => void
+  findTerminalAgentSessionOwner?: StructuredAgentSessionHostDeps['findTerminalAgentSessionOwner']
 }
 
 export async function performAttach(
+  input: AttachFlowInput
+): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  const { params } = input
+  const adoptedHandle = params.adopt?.providerHandle ?? params.providerHandle
+  const conversationRoot = adoptedHandle
+    ? agentSessionProviderHandleRoot(agentSessionProviderHandleFromWire(adoptedHandle))
+    : null
+  return await withAgentSessionConversationGate(conversationRoot, () =>
+    performAttachUnderGate(input)
+  )
+}
+
+async function performAttachUnderGate(
   input: AttachFlowInput
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { params, store } = input
@@ -99,9 +120,23 @@ export async function performAttach(
     )
   })
   const sessionId = params.envelope.sessionId
+  const adoptedHandle = params.adopt?.providerHandle ?? params.providerHandle
   const admitted = admitAttachOrRefuse(params)
   if (!admitted.ok) {
     return admitted
+  }
+  if (adoptedHandle && input.findTerminalAgentSessionOwner) {
+    const terminalOwner = await input.findTerminalAgentSessionOwner(params)
+    if (terminalOwner !== 'available') {
+      return {
+        ok: false,
+        refusal: refuse(
+          'agent_session_conflict',
+          { reason: 'conversationHeldElsewhere' },
+          'The requested provider conversation is already owned by a terminal.'
+        )
+      }
+    }
   }
   // Every start of every agent passes here, so this is where a record this build cannot drive (its
   // transport or account variable is not its agent's) is refused; reading it never is.
@@ -296,33 +331,4 @@ async function readProviderHistoryWindow(input: {
   // A lease that was already live may belong to a provider child this process
   // has not indexed yet. Preserve the safe unknown outcome in that case.
   return history && input.ownerAlreadyAdmitted ? { ...history, turnInFlight: true } : history
-}
-
-async function settleUnsupportedReservation(
-  input: AttachFlowInput,
-  record: AgentSessionRecord
-): Promise<void> {
-  const spawnToken = record.lease.reservedSpawnToken
-  if (!spawnToken) {
-    return
-  }
-  try {
-    await input.store.settleFailedAcquisition({
-      sessionId: record.sessionId,
-      fence: record.lease.runtimeFence,
-      spawnToken,
-      callerKey: input.callerKey,
-      operationId: input.params.envelope.clientOperationId,
-      outcome: {
-        status: 'failed',
-        code: 'structured_agent_session_unsupported',
-        details: { reason: 'hostUnsupported' },
-        message: 'Structured session support changed before the provider could start.'
-      },
-      exitProof: 'processless',
-      now: input.now()
-    })
-  } catch (error) {
-    throw new AggregateError([error], 'agent session unsupported reservation settlement failed')
-  }
 }

@@ -153,6 +153,9 @@ async function runAttach(
         ...(await pinnedAgentSessionLaunchArgs(context.deps.resolveLaunchArgs, params)),
         ...(await pinnedAgentSessionLaunchEnv(context.deps.resolveLaunchEnv, params))
       },
+      ...(context.deps.findTerminalAgentSessionOwner
+        ? { findTerminalAgentSessionOwner: context.deps.findTerminalAgentSessionOwner }
+        : {}),
       callerKey,
       params,
       now: () => context.now(),

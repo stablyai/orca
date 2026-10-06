@@ -175,6 +175,9 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Latest provider-authored turn activity; optional for mixed-version hosts. */
       activity?: AgentSessionTurnActivity | null
+      /** The provider conversation this chat holds, so a client can offer a terminal
+       *  resume without a history read. Absent on older hosts. */
+      providerSession?: AgentProviderSessionMetadata
     } & AgentSessionHostClockField)
   | ({
       type: 'batch'
