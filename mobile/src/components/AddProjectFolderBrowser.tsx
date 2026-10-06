@@ -120,18 +120,17 @@ export function AddProjectFolderBrowser({ client, busy, error, onBack, onPick }:
   )
 
   useEffect(() => {
-    return () => {
-      mounted.current = false
-      requestGeneration.current += 1
-    }
-  }, [])
-
-  useEffect(() => {
+    mounted.current = true
     requestGeneration.current += 1
     setListing(null)
     setLoadError('')
     setLoading(false)
     void open(HOME_PATH)
+
+    return () => {
+      mounted.current = false
+      requestGeneration.current += 1
+    }
   }, [open])
 
   const currentPath = listing?.path ?? ''

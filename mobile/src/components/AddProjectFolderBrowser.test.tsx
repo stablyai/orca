@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, StrictMode } from 'react'
 import { Text } from 'react-native'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -226,5 +226,29 @@ describe('AddProjectFolderBrowser', () => {
 
     act(() => button(renderer!, 'Add this folder as a project').props.onPress())
     expect(onPick).toHaveBeenCalledWith('/fourth')
+  })
+
+  it('accepts the initial listing under StrictMode effect replay', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(listing('/strict-mode', []))
+
+    act(() => {
+      renderer = create(
+        createElement(
+          StrictMode,
+          null,
+          createElement(AddProjectFolderBrowser, {
+            client: clientWith(sendRequest),
+            busy: false,
+            error: '',
+            onBack: vi.fn(),
+            onPick: vi.fn()
+          })
+        )
+      )
+    })
+    await settle()
+
+    expect(button(renderer!, 'Add this folder as a project').props.disabled).toBe(false)
+    expect(sendRequest).toHaveBeenCalled()
   })
 })
