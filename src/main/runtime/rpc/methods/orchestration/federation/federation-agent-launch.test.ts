@@ -21,7 +21,10 @@ describe('federated worker agent launch', () => {
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
     vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
-      id: 'folder:remote-workspace'
+      id: 'folder:remote-workspace',
+      // Decoy so a top-level branch read cannot satisfy the git.branch assertion.
+      branch: 'ignored-top-level',
+      git: { branch: 'octocat/existing-branch' }
     } as never)
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term_remote_worker',
@@ -81,6 +84,7 @@ describe('federated worker agent launch', () => {
       failedStage?: string
       lastError?: string
       launch: unknown
+      effects?: { kind?: string; action?: string; id?: string; branch?: string }[]
     }
 
     // Why: assert the worker actually reached ready — a spy-only assertion would
@@ -103,6 +107,16 @@ describe('federated worker agent launch', () => {
     expect(createTerminal).toHaveBeenCalledWith(
       'id:folder:remote-workspace',
       expect.not.objectContaining({ command: expect.anything() })
+    )
+    expect(result.effects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'worktree',
+          action: 'reused',
+          id: 'folder:remote-workspace',
+          branch: 'octocat/existing-branch'
+        })
+      ])
     )
   })
 })
