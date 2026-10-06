@@ -19,11 +19,10 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   submissions: readonly AgentJournalSubmission[]
   journalItems: readonly AgentJournalRenderItem[]
   failedHere: ReadonlySet<string>
-  queuedMessageIds: readonly string[]
   retry: (clientMessageId: string) => void
   agentName: string
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
-  const { agentName, failedHere, outbox, queuedMessageIds, submissions } = args
+  const { agentName, failedHere, outbox, submissions } = args
   // Read at click time, so the notices stay put while the outbox's Retry is rebuilt each render.
   const retryRef = useRef(args.retry)
   useEffect(() => {
@@ -54,7 +53,6 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
         journalRows,
         startFailures,
         failedHere,
-        queuedMessageIds,
         commandItemIds,
         loadedItems
       ),
@@ -65,7 +63,6 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
       journalRows,
       startFailures,
       failedHere,
-      queuedMessageIds,
       commandItemIds,
       loadedItems
     ]

@@ -19,7 +19,6 @@ import {
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
-const NO_CARDS: readonly string[] = []
 const MESSAGE_ID = agentJournalSubmissionKey('m')
 
 function answer(sequence: number): AgentJournalRenderItem {
@@ -126,7 +125,7 @@ it("keeps the outbox copy of a rejected message whose row is outside the window,
   )
   expect(kept).toMatchObject([{ clientMessageId: 'm', state: 'rejected' }])
   const drawn = (outbox: typeof kept) =>
-    projectStructuredAgentSessionMessages(state.items, outbox, state.submissions, NO_CARDS)
+    projectStructuredAgentSessionMessages(state.items, outbox, state.submissions)
       .filter((message) => message.role === 'user')
       .map(({ id, unsent }) => ({ id, unsent }))
   expect(drawn(kept)).toEqual([{ id: MESSAGE_ID, unsent: true }])
