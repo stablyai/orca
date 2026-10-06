@@ -297,6 +297,44 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     expect(onlyDispatch()).toMatchObject({ agentState: 'done' })
   })
 
+  it('keeps unread indicators but withholds completion delivery before catalog hydration', () => {
+    const settings = store.getState().settings
+    if (!settings) {
+      throw new Error('Expected seeded notification settings')
+    }
+    store.setState({
+      worktreesByRepo: {},
+      settings: {
+        ...settings,
+        notifications: {
+          ...settings.notifications,
+          cliWorktreeTaskComplete: false,
+          automationWorktreeTaskComplete: false
+        }
+      }
+    })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(indicators()).toMatchObject({
+      paneDot: 'agent-completion',
+      tabDot: 'agent-completion',
+      surfaceDot: 'agent-completion'
+    })
+    expect(dispatched).toEqual([])
+  })
+
+  it('delivers an unresolved completion when both origin switches remain enabled', () => {
+    store.setState({ worktreesByRepo: {} })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(onlyDispatch()).toMatchObject({ agentState: 'done' })
+  })
+
+  it('still delivers an input request before catalog hydration', () => {
+    store.setState({ worktreesByRepo: {} })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ awaitingUser: true }))
+    expect(indicators().paneDot).toBe('agent-completion')
+    expect(onlyDispatch()).toMatchObject({ agentState: 'blocked' })
+  })
+
   it('says done even while the status row still reads working, because the host settled the turn', () => {
     // The completion can outrun the status re-projection. Sending the row's own state would make
     // main word a finished turn as "working" (notification-options.ts), which is the whole reason

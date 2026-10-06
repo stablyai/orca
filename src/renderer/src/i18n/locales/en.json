@@ -279,6 +279,12 @@
         "unavailable": "Browser identity is unavailable."
       }
     },
+    "notifications": {
+      "cliWorktrees": "CLI-created Worktrees",
+      "cliWorktreesDescription": "Agent completion banners and phone pushes for worktrees created from the CLI.",
+      "automationWorktrees": "Automation-created Worktrees",
+      "automationWorktreesDescription": "Agent completion banners and phone pushes for worktrees created by automations."
+    },
     "agents": {
       "codexTerminalServerIsolation": {
         "title": "Run each Codex terminal on its own server",

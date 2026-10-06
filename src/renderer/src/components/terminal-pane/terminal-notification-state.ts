@@ -14,11 +14,16 @@ import {
   resolveIndexedRepoOwner
 } from '@/lib/worktree-runtime-owner-index'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import {
+  getWorkspaceNotificationOrigin,
+  type WorkspaceNotificationOrigin
+} from '../../../../shared/workspace-notification-policy'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -214,7 +219,7 @@ export function getNotificationWorkspaceLabels(
   state: StoreSnapshot,
   workspaceId: string,
   terminalTitle?: string
-): { repoLabel?: string; worktreeLabel: string } {
+): { repoLabel?: string; worktreeLabel: string; workspaceOrigin?: WorkspaceNotificationOrigin } {
   const scope = parseWorkspaceKey(workspaceId)
   const fallback = terminalTitle?.trim() || 'workspace'
   if (scope?.type === 'folder') {
@@ -227,15 +232,27 @@ export function getNotificationWorkspaceLabels(
         folder.projectGroupId,
         getCatalogOwnerHostId(folder)
       )
-    return { repoLabel: group?.name, worktreeLabel: folder?.name || fallback }
+    return {
+      repoLabel: group?.name,
+      worktreeLabel: folder?.name || fallback,
+      // Folder scopes cannot carry CLI or automation provenance, even before catalog hydration.
+      workspaceOrigin: 'other'
+    }
   }
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
   const { worktree, hostId } = findWorktreeRowOnItsOwnHost(state, worktreeId)
   const repo = worktree
     ? findNotificationRepo(state, worktreeId, worktree.repoId, hostId)
     : undefined
+  const workspaceOrigin =
+    worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+      ? 'other'
+      : worktree
+        ? getWorkspaceNotificationOrigin(worktree)
+        : undefined
   return {
     repoLabel: repo?.displayName,
+    ...(workspaceOrigin !== undefined ? { workspaceOrigin } : {}),
     worktreeLabel: worktree?.displayName || worktree?.branch || fallback
   }
 }

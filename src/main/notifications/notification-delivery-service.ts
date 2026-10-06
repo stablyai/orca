@@ -14,6 +14,7 @@ import type {
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import { reserveNotificationCooldown } from '../ipc/notification-burst-cooldown'
+import { allowsWorkspaceAgentNotification } from '../../shared/workspace-notification-policy'
 
 export type NotificationDeliveryDependencies = {
   readNotificationSettings: () => NotificationSettings
@@ -86,7 +87,13 @@ export function createNotificationDeliveryService(
       // Machine mutes leave mobile eligibility and its cooldown unchanged.
       const desktopAllowed =
         settings.enabled &&
-        (request.source !== 'agent-task-complete' || settings.agentTaskComplete) &&
+        (request.source !== 'agent-task-complete' ||
+          (settings.agentTaskComplete &&
+            allowsWorkspaceAgentNotification(
+              settings,
+              request.workspaceOrigin,
+              request.agentState
+            ))) &&
         (request.source !== 'terminal-bell' || settings.terminalBell)
 
       const notificationOptions = buildNotificationOptions(request)
