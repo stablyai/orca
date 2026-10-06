@@ -1,5 +1,5 @@
 import { ChevronLeft, Folder, HardDrive } from 'lucide-react-native'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { serverDirectoryBrowseRun } from '../tasks/repo-add-project-operations'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -75,16 +75,24 @@ export function AddProjectFolderBrowser({ client, busy, error, onBack, onPick }:
   const [listing, setListing] = useState<FolderListing | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const requestGeneration = useRef(0)
+  const mounted = useRef(true)
 
   const open = useCallback(
     async (path: string) => {
       if (!client) {
         return
       }
+      const generation = requestGeneration.current + 1
+      requestGeneration.current = generation
+      const requestClient = client
       setLoading(true)
       setLoadError('')
       try {
-        const reply = await serverDirectoryBrowseRun.request(client, { path })
+        const reply = await serverDirectoryBrowseRun.request(requestClient, { path })
+        if (!mounted.current || generation !== requestGeneration.current) {
+          return
+        }
         const verdict = serverDirectoryBrowseRun.interpret(reply)
         if (!verdict.accepted) {
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unaccepted reply to a skip policy is a failure envelope.
@@ -97,16 +105,32 @@ export function AddProjectFolderBrowser({ client, busy, error, onBack, onPick }:
           entries: verdict.value.entries.filter((entry) => entry.isDirectory || entry.isSymlink)
         })
       } catch (error) {
+        if (!mounted.current || generation !== requestGeneration.current) {
+          return
+        }
         // Why: a transport rejection mid-browse must land as copy, not leave the spinner up forever.
         setLoadError(error instanceof Error ? error.message : 'Unable to read that folder')
       } finally {
-        setLoading(false)
+        if (mounted.current && generation === requestGeneration.current) {
+          setLoading(false)
+        }
       }
     },
     [client]
   )
 
   useEffect(() => {
+    return () => {
+      mounted.current = false
+      requestGeneration.current += 1
+    }
+  }, [])
+
+  useEffect(() => {
+    requestGeneration.current += 1
+    setListing(null)
+    setLoadError('')
+    setLoading(false)
     void open(HOME_PATH)
   }, [open])
 
@@ -182,9 +206,9 @@ export function AddProjectFolderBrowser({ client, busy, error, onBack, onPick }:
         <Pressable
           style={[
             formStyles.createButton,
-            (!currentPath || busy) && formStyles.createButtonDisabled
+            (!currentPath || busy || loading) && formStyles.createButtonDisabled
           ]}
-          disabled={!currentPath || busy}
+          disabled={!currentPath || busy || loading}
           onPress={() => onPick(currentPath)}
           accessibilityRole="button"
           accessibilityLabel="Add this folder as a project"

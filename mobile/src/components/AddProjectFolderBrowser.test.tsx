@@ -36,6 +36,16 @@ function clientWith(sendRequest: RpcClient['sendRequest']): RpcClient {
   return { ...createFakeRpcClient(), sendRequest }
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
+}
+
 function button(tree: ReactTestRenderer, label: string): ReactTestInstance {
   return tree.root.find((node) => node.props.accessibilityLabel === label)
 }
@@ -135,5 +145,86 @@ describe('AddProjectFolderBrowser', () => {
       )
     )
     expect(button(renderer!, 'Add this folder as a project').props.disabled).toBe(true)
+  })
+
+  it('ignores stale replies and rejects while switching clients, and disables picking while loading', async () => {
+    const firstRequest = deferred<ReturnType<typeof listing>>()
+    const secondRequest = deferred<ReturnType<typeof listing>>()
+    const thirdRequest = deferred<ReturnType<typeof listing>>()
+    const fourthRequest = deferred<ReturnType<typeof listing>>()
+    const firstClient = clientWith(vi.fn().mockReturnValue(firstRequest.promise))
+    const secondClient = clientWith(vi.fn().mockReturnValue(secondRequest.promise))
+    const thirdClient = clientWith(vi.fn().mockReturnValue(thirdRequest.promise))
+    const fourthClient = clientWith(vi.fn().mockReturnValue(fourthRequest.promise))
+    const onPick = vi.fn()
+
+    act(() => {
+      renderer = create(
+        createElement(AddProjectFolderBrowser, {
+          client: firstClient,
+          busy: false,
+          error: '',
+          onBack: vi.fn(),
+          onPick
+        })
+      )
+    })
+    expect(button(renderer!, 'Add this folder as a project').props.disabled).toBe(true)
+
+    act(() => {
+      renderer!.update(
+        createElement(AddProjectFolderBrowser, {
+          client: secondClient,
+          busy: false,
+          error: '',
+          onBack: vi.fn(),
+          onPick
+        })
+      )
+    })
+    secondRequest.resolve(listing('/second', []))
+    await settle()
+    expect(button(renderer!, 'Add this folder as a project').props.disabled).toBe(false)
+    expect(button(renderer!, 'Add this folder as a project').props.onPress).toBeDefined()
+
+    firstRequest.resolve(listing('/stale', []))
+    await settle()
+    expect(button(renderer!, 'Add this folder as a project').props.disabled).toBe(false)
+    expect(
+      renderer!.root.findAllByType(Text).some((node) => node.props.children === '/second')
+    ).toBe(true)
+    act(() =>
+      renderer!.update(
+        createElement(AddProjectFolderBrowser, {
+          client: thirdClient,
+          busy: false,
+          error: '',
+          onBack: vi.fn(),
+          onPick
+        })
+      )
+    )
+    act(() =>
+      renderer!.update(
+        createElement(AddProjectFolderBrowser, {
+          client: fourthClient,
+          busy: false,
+          error: '',
+          onBack: vi.fn(),
+          onPick
+        })
+      )
+    )
+    fourthRequest.resolve(listing('/fourth', []))
+    await settle()
+    thirdRequest.reject(new Error('stale connection'))
+    await settle()
+    expect(button(renderer!, 'Add this folder as a project').props.disabled).toBe(false)
+    expect(
+      renderer!.root.findAllByType(Text).some((node) => node.props.children === 'stale connection')
+    ).toBe(false)
+
+    act(() => button(renderer!, 'Add this folder as a project').props.onPress())
+    expect(onPick).toHaveBeenCalledWith('/fourth')
   })
 })
