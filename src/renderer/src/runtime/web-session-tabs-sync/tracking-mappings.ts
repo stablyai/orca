@@ -74,6 +74,22 @@ export function hostSessionTabIdsByLocalTabForWorktree(
   return entries
 }
 
+export function hostSessionTabPublishersForLocalTab(
+  worktreeId: string,
+  tabId: string
+): { environmentId: string; hostTabId: string }[] {
+  const publishers: { environmentId: string; hostTabId: string }[] = []
+  for (const environmentId of hostSessionTabMappingKeysByEnvironmentAndWorktree.keys()) {
+    const hostTabId = hostSessionTabIdByLocalKey.get(
+      hostSessionTabMappingKey({ environmentId, worktreeId, tabId })
+    )
+    if (hostTabId !== undefined) {
+      publishers.push({ environmentId, hostTabId })
+    }
+  }
+  return publishers
+}
+
 /** The local tab mirroring a host tab, or null when no mirrored tab claims it. */
 export function resolveLocalTabIdForHostSessionTab(args: {
   environmentId: string

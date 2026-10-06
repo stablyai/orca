@@ -6,17 +6,21 @@ import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
 
 function createEditorStore(overrides?: Partial<AppState>): StoreApi<AppState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createStore<any>()((...args: any[]) => ({
-    activeWorktreeId: 'wt-1',
-    tabsByWorktree: {},
-    browserTabsByWorktree: {},
-    activeBrowserTabId: null,
-    activeBrowserTabIdByWorktree: {},
-    tabBarOrderByWorktree: {},
-    ...overrides,
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
+  return createStore<AppState>()((set, get, api) => {
+    const state = {
+      activeWorktreeId: 'wt-1',
+      tabsByWorktree: {},
+      browserTabsByWorktree: {},
+      activeBrowserTabId: null,
+      activeBrowserTabIdByWorktree: {},
+      tabBarOrderByWorktree: {},
+      unifiedTabsByWorktree: {},
+      ...overrides,
+      ...createEditorSlice(set, get, api)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial store includes every dependency exercised by these editor tests.
+    return state as AppState
+  })
 }
 
 function makeBrowserTab(id: string): BrowserTab {

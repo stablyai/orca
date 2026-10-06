@@ -223,6 +223,11 @@ export function prepareWebSessionTabsSnapshotUnified(
     editorTabs: mirroredEditorTabs,
     agentTabs: mirroredAgentTabs
   })
+  const dirtyEditorFileIds = new Set(
+    base.worktreeOpenFiles
+      .filter((file) => file.isDirty && state.editorDrafts?.[file.id] !== undefined)
+      .map((file) => file.id)
+  )
   updateHostSessionTabIdMappings({
     environmentId,
     worktreeId,
@@ -230,7 +235,12 @@ export function prepareWebSessionTabsSnapshotUnified(
     terminalTabs: mirroredTerminalTabEntries,
     browserTabs: mirroredBrowserTabs,
     editorTabs: mirroredEditorTabs,
-    agentTabs: mirroredAgentTabs
+    agentTabs: mirroredAgentTabs,
+    retainedDirtyEditorTabIds: new Set(
+      retainedUnifiedTabs
+        .filter((tab) => tab.contentType === 'editor' && dirtyEditorFileIds.has(tab.entityId))
+        .map((tab) => tab.id)
+    )
   })
 
   return {

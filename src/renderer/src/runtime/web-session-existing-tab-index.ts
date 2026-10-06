@@ -6,7 +6,11 @@ type PositionedTab = {
 }
 
 export type WebSessionExistingTabIndex = {
-  getEditorUnifiedTab: (fileId: string, hostTabId: string) => Tab | null
+  getEditorUnifiedTab: (
+    fileId: string,
+    hostTabId: string,
+    executionHostId?: Tab['executionHostId']
+  ) => Tab | null
 }
 
 type BuildWebSessionExistingTabIndexArgs = {
@@ -45,10 +49,16 @@ export function buildWebSessionExistingTabIndex({
   }
 
   return {
-    getEditorUnifiedTab: (fileId, hostTabId) => {
+    getEditorUnifiedTab: (fileId, hostTabId, executionHostId) => {
       const { editorTabById, editorTabByFileId } = getIndexes()
-      const byHostId = editorTabById.get(hostTabId)
-      const byFileId = editorTabByFileId.get(fileId)
+      const matchesOwner = (entry: PositionedTab | undefined): boolean =>
+        !executionHostId ||
+        !entry?.tab.executionHostId ||
+        entry.tab.executionHostId === executionHostId
+      const hostCandidate = editorTabById.get(hostTabId)
+      const fileCandidate = editorTabByFileId.get(fileId)
+      const byHostId = matchesOwner(hostCandidate) ? hostCandidate : undefined
+      const byFileId = matchesOwner(fileCandidate) ? fileCandidate : undefined
       // Why: the former Array.find accepted either key, so duplicate legacy
       // entries must still resolve to whichever candidate appeared first.
       if (byHostId && byFileId) {

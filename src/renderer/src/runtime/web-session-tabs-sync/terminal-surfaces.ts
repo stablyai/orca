@@ -141,17 +141,6 @@ export function buildMirroredAgentTabs(
   })
 }
 
-export function localEditorFileId(tab: ReadyEditorSurface): string {
-  if (tab.type === 'markdown' && tab.mode === 'markdown-preview') {
-    return `markdown-preview::${tab.sourceFilePath}`
-  }
-  return tab.filePath
-}
-
-export function editorSourceFileId(tab: ReadyEditorSurface): string | undefined {
-  return tab.type === 'markdown' && tab.mode === 'markdown-preview' ? tab.sourceFilePath : undefined
-}
-
 export function isRuntimeTerminalTabForEnvironment(
   tab: TerminalTab,
   environmentId: string

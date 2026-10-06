@@ -343,7 +343,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(patch.activeTabType).toBeUndefined()
     expect(patch.activeFileIdByWorktree?.[WT]).toBeUndefined()
-    expect(patch.groupsByWorktree?.[WT]?.[0]?.activeTabId).toBe('host-editor')
+    expect(patch.groupsByWorktree?.[WT]?.[0]?.activeTabId).toBe(editorTab.id)
   })
 
   it('focuses a caller-created terminal even when an older host leaves it inactive', () => {

@@ -64,7 +64,11 @@ export function prepareWebSessionTabsSnapshotGroups(
       }
     }
     for (const entry of mirroredEditorTabs) {
-      const existing = existingTabIndex.getEditorUnifiedTab(entry.file.id, entry.hostTabId)
+      const existing = existingTabIndex.getEditorUnifiedTab(
+        entry.file.id,
+        entry.hostTabId,
+        entry.unifiedTab.executionHostId
+      )
       if (existing && existing.id !== entry.unifiedTab.id) {
         rekeyedTabIds.set(existing.id, entry.unifiedTab.id)
       }

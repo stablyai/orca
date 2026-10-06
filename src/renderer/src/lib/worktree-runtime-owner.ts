@@ -158,6 +158,31 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
   return getExplicitRuntimeEnvironmentIdFromHost(getRepoExecutionHostId(repo))
 }
 
+export function translateMirroredEditorRuntimeEnvironmentId(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string,
+  incomingRuntimeEnvironmentId: string | null | undefined
+): string | null | undefined {
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  const hasConcreteRecord =
+    workspaceScope?.type === 'folder'
+      ? Boolean(findFolderWorkspaceOwner(state, workspaceScope.folderWorkspaceId))
+      : Boolean(
+          findWorktreeRecord(state.worktreesByRepo, worktreeId) ||
+          hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
+        )
+  if (
+    !hasConcreteRecord ||
+    resolveExplicitWorktreeOperationRouteResult(state, worktreeId).kind === 'ambiguous'
+  ) {
+    return incomingRuntimeEnvironmentId
+  }
+  return getExplicitRuntimeEnvironmentIdForWorktree(
+    { ...state, activeWorktreeId: null, activeWorkspaceExecutionHostId: null },
+    worktreeId
+  )
+}
+
 function getFocusedRuntimeOrLocalExecutionHostId(
   state: WorktreeRuntimeOwnerState
 ): ExecutionHostId {

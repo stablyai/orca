@@ -47,4 +47,20 @@ describe('buildWebSessionExistingTabIndex', () => {
     expect(index.getEditorUnifiedTab('/repo/unrelated.ts', 'host-1')).toBe(byHostId)
     expect(index.getEditorUnifiedTab('/repo/a.ts', 'unrelated-host')).toBe(byHostId)
   })
+
+  it('excludes a different host when the incoming tab id collides', () => {
+    const first = {
+      ...makeTab('host-tab', '/repo/first.ts', 'editor'),
+      executionHostId: 'runtime:first' as const
+    }
+    const target = {
+      ...makeTab('target-tab', '/repo/target.ts', 'editor'),
+      executionHostId: 'runtime:target' as const
+    }
+    const index = buildWebSessionExistingTabIndex({ unifiedTabs: [first, target] })
+
+    expect(index.getEditorUnifiedTab(target.entityId, first.id, 'runtime:target')).toBe(target)
+    expect(index.getEditorUnifiedTab('/repo/new.ts', first.id, 'runtime:target')).toBeNull()
+    expect(index.getEditorUnifiedTab('/repo/new.ts', first.id, 'runtime:first')).toBe(first)
+  })
 })

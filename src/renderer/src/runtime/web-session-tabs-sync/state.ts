@@ -229,21 +229,28 @@ export type WebSessionTabsSyncState = Pick<
     Pick<
       AppState,
       | 'acknowledgedAgentsByPaneKey'
+      | 'activeWorkspaceExecutionHostId'
       | 'activityClearedAtByPaneKey'
       | 'agentLaunchConfigByPaneKey'
       | 'automaticAgentResumeClaimsByTabId'
       // Why: a client draft is the evidence that a mirrored file's dirty flag is the client's
       // own and must survive a host republish (#21392); absent here, the host flag wins.
       | 'editorDrafts'
+      | 'detectedWorktreesByRepo'
+      | 'folderWorkspaces'
       | 'localOnlyScrollbackByTabId'
       | 'migrationUnsupportedByPtyId'
       | 'manuallyUnreadTurnsByPaneKey'
       | 'paneForegroundAgentByPaneKey'
       | 'pendingStartupByTabId'
+      | 'projectGroups'
       | 'recentlyClosedAgentStatusTabIds'
       | 'recentlyRetiredAgentStatusPaneKeys'
       | 'retainedAgentsByPaneKey'
       | 'retentionSuppressedPaneKeys'
+      | 'repos'
+      | 'settings'
+      | 'worktreesByRepo'
     >
   >
 
