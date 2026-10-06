@@ -25,6 +25,18 @@ const RESOLUTION = {
 const CANONICAL_BODIES: AgentJournalItemBody[] = [
   {
     kind: 'message',
+    role: 'reasoning',
+    blocks: [{ type: 'text', text: 'Inspecting the request' }]
+  },
+  {
+    kind: 'message',
+    role: 'reasoning',
+    blocks: [{ type: 'text', text: 'Inspecting the request' }],
+    state: 'completed',
+    completedAt: 2_000
+  },
+  {
+    kind: 'message',
     role: 'user',
     blocks: [
       {
@@ -477,6 +489,14 @@ describe('thread goal fields', () => {
     ).toBe(true)
     expect(
       isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [],
+        state: 'paused'
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
         kind: 'status',
         text: 'Goal archived',
         threadGoal: { state: 'archived' }
@@ -495,6 +515,8 @@ describe('thread goal fields', () => {
     for (const body of [
       { kind: 'message', role: 'user', blocks: [], sentAs: 5 },
       { kind: 'message', role: 'user', blocks: [], sentAs: '' },
+      { kind: 'message', role: 'reasoning', blocks: [], state: '' },
+      { kind: 'message', role: 'reasoning', blocks: [], completedAt: 'later' },
       { kind: 'status', text: 'Goal set', threadGoal: { state: 'set' } },
       {
         kind: 'status',

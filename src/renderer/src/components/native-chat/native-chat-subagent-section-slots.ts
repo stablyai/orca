@@ -110,6 +110,7 @@ export function nativeChatSubagentSectionSlots({
         receipt,
         status: undefined,
         folded: false,
+        drawsMessage: true,
         turnFolds: false,
         turnDiff: undefined,
         subagentRoster: undefined,

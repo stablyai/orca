@@ -172,6 +172,18 @@ describe('transcript row height estimate', () => {
     )
   })
 
+  it('charges a long reasoning row only for the one-line trigger it shows collapsed', () => {
+    const summary = 'x'.repeat(4_129)
+    const reasoning = estimateNativeChatRowHeight(
+      nativeChatRowContentMetrics(message(summary, 'reasoning')),
+      NO_CHROME
+    )
+    expect(reasoning).toBe(24)
+    expect(
+      estimateNativeChatRowHeight(nativeChatRowContentMetrics(message(summary)), NO_CHROME)
+    ).toBeGreaterThan(900)
+  })
+
   it('reuses one derivation per message', () => {
     const subject = message('cached')
     expect(nativeChatRowContentMetrics(subject)).toBe(nativeChatRowContentMetrics(subject))
