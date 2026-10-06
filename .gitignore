@@ -96,6 +96,12 @@ design-docs/
 # and the tracked reference docs linked from AGENTS.md / README.md).
 docs/**
 !docs/
+# Approved WSL Antigravity design and implementation plan.
+!docs/superpowers/
+!docs/superpowers/specs/
+!docs/superpowers/specs/2026-10-06-antigravity-wsl-native-accounts-design.md
+!docs/superpowers/plans/
+!docs/superpowers/plans/2026-10-06-antigravity-wsl-native-accounts.md
 # The deployable docs app is source, not local engineering notes.
 !docs/site/
 !docs/site/**
