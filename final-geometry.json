@@ -1,0 +1,622 @@
+{
+  "sha": "ef21e3fc62ec75aa8a605fddb3ac9ee9f3ebc4f8",
+  "screenshots": [
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/final-dark-default.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/final-light-default.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/final-match-on.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/final-narrow-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/final-wide-20-18.png",
+    "/Users/m4air/orca-qa/pr-25658/remote/shots/final-locale-ja-20-18.png"
+  ],
+  "results": [
+    {
+      "name": "identity",
+      "identity": {
+        "name": "Orca: ef21e3fc62",
+        "isDev": true,
+        "devLabel": "pr25658-review-qa @ ef21e3fc62",
+        "devBranch": "ef21e3fc62",
+        "devWorktreeName": "pr25658-review-qa",
+        "devRepoRoot": "/Users/m4air/orca/workspaces/orca/pr25658-review-qa",
+        "dockBadgeLabel": null
+      },
+      "url": "http://127.0.0.1:5176/"
+    },
+    {
+      "name": "dark-default",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "closing": {
+          "top": 370,
+          "bottom": 390,
+          "fullyInside": true,
+          "width": 696
+        },
+        "code": {
+          "top": 282,
+          "bottom": 357,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    },
+    {
+      "name": "shot-dark-default",
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/final-dark-default.png",
+      "bytes": 179061,
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      }
+    },
+    {
+      "name": "light-default",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "closing": {
+          "top": 370,
+          "bottom": 390,
+          "fullyInside": true,
+          "width": 696
+        },
+        "code": {
+          "top": 282,
+          "bottom": 357,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    },
+    {
+      "name": "shot-light-default",
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/final-light-default.png",
+      "bytes": 181266,
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      }
+    },
+    {
+      "name": "match-on",
+      "checked": "true",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "closing": {
+          "top": 370,
+          "bottom": 390,
+          "fullyInside": true,
+          "width": 696
+        },
+        "code": {
+          "top": 282,
+          "bottom": 357,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    },
+    {
+      "name": "shot-match-on",
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/final-match-on.png",
+      "bytes": 184276,
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      }
+    },
+    {
+      "name": "match-off",
+      "checked": "false",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "closing": {
+          "top": 370,
+          "bottom": 390,
+          "fullyInside": true,
+          "width": 696
+        },
+        "code": {
+          "top": 282,
+          "bottom": 357,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    },
+    {
+      "name": "width-Comfortable",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "closing": {
+          "top": 370,
+          "bottom": 390,
+          "fullyInside": true,
+          "width": 696
+        },
+        "code": {
+          "top": 282,
+          "bottom": 357,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    },
+    {
+      "name": "width-Wide",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "60rem",
+        "closing": {
+          "top": 370,
+          "bottom": 390,
+          "fullyInside": true,
+          "width": 696
+        },
+        "code": {
+          "top": 282,
+          "bottom": 357,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    },
+    {
+      "name": "width-Full",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "none",
+        "closing": {
+          "top": 370,
+          "bottom": 390,
+          "fullyInside": true,
+          "width": 696
+        },
+        "code": {
+          "top": 282,
+          "bottom": 357,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    },
+    {
+      "name": "width-Comfortable",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "closing": {
+          "top": 370,
+          "bottom": 390,
+          "fullyInside": true,
+          "width": 696
+        },
+        "code": {
+          "top": 282,
+          "bottom": 357,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    },
+    {
+      "name": "contrast",
+      "before": {
+        "aria": "100",
+        "mix": "78%",
+        "saved": 100,
+        "focused": "radio"
+      },
+      "during": {
+        "aria": "101",
+        "mix": "78.44%",
+        "saved": 100,
+        "focused": "slider"
+      },
+      "after": {
+        "aria": "101",
+        "mix": "78.44%",
+        "saved": 101,
+        "focused": "slider"
+      },
+      "keyboard": {
+        "aria": "101",
+        "mix": "78.44%",
+        "saved": 101,
+        "focused": "slider"
+      },
+      "draftChanged": true,
+      "releaseCommitted": true
+    },
+    {
+      "name": "narrow-20-18",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 542,
+          "height": 440
+        },
+        "columnWidth": 510,
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "closing": {
+          "top": 451,
+          "bottom": 480,
+          "fullyInside": false,
+          "width": 500
+        },
+        "code": {
+          "top": 337,
+          "bottom": 438,
+          "fullyInside": true,
+          "width": 498
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    },
+    {
+      "name": "shot-narrow-20-18",
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/final-narrow-20-18.png",
+      "bytes": 146470,
+      "viewport": {
+        "width": 980,
+        "height": 1300
+      }
+    },
+    {
+      "name": "wide-20-18",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "closing": {
+          "top": 451,
+          "bottom": 480,
+          "fullyInside": false,
+          "width": 696
+        },
+        "code": {
+          "top": 337,
+          "bottom": 438,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    },
+    {
+      "name": "shot-wide-20-18",
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/final-wide-20-18.png",
+      "bytes": 186495,
+      "viewport": {
+        "width": 1600,
+        "height": 1500
+      }
+    },
+    {
+      "name": "locale-en-20-18",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "closing": {
+          "top": 451,
+          "bottom": 480,
+          "fullyInside": false,
+          "width": 696
+        },
+        "code": {
+          "top": 337,
+          "bottom": 438,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    },
+    {
+      "name": "locale-es-20-18",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Vista previa",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "closing": {
+          "top": 451,
+          "bottom": 480,
+          "fullyInside": false,
+          "width": 696
+        },
+        "code": {
+          "top": 337,
+          "bottom": 438,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "¿Por qué pnpm dev se cierra justo después de iniciarse en Windows?\n\nTrabajó durante 12s\n\nUsa Node, no sintaxis exclusiva de Unix.\n\nSe buscó 1 patrón y se leyó 1 archivo\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nDespués, ejecuta pnpm dev de nuevo.",
+        "links": 0
+      }
+    },
+    {
+      "name": "locale-fr-20-18",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Aperçu",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "closing": {
+          "top": 451,
+          "bottom": 480,
+          "fullyInside": false,
+          "width": 696
+        },
+        "code": {
+          "top": 337,
+          "bottom": 438,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Pourquoi pnpm dev se ferme-t-il juste après son démarrage sous Windows ?\n\nA travaillé pendant 12s\n\nUtilisez Node, pas la syntaxe propre à Unix.\n\n1 motif recherché, 1 fichier lu\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nPuis relancez pnpm dev.",
+        "links": 0
+      }
+    },
+    {
+      "name": "locale-ja-20-18",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "プレビュー",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "closing": {
+          "top": 451,
+          "bottom": 480,
+          "fullyInside": false,
+          "width": 696
+        },
+        "code": {
+          "top": 337,
+          "bottom": 438,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Windows で pnpm dev が起動直後に終了するのはなぜですか？\n\n12s で完了\n\nUnix 専用の構文ではなく Node を使います。\n\n1 件のパターンを検索、1 件のファイルを読み取り\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nその後、pnpm dev を再実行してください。",
+        "links": 0
+      }
+    },
+    {
+      "name": "shot-locale-ja-20-18",
+      "path": "/Users/m4air/orca-qa/pr-25658/remote/shots/final-locale-ja-20-18.png",
+      "bytes": 183119,
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      }
+    },
+    {
+      "name": "locale-ko-20-18",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "미리보기",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "closing": {
+          "top": 451,
+          "bottom": 480,
+          "fullyInside": false,
+          "width": 696
+        },
+        "code": {
+          "top": 337,
+          "bottom": 438,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Windows에서 pnpm dev가 시작 직후 종료되는 이유는 무엇인가요?\n\n12s 작업 완료\n\nUnix 전용 구문 대신 Node를 사용하세요.\n\n패턴 1개 검색, 파일 1개 읽음\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\n그런 다음 pnpm dev를 다시 실행하세요.",
+        "links": 0
+      }
+    },
+    {
+      "name": "locale-zh-20-18",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "预览",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "20px",
+        "codeFontSize": "18px",
+        "cap": "46rem",
+        "closing": {
+          "top": 423,
+          "bottom": 451,
+          "fullyInside": false,
+          "width": 696
+        },
+        "code": {
+          "top": 308,
+          "bottom": 410,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "为什么 pnpm dev 在 Windows 上刚启动就退出了？\n\n工作了 12s\n\n使用 Node，而不是 Unix 专用语法。\n\n搜索了 1 个模式，读取了 1 个文件\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\n然后再次运行 pnpm dev。",
+        "links": 0
+      }
+    },
+    {
+      "name": "final-default",
+      "state": {
+        "present": true,
+        "inert": true,
+        "header": "Preview",
+        "preview": {
+          "width": 738,
+          "height": 440
+        },
+        "columnWidth": 706,
+        "fontSize": "14px",
+        "codeFontSize": "12px",
+        "cap": "46rem",
+        "closing": {
+          "top": 370,
+          "bottom": 390,
+          "fullyInside": true,
+          "width": 696
+        },
+        "code": {
+          "top": 282,
+          "bottom": 357,
+          "fullyInside": true,
+          "width": 694
+        },
+        "sample": "Why does pnpm dev exit right after it starts on Windows?\n\nWorked for 12s\n\nUse Node instead of Unix-only syntax.\n\nSearched 1 pattern, read 1 file\nGrep\nNODE_ENV=\nRead\npackage.json\nJSON\n\"scripts\": {\n  \"dev\": \"node --env-file=.env.development scripts/dev.mjs\"\n}\n\n\nThen run pnpm dev again.",
+        "links": 0
+      }
+    }
+  ],
+  "failures": []
+}
