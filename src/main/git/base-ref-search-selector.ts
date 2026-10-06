@@ -9,7 +9,8 @@ export function resolveBaseRefSearchSelector(fullRef: string, shortRef: string):
   }
   const namespaceName = `${parts[1]}/${parts[2]}`
   const naturalName = parts[2]
-  // Full selectors preserve identity when Git disambiguates or corrupts a short name.
+  // Apple Git-154 (2.39.5) can corrupt short refs (#19515); retire recovery when affected builds are unsupported.
+  // Preserve current-Git disambiguation when removing that compatibility workaround.
   if (shortRef === namespaceName || ![fullRef, namespaceName, naturalName].includes(shortRef)) {
     return fullRef
   }
