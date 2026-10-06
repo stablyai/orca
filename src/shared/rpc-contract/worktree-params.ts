@@ -140,7 +140,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   sparseDirectories: z.array(z.string()).optional(),
   sparseBaseRef: OptionalString,
   sparsePresetId: OptionalString,
-  baseRef: OptionalString,
+  // Why: null is the clear signal; JSON drops undefined on the wire.
+  baseRef: z.union([z.null(), OptionalString]),
   workspaceStatus: OptionalString,
   pushTarget: z
     .object({

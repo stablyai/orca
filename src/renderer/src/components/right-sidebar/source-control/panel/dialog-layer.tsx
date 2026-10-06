@@ -78,7 +78,7 @@ export function SourceControlDialogLayer({
   baseRefRepoId: string
   pickerBaseRef: BaseRefPickerProps['currentBaseRef']
   onSelectBaseRef: BaseRefPickerProps['onSelect']
-  onUsePrimaryBaseRef: NonNullable<BaseRefPickerProps['onUsePrimary']>
+  onUsePrimaryBaseRef: BaseRefPickerProps['onUsePrimary']
   sourceControlAiActionsVisible: boolean
   resolveConflictsComposerOpen: boolean
   onResolveConflictsComposerOpenChange: AgentDialogProps['onOpenChange']
@@ -162,8 +162,8 @@ export function SourceControlDialogLayer({
             </DialogTitle>
             <DialogDescription className="text-xs">
               {translate(
-                'auto.components.right.sidebar.SourceControl.c9ad22888e',
-                'Pick the branch compare target for this repository.'
+                'auto.components.right.sidebar.SourceControl.worktreeBaseRefDescription',
+                'Pick the branch compare target for this workspace. Other workspaces keep their own.'
               )}
             </DialogDescription>
           </DialogHeader>

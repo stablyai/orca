@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control-launch-agent-selection'
 import { SourceControlDialogLayer } from './dialog-layer'
 import type { SourceControlPanelReadyProps } from './panel-props'
@@ -48,6 +49,14 @@ export function SourceControlPanelDialogs({
     updateWorktreeMeta
   } = model
 
+  const writeWorktreeBaseRef = async (worktreeId: string, baseRef: string | undefined) => {
+    const result = await updateWorktreeMeta(worktreeId, { baseRef })
+    // Why: a failed write is reverted by a refetch, so without this the pick silently undoes itself.
+    if (!result.ok) {
+      toast.error(result.error)
+    }
+  }
+
   return (
     <SourceControlDialogLayer
       clearNotesOpen={resolvedPendingDiffCommentsClear !== null}
@@ -64,23 +73,24 @@ export function SourceControlPanelDialogs({
       baseRefRepoId={activeRepo.id}
       pickerBaseRef={pickerBaseRef}
       onSelectBaseRef={(ref) => {
-        if (baseRefOwnedByWorktree && activeWorktreeId) {
-          void updateWorktreeMeta(activeWorktreeId, { baseRef: ref })
+        // Why: a repo-wide write here retargeted every sibling worktree without its own pin; the repo default lives in project settings.
+        if (activeWorktreeId) {
+          void writeWorktreeBaseRef(activeWorktreeId, ref)
         } else {
           void updateRepo(activeRepo.id, { worktreeBaseRef: ref })
         }
         setBaseRefDialogOpen(false)
         window.setTimeout(() => void refreshBranchCompare(), 0)
       }}
-      onUsePrimaryBaseRef={() => {
-        if (baseRefOwnedByWorktree && activeWorktreeId) {
-          void updateWorktreeMeta(activeWorktreeId, { baseRef: undefined })
-        } else {
-          void updateRepo(activeRepo.id, { worktreeBaseRef: undefined })
-        }
-        setBaseRefDialogOpen(false)
-        window.setTimeout(() => void refreshBranchCompare(), 0)
-      }}
+      onUsePrimaryBaseRef={
+        baseRefOwnedByWorktree && activeWorktreeId
+          ? () => {
+              void writeWorktreeBaseRef(activeWorktreeId, undefined)
+              setBaseRefDialogOpen(false)
+              window.setTimeout(() => void refreshBranchCompare(), 0)
+            }
+          : undefined
+      }
       sourceControlAiActionsVisible={sourceControlAiActionsVisible}
       resolveConflictsComposerOpen={resolveConflictsComposerOpen}
       onResolveConflictsComposerOpenChange={setResolveConflictsComposerOpen}

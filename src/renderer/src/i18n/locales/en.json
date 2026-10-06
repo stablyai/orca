@@ -579,6 +579,7 @@
                 "persist": {
                   "877e3638d8": "Update the remote runtime to change this workspace’s linked issue",
                   "4367540861": "Update the remote runtime to link Linear issues",
+                  "baseRefClear": "Update the remote runtime to reset this workspace’s compare target",
                   "github": {
                     "pr": {
                       "suppression": "Update the remote runtime to unlink GitHub pull requests"
@@ -12846,7 +12847,7 @@
             "e48caaf0dd": "Started an AI agent for the conflicts.",
             "901140f47d": "Review the prompt before starting an agent.",
             "19652ddd76": "Resolve Conflicts With AI",
-            "c9ad22888e": "Pick the branch compare target for this repository.",
+            "worktreeBaseRefDescription": "Pick the branch compare target for this workspace. Other workspaces keep their own.",
             "574d2f4413": "Clear Notes",
             "05bb8f4a48": "Cancel",
             "48db37cca9": "View all",

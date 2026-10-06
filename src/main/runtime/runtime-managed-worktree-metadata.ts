@@ -8,8 +8,9 @@ import type { RuntimeStore } from './runtime-store-contract'
 import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
-type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
+type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget' | 'baseRef'> & {
   pushTarget?: GitPushTarget | null
+  baseRef?: string | null
   lineage?: { parentWorktree?: string; noParent?: boolean }
 }
 
@@ -34,11 +35,14 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
     args.ports.invalidateResolved()
     args.ports.invalidateScan(worktree.repoId)
   }
-  const clearPushTarget =
-    Object.hasOwn(metaUpdates, 'pushTarget') && metaUpdates.pushTarget === null
-  const normalized: Partial<WorktreeMeta> = clearPushTarget
-    ? { ...metaUpdates, pushTarget: undefined }
-    : (metaUpdates as Partial<WorktreeMeta>)
+  const { pushTarget, baseRef, ...otherMetaUpdates } = metaUpdates
+  const clearPushTarget = pushTarget === null
+  const clearBaseRef = baseRef === null
+  const normalized: Partial<WorktreeMeta> = {
+    ...otherMetaUpdates,
+    ...(pushTarget ? { pushTarget } : {}),
+    ...(baseRef ? { baseRef } : {})
+  }
   const persisted: Partial<WorktreeMeta> = omitUndefinedProperties(
     normalized.displayName !== undefined
       ? {
@@ -50,6 +54,9 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   )
   if (clearPushTarget) {
     persisted.pushTarget = undefined
+  }
+  if (clearBaseRef) {
+    persisted.baseRef = undefined
   }
   if (lineage?.noParent === true) {
     args.store.removeWorktreeLineage?.(worktree.id)
