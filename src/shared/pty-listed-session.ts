@@ -20,6 +20,8 @@ export type PtyListedSession = {
   cwd: string
   title: string
   worktreeId?: string
+  /** Pane key the PTY was spawned with; reattaching from another pane never changes it. */
+  paneKey?: string
   /**
    * Agent ownership as the listing provider could establish it. Destructive actions must treat
    * anything other than `absent` as live work: discarding this distinction is what let Resource

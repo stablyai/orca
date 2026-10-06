@@ -13,6 +13,9 @@ const { resumeSpy, clearSleepingAgentSessionsByPaneKey } = vi.hoisted(() => ({
 vi.mock('./resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: resumeSpy
 }))
+vi.mock('./worktree-agent-activation-gate', () => ({
+  readLiveSleepingAgentClaimKeys: async () => new Set<string>()
+}))
 
 let sleepingRecords: Record<string, Record<string, unknown>> = {}
 vi.mock('@/store', () => ({
@@ -34,7 +37,7 @@ afterEach(() => {
 })
 
 describe('background wake of a finished live checkpoint', () => {
-  it('mounts its saved tab as passive history without launching a resume tab', () => {
+  it('mounts its saved tab as passive history without launching a resume tab', async () => {
     sleepingRecords = {
       'tab-done:leaf-1': {
         paneKey: 'tab-done:leaf-1',
@@ -55,7 +58,7 @@ describe('background wake of a finished live checkpoint', () => {
     window.addEventListener(BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT, onMount)
 
     try {
-      wakeSleepingAgentsForWorktreeInBackground('wt-1')
+      await wakeSleepingAgentsForWorktreeInBackground('wt-1')
     } finally {
       window.removeEventListener(BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT, onMount)
     }

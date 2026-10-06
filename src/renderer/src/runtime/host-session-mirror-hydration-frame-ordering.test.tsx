@@ -515,7 +515,7 @@ describe('a parked wake replay keeps the mount contract of its caller', () => {
 
     // A phone opens a workspace the desktop is not looking at, while the mirror
     // for its pane is still unanswered — so the sweep parks instead of resuming.
-    wakeSleepingAgentsForWorktreeInBackground(BG_WT)
+    await wakeSleepingAgentsForWorktreeInBackground(BG_WT)
     expect(takePendingBackgroundTerminalWorktreeMount(BG_WT)).toBeNull()
 
     // The inventory retracts the background mirror tab, releasing the waiter.

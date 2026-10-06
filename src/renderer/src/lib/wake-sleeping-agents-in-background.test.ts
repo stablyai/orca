@@ -33,6 +33,11 @@ vi.mock('./sleeping-agent-pane-ownership', () => ({
     `${record.worktreeId}\0${record.agent ?? 'agent'}\0${record.providerSession?.key ?? 'session_id'}\0${record.providerSession?.id ?? 'session'}`
 }))
 
+const liveClaimsSpy = vi.fn<(worktreeId: string) => Promise<Set<string> | null>>()
+vi.mock('./worktree-agent-activation-gate', () => ({
+  readLiveSleepingAgentClaimKeys: (worktreeId: string) => liveClaimsSpy(worktreeId)
+}))
+
 let sleepingRecords: Record<string, { worktreeId: string; paneKey: string; tabId?: string }> = {}
 let terminalTabsByWorktree: Record<string, { id: string }[]> = {}
 const clearSleepingAgentSessionsByPaneKey = vi.fn((paneKeys: readonly string[]) => {
@@ -96,6 +101,8 @@ beforeEach(() => {
   isPassiveSpy.mockReset()
   resumeSpy.mockReset()
   resumeSpy.mockReturnValue(0)
+  liveClaimsSpy.mockReset()
+  liveClaimsSpy.mockResolvedValue(new Set())
 })
 
 afterEach(() => {
@@ -135,12 +142,12 @@ describe('createBackgroundSleepingAgentWakeDispatcher', () => {
 })
 
 describe('wakeSleepingAgentsForWorktreeInBackground', () => {
-  it('fires wake, targeted background-mount, then resume when a passive record exists', () => {
+  it('fires wake, targeted background-mount, then resume when a passive record exists', async () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'tab-a:leaf-1', tabId: 'tab-a' } }
     isPassiveSpy.mockReturnValue(true)
     const rec = recordEvents()
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
     // (a) pane-level wake of mounted hidden panes fires before (b) background-mount
@@ -156,19 +163,19 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     )
   })
 
-  it('falls back to a whole-worktree mount when a passive record has no resolvable tab', () => {
+  it('falls back to a whole-worktree mount when a passive record has no resolvable tab', async () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'not-a-pane-key' } }
     isPassiveSpy.mockReturnValue(true)
     const rec = recordEvents()
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
     expect(rec.events).toEqual(['wake:wt-1', 'mount:wt-1'])
     expect(rec.mountDetails[0]?.tabIds).toBeUndefined()
   })
 
-  it('mounts one canonical tab and clears cold aliases for the same provider session', () => {
+  it('mounts one canonical tab and clears cold aliases for the same provider session', async () => {
     sleepingRecords = {
       'tab-a:leaf-1': {
         worktreeId: 'wt-1',
@@ -188,7 +195,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     isPassiveSpy.mockReturnValue(true)
     const rec = recordEvents()
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
     expect(rec.mountDetails).toEqual([{ worktreeId: 'wt-1', tabIds: ['tab-a'] }])
@@ -197,7 +204,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     expect(sleepingRecords).not.toHaveProperty('tab-b:leaf-1')
   })
 
-  it('prefers a live duplicate tab when the oldest alias tab is gone', () => {
+  it('prefers a live duplicate tab when the oldest alias tab is gone', async () => {
     sleepingRecords = {
       'missing-tab:leaf-1': {
         worktreeId: 'wt-1',
@@ -218,14 +225,14 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     isPassiveSpy.mockReturnValue(true)
     const rec = recordEvents()
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
     expect(rec.mountDetails).toEqual([{ worktreeId: 'wt-1', tabIds: ['live-tab'] }])
     expect(clearSleepingAgentSessionsByPaneKey).toHaveBeenCalledWith(['missing-tab:leaf-1'])
   })
 
-  it('clears many cold aliases in one store action', () => {
+  it('clears many cold aliases in one store action', async () => {
     sleepingRecords = Object.fromEntries(
       Array.from({ length: 100 }, (_, index) => {
         const tabId = `tab-${index}`
@@ -243,14 +250,14 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     )
     isPassiveSpy.mockReturnValue(true)
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     expect(clearSleepingAgentSessionsByPaneKey).toHaveBeenCalledOnce()
     expect(clearSleepingAgentSessionsByPaneKey.mock.calls[0]?.[0]).toHaveLength(99)
     expect(Object.keys(sleepingRecords)).toEqual(['tab-0:leaf-1'])
   })
 
-  it('does not background-mount finished panes captured by an explicit workspace sleep', () => {
+  it('does not background-mount finished panes captured by an explicit workspace sleep', async () => {
     sleepingRecords = Object.fromEntries(
       Array.from({ length: 12 }, (_, index) => {
         const tabId = `tab-${index}`
@@ -271,7 +278,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     isPassiveSpy.mockReturnValue(true)
     const rec = recordEvents()
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
     // Why: a phone opening a slept workspace must not respawn every agent the
@@ -281,7 +288,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     expect(Object.keys(sleepingRecords)).toHaveLength(12)
   })
 
-  it('still background-mounts hibernated panes alongside lazily restored slept panes', () => {
+  it('still background-mounts hibernated panes alongside lazily restored slept panes', async () => {
     sleepingRecords = {
       'tab-slept:leaf-1': {
         worktreeId: 'wt-1',
@@ -304,13 +311,13 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     isPassiveSpy.mockReturnValue(true)
     const rec = recordEvents()
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
     expect(rec.mountDetails).toEqual([{ worktreeId: 'wt-1', tabIds: ['tab-hibernated'] }])
   })
 
-  it('mounts the hibernated record when a lazily restored slept pane shares its claim', () => {
+  it('mounts the hibernated record when a lazily restored slept pane shares its claim', async () => {
     sleepingRecords = {
       'tab-slept:leaf-1': {
         worktreeId: 'wt-1',
@@ -333,7 +340,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     isPassiveSpy.mockReturnValue(true)
     const rec = recordEvents()
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
     // Why: canonicalization deletes same-claim duplicates, so a lazy record must be filtered
@@ -344,7 +351,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     expect(sleepingRecords).toHaveProperty('tab-slept:leaf-1')
   })
 
-  it('background-mounts the tabs the suppressed resume launches for non-passive records', () => {
+  it('background-mounts the tabs the suppressed resume launches for non-passive records', async () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'tab-a:leaf-1', tabId: 'tab-a' } }
     isPassiveSpy.mockReturnValue(false)
     resumeSpy.mockImplementation((_worktreeId, options) => {
@@ -353,7 +360,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     })
     const rec = recordEvents()
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
     // Why: the resume tab is created with activate:false, so nothing else
@@ -362,12 +369,12 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     expect(rec.mountDetails[0]?.tabIds).toEqual(['tab-new'])
   })
 
-  it('skips background-mount when only non-passive records exist and nothing launches', () => {
+  it('skips background-mount when only non-passive records exist and nothing launches', async () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'tab-a:leaf-1', tabId: 'tab-a' } }
     isPassiveSpy.mockReturnValue(false)
     const rec = recordEvents()
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
     // Why: no passive record and no launched resume tab → nothing needs a
@@ -379,7 +386,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     )
   })
 
-  it('passes claims consumed by mounted panes to the generic resume as skipClaimKeys', () => {
+  it('skips both in-place wakes and sessions a live PTY still owns', async () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'tab-a:leaf-1', tabId: 'tab-a' } }
     isPassiveSpy.mockReturnValue(false)
     // A mounted pane consuming the in-place wake adds its claim key to the
@@ -390,19 +397,35 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
       )
     }
     window.addEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWake)
+    // An agent another client launched is still running in a PTY the census lists.
+    liveClaimsSpy.mockResolvedValue(new Set(['claim-live']))
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     window.removeEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWake)
     const options = resumeSpy.mock.calls[0]?.[1]
-    expect(options?.skipClaimKeys?.has('claim-1')).toBe(true)
+    expect([...(options?.skipClaimKeys ?? [])].sort()).toEqual(['claim-1', 'claim-live'])
   })
 
-  it('does nothing when the worktree has no sleeping records', () => {
+  it('wakes hibernated panes but resumes nothing when the PTY census fails', async () => {
+    sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'tab-a:leaf-1', tabId: 'tab-a' } }
+    isPassiveSpy.mockReturnValue(true)
+    // e.g. the SSH relay is detached: that cannot prove another client's agent has exited.
+    liveClaimsSpy.mockResolvedValue(null)
+    const rec = recordEvents()
+
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
+
+    rec.stop()
+    expect(rec.events).toEqual(['wake:wt-1', 'mount:wt-1'])
+    expect(resumeSpy).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when the worktree has no sleeping records', async () => {
     sleepingRecords = { k1: { worktreeId: 'other-wt', paneKey: 'tab-a:leaf-1' } }
     const rec = recordEvents()
 
-    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+    await wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
     // Why: mobile browsing a worktree with nothing slept must not mount it (and

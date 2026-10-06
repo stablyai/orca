@@ -13,6 +13,8 @@ export type PtyProcessInfo = {
   worktreeId?: string
   /** Trusted ORCA_TERMINAL_HANDLE exported into this PTY, when known. */
   terminalHandle?: string
+  /** ORCA_PANE_KEY this PTY was spawned with, when the provider recorded it. */
+  paneKey?: string
   /** Exact WSL owner reported by the PTY provider; null means native Windows. */
   wslDistro?: string | null
   /** Optional host-side process evidence attached to an inventory seed. */

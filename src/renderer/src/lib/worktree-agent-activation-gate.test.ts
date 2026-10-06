@@ -440,6 +440,28 @@ describe('worktree agent activation gate', () => {
     expect(resume).toHaveBeenCalledWith(WORKTREE_ID, { skipClaimKeys: new Set() })
   })
 
+  it('does not claim a dead agent through a shell spawned for another pane of its tab', async () => {
+    const dead = sleepingRecord('tab-dead', DEAD_LEAF_ID, 'dead-session')
+    const shellPtyId = `${WORKTREE_ID}@@sibling-shell`
+    const { deps, resume } = testDeps({
+      sessions: [
+        {
+          ...listed(shellPtyId),
+          title: 'zsh',
+          agentOwnership: 'absent',
+          paneKey: `tab-dead:${SIBLING_LEAF_ID}`
+        }
+      ],
+      sleeping: [dead]
+    })
+    // The agent's tab closed on PTY exit, which drops its layout but keeps the record.
+    delete deps.getState().terminalLayoutsByTabId['tab-dead']
+
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('resumed')
+
+    expect(resume).toHaveBeenCalledWith(WORKTREE_ID, { skipClaimKeys: new Set() })
+  })
+
   it('suppresses only the exact live agent session while resuming a dead sibling', async () => {
     const live = sleepingRecord('tab-live', LIVE_LEAF_ID, 'live-session')
     const dead = sleepingRecord('tab-dead', DEAD_LEAF_ID, 'dead-session')

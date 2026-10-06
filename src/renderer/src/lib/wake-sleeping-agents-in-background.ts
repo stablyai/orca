@@ -12,6 +12,7 @@ import {
   activationTreatsNoteAsFinished,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
+import { readLiveSleepingAgentClaimKeys } from './worktree-agent-activation-gate'
 
 type BackgroundSleepingAgentWakeDispatcherOptions = {
   isWorkspaceSessionReady?: () => boolean
@@ -32,7 +33,12 @@ export function createBackgroundSleepingAgentWakeDispatcher(
     options.isWorkspaceSessionReady ?? (() => useAppStore.getState().workspaceSessionReady)
   const subscribeToStore =
     options.subscribeToStore ?? ((listener) => useAppStore.subscribe(listener))
-  const wake = options.wake ?? wakeSleepingAgentsForWorktreeInBackground
+  const wake =
+    options.wake ??
+    ((worktreeId: string) =>
+      void wakeSleepingAgentsForWorktreeInBackground(worktreeId).catch((error) =>
+        console.error('Failed to wake sleeping agents in the background:', error)
+      ))
   let unsubscribeReadiness: (() => void) | null = null
   let disposed = false
 
@@ -157,14 +163,15 @@ function getCanonicalPassiveWakeRecords(
  *      undone wholesale by a phone opening the workspace;
  *  (c) resume the non-passive record classes (manual sleep of a still-working
  *      agent, `origin: 'quit'`) with navigation suppressed, skipping the
- *      claims from (a);
+ *      claims from (a) and every record a live PTY still owns; a PTY census
+ *      that fails skips this step until the next wake or activation;
  *  (d) background-mount the tabs (c) created — they are `activate: false`, so
  *      nothing else would mount them and their queued `--resume` startup
  *      would otherwise never reach a PTY.
  * Woken PTYs auto-publish to mobile via the renderer graph republish, so no
  * spawn is awaited.
  */
-export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): void {
+export async function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): Promise<void> {
   const worktreeRecords = Object.values(
     useAppStore.getState().sleepingAgentSessionsByPaneKey
   ).filter((record) => record.worktreeId === worktreeId)
@@ -209,9 +216,15 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
       hasUntargetablePassiveRecord ? undefined : [...passiveTabIds]
     )
   }
+  // Why: an agent launched for another client's pane reports from a pane this renderer has no
+  // layout for, so only the PTY census can show it still runs.
+  const liveClaimKeys = await readLiveSleepingAgentClaimKeys(worktreeId)
+  if (!liveClaimKeys) {
+    return
+  }
   resumeSleepingAgentSessionsForWorktree(worktreeId, {
     suppressNavigation: true,
-    skipClaimKeys: wokenClaimKeys,
+    skipClaimKeys: new Set([...wokenClaimKeys, ...liveClaimKeys]),
     // Why: a mirror-parked sweep replays after this call returns, so each tab
     // must request its own mount instead of a batch collected here.
     onSessionLaunched: (tabId) => dispatchBackgroundMount(worktreeId, [tabId])
