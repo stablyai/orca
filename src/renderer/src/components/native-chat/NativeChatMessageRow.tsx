@@ -1,4 +1,6 @@
 import { memo, useCallback, useRef } from 'react'
+import { NativeChatRewindAction } from './NativeChatRewindAction'
+import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { Goal, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
@@ -43,13 +45,15 @@ const USER_META_REVEAL =
 function UserMessageMeta({
   markdown,
   timestamp,
-  sending
+  sending,
+  rewind
 }: {
   markdown: string
   timestamp: number | null
   sending: boolean
+  rewind?: { itemId: string; surface: NativeChatRewindSurface }
 }): React.JSX.Element | null {
-  if (!markdown && timestamp === null && !sending) {
+  if (!markdown && timestamp === null && !sending && !rewind) {
     return null
   }
   return (
@@ -64,6 +68,9 @@ function UserMessageMeta({
       ) : (
         <NativeChatMessageTimestamp timestamp={timestamp} focusable />
       )}
+      {rewind && !sending ? (
+        <NativeChatRewindAction itemId={rewind.itemId} rewind={rewind.surface} />
+      ) : null}
     </div>
   )
 }
@@ -89,7 +96,8 @@ export const MessageRow = memo(function MessageRow({
   subagentRoster,
   subagentDisclosure,
   inSubagentSection = false,
-  runtimeContext
+  runtimeContext,
+  rewind
 }: {
   message: NativeChatMessage
   previousTodoWrite?: NativeChatToolCallBlock
@@ -112,6 +120,8 @@ export const MessageRow = memo(function MessageRow({
   /** Inside a subagent's section, whose border has to reach past the row's controls. */
   inSubagentSection?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
+  /** On a user row: discards it and everything after it. */
+  rewind?: NativeChatRewindSurface
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   // One pass per block set, shared with the list that decides whether this row
@@ -213,6 +223,7 @@ export const MessageRow = memo(function MessageRow({
           markdown={markdown}
           timestamp={message.timestamp}
           sending={deliveryNotice?.sending === true}
+          {...(rewind ? { rewind: { itemId: message.id, surface: rewind } } : {})}
         />
         {deliveryNotice?.text !== undefined ? (
           <div className="flex max-w-[85%] items-center gap-2 text-[11px] text-destructive/80">

@@ -11,6 +11,9 @@
     "retrying": "正在重试..."
   },
   "settings": {
+    "chat": {
+      "description": "选择聊天的外观。"
+    },
     "terminal": {
       "optionLayoutAlt": "ABC 或 U.S. — Option 键发送 Alt/Esc 序列",
       "optionLayoutCompose": "此布局使用 Option 键输入 @、€、[、] 等字符",
@@ -67,8 +70,7 @@
         "wide": "宽",
         "full": "全宽",
         "pixels": "px",
-        "reset": "重置",
-        "summary": "{{fontSize}}px · {{width}}宽度"
+        "reset": "重置"
       }
     },
     "browser": {

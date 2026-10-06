@@ -226,6 +226,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
+  /** On a conversation command the user sent, such as `/compact`: the command it names. */
+  command?: { name: string }
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
   /** Shown as not sent: in no turn, so a newer turn's bar and clock never land on it. Drawn where

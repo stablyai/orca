@@ -255,7 +255,9 @@ it('hands over a message held behind the command when the command ends just as t
     if (
       !ended &&
       read?.startsWith('compact:') &&
-      new Error('who reads').stack?.includes('StructuredAgentSessionDeliveryLoop.prepare')
+      /at (?:StructuredAgentSessionDeliveryLoop\.)?prepare \(.*structured-agent-session-delivery-loop/.test(
+        new Error('who reads').stack ?? ''
+      )
     ) {
       ended = true
       finish({ outcome: 'success' })

@@ -110,6 +110,9 @@
     "retrying": "Nouvelle tentative…"
   },
   "settings": {
+    "chat": {
+      "description": "Choisissez l’apparence des chats."
+    },
     "terminal": {
       "optionLayoutAlt": "ABC ou U.S. — Option envoie des séquences Alt/Esc",
       "optionLayoutCompose": "la disposition utilise Option pour composer des caractères comme @, €, [, ]",
@@ -166,8 +169,7 @@
         "wide": "Large",
         "full": "Pleine",
         "pixels": "px",
-        "reset": "Réinitialiser",
-        "summary": "{{fontSize}}px · Largeur {{width}}"
+        "reset": "Réinitialiser"
       }
     },
     "browser": {

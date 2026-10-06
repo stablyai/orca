@@ -11,6 +11,9 @@
     "retrying": "재시도 중…"
   },
   "settings": {
+    "chat": {
+      "description": "채팅 모양을 선택하세요."
+    },
     "terminal": {
       "optionLayoutAlt": "ABC 또는 U.S. — Option 키가 Alt/Esc 시퀀스를 전송합니다",
       "optionLayoutCompose": "이 배열에서는 Option 키로 @, €, [, ] 같은 문자를 입력합니다",
@@ -67,8 +70,7 @@
         "wide": "넓게",
         "full": "전체",
         "pixels": "px",
-        "reset": "초기화",
-        "summary": "{{fontSize}}px · {{width}} 너비"
+        "reset": "초기화"
       }
     },
     "browser": {

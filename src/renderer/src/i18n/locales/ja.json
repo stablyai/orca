@@ -11,6 +11,9 @@
     "retrying": "再試行中…"
   },
   "settings": {
+    "chat": {
+      "description": "チャットの外観を選びます。"
+    },
     "terminal": {
       "optionLayoutAlt": "ABCまたはU.S. — OptionはAlt/Escシーケンスを送信します",
       "optionLayoutCompose": "この配列ではOptionで@、€、[、]などの文字を入力します",
@@ -67,8 +70,7 @@
         "wide": "広い",
         "full": "全幅",
         "pixels": "px",
-        "reset": "リセット",
-        "summary": "{{fontSize}}px · 幅: {{width}}"
+        "reset": "リセット"
       }
     },
     "browser": {
