@@ -19,6 +19,7 @@ import { finishRuntimeRemoteWorktreeCreate } from './runtime-remote-worktree-cre
 type Dependencies = {
   store: RuntimeStore
   canSpawn(): boolean
+  provisionInBackground?: () => boolean
   createTerminal(
     selector: string,
     options: TerminalCreateOptions
@@ -135,8 +136,10 @@ export async function createRuntimeRemoteManagedWorktree(
   }
 
   if (shouldActivate) {
+    const provisionInBackground = deps.provisionInBackground?.() === true
     const runtimeWillProvisionTerminals =
-      didSpawnStartup && Boolean(result.setup || result.defaultTabs)
+      (provisionInBackground && deps.canSpawn()) ||
+      (didSpawnStartup && Boolean(result.setup || result.defaultTabs))
     if (runtimeWillProvisionTerminals) {
       // Why: remote/mobile task creates spawn the agent terminal in runtime,
       // so renderer activation may not materialize setup/default tabs. Await so
@@ -151,6 +154,7 @@ export async function createRuntimeRemoteManagedWorktree(
         hasStartupTerminal: didSpawnStartup,
         setupCommandPlatform: setupPlatform(result.setup),
         observeSetupCompletion: args.observeSetupCompletion,
+        ...(provisionInBackground ? { surfaceOwner: false as const } : {}),
         // Why: carry the wait-for-agent wrapped setup command (#6298) so the
         // remote Setup tab runs the same script the sequenced agent waits on.
         ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})

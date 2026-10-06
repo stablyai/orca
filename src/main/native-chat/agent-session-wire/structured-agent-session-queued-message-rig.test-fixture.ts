@@ -10,6 +10,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
+import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -28,8 +29,10 @@ import {
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 export const QUEUED_RIG_CALLER = { callerKey: 'client-1' }
+type RigSendOptions = { internal?: true; source?: AgentMessageSource }
 
 export function eventually(assertion: () => void | Promise<void>): Promise<void> {
   return vi.waitFor(assertion, { timeout: 10_000 })
@@ -74,6 +77,7 @@ export async function createQueuedMessageTestRig(
   const store = await openTestAgentSessionRecordStore(root)
   const makeHost = () =>
     new StructuredAgentSessionHost({
+      agents: claudeAndCodexDeclared(),
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: {
@@ -131,25 +135,21 @@ export async function createQueuedMessageTestRig(
       sessionId,
       clientOperationId,
       expectedRuntimeFence: 1,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method,
-        sessionId,
-        fields
-      })
+      payloadFingerprint: computeAgentSessionPayloadFingerprint({ method, sessionId, fields })
     }
   }
 
   /** A client's send, as the `agentSession.send` RPC hands it to the host;
-   *  `internal` is a host-side sender (orchestration mail, a restart continuation). */
-  function send(text: string, delivery?: 'queue-if-active', options?: { internal?: true }) {
+   *  `internal` is a host-side sender (orchestration mail, a restart continuation), and `source`
+   *  who it is from. */
+  function send(text: string, delivery?: 'queue-if-active', options?: RigSendOptions) {
     const body = hostTestMessage(text)
     const clientOperationId = hostTestOperationId()
     const fields = { body, ...(delivery ? { delivery } : {}) }
     const result = host.send(QUEUED_RIG_CALLER, {
       envelope: envelope(fields, 'agentSession.send', clientOperationId),
-      body,
-      ...(delivery ? { delivery } : {}),
-      ...(options?.internal ? {} : { userSend: true as const })
+      ...fields,
+      ...(options?.internal ? { source: options.source } : { userSend: true as const })
     })
     return { id: clientOperationId, result }
   }

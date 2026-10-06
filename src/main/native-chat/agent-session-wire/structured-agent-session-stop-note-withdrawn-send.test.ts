@@ -16,6 +16,7 @@ import { codexProviderHandle } from '../../../shared/agent-session-provider-hand
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { performCancel, type AgentSessionTurnContext } from './structured-agent-session-turns'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -76,6 +77,8 @@ async function stopEndingTheChild(options: {
     sessionId: 'session-1',
     journal,
     fence: 1,
+    agents: NO_STRUCTURED_AGENTS,
+    agent: 'codex',
     adapter: {
       acquire: vi.fn(),
       dispatch: vi.fn(),

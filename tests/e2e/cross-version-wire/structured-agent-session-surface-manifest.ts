@@ -187,7 +187,13 @@ export const STRUCTURED_CALLS: {
   },
   // Teardown runs through the runtime's subscription registry rather than the
   // host, so its reply is the only signal that the gate opened.
-  { method: 'agentSession.unsubscribe', hostMethod: null, result: { unsubscribed: true } }
+  { method: 'agentSession.unsubscribe', hostMethod: null, result: { unsubscribed: true } },
+  // The host's registered agents, each with its declared capability record.
+  {
+    method: 'agentSession.agents',
+    hostMethod: 'agentDefinitions',
+    result: { agents: [{ agent: 'codex', capabilities: { compact: true } }] }
+  }
 ]
 
 export function envelope(args: {
@@ -310,6 +316,7 @@ export function paramsFor(method: string): unknown {
     case 'agentSession.hold':
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }
+    case 'agentSession.agents':
     case 'agentSession.restartResumable':
     case 'agentSession.restartResumableDismiss':
     case 'agentSession.restartResume':

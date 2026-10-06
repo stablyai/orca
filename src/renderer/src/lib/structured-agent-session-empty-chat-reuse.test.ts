@@ -115,10 +115,15 @@ import {
   clearNativeChatDraftCacheForTests,
   writeNativeChatDraftCache
 } from '@/components/native-chat/native-chat-draft-cache'
+import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../shared/structured-agent-session-projection'
+  hydrateNativeChatComposerDrafts,
+  structuredAgentSessionDraftScopeKey
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from '@/components/native-chat/native-chat-composer-draft-storage'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
@@ -278,8 +283,8 @@ describe('a second "new chat" with no text', () => {
   it('opens a new chat when the idle chat has a typed draft', async () => {
     pick('plus-pick-1')
     await publishIdle(first.sessionId)
-    const tabId = structuredAgentSessionTabId(first.sessionId)
-    writeNativeChatDraftCache(structuredAgentSessionPaneKey(tabId, first.sessionId), 'half a q')
+    // Under the conversation's key, which the composer and every hand-back write.
+    writeNativeChatDraftCache(structuredAgentSessionDraftScopeKey(first.sessionId), 'half a q')
 
     expect(pick('plus-pick-2').sessionId).toBe(second.sessionId)
   })
@@ -287,8 +292,7 @@ describe('a second "new chat" with no text', () => {
   it('opens a new chat when the idle chat has an image in its composer', async () => {
     pick('plus-pick-1')
     await publishIdle(first.sessionId)
-    const tabId = structuredAgentSessionTabId(first.sessionId)
-    appendNativeChatAttachmentCache(structuredAgentSessionPaneKey(tabId, first.sessionId), [
+    appendNativeChatAttachmentCache(structuredAgentSessionDraftScopeKey(first.sessionId), [
       { id: 'shot', path: '/tmp/shot.png' }
     ])
 
@@ -481,6 +485,45 @@ describe('a "new chat" with text', () => {
     expect(pick('notes-send', { prompt: 'review notes', group: 'group-right' }).sessionId).toBe(
       blank.sessionId
     )
+  })
+
+  it('leaves a starting chat whose draft holds text, given back or typed, to its user', () => {
+    mocks.launch.mockImplementation(() => new Promise(() => undefined))
+    const blank = pick('plus-pick-1')
+    writeNativeChatDraftCache(structuredAgentSessionDraftScopeKey(blank.sessionId), 'my words')
+
+    expect(pick('notes-send', { prompt: 'review notes' }).sessionId).toBe(second.sessionId)
+    expect(readOutbox(blank.sessionId)).toEqual([])
+  })
+
+  it('never takes over or reuses a chat whose saved draft holds text or only an image', async () => {
+    mocks.launch.mockImplementation(() => new Promise(() => undefined))
+    const typed = pick('plus-pick-1')
+    writeNativeChatDraftCache(structuredAgentSessionDraftScopeKey(typed.sessionId), 'my words')
+    // The saved drafts have loaded, so only the draft itself keeps this chat from looking empty.
+    await hydrateNativeChatComposerDrafts()
+    const taken = pick('notes-send', { prompt: 'review notes' })
+    expect(taken.sessionId).not.toBe(typed.sessionId)
+    expect(readOutbox(typed.sessionId)).toEqual([])
+
+    appendNativeChatAttachmentCache(structuredAgentSessionDraftScopeKey(taken.sessionId), [
+      { id: 'shot', path: '/tmp/shot.png' }
+    ])
+    await hydrateNativeChatComposerDrafts()
+    expect(pick('notes-send-2', { prompt: 'more notes' }).sessionId).not.toBe(taken.sessionId)
+  })
+
+  it('takes no chat while saved drafts are still loading, since one may hold a draft', () => {
+    mocks.launch.mockImplementation(() => new Promise(() => undefined))
+    const blank = pick('plus-pick-1')
+    const loading = createMemoryNativeChatComposerDraftStorage()
+    setNativeChatComposerDraftStorageForTests({
+      ...loading,
+      loadAll: () => new Promise<ReadonlyMap<string, unknown>>(() => undefined)
+    })
+    void hydrateNativeChatComposerDrafts()
+
+    expect(pick('notes-send', { prompt: 'review notes' }).sessionId).not.toBe(blank.sessionId)
   })
 
   it('takes an empty chat still starting, as before', () => {

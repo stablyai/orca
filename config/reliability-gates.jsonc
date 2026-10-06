@@ -11,6 +11,115 @@
   },
   "gates": [
     {
+      "id": "agent-status.claude-task-wakeup-cycle",
+      "title": "Claude task wake-ups cannot finish an automation before its lead turn",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-status",
+      "layer": "execution-host-hooks-and-runtime-wait",
+      "surfaces": [
+        "canonical agent status",
+        "terminal automation completion",
+        "local and relayed cancellation"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "remote-runtime"
+      ],
+      "coverageNotes": "Real HTTP hook ingress and relay forwarding, production runtime automation observer, and captured Claude native ready bytes run locally on macOS. SSH/WSL transport ownership is simulated; physical remote hosts and native Windows/Linux are not verified.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/24878",
+        "https://github.com/stablyai/orca/issues/23942"
+      ],
+      "invariant": "An ended tracked task stays pending until its wake-up and finishing turn end; missing wake-ups expire only after 60 idle seconds. Cancellation remains owned by the executing host, duplicate delivery cannot create a fresh completion veto, and fresh native rest can recover a lost finishing Stop.",
+      "oracle": "Replay captured hook ordering through production HTTP entry points and native ready bytes through the actual automation observer. Check local/relay state, cancellation/new-turn fencing, fresh versus retained rest, bounded task/timer ownership, and zero global status reads during indexed runtime waits.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts src/main/runtime/tui-idle-claude-task-wakeup.test.ts src/main/runtime/claude-task-wakeup-indexed-read.test.ts src/shared/claude-owed-notification-resource-contract.test.ts src/shared/agent-hook-listener-claude-task-notification.test.ts src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts src/relay/agent-hook-interrupt-reconciliation.test.ts src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts"
+      ],
+      "testFiles": [
+        "src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts",
+        "src/main/runtime/tui-idle-claude-task-wakeup.test.ts",
+        "src/main/runtime/claude-task-wakeup-indexed-read.test.ts",
+        "src/shared/claude-owed-notification-resource-contract.test.ts",
+        "src/shared/agent-hook-listener-claude-task-notification.test.ts",
+        "src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts",
+        "src/relay/agent-hook-interrupt-reconciliation.test.ts",
+        "src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts",
+          "assertions": [
+            "does not reopen notification debt for a duplicate child-end post",
+            "waits on captured ready bytes through task finishing or missing wake-up expiry: %s"
+          ]
+        },
+        {
+          "file": "src/main/runtime/claude-task-wakeup-indexed-read.test.ts",
+          "assertions": [
+            "reads only its pane with 512 unrelated agents, including an empty index: pending=%s"
+          ]
+        },
+        {
+          "file": "src/shared/claude-owed-notification-resource-contract.test.ts",
+          "assertions": [
+            "caps live task records without evicting a tracked running task",
+            "shares one timer across 512 panes and publishes nothing for closed owners"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts src/main/runtime/tui-idle-claude-task-wakeup.test.ts src/main/runtime/claude-task-wakeup-indexed-read.test.ts src/shared/claude-owed-notification-resource-contract.test.ts src/shared/agent-hook-listener-claude-task-notification.test.ts src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts src/relay/agent-hook-interrupt-reconciliation.test.ts src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts",
+          "result": "passed",
+          "durationSeconds": 8.62,
+          "summary": "Exact stored command with repository Vitest configuration passes 148 tests across eight files including out-of-order launch/end/delivery controls. Includes real HTTP/relay ingress, 12 blank/padded Agent/Bash/Monitor IDs, captured-native-rest automation completion, duplicate/cancellation controls, owner/phase gates, timer/task bounds and indexed reads. Three upstream interrupt suites pass 28 more tests separately."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Focused local host/relay/runtime suite; CI p95 and platform soak not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Deterministic local fake-clock replay and real HTTP ingress pass; no 100-run or cross-platform soak claim."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Identical corrected production automation test with actual Claude launch ownership prematurely completes on both parent main and the original PR; repaired candidate holds through task finishing. Same endpoint captures fail 12 of 18 parent tests. Indexed runtime counters fail before targeted reads and pass after."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "At most 256 tracked tasks per pane, one shared host deadline timer across 512 panes, no publication after pane cleanup, and zero full-store reads with 512 irrelevant agents on the indexed automation wait path. Uses existing hook-server pane index; no reader cache or polling loop added."
+      },
+      "knownGaps": [
+        "Missing notifications intentionally postpone completion up to 60 idle seconds plus the existing runtime polling interval.",
+        "Older remote hosts without optional phase/revision metadata retain their previous behavior.",
+        "Physical SSH/WSL, native Windows/Linux, packaged Electron and an authenticated end-to-end Claude automation run are unverified."
+      ],
+      "promotionCriteria": [
+        "Collect cross-platform and physical remote-host evidence plus the policy soak threshold without relaxing owner, phase, deadline or resource assertions."
+      ],
+      "demotionRule": "Remain experimental until platform and soak evidence; investigate failures without extending deadlines or accepting foreign/stale ownership."
+    },
+    {
       "id": "profile-storage.sqlite-authority-without-automatic-json",
       "title": "SQLite remains authoritative after automatic JSON snapshots are retired",
       "maturity": "experimental",
@@ -3357,13 +3466,12 @@
       "invariant": "A non-empty SSH file stream that produces no valid frame for 30 seconds must cancel at its authoritative stream reader and release all local lifecycle state. System suspend is sticky across metadata and subscription races, resume grants every still-live stream one fresh inactivity window, one failing consumer cannot block the others, and the sole Electron bridge survives a vetoed before-quit without retaining a per-stream Electron listener.",
       "oracle": "Publish suspend before stream metadata resolves, jump wall time by one hour, and require the late-subscribing stream to remain pending until resume grants a fresh 30-second window. Deliver a valid final chunk and end frame, require exact content, then publish another resume and require zero timers, multiplexer listeners, or renewed work; separately require stalled cancellation at 30 seconds, atomic state replay, failure-isolated fanout, and bridge disposal only after the committed will-quit gate.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts src/main/startup/desktop-startup-ordering.test.ts --reporter=dot"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts --reporter=dot --maxWorkers=2"
       ],
       "testFiles": [
         "src/main/providers/ssh-filesystem-provider-stream.test.ts",
         "src/main/system-resume-broadcast.test.ts",
-        "src/main/system-power-lifecycle.test.ts",
-        "src/main/startup/desktop-startup-ordering.test.ts"
+        "src/main/system-power-lifecycle.test.ts"
       ],
       "assertionRefs": [
         {
@@ -3377,7 +3485,9 @@
         },
         {
           "file": "src/main/system-resume-broadcast.test.ts",
-          "assertions": ["publishes suspend and resume to main-process lifecycle consumers"]
+          "assertions": [
+            "publishes suspend and resume to main-process lifecycle consumers"
+          ]
         },
         {
           "file": "src/main/system-power-lifecycle.test.ts",
@@ -3386,23 +3496,17 @@
             "atomically replays a transition to a subscriber added during publication",
             "isolates a failing listener from the remaining subscribers"
           ]
-        },
-        {
-          "file": "src/main/startup/desktop-startup-ordering.test.ts",
-          "assertions": [
-            "keeps the power bridge through vetoable before-quit and disposes after commit"
-          ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-01",
+          "date": "2026-10-06",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts src/main/startup/desktop-startup-ordering.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 1.6,
-          "summary": "Four focused files and 33 tests passed, including stalled cancellation, active progress, late metadata replay, failure isolation, committed-quit bridge lifetime, and post-settlement cleanup."
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts --reporter=dot --maxWorkers=2",
+          "durationSeconds": 8.141,
+          "summary": "The retained behavioral cohort passed 25 tests after removing source-only ordering tests. Historical pre-removal receipts are preserved verbatim with their originally executed commands: [{\"date\":\"2026-08-01\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts src/main/startup/desktop-startup-ordering.test.ts --reporter=dot\",\"result\":\"passed\",\"durationSeconds\":1.6,\"summary\":\"Four focused files and 33 tests passed, including stalled cancellation, active progress, late metadata replay, failure isolation, committed-quit bridge lifetime, and post-settlement cleanup.\"}] No new native desktop or hosted run is claimed."
         }
       ],
       "runtimeBudget": {
@@ -4615,9 +4719,9 @@
       "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation preserves its daemon-backed sessions. On macOS, a CLI-supervised serve update keeps the node-mode parent alive across ShipIt's atomic bundle swap, restarts with the original serve arguments only after the target bundle is present, and clears handoff state only after that target version reports runtime readiness. Once a supervised child exits or fails to start, no late handoff completion may signal it or arm force-kill escalation. Unsupported or failed handoffs leave the current serving owner intact or recover it once without an install retry loop.",
       "oracle": "Unit tests coalesce early activation, preserve daemon and SSH identity, and reproduce the update race with a staged target, old serving child, persistent CLI parent, atomic .app replacement, and replacement readiness message. They assert the parent does not exit for launchd to respawn the old app, the native updater does not launch an interactive GUI, the replacement version is verified before handoff completion, mismatches become durable failures without retries, and unsupported/preflight-failed installs do not invoke native quit or PTY cleanup. Force handoff completion to fail after the replacement child exits and require zero later child signals and zero escalation timers. A joined lock-owner/activation/hydration contract asserts that a forced relaunch opens exactly one window and that the renderer promoted inside the serve process launches zero agent resumes, creates no replacement tab or startup command, and leaves every surviving session record untouched. The Electron journey independently verifies headless promotion retains owner/runtime/daemon/PTY identity and terminal I/O.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/serve-desktop-promotion-session-continuity.test.ts",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1"
@@ -4628,7 +4732,6 @@
         "src/cli/runtime/launch.test.ts",
         "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
         "src/main/startup/serve-desktop-activation.test.ts",
-        "src/main/startup/serve-desktop-activation-wiring.test.ts",
         "src/main/startup/single-instance-lock.test.ts",
         "src/main/startup/window-all-closed-quit-policy.test.ts",
         "src/cli/runtime-client.test.ts",
@@ -4661,7 +4764,9 @@
         },
         {
           "file": "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
-          "assertions": ["late update handoff failure cannot rearm termination after child exit"]
+          "assertions": [
+            "late update handoff failure cannot rearm termination after child exit"
+          ]
         },
         {
           "file": "src/main/serve-update-handoff.test.ts",
@@ -4676,13 +4781,6 @@
           "assertions": [
             "early activation requests coalesce until the persistent provider is ready",
             "a blocked provider drops pending activation and never opens a window"
-          ]
-        },
-        {
-          "file": "src/main/startup/serve-desktop-activation-wiring.test.ts",
-          "assertions": [
-            "second-instance and macOS app activation use the same safety gate",
-            "headless PTY registration waits for provider settlement and promotion waits for RPC startup"
           ]
         },
         {
@@ -4749,24 +4847,6 @@
           "summary": "Six tests passed joining the serve lock owner, the activation gate, and the promoted renderer's resume accounting. Red evidence: reverting the hidden-pane ownership predicate launched two duplicate codex resume tabs; additionally zeroing the live-PTY check made both hydration passes red; removing the duplicate-serve argv guard opened a window for `--serve`; always marking the gate ready removed the fail-closed diagnostic; refusing to open a window dropped both promotion assertions."
         },
         {
-          "date": "2026-07-21",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts",
-          "result": "passed",
-          "durationSeconds": 5,
-          "summary": "Seven focused files passed with 133 tests. The lifecycle harness keeps the CLI parent alive across an atomic .app replacement, starts one target-version serve replacement, and requires its bounded readiness message. Unsupported and failed-preflight paths make zero native install and PTY-cleanup calls; supervised native install leaves the modeled daemon session intact and suppresses native GUI relaunch."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
-          "result": "passed",
-          "durationSeconds": 13,
-          "summary": "Seven activation, ownership, quit, local/remote CLI, and runtime contract files passed with 704 tests, including first and repeated windowless reattach, local/SSH identity transfer, ordinary desktop persistence isolation, and dynamic side-effect scanner gating."
-        },
-        {
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
@@ -4786,7 +4866,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The original updater regression was observed red with one native install call, one paired-client disconnect, one cleanup start, no replacement owner, and a stranded staged installer. The root-cause harness was then observed red because the Electron child received no handoff path and the CLI parent exited, allowing launchd to spawn the old version while ShipIt still required zero running target apps. A live canary then exposed MacUpdater ignoring quitAndInstall relaunch arguments and starting a second desktop owner; disabling its independent relaunch for supervised mode produced one stable LaunchAgent parent, one verified replacement, and a surviving session across the real ShipIt swap. The final deterministic harness keeps that parent, observes the atomic bundle swap, and verifies the new serving version before clearing state. Earlier activation evidence also fixed second-owner and replacement-PTY failures."
+        "evidence": "The original updater regression was observed red with one native install call, one paired-client disconnect, one cleanup start, no replacement owner, and a stranded staged installer. The root-cause harness was then observed red because the Electron child received no handoff path and the CLI parent exited, allowing launchd to spawn the old version while ShipIt still required zero running target apps. A live canary then exposed MacUpdater ignoring quitAndInstall relaunch arguments and starting a second desktop owner; disabling its independent relaunch for supervised mode produced one stable LaunchAgent parent, one verified replacement, and a surviving session across the real ShipIt swap. The final deterministic harness keeps that parent, observes the atomic bundle swap, and verifies the new serving version before clearing state. Earlier activation evidence also fixed second-owner and replacement-PTY failures. Historical receipts before removing the source-only tests, preserved verbatim with their originally executed commands (the narrowed commands were not rerun here): [{\"date\":\"2026-07-21\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts\",\"result\":\"passed\",\"durationSeconds\":5,\"summary\":\"Seven focused files passed with 133 tests. The lifecycle harness keeps the CLI parent alive across an atomic .app replacement, starts one target-version serve replacement, and requires its bounded readiness message. Unsupported and failed-preflight paths make zero native install and PTY-cleanup calls; supervised native install leaves the modeled daemon session intact and suppresses native GUI relaunch.\"},{\"date\":\"2026-07-13\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts\",\"result\":\"passed\",\"durationSeconds\":13,\"summary\":\"Seven activation, ownership, quit, local/remote CLI, and runtime contract files passed with 704 tests, including first and repeated windowless reattach, local/SSH identity transfer, ordinary desktop persistence isolation, and dynamic side-effect scanner gating.\"}]"
       },
       "performanceBudget": {
         "required": true,
@@ -7033,7 +7113,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-persisted-worker-egress.electron.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-tcp-egress.electron.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts src/main/startup/secure-dns-census.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts",
         "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_LOCAL_SSH_BROWSER=1 ORCA_E2E_SSH_CLIENT_HOSTED_BROWSER=1 ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/local-ssh-browser-routing.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3",
         "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_LOCAL_SSH_BROWSER=1 ORCA_E2E_SSH_CLIENT_HOSTED_BROWSER=1 ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3"
       ],
@@ -7046,7 +7126,6 @@
         "src/main/browser/browser-route-webrtc-egress.electron.test.ts",
         "src/main/browser/browser-route-h3-egress.electron.test.ts",
         "src/main/browser/browser-route-dns-prefetch.electron.test.ts",
-        "src/main/startup/secure-dns-census.test.ts",
         "src/main/browser/browser-route-webcontents-registry.test.ts",
         "src/main/browser/browser-session-registry.test.ts",
         "src/main/browser/browser-session-startup.test.ts",
@@ -7128,13 +7207,6 @@
           ]
         },
         {
-          "file": "src/main/startup/secure-dns-census.test.ts",
-          "assertions": [
-            "no source file configures a host resolver with a non-'off' secureDnsMode",
-            "the census matcher flags a known DoH offender"
-          ]
-        },
-        {
           "file": "src/main/browser/browser-route-webcontents-registry.test.ts",
           "assertions": [
             "route guests apply non-proxied WebRTC denial before admission",
@@ -7164,16 +7236,6 @@
         }
       ],
       "evidenceRuns": [
-        {
-          "date": "2026-08-20",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts src/main/startup/secure-dns-census.test.ts",
-          "result": "passed",
-          "durationSeconds": 21,
-          "summary": "The direct control emitted 5 WebTransport and 6 forced-QUIC datagrams while the SOCKS route partition emitted zero of each. With Direct Sockets explicitly enabled the control exposed TCPSocket/UDPSocket/TCPServerSocket and constructing one killed the guest renderer; the shipped disable-features list left all three undefined and the renderer alive. The dns-prefetch tripwire recorded HOST_RESOLVER_SYSTEM_TASK for the prefetched host with zero events for an unreferenced control host, documenting the accepted local-resolution residual.",
-          "notes": "The dns-prefetch expectation intentionally asserts the leak. Flip it to an empty event list when the upstream Electron PrefetchDNS fix lands."
-        },
         {
           "date": "2026-08-17",
           "runner": "local",
@@ -7239,7 +7301,7 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The TCP A/B control first reached all six target paths directly, while the fixed SOCKS arm routed the same HTTP, HTTPS, WebSocket, redirect, subresource, and download traffic plus remote DNS with zero direct target connections. The two-launch worker control reached desktop localhost before setProxy; immediate setProxy routed the same wake and later fetch through SOCKS. The WebRTC control emitted four direct STUN packets until disable_non_proxied_udp reduced the capture to zero. Non-WebRTC UDP and network-service restart remain explicit residuals."
+        "evidence": "The TCP A/B control first reached all six target paths directly, while the fixed SOCKS arm routed the same HTTP, HTTPS, WebSocket, redirect, subresource, and download traffic plus remote DNS with zero direct target connections. The two-launch worker control reached desktop localhost before setProxy; immediate setProxy routed the same wake and later fetch through SOCKS. The WebRTC control emitted four direct STUN packets until disable_non_proxied_udp reduced the capture to zero. Non-WebRTC UDP and network-service restart remain explicit residuals. Historical receipts before removing the source-only tests, preserved verbatim with their originally executed commands (the narrowed commands were not rerun here): [{\"date\":\"2026-08-20\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts src/main/startup/secure-dns-census.test.ts\",\"result\":\"passed\",\"durationSeconds\":21,\"summary\":\"The direct control emitted 5 WebTransport and 6 forced-QUIC datagrams while the SOCKS route partition emitted zero of each. With Direct Sockets explicitly enabled the control exposed TCPSocket/UDPSocket/TCPServerSocket and constructing one killed the guest renderer; the shipped disable-features list left all three undefined and the renderer alive. The dns-prefetch tripwire recorded HOST_RESOLVER_SYSTEM_TASK for the prefetched host with zero events for an unreferenced control host, documenting the accepted local-resolution residual.\",\"notes\":\"The dns-prefetch expectation intentionally asserts the leak. Flip it to an empty event list when the upstream Electron PrefetchDNS fix lands.\"}]"
       },
       "performanceBudget": {
         "required": true,
@@ -11647,9 +11709,13 @@
         "https://github.com/stablyai/orca/issues/8652",
         "https://github.com/stablyai/orca/pull/10625"
       ],
-      "invariant": "A host advertising terminal.paired-parking.v1 keeps the PTY and bounded authoritative history alive while an ordinary hidden-view park destroys the client xterm and releases its raw per-PTY stream. Reveal must restore up to the requested 5,000 rows, parked-time side effects/output, the same PTY identity, and continued input/output. Parked watcher synchronization compares parking semantics rather than fresh object identity, owns setup and cleanup across StrictMode replay, reconciles real PTY/layout changes, and performs no terminal-state scan when nothing is parked. After a host main-process relaunch, unknown local delivery-sync state must not be treated as proof that a surviving daemon PTY is already foregrounded. An empty headed session-tab inventory is authoritative only after the current renderer graph generation publishes a complete inventory and every execution host answers the PTY census; unpublished, resync-pending, transport-failed, and partially scoped inventories remain unverifiable, while genuinely authoritative empty and non-empty inventories settle and a scope-less legacy empty keeps its pre-authority best-effort settle so outdated hosts retain agent auto-resume. The unpublished-empty regression must keep the resume dispatch parked with exactly one daemon process/writer; restoring unconditional empty hydration must release one dispatch and create two live writers. If subscription precedes provider readiness, authoritative inventory must reconsider that existing subscriber without spawning, resizing, or changing reconnect state. A snapshot without an output high-water must keep it unknown rather than borrowing a layout version that can suppress newer live output. Hosts without the capability must gate hidden raw output before xterm scheduling and repaint from the authoritative snapshot on reveal while retaining the existing limit/TTL force-parking fallback. After the first semantic title state, decorative spinner frequency must add zero paired client-event frames and zero full session-tabs work between status-freshness leases regardless of hidden worktree count. Continuous working or permission evidence may refresh each affected worktree once per 15 minutes through one globally spaced FIFO so current and legacy viewers do not decay before 30 minutes; sibling PTYs share that worktree refresh, while local title animation, raw output, and semantic title, status, bell, completion, and query facts remain intact. A paired terminal stream whose delivery credits stop progressing must replace only that stream; command silence first probes authoritative state and replaces the stream if the probe times out or proves the PTY advanced beyond the client's delivered output sequence. When no comparable delivery high-water exists, the first sequenced probe establishes a baseline and only later advancement proves staleness. A same-sequence snapshot remains valid proof of a responsive silent command. A successful status probe may replace a pre-ready shared-control socket without rejecting or duplicating calls already waiting for that transport. Manual disconnect must retain pairing while preventing queued or passive calls and subscriptions from recreating transport until explicit Connect.",
+      "invariant": "A host advertising terminal.paired-parking.v1 keeps the PTY and bounded authoritative history alive while an ordinary hidden-view park destroys the client xterm and releases its raw per-PTY stream. Reveal must restore up to the requested 5,000 rows, parked-time side effects/output, the same PTY identity, and continued input/output. Parked watcher synchronization compares parking semantics rather than fresh object identity, owns setup and cleanup across StrictMode replay, reconciles real PTY/layout changes, and performs no terminal-state scan when nothing is parked. After a host main-process relaunch, unknown local delivery-sync state must not be treated as proof that a surviving daemon PTY is already foregrounded. An empty headed session-tab inventory is authoritative only after the current renderer graph generation publishes a complete inventory and every execution host answers the PTY census; unpublished, resync-pending, transport-failed, and partially scoped inventories remain unverifiable, while genuinely authoritative empty and non-empty inventories settle and a scope-less legacy empty keeps its pre-authority best-effort settle so outdated hosts retain agent auto-resume. The unpublished-empty regression must keep the resume dispatch parked with exactly one daemon process/writer; restoring unconditional empty hydration must release one dispatch and create two live writers. If subscription precedes provider readiness, authoritative inventory must reconsider that existing subscriber without spawning, resizing, or changing reconnect state. A snapshot without an output high-water must keep it unknown rather than borrowing a layout version that can suppress newer live output. Hosts without the capability must gate hidden raw output before xterm scheduling and repaint from the authoritative snapshot on reveal while retaining the existing limit/TTL force-parking fallback. After the first semantic title state, decorative spinner frequency must add zero paired client-event frames and zero full session-tabs work between status-freshness leases regardless of hidden worktree count. Continuous working or permission evidence may refresh each affected worktree once per 15 minutes through one globally spaced FIFO so current and legacy viewers do not decay before 30 minutes; sibling PTYs share that worktree refresh, while local title animation, raw output, and semantic title, status, bell, completion, and query facts remain intact. A paired terminal stream whose delivery credits stop progressing must replace only that stream; command silence first probes authoritative state and replaces the stream if the probe times out or proves the PTY advanced beyond the client's delivered output sequence. When no comparable delivery high-water exists, the first sequenced probe establishes a baseline and only later advancement proves staleness. A same-sequence snapshot remains valid proof of a responsive silent command. A successful status probe may replace a pre-ready shared-control socket without rejecting or duplicating calls already waiting for that transport. Manual disconnect must retain pairing while preventing queued or passive calls and subscriptions from recreating transport until explicit Connect. A paired pane reconnecting to a relaunched host that has not yet published its window graph (an unpublished frame, bare or client-projected) must stay in recovery rather than retire, and the host's first published snapshot carrying the surface must reattach it; a published frame lacking the surface still retires it. The placeholder is only ever sent before the host's graph first publishes; afterwards a worktree with no tabs gets a real empty answer, pushed once to any client that asked during startup, so a paired client opening a never-opened host worktree still gets its first terminal.",
       "oracle": "Run one byte-identical six-terminal oracle against an isolated headed desktop host and an isolated headless `orca serve` host. Stage at least 1,000,000 xterm cells, hide all six warm managers, emit an initial working title followed by 30 timed real-PTY spinner frames and a final idle title per worktree, and observe a second real session-tabs subscription plus the production renderer store. Require exactly two transport envelopes and two title mutations per worktree, no decorative title crossing either boundary, and positive decoded-envelope bytes. Enable ordinary parking with the lossy retention budget disabled, require exactly one mounted manager and five parked tabs, at most 45% retained cells, no more than 16 MiB heap growth, and under 500 ms timer drift. In headed mode, require the host renderer to remain on its original workspace with zero target terminal managers mounted throughout client park, reveal, and live I/O. While a tab is parked, require authoritative terminal.read to observe new PTY output; reveal it and require the original PTY, a marker within the requested 5,000-row history, the parked marker, and post-reveal input/output. Drive 24 real PTY title trackers in distinct worktrees through 40 decorative spinner frames each, then 40 spinner frames alternating with Cursor's bare native identity redraw, using fake clocks. Require all 2,880 raw chunks exactly and zero host session-tabs publications, serialized bytes, renderer apply calls, and renderer store mutations. Continue decorative evidence beyond 30 minutes, require exactly one refresh per worktree per 15-minute lease through a FIFO spaced by at least 50 ms, and require all 24 viewer statuses to remain working and fresh; then require one exact semantic idle transition and one visible-output chunk per PTY. Require ordinary and interior-Braille title changes to publish. Drive 64 host PTYs through ten 80 ms synthetic title frames, require zero paired client events after the first frame per PTY while all 640 local frames remain observable, attach a late client and require one current frame per PTY, then require semantic bell and idle transitions on both clients. Reconstruct a legacy subscribed stream with no outputPause capability, hide a chatty pane, require no hidden xterm writes, reveal it, and require one authoritative snapshot plus continued live output. Drop and acknowledge output only for one original paired-client stream, prove the fixture process consumed input while the host model advanced and the client stayed stale, then require the command snapshot probe to replace that stream, repaint exact fixture output, preserve authoritative PTY identity and target-tab cardinality, and resume live I/O. For a client without a delivered sequence, require the first numeric probe to establish a baseline without replacement, a same-sequence probe to remain attached, and a later advanced probe to replace only that stream. Withhold the first encrypted shared-control ready frame, start one RPC, trigger a status-probe refresh, and require two connections, one host delivery, successful response, and zero retained request bytes. Admit 128 active streams, reject the 129th as retryable, release one stream, then require the retry to attach and publish a snapshot without multiplying retained subscribers. Disable terminal.paired-parking.v1 and require the same oracle to fail before parking, while the legacy limit-one fallback separately passes. Also preserve truncated first paint, ACK-starved same-PTY recovery, responsive silent-command snapshot probes, dead-stream probe timeout recovery, and queued manual-disconnect fencing.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-unpublished-host-graph.test.ts src/renderer/src/runtime/web-session-terminal-handle-events.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-host-quit-reconnect-input.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/session-tabs-empty-worktree-publication.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/paired-client-first-terminal-unopened-host-worktree.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/mobile-session-tabs-agent-status-heartbeat.test.ts src/main/runtime/orca-runtime-hook-agent-status-projection.test.ts tests/e2e/session-tabs-decorative-title-fanout.unit.test.ts tests/e2e/session-tabs-rich-status-boundaries.unit.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-cold-park-pre-gate-loop.react185.test.tsx src/renderer/src/components/terminal-pane/use-parked-terminal-watcher-synchronization.react185.test.tsx src/renderer/src/components/terminal-pane/terminal-cold-park-verdict-loop.test.tsx src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-parked-ssh-snapshot.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments-pairing.test.ts",
@@ -11718,7 +11784,11 @@
         "tests/e2e/paired-remote-terminal-retention-memory.spec.ts",
         "tests/e2e/headless-paired-remote-terminal-retention-memory.spec.ts",
         "tests/e2e/terminal-parked-memory.spec.ts",
-        "tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts"
+        "tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-unpublished-host-graph.test.ts",
+        "tests/e2e/paired-remote-terminal-host-quit-reconnect-input.spec.ts",
+        "src/main/runtime/session-tabs-empty-worktree-publication.test.ts",
+        "tests/e2e/paired-client-first-terminal-unopened-host-worktree.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -12221,14 +12291,13 @@
       "invariant": "Typing, focus, terminal switch, workspace switch, visibility resume, resize, render, per-pane liveness, and tab-title synchronization must not call global pty:listSessions or aiVault.listSessions; they must use targeted APIs or cached provider-owned state.",
       "oracle": "The current executable slice asserts targeted visibility/first-input liveness, resize re-assertion after visibility resume, light tab/active-state resume, SSH/remote skip behavior, and a closed Resource Manager budget of one readiness seed plus one coalesced inventory read only for unknown spawn IDs. AI Vault title sync deterministically accepts only resolveSessionTitles, batches at most 64 exact identities, bounds scanner-service calls at sixteen, routes requests to the transcript-owning local/SSH/runtime host, and proves zero broad scans for unsupported hosts. The full hot-path oracle still needs instrumentation around raw focus, split focus, workspace switch, render ticks, and high-session PTY fixtures.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-startup-barrier-and-listing.test.ts src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx src/renderer/src/components/status-bar/resource-session-inventory.test.ts src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-service-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts src/relay/ai-vault-handler.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-service-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts src/relay/ai-vault-handler.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-startup-barrier-and-listing.test.ts src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx src/renderer/src/components/status-bar/resource-session-inventory.test.ts --maxWorkers=2 --reporter=dot"
       ],
       "testFiles": [
         "src/main/ipc/pty-startup-barrier-and-listing.test.ts",
         "src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx",
         "src/renderer/src/components/status-bar/resource-session-inventory.test.ts",
-        "src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts",
         "src/renderer/src/lib/ai-vault-tab-title-sync.test.ts",
         "src/main/ai-vault/session-scanner-service-client.test.ts",
         "src/main/ai-vault/session-title-file-reader.test.ts",
@@ -12254,20 +12323,15 @@
         },
         {
           "file": "src/main/ipc/pty-startup-barrier-and-listing.test.ts",
-          "assertions": ["global inventory starts local and SSH provider listings concurrently"]
+          "assertions": [
+            "global inventory starts local and SSH provider listings concurrently"
+          ]
         },
         {
           "file": "src/renderer/src/components/status-bar/resource-session-inventory.test.ts",
           "assertions": [
             "daemon inventory construction copies its source and preserves count parity",
             "single and batch removals preserve unrelated sessions and no-op references"
-          ]
-        },
-        {
-          "file": "src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts",
-          "assertions": [
-            "the closed inventory hook installs no interval",
-            "the badge count comes from cached daemon inventory rather than wake-hint bindings"
           ]
         },
         {
@@ -12305,15 +12369,6 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-22",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-startup-barrier-and-listing.test.ts src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx src/renderer/src/components/status-bar/resource-session-inventory.test.ts src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts",
-          "result": "passed",
-          "durationSeconds": 4.3,
-          "summary": "4 files and 358 tests passed, covering readiness seed/recovery, zero interval polling, bounded unknown-spawn reconciliation, concurrent provider starts, exit fencing, cleanup, and out-of-order refresh fencing."
-        },
-        {
           "date": "2026-10-02",
           "runner": "local",
           "platform": "macos",
@@ -12321,6 +12376,15 @@
           "result": "passed",
           "durationSeconds": 5.3,
           "summary": "The focused run passed 138 tests across 7 files, proving exact-title-only renderer requests, provider-isolated batching, per-lane scanner-service lifecycle and fault recovery, exact transcript identity, host routing, mixed-version degradation, and zero broad-scan fallback."
+        },
+        {
+          "date": "2026-10-06",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-startup-barrier-and-listing.test.ts src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx src/renderer/src/components/status-bar/resource-session-inventory.test.ts --maxWorkers=2 --reporter=dot",
+          "durationSeconds": 8.736,
+          "summary": "After removing source-text tests, the retained behavioral cohort passed 28 tests. No fresh native desktop, Docker, or hosted run is claimed. Historical evidence before the test removal (original commands were executed then, not rerun now): [{\"date\":\"2026-07-22\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-startup-barrier-and-listing.test.ts src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx src/renderer/src/components/status-bar/resource-session-inventory.test.ts src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts\",\"result\":\"passed\",\"durationSeconds\":4.3,\"summary\":\"4 files and 358 tests passed, covering readiness seed/recovery, zero interval polling, bounded unknown-spawn reconciliation, concurrent provider starts, exit fencing, cleanup, and out-of-order refresh fencing.\"}]"
         }
       ],
       "runtimeBudget": {
@@ -19770,15 +19834,14 @@
       "invariant": "After packaged foreground headless serve publishes structured readiness, one SIGINT or SIGTERM exits successfully without an Electron fatal trap or core evidence, releases the exact listener and owned Xvfb/process tree, and leaves an unrelated process identity untouched.",
       "oracle": "First start the original, readable-and-executable AppImage once in a fresh restricted Ubuntu 26.04 container through dbus-run-session -- xvfb-run -a --appimage-extract-and-run with ORCA_STARTUP_DIAGNOSTICS=1, and require the exact updater-setup-done marker within 90 seconds while fencing the launcher and owned Xvfb by PID start ticks. For each signal, start a separate unprivileged container with disposable profile and runtime directories, a random loopback port, DISPLAY unset, software GL, and the extracted AppImage in a fresh session. Wait for orca_server_ready schema version 1, record the listener owner, process tree, owned Xvfb, and unrelated canary identities, deliver SIGINT to the foreground process group or the documented KillMode=mixed graceful SIGTERM to the AppRun PID, then require wait status zero, no Failed to shutdown, SIGTRAP, core, listener, recorded descendant, profile/AppImage/Xvfb residue, or changed canary identity. The 30-second bounds are failure deadlines, never success conditions.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts config/scripts/headless-serve-shutdown-workflow.test.mjs --reporter=dot",
         "shellcheck config/docker/headless-serve-shutdown/run-signal-case.sh",
         "shellcheck config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh",
         "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage",
-        "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64"
+        "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts --maxWorkers=2 --reporter=dot"
       ],
       "testFiles": [
         "src/main/startup/ensure-virtual-display.test.ts",
-        "config/scripts/headless-serve-shutdown-workflow.test.mjs",
         "config/scripts/run-headless-serve-shutdown-docker.mjs",
         "config/docker/headless-serve-shutdown/run-signal-case.sh",
         "config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh"
@@ -19792,15 +19855,6 @@
             "owned Xvfb retains an early-process-exit guard until Electron is ready",
             "owned Xvfb is not stopped from Electron's cancelable will-quit event",
             "external displays and non-Linux startup remain untouched"
-          ]
-        },
-        {
-          "file": "config/scripts/headless-serve-shutdown-workflow.test.mjs",
-          "assertions": [
-            "PR CI builds an x64 AppImage before invoking the packaged shutdown oracle",
-            "the original AppImage desktop startup oracle is wired before extraction and signal cases",
-            "the bound AppImage is readable and executable before desktop launch and extraction",
-            "the documented systemd unit uses KillMode=mixed so graceful TERM targets Orca before its owned Xvfb"
           ]
         },
         {
@@ -19836,15 +19890,6 @@
           "date": "2026-08-13",
           "runner": "local",
           "platform": "linux",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts config/scripts/headless-serve-shutdown-workflow.test.mjs --reporter=dot",
-          "result": "passed",
-          "durationSeconds": 1,
-          "summary": "The focused startup and workflow contracts passed with owned-display termination semantics and native amd64 CI wiring."
-        },
-        {
-          "date": "2026-08-13",
-          "runner": "local",
-          "platform": "linux",
           "command": "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
           "result": "passed",
           "durationSeconds": 48,
@@ -19870,7 +19915,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical Docker oracle failed process-group SIGINT and main-PID SIGTERM on v1.4.180 AppImage af3b6e6a67fc, launch-day main AppImage 017ff5abc35a, and candidate-with-fix-disabled AppImage f409f58dd9c3 with wait status 133 plus Electron Failed to shutdown and SIGTRAP. The prior candidate 5b94b86a9879 passed PID signals but failed process-group SIGINT with status 133, proving Xvfb also needed an independent process group. Final candidate AppImage 5c82936043e4 passed process-group SIGINT and the documented systemd KillMode=mixed main-PID SIGTERM with status zero and complete cleanup. A control-group TERM that also targets Xvfb remains red, proving KillMode=mixed is required for the documented owned-Xvfb unit. Applying PR #14071's launcher exec semantics with PID delivery left v1.4.180 red and the candidate green, proving the launcher and Electron/Xvfb fixes are independent and composable."
+        "evidence": "The byte-identical Docker oracle failed process-group SIGINT and main-PID SIGTERM on v1.4.180 AppImage af3b6e6a67fc, launch-day main AppImage 017ff5abc35a, and candidate-with-fix-disabled AppImage f409f58dd9c3 with wait status 133 plus Electron Failed to shutdown and SIGTRAP. The prior candidate 5b94b86a9879 passed PID signals but failed process-group SIGINT with status 133, proving Xvfb also needed an independent process group. Final candidate AppImage 5c82936043e4 passed process-group SIGINT and the documented systemd KillMode=mixed main-PID SIGTERM with status zero and complete cleanup. A control-group TERM that also targets Xvfb remains red, proving KillMode=mixed is required for the documented owned-Xvfb unit. Applying PR #14071's launcher exec semantics with PID delivery left v1.4.180 red and the candidate green, proving the launcher and Electron/Xvfb fixes are independent and composable. On 2026-10-06, the retained behavioral unit command \"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts --maxWorkers=2 --reporter=dot\" passed 33 tests locally on macOS in 5.599 seconds. This checks the portable startup/participation verifier only; no new Linux native, packaged, desktop, or hosted qualification is claimed. Historical evidence before removing the workflow-source test, preserved with the originally executed command: [{\"date\":\"2026-08-13\",\"runner\":\"local\",\"platform\":\"linux\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts config/scripts/headless-serve-shutdown-workflow.test.mjs --reporter=dot\",\"result\":\"passed\",\"durationSeconds\":1,\"summary\":\"The focused startup and workflow contracts passed with owned-display termination semantics and native amd64 CI wiring.\"}]"
       },
       "performanceBudget": {
         "required": true,
@@ -20716,7 +20761,7 @@
       "invariant": "For each Orca-owned page identity, after its owner closes or is destroyed and a five-second third-party shutdown grace expires, no live helper session named orca-tab-<pageId> may remain; unrelated live page identities must survive, and runtime quit must join the bounded cleanup attempt. The serve supervisor may force-kill only after the renderer-acknowledgement deadline, committed teardown deadline, and bounded scheduling margin have all elapsed.",
       "oracle": "Create two isolated offscreen pages and register their WebContents. Close one, block onPageClosed for its stable page ID, and require unregisterGuest to have already removed that page from command routing while the unrelated page remains live. Emit destroyed and require the same exact retirement. Race shutdown with creation, pending retirement, and process-swap destruction; require no replacement session or command after terminal cleanup starts, require shutdown to remain pending until retirement settles, require the swap close command to use the five-second cleanup timeout, and require at most four concurrent close commands. Deliver repeated signals and require every attempt to reach Electron quit; under Windows shared-console semantics require the child to handle Ctrl-C without an immediate child.kill. Advance the supervisor clock through the renderer-acknowledgement and committed teardown deadlines and require no SIGKILL until the bounded scheduling margin elapses. In direct built-CLI serve, inspect exact session/PID/socket identity plus RSS/fd inventory before close and after a five-second grace; reconnect between commands and stop via Ctrl-C. No process-name kill or global sweep is permitted.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/agent-browser-bridge-session-lifecycle.test.ts src/main/browser/agent-browser-bridge-tab-routing.test.ts src/main/startup/serve-signal-handlers.test.ts src/main/startup/desktop-startup-ordering.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/agent-browser-bridge-session-lifecycle.test.ts src/main/browser/agent-browser-bridge-tab-routing.test.ts src/main/startup/serve-signal-handlers.test.ts --maxWorkers=2",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser"
       ],
       "testFiles": [
@@ -20724,7 +20769,6 @@
         "src/main/browser/agent-browser-bridge-session-lifecycle.test.ts",
         "src/main/browser/agent-browser-bridge-tab-routing.test.ts",
         "src/main/startup/serve-signal-handlers.test.ts",
-        "src/main/startup/desktop-startup-ordering.test.ts",
         "src/cli/runtime/serve-signal-exit-diagnostic.test.ts"
       ],
       "assertionRefs": [
@@ -20748,20 +20792,15 @@
         },
         {
           "file": "src/main/browser/agent-browser-bridge-tab-routing.test.ts",
-          "assertions": ["closing a tab retires the exact named agent-browser session"]
+          "assertions": [
+            "closing a tab retires the exact named agent-browser session"
+          ]
         },
         {
           "file": "src/main/startup/serve-signal-handlers.test.ts",
           "assertions": [
             "every repeated serve signal retries Electron quit after a possible renderer veto",
             "SIGINT and SIGTERM listeners remain installed during quit draining"
-          ]
-        },
-        {
-          "file": "src/main/startup/desktop-startup-ordering.test.ts",
-          "assertions": [
-            "agent-browser cleanup is joined by the committed quit teardown barrier",
-            "repeatable serve signal handling is registered before readiness"
           ]
         },
         {
@@ -20774,13 +20813,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-26",
+          "date": "2026-10-06",
           "runner": "local",
           "platform": "macos",
           "result": "passed",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/agent-browser-bridge-session-lifecycle.test.ts src/main/browser/agent-browser-bridge-tab-routing.test.ts src/main/startup/serve-signal-handlers.test.ts src/main/startup/desktop-startup-ordering.test.ts",
-          "durationSeconds": 0.44,
-          "summary": "Candidate passed 63 lifecycle, bridge, routing, signal, and quit-order tests plus 1,469 browser tests. The production-reverted control was red; disabling the final swap-timeout/admission controls failed 3 of 15 bridge lifecycle tests; removing the pending-retirement join, page-routing fence, repeat-signal behavior, or Windows shared-console guard failed its exact focused oracle. Setting the supervisor scheduling margin to zero reproduced SIGKILL at the combined 30-second renderer-acknowledgement and teardown boundary. Direct built-CLI serve observed exact PPID-1 helpers at 10-11 MiB RSS and 16-18 fd rows. Closing one page removed only its helper/session within five seconds while the other page survived reconnect. With the signal fix disabled, Ctrl-C left exact helpers alive after the listener exited; the final candidate emptied session inventory and removed app/helper PIDs and port within five seconds."
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/agent-browser-bridge-session-lifecycle.test.ts src/main/browser/agent-browser-bridge-tab-routing.test.ts src/main/startup/serve-signal-handlers.test.ts --maxWorkers=2",
+          "durationSeconds": 2.546,
+          "summary": "The retained behavioral cohort passed 58 tests after removing source-only ordering tests. Historical pre-removal receipts are preserved verbatim with their originally executed commands: [{\"date\":\"2026-08-26\",\"runner\":\"local\",\"platform\":\"macos\",\"result\":\"passed\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/agent-browser-bridge-session-lifecycle.test.ts src/main/browser/agent-browser-bridge-tab-routing.test.ts src/main/startup/serve-signal-handlers.test.ts src/main/startup/desktop-startup-ordering.test.ts\",\"durationSeconds\":0.44,\"summary\":\"Candidate passed 63 lifecycle, bridge, routing, signal, and quit-order tests plus 1,469 browser tests. The production-reverted control was red; disabling the final swap-timeout/admission controls failed 3 of 15 bridge lifecycle tests; removing the pending-retirement join, page-routing fence, repeat-signal behavior, or Windows shared-console guard failed its exact focused oracle. Setting the supervisor scheduling margin to zero reproduced SIGKILL at the combined 30-second renderer-acknowledgement and teardown boundary. Direct built-CLI serve observed exact PPID-1 helpers at 10-11 MiB RSS and 16-18 fd rows. Closing one page removed only its helper/session within five seconds while the other page survived reconnect. With the signal fix disabled, Ctrl-C left exact helpers alive after the listener exited; the final candidate emptied session inventory and removed app/helper PIDs and port within five seconds.\"}] No new native desktop or hosted run is claimed."
         }
       ],
       "runtimeBudget": {
@@ -21177,12 +21216,11 @@
       "commands": [
         "gh workflow run packaged-browser-e2e.yml",
         "pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3 --retries=0",
-        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/packaged-browser-lane-contract.test.mjs config/scripts/verify-packaged-browser-participation.test.mjs",
-        "gh run view 34069063016 --log"
+        "gh run view 34069063016 --log",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts config/scripts/verify-packaged-browser-participation.test.mjs --maxWorkers=2 --reporter=dot"
       ],
       "testFiles": [
         "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
-        "config/scripts/packaged-browser-lane-contract.test.mjs",
         "config/scripts/verify-packaged-browser-participation.test.mjs"
       ],
       "assertionRefs": [
@@ -21195,13 +21233,8 @@
         },
         {
           "file": "config/scripts/verify-packaged-browser-participation.test.mjs",
-          "assertions": ["reject missing, substituted, skipped and retried scenarios"]
-        },
-        {
-          "file": "config/scripts/packaged-browser-lane-contract.test.mjs",
           "assertions": [
-            "verify pinned package checksum before extraction",
-            "require both directions three times and run report verification even on failure"
+            "reject missing, substituted, skipped and retried scenarios"
           ]
         }
       ],
@@ -21226,7 +21259,7 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Participation unit tests reject missing and retried scenarios; no application mutation proof."
+        "evidence": "Participation unit tests reject missing and retried scenarios; no application mutation proof. On 2026-10-06, the retained behavioral unit command \"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts config/scripts/verify-packaged-browser-participation.test.mjs --maxWorkers=2 --reporter=dot\" passed 8 tests locally on macOS in 0.546 seconds. This checks the portable startup/participation verifier only; no new Linux native, packaged, desktop, or hosted qualification is claimed."
       },
       "performanceBudget": {
         "required": false,
@@ -21262,21 +21295,17 @@
       "commands": [
         "gh workflow run terminal-ime-e2e.yml",
         "gh run view 34074017928 --log",
-        "pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/terminal-hangul-terminating-digit-native.spec.ts --project=electron-headful --workers=1 --repeat-each=3 --retries=0 --reporter=list,json",
-        "ORCA_BACKGROUND_LAUNCH=1 node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/terminal-ime-e2e-workflow.test.mjs"
+        "pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/terminal-hangul-terminating-digit-native.spec.ts --project=electron-headful --workers=1 --repeat-each=3 --retries=0 --reporter=list,json"
       ],
       "testFiles": [
-        "tests/e2e/terminal-hangul-terminating-digit-native.spec.ts",
-        "config/scripts/terminal-ime-e2e-workflow.test.mjs"
+        "tests/e2e/terminal-hangul-terminating-digit-native.spec.ts"
       ],
       "assertionRefs": [
         {
           "file": "tests/e2e/terminal-hangul-terminating-digit-native.spec.ts",
-          "assertions": ["a digit typed right after a Hangul syllable reaches the pty"]
-        },
-        {
-          "file": "config/scripts/terminal-ime-e2e-workflow.test.mjs",
-          "assertions": ["runs native Wayland independently with CJK fonts and retained evidence"]
+          "assertions": [
+            "a digit typed right after a Hangul syllable reaches the pty"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -21630,6 +21659,203 @@
         "Collect CI soak with zero unexplained GC flakes and retain callback-order, overflow-carry and reentrancy assertions."
       ],
       "demotionRule": "Keep experimental; investigate delivery, coalescing, error-path or pending-reference regressions without weakening the retention or fidelity oracle."
+    },
+    {
+      "id": "orchestration.worker-recovery-convergence",
+      "title": "Settled assignments leave recovery while unresolved workers retain automatic recovery",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "orchestration",
+      "layer": "sqlite-runtime-provider-contract",
+      "surfaces": [
+        "worker and assignment settlement",
+        "historical worker repair",
+        "deleted git and folder workspaces",
+        "recovery retry scheduling",
+        "durable session retirement"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon", "ssh"],
+      "coverageNotes": "Temporary SQLite databases and fake-clock/provider contracts cover assignment repair, uncertain starts/stops, missing git/folder workspaces, owning SSH inventories, and rejection of foreign paired-runtime PTYs. Hidden macOS Electron journeys retain real daemon PTYs. A macOS client against a Debian ARM64 Docker SSH host proves historical repair preserves terminal ownership, the same live shell and background child, input and rendered output through app restart and SSH reconnect. Native Linux/Windows desktop, WSL and active-worker remote absence/deleted-folder journeys remain gaps; no execution commands or wire payloads change.",
+      "motivatingLinks": [
+        "https://stablygroup.slack.com/archives/C0AK2T3JEF4/p1791225819076759",
+        "https://github.com/stablyai/orca/pull/11271",
+        "https://github.com/stablyai/orca/pull/22612"
+      ],
+      "invariant": "Completing an assignment settles its active worker bookkeeping in the same transaction without asserting process exit or releasing a terminal. Historical settled assignments converge on database open; an additive active-worker index excludes finished history, and healthy checks do not take a writer lock. Missing workspaces require owning-provider evidence before exact-incarnation retirement; a restarted relay's empty inventory and loss of contact are unverifiable. Automatic retries retain unresolved assignments without revisiting settled workers or persisting empty batches; late availability converges without user intervention.",
+      "oracle": "Reopen historical completed/failed/circuit-broken PTY, structured and handle-less assignments and require no active recovery rows; preserve genuine report outcomes, pending unknown workers, diagnostics and terminal resources. Inject settlement failure and require complete transaction rollback. Resolve each workspace once per pass, recheck it on later passes, and query 100 missing-workspace candidates once per provider, preserve live/unidentified PTYs and wrong-host SSH evidence. Advance fake time ten minutes and require zero persistence for unresolved passes and no repeated settlement. Make a host verifiable after two minutes and require automatic convergence and timer cleanup. Require indexed SQL lookups for only the requested assignments, one query shape across batch sizes, and recovery after a failed SQL read. Require the actual startup query to use the active-worker partial index, let healthy repair finish under a competing writer lock, and repair stale rows introduced by an older SQL writer after the first repair. Check all 45 assignment/worker state combinations and idempotent reopen; inject failure on the second startup repair and require complete rollback. Measure 100,000 historical assignments with 1,000 stale workers and require zero writes on the next repair pass. On a real SSH host, require settled worker bookkeeping with unchanged terminal ownership, shell PID, background child PID, environment and working directory through restart and reconnect, with rendered input/output proof.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/cli/handlers/orchestration-lifecycle-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts tests/e2e/cross-version-wire/orchestration-delivery-downgrade.unit.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/worker-dispatch-settlement.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/profile-state-terminal-restart-persistence.spec.ts tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 -g 'repairs a settled worker'",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts"
+      ],
+      "testFiles": [
+        "src/main/runtime/orchestration/worker-dispatch-settlement.test.ts",
+        "src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts",
+        "src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts",
+        "src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts",
+        "src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts",
+        "tests/e2e/ssh-cold-activation-restore.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/orchestration/worker-dispatch-settlement.test.ts",
+          "assertions": [
+            "repairs historical settled PTY, structured and handle-less assignments on reopen",
+            "preserves genuine report outcomes and pending unknown workers",
+            "rolls back all assignments when worker settlement fails",
+            "reads only requested recovery assignments through indexed lookups and one SQL shape",
+            "a failed SQL read remains a retry failure and recovery resumes after reopen"
+          ]
+        },
+        {
+          "file": "src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts",
+          "assertions": [
+            "late provider availability recovers automatically after two minutes",
+            "ten minutes of unresolved retries never revisit settled workers or persist empty batches",
+            "every host timer remains cancellable during extended recovery"
+          ]
+        },
+        {
+          "file": "src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts",
+          "assertions": [
+            "100 deleted git or folder workspace candidates use one owning-provider inventory",
+            "100 workers sharing a workspace resolve it once per pass; the next pass rechecks both git and folder workspaces",
+            "live PTYs without scoped membership or verified incarnation remain deferred",
+            "local inventory and restarted relay inventory never prove SSH worker exit",
+            "SSH cleanup requires an explicit owning-host absence verdict; probe failures preserve uncertainty",
+            "foreign provider identities do not start local recovery timers"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "recovery starts zero foreground-process probes while an explicit status refresh still reads its requested terminal"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts",
+          "assertions": [
+            "all 45 assignment and worker state combinations preserve genuine outcomes, pending work and terminal ownership",
+            "historical repair uses an active-worker partial index and primary-key assignment lookups without scanning settled history",
+            "second repair failure rolls back the first repair and leaves no partial state",
+            "healthy repair remains read-only while another connection holds the writer lock",
+            "an older SQL writer can reintroduce stale bookkeeping after repair and the next open still settles it",
+            "second open and repair perform zero worker mutations with 100,000 historical assignments"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-cold-activation-restore.spec.ts",
+          "assertions": [
+            "historical assignment repair preserves a real SSH shell and its live background child through app restart and reconnect",
+            "rendered terminal output and host-side process proof retain the same identity, environment and working directory"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 -g 'repairs a settled worker'",
+          "result": "passed",
+          "durationSeconds": 42.4,
+          "summary": "Rebuilt hidden Electron with the active-worker partial index and read-only repair preflight. The real Debian ARM64 SSH journey preserves the same live shell and background child, terminal ownership, input and rendered output through app restart and reconnect."
+        },
+        {
+          "date": "2026-10-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/cli/handlers/orchestration-lifecycle-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts tests/e2e/cross-version-wire/orchestration-delivery-downgrade.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 27.41,
+          "summary": "2,587 tests passed across 151 files; seven tests and one file skipped. Includes all 45 state combinations, rollback, historical upgrade migrations, SQL downgrade compatibility, active-worker index query plans, old-writer reintroduction, and read-only repair with a competing writer. The 50 focused tests passed separately. Reverting the index and read-only preflight produces two failures."
+        },
+        {
+          "date": "2026-10-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/cli/handlers/orchestration-lifecycle-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts tests/e2e/cross-version-wire/orchestration-delivery-downgrade.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 21.07,
+          "summary": "48 focused tests passed after worker-first startup lookups and per-pass workspace deduplication. Reverting both optimizations produces four failures. The broader lifecycle command also passed 2,585 tests across 151 files in 21.07s, with seven tests and one file skipped."
+        },
+        {
+          "date": "2026-10-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/cli/handlers/orchestration-lifecycle-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts tests/e2e/cross-version-wire/orchestration-delivery-downgrade.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 56.25,
+          "summary": "2,581 tests passed across 150 files; seven tests and one file skipped. Includes SQLite lifecycle, runtime recovery, federation, CLI and SQL downgrade contracts."
+        },
+        {
+          "date": "2026-10-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/profile-state-terminal-restart-persistence.spec.ts tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 66,
+          "summary": "Six hidden Electron journeys passed, including legacy/current worker PTY retention and four SQL restart/profile-transfer journeys."
+        },
+        {
+          "date": "2026-10-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/worker-dispatch-settlement.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.58,
+          "summary": "47 focused settlement, automatic retry, indexed SQL, missing-workspace, durable host-routing and historical-repair safety regressions passed. Includes all 45 state combinations and 100,000 historical assignments."
+        },
+        {
+          "date": "2026-10-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.29,
+          "summary": "Three safety and scale tests pass. One local run with 100,000 assignments and 1,000 stale workers: repair 38.83ms, no-op repair 25.07ms, complete subsequent database open 38.52ms. These are observations, not a CI latency bound."
+        },
+        {
+          "date": "2026-10-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 -g 'repairs a settled worker'",
+          "result": "passed",
+          "durationSeconds": 32.1,
+          "summary": "A rebuilt hidden macOS Electron client against Debian ARM64 Docker SSH repairs historical settled worker bookkeeping while retaining terminal ownership, the same live shell and background child, environment, working directory, input and rendered output through app restart and SSH reconnect. Removing startup repair fails the worker-state assertion; restoring it passes."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "Deterministic unit/provider contracts; Electron restart journeys are separate and CI p95 is not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local validation; cross-platform soak pending."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Reverting settlement and recovery entry points produced 16 failing and 11 passing regressions. Separate reversions reproduced failures for indexed SQL scope, uncertain SSH absence, late automatic recovery and five unnecessary foreground probes. Candidate and broader runtime tests pass; no soak history yet. Removing startup repair makes the 45-state reopen regression fail and the rebuilt real-SSH journey fail because the worker remains ready instead of abandoned; restoring repair passes the focused safety checks. The restored rebuilt SSH journey also passes with host-side child liveness and rendered input/output checks. Reverting the worker-first query and per-pass workspace deduplication produces four failures: the actual SQL query plan and 100-worker lookup counts. Restoring them passes all 48 focused tests. Reverting the active-worker index and read-only preflight causes two failures: the actual query plan and a healthy repair attempted while another connection holds the writer lock."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "One startup SQL repair, one inventory query for 100 deleted-workspace candidates, one durable batch flush, and at most two full rollback snapshots per changed host. Timer passes query only still-deferred assignments through primary-key indexes with a stable parameterized SQL shape, perform zero foreground-process or foreground-agent probes, and skip empty persistence and release reconciliation. Explicit foreground status reads still work. Ten minutes of unchanged retries cause zero session writes and never revisit settled workers. Existing backoff remains capped at 30 seconds so late availability recovers automatically; timers stop on convergence or cancellation, and foreign identities never arm local timers. An additive partial index contains only the five potentially active worker states and is maintained by SQLite for old writers too. Repair queries avoid scanning finished history and return without a write transaction when no stale worker exists; actual repairs re-read under the writer lock and remain atomic. The index is built once per database and adds maintenance on worker-state changes. One recovery pass resolves each workspace once and keeps no lookup cache between passes. A same-machine 100,000-assignment before/after run observed repair 37.75ms to 17.89ms, no-op scan 25.62ms to 4.35ms with zero mutations, and subsequent database open 37.42ms to 17.11ms; The later partial-index/read-only revision observed no-op repair 0.016ms, complete healthy database open 12.44ms, and first index-build plus repair/open 63.14ms for 100,000 assignments and 1,000 stale workers. These local observations are not latency guarantees; index maintenance and fallback metadata work remain. Original customer latency and CI p95 remain unmeasured."
+      },
+      "knownGaps": [
+        "Native Linux/Windows desktop and WSL worker journeys, active-worker SSH absence/deleted-folder recovery, and stranded old-relay process discovery remain untested locally.",
+        "No latency claim against the original customer profile; deterministic counts and one synthetic scale measurement cover the identified work."
+      ],
+      "promotionCriteria": [
+        "Collect cross-platform and provider soak evidence with no weakened identity, transaction or bounded-work assertions."
+      ],
+      "demotionRule": "Keep experimental until soak and platform evidence; investigate failures without weakening ownership, late recovery, or zero-write retry evidence."
     }
   ]
 }

@@ -2,7 +2,7 @@
 //
 // A different question from storage: the durable record decides which markers are still present;
 // this decides which of those a resume may act on. The offer, the click and the pre-send check all
-// ask it.
+// ask it, and the start asks the same `hostCanStartRecord`, so none offers what the start refuses.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
@@ -10,7 +10,8 @@ import type { AgentSessionResumeMarker } from '../../../shared/agent-session-res
 import { latestStructuredAgentSessionPrompt } from '../../../shared/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { adapterSupportsRecord } from './structured-agent-session-provider-support'
+import { hostCanStartRecord } from './structured-agent-session-provider-support'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 import {
   structuredAgentSessionResumableSet,
   type StructuredAgentSessionResumableSet
@@ -29,6 +30,7 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
   sessions: ReadonlyMap<string, StructuredAgentSessionRestartJournalSource>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   adapter: StructuredAgentSessionAdapter
+  agents: Pick<StructuredAgentRegistry, 'definition'>
   /** Whether the chat moved on since the offer was taken; see the offer withdrawal. */
   movedOn: (marker: AgentSessionResumeMarker) => boolean
   /** Whether the chat was saved by a newer Orca: its whole database, or its journal's open. */
@@ -38,7 +40,7 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
     structuredAgentSessionResumableSet({
       markers,
       getRecord: deps.getRecord,
-      supportsRecord: (record) => adapterSupportsRecord(deps.adapter, record),
+      supportsRecord: (record) => hostCanStartRecord(deps, record),
       movedOn: deps.movedOn,
       savedByNewerOrca: deps.savedByNewerOrca,
       latestPrompt: (sessionId) =>

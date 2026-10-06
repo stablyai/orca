@@ -148,6 +148,8 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     } else {
       store.removeWorktreeMeta(worktreeId)
     }
+    // Why outside the same-id gate: retirement is per host and per pane, so a surviving owner keeps its own.
+    this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, hostId ?? persistedHostId)
     if (!preservesSameIdOwner) {
       // A paired PTY can outlive the delete acknowledgement; it must not be
       // rescued into a newly-created occupant of the same path-derived ID.

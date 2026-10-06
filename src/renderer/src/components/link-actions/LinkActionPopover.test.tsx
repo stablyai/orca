@@ -105,6 +105,39 @@ describe('LinkActionPopover', () => {
     expect(run).toHaveBeenCalledOnce()
   })
 
+  it('lists secondary rows after the shortcut rows, without a shortcut, and runs them', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    const onClose = vi.fn()
+    const restoreFocus = vi.fn()
+    const reveal = vi.fn()
+    const request: LinkActionRequest = {
+      anchorX: 100,
+      anchorY: 200,
+      destination: '/repo/src/main.ts',
+      kind: 'file',
+      primary: { label: 'Open file', run: vi.fn() },
+      alternate: { label: 'Open with default app', run: vi.fn() },
+      secondaryActions: [{ label: 'Reveal in Finder', run: reveal }],
+      restoreFocus
+    }
+
+    render(<LinkActionPopover request={request} onClose={onClose} />)
+
+    const labels = screen.getAllByRole('button').map((button) => button.textContent ?? '')
+    expect(labels.findIndex((label) => label.startsWith('Reveal in Finder'))).toBeGreaterThan(
+      labels.findIndex((label) => label.startsWith('Open with default app'))
+    )
+    expect(screen.getAllByText('Click')).toHaveLength(2)
+    expect(screen.getByText('Reveal in Finder').closest('button')?.textContent).toBe(
+      'Reveal in Finder'
+    )
+
+    fireEvent.click(screen.getByText('Reveal in Finder'))
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(restoreFocus).toHaveBeenCalledOnce()
+    expect(reveal).toHaveBeenCalledOnce()
+  })
+
   it('identifies the dismissed request so a newer request can survive', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const onClose = vi.fn()

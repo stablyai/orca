@@ -132,7 +132,7 @@ describe('worktree RPC methods', () => {
       pushTarget: { remoteName: 'fork', branchName: 'feature' },
       runHooks: false,
       activate: false,
-      navigation: 'all',
+      navigation: 'host',
       setupDecision: 'skip',
       createdWithAgent: undefined,
       automationProvenance: undefined,

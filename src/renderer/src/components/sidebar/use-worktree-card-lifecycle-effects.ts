@@ -2,11 +2,7 @@ import { useEffect } from 'react'
 
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
-import {
-  HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS,
-  isWebClient,
-  type WorktreeCardProps
-} from './worktree-card-model'
+import { isWebClient, type WorktreeCardProps } from './worktree-card-model'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
 
@@ -55,65 +51,11 @@ export function useWorktreeCardLifecycleEffects({
     showIssue: boolean
     showLinearIssue: boolean
   }): void {
-  // Why: card surfaces are presentational, so skip hosted-review fetches when hidden to save rate-limit budget.
-  useEffect(() => {
-    // Why: paired web must not fan out per-card decoration RPCs during startup; host session/tab parity is critical.
-    if (isWebClient()) {
-      return
-    }
-    if (
-      !repo ||
-      isFolder ||
-      worktree.isBare ||
-      !hostedReviewCacheKey ||
-      !shouldRefreshHostedReview ||
-      isMacAppDataPath(repo.path)
-    ) {
-      return
-    }
-    const refreshHostedReview = (): void => {
-      // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR number from explicit metadata when we have one.
-      void fetchHostedReviewForBranch(repo.path, branch, {
-        repoId: repo.id,
-        linkedGitHubPR: worktree.linkedPR ?? null,
-        ...(cachedBranchFallbackGitHubPRNumber !== null
-          ? { fallbackGitHubPR: cachedBranchFallbackGitHubPRNumber }
-          : {}),
-        currentHeadOid: worktree.head ?? null,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR,
-        staleWhileRevalidate: true
-      })
-    }
-    // Why: PRs created outside Orca (e.g. `gh pr create`) emit no renderer event; poll visible cards to discover them.
-    return installWindowVisibilityInterval({
-      run: refreshHostedReview,
-      jitterOnVisible: true,
-      intervalMs: HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS
-    })
-  }, [
-    repo,
-    isFolder,
-    worktree.isBare,
-    worktree.linkedPR,
-    worktree.head,
-    cachedBranchFallbackGitHubPRNumber,
-    linkedGitLabMR,
-    linkedBitbucketPR,
-    linkedAzureDevOpsPR,
-    linkedGiteaPR,
-    fetchHostedReviewForBranch,
-    branch,
-    hostedReviewCacheKey,
-    shouldRefreshHostedReview
-  ])
-
   useEffect(() => {
     if (
       !newCardStyle ||
       !hoverDetailsOpen ||
+      !isWindowVisible() ||
       shouldRefreshHostedReview ||
       isWebClient() ||
       !repo ||

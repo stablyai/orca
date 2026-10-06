@@ -54,6 +54,13 @@ describe('whether a launch prompt rides the typed startup line', () => {
     expect(plan?.launchCommand).toContain('explain this repo')
   })
 
+  it('carries a short Windows multi-line prompt as one encoded physical launch line', () => {
+    const { plan, promptCarried } = offer('claude', linesOf(5, 40), { platform: 'win32' })
+    expect(promptCarried).toBe(true)
+    expect(plan?.launchCommand).not.toContain('\n')
+    expect(plan?.launchCommand).toContain('`n')
+  })
+
   it('carries a line of exactly the budget and refuses one byte past it', () => {
     const atBudget = offer('claude', promptForClaudeLineOf(TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES))
     expect(new TextEncoder().encode(atBudget.plan?.launchCommand ?? '').byteLength).toBe(
@@ -186,7 +193,8 @@ describe('a multi-line prompt typed into a shell the host names', () => {
 describe('on a host that cannot prove the launched agent is in front', () => {
   it.each([
     ['a long single line', 'x'.repeat(TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES * 4)],
-    ['a multi-line prompt', linesOf(5, 40)]
+    // Over the typed budget even as PowerShell's one-line form, so the control still pastes it.
+    ['a long multi-line prompt', linesOf(20, 40)]
   ])('carries %s on the launch line', (_label, prompt) => {
     const { plan, promptCarried } = offer('claude', prompt, {
       platform: 'win32',
@@ -195,7 +203,19 @@ describe('on a host that cannot prove the launched agent is in front', () => {
     expect(promptCarried).toBe(true)
     expect(plan?.launchCommand).toContain(prompt.split('\n')[0])
     // Control: the same prompt is pasted where the host can prove the agent.
-    expect(offer('claude', prompt, { platform: 'win32' }).promptCarried).toBe(false)
+    expect(offer('claude', prompt, { platform: 'darwin' }).promptCarried).toBe(false)
+  })
+})
+
+// Why: PowerShell's multi-line form is one physical line with backtick escapes (#23672), so a short
+// multi-line prompt has no control byte there and rides the line within the typed budget.
+describe('a short multi-line prompt on a Windows PowerShell host', () => {
+  it('rides the launch line as one physical line', () => {
+    const prompt = linesOf(5, 40)
+    const { plan, promptCarried } = offer('claude', prompt, { platform: 'win32' })
+    expect(promptCarried).toBe(true)
+    expect(plan?.launchCommand).not.toMatch(/[\r\n]/)
+    expect(plan?.launchCommand).toContain(prompt.replaceAll('\n', '`n'))
   })
 })
 

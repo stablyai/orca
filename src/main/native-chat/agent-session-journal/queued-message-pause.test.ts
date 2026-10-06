@@ -63,6 +63,7 @@ function queueDraft(journal: AgentSessionJournal, messageId: string, carriedFrom
     body: message(messageId),
     fingerprint: `fp-${messageId}`,
     hostInstance: HOST,
+    source: { kind: 'user' },
     ...(carriedFrom ? { carriedFrom } : {})
   })
 }
@@ -495,7 +496,8 @@ describe("a restart's pause", () => {
       messageId: 'draft-restart',
       body: message('written before the restart'),
       fingerprint: 'fp-draft-restart',
-      hostInstance: 'proc-0'
+      hostInstance: 'proc-0',
+      source: { kind: 'user' }
     })
     expect(reason(journal)).toBe('restarted')
     await queueDraft(journal, 'draft-legacy')

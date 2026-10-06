@@ -4,11 +4,7 @@
 // The virtualizer owns visible-row anchoring; the transcript scroll hook owns
 // end-follow intent. Geometry alone must never reattach a parked reader.
 //
-// Every measurement here ends up in the scroll container's own coordinate space,
-// which means `offsetTop` / `offsetHeight` rather than a bounding rect. The
-// transcript is zoomable, and a rect is in viewport pixels while `scrollTop` is
-// not: mixing the two puts the window out of place by exactly the zoom factor.
-// One path does read rects, and it converts them back before using them.
+// Measurements and scroll offsets share the container's coordinate space.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elementScroll, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
@@ -70,17 +66,13 @@ export function nativeChatScrollOffsetWithin(
   return node === container ? top : null
 }
 
-/** Same distance read off rects, for the case where there is no `offsetParent`
- *  chain to walk. Rects are viewport pixels, so the container's own measured
- *  zoom converts them back; a container with no layout reports no zoom and no
- *  distance, which leaves the offset where it already is. */
+/** Fallback when layout provides no offset-parent chain. */
 function rectOffsetWithin(element: HTMLElement, container: HTMLElement): number {
-  const containerRect = container.getBoundingClientRect()
-  const zoom =
-    container.offsetHeight > 0 && containerRect.height > 0
-      ? containerRect.height / container.offsetHeight
-      : 1
-  return container.scrollTop + (element.getBoundingClientRect().top - containerRect.top) / zoom
+  return (
+    container.scrollTop +
+    element.getBoundingClientRect().top -
+    container.getBoundingClientRect().top
+  )
 }
 
 export function useNativeChatTranscriptWindow({

@@ -2,9 +2,8 @@ import { useEffect, useRef } from 'react'
 import { ShieldQuestion, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import CommentMarkdown, {
-  type CommentMarkdownLinkClickHandler
-} from '@/components/sidebar/CommentMarkdown'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { NativeChatMarkdown } from './NativeChatMarkdown'
 import {
   isNewerApprovalSubject,
   isPlanApprovalSubject
@@ -55,8 +54,8 @@ export function NativeChatApprovalCard({
   }, [shouldFocus])
 
   return (
-    <div className="min-h-0 shrink overflow-hidden bg-background">
-      <div className="mx-auto flex h-full min-h-0 max-h-full w-full max-w-4xl px-3 pt-2 pb-1 sm:px-4">
+    <div className="min-h-0 shrink overflow-hidden bg-chat-canvas">
+      <div className="mx-auto flex h-full min-h-0 max-h-full w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4">
         <div
           ref={cardRef}
           data-native-chat-approval-card="true"
@@ -129,10 +128,10 @@ export function NativeChatApprovalCard({
               ) : null}
               {isPlanApprovalSubject(approval.subject) ? (
                 <div data-native-chat-approval-plan="true">
-                  <CommentMarkdown
+                  <NativeChatMarkdown
                     content={approval.subject.text}
                     variant="document"
-                    className="text-sm"
+                    className="text-sm text-chat-foreground"
                     renderCodeBlock={NativeChatCodeBlock}
                     {...(onLinkClick ? { onLinkClick } : {})}
                     allowFileUriLinks={allowFileUriLinks}
@@ -150,6 +149,7 @@ export function NativeChatApprovalCard({
               ) : approval.detail ? (
                 <div
                   data-native-chat-approval-detail="true"
+                  data-native-chat-code-content
                   className="whitespace-pre-wrap break-words font-mono"
                 >
                   {approval.detail}

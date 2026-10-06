@@ -1,3 +1,4 @@
+import { DirectoryTransferBudget } from '../ssh/ssh-directory-transfer-budget'
 import { mkdir, open } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { FileEntryWithStats, SFTPWrapper } from 'ssh2'
@@ -7,7 +8,11 @@ import {
   normalizeRuntimePathSeparators
 } from '../../shared/cross-platform-path'
 import { sanitizeLocalDownloadFilename } from '../local-download-filename'
-import { fastGetViaSftp, readDirViaSftp, statViaSftp } from './ssh-filesystem-provider-sftp'
+import {
+  fastGetViaSftp,
+  readDirectoryEntriesViaSftp,
+  statViaSftp
+} from './ssh-filesystem-provider-sftp'
 
 export type SftpFactory = (options?: { signal?: AbortSignal }) => Promise<SFTPWrapper>
 
@@ -83,45 +88,62 @@ async function downloadDirectoryTree(
   sourceDir: string,
   destinationDir: string,
   signal?: AbortSignal,
-  windowsRemotePaths?: boolean
+  windowsRemotePaths?: boolean,
+  budget = new DirectoryTransferBudget(),
+  depth = 0
 ): Promise<void> {
-  signal?.throwIfAborted()
-  const entries = (await readDirViaSftp(sftp, sourceDir, { signal })).filter(
-    (entry) => entry.filename !== '.' && entry.filename !== '..'
-  )
   signal?.throwIfAborted()
   const usedLocalNames = new Set<string>()
   const plannedEntries: {
-    entry: FileEntryWithStats
+    remoteName: string
     kind: 'directory' | 'file'
     localName: string
   }[] = []
-  for (const entry of entries) {
-    const localName = sanitizeLocalDownloadFilename(entry.filename)
-    if (usedLocalNames.has(localName)) {
-      throw new Error(`Remote entries map to the same local name '${localName}'`)
+  let retainedBytes = budget.record([sourceDir, destinationDir], depth)
+  let retainedEntries = 1
+  try {
+    for await (const entry of readDirectoryEntriesViaSftp(sftp, sourceDir, { signal })) {
+      const localName = sanitizeLocalDownloadFilename(entry.filename)
+      retainedBytes += budget.record([sourceDir, destinationDir, entry.filename, localName], depth)
+      retainedEntries++
+      if (usedLocalNames.has(localName)) {
+        throw new Error(`Remote entries map to the same local name '${localName}'`)
+      }
+      usedLocalNames.add(localName)
+      plannedEntries.push({
+        remoteName: entry.filename,
+        kind: classifySftpEntry(entry),
+        localName
+      })
     }
-    usedLocalNames.add(localName)
-    plannedEntries.push({
-      entry,
-      kind: classifySftpEntry(entry),
-      localName
-    })
-  }
 
-  await mkdir(destinationDir, { recursive: false })
-  for (const { entry, kind, localName } of plannedEntries) {
     signal?.throwIfAborted()
-    const remotePath = joinSftpChildPath(sourceDir, entry.filename, windowsRemotePaths)
-    const localPath = join(destinationDir, localName)
-    if (kind === 'directory') {
-      await downloadDirectoryTree(sftp, remotePath, localPath, signal, windowsRemotePaths)
-      continue
+    await mkdir(destinationDir, { recursive: false })
+    signal?.throwIfAborted()
+    for (const { remoteName, kind, localName } of plannedEntries) {
+      signal?.throwIfAborted()
+      const remotePath = joinSftpChildPath(sourceDir, remoteName, windowsRemotePaths)
+      const localPath = join(destinationDir, localName)
+      if (kind === 'directory') {
+        await downloadDirectoryTree(
+          sftp,
+          remotePath,
+          localPath,
+          signal,
+          windowsRemotePaths,
+          budget,
+          depth + 1
+        )
+        continue
+      }
+      // Why: filesystem semantics belong to the selected volume, not the host OS;
+      // an exclusive placeholder prevents case/Unicode aliases from overwriting.
+      await reserveLocalFile(localPath, localName)
+      await fastGetViaSftp(sftp, remotePath, localPath, { signal })
     }
-    // Why: filesystem semantics belong to the selected volume, not the host OS;
-    // an exclusive placeholder prevents case/Unicode aliases from overwriting.
-    await reserveLocalFile(localPath, localName)
-    await fastGetViaSftp(sftp, remotePath, localPath, { signal })
+    signal?.throwIfAborted()
+  } finally {
+    budget.release(retainedBytes, retainedEntries)
   }
 }
 
@@ -177,6 +199,7 @@ export async function downloadFolderViaSftp(
       signal,
       options?.windowsRemotePaths
     )
+    signal?.throwIfAborted()
   } finally {
     signal?.removeEventListener('abort', endSftp)
     endSftp()

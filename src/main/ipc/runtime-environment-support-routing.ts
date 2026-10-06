@@ -119,6 +119,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
   timeoutMs: number
   callbacks: SubscriptionCallbacks
   isCurrent: () => boolean
+  signal?: AbortSignal
 }): Promise<RemoteRuntimeSubscription> {
   let markedUsed = false
   let supportOutcome: SupportRoute['outcome'] | null = null
@@ -138,6 +139,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
     environment: args.environment,
     timeoutMs: args.timeoutMs,
     isCurrent: args.isCurrent,
+    signal: args.signal,
     supported: (route) => {
       supportOutcome = route.outcome
       return subscribeRemoteRuntimeSharedControlRequest(
@@ -146,7 +148,8 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
         args.method,
         args.params,
         args.timeoutMs,
-        callbacks
+        callbacks,
+        args.signal
       )
     },
     unsupported: (route) => {
@@ -157,7 +160,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
         args.params,
         args.timeoutMs,
         callbacks,
-        { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
+        { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, signal: args.signal }
       )
     }
   })
@@ -213,15 +216,14 @@ export async function routeRuntimeEnvironmentSubscriptionBySupport<TSubscription
   environment: KnownRuntimeEnvironment
   timeoutMs: number
   isCurrent: () => boolean
+  signal?: AbortSignal
   supported: (route: SupportRoute) => Promise<TSubscription>
   unsupported: (route: SupportRoute) => Promise<TSubscription>
 }): Promise<{ subscription: TSubscription; outcome: SupportRoute['outcome'] }> {
   const pairing = getPreferredPairingOffer(args.environment)
-  const outcome = await supportsSharedControl(
-    args.userDataPath,
-    args.environment,
-    pairing,
-    args.timeoutMs
+  const outcome = await waitForPromiseWithSignal(
+    supportsSharedControl(args.userDataPath, args.environment, pairing, args.timeoutMs),
+    args.signal
   )
   if (
     outcome.kind === 'stale_incarnation' ||

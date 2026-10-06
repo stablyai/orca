@@ -12,8 +12,11 @@ import type { CodexSession } from './codex-structured-session-state'
 import {
   AGENT_MODEL_CATALOG_FRESH_MS,
   AGENT_MODEL_CATALOG_VALIDATION_MIN_AGE_MS,
-  AgentModelCatalogStore
+  AgentModelCatalogStore,
+  type AgentModelCatalogProbe
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
+import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 
 const FINGERPRINT = 'fp-session-account'
 
@@ -100,6 +103,85 @@ describe('Codex session options through the host catalog store', () => {
       'gpt-next'
     ])
     expect(store.get('some-other-account')).toBeNull()
+  })
+
+  it('restores a new chat from its own connection while a session-less probe hangs', async () => {
+    const store = new AgentModelCatalogStore()
+    // Opening the chat's picker kicked the host probe for this account; its Codex never answers.
+    const hungProbe: AgentModelCatalogProbe = () => new Promise<never>(() => {})
+    void store.refresh(FINGERPRINT, 'codex', hungProbe, () => hungProbe('/homes/a'))
+    const request = vi.fn(async () => listAnswer('gpt-live'))
+    const session = storeSession(request, store)
+    // The acquire-time restore read: joining the probe would fail the chat at the probe's deadline.
+    const result = await readLiveCodexSessionOptions(session, undefined)
+    expect(result.models.map((model) => model.id)).toEqual(['gpt-live'])
+    expect(modelListCalls(request)).toBe(1)
+  })
+
+  it('restores a new chat while the probe its opening picker read kicked hangs', async () => {
+    const store = new AgentModelCatalogStore()
+    const fingerprint = agentModelCatalogFingerprint({
+      agent: 'codex',
+      accountHomeVariable: 'CODEX_HOME',
+      accountHomePath: '/homes/a',
+      wslDistro: null
+    })
+    const hungProbe = vi.fn<AgentModelCatalogProbe>(() => new Promise<never>(() => {}))
+    const service = createAgentModelCatalogService({
+      store,
+      getRecord: () => undefined,
+      drivesRecord: () => true,
+      resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/homes/a' }),
+      probes: { codex: hungProbe }
+    })
+    expect(await service.read({ agent: 'codex' })).toEqual({
+      origin: 'unknown',
+      listingInProgress: true
+    })
+    expect(hungProbe).toHaveBeenCalledTimes(1)
+    const request = vi.fn(async () => listAnswer('gpt-live'))
+    const session = storeSession(request, store)
+    session.catalogAccess = { store, fingerprint, accountHomePath: '/homes/a' }
+    const result = await readLiveCodexSessionOptions(session, undefined)
+    expect(result.models.map((model) => model.id)).toEqual(['gpt-live'])
+    // The picker's waiting read now answers from the chat's listing.
+    const picker = await service.read({ agent: 'codex', waitForListing: true })
+    expect(picker.origin === 'unknown' ? null : picker.models[0]!.id).toBe('gpt-live')
+  })
+
+  it("restores a new chat from its own connection while another chat's listing hangs", async () => {
+    const store = new AgentModelCatalogStore()
+    // Another chat on the same account is mid-listing and its Codex never answers.
+    const wedged = storeSession(
+      vi.fn(() => new Promise<never>(() => {})),
+      store
+    )
+    void readLiveCodexSessionOptions(wedged, undefined)
+    const request = vi.fn(async () => listAnswer('gpt-live'))
+    const session = storeSession(request, store)
+    const result = await readLiveCodexSessionOptions(session, undefined)
+    expect(result.models.map((model) => model.id)).toEqual(['gpt-live'])
+    expect(modelListCalls(request)).toBe(1)
+  })
+
+  it("shares one listing between a chat's own concurrent reads", async () => {
+    const store = new AgentModelCatalogStore()
+    let answer!: () => void
+    const answered = new Promise<void>((resolve) => (answer = resolve))
+    const request = vi.fn(async () => {
+      await answered
+      return listAnswer('gpt-live')
+    })
+    const session = storeSession(request, store)
+    const reads = [
+      readLiveCodexSessionOptions(session, undefined),
+      readLiveCodexSessionOptions(session, undefined)
+    ]
+    answer()
+    for (const result of await Promise.all(reads)) {
+      expect(result.models.map((model) => model.id)).toEqual(['gpt-live'])
+    }
+    expect(modelListCalls(request)).toBe(1)
   })
 
   it('answers the picker with zero provider fetches when the store is already warm', async () => {

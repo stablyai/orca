@@ -56,7 +56,6 @@ function transcript(items: AgentJournalRenderItem[]) {
       }}
       isWorking={false}
       expandSignal
-      fontScale={1}
     />
   )
 }

@@ -24,6 +24,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -43,31 +44,32 @@ beforeEach(async () => {
   stopBackgroundTasks = vi.fn(async () => ({ cancelled: true }))
   cancelTurn = vi.fn(async () => ({ cancelled: true }))
   store = await openTestAgentSessionRecordStore(root)
+  const adapter: StructuredAgentSessionAdapter = {
+    acquire: async ({ fence, spawnToken }) => ({
+      process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
+      acquisitionGeneration: 'generation-1',
+      link: {
+        linkId: `link-${fence}`,
+        handle: codexProviderHandle(THREAD),
+        origin: fence > 1 ? ('resumed' as const) : ('created' as const),
+        mintedAtFence: fence,
+        observedAt: NOW
+      }
+    }),
+    dispatch: vi.fn(async () => ({ state: 'admitted' as const })),
+    closeSession: vi.fn(async () => true),
+    releaseAcquisition: vi.fn(async () => true),
+    cancelTurn,
+    answerPrompt: vi.fn(async () => undefined),
+    setOption,
+    changeThreadGoal,
+    stopBackgroundTasks
+  }
   host = new StructuredAgentSessionHost({
+    agents: claudeAndCodexAgents(adapter),
     logger: createStructuredAgentSessionLogger(),
     store,
-    adapter: {
-      acquire: async ({ fence, spawnToken }) => ({
-        process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
-        acquisitionGeneration: 'generation-1',
-        link: {
-          linkId: `link-${fence}`,
-          handle: codexProviderHandle(THREAD),
-          origin: fence > 1 ? ('resumed' as const) : ('created' as const),
-          mintedAtFence: fence,
-          observedAt: NOW
-        }
-      }),
-      dispatch: vi.fn(async () => ({ state: 'admitted' as const })),
-      closeSession: vi.fn(async () => true),
-      releaseAcquisition: vi.fn(async () => true),
-      cancelTurn,
-      answerPrompt: vi.fn(async () => undefined),
-      setOption,
-      changeThreadGoal,
-      supportsThreadGoal: () => true,
-      stopBackgroundTasks
-    },
+    adapter,
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-1',

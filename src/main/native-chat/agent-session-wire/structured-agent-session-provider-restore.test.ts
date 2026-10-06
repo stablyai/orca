@@ -18,6 +18,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CLAUDE_SESSION = 'claude-session'
 const hosts: StructuredAgentSessionHost[] = []
@@ -58,6 +59,7 @@ function createHost(
   probeOwner?: StructuredAgentSessionHost['deps']['probeOwner']
 ): StructuredAgentSessionHost {
   const host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: claudeAdapter(),

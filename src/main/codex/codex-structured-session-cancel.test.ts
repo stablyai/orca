@@ -10,6 +10,7 @@ const processWork = vi.hoisted(() => {
       capturedAtMs: 0
     })),
     terminateDescendantSnapshotAndWait: vi.fn(never),
+    terminateDescendantSnapshotWithVerdict: vi.fn(never),
     queryWindowsProcessDescendants: vi.fn(never),
     terminateWindowsProcessTree: vi.fn(never)
   }
@@ -20,7 +21,8 @@ vi.mock('../pty-descendant-termination', async (importOriginal) => ({
 }))
 vi.mock('../pty-descendant-exit-verification', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  terminateDescendantSnapshotAndWait: processWork.terminateDescendantSnapshotAndWait
+  terminateDescendantSnapshotAndWait: processWork.terminateDescendantSnapshotAndWait,
+  terminateDescendantSnapshotWithVerdict: processWork.terminateDescendantSnapshotWithVerdict
 }))
 vi.mock('../providers/windows-foreground-process-rows', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

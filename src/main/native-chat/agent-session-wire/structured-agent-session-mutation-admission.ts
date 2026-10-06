@@ -49,7 +49,9 @@ import {
   resolveAgentSessionReplayOutcome
 } from './structured-agent-session-replay-outcome'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
+import { mutationTurnContext } from './structured-agent-session-mutation-turn-context'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 
 // The code is shared with the client so a read that refuses this way can be told apart from a
 // transcript that failed to load; the two must never drift apart.
@@ -73,6 +75,7 @@ export type AgentSessionMutationSessionPreparation =
 export type AgentSessionMutationRequest<TValue> = {
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
+  agents: StructuredAgentRegistry
   logger: StructuredAgentSessionLogger
   callerKey: string
   envelope: AgentSessionMutationEnvelope
@@ -175,7 +178,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   }
 
   const fence = record.lease.runtimeFence
-  const context = turnContext(request, journal, fence)
+  const context = mutationTurnContext(request, journal, record)
   if (admission.decision === 'replay') {
     const replayed = replayRecordedOperation(request, context, admission.row)
     if (replayed !== 'rerun') {
@@ -262,7 +265,7 @@ async function answerRecordedOperation<TValue>(
     // The row is gone since: the first-run path decides it from scratch.
     return 'rerun'
   }
-  const context = turnContext(request, journal, current.record.lease.runtimeFence)
+  const context = mutationTurnContext(request, journal, current.record)
   return replayRecordedOperation(request, context, current.decision.row)
 }
 
@@ -316,33 +319,4 @@ function admitWithoutLedgerRow(
     ...(operation.conversationWrite ? { conversationWrite: true } : {})
   })
   return { admission, record: evaluated.record }
-}
-
-function turnContext<TValue>(
-  request: AgentSessionMutationRequest<TValue>,
-  journal: AgentSessionJournal,
-  fence: number
-): AgentSessionTurnContext {
-  const persistedOptions = request.store.getRecord(request.envelope.sessionId)?.options
-  return {
-    sessionId: request.envelope.sessionId,
-    journal,
-    fence,
-    adapter: request.adapter,
-    logger: request.logger,
-    ...(persistedOptions ? { persistedOptions } : {}),
-    persistOptions: (options) =>
-      request.store
-        .replaceSessionOptions({
-          sessionId: request.envelope.sessionId,
-          fence,
-          options,
-          now: request.now()
-        })
-        .then(() => undefined),
-    resolvedBy: request.callerKey,
-    publish: () => request.publish(journal),
-    ...(request.providerChildPhase ? { providerChildPhase: request.providerChildPhase } : {}),
-    now: () => request.now()
-  }
 }

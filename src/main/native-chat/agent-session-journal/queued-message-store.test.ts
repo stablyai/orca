@@ -22,6 +22,7 @@ import {
   QueuedMessageNotConsumableError
 } from './journal-queued-messages'
 import type { AgentSessionJournal } from './journal-store'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
 import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener
@@ -81,7 +82,8 @@ async function queueDraft(journal: AgentSessionJournal, messageId: string, text 
     messageId,
     body: message(text),
     fingerprint: `fp-${messageId}`,
-    hostInstance: 'proc-1'
+    hostInstance: 'proc-1',
+    source: { kind: 'user' }
   })
 }
 
@@ -172,6 +174,53 @@ describe('draft rows', () => {
     const again = await queueDraft(journal, 'draft-1')
     expect(again.position).toBe(1)
     expect(journal.queuedMessages.list()).toHaveLength(1)
+  })
+
+  it("keeps who queued a card across reopen; a card with no readable sender is the person's", async () => {
+    const agent: AgentSessionMessageSource = {
+      kind: 'agent',
+      senders: [
+        {
+          party: {
+            address: 'structworker_1',
+            terminalHandle: 'structworker_1',
+            orcaSessionId: null
+          }
+        }
+      ],
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'run:r1',
+        dispatchId: 'd1',
+        messages: [{ messageId: 'm1', runId: 'r1', from: 'structworker_1' }]
+      }
+    }
+    const first = await open()
+    await first.queuedMessages.insert({
+      messageId: 'agent-card',
+      body: message('You have 1 orchestration message. Run `orca orchestration check --run r1`.'),
+      fingerprint: 'fp-agent-card',
+      hostInstance: 'proc-1',
+      source: agent
+    })
+    await queueDraft(first, 'before-the-column')
+    await queueDraft(first, 'unreadable')
+    await first.close()
+    closeTestJournalHostDatabases()
+    const db = new Database(journalDatabasePath(root))
+    db.prepare('UPDATE queued_messages SET source_json = NULL WHERE message_id = ?').run(
+      'before-the-column'
+    )
+    db.prepare('UPDATE queued_messages SET source_json = \'{"v":9}\' WHERE message_id = ?').run(
+      'unreadable'
+    )
+    db.close()
+    const reopened = await open()
+    expect(reopened.queuedMessages.list().map((row) => [row.messageId, row.source])).toEqual([
+      ['agent-card', agent],
+      ['before-the-column', { kind: 'user' }],
+      ['unreadable', { kind: 'user' }]
+    ])
   })
 
   it('drafts survive epoch replacement, which deletes only journal rows', async () => {

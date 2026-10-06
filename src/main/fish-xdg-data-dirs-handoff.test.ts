@@ -122,7 +122,8 @@ describe.skipIf(!fish.available)('fish vendor snippet in a real fish', () => {
   })
 
   afterEach(() => {
-    rmSync(sandbox, { recursive: true, force: true })
+    // Fish may finish its universal-variable write after the shell exits.
+    rmSync(sandbox, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 })
   })
 
   function runFish(args: string[], env: Record<string, string>): string {

@@ -59,6 +59,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   const loop = new StructuredAgentSessionDeliveryLoop({
     sessions,
     adapter: deps.adapter,
+    agents: deps.agents,
     serialize: input.serialize,
     trackStart: input.trackStart,
     ensureProviderChild: input.ensureProviderChild,

@@ -28,6 +28,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -71,6 +72,7 @@ beforeEach(async () => {
   })
   disposeSession = vi.spyOn(adapter, 'disposeSession')
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: (log = recordingStructuredAgentSessionLogger()).logger,
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),

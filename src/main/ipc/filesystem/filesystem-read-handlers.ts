@@ -1,3 +1,6 @@
+import { listFilesystemMarkdownDocuments } from '../../providers/filesystem-markdown-listing'
+import { classifyFilesystemDirectoryEntries } from '../filesystem-symlink-directory-entries'
+import { markdownDocumentsFromRelativePaths } from '../../../shared/markdown-document-paths'
 import {
   capturePathExistence,
   validatePathExistenceBatch,
@@ -15,14 +18,13 @@ import {
   resolveLocalFileRequestPath
 } from '../local-file-access-resolution'
 import { isENOENT } from '../filesystem-path-containment'
-import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from '../markdown-documents'
+import { listMarkdownDocuments } from '../markdown-documents'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-store'
 import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from '../readdir-error-diagnostics'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemChunkReadHandler } from './filesystem-chunk-read-handler'
 import {
-  isDirectoryEntry,
   readLocalFileContent,
   readLocalLogSnapshot,
   type LocalFileContent
@@ -34,7 +36,10 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
 
   ipcMain.handle(
     'fs:readDir',
-    async (_event, args: { dirPath: string; connectionId?: string }): Promise<DirEntry[]> => {
+    async (
+      _event,
+      args: { dirPath: string; connectionId?: string; followSymlinks?: boolean }
+    ): Promise<DirEntry[]> => {
       // Why: fs:readDir throws surface as opaque IPC errors; record the throw site + redacted path shape to keep them diagnosable.
       let throwSite: ReadDirThrowSite = 'authorize'
       try {
@@ -42,16 +47,19 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
           throwSite = 'ssh-provider'
           const provider = requireSshFilesystemProvider(args.connectionId)
           // Why: re-sort locally — the remote relay may be an older build with lexicographic ordering.
-          return sortDirEntries(await provider.readDir(args.dirPath))
+          return sortDirEntries(
+            await provider.readDir(args.dirPath, { followSymlinks: args.followSymlinks })
+          )
         }
         const dirPath = await resolveDesktopAuthorizedPath(args.dirPath, store)
         throwSite = 'readdir'
         const entries = await readdir(dirPath, { withFileTypes: true })
-        const mapped = entries.map((entry) => ({
-          name: entry.name,
-          isDirectory: isDirectoryEntry(entry),
-          isSymlink: entry.isSymbolicLink()
-        }))
+        const mapped = await classifyFilesystemDirectoryEntries(
+          args.dirPath,
+          entries,
+          args.followSymlinks ?? store.getSettings().followSymlinkedDirectories ?? false,
+          (path) => resolveDesktopAuthorizedPath(path, store)
+        )
         return sortDirEntries(mapped)
       } catch (error: unknown) {
         recordCrashBreadcrumb(
@@ -98,14 +106,24 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     ): Promise<MarkdownDocument[]> => {
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
-        const relativePaths = await provider.listFiles(args.rootPath)
-        return markdownDocumentsFromRelativePaths(args.rootPath, relativePaths)
+        return listFilesystemMarkdownDocuments(provider, args.rootPath)
       }
-      const rootPath = await resolveRegisteredWorktreePath(args.rootPath, store)
-      return listMarkdownDocuments(
+      const isFolderRoot = store
+        .getFolderWorkspaces?.()
+        .some((workspace) => workspace.folderPath === args.rootPath)
+      const rootPath = isFolderRoot
+        ? await resolveDesktopAuthorizedPath(args.rootPath, store)
+        : await resolveRegisteredWorktreePath(args.rootPath, store)
+      const documents = await listMarkdownDocuments(
         rootPath,
         getLocalGitOptionsForRegisteredWorktree(store, args.rootPath, rootPath)
       )
+      return rootPath === args.rootPath
+        ? documents
+        : markdownDocumentsFromRelativePaths(
+            args.rootPath,
+            documents.map((document) => document.relativePath)
+          )
     }
   )
 

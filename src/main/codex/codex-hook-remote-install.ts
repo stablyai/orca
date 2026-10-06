@@ -13,7 +13,11 @@ import {
   writeManagedScriptRemote,
   writeTextFileRemoteAtomic
 } from '../agent-hooks/installer-utils-remote'
-import { upsertHookTrustEntriesInContent, type CodexTrustEntry } from './config-toml-trust'
+import {
+  assertLoadableHookTrustConfig,
+  upsertHookTrustEntriesInContent,
+  type CodexTrustEntry
+} from './config-toml-trust'
 import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
@@ -108,6 +112,7 @@ export async function installCodexHooksRemote(
       const existingToml = existingTomlRaw ?? ''
       const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
       if (updatedToml !== existingToml) {
+        assertLoadableHookTrustConfig(remoteTomlPath, existingToml, updatedToml)
         await writeTextFileRemoteAtomic(sftp, remoteTomlPath, updatedToml)
       }
     } catch (error) {

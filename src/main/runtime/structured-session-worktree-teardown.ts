@@ -35,10 +35,11 @@ import { closeStructuredAgentSessionChild } from './structured-agent-session-clo
 import { retireSettledStructuredWorkerTab } from './structured-agent-session-tab-retirement'
 import type { WorktreePtyHostFence } from './worktree-pty-host-fence'
 import type { OrcaRuntimeService } from './orca-runtime'
+import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 
 export type StructuredSessionInWorkspace = {
   sessionId: string
-  agent: 'claude' | 'codex'
+  agent: StructuredAgentId
 }
 
 export type UnclosedStructuredSession = StructuredSessionInWorkspace & {

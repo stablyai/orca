@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import {
-  decideStructuredSessionPointerDelivery,
   retainReasonForDispatch,
   structuredDispatchDelivered,
   structuredSessionGateFacts
@@ -77,37 +76,6 @@ describe('structured session gate facts', () => {
         pendingApproval()
       ])
     ).toEqual({ turnRunning: true, awaitingHuman: true })
-  })
-})
-
-describe('decideStructuredSessionPointerDelivery', () => {
-  it('delivers to an attached, idle session', () => {
-    expect(decideStructuredSessionPointerDelivery({ session: IDLE })).toEqual({
-      deliver: true
-    })
-  })
-
-  it('retains when the session is not attached on this host', () => {
-    expect(decideStructuredSessionPointerDelivery({ session: null })).toEqual({
-      deliver: false,
-      retain: 'session-not-attached'
-    })
-  })
-
-  it('retains mid-turn rather than delegating the race to the provider', () => {
-    expect(
-      decideStructuredSessionPointerDelivery({
-        session: { turnRunning: true, awaitingHuman: false }
-      })
-    ).toEqual({ deliver: false, retain: 'turn-unsettled' })
-  })
-
-  it('names the human prompt ahead of the turn, so the retain reason is the actionable one', () => {
-    expect(
-      decideStructuredSessionPointerDelivery({
-        session: { turnRunning: true, awaitingHuman: true }
-      })
-    ).toEqual({ deliver: false, retain: 'awaiting-human' })
   })
 })
 

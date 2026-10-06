@@ -74,6 +74,11 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'codex-0-158-0-approval': 12,
   'codex-0-158-0-timed-turn': 20,
   'codex-0-158-0-trustprompt': 36,
+  // Fullscreen startup captures diverge identically with the base b58f8197dc36 serializer.
+  'codex-fullscreen-custom-footer': 18,
+  'codex-fullscreen-early-input': 4,
+  'codex-fullscreen-multiline-early-input': 10,
+  'codex-fullscreen-startup': 14,
   'claude-dialog-trust-workspace-answered': 13,
   // DSH-TUI's whale intro paints whole rows of 24-bit background, and every one of this
   // transcript's divergences is the same shape: `visible-grid row=0`, a true-colour

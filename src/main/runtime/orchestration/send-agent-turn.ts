@@ -17,6 +17,7 @@ import {
   type AgentSessionQueuedSendReceipt
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire-refusals'
+import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
@@ -36,11 +37,14 @@ export type StructuredAgentTurnHost = Pick<
 
 export type StructuredSessionTurn = {
   body: AgentJournalMessageItem
-  delivery: AgentTurnDelivery
   /** Reused on a retry, so the host replays its recorded answer instead of sending twice. */
   operationId: string
   expectedRuntimeFence: number
-}
+} & (
+  | { delivery: 'now' }
+  /** A queued card records who it is from. */
+  | { delivery: 'queue'; source: AgentMessageSource }
+)
 
 export type StructuredSessionTurnSend = {
   kind: 'structured-session'
@@ -123,15 +127,17 @@ async function sendStructuredSessionTurn(
   send: StructuredSessionTurnSend
 ): Promise<StructuredSessionTurnOutcome> {
   const { turn } = send
+  const message = structuredAgentSessionMessageSendMutation({
+    sessionId: send.sessionId,
+    clientOperationId: turn.operationId,
+    expectedRuntimeFence: turn.expectedRuntimeFence,
+    body: turn.body,
+    delivery: turn.delivery === 'queue' ? 'queue-if-active' : undefined
+  })
   const result = await send.host.send(
     { callerKey: send.callerKey },
-    structuredAgentSessionMessageSendMutation({
-      sessionId: send.sessionId,
-      clientOperationId: turn.operationId,
-      expectedRuntimeFence: turn.expectedRuntimeFence,
-      body: turn.body,
-      delivery: turn.delivery === 'queue' ? 'queue-if-active' : undefined
-    })
+    // The source is host-local and outside the fingerprint: a retry under the same id replays.
+    turn.delivery === 'queue' ? { ...message, source: turn.source } : message
   )
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }

@@ -18,6 +18,7 @@ import { createStructuredAgentSessionLogger } from './structured-agent-session-l
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import type { AgentSessionPromptCancelRoute } from './structured-agent-session-adapter-stop'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -91,6 +92,8 @@ function context(
     sessionId: 'session-1',
     journal,
     fence: 1,
+    agents: NO_STRUCTURED_AGENTS,
+    agent: 'codex',
     adapter: { cancelTurn } as unknown as StructuredAgentSessionAdapter,
     persistOptions: async () => undefined,
     resolvedBy: 'client-1',

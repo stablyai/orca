@@ -207,6 +207,38 @@ describe('Claude structured session publishes before the CLI answers initialize'
     })
   })
 
+  // Accounts as Claude 2.1.280 reports them at initialize; the /login key row is from its source.
+  it.each([
+    ['an ANTHROPIC_API_KEY', { tokenSource: 'none', apiKeySource: 'ANTHROPIC_API_KEY' }],
+    ['a Console /login key', { tokenSource: 'none', apiKeySource: '/login managed key' }],
+    ['an apiKeyHelper', { tokenSource: 'apiKeyHelper', apiKeySource: 'apiKeyHelper' }],
+    ['an ANTHROPIC_AUTH_TOKEN', { tokenSource: 'ANTHROPIC_AUTH_TOKEN' }],
+    ['a third-party provider', { apiProvider: 'bedrock' }]
+  ])('starts a session Claude authenticates with %s', async (_label, account) => {
+    const claude = fakeClaude({ initAccount: { apiProvider: 'firstParty', ...account } })
+    const { adapter, events } = startingAdapter(claude)
+    await adapter.acquire(ACQUIRE)
+    await adapter.awaitStarted('session-1')
+
+    expect(events.some((event) => event.type === 'started')).toBe(true)
+    expect(events.some((event) => event.type === 'ended')).toBe(false)
+    await adapter.closeAll()
+  })
+
+  it('still refuses a start whose API key source is reported as none', async () => {
+    const claude = fakeClaude({
+      initAccount: { apiProvider: 'firstParty', tokenSource: 'none', apiKeySource: 'none' }
+    })
+    const { adapter, events } = startingAdapter(claude)
+    await adapter.acquire(ACQUIRE)
+    await adapter.awaitStarted('session-1')
+    await adapter.drainObservedExits()
+
+    expect(events.find((event) => event.type === 'ended')).toMatchObject({
+      reason: expect.stringMatching(/not signed in/)
+    })
+  })
+
   // A Stop that closes a child still starting must end the wait the host's delivery loop is in,
   // though initialize never answers; otherwise every later send joins a loop that never moves.
   it('ends the wait on a start closed before init, without faulting it', async () => {

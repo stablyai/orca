@@ -66,6 +66,7 @@ import {
   type ControlRenewalRequest
 } from './control-renewal-statement.js'
 import {
+  commitWithFinalWrite,
   REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS
 } from './database.js'
 import type { RelayCellConfig } from './config.js'
@@ -356,6 +357,13 @@ const ACTIVITY_REQUEST_UNITS: Record<AssignmentActivityKind, number> = {
 }
 
 const ASSIGNMENT_LOCK_RETRY_DEADLINE_MS = 15_000
+// Clamped at zero on release; an increase that would pass capacity changes no row.
+const CELL_RESERVATION_UPDATE = `UPDATE relay_cells SET reserved_requests =
+     CASE WHEN reserved_requests + ? < 0 THEN 0 ELSE reserved_requests + ? END,
+     updated_at = ?
+   WHERE cell_id = ?
+     AND (? <= 0 OR reserved_requests + ? <= capacity_requests)
+   RETURNING cell_id`
 // About one release round trip from Asia, with margin; see assignStickyOnce.
 const STICKY_ASSIGNMENT_ROW_WAIT_MS = 1_000
 
@@ -3724,7 +3732,7 @@ export class RelayAssignmentStore {
         )
         // Keep the contended cell row locked for only the final write and commit.
         if (!existing) {
-          await this.adjustCellReservationAtomically(transaction, input.cellId, units)
+          await this.commitCellReservationAtomically(transaction, input.cellId, units)
         }
       })
     })
@@ -3886,9 +3894,13 @@ export class RelayAssignmentStore {
          WHERE attempt_id = ?`, [now, request.attemptId]
       )
       // Must stay the last statement: the row is held from here to COMMIT.
-      const target = await this.reserveRegionalRehomeTargetRow(
-        transaction, attempt.targetCellId, attempt.targetReservedUnits, now
-      )
+      const target = await this.reserveRegionalRehomeTargetRow(transaction, {
+        identity: request,
+        assignmentEpoch: attempt.assignmentEpoch,
+        cellId: attempt.targetCellId,
+        units: attempt.targetReservedUnits,
+        now
+      })
       if (target !== 'reserved') {
         targetDeferral = target
         throw new RegionalRehomeTargetDeferred()
@@ -4204,7 +4216,7 @@ export class RelayAssignmentStore {
           now
         )
         // Release paths can safely defer the cell-row lock until their final write.
-        await this.adjustCellReservationAtomically(
+        await this.commitCellReservationAtomically(
           transaction,
           text(existing, 'cell_id'),
           -integer(existing, 'request_units')
@@ -4337,7 +4349,7 @@ export class RelayAssignmentStore {
         // trips. Holding its write lock from the first of them capped a
         // far-from-Postgres cell at a couple of accepts a second.
         if (reservationDelta !== 0) {
-          await this.adjustCellReservationAtomically(
+          await this.commitCellReservationAtomically(
             transaction,
             input.cellId,
             reservationDelta
@@ -6249,12 +6261,21 @@ export class RelayAssignmentStore {
   // the statement, because an admission flip no longer serialises against this
   // transaction any other way. Locking the admission row too makes a flip that
   // committed after the statement's snapshot re-evaluate on its new version.
+  // Connection headroom is re-checked here too: the candidate read happened before this
+  // transaction's own reservation insert, and a placement may have reserved since. Every
+  // other reservation inserter holds this row first, so NOWAIT defers rather than races.
+  // The host's own reservation is excluded by key because the insert may have added none.
   private async reserveRegionalRehomeTargetRow(
     database: RelayDatabase,
-    cellId: string,
-    units: number,
-    now: number
+    input: {
+      identity: AssignmentIdentity
+      assignmentEpoch: number
+      cellId: string
+      units: number
+      now: number
+    }
   ): Promise<'reserved' | RegionalRehomeTargetDeferral> {
+    const { identity, cellId, units, now } = input
     const lockClause = database.dialect === 'sqlite' ? '' : 'FOR UPDATE OF cell, admission NOWAIT'
     try {
       const rows = await database.queryLocked(
@@ -6268,8 +6289,39 @@ export class RelayAssignmentStore {
          UPDATE relay_cells SET reserved_requests = reserved_requests + ?, updated_at = ?
          WHERE cell_id IN (SELECT cell_id FROM target)
            AND reserved_requests + ? <= capacity_requests
+           AND (
+             NOT EXISTS (SELECT 1 FROM relay_cell_connection_limits WHERE cell_id = ?)
+             OR EXISTS (
+               SELECT 1 FROM relay_cell_connection_limits limits
+               JOIN relay_cell_connection_snapshots snapshot ON snapshot.cell_id = limits.cell_id
+               JOIN relay_cell_runtime runtime ON runtime.cell_id = limits.cell_id
+               WHERE limits.cell_id = ?
+                 AND snapshot.snapshot_at > ?
+                 AND snapshot.cell_incarnation = runtime.cell_incarnation
+                 AND snapshot.enforced_connection_units
+                   + (SELECT COUNT(*) FROM relay_control_connection_reservations reservation
+                      WHERE reservation.cell_id = limits.cell_id
+                        AND reservation.state IN ('reserved', 'late-arrival-debt', 'claimed')
+                        AND NOT (reservation.user_id = ? AND reservation.relay_host_id = ?
+                          AND reservation.assignment_epoch = ?))
+                   + limits.unobserved_bound
+                   < limits.hard_cap - ?
+             )
+           )
          RETURNING cell_id`,
-        [cellId, units, now, units],
+        [
+          cellId,
+          units,
+          now,
+          units,
+          cellId,
+          cellId,
+          now - this.heartbeatTtlMs,
+          identity.userId,
+          identity.relayHostId,
+          input.assignmentEpoch,
+          RELAY_ADMISSION_BUDGETS.reservedHostControls
+        ],
         {
           failIfUnavailable: true,
           lockClauseInStatement: true,
@@ -8492,16 +8544,31 @@ export class RelayAssignmentStore {
     cellId: string,
     delta: number
   ): Promise<void> {
-    const rows = await database.query(
-      `UPDATE relay_cells SET reserved_requests =
-         CASE WHEN reserved_requests + ? < 0 THEN 0 ELSE reserved_requests + ? END,
-         updated_at = ?
-       WHERE cell_id = ?
-         AND (? <= 0 OR reserved_requests + ? <= capacity_requests)
-       RETURNING cell_id`,
-      [delta, delta, this.now(), cellId, delta, delta]
-    )
-    if (rows.length > 0) return
+    const rows = await database.query(CELL_RESERVATION_UPDATE, [
+      delta,
+      delta,
+      this.now(),
+      cellId,
+      delta,
+      delta
+    ])
+    if (rows.length === 0) await this.refuseCellReservation(database, cellId)
+  }
+
+  // The same write as the last statement of its transaction, committed in the same round
+  // trip so the shared cell row is not held while the reply crosses to a far cell.
+  private async commitCellReservationAtomically(
+    transaction: RelayDatabase,
+    cellId: string,
+    delta: number
+  ): Promise<void> {
+    const params = [delta, delta, this.now(), cellId, delta, delta]
+    if (!(await commitWithFinalWrite(transaction, CELL_RESERVATION_UPDATE, params))) {
+      await this.refuseCellReservation(transaction, cellId)
+    }
+  }
+
+  private async refuseCellReservation(database: RelayDatabase, cellId: string): Promise<never> {
     const cell = (
       await database.query(`SELECT cell_id FROM relay_cells WHERE cell_id = ?`, [cellId])
     )[0]

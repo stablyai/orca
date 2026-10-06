@@ -93,9 +93,8 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
         with:
-          native-runtime: node
+          native-runtime: none
           node-version: ${{ matrix.node }}
-          cache-electron-package: 'true'
           cache-dependency-path: |
             pnpm-lock.yaml
             cloud/pnpm-lock.yaml

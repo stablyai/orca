@@ -2583,3 +2583,47 @@ The single hosted trial occupied 134 runner-seconds including all six samples,
 shared setup and upload. That is trial cost, not a production saving. These
 focused process measurements do not establish full-shard savings, PR runtime
 percentiles, queue relief or a change in the organization's runner allowance.
+
+## October 5 localization gate work
+
+The localization coverage audit now classifies only AST nodes that can emit string
+parts, and reuses the class-property exclusion set. It still visits every child and
+handles JSX text separately. The extraction scope skips only source extensions and
+test paths explicitly excluded by the real extractor configuration. Catalogs,
+assets, unknown extensions, configuration changes and mixed production changes
+still select extraction; both sides of a rename remain covered.
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/37360932616)
+used fixed source `761d63a4e52ff7915d4432c004df13182db63010`, Linux ARM,
+Node 24.21.0 and pnpm 12.8.1. Dependency setup was shared outside the samples.
+Each timed check was a fresh process with Node compile caching disabled.
+
+| Complete coverage audit | Original | Candidate | Paired saving |
+| ----------------------- | -------- | --------- | ------------- |
+| Pair 1                  | 9.182s   | 4.924s    | 4.258s        |
+| Pair 2, reversed order  | 9.133s   | 4.924s    | 4.209s        |
+| Pair 3                  | 8.930s   | 4.924s    | 4.007s        |
+
+The median paired saving is 4.209 seconds, or
+46.1% of this audit. All three pairs improved; the original range was
+0.252 seconds. Complete JSON finding inventories match byte-for-byte,
+including all 13 findings and their source locations. All 53 candidate tests pass.
+Four real audit mutations fail their intended assertions. An ignored test fixture
+passes the real extraction gate; renaming it into production source selects the
+gate and fails on the deliberately missing translation key.
+
+For an existing ignored test path, three conditional comparisons avoid a median
+27.628 seconds of extraction work. Original arms really run the full gate
+and pass; candidate extraction arms are explicitly `not_selected`. The routing
+tests pin the actual extractor inputs and exclusions, so configuration drift fails
+the tests. This saving applies only when every changed source path is ignored.
+
+Relay integration also omits desktop native preparation and the Electron archive
+cache. Its existing two files use Node's SQLite, HTTP and WebSocket paths; general
+unit shards retain their desktop setup. The existing 16 relay cases pass locally
+on Node 24.20.0 and 26.7.0. Removed setup work is not a measured timing saving.
+
+These comparisons exclude queues and other checks. Extraction already overlaps
+other preflight work, so conditional avoidance does not translate directly into
+preflight wall time. No change to full-PR percentiles or the concurrency allowance
+is established.

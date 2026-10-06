@@ -10,6 +10,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
+import { STATUS_METHODS } from './rpc/methods/status'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
 vi.mock('electron', () => ({
@@ -155,7 +156,8 @@ async function runBuiltCli(
       ...process.env,
       ORCA_USER_DATA_PATH: userDataPath,
       ORCA_TERMINAL_HANDLE: TERMINAL_HANDLE,
-      ORCA_PANE_KEY: PANE_KEY
+      ORCA_PANE_KEY: PANE_KEY,
+      ORCA_AGENT_LAUNCH_TOKEN: LAUNCH_TOKEN
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })
@@ -442,11 +444,8 @@ describe('STA-4325 message and delivery identity', () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-sta-4325-cli-'))
       temporaryDirectories.push(userDataPath)
       const db = new OrchestrationDb(join(userDataPath, 'orchestration.db'))
-      const runtime = new OrcaRuntimeService()
-      runtime.setOrchestrationDb(db)
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-        handle === TERMINAL_HANDLE ? PANE_KEY : null
-      )
+      const { runtime } = createRuntime(db)
+      await driveToLiveIdle(runtime)
       const run = db.createRun({
         objective: 'STA-4325 built CLI',
         coordinatorHandle: TERMINAL_HANDLE,
@@ -468,12 +467,16 @@ describe('STA-4325 message and delivery identity', () => {
         runId: run.id,
         deliveryContract: 'current_delivery'
       })
-      const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        methods: [...STATUS_METHODS, ...ORCHESTRATION_METHODS]
+      })
       await server.start()
 
       try {
         const first = await runBuiltCli(userDataPath, ['orchestration', 'check', '--json'])
-        expect(first.exitCode, first.stderr).toBe(0)
+        expect(first.exitCode, first.stderr || first.stdout).toBe(0)
         const firstPayload = JSON.parse(first.stdout) as { result: CheckResult }
         expect(firstPayload.result).toMatchObject({ runId: run.id, count: 2, replayed: false })
         expect(firstPayload.result.messages.map((message) => message.id)).toEqual([

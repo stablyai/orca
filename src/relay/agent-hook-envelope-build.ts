@@ -21,6 +21,7 @@ export function buildRelayHookEnvelope(
       : {}),
     agentPresence: event.agentPresence,
     paneKey: event.paneKey,
+    ...(event.hostTurnRevision ? { hostTurnRevision: event.hostTurnRevision } : {}),
     ...(event.launchToken ? { launchToken: event.launchToken } : {}),
     tabId: event.tabId,
     worktreeId: event.worktreeId,

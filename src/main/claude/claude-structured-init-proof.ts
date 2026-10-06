@@ -71,8 +71,11 @@ export function claudeInitializationAuthError(
   initialization: unknown
 ): AgentSessionAcquisitionRefusal | null {
   const account =
-    isRecord(initialization) && isRecord(initialization.account) ? initialization.account : null
-  return readClaudeFrameString(account ?? {}, 'tokenSource') === 'none'
+    isRecord(initialization) && isRecord(initialization.account) ? initialization.account : {}
+  // An API key (ANTHROPIC_API_KEY or a Console /login key) reports tokenSource "none".
+  const apiKeySource = readClaudeFrameString(account, 'apiKeySource')
+  return readClaudeFrameString(account, 'tokenSource') === 'none' &&
+    (apiKeySource === null || apiKeySource === 'none')
     ? new AgentSessionAcquisitionRefusal(
         'Claude is not signed in for the selected account. Sign in with the Claude CLI for this CLAUDE_CONFIG_DIR, then retry.',
         'notSignedIn'

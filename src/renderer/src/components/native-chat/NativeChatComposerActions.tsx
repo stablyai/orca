@@ -1,4 +1,4 @@
-import { ArrowUp, Mic, Plus, Square } from 'lucide-react'
+import { ArrowUp, CircleAlert, Mic, Plus, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -16,6 +16,10 @@ export type NativeChatComposerActionsProps = {
   attachDisabled: boolean
   dictationDisabled: boolean
   sendDisabled: boolean
+  /** Shown on the disabled send button: what the user can do to send. */
+  sendBlockedReason?: string | null
+  /** Storage refused this draft; it is held in memory only. */
+  draftNotSaved?: boolean
   isWorking: boolean
   isDictating: boolean
   isDictationHoldMode: boolean
@@ -38,6 +42,8 @@ export function NativeChatComposerActions({
   attachDisabled,
   dictationDisabled,
   sendDisabled,
+  sendBlockedReason,
+  draftNotSaved,
   isWorking,
   isDictating,
   isDictationHoldMode,
@@ -68,8 +74,28 @@ export function NativeChatComposerActions({
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
+  const sendReason = isWorking ? null : (sendBlockedReason ?? null)
+  const sendButton = (
+    <Button
+      type="button"
+      data-native-chat-critical-action={isWorking ? 'stop' : undefined}
+      aria-label={
+        isWorking
+          ? translate('components.native-chat.stop', 'Stop the agent')
+          : (sendReason ?? translate('components.native-chat.composer.send', 'Send'))
+      }
+      disabled={sendDisabled}
+      onClick={handleCriticalAction}
+      variant={isWorking ? 'secondary' : 'default'}
+      size="icon"
+      className="size-8 rounded-full pointer-coarse:size-10"
+    >
+      {isWorking ? <Square className="size-3.5 fill-current" /> : <ArrowUp className="size-4" />}
+    </Button>
+  )
+
   return (
-    <div className="flex w-full items-center justify-between gap-2">
+    <div className="flex w-full items-center justify-between gap-2 text-chat-foreground-faint">
       <div className="flex min-w-0 items-center gap-0.5">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -145,27 +171,44 @@ export function NativeChatComposerActions({
             {dictationLabel}
           </TooltipContent>
         </Tooltip>
-        <Button
-          type="button"
-          data-native-chat-critical-action={isWorking ? 'stop' : undefined}
-          aria-label={
-            isWorking
-              ? translate('components.native-chat.stop', 'Stop the agent')
-              : translate('components.native-chat.composer.send', 'Send')
-          }
-          disabled={sendDisabled}
-          onClick={handleCriticalAction}
-          variant={isWorking ? 'secondary' : 'default'}
-          size="icon"
-          className="size-8 rounded-full pointer-coarse:size-10"
-        >
-          {isWorking ? (
-            <Square className="size-3.5 fill-current" />
-          ) : (
-            <ArrowUp className="size-4" />
-          )}
-        </Button>
+        <DraftNotSavedIcon shown={draftNotSaved === true} />
+        {sendReason ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* A disabled button gets no pointer events, so the wrapper carries the hover. */}
+              <span className="inline-flex">{sendButton}</span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {sendReason}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          sendButton
+        )}
       </div>
     </div>
+  )
+}
+
+/** Shown only after storage refused the draft, so it never appears on a normal save. */
+function DraftNotSavedIcon({ shown }: { shown: boolean }): React.JSX.Element | null {
+  if (!shown) {
+    return null
+  }
+  const explanation = translate(
+    'components.native-chat.composer.draftNotSaved',
+    "This draft couldn't be saved yet. Orca keeps trying."
+  )
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span role="img" aria-label={explanation} className="inline-flex text-status-warning">
+          <CircleAlert className="size-4" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {explanation}
+      </TooltipContent>
+    </Tooltip>
   )
 }

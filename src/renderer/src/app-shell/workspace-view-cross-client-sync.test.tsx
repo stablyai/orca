@@ -270,6 +270,40 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(after.hideCliCreatedWorkspaces).toBe(before.hideCliCreatedWorkspaces)
   })
 
+  it('saves a revealed remote host after an unrelated older broadcast', async () => {
+    act(() => {
+      authority.set({ workspaceHostScope: 'local', visibleWorkspaceHostIds: ['local'] })
+    })
+    deliverBroadcasts()
+    act(() => {
+      authority.set({ sidebarWidth: 320 })
+      store.getState().setVisibleWorkspaceHostIds(['local', 'runtime:m4air'])
+    })
+    pendingBroadcasts.reverse()
+    deliverBroadcasts()
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['local', 'runtime:m4air'])
+    await flushDesktopDebounce()
+    deliverBroadcasts()
+    expect(authority.get().visibleWorkspaceHostIds).toEqual(['local', 'runtime:m4air'])
+    expect(authority.get().sidebarWidth).toBe(320)
+  })
+
+  it('saves All hosts after flipping back during a host-selection write', async () => {
+    holdAcks = true
+    act(() => store.getState().setWorkspaceHostScope('local'))
+    await flushDesktopDebounce()
+    act(() => store.getState().setWorkspaceHostScope('all'))
+    deliverBroadcasts()
+    expect(store.getState().visibleWorkspaceHostIds).toBeNull()
+    expect(store.getState().workspaceHostScope).toBe('all')
+    await resolveAcks()
+    holdAcks = false
+    await flushDesktopDebounce()
+    deliverBroadcasts()
+    expect(authority.get().visibleWorkspaceHostIds).toBeNull()
+    expect(authority.get().workspaceHostScope).toBe('all')
+  })
+
   it('persists a left sidebar close across an unrelated sync and restores it on startup', async () => {
     act(() => {
       store.getState().toggleSidebar()

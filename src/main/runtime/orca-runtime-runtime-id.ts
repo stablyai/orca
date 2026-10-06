@@ -133,6 +133,9 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected sessionTabsInventoryWaiters = new Set<() => void>()
 
+  // Worktrees answered with the unpublished placeholder, owed their real answer once the graph publishes.
+  protected worktreesAwaitingSessionTabsPublication = new Set<string>()
+
   protected readonly clientHostedPageReconciliation = new ClientHostedPageReconciliationWindow(
     Date.now()
   )

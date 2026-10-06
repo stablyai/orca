@@ -96,9 +96,8 @@ export function useStructuredAgentSessionOptions(args: {
     target,
     optionCatalog,
     enabled: args.isVisible,
-    // A resumed conversation may keep its own model, so only a new one runs the listed default —
-    // and only Codex's listing names the configured model; Claude's settings or env may pick another.
-    namesDefault: launch?.kind === 'new' && agent === 'codex',
+    // A resumed conversation may keep its own model, so only a new one runs the listed default.
+    namesDefault: launch?.kind === 'new' && optionCatalog?.hostListingNamesConfiguredModel === true,
     ...(launch?.worktree ? { worktree: launch.worktree } : {}),
     fence,
     activeOptionRecordRef,

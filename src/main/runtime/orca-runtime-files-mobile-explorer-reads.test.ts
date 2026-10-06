@@ -264,4 +264,28 @@ describe('RuntimeFileCommands', () => {
     ])
     expect(statMock).not.toHaveBeenCalledWith('/repo/linked-docs')
   })
+  it.each([
+    { setting: true, override: undefined, expected: true },
+    { setting: true, override: false, expected: false },
+    { setting: false, override: true, expected: true }
+  ])(
+    'applies runtime symlink setting $setting with override $override',
+    async ({ setting, override, expected }) => {
+      const { commands, store } = createRuntimeFileCommands()
+      store.getSettings.mockReturnValue({ followSymlinkedDirectories: setting })
+      resolveAuthorizedPathMock.mockImplementation(async (path) => path)
+      readdirMock.mockResolvedValue([dirEntry({ name: 'linked-docs', symlink: true })])
+      statMock.mockResolvedValue({ isDirectory: () => true })
+
+      await expect(
+        commands.readFileExplorerDir('id:wt-1', '', { followSymlinks: override })
+      ).resolves.toEqual([{ name: 'linked-docs', isDirectory: expected, isSymlink: true }])
+      expect(store.getSettings).toHaveBeenCalledTimes(override === undefined ? 1 : 0)
+      if (expected) {
+        expect(statMock).toHaveBeenCalledWith('/repo/linked-docs')
+      } else {
+        expect(statMock).not.toHaveBeenCalled()
+      }
+    }
+  )
 })

@@ -22,6 +22,7 @@ import {
   type AgentSessionFailureWordsContext
 } from '../../../shared/agent-session-failure-words'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 import {
   structuredAgentSessionStartFailure,
   type StructuredAgentSessionStartFailureCause
@@ -45,6 +46,7 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 export type StructuredAgentSessionDeliveryLoopDeps = {
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
   adapter: StructuredAgentSessionAdapter
+  agents: StructuredAgentRegistry
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   /** A start step, tracked from enqueue so quit waits for the child it may produce. */
   trackStart: <T>(start: Promise<T>) => Promise<T>
@@ -238,6 +240,7 @@ export class StructuredAgentSessionDeliveryLoop {
         journal: session.journal,
         fence: awaitedChild.fence,
         adapter: this.deps.adapter,
+        agents: this.deps.agents,
         providerChildPhase: () => this.deps.sessions.get(sessionId)?.child?.phase,
         failureTextContext: this.deps.failureTextContext(sessionId),
         record: () => this.deps.record(sessionId),

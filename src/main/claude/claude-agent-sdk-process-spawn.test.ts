@@ -121,32 +121,21 @@ describe('claude agent SDK process spawn', () => {
       spawn.spawn(sdkOptions())
       expect(spawn.supervised).toBe(specSupervised)
 
-      let exited = false
-      let settle = (): void => {}
-      const exitPromise = new Promise<void>((resolve) => {
-        settle = resolve
-      })
-      // Claude leaves shortly after stdin ends, so the ladder never needs its forced rung.
+      const managed = spawn.managed
+      if (!managed) {
+        throw new Error('Claude spawner did not retain its managed child')
+      }
+      // Claude leaves shortly after stdin ends, before the forced stop.
       process.child.stdin.on('finish', () =>
-        setTimeout(() => {
-          exited = true
-          settle()
-        }, 10)
+        setTimeout(() => process.child.emit('exit', 0, null), 10)
       )
       const tree = {
         capture: vi.fn(async () => {}),
         reap: vi.fn(async () => 'exited' as const),
         treeVerdict: 'exited' as const
       }
-      await proveClaudeChildExitWithReaper(
-        {
-          child: process.child,
-          exitPromise,
-          exited: () => exited,
-          tree,
-          supervised: spawn.supervised
-        },
-        () => tree
+      await expect(proveClaudeChildExitWithReaper({ managed, tree }, () => tree)).resolves.toBe(
+        true
       )
       // SIGTERM to an unsupervised Claude on Windows is TerminateProcess; a skipped one leaves it running.
       if (specSupervised) {
@@ -176,8 +165,8 @@ describe('claude agent SDK process spawn', () => {
     process.child.stderr.write('claude: not signed in')
     await new Promise((resolve) => setImmediate(resolve))
 
-    expect(spawn.stderrTail).toMatch(/claude: not signed in$/)
-    expect(spawn.stderrTail.length).toBe(8192)
+    expect(spawn.managed?.stderrTail()).toMatch(/claude: not signed in$/)
+    expect(spawn.managed?.stderrTail().length).toBe(8192)
   })
 
   it('hands a Windows .cmd shim to Orca\u2019s argument encoder', () => {

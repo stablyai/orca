@@ -52,6 +52,56 @@ async function listenSilentUpgradeServer(): Promise<string> {
 }
 
 describe('remote runtime subscription connect bound', () => {
+  it('closes an unanswered real upgrade immediately when setup is cancelled', async () => {
+    const endpoint = await listenSilentUpgradeServer()
+    const keyPair = generateKeyPair()
+    const controller = new AbortController()
+    const pending = subscribeRemoteRuntimeTransport(
+      {
+        v: 2,
+        endpoint,
+        deviceToken: 'device-token',
+        publicKeyB64: publicKeyToBase64(keyPair.publicKey)
+      },
+      'files.search',
+      { worktree: 'id:fixture', query: 'needle' },
+      15_000,
+      { onResponse: vi.fn(), onError: vi.fn(), onClose: vi.fn() },
+      { signal: controller.signal }
+    )
+    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => expect(sockets.size).toBe(1))
+    for (const socket of sockets) {
+      socket.resume()
+    }
+    controller.abort()
+    await rejection
+    await vi.waitFor(() => expect(sockets.size).toBe(0))
+  })
+
+  it('creates no socket for a pre-aborted request', async () => {
+    const endpoint = await listenSilentUpgradeServer()
+    const keyPair = generateKeyPair()
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      subscribeRemoteRuntimeTransport(
+        {
+          v: 2,
+          endpoint,
+          deviceToken: 'device-token',
+          publicKeyB64: publicKeyToBase64(keyPair.publicKey)
+        },
+        'files.search',
+        {},
+        15_000,
+        { onResponse: vi.fn(), onError: vi.fn() },
+        { signal: controller.signal }
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(sockets.size).toBe(0)
+  })
+
   it('fails an unanswered subscribe on the connect bound, with a message that survives the code strip', async () => {
     const endpoint = await listenSilentUpgradeServer()
     const keyPair = generateKeyPair()

@@ -1,9 +1,8 @@
 import { memo, useCallback, useRef } from 'react'
 import { Goal, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import CommentMarkdown, {
-  type CommentMarkdownLinkClickHandler
-} from '@/components/sidebar/CommentMarkdown'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -59,7 +58,7 @@ function UserMessageMeta({
         <NativeChatCopyButton text={markdown} className={sending ? USER_META_REVEAL : undefined} />
       ) : null}
       {sending ? (
-        <span className="text-xs whitespace-nowrap text-muted-foreground">
+        <span className="text-xs whitespace-nowrap text-chat-foreground-faint">
           {translate('components.native-chat.messageSending', 'Sending…')}
         </span>
       ) : (
@@ -178,9 +177,8 @@ export const MessageRow = memo(function MessageRow({
   if (isUser) {
     return (
       <div ref={rowRef} className="group relative flex flex-col items-end gap-0.5">
-        {/* User turns get a distinct muted fill (not the card/canvas color) so
-            the prompt reads apart from the assistant's body copy. */}
-        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
+        {/* A distinct surface separates the user's prompt from the assistant's prose. */}
+        <div className="max-w-[80%] rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-sm native-chat-message-text text-chat-foreground-strong">
           {markdown ? (
             <>
               <NativeChatImageAttachments
@@ -188,10 +186,10 @@ export const MessageRow = memo(function MessageRow({
                 runtimeContext={runtimeContext}
                 enablePreview={runtimeContext !== undefined}
               />
-              <CommentMarkdown
+              <NativeChatMarkdown
                 content={markdown}
                 variant="document"
-                className="text-sm"
+                className="text-sm native-chat-message-text"
                 renderCodeBlock={NativeChatCodeBlock}
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
@@ -246,11 +244,13 @@ export const MessageRow = memo(function MessageRow({
   return (
     <div
       ref={rowRef}
+      data-native-chat-message-tone={isReasoning || isSystem ? 'faint' : undefined}
       className={cn(
-        'group relative max-w-full select-text text-sm leading-relaxed text-foreground',
-        // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
-        isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
-        isSystem && 'text-xs text-muted-foreground'
+        'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',
+        !isSystem && 'native-chat-message-text',
+        // Reasoning stays quieter while keeping the same upright text as prose.
+        isReasoning && 'border-l-2 border-border/60 pl-3 text-chat-foreground-faint',
+        isSystem && 'text-xs text-chat-foreground-faint'
       )}
     >
       <NativeChatImageAttachments
@@ -259,10 +259,10 @@ export const MessageRow = memo(function MessageRow({
         enablePreview={runtimeContext !== undefined}
       />
       {markdown ? (
-        <CommentMarkdown
+        <NativeChatMarkdown
           content={markdown}
           variant="document"
-          className="text-sm"
+          className="text-sm native-chat-message-text"
           renderCodeBlock={NativeChatCodeBlock}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}

@@ -37,7 +37,7 @@ LEFT JOIN pg_stat_activity holder ON holder.pid = root.pid
 WHERE w.application_name LIKE 'orca-relay/%'
 GROUP BY 1, 2, 3`
 
-const RELAY_ROLES = new Set(['director', 'cell'])
+const RELAY_ROLES = new Set(['director', 'cell', 'combined'])
 
 export async function readPostgresLockWaitSample(
   database: RelayDatabase

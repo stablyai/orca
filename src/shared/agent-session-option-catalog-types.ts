@@ -76,6 +76,9 @@ export type AgentSessionOptionCatalog = {
    * model while the picker, which never reads launch args, still names the CLI default.
    * A real fix means threading `modelApply.removeAgentArgs` through to the surface. */
   defaultModelIsCliDefault?: true
+  /** The host's model listing names the model the account is configured to run, so a new chat
+   *  may run the listed default. Off where the agent's own settings or env may pick another. */
+  hostListingNamesConfiguredModel?: true
   listModels?: {
     command: string
     parse: (stdout: string) => CatalogModel[]

@@ -52,6 +52,23 @@
           "statusItem": "elemento de estado",
           "activity": "actividad"
         }
+      },
+      "chat": {
+        "title": "Chat",
+        "textSize": "Tamaño del texto",
+        "textSizeDescription": "Mensajes, actividad de herramientas y cuadro de mensaje. {{increase}} / {{decrease}} en un chat también cambian este valor.",
+        "codeTextSize": "Tamaño del texto del código",
+        "codeTextSizeDescription": "Bloques de código, código en línea, comandos y salida de herramientas.",
+        "width": "Ancho",
+        "widthDescription": "Cuánto pueden ampliarse los mensajes y el cuadro de mensaje en un panel ancho.",
+        "resetAppearance": "Restablecer apariencia del chat",
+        "resetDescription": "Restaurar los valores predeterminados anteriores.",
+        "comfortable": "Cómodo",
+        "wide": "Amplio",
+        "full": "Completo",
+        "pixels": "px",
+        "reset": "Restablecer",
+        "summary": "{{fontSize}}px · Ancho {{width}}"
       }
     },
     "browser": {
@@ -894,7 +911,8 @@
             "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
             "invalidImage": "{{fileName}} is not a valid supported image.",
             "additionalErrors": "{{count}} additional images could not be attached.",
-            "totalTooLarge": "{{fileName}} superaría el total de {{maxSize}} de archivos adjuntos."
+            "totalTooLarge": "{{fileName}} superaría el total de {{maxSize}} de archivos adjuntos.",
+            "compressed": "{{fileName}} se comprimió de {{originalSize}} a {{size}} para ajustarse al límite de archivos adjuntos."
           }
         }
       },
@@ -933,6 +951,16 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "El texto es demasiado grande para copiarlo."
+      },
+      "reveal": {
+        "in": {
+          "file": {
+            "manager": {
+              "notFound": "No se encontró el archivo. Puede que se haya movido o eliminado.",
+              "launchFailed": "No se pudo mostrar el archivo."
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -3342,10 +3370,7 @@
             "1d04b1630b": "Dividir hacia abajo",
             "6b3efb106e": "Dividir hacia arriba",
             "fdd29eb669": "Fijar pestaña",
-            "8e9d603a09": "Desanclar pestaña",
-            "revealInFinder": "Revelar en Finder",
-            "openContainingFolder": "Abrir carpeta contenedora",
-            "revealInFileExplorer": "Revelar en el Explorador de archivos"
+            "8e9d603a09": "Desanclar pestaña"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Ajustes de Agents…",
@@ -4010,6 +4035,15 @@
             "contact_note": "Es posible que el host todavía esté ejecutándose; sólo la conexión Orca no está disponible.",
             "last_connected": "Última conexión {{value0}}",
             "reconnect_attempt": "Intento {{value0}}"
+          },
+          "provider": {
+            "extra": {
+              "usage": {
+                "section": {
+                  "135d51c19f": "Límite {{value0}}"
+                }
+              }
+            }
           }
         }
       },
@@ -5702,7 +5736,7 @@
           "3921d3d9a5": "No se encontró la carpeta del espacio de trabajo.",
           "f387af445b": "La ruta del espacio de trabajo no es una ruta local válida.",
           "3ec372b664": "gestor de archivos",
-          "localOnly": "Local only",
+          "localOnly": "Solo local",
           "remoteSsh": "Remote SSH",
           "remoteRuntimeUnsupported": "Opening this path in a local app is not available.",
           "remoteRuntimeUnsupportedDetail": "Switch to a local or SSH workspace, then try again.",
@@ -6225,6 +6259,7 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
+          "preparing": "Preparando archivos adjuntos…",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}",
           "screenshotsHint": "Adjunta hasta {{count}} capturas de pantalla, {{maxSize}} en total"
@@ -6454,8 +6489,8 @@
           "96f3649526": "Usar credenciales de Gemini CLI (experimental)",
           "d676c41fc6": "Extrae credenciales OAuth de tu instalación local de Gemini CLI para autenticarse con Google. Usa credenciales emitidas para la app Gemini CLI, no para Orca. Puede romperse si Google actualiza la CLI. Úsalo bajo tu propio riesgo.",
           "0c7f915b01": "Usar credenciales de Gemini CLI",
-          "973741a871": "Configura los ajustes del proveedor Gemini.",
-          "0c64dc2a64": "Gemini",
+          "973741a871": "Mantén disponibles las sesiones existentes de Gemini CLI. Las credenciales de Gemini no sirven para iniciar sesión en Antigravity.",
+          "0c64dc2a64": "Gemini CLI (heredado)",
           "db209ee572": "Eliminar",
           "8a0f870153": "Volver a autenticar",
           "3d245ef7d9": "Codex informó que este inicio de sesión no está actualizado",
@@ -7135,8 +7170,8 @@
             "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell",
             "resumeCopy": "Cuando Orca se cierra o instala una actualización, los chats que estaban trabajando se reanudan automáticamente al volver a abrir Orca.",
             "structuredTitle": "Utilice el chat nativo estructurado actualizado",
-            "structuredCopy": "Abra nuevos agentes de Codex y Claude como chats estructurados. Off los abre en el chat respaldado por la terminal. Los chats que ya existen permanecen como están.",
-            "structuredScope": "Se ejecuta en esta máquina y en servidores Orca emparejados que ejecutan una versión que lo admita; Los servidores más antiguos mantienen el chat del terminal. Los hosts WSL y SSH continúan usando el chat de terminal y Windows recurre a él a menos que Orca pueda leer las horas de inicio del proceso.",
+            "structuredCopy": "Abra nuevos agentes de Codex y Claude como chats estructurados. Si está desactivado, los abre en el chat respaldado por la terminal. Los chats que ya existen permanecen como están.",
+            "structuredScope": "Se ejecuta en esta máquina y en servidores Orca emparejados que ejecutan una versión que lo admita; los servidores más antiguos mantienen el chat de terminal. Los hosts WSL y SSH continúan usando el chat de terminal y Windows recurre a él a menos que Orca pueda leer las horas de inicio del proceso.",
             "structuredToggleLabel": "Alternar chat nativo estructurado actualizado",
             "resumeTitle": "Reanudar los chats de trabajo automáticamente después de reiniciar",
             "resumeToggleLabel": "Alternar reanudación automática después de un reinicio"
@@ -7181,7 +7216,7 @@
         "GeneralEditorSettingsSection": {
           "f80603d293": "Muestra controles de notas Markdown en todas las vistas Markdown e incluye esas notas en las acciones de handoff de agentes.",
           "4edc104f0f": "Notas Markdown de revisión",
-          "5f02e6fb21": "Muestra controles de notas Markdown locales en archivos Markdown.",
+          "5f02e6fb21": "Muestra controles de notas de revisión de Markdown locales en archivos Markdown.",
           "51161d1647": "Muestra la vista general del minimapa al editar un archivo.",
           "6690b1ffb9": "Minimapa",
           "5a1ea6eaa2": "Oculto",
@@ -13799,7 +13834,7 @@
           "69af7e9c1c": "aún no está en tu PATH. Orca lo configurará como predeterminado y podrás instalarlo en cualquier momento.",
           "1eee1c7bd8": "No se detectaron agentes en tu PATH. Elige uno para instalarlo más tarde o continúa con una terminal en blanco.",
           "hideAgents": "Ocultar agentes",
-          "showMoreAgents": "Mostrar {{value0}} agentes más→",
+          "showMoreAgents": "Mostrar {{value0}} agentes más →",
           "yoloModeLabel": "Modo Yolo",
           "yoloPermissionsDescription": "Los agentes ejecutan comandos y editan archivos sin preguntar, y algunos también omiten su sandbox. Úsalo solo en proyectos de confianza."
         },
@@ -15063,10 +15098,7 @@
           "f0fd4174b5": "Abre la pestaña de archivo para usar la edición enriquecida de Markdown",
           "a10d9b8337": "Abrir archivo",
           "2076ecfc9c": "Cambio anterior",
-          "631dab0df3": "Cambio siguiente",
-          "revealInFinder": "Revelar en Finder",
-          "openContainingFolder": "Abrir carpeta contenedora",
-          "revealInFileExplorer": "Revelar en el Explorador de archivos"
+          "631dab0df3": "Cambio siguiente"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Exportar como PDF",
@@ -16700,11 +16732,17 @@
             "permission": "Requiere atención"
           },
           "filtersSection": "Filtros",
-          "viewSection": "Vista"
+          "viewSection": "Vista",
+          "threadListOptionsActive": "Opciones de lista de hilos ({{value0}} activos)",
+          "activityOptionsActive": "Opciones de actividad ({{value0}})"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "Mostrar todos los hosts y proyectos",
-          "hiddenCount": "{{value0}} oculto"
+          "hiddenCount": "{{value0}} oculto",
+          "hideAutomationCreated": "Ocultar creados por automatizaciones",
+          "hideCliCreated": "Ocultar creados por el CLI",
+          "hideOtherClientsAria": "Ocultar agentes en espacios de trabajo creados desde otros clientes de Orca en servidores remotos compartidos",
+          "hideOtherClients": "Ocultar agentes de otros clientes"
         },
         "ActivityThreadRow": {
           "clearNotification": "Borrar notificación"
@@ -16729,6 +16767,25 @@
         "standaloneWorktree": {
           "floatingTerminal": "Terminal flotante",
           "standaloneTerminal": "Terminal independiente"
+        },
+        "ActivityThreadContextMenu": {
+          "copyTitle": "Copiar título",
+          "copyPath": "Copiar ruta",
+          "open": "Abrir",
+          "markRead": "Marcar como leído",
+          "markUnread": "Marcar como no leído",
+          "goToWorkspace": "Ir al espacio de trabajo",
+          "clear": "Quitar de la lista",
+          "agentSection": "Agente",
+          "markManyRead_one": "Marcar {{count}} agente como leído",
+          "markManyRead_other": "Marcar {{count}} agentes como leídos",
+          "markManyUnread_one": "Marcar {{count}} agente como no leído",
+          "markManyUnread_other": "Marcar {{count}} agentes como no leídos",
+          "clearMany_one": "Quitar {{count}} agente de la lista",
+          "clearMany_other": "Quitar {{count}} agentes de la lista",
+          "markManyRead": "Marcar {{count}} agentes como leídos",
+          "markManyUnread": "Marcar {{count}} agentes como no leídos",
+          "clearMany": "Quitar {{count}} agentes de la lista"
         }
       },
       "confirmation": {
@@ -17612,6 +17669,13 @@
         "localAttachmentUnsupported": "Los archivos adjuntos locales no están disponibles para sesiones remotas.",
         "removeAttachment": "Quitar archivo adjunto",
         "pastedImageLabel": "Imagen pegada",
+        "draftNotSaved": "Este borrador aún no se ha podido guardar. Orca lo sigue intentando.",
+        "imageNotBroughtBack": "No se pudo recuperar la imagen {{name}} con este borrador. Vuelve a adjuntarla o quítala.",
+        "pastedImageNotBroughtBack": "No se pudo recuperar esta imagen pegada con este borrador. Quítala y vuelve a pegarla si aún la necesitas.",
+        "removeImageToSend": "No se pudo recuperar una imagen. Quítala para enviar.",
+        "removeImagesToSend": "No se pudieron recuperar algunas imágenes. Quítalas para enviar.",
+        "imageAttachAgainLabel": "Adjuntar de nuevo",
+        "pastedImageNotKeptLabel": "No se conservó",
         "imagePasteFailed": "Error al pegar imagen.",
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
         "pasteUnavailable": "No se puede pegar — este chat no acepta entradas en este momento.",
@@ -17673,6 +17737,8 @@
         "moreCalls": "+{{value0}} más",
         "failedCount": "{{value0}} fallidas",
         "failedCallsLabel": "Llamadas a herramientas fallidas: {{value0}}",
+        "interruptedCount": "{{value0}} interrumpidas",
+        "interruptedCallsLabel": "Llamadas a herramientas interrumpidas: {{value0}}",
         "runningPreview": "Ejecutando {{preview}}",
         "runningCommand": "Ejecutando comando",
         "runningNamedPreview": "Ejecutando {{toolName}} {{preview}}",
@@ -17683,13 +17749,35 @@
         "ranCommandsManyToolsSummary": "Se ejecutaron {{commandCount}} comandos y se usaron {{toolCount}} herramientas",
         "usedOneSummary": "Se usó 1 herramienta",
         "usedManySummary": "Se usaron {{toolCount}} herramientas",
-        "editedFile": "Archivo editado",
-        "addedFile": "Archivo añadido",
-        "deletedFile": "Archivo eliminado",
-        "renamedFile": "Archivo renombrado",
         "copyDiff": "Copiar diff",
         "diffGap": "Líneas no mostradas",
         "diffTruncated": "Diff truncado",
+        "row": {
+          "running": "Ejecutando",
+          "reading": "Leyendo",
+          "editing": "Editando",
+          "searching": "Buscando",
+          "searchingWeb": "Buscando en la web",
+          "fetching": "Obteniendo",
+          "listed": "Listó",
+          "listing": "Listando",
+          "ran": "Ejecutó",
+          "read": "Leyó",
+          "edited": "Editó",
+          "searched": "Buscó",
+          "searchedWeb": "Buscó en la web",
+          "fetched": "Obtuvo",
+          "added": "Añadió",
+          "deleted": "Eliminó",
+          "renamed": "Renombró",
+          "subagent": "Subagente",
+          "triedRead": "Intentó leer",
+          "triedEdit": "Intentó editar",
+          "triedSearch": "Intentó buscar",
+          "triedList": "Intentó listar",
+          "triedFetch": "Intentó obtener",
+          "triedSearchWeb": "Intentó buscar en la web"
+        },
         "runReadOne": "Se leyó 1 archivo",
         "runReadMany": "Se leyeron {{value0}} archivos",
         "runSearchOne": "Se buscó 1 vez",
@@ -18241,6 +18329,16 @@
         "workspaceReadyToast": "El espacio de trabajo {{name}} está listo",
         "goToWorktree": "Ir al worktree",
         "goToWorkspace": "Ir al espacio de trabajo"
+      },
+      "delete": {
+        "changes": {
+          "permanentLoss": "Los cambios sin confirmar o sin seguimiento en los espacios de trabajo de Git se eliminarán de forma permanente.",
+          "clean": "No hay cambios sin confirmar ni sin seguimiento",
+          "unavailable": "No se pudieron comprobar los cambios",
+          "checking": "Comprobando si hay cambios…",
+          "checkingDetails": "Comprobando…",
+          "unavailableDetails": "Detalles no disponibles"
+        }
       }
     },
     "agentSessionContinuation": {
@@ -18358,6 +18456,11 @@
         "days": "{{value0}} d",
         "underOneMinute": "<1 min"
       }
+    },
+    "jiraIssueAssigneeField": {
+      "label": "Asignado",
+      "automatic": "Automático",
+      "assignToMe": "Asignármelo ({{name}})"
     }
   },
   "dashboardPopout": {
@@ -18965,5 +19068,54 @@
   },
   "fileSearch": {
     "failed": "La búsqueda falló. Reintenta."
+  },
+  "csv": {
+    "detectingDelimiter": "Detectando delimitador…",
+    "indexProgress": "Indexando CSV… {{percent}}%",
+    "loadingCell": "Cargando…",
+    "nextRows": "Filas siguientes",
+    "previousRows": "Filas anteriores",
+    "readOnlyPreview": "Vista previa de archivo grande · Solo lectura",
+    "resizeColumn": "Cambiar el ancho de la columna {{column}}",
+    "rowWindow": "Filas {{first}}–{{last}}",
+    "editor": "Editor de CSV",
+    "editCell": "Editar fila {{row}}, columna {{column}}",
+    "filterRows": "Filtrar filas",
+    "edit": "Editar celda",
+    "copy": "Copiar",
+    "paste": "Pegar",
+    "rows": "Filas",
+    "insertRowAbove": "Insertar fila arriba",
+    "insertRowBelow": "Insertar fila abajo",
+    "deleteRows": "Eliminar las filas seleccionadas",
+    "columns": "Columnas",
+    "newColumn": "Columna {{column}}",
+    "insertColumnBefore": "Insertar columna delante",
+    "insertColumnAfter": "Insertar columna detrás",
+    "moveColumnLeft": "Mover columna a la izquierda",
+    "moveColumnRight": "Mover columna a la derecha",
+    "deleteColumns": "Eliminar las columnas seleccionadas",
+    "sort": "Ordenar",
+    "sortAscending": "Ordenar la columna seleccionada de forma ascendente",
+    "sortDescending": "Ordenar la columna seleccionada de forma descendente",
+    "originalOrder": "Orden de filas original",
+    "save": "Guardar",
+    "inspectionOnly": "Solo inspección · Se mantiene el orden de filas del archivo"
+  },
+  "worktree": {
+    "nestedRemoval": {
+      "refreshFailed": "No se pudo actualizar la lista de espacios de trabajo",
+      "review": "Eliminar con worktrees anidados…",
+      "title": "¿Eliminar el espacio de trabajo y los worktrees anidados?",
+      "description": "Esto elimina de forma permanente \"{{name}}\", todos los worktrees anidados que se indican a continuación y todos los archivos que contienen, incluidos los cambios sin confirmar. Se detendrán sus terminales y agentes.",
+      "detached": "HEAD desacoplado",
+      "loading": "Comprobando worktrees anidados…",
+      "order": "Los worktrees anidados se eliminan primero. Si uno falla, la eliminación se detiene y se conserva el principal. Las ramas siguen tu configuración de eliminación existente.",
+      "cancel": "Cancelar",
+      "retry": "Revisar de nuevo",
+      "deleting": "Eliminando…",
+      "confirm": "Eliminar todos los worktrees indicados",
+      "preservedBranches": "Se conservaron algunas ramas de worktrees anidados"
+    }
   }
 }

@@ -1086,6 +1086,71 @@ resource "google_monitoring_alert_policy" "relay_region_hint_skew" {
   depends_on = [google_logging_metric.relay_snapshot]
 }
 
+# Declared for a targeted apply after the step-2 wave. Cells only: a director-only fix must not
+# raise the level the cells are held to. sum / count of the distribution is the exact level.
+resource "google_logging_metric" "relay_cell_fix_level" {
+  project         = var.project_id
+  name            = "orca_relay_cell_fix_level"
+  description     = "RELAY_FIX_LEVEL reported by each cell's runtime metrics line."
+  filter          = "${local.relay_runtime_log_filter} AND jsonPayload.role=\"cell\" AND jsonPayload.fixLevel:*"
+  value_extractor = "EXTRACT(jsonPayload.fixLevel)"
+  label_extractors = {
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+  }
+
+  bucket_options {
+    linear_buckets {
+      num_finite_buckets = 64
+      width              = 1
+      offset             = 0
+    }
+  }
+}
+
+locals {
+  relay_cell_fix_level_hourly = "(sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_cell_fix_level_sum{monitored_resource=\"gce_instance\"}[1h])) / sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_cell_fix_level_count{monitored_resource=\"gce_instance\"}[1h])))"
+  relay_cell_serving          = "(sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_controls_sum{monitored_resource=\"gce_instance\",role=\"cell\"}[1h])) > 0)"
+}
+
+# One PromQL condition per policy, and log-based metrics allow at most 25 h of lookback, so the
+# floor is a fixed variable rather than a fleet maximum: raise it with a targeted apply once a
+# wave has rolled every serving cell. Images from before the field report no level at all.
+resource "google_monitoring_alert_policy" "relay_cell_outdated_fix_level" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell left on an outdated image"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Serving cell below fix level ${var.relay_cell_min_fix_level} for 6 hours"
+
+    condition_prometheus_query_language {
+      query    = "((${local.relay_cell_fix_level_hourly} < ${var.relay_cell_min_fix_level}) or (${local.relay_cell_serving} unless on (cell_id) ${local.relay_cell_fix_level_hourly})) and on (cell_id) ${local.relay_cell_serving}"
+      duration = "21600s"
+    }
+  }
+
+  documentation {
+    content   = "A cell holding desktops runs an image below `relay_cell_min_fix_level`, or one too old to report `fixLevel`. On 2026-09-28, 18 cells still ran images without the pg connection-error fix and crashed in a two-minute database failover, dropping ~16.3k hosts. Roll the named cell with a same-capacity roll to the current digest. Empty cells do not fire because they hold no controls. Raise the floor only after a wave has rolled every serving cell."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_cell_fix_level]
+}
+
 # Why: the four signals that had to be assembled by hand during the 2026-09-04 incident.
 resource "google_monitoring_dashboard" "relay_incident" {
   project = var.project_id

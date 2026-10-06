@@ -611,6 +611,44 @@ function director503s(minute, count) {
   return [{ minute503: minute, count }]
 }
 
+test('row-busy 503s are scheduled only up to the drain-return admissions they ride on', () => {
+  const drain = drainReturnByMinute([{
+    failed: false,
+    samples: [{
+      timestamp: '2026-10-05T20:01:00Z',
+      drainReturnAssignmentsDelta: 10,
+      assign503sByCauseDelta: { relay_assignment_row_busy: 8, 'placement-lane': 5 }
+    }]
+  }], 1000)
+  assert.deepEqual(drain.ownRetriesPerMinute, { '2026-10-05T20:00': 8 })
+  assert.equal(drain.rowBusyBeyondDrainTotal, 0)
+  const split = withoutDrainDeferrals(
+    { perMinute: { '2026-10-05T20:00': 13 } },
+    drain,
+    ['2026-10-05T20:00']
+  )
+  // The placement-lane refusals stay: only the row-busy ones were scheduled.
+  assert.deepEqual(split.series, [5])
+})
+
+test('row-busy 503s beyond the drain stay in the non-drain budget and fail it', () => {
+  const minutes = Array.from({ length: 10 }, (_, index) => `2026-10-05T20:0${index}`)
+  // No drain in the background, and 3 drain-return admissions a minute in the window against 60
+  // row-busy refusals: row contention the drain does not explain.
+  const samples = minutes.map((minute, index) => ({
+    timestamp: new Date(Date.parse(`${minute}:30Z`) + 30_000).toISOString(),
+    drainReturnAssignmentsDelta: index < 5 ? 0 : 3,
+    assign503sByCauseDelta: { relay_assignment_row_busy: index < 5 ? 0 : 60 }
+  }))
+  const drain = drainReturnByMinute([{ failed: false, samples }], 1000)
+  assert.equal(drain.rowBusyBeyondDrainTotal, 5 * (60 - 3 - 2))
+  const perMinute = Object.fromEntries(minutes.map((minute, index) => [minute, index < 5 ? 2 : 60]))
+  const background = backgroundOf(withoutDrainDeferrals({ perMinute }, drain, minutes.slice(0, 5)))
+  const observed = withoutDrainDeferrals({ perMinute }, drain, minutes.slice(5))
+  assert.deepEqual(observed.series, [55, 55, 55, 55, 55])
+  assert.equal(judgeNonDrain503Budget({ observed, background }).status, 'would-block')
+})
+
 test('scheduled 503s come out of the count, split across the minutes they cover', () => {
   const drain = drainReturnByMinute([{
     failed: false,

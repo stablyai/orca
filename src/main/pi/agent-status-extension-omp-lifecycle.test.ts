@@ -44,9 +44,16 @@ describe('OMP agent_end contract', () => {
     )
   })
 
+  it('subscribes once when the factory runs again on the same bus', () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    harness.reload()
+    expect(harness.piEventListenerCount('task:subagent:lifecycle')).toBe(1)
+    expect(harness.piEventListenerCount('subagent:process-terminal')).toBe(1)
+  })
+
   it('keeps one lifecycle subscription across extension reloads', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
-    harness.reload()
+    await harness.reloadPi()
     expect(harness.piEventListenerCount('task:subagent:lifecycle')).toBe(1)
     expect(harness.piEventListenerCount('subagent:async-started')).toBe(1)
     expect(harness.piEventListenerCount('subagent:async-complete')).toBe(1)

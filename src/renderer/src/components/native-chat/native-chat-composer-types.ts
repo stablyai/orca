@@ -51,6 +51,9 @@ export type NativeChatComposerProps = {
   terminalTabId: string
   /** Stable split-leaf identity; unlike a PTY id, this survives reconnects. */
   paneKey: string
+  /** Owner of the unsent draft; defaults to `paneKey`. A structured chat's is its conversation,
+   *  shared by every composer showing it. */
+  draftScopeKey?: string
   /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
   agent: AgentType

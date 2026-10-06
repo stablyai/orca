@@ -24,6 +24,9 @@ const PRODUCTION_CANARIES = {
   },
   'production-gce-c33': {
     kind: 'production-c33-canary', origin: 'https://c33.relay.onorca.dev', region: US_REGION
+  },
+  'production-gce-c34': {
+    kind: 'production-c34-canary', origin: 'https://c34.relay.onorca.dev', region: ASIA_REGION
   }
 }
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/

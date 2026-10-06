@@ -19,6 +19,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
+import { advanceProbeClock, useProbeClock } from './NativeChatStructuredSession.test-harness'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import { agentSessionWriteNoticeEnglish } from '../../../../shared/agent-session-refusal-notice'
@@ -43,7 +44,10 @@ function outboxProps(submissions: AgentJournalSubmission[]): OutboxProps {
 const NO_JOURNAL_ITEMS: readonly AgentJournalRenderItem[] = []
 
 // Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 function shownFailure(entry: StructuredAgentSessionOutboxEntry | undefined): string | undefined {
   return (
@@ -297,6 +301,7 @@ describe('a send the host rejected because the agent never started', () => {
   // One stored host fact, one rendering: a message the host recorded and rejected, whose record this
   // chat does not hold, keeps showing why on every mount, with no control, and is never sent again.
   it('keeps a message the host rejected, with no control, on every mount, and never resends it', async () => {
+    useProbeClock()
     writeOutbox('session-1', [
       {
         ...rejectedBeforeRestart(),
@@ -333,9 +338,8 @@ describe('a send the host rejected because the agent never started', () => {
       )
 
     const first = mount()
-    await waitFor(() => expect(first.result.current.outbox[0]?.state).toBe('rejected'), {
-      timeout: 4000
-    })
+    await advanceProbeClock(1000)
+    expect(first.result.current.outbox[0]?.state).toBe('rejected')
     const onFirst = notice(first.result.current.outbox, first.result.current.failedHere)
     first.unmount()
     const second = mount()
@@ -344,7 +348,7 @@ describe('a send the host rejected because the agent never started', () => {
     for (const shown of [onFirst, onSecond]) {
       expect(shown).toEqual({ text: REASON })
     }
-    await act(() => new Promise((resolve) => setTimeout(resolve, 1500)))
+    await advanceProbeClock(1500)
     // Only the first mount's question about the send it left in doubt; nothing resends it.
     expect(mocks.call).toHaveBeenCalledOnce()
     expect(second.result.current.outbox.map((entry) => entry.state)).toEqual(['rejected'])

@@ -27,6 +27,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-ty
 import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 
 const WORKTREE = 'repo-1::/workspace/repo'
 
@@ -38,6 +39,7 @@ let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']
 
 function openHost(): void {
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {

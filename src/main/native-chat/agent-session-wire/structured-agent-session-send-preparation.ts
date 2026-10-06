@@ -11,6 +11,7 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
 import { journalOpenRefusal } from '../agent-session-journal/journal-open-failure'
 import {
@@ -173,7 +174,9 @@ export function structuredAgentSessionFailureWordsContext(
 ): AgentSessionFailureWordsContext {
   const command = journal && structuredAgentSessionAwaitedCommand(journal)
   return {
-    ...(record ? { agentName: TUI_AGENT_DISPLAY_NAMES[record.provider] } : {}),
+    ...(record && isTuiAgent(record.provider)
+      ? { agentName: TUI_AGENT_DISPLAY_NAMES[record.provider] }
+      : {}),
     ...(command ? { command } : {})
   }
 }

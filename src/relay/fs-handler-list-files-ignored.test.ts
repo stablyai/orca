@@ -86,6 +86,60 @@ describe('relay quick open ignored file listing', () => {
     }
   })
 
+  it('rejects a full git inventory capacity failure and stops both passes', async () => {
+    const primary = createMockProcess()
+    const ignored = createMockProcess()
+    spawnMock.mockReturnValueOnce(primary).mockReturnValueOnce(ignored)
+    const result = listFilesWithGit('/remote/root')
+    const rejected = expect(result).rejects.toThrow('inventory is too large')
+    let produced = 0
+    while (primary.stdout?.listenerCount('data') && produced < 100000) {
+      primary.stdout.emit(
+        'data',
+        Array.from({ length: 100 }, () => `src/${'x'.repeat(1000)}-${produced++}.ts\0`).join('')
+      )
+    }
+    await rejected
+    expect(produced).toBeLessThan(40000)
+    expect(primary.kill).toHaveBeenCalled()
+    expect(ignored.kill).toHaveBeenCalled()
+    expect(primary.stdout?.listenerCount('data')).toBe(0)
+    expect(ignored.stdout?.listenerCount('data')).toBe(0)
+  })
+
+  it('retains a late 25,002nd file in a complete inventory', async () => {
+    const child = createMockProcess()
+    spawnMock.mockReturnValue(child)
+    const result = listFilesWithRg('/remote/root')
+    child.stdout?.emit(
+      'data',
+      Array.from({ length: 25002 }, (_, i) => `src/file-${i}.ts\0`).join('')
+    )
+    child.emit('close', 0, null)
+    const paths = await result
+    expect(paths).toHaveLength(25002)
+    expect(paths.at(-1)).toBe('src/file-25001.ts')
+  })
+
+  it('stops a full-inventory producer at its aggregate retained-byte ceiling', async () => {
+    const child = createMockProcess()
+    spawnMock.mockReturnValue(child)
+    const result = listFilesWithRg('/remote/root')
+    const rejected = expect(result).rejects.toThrow('inventory is too large')
+    let produced = 0
+    while (child.stdout?.listenerCount('data') && produced < 100000) {
+      child.stdout.emit(
+        'data',
+        Array.from({ length: 100 }, () => `src/${'x'.repeat(1000)}-${produced++}.ts\0`).join('')
+      )
+    }
+    await rejected
+    expect(produced).toBeLessThan(40000)
+    expect(child.kill).toHaveBeenCalled()
+    expect(child.stdout?.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+  })
+
   it('uses one broad rg pass for unbounded listings and keeps blocklists/excludes', async () => {
     const ignoredProc = createMockProcess()
 

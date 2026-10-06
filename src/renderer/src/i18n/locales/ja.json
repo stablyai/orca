@@ -52,6 +52,23 @@
           "statusItem": "ステータスアイテム",
           "activity": "活動"
         }
+      },
+      "chat": {
+        "title": "チャット",
+        "textSize": "テキストサイズ",
+        "textSizeDescription": "メッセージ、ツールの動作、メッセージ入力欄。チャット内の {{increase}} / {{decrease}} でも変更できます。",
+        "codeTextSize": "コードのテキストサイズ",
+        "codeTextSizeDescription": "コードブロック、インラインコード、コマンド、ツールの出力。",
+        "width": "幅",
+        "widthDescription": "広いペインでメッセージと入力欄をどこまで広げるかを設定します。",
+        "resetAppearance": "チャットの外観をリセット",
+        "resetDescription": "上記の既定値に戻します。",
+        "comfortable": "標準",
+        "wide": "広い",
+        "full": "全幅",
+        "pixels": "px",
+        "reset": "リセット",
+        "summary": "{{fontSize}}px · 幅: {{width}}"
       }
     },
     "browser": {
@@ -894,7 +911,8 @@
             "dimensionsTooLarge": "{{fileName}} は画像サイズが大きすぎるため、安全にプレビューできません。",
             "invalidImage": "{{fileName}} は有効な画像として読み取れません。",
             "additionalErrors": "ほかに {{count}} 件の画像を添付できませんでした。",
-            "totalTooLarge": "{{fileName}} を追加すると添付ファイルの合計が {{maxSize}} を超えます。"
+            "totalTooLarge": "{{fileName}} を追加すると添付ファイルの合計が {{maxSize}} を超えます。",
+            "compressed": "{{fileName}} を添付ファイルの上限に収めるため、{{originalSize}} から {{size}} に圧縮しました。"
           }
         }
       },
@@ -933,6 +951,16 @@
         "tooLarge": "サイズが大きすぎてコピーできないため、Orca は Agent に渡せませんでした。",
         "storageFull": "ドロップされたファイル用の Orca の保存先がいっぱいのため、Orca は Agent に渡せませんでした。",
         "generic": "もう一度ドロップしてください。"
+      },
+      "reveal": {
+        "in": {
+          "file": {
+            "manager": {
+              "notFound": "ファイルが見つかりません。移動または削除された可能性があります。",
+              "launchFailed": "ファイルを表示できませんでした。"
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -3342,10 +3370,7 @@
             "1d04b1630b": "下に分割",
             "6b3efb106e": "上に分割",
             "fdd29eb669": "ピンタブ",
-            "8e9d603a09": "タブの固定を解除する",
-            "revealInFinder": "ファインダーで表示",
-            "openContainingFolder": "含まれているフォルダーを開く",
-            "revealInFileExplorer": "ファイルエクスプローラーで表示"
+            "8e9d603a09": "タブの固定を解除する"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent 設定…",
@@ -4010,6 +4035,15 @@
             "resumingAriaOne": "1 件のチャットを再開中。詳細はクリックしてください。",
             "resumingAria": "{{value0}} 件のチャットを再開中。詳細はクリックしてください。",
             "resumingTooltip": "中断されたチャットを復元し、続行を依頼しています…"
+          },
+          "provider": {
+            "extra": {
+              "usage": {
+                "section": {
+                  "135d51c19f": "上限 {{value0}}"
+                }
+              }
+            }
           }
         }
       },
@@ -6225,6 +6259,7 @@
           "parkTerminal": "ターミナルを退避"
         },
         "SidebarFeedbackImageAttachments": {
+          "preparing": "添付ファイルを準備しています…",
           "attachImages": "Attach",
           "removeImage": "{{fileName}} を削除",
           "screenshotsHint": "スクリーンショットを最大 {{count}} 件、合計 {{maxSize}} まで添付できます"
@@ -6439,8 +6474,8 @@
           "96f3649526": "Gemini CLI 認証情報を使用する (実験的機能)",
           "d676c41fc6": "ローカルの Gemini CLI インストールから OAuth 認証情報を抽出して、Google で認証します。これは、Orca ではなく、Gemini CLI アプリに発行された認証情報を使用します。 Google が CLI を更新すると壊れる可能性があります。ご自身の責任でご使用ください。",
           "0c7f915b01": "Gemini CLI 認証情報を使用する",
-          "973741a871": "Gemini プロバイダー設定を構成します。",
-          "0c64dc2a64": "Gemini",
+          "973741a871": "既存の Gemini CLI セッションを利用可能な状態に保ちます。Gemini の認証情報では Antigravity にサインインできません。",
+          "0c64dc2a64": "Gemini CLI (レガシー)",
           "db209ee572": "削除",
           "8a0f870153": "再認証",
           "3d245ef7d9": "Codex はこのサインインが古いと報告しました",
@@ -7164,7 +7199,7 @@
           "80c454e8a6": "これをプロバイダーのキャッシュ TTL と一致させます。"
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "すべての markdown ビューで markdown ノートコントロールを表示し、Agent のハンドオフ 操作にそれらのノートを含めます。",
+          "f80603d293": "すべての markdown ビューで markdown ノートコントロールを表示し、Agent のハンドオフ操作にそれらのノートを含めます。",
           "4edc104f0f": "Markdown レビューノート",
           "5f02e6fb21": "markdown ファイルでローカル markdown レビューノートコントロールを表示します。",
           "51161d1647": "ファイルの編集時にミニマップの概要を表示します。",
@@ -13799,7 +13834,7 @@
           "69af7e9c1c": "はまだ PATH 上にありません。 Orca はこれをデフォルトとして設定し、いつでもインストールできます。",
           "1eee1c7bd8": "PATH 上に Agent が検出されませんでした。後でインストールするものを選択するか、空のターミナルを使用して続行します。",
           "hideAgents": "Agent を非表示にする",
-          "showMoreAgents": "{{value0}} 件の Agent をさらに表示→",
+          "showMoreAgents": "{{value0}} 件の Agent をさらに表示 →",
           "yoloModeLabel": "Yolo モード",
           "yoloPermissionsDescription": "Agent は確認なしでコマンドを実行しファイルを編集します。一部はサンドボックスも回避します。信頼できるプロジェクトでのみ使用してください。"
         },
@@ -15063,10 +15098,7 @@
           "f0fd4174b5": "ファイルタブを開いてリッチ markdown 編集を使用する",
           "a10d9b8337": "ファイルを開く",
           "2076ecfc9c": "前の変更",
-          "631dab0df3": "次の変更",
-          "revealInFinder": "ファインダーで表示",
-          "openContainingFolder": "含まれているフォルダーを開く",
-          "revealInFileExplorer": "ファイルエクスプローラーで表示"
+          "631dab0df3": "次の変更"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDFとしてエクスポート",
@@ -16700,11 +16732,17 @@
             "permission": "要対応"
           },
           "filtersSection": "フィルター",
-          "viewSection": "表示"
+          "viewSection": "表示",
+          "threadListOptionsActive": "スレッドリストのオプション（{{value0}} 件アクティブ）",
+          "activityOptionsActive": "アクティビティのオプション（{{value0}}）"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "すべてのホストとプロジェクトを表示",
-          "hiddenCount": "{{value0}} 非表示"
+          "hiddenCount": "{{value0}} 非表示",
+          "hideAutomationCreated": "自動化で作成されたワークスペースを非表示",
+          "hideCliCreated": "CLI が作成したものを非表示",
+          "hideOtherClientsAria": "共有リモートサーバー上の他の Orca クライアントで作成されたワークスペース内の Agent を非表示",
+          "hideOtherClients": "他のクライアントの Agent を非表示"
         },
         "ActivityThreadRow": {
           "clearNotification": "通知を消去"
@@ -16729,6 +16767,25 @@
           "workspace": "ワークスペース",
           "copyPath": "パスをコピーする",
           "jumpToWorkspace": "ワークスペースにジャンプ"
+        },
+        "ActivityThreadContextMenu": {
+          "copyTitle": "タイトルをコピー",
+          "copyPath": "パスのコピー",
+          "open": "オープン",
+          "markRead": "既読マークを付ける",
+          "markUnread": "未読としてマークする",
+          "goToWorkspace": "ワークスペースへ移動",
+          "clear": "リストから消去",
+          "agentSection": "Agent",
+          "markManyRead_one": "{{count}} 件の Agent に既読マークを付ける",
+          "markManyRead_other": "{{count}} 件の Agent に既読マークを付ける",
+          "markManyUnread_one": "{{count}} 件の Agent を未読としてマークする",
+          "markManyUnread_other": "{{count}} 件の Agent を未読としてマークする",
+          "clearMany_one": "{{count}} 件の Agent をリストから消去",
+          "clearMany_other": "{{count}} 件の Agent をリストから消去",
+          "markManyRead": "{{count}} 件の Agent に既読マークを付ける",
+          "markManyUnread": "{{count}} 件の Agent を未読としてマークする",
+          "clearMany": "{{count}} 件の Agent をリストから消去"
         }
       },
       "confirmation": {
@@ -17647,6 +17704,13 @@
         "localAttachmentUnsupported": "ローカル添付ファイルはリモートセッションでは使用できません。",
         "removeAttachment": "添付ファイルを削除する",
         "pastedImageLabel": "貼り付けた画像",
+        "draftNotSaved": "この下書きはまだ保存できていません。Orca は保存を再試行し続けます。",
+        "imageNotBroughtBack": "{{name}} をこの下書きと一緒に復元できませんでした。もう一度添付するか、削除してください。",
+        "pastedImageNotBroughtBack": "この貼り付けた画像をこの下書きと一緒に復元できませんでした。削除して、必要であればもう一度貼り付けてください。",
+        "removeImageToSend": "復元できなかった画像があります。送信するには削除してください。",
+        "removeImagesToSend": "復元できなかった画像があります。送信するには削除してください。",
+        "imageAttachAgainLabel": "もう一度添付",
+        "pastedImageNotKeptLabel": "保持されていません",
         "imagePasteFailed": "画像の貼り付けに失敗しました。",
         "worktreeNotReady": "ワークツリーが準備できていません — しばらくしてから再試行してください。",
         "pasteUnavailable": "貼り付けできません — このチャットは現在入力を受け付けていません。",
@@ -17708,6 +17772,8 @@
         "moreCalls": "+{{value0}} 詳細",
         "failedCount": "{{value0}} 件失敗",
         "failedCallsLabel": "失敗したツール呼び出し: {{value0}}",
+        "interruptedCount": "{{value0}} 件中断",
+        "interruptedCallsLabel": "中断されたツール呼び出し: {{value0}}",
         "runningPreview": "{{preview}} を実行中",
         "runningCommand": "コマンドの実行",
         "runningNamedPreview": "{{toolName}} {{preview}} を実行中",
@@ -17718,13 +17784,35 @@
         "ranCommandsManyToolsSummary": "{{commandCount}} コマンドを実行し、{{toolCount}} ツールを使用しました",
         "usedOneSummary": "使用した工具 1 個",
         "usedManySummary": "使用した{{toolCount}}ツール",
-        "editedFile": "編集したファイル",
-        "addedFile": "追加されたファイル",
-        "deletedFile": "削除されたファイル",
-        "renamedFile": "名前変更されたファイル",
         "copyDiff": "差分をコピー",
         "diffGap": "線は表示されません",
         "diffTruncated": "差分切り捨て",
+        "row": {
+          "running": "実行中",
+          "reading": "読み取り中",
+          "editing": "編集中",
+          "searching": "検索中",
+          "searchingWeb": "ウェブ検索中",
+          "fetching": "取得中",
+          "listed": "一覧表示",
+          "listing": "一覧表示中",
+          "ran": "実行",
+          "read": "読み取り",
+          "edited": "編集",
+          "searched": "検索",
+          "searchedWeb": "ウェブ検索",
+          "fetched": "取得",
+          "added": "追加",
+          "deleted": "削除",
+          "renamed": "名前変更",
+          "subagent": "サブエージェント",
+          "triedRead": "読み取りを試行",
+          "triedEdit": "編集を試行",
+          "triedSearch": "検索を試行",
+          "triedList": "一覧表示を試行",
+          "triedFetch": "取得を試行",
+          "triedSearchWeb": "ウェブ検索を試行"
+        },
         "runReadOne": "1ファイルを読み込む",
         "runReadMany": "{{value0}} ファイルを読み取る",
         "runSearchOne": "1 回検索されました",
@@ -18276,6 +18364,16 @@
         "workspaceReadyToast": "ワークスペース {{name}} の準備ができました",
         "goToWorktree": "ワークツリーに移動",
         "goToWorkspace": "ワークスペースに移動"
+      },
+      "delete": {
+        "changes": {
+          "permanentLoss": "Git ワークスペース内のコミットされていない変更または未追跡の変更は完全に削除されます。",
+          "clean": "コミットされていない変更または未追跡の変更はありません",
+          "unavailable": "変更を確認できませんでした",
+          "checking": "変更を確認中…",
+          "checkingDetails": "確認中…",
+          "unavailableDetails": "詳細を利用できません"
+        }
       }
     },
     "agentSessionContinuation": {
@@ -18358,6 +18456,11 @@
     },
     "agentChildRow": {
       "ended": "終了"
+    },
+    "jiraIssueAssigneeField": {
+      "label": "担当者",
+      "automatic": "自動",
+      "assignToMe": "自分に割り当てる（{{name}}）"
     }
   },
   "dashboardPopout": {
@@ -18965,5 +19068,54 @@
   },
   "fileSearch": {
     "failed": "検索失敗。もう一度お試しください"
+  },
+  "csv": {
+    "detectingDelimiter": "デリミタを検出中…",
+    "indexProgress": "CSV をインデックス作成中… {{percent}}%",
+    "loadingCell": "読み込み中…",
+    "nextRows": "次の行",
+    "previousRows": "前の行",
+    "readOnlyPreview": "大きなファイルのプレビュー · 読み取り専用",
+    "resizeColumn": "列 {{column}} のサイズを変更",
+    "rowWindow": "行 {{first}}–{{last}}",
+    "editor": "CSV エディター",
+    "editCell": "行 {{row}}、列 {{column}} を編集",
+    "filterRows": "行を絞り込む",
+    "edit": "セルを編集",
+    "copy": "コピー",
+    "paste": "貼り付け",
+    "rows": "行",
+    "insertRowAbove": "上に行を挿入",
+    "insertRowBelow": "下に行を挿入",
+    "deleteRows": "選択した行を削除",
+    "columns": "列",
+    "newColumn": "列 {{column}}",
+    "insertColumnBefore": "前に列を挿入",
+    "insertColumnAfter": "後に列を挿入",
+    "moveColumnLeft": "列を左に移動",
+    "moveColumnRight": "列を右に移動",
+    "deleteColumns": "選択した列を削除",
+    "sort": "並べ替え",
+    "sortAscending": "選択した列を昇順に並べ替え",
+    "sortDescending": "選択した列を降順に並べ替え",
+    "originalOrder": "元の行順",
+    "save": "保存",
+    "inspectionOnly": "検査のみ · ファイルの行順は変更されません"
+  },
+  "worktree": {
+    "nestedRemoval": {
+      "refreshFailed": "ワークスペースリストを更新できませんでした",
+      "review": "ネストされたワークツリーと共に削除…",
+      "title": "ワークスペースとネストされたワークツリーを削除しますか？",
+      "description": "これにより「{{name}}」、以下に表示されるすべてのネストされたワークツリー、およびそれら内のすべてのファイル（コミットされていない変更を含む）が完全に削除されます。それらのターミナルと Agent は停止されます。",
+      "detached": "分離 HEAD",
+      "loading": "ネストされたワークツリーを確認中…",
+      "order": "ネストされたワークツリーが先に削除されます。1つでも失敗すると削除は停止し、親は保持されます。ブランチは既存の削除設定に従います。",
+      "cancel": "キャンセル",
+      "retry": "再確認",
+      "deleting": "削除中…",
+      "confirm": "一覧表示されたすべてのワークツリーを削除",
+      "preservedBranches": "一部のネストされたワークツリーブランチは保持されました"
+    }
   }
 }

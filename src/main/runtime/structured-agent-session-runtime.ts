@@ -20,23 +20,17 @@ import {
   type InstalledRuntime
 } from './structured-agent-session-runtime-teardown'
 import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
-import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
 import type { CodexStructuredPermissionPolicy } from '../codex/codex-structured-permission-policy'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredSessionAdapterDeps
-} from '../codex/codex-structured-session-adapter'
+import type { CodexStructuredSessionAdapterDeps } from '../codex/codex-structured-session-adapter'
 import type { ClaudeStructuredSessionAdapterDeps } from '../claude/claude-structured-session-adapter'
 import {
   StructuredAgentSessionHost,
   type StructuredAgentSessionHostDeps
 } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
+import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import {
-  readClaudeManagedAccountGateSettings,
-  type ClaudeManagedAccountGateSettings
-} from '../native-chat/claude-structured-managed-account-support'
+import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { openStructuredAgentSessionJournalDatabase } from './structured-agent-session-journal-open'
@@ -50,7 +44,10 @@ import {
 import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
-import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
+import {
+  STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
+  type StructuredAgentAdapterContext
+} from './structured-agent-runtime-registrations'
 import { createStructuredAgentSessionLifecycleDelivery } from './structured-agent-session-lifecycle-delivery'
 import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
@@ -241,75 +238,43 @@ async function installOnJournal(
   journalDatabase: JournalHostDatabase
 ): Promise<InstalledRuntime> {
   const envResolvers = createStructuredAgentEnvironmentResolvers(deps)
-  const { resolveCodexEnvironment, resolveClaudeInheritedEnv } = envResolvers
-  const store = AgentSessionRecordStore.open({ journalDatabase, hostId: deps.hostId })
+  const store = AgentSessionRecordStore.open({
+    journalDatabase,
+    hostId: deps.hostId
+  })
   let host: StructuredAgentSessionHost | null = null
   const lifecycle = createStructuredAgentSessionLifecycleDelivery({
     handle: (event) => host?.handleAdapterEvent(event),
     logger: deps.logger,
-    // Claude publishes an observed exit only after its close ladder and transcript write; Codex
-    // publishes inside its own exit callback and needs nothing.
-    drainObservedExits: () => claude.drainObservedExits()
-  })
-  const { onDispatchSettledLate, releaseUnansweredDispatches } =
-    createStructuredAgentSessionDispatchFollowUps({ host: () => host, logger: deps.logger })
-  const codex = new CodexStructuredSessionAdapter({
-    resolveLaunch: createCodexStructuredLaunchResolver({
-      store,
-      resolveWorkspacePath: deps.resolveWorkspacePath,
-      resolveEnvironment: resolveCodexEnvironment,
-      ...(deps.resolveCodexPermissionPolicy
-        ? { resolvePermissionPolicy: deps.resolveCodexPermissionPolicy }
-        : {}),
-      ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
-    }),
-    ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
-    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
-    modelCatalog: agentModelCatalogStore,
-    onChildWorkEvidence: (sessionId, evidence) =>
-      host?.publishChildWorkEvidence(sessionId, evidence),
-    onDispatchSettledLate,
-    onPrimaryThreadStoppedRunning: releaseUnansweredDispatches,
-    logger: deps.logger,
-    onEvent: (event) => {
-      // Every exit, expected or not: the host ends that child's record.
-      if (event.type === 'ended' && 'cause' in event) {
-        lifecycle.deliver(event)
-      }
+    // An agent that publishes an observed exit only after its own close work drains it here.
+    drainObservedExits: async () => {
+      await Promise.all(
+        registrations.map(({ adapter }) => adapter.drainObservedExits?.() ?? Promise.resolve())
+      )
     }
   })
-  const claude = createStructuredClaudeRuntimeAdapter({
+  const context: StructuredAgentAdapterContext = {
+    deps,
     store,
-    resolveWorkspacePath: deps.resolveWorkspacePath,
-    ...(deps.resolveClaudeCommand ? { resolveClaudeCommand: deps.resolveClaudeCommand } : {}),
-    ...(deps.resolveClaudeLaunchEnv ? { resolveClaudeLaunchEnv: deps.resolveClaudeLaunchEnv } : {}),
-    resolveClaudeInheritedEnv,
-    resolveClaudeAuthPolicy: deps.resolveClaudeAuthPolicy,
-    ...(deps.resolveClaudePermissionMode
-      ? { resolveClaudePermissionMode: deps.resolveClaudePermissionMode }
-      : {}),
-    ...(deps.getClaudeManagedAccountGateSettings
-      ? {
-          readClaudeManagedAccountGate: () =>
-            readClaudeManagedAccountGateSettings(deps.getClaudeManagedAccountGateSettings!)
-        }
-      : {}),
-    onLifecycleEvent: (event) => lifecycle.deliver(event),
-    logger: deps.logger,
-    onChildWorkEvidence: (sessionId, evidence) =>
-      host?.publishChildWorkEvidence(sessionId, evidence),
-    onDispatchSettledLate,
-    onSessionIdle: releaseUnansweredDispatches,
-    ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
-    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
-    modelCatalog: agentModelCatalogStore
-  })
-  const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude }, async () => {
-    await Promise.all([codex.closeAll(), claude.closeAll()])
+    environment: envResolvers,
+    deliverLifecycle: lifecycle.deliver,
+    followUps: createStructuredAgentSessionDispatchFollowUps({
+      host: () => host,
+      logger: deps.logger
+    }),
+    host: () => host
+  }
+  const registrations = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(
+    ({ definition, createAdapter }) => ({ definition, adapter: createAdapter(context) })
+  )
+  const agents = new StructuredAgentRegistry(registrations)
+  const adapter = new StructuredAgentSessionAdapterRouter(agents, async () => {
+    await Promise.all(registrations.map((registration) => registration.adapter.closeAll()))
   })
   host = new StructuredAgentSessionHost({
     store,
     adapter,
+    agents,
     recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
     journalDatabase,
     claimKeyId: deps.claimKeyId,
@@ -325,7 +290,7 @@ async function installOnJournal(
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
-    ...(await modelCatalogHostDeps({ store, deps, envResolvers }))
+    ...(await modelCatalogHostDeps({ store, agents, deps, envResolvers }))
   })
   setStructuredAgentSessionHost(host)
   return {

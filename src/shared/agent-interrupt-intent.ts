@@ -26,12 +26,10 @@ export function shouldIgnoreInterruptIntent(
   return intent === 'ctrl-c' && (agentType === 'codex' || agentType === 'droid')
 }
 
-// Why: these TUIs also close an overlay on a bare Escape (Claude's /btw composer, OMP/Pi's
-// focused-child and settings views). The keypress is ambiguous at the source and nothing outside
-// the TUI can disambiguate it, so it is never evidence a turn ended — only the provider's own
-// hook may retire the row (#13547, #9208). Ctrl+C is unaffected; it has no navigation meaning.
+// Escape also closes views (including Codex search and /permissions); only provider evidence ends the turn.
 const ESCAPE_ALSO_NAVIGATES_AGENT_TYPES: ReadonlySet<AgentType> = new Set([
   'claude',
+  'codex',
   'omp',
   'pi',
   'prime-agent'

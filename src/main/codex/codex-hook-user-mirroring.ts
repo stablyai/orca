@@ -9,7 +9,7 @@ import {
   escapeTomlString,
   getCodexExplicitHomeHookSourcePath,
   parseTrustKey,
-  writeConfigAtomically,
+  writeLoadableHookTrustConfig,
   type CodexTrustEntry
 } from './config-toml-trust'
 import { createCodexHookTrustEntry, getCodexHookTrustSignature } from './codex-hook-identity'
@@ -202,7 +202,7 @@ export function applyMirroredRuntimeUserHookTrustStates(
     updated = updated.replace(pattern, `$1${enabled}`)
   }
   if (updated !== existing) {
-    writeConfigAtomically(tomlPath, updated)
+    writeLoadableHookTrustConfig(tomlPath, existing, updated)
   }
 }
 

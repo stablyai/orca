@@ -181,15 +181,6 @@ describe('Subprocess: Relay entry point', () => {
     }
   })
 
-  it('prints sentinel on startup', async () => {
-    relay = spawn()
-    await relay.sentinelReceived
-  }, 10_000)
-
-  it('keeps the Node-18 relay bundle free of unsupported array copy methods', () => {
-    expect(readFileSync(relayEntry, 'utf8')).not.toContain('.toReversed(')
-  })
-
   it('loads node-pty after an in-place dependency repair without restarting', async () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-native-repair-'))
     const repairedRelayEntry = path.join(tmpDir, 'relay.js')

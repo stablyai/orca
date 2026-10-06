@@ -118,7 +118,10 @@ export function loadAgentSessionStoreRows(
         lease: { ...withoutRetiredLeaseLatches(record.lease), unreconciled: true }
       })
     } else {
-      state.unreadableRecords.set(sessionId, { reason: unreadableRecordReason(value), raw: value })
+      state.unreadableRecords.set(sessionId, {
+        reason: unreadableRecordReason(value),
+        raw: value
+      })
     }
   }
   for (const row of db

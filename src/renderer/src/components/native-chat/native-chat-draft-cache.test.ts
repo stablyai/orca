@@ -28,20 +28,13 @@ describe('native-chat draft cache', () => {
     expect(readNativeChatDraftCache('pty-1')).toBe('')
   })
 
-  it('bounds the cache so unsent drafts for removed panes cannot accumulate', () => {
-    writeNativeChatDraftCache('keep', 'hot')
-
+  it('keeps every draft however many there are, since a draft that is pushed out is lost', () => {
     const total = NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX + 40
     for (let i = 0; i < total; i += 1) {
       writeNativeChatDraftCache(`scope-${i}`, `draft-${i}`)
-      if (i % 20 === 0) {
-        writeNativeChatDraftCache('keep', 'hot')
-      }
     }
 
-    // Oldest untouched draft evicted; the actively-edited and most-recent survive.
-    expect(readNativeChatDraftCache('scope-0')).toBe('')
-    expect(readNativeChatDraftCache('keep')).toBe('hot')
+    expect(readNativeChatDraftCache('scope-0')).toBe('draft-0')
     expect(readNativeChatDraftCache(`scope-${total - 1}`)).toBe(`draft-${total - 1}`)
   })
 })

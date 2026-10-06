@@ -431,6 +431,7 @@ describe('openCodexAppServerConnection', () => {
 
     expect(error.name).toBe('CodexAppServerHandshakeExitUnprovenError')
     expect(error.connection).toBeDefined()
+    child.emit('exit', 1, null)
     child.emit('close', 1, null)
     await expect(error.connection?.close()).resolves.toBe(true)
   })

@@ -17,6 +17,7 @@ import {
   transcriptPollUpdate
 } from '../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../shared/agent-transcript-poll-scheduler'
+import { ClaudeOwedNotificationExpiryTimers } from '../shared/claude-owed-notification-expiry-timers'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -47,9 +48,11 @@ export class AgentHookResultRetryScheduler {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private transcriptPollScheduler: AgentTranscriptPollScheduler<TranscriptPoll>
   private host: AgentHookResultRetryHost
+  private claudeOwedNotificationExpiry: ClaudeOwedNotificationExpiryTimers
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
+    this.claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(host.state)
     this.transcriptPollScheduler = new AgentTranscriptPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
       (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
@@ -62,6 +65,21 @@ export class AgentHookResultRetryScheduler {
     }
     this.assistantMessageRetryTimers.clear()
     this.transcriptPollScheduler.clearAll()
+    this.claudeOwedNotificationExpiry.clearAll()
+  }
+
+  /** No hook fires when Claude never sends an owed task notification; restate the row ourselves. */
+  armClaudeOwedNotificationExpiry(
+    source: AgentHookSource,
+    paneKey: string,
+    env?: string,
+    version?: string
+  ): void {
+    this.claudeOwedNotificationExpiry.arm(paneKey, (row) => {
+      if (this.host.isListening()) {
+        this.host.applyEvent(row, source, env, version)
+      }
+    })
   }
 
   clearAssistantMessageRetry(paneKey: string): void {

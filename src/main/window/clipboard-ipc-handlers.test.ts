@@ -84,9 +84,7 @@ vi.mock('node:fs/promises', () => ({
   stat: fsStatMock,
   realpath: vi.fn(), // unused here; only satisfies filesystem-path-containment's named import
   writeFile: fsWriteFileMock,
-  default: {
-    writeFile: fsWriteFileMock
-  }
+  default: { writeFile: fsWriteFileMock, mkdir: fsMkdirMock }
 }))
 
 vi.mock('../ipc/filesystem-auth', () => ({
