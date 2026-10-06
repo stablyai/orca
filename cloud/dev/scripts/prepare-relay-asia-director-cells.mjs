@@ -15,8 +15,12 @@ function argumentsFrom(argv) {
   return values
 }
 
-// Production Asia pools sit 176 ms from Cloud SQL and run at 16; staging C4 stays at 10.
-const ASIA_DATABASE_POOL_MAX = { production: 16, staging: 10 }
+// Production Asia pools sit 176 ms from Cloud SQL and run at 16; staging C4 and the production
+// US cells at the Asia shape keep the default 10.
+const DATABASE_POOL_MAX = {
+  production: { 'asia-east2': 16, 'us-central1': 10 },
+  staging: { 'asia-east2': 10 }
+}
 
 export function prepareRelayAsiaDirectorCells({ currentCells, topology, cellIds, imageDigest }) {
   if (!Array.isArray(currentCells) || !topology || Array.isArray(topology)) {
@@ -35,11 +39,12 @@ export function prepareRelayAsiaDirectorCells({ currentCells, topology, cellIds,
   }))
   const desiredCells = additions.map((cellId) => {
     const cell = topology[cellId]
+    const pools = DATABASE_POOL_MAX[cellId.split('-')[0]] ?? {}
     if (
       !cell ||
-      cell.region !== 'asia-east2' ||
+      !Object.hasOwn(pools, cell.region) ||
       cell.capacity_requests !== 6_000 ||
-      cell.database_pool_max !== ASIA_DATABASE_POOL_MAX[cellId.split('-')[0]] ||
+      cell.database_pool_max !== pools[cell.region] ||
       cell.connection_hard_cap !== 3_000 ||
       cell.connection_unobserved_bound !== 60 ||
       cell.initially_enabled !== false ||

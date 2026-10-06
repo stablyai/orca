@@ -242,8 +242,8 @@ export function nativeChatSlotIndexOf(
   return slots.findIndex((slot) => slot.kind === 'message' && slot.message.id === messageId)
 }
 
-/** Splits off the slots of messages waiting behind the live turn: they draw after its live
- *  activity, not inside it. */
+/** Splits off the slots of messages waiting behind the live turn, and of ones shown as not sent
+ *  that the journal holds no place for: they draw after the live activity, not inside it. */
 export function splitNativeChatSlotsWaitingBehindLiveTurn(
   slots: readonly NativeChatTranscriptSlot[],
   journalItems: readonly AgentJournalRenderItem[] | undefined
@@ -253,9 +253,16 @@ export function splitNativeChatSlotsWaitingBehindLiveTurn(
     journalItems
   )
   const isWaiting = (slot: NativeChatTranscriptSlot): boolean =>
-    slot.kind === 'message' && waiting.has(slot.message.id)
-  return {
-    slots: slots.filter((slot) => !isWaiting(slot)),
-    waitingSlots: slots.filter(isWaiting)
-  }
+    slot.kind === 'message' &&
+    (waiting.has(slot.message.id) ||
+      (slot.message.unsent === true && slot.message.journalPosition === undefined))
+  const waitingSlots: NativeChatTranscriptSlot[] = []
+  const transcriptSlots = slots.filter((slot) => {
+    if (isWaiting(slot)) {
+      waitingSlots.push(slot)
+      return false
+    }
+    return true
+  })
+  return { slots: transcriptSlots, waitingSlots }
 }

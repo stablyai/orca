@@ -253,7 +253,6 @@ export function useFileExplorerTreePaneState({
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
     loadDir,
     statPath,
-    authorizeExternalPath: window.api.fs.authorizeExternalPath,
     markPathAsDirectory,
     setSelectedPath: setSingleSelectedPath,
     scrollRef

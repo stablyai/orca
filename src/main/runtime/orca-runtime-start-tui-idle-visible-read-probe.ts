@@ -14,7 +14,7 @@ import {
   isKnownReadyPromptBody,
   isKnownReadyPromptSettled
 } from './terminal-wait-detection'
-import { getScreenReadyRule } from './screen-ruled-agent-readiness'
+import { readsTrustedScreen } from './agent-state-rules/agent-state-rules-engine'
 import { restoreProjectedComposerDraft } from './orca-runtime-terminal-projection'
 import type {
   RuntimeTerminalWait,
@@ -55,7 +55,7 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     if (providerTimeoutMs < 1) {
       return
     }
-    const screenRule = getScreenReadyRule(agent)
+    const screenRule = readsTrustedScreen(agent)
     void withTimeout(
       this.readTerminal(waiter.handle, screenRule ? { screen: true } : {}, {
         timeoutMs: providerTimeoutMs,

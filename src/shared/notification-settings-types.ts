@@ -1,5 +1,6 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
+import type { NotificationSourceId } from './notification-source'
 
 export type NotificationSettings = {
   enabled: boolean
@@ -20,6 +21,8 @@ export type NotificationSettings = {
     | 'custom'
   customSoundPath: string | null
   customSoundVolume: number
+  /** Desktop opt-outs stored only on this client, per configured source and work reached through it; new sources notify. */
+  mutedNotificationSourceIds: NotificationSourceId[]
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
@@ -30,6 +33,8 @@ export type NotificationDispatchRequest = {
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
+  /** Configured notification source; independent of physical execution location. */
+  notificationSourceId?: NotificationSourceId
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
   paneKey?: string
   repoLabel?: string
@@ -59,6 +64,7 @@ export type NotificationDispatchResult = {
   reason?:
     | 'disabled'
     | 'source-disabled'
+    | 'host-muted'
     | 'suppressed-focus'
     | 'cooldown'
     | 'not-supported'

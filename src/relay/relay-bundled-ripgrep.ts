@@ -4,12 +4,13 @@
  * the answer whenever that binary is absent or cannot launch on this host.
  */
 import { existsSync, statSync } from 'node:fs'
-import { delimiter, join, win32 } from 'node:path'
+import { win32 } from 'node:path'
 import {
   isRipgrepSpawnCwdUsable,
   isTransientRipgrepSpawnError
 } from '../shared/ripgrep-process-availability'
 import { relayLogLine } from './relay-diagnostic-log'
+import { buildRelayCommandEnv } from './relay-command-env'
 
 export const PATH_RIPGREP_COMMAND = 'rg'
 
@@ -31,13 +32,13 @@ export function isDriveRootedWindowsPath(dir: string): boolean {
 
 // Why only rg.exe, though libuv honours %PATHEXT%: `.bat`/`.cmd` shims are not spawnable without
 // `shell: true`, and every ripgrep installer (winget, choco, scoop, cargo) lays down rg.exe.
-function resolveWindowsPathRipgrep(): string | null {
-  for (const entry of (process.env.PATH ?? '').split(delimiter)) {
+function resolveWindowsPathRipgrep(path: string): string | null {
+  for (const entry of path.split(';')) {
     const dir = entry.replace(/^"|"$/g, '').trim()
     if (!dir || !isDriveRootedWindowsPath(dir)) {
       continue
     }
-    const candidate = join(dir, 'rg.exe')
+    const candidate = win32.join(dir, 'rg.exe')
     try {
       if (statSync(candidate).isFile()) {
         return candidate
@@ -49,7 +50,8 @@ function resolveWindowsPathRipgrep(): string | null {
   return null
 }
 
-let windowsPathRipgrep: string | null | undefined
+let windowsPathRipgrep: { path: string; command: string | null; expiresAt: number } | undefined
+const WINDOWS_PATH_MISS_RETRY_MS = 60_000
 
 let bundledRipgrepPath: string | null = null
 // Why a back-off, not forever: Windows AV often locks a just-installed rg.exe for its first spawns.
@@ -69,13 +71,23 @@ export function pathRipgrepCommand(): string | null {
   if (process.platform !== 'win32') {
     return PATH_RIPGREP_COMMAND
   }
-  // Why the explicit undefined check and not `??=`: a miss resolves to null, which is nullish, so
-  // `??=` would re-walk every PATH entry on each call -- and a miss is the expensive case, since
-  // it stats every directory instead of stopping at the first hit.
-  if (windowsPathRipgrep === undefined) {
-    windowsPathRipgrep = resolveWindowsPathRipgrep()
+  const env = buildRelayCommandEnv()
+  const path = env.PATH ?? env.Path ?? ''
+  const now = Date.now()
+  // Cache the effective PATH; retry misses so an install can become visible without restarting.
+  if (
+    !windowsPathRipgrep ||
+    windowsPathRipgrep.path !== path ||
+    now >= windowsPathRipgrep.expiresAt
+  ) {
+    const command = resolveWindowsPathRipgrep(path)
+    windowsPathRipgrep = {
+      path,
+      command,
+      expiresAt: command === null ? now + WINDOWS_PATH_MISS_RETRY_MS : Infinity
+    }
   }
-  return windowsPathRipgrep
+  return windowsPathRipgrep.command
 }
 
 /** Null means this host has no usable rg, so the caller falls back to git/readdir. */

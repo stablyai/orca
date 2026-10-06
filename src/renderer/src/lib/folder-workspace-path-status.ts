@@ -96,69 +96,97 @@ export function getFolderWorkspacePathStatusDescription(
   }
 }
 
+// IPC wrappers precede the code; ambiguous-connection errors can omit the path.
+const FOLDER_WORKSPACE_PATH_ERROR_PATTERN =
+  /^([ \t]*(?:Error invoking remote method '[^'\r\n]+': )?(?:Error: )*)folder_workspace_(path_missing|path_not_directory|connection_ambiguous|path_unavailable)(?::([\s\S]*))?$/
+
+export function isFolderWorkspacePathError(message: string): boolean {
+  return FOLDER_WORKSPACE_PATH_ERROR_PATTERN.test(message)
+}
+
+/** Maps a main-process folder path error code to user-facing copy, or null for anything else. */
+export function getFolderWorkspacePathErrorCopy(message: string): {
+  title: string
+  description: string
+} | null {
+  const match = FOLDER_WORKSPACE_PATH_ERROR_PATTERN.exec(message)
+  if (!match) {
+    return null
+  }
+  const [, , code, path = ''] = match
+  switch (code) {
+    case 'path_missing':
+      return {
+        title: translate(
+          'auto.lib.folderWorkspacePathStatus.createError.title.missing',
+          'Folder not found'
+        ),
+        description: translate(
+          'auto.lib.folderWorkspacePathStatus.createError.description.missing',
+          'Orca cannot find {{path}}. Remove and re-import the folder.',
+          { path }
+        )
+      }
+    case 'path_not_directory':
+      return {
+        title: translate(
+          'auto.lib.folderWorkspacePathStatus.createError.title.notDirectory',
+          'Path is not a folder'
+        ),
+        description: translate(
+          'auto.lib.folderWorkspacePathStatus.createError.description.notDirectory',
+          '{{path}} exists, but it is not a folder.',
+          { path }
+        )
+      }
+    case 'connection_ambiguous':
+      return {
+        title: translate(
+          'auto.lib.folderWorkspacePathStatus.createError.title.ambiguousConnection',
+          'Cannot determine connection'
+        ),
+        description: translate(
+          'auto.lib.folderWorkspacePathStatus.createError.description.ambiguousConnection',
+          'Orca cannot tell which SSH connection owns this folder scope.'
+        )
+      }
+    default:
+      return {
+        title: translate(
+          'auto.lib.folderWorkspacePathStatus.createError.title.unavailable',
+          'Cannot check folder'
+        ),
+        description: translate(
+          'auto.lib.folderWorkspacePathStatus.createError.description.unavailable',
+          'Orca cannot verify this folder right now. Check the runtime or SSH connection and try again.'
+        )
+      }
+  }
+}
+
+export function humanizeFolderWorkspacePathError(message: string): string {
+  const copy = getFolderWorkspacePathErrorCopy(message)
+  return copy
+    ? message.replace(FOLDER_WORKSPACE_PATH_ERROR_PATTERN, (_match, prefix: string) =>
+        prefix.concat(copy.description)
+      )
+    : message
+}
+
 export function formatFolderWorkspaceCreateError(error: unknown): {
   title: string
   description: string
 } {
   const message = error instanceof Error ? error.message : String(error)
-  const path = message.includes(':') ? message.slice(message.indexOf(':') + 1) : ''
-  if (message.startsWith('folder_workspace_path_missing:')) {
-    return {
+  return (
+    getFolderWorkspacePathErrorCopy(message) ?? {
       title: translate(
-        'auto.lib.folderWorkspacePathStatus.createError.title.missing',
-        'Folder not found'
+        'auto.lib.folderWorkspacePathStatus.createError.title.generic',
+        'Failed to create folder workspace'
       ),
-      description: translate(
-        'auto.lib.folderWorkspacePathStatus.createError.description.missing',
-        'Orca cannot find {{path}}. Remove and re-import the folder.',
-        { path }
-      )
+      description: message
     }
-  }
-  if (message.startsWith('folder_workspace_path_not_directory:')) {
-    return {
-      title: translate(
-        'auto.lib.folderWorkspacePathStatus.createError.title.notDirectory',
-        'Path is not a folder'
-      ),
-      description: translate(
-        'auto.lib.folderWorkspacePathStatus.createError.description.notDirectory',
-        '{{path}} exists, but it is not a folder.',
-        { path }
-      )
-    }
-  }
-  if (message.startsWith('folder_workspace_connection_ambiguous:')) {
-    return {
-      title: translate(
-        'auto.lib.folderWorkspacePathStatus.createError.title.ambiguousConnection',
-        'Cannot determine connection'
-      ),
-      description: translate(
-        'auto.lib.folderWorkspacePathStatus.createError.description.ambiguousConnection',
-        'Orca cannot tell which SSH connection owns this folder scope.'
-      )
-    }
-  }
-  if (message.startsWith('folder_workspace_path_unavailable:')) {
-    return {
-      title: translate(
-        'auto.lib.folderWorkspacePathStatus.createError.title.unavailable',
-        'Cannot check folder'
-      ),
-      description: translate(
-        'auto.lib.folderWorkspacePathStatus.createError.description.unavailable',
-        'Orca cannot verify this folder right now. Check the runtime or SSH connection and try again.'
-      )
-    }
-  }
-  return {
-    title: translate(
-      'auto.lib.folderWorkspacePathStatus.createError.title.generic',
-      'Failed to create folder workspace'
-    ),
-    description: message
-  }
+  )
 }
 
 export function folderWorkspaceActivationBlocked(

@@ -19,6 +19,7 @@ import {
   turnVerdictFromDeathEvidence,
   UNVERIFIABLE_TURN_VERDICT
 } from './structured-agent-session-stale-turn-verdict'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const THREAD = 'thread-1'
 const RUNNING_IDENTITY = {
@@ -276,6 +277,7 @@ describe('stale session state on a cold acquire', () => {
     const journal = {
       snapshot: () => ({ items }),
       itemFence: () => 1,
+      stopMarks: { latest: () => null },
       cursor: () => ({ epoch: 'epoch-1', sequence: 8 }),
       appendLifecycleBatch
     } as unknown as AgentSessionJournal
@@ -367,7 +369,7 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
         stateDirectory: root,
         now: () => 1_000
@@ -421,7 +423,7 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
         stateDirectory: root,
         now: () => now
@@ -487,7 +489,7 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
         stateDirectory: root,
         now: () => now
@@ -558,7 +560,7 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
         stateDirectory: root,
         now: () => now
@@ -618,7 +620,7 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
         stateDirectory: root,
         now: () => now

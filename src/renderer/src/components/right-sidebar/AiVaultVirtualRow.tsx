@@ -1,4 +1,5 @@
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
@@ -135,10 +136,14 @@ export function AiVaultVirtualRow({
   const searchResumeAllowed = searchHit ? canResumeAiVaultSearchHit(searchHit) : true
   const searchPathAllowed = searchHit ? hasAiVaultSearchHitPath(searchHit) : true
   const usesLegacyResumeCommand = row.type === 'session' && !row.session.structuredSession
-  const resumeStartup =
-    row.type === 'session' && searchResumeAllowed && usesLegacyResumeCommand
-      ? buildResumeStartup(row.session, resumeState?.worktreeId)
-      : { command: '' }
+  const canBuildResumeStartup =
+    row.type === 'session' &&
+    searchResumeAllowed &&
+    usesLegacyResumeCommand &&
+    (!isAntigravityReferenceSession(row.session) || !resumeGating.resumeDisabled)
+  const resumeStartup = canBuildResumeStartup
+    ? buildResumeStartup(row.session, resumeState?.worktreeId)
+    : { command: '' }
   const visibleResumeActions =
     searchResumeAllowed && resumeActions
       ? resumeActions
@@ -170,7 +175,7 @@ export function AiVaultVirtualRow({
           liveState={getSessionLiveState(row.session)}
           resumeStartup={resumeStartup}
           realHomeResumeStartup={
-            searchResumeAllowed && usesLegacyResumeCommand
+            canBuildResumeStartup
               ? buildResumeStartup({ ...row.session, codexHome: null }, resumeState?.worktreeId)
               : resumeStartup
           }

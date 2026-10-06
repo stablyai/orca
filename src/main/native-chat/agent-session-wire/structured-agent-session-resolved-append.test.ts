@@ -1,17 +1,23 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { openJournalOwingImport } from '../agent-session-journal/journal-owed-import-test-support'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget,
   type StructuredAgentSessionRevisionResolver
 } from './structured-agent-session-event-sink'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
+import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const ROW: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'row' }
 
@@ -26,25 +32,36 @@ function textOf(body: AgentJournalItemBody | undefined): string {
   return block?.type === 'text' ? block.text : ''
 }
 
-/** A journal whose appends land a tick later, so an unserialized read would race. */
-function journalTarget(rows: Map<string, AgentJournalItemBody>): StructuredAgentSessionEventTarget {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a double for the journal methods the resolved paths call.
-  const journal = {
-    epoch: 'e',
-    appendItem: vi.fn(async (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
-      await new Promise((resolve) => setTimeout(resolve, 1))
-      rows.set(agentJournalItemKey(identity), body)
-      return { cursor: { epoch: 'e', sequence: rows.size } }
-    }),
-    visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) => {
-      let sequence = 0
-      for (const [itemId, body] of rows) {
-        visit(itemId, ++sequence, body)
-      }
+let root = ''
+let journal: AgentSessionJournal
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-resolved-append-'))
+  // Its copy owed, so every write handed over waits in the queue: a resolver that read at submit
+  // would read the row before the revisions ahead of it had landed.
+  ;({ journal } = await openJournalOwingImport({
+    stateDirectory: root,
+    identity: {
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
+      hostId: 'host-1',
+      agent: 'codex',
+      providerHandle: codexProviderHandle('thread-1')
     }
-  } as unknown as AgentSessionJournal
+  }))
+})
+
+afterEach(async () => {
+  await journal.close()
+  await rm(root, { recursive: true, force: true })
+})
+
+/** The real journal: each resolved write reads the fold at its own place in the write queue. */
+function journalTarget(): StructuredAgentSessionEventTarget {
   return { journal, fence: 1, publish: vi.fn() }
 }
+
+const rowText = (): string => textOf(journal.itemBody(agentJournalItemKey(ROW)) ?? undefined)
 
 const appendSuffix =
   (suffix: string): StructuredAgentSessionRevisionResolver =>
@@ -60,8 +77,7 @@ const appendSuffix =
 
 describe('resolved revisions', () => {
   it('reads the row as the journal holds it when each queued revision runs', async () => {
-    const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('abc'))
     for (const suffix of ['a', 'b', 'c']) {
       expect(
@@ -74,26 +90,24 @@ describe('resolved revisions', () => {
     }
     // Three revisions of one row stay three operations; none replaces another.
     expect(deferred.state().queuedOperations).toBe(3)
-    deferred.bind(journalTarget(rows))
+    deferred.bind(journalTarget())
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
-    expect(textOf(rows.get(agentJournalItemKey(ROW)))).toBe('abc')
+    expect(rowText()).toBe('abc')
   })
 
   it('skips a revision that resolves to nothing', async () => {
-    const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.sink.tryReviseResolvedItem?.(1_000, () => null, {
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
-    const target = journalTarget(rows)
-    deferred.bind(target)
+    const before = journal.cursor()
+    deferred.bind(journalTarget())
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
-    expect(target.journal.appendItem).not.toHaveBeenCalled()
+    expect(journal.cursor()).toEqual(before)
   })
 
   it('publishes a revision in the operation that writes it, within the same reservation', async () => {
-    const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))
     deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, appendSuffix('a'), {
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
@@ -101,11 +115,9 @@ describe('resolved revisions', () => {
     deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, () => null, {
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
-    const target = journalTarget(rows)
+    const target = journalTarget()
     const published: string[] = []
-    vi.mocked(target.publish).mockImplementation(() =>
-      published.push(textOf(rows.get(agentJournalItemKey(ROW))))
-    )
+    vi.mocked(target.publish).mockImplementation(() => published.push(rowText()))
     deferred.bind(target)
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
     // Published once, after the append: the revision that resolves to nothing publishes nothing.
@@ -113,8 +125,7 @@ describe('resolved revisions', () => {
   })
 
   it('refuses a resolved write larger than the reservation it was admitted with', async () => {
-    const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))
     deferred.sink.tryReviseResolvedItem?.(
       bytes,
@@ -124,8 +135,8 @@ describe('resolved revisions', () => {
       }),
       { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    deferred.bind(journalTarget(rows))
+    deferred.bind(journalTarget())
     await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
-    expect(rows.size).toBe(0)
+    expect(journal.itemBody(agentJournalItemKey(ROW))).toBeNull()
   })
 })

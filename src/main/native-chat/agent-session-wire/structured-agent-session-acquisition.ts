@@ -3,9 +3,9 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError,
-  rethrowAfterAgentSessionAcquisitionCleanup,
   type StructuredAgentSessionProviderChildPhase
 } from './structured-agent-session-adapter'
+import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
 import { journalIdentityFor } from './structured-agent-session-attach'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import { readNativeSessionOptions } from './structured-agent-session-option-restoration'

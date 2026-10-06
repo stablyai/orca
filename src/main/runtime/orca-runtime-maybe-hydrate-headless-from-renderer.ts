@@ -127,6 +127,8 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     // once a live title was observed, so live state always wins.
     this.getOrCreatePtyTitleTrackerEntry(ptyId).tracker.seedInitialTitle(title)
     const status = detectAgentStatusFromTitle(title)
+    // Why evidence, not display: display readers project a stale-working clear over the record,
+    // so re-seeding the native working title cannot bring a cleared spinner back.
     // Why: live observations store normalized titles, so seeds must match —
     // otherwise the first live frame after hydration compares unequal and
     // touches session tabs once for no visible change.

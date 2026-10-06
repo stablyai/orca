@@ -169,7 +169,7 @@ function cellShape(cellId) {
 }
 
 // The class block runs before checkout-independent work and decides the whole wave shape.
-function resolveCellClass(cellId) {
+function resolveCellClass(cellId, drainPaceWindowMs = '300000') {
   return spawnSync('bash', [
     '-euo',
     'pipefail',
@@ -178,7 +178,11 @@ function resolveCellClass(cellId) {
       '          CELL_CLASS="$(node dev/scripts/relay-production-same-cap-wave.mjs cell-class \\',
       '          SELECTOR_WAVE_DELTA="$(jq -er \'.selectorWaveDelta\' <<< "${CELL_CLASS}")"'
     )}\necho "\${ENTRY_ADMISSION} \${SELECTOR_WAVE_DELTA}"`
-  ], { cwd: new URL('../..', import.meta.url), env: { ...process.env, TARGET_CELL_ID: cellId }, encoding: 'utf8' })
+  ], {
+    cwd: new URL('../..', import.meta.url),
+    env: { ...process.env, TARGET_CELL_ID: cellId, DRAIN_PACE_WINDOW_MS: drainPaceWindowMs },
+    encoding: 'utf8'
+  })
 }
 
 function drainingBlock() {
@@ -186,34 +190,6 @@ function drainingBlock() {
     '          # Rollback is the documented recovery from a failed canary, which',
     '            PREDECESSOR_DRAINING_OK=false\n          fi'
   )}\necho "\${PRECHECK_ADMISSION} \${PRECHECK_DRAINING} \${PREDECESSOR_DRAINING_OK}"`
-}
-
-// The three fields gcloud would otherwise default, as the MIG resource declares them.
-function migUpdatePolicy() {
-  const terraform = readFileSync(
-    new URL('../../infra/terraform/relay-gce-cells.tf', import.meta.url),
-    'utf8'
-  )
-  const policy = terraform.split('  update_policy {')[1]?.split('\n  }')[0] ?? ''
-  const method = /replacement_method\s+= "([A-Z]+)"/.exec(policy)?.[1]
-  assert.notEqual(method, undefined, 'the MIG declares no replacement method')
-  // Both fixed bounds come from the topology locals the MIG resource points at.
-  const surgeLocal = /max_surge_fixed\s+= local\.relay_gce_topology\.(\w+)/.exec(policy)?.[1]
-  const unavailableLocal =
-    /max_unavailable_fixed\s+= local\.relay_gce_topology\.(\w+)/.exec(policy)?.[1]
-  assert.notEqual(surgeLocal, undefined, 'the MIG pins no surge local')
-  assert.notEqual(unavailableLocal, undefined, 'the MIG pins no unavailable local')
-  const topology = terraform.split('  relay_gce_topology = {')[1]?.split('\n  }')[0] ?? ''
-  const local = (name) => {
-    const value = new RegExp(`${name}\\s+= (\\d+)`).exec(topology)?.[1]
-    assert.notEqual(value, undefined, `the topology locals pin no ${name}`)
-    return value
-  }
-  return {
-    replacementMethod: method.toLowerCase(),
-    maxSurge: local(surgeLocal),
-    maxUnavailable: local(unavailableLocal)
-  }
 }
 
 // The stage decides the predecessor, the plan's reviewed rollback image, and whether the
@@ -284,14 +260,14 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       assert.equal(resolved.status, 0, `${cellId}: ${resolved.stderr}`)
       assert.match(
         resolved.stdout.trim(),
-        /^(us-central1 1000 pool=|us-central1 600 pool=|asia-east2 3000 pool=16)$/,
+        /^(us-central1 1000 pool=|us-central1 600 pool=|asia-east2 3000 pool=16|us-central1 3000 pool=)$/,
         cellId
       )
       assert.equal(tfvarsDatabasePoolMax(cellId), cellShape(cellId).pool ?? '10', cellId)
       assert.equal(String(cellShape(cellId).cap), tfvarsHardCap(cellId), cellId)
     }
     assert.equal(resolveCellShape('production-gce-c12').status, 1)
-    assert.equal(resolveCellShape('production-gce-c31').status, 1)
+    assert.equal(resolveCellShape('production-gce-c35').status, 1)
   })
 
 
@@ -303,9 +279,10 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     const trusted = SAME_CAP_CELLS.filter((cell) => REHOME_SOURCE_CELLS.has(cell))
     // Only a declared rehome source may roll at a trusted protocol at all; the job refuses
     // the rest before it plans, and the next test covers them at protocol 0.
+    // The C34 spare is a rehome source that stays migration-only.
     assert.deepEqual(
       SAME_CAP_CELLS.filter((cell) => !REHOME_SOURCE_CELLS.has(cell)),
-      SAME_CAP_MIGRATION_ONLY_CELLS
+      SAME_CAP_MIGRATION_ONLY_CELLS.filter((cell) => cell !== 'production-gce-c34')
     )
     for (const [cellId, protocol] of trusted.flatMap((cell) => [[cell, 1], [cell, 3]])) {
       const { cap, pool } = cellShape(cellId)
@@ -384,6 +361,10 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       )
     }
     assert.equal(resolveCellClass('production-gce-c12').status, 1)
+    // The job's own block refuses a pace its cell may not run, before anything reads production.
+    assert.equal(resolveCellClass('production-gce-c7', '60000').status, 0)
+    assert.equal(resolveCellClass('production-gce-c28', '60000').status, 1)
+    assert.equal(resolveCellClass('production-gce-c7', '45000').status, 1)
   })
 
   it('offsets a later wave by this cell class\'s own selector delta', () => {
@@ -605,38 +586,51 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     assert.equal(missing, 'resume')
   })
 
-  it('rolls the MIG itself when a stranded plan changes nothing', () => {
+  it('recreates the one stranded instance when a stranded plan changes nothing', () => {
     const apply = workflow
       .split('name: Apply only the selected same-cap template and MIG')[1]
       .split('\n      - id:')[0]
     // The plan is reviewed against the image the cell serves, not an assumed predecessor.
     assert.match(apply, /--rollback-image "\$\{PLAN_ROLLBACK_IMAGE\}"/)
     assert.doesNotMatch(apply, /--rollback-image "\$\{IMAGE_REPOSITORY\}/)
+    // A rolling action rewrites the MIG's version name outside Terraform, and the validator then
+    // refuses every later plan for the cell; recreating the instance leaves the MIG untouched.
+    assert.doesNotMatch(apply, /rolling-action/)
     assert.match(
       apply,
-      /test "\$\{ROLLBACK_STAGE\}" = stranded \\\n\s+&& test "\$\(jq -er '\.changes' <<< "\$\{PLAN_REVIEW\}"\)" = 0/
+      /list-instances \\\n\s+"\$\{MIG_NAME\}"[\s\S]*?if length == 1 then \.\[0\]\.instance/
     )
-    // gcloud persists all three fields into the MIG's update policy and defaults the
-    // method to substitute here, so every one has to match what Terraform declares or the
-    // recovery drifts the policy and the next targeted plan is refused as an unreviewed
-    // MIG change. Read the declared values rather than restating them.
-    assert.match(apply, /rolling-action replace "\$\{MIG_NAME\}"/)
-    const declared = migUpdatePolicy()
-    assert.deepEqual(declared, {
-      replacementMethod: 'recreate',
-      maxSurge: '0',
-      maxUnavailable: '1'
-    })
     assert.match(
       apply,
-      new RegExp(
-        `--replacement-method ${declared.replacementMethod}` +
-          ` --max-surge ${declared.maxSurge} --max-unavailable ${declared.maxUnavailable}`
-      )
+      /recreate-instances "\$\{MIG_NAME\}" \\\n\s+--instances "\$\{STRANDED_INSTANCE\}"/
     )
-    // Nothing else may reach the group, and the roll has to be waited on.
-    assert.equal(apply.split('rolling-action').length, 2)
+    assert.equal(apply.split('recreate-instances').length, 2)
+    // The recreate has to be waited on, after the apply's own wait.
+    const recreate = apply.indexOf('recreate-instances')
     assert.equal(apply.split('wait-until "${MIG_NAME}" --stable').length, 3)
+    assert.ok(apply.indexOf('wait-until "${MIG_NAME}" --stable', recreate) > recreate)
+  })
+
+  // The stranded branch's instance pick has to refuse anything but exactly one instance.
+  it('picks the stranded instance only from a one-instance MIG', () => {
+    const apply = workflow
+      .split('name: Apply only the selected same-cap template and MIG')[1]
+      .split('\n      - id:')[0]
+    const filter = /jq -er '(if length == 1[\s\S]*?end)'\)"/.exec(apply)?.[1]
+    assert.notEqual(filter, undefined, 'the stranded branch no longer asserts one instance')
+    const pick = (instances) =>
+      spawnSync('jq', ['-er', filter], { input: JSON.stringify(instances), encoding: 'utf8' })
+    const link = (name) =>
+      `https://www.googleapis.com/compute/v1/projects/p/zones/z/instances/${name}`
+    const one = pick([{ instance: link('relay-c29-abcd') }])
+    assert.equal(one.error, undefined)
+    assert.equal(one.status, 0, one.stderr)
+    assert.equal(one.stdout.trim(), 'relay-c29-abcd')
+    assert.notEqual(pick([]).status, 0)
+    assert.notEqual(
+      pick([{ instance: link('relay-c29-abcd') }, { instance: link('relay-c29-efgh') }]).status,
+      0
+    )
   })
 
   // Run the predicate the job ships rather than restating it, because restating it is how the
@@ -674,7 +668,7 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       .split('name: Apply only the selected same-cap template and MIG')[1]
       .split('\n      - id:')[0]
     const condition =
-      /if test "\$\{ROLLBACK_STAGE\}" = stranded \\\n\s+(&& test "\$\(jq -er '\.changes' <<< "\$\{PLAN_REVIEW\}"\)" = 0); then/
+      /if test "\$\{ROLLBACK_STAGE\}" = stranded \\\n\s+(&& jq -e '\.changes < 2' <<< "\$\{PLAN_REVIEW\}" >\/dev\/null); then/
         .exec(apply)
     assert.notEqual(condition, null, 'the stranded roll no longer gates on the plan review')
     const rolls = (stage, review) => {
@@ -688,6 +682,8 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       return resolved.stdout.trim()
     }
     assert.equal(rolls('stranded', { changes: 0 }), 'replace')
+    // A MIG-only reconciliation (a version label revert) leaves the template, so no restart.
+    assert.equal(rolls('stranded', { changes: 1 }), 'replace')
     // A real template replacement already restarts the instance; rolling again would be a second.
     assert.equal(rolls('stranded', { changes: 2 }), 'no-replace')
     assert.equal(rolls('resume', { changes: 0 }), 'no-replace')

@@ -1,9 +1,11 @@
-import type { DraftPasteReadySignal } from './tui-agent-config'
+import type { DraftPasteReadySignal, TuiAgentConfig } from './tui-agent-config'
+import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
 
 // Why: agents enable bracketed paste (DECSET 2004) before their composer is
 // actually mounted/focused. These markers let the scanner detect the real
 // "input is ready" moment per agent instead of guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
+const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
 const CODEX_COMPOSER_PROMPT = '›'
 // Why: opencode emits the DECTCEM show-cursor only once the composer row is
 // mounted and the text cursor is placed in it — a "composer ready" signal,
@@ -39,7 +41,18 @@ type DraftPasteReadySignalSpec = {
   quietAnchor: string | null
 }
 
-const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySignalSpec> = {
+// Signals that read the screen's structure, not one marker; a Record so none lacks its scanner.
+type StructuralSignal = 'opencode-agent-row'
+const STRUCTURAL_SCANNERS: Record<
+  StructuralSignal,
+  () => { observe: (data: string) => { ready: boolean; readyAfterMs: number | null } }
+> = {
+  'opencode-agent-row': createOpenCodeAgentRowScanner
+}
+
+type SingleSignal = Exclude<DraftPasteReadySignal, StructuralSignal>
+
+const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec> = {
   'codex-composer-prompt': {
     markerAnchor: DECSET_BRACKETED_PASTE,
     markerAnchorEnd: null,
@@ -48,7 +61,10 @@ const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySi
   },
   'render-cursor-after-bracketed-paste': {
     markerAnchor: DECSET_BRACKETED_PASTE,
-    markerAnchorEnd: null,
+    // Why: the launching shell's prompt turns bracketed paste on and back off before exec
+    // (terminal-agent-paste-bracketing.ts), so a show-cursor after that `2004l` is a launcher's,
+    // never a composer that takes a bracketed paste. OpenCode never sends `2004l` while booting.
+    markerAnchorEnd: DECRST_BRACKETED_PASTE,
     marker: DECTCEM_SHOW_CURSOR,
     quietAnchor: null
   },
@@ -97,11 +113,32 @@ const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySi
 /** Longest anchor sequence minus one — the carry needed to rejoin one split across chunks. */
 const ANCHOR_CARRY_CHARS = 7
 
+/** Whether the signal has a composer marker, rather than only a quiet window after its anchor. */
+export function draftPasteReadySignalHasMarker(readySignal: DraftPasteReadySignal): boolean {
+  return DRAFT_PASTE_READY_SIGNALS[readySignal].marker !== null
+}
+
 export type DraftPasteReadyScanResult = {
   /** The agent-specific ready signal fired — caller should deliver the paste now. */
   ready: boolean
   /** Caller should (re)arm the quiet-window fallback timer for this chunk. */
   armQuietTimer: boolean
+  /** Ready after this many ms unless the signal fires first; null withdraws an armed one. */
+  readyAfterMs?: number | null
+}
+
+export type DraftPasteReadyScanner = { observe: (data: string) => DraftPasteReadyScanResult }
+
+/** The signal to wait for before a paste; one that Enter follows waits for the submit signal. */
+export function resolvePasteReadySignal(
+  agentConfig: Pick<TuiAgentConfig, 'draftPasteReadySignal' | 'submitPasteReadySignal'> | null,
+  submit: boolean
+): DraftPasteReadySignal {
+  return (
+    (submit ? agentConfig?.submitPasteReadySignal : undefined) ??
+    agentConfig?.draftPasteReadySignal ??
+    'render-quiet-after-bracketed-paste'
+  )
 }
 
 /**
@@ -116,12 +153,13 @@ export type DraftPasteReadyScanResult = {
  *     2004, or when DECSET follows a glyph rendered while Codex owns the
  *     alternate screen; never arms the quiet window.
  *   - `render-cursor-after-bracketed-paste`: ready when DECTCEM show-cursor
- *     (`\x1b[?25h`) renders after DECSET 2004. Like Codex it does NOT arm the
- *     quiet window: opencode stays silent for ~1.5-2s between enabling
- *     bracketed paste and mounting its composer, so a quiet window would fire
- *     during that gap and pre-empt the marker. opencode re-emits show-cursor on
- *     every render frame once mounted, so the marker is effectively guaranteed;
- *     the caller's hard timeout is the backstop if it never appears.
+ *     (`\x1b[?25h`) renders while DECSET 2004 is held; `\x1b[?2004l` revokes it.
+ *     Like Codex it does NOT arm the quiet window: opencode stays silent for up
+ *     to ~3.9s between enabling bracketed paste and mounting its composer, so a
+ *     quiet window would fire during that gap and pre-empt the marker. opencode
+ *     re-emits show-cursor on every render frame once mounted, so the marker is
+ *     effectively guaranteed; the caller's hard timeout is the backstop if it
+ *     never appears.
  *   - `grok-composer-prompt`: ready when grok's `❯` glyph renders after the
  *     alternate-screen switch (`\x1b[?1049h`). grok shimmers its startup logo
  *     until the session opens, so the quiet window alone never settles and the
@@ -146,13 +184,34 @@ export type DraftPasteReadyScanResult = {
  *     mounted — so the quiet window alone never settles and a launch draft would wait out
  *     the whole hard timeout, exactly as grok did. Same alt-screen anchoring and
  *     revocation as grok, because a powerline shell prompt can draw `╭` too.
+ *   - `opencode-agent-row`: OpenCode's submit signal (see opencode-agent-row-scanner.ts): the
+ *     box's show-cursor as above plus the agent/model row painted directly above the box's
+ *     bottom corner. OpenCode 2 draws the box before its agent list loads and drops an Enter
+ *     sent in between. No quiet window; while the box shows without the row it asks for a
+ *     grace timer (`readyAfterMs`) instead.
  *   - `render-quiet-after-bracketed-paste` (default): no signal marker; arms the
  *     quiet window once DECSET 2004 is seen.
  *
  * A 512-byte ring (`recent` / `postAnchorRecent`) covers escape sequences
  * split across chunk boundaries without retaining terminal scrollback.
  */
-export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal): {
+export function createDraftPasteReadyScanner(
+  readySignal: DraftPasteReadySignal
+): DraftPasteReadyScanner {
+  if (isSingleSignal(readySignal)) {
+    return createSingleSignalScanner(readySignal)
+  }
+  const scanner = STRUCTURAL_SCANNERS[readySignal]()
+  return {
+    observe: (data) => ({ ...scanner.observe(data), armQuietTimer: false })
+  }
+}
+
+function isSingleSignal(signal: DraftPasteReadySignal): signal is SingleSignal {
+  return !(signal in STRUCTURAL_SCANNERS)
+}
+
+function createSingleSignalScanner(readySignal: SingleSignal): {
   observe: (data: string) => DraftPasteReadyScanResult
 } {
   let recent = ''
@@ -177,7 +236,12 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
    * only counts while the anchor is actually held, and re-entering re-arms it.
    * Only reachable for signals that define `markerAnchorEnd`.
    */
-  const scanRevocableAnchorSegments = (window: string, anchor: string, end: string): boolean => {
+  const scanRevocableAnchorSegments = (
+    window: string,
+    carriedLength: number,
+    anchor: string,
+    end: string
+  ): boolean => {
     let cursor = 0
     while (cursor < window.length) {
       if (!sawMarkerAnchor) {
@@ -191,7 +255,11 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
         continue
       }
       const leaveIndex = window.indexOf(end, cursor)
-      const segment = leaveIndex === -1 ? window.slice(cursor) : window.slice(cursor, leaveIndex)
+      // Why: carried chars only rejoin a split anchor or leave; postAnchorRecent already holds
+      // them, so re-reading them could join a marker across the duplicated seam.
+      const segmentStart = Math.max(cursor, carriedLength)
+      const segment =
+        leaveIndex === -1 ? window.slice(segmentStart) : window.slice(segmentStart, leaveIndex)
       if ((postAnchorRecent + segment).includes(signalMarker ?? '')) {
         return true
       }
@@ -251,9 +319,10 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
         if (markerAnchorEnd !== null) {
           // Why: carry only the bytes an anchor could straddle, so already-scanned
           // output is never re-walked into a second enter/leave transition.
+          const carriedLength = anchorCarry.length
           const window = anchorCarry + data
           anchorCarry = window.slice(-ANCHOR_CARRY_CHARS)
-          if (scanRevocableAnchorSegments(window, markerAnchor, markerAnchorEnd)) {
+          if (scanRevocableAnchorSegments(window, carriedLength, markerAnchor, markerAnchorEnd)) {
             return { ready: true, armQuietTimer: false }
           }
         } else if (!sawMarkerAnchor) {
@@ -278,7 +347,7 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
       }
       // Why: the Codex glyph and opencode show-cursor signals must NOT arm the
       // quiet window (they carry no quiet anchor). opencode goes silent for
-      // ~1.5-2s between enabling bracketed paste and mounting its composer, so a
+      // up to ~3.9s between enabling bracketed paste and mounting its composer, so a
       // quiet window would fire during that gap — before the composer exists —
       // and pre-empt the marker. Those signals wait for their marker, bounded
       // only by the caller's hard timeout (and its best-effort

@@ -12,7 +12,6 @@ import {
   type AgentJournalTurnScope
 } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionStopCause } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   claudeCurrentTurnIdentity,
   claudeTurnLifecycleItem,
@@ -33,9 +32,6 @@ export type ClaudeOpenTurnDeps = {
 
 export class ClaudeOpenTurn {
   private current: ClaudeCurrentTurn | null = null
-  /** The stop Orca sent, held against the turn it was sent to: it reads only while that turn is open. */
-  private sentStop: { turn: ClaudeCurrentTurn; cause: StructuredAgentSessionStopCause } | null =
-    null
   /** Provider output may not reopen a turn after the session ended or a turn
    *  failed: nothing would ever close the turn it opened, and the row would read
    *  working for the life of the session. Only an accepted send lifts it. */
@@ -88,26 +84,6 @@ export class ClaudeOpenTurn {
 
   get isOpen(): boolean {
     return this.current !== null
-  }
-
-  get stop(): StructuredAgentSessionStopCause | null {
-    return this.current && this.sentStop?.turn === this.current ? this.sentStop.cause : null
-  }
-
-  /** Orca is stopping `turnId`. False when that turn is no longer the open one. */
-  recordStop(turnId: string, cause: StructuredAgentSessionStopCause): boolean {
-    if (this.current?.turnId !== turnId) {
-      return false
-    }
-    this.sentStop = { turn: this.current, cause }
-    return true
-  }
-
-  /** The provider refused the stop, so the turn goes on as if none was sent. */
-  withdrawStop(turnId: string): void {
-    if (this.current?.turnId === turnId) {
-      this.sentStop = null
-    }
   }
 
   /** Whether a turn is open inside a provider request cycle that has already
@@ -228,7 +204,7 @@ export class ClaudeOpenTurn {
       { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) },
       { publish: false, options: item.options }
     )
-    // Preserve first-work evidence when completion arrives before the journal drains.
+    // Keyed apart, so this never replaces the start's publication while it still waits to run.
     this.deps.sink.publish({ coalescingKey: item.publishCoalescingKey })
   }
 }

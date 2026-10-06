@@ -36,6 +36,15 @@ export const ANTIGRAVITY_USAGE_ARGS: readonly string[] = [
  */
 export const ANTIGRAVITY_USAGE_TIMEOUT_MS = 30_000
 
+// Before agy 1.1.11, `/usage` in print mode spends a model turn (agy's bundled changelog).
+export const ANTIGRAVITY_MIN_USAGE_VERSION = '1.1.11'
+
+/** The version probe; free in every sense — no conversation, no quota. */
+export const ANTIGRAVITY_VERSION_ARGS: readonly string[] = ['--version']
+
+/** Why bound it: the probe runs before every quota read, so a wedged CLI must not stall the cycle. */
+export const ANTIGRAVITY_VERSION_TIMEOUT_MS = 5_000
+
 /** Cap on captured output; the envelope is a single JSON line well under a kilobyte. */
 export const ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES = 512 * 1024
 

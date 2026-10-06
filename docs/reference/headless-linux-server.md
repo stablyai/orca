@@ -455,9 +455,10 @@ Two facts make the persisted-state transition predictable:
   Replacing the binary never touches projects, worktree metadata, terminal
   history, orchestration state, or paired-device keys — so mobile and web
   clients reconnect after an upgrade without re-pairing.
-- **New builds migrate old state on load.** Orca loads older `orca-data.json`
-  state into the current schema and writes it back in the current shape, so a
-  forward upgrade needs no manual data step.
+- **New builds migrate old state on load.** Orca imports older `orca-data.json`
+  into each profile's `profile-state.db`, so a forward upgrade needs no manual
+  data step. Normal writes, shutdown and profile switching save SQLite; they
+  no longer refresh the legacy JSON file.
 
 These guarantees preserve live processes only when the daemon is in its own
 `orca-daemon-*.scope`, as reported by `health.terminalDaemon.cgroupUnit`. The
@@ -696,13 +697,21 @@ files from different bundles.
 
 ### Roll back
 
-A rollback is **not** binary-only safe. Once a newer build has started, it can
-rewrite `orca-data.json` in the current schema. If an older build then writes
-that file, it can discard fields it does not recognize. The rolling
-`orca-data.json.bak.*` files are corruption-recovery snapshots, not a dedicated
-pre-upgrade copy, and normal writes can rotate them away. To roll back cleanly,
-restore the backup from step 3 **and** swap the binary back. Run this block as one
-Bash script:
+A rollback is **not** binary-only safe. New builds save profile state in
+SQLite, while a JSON-only build would read a stale legacy `orca-data.json`.
+The rollback below restores the complete pre-upgrade profile directories from
+step 3 and swaps the binary back. It deliberately returns to the pre-upgrade
+state rather than preserving changes made since the upgrade. Run this block
+as one Bash script:
+
+To preserve the latest state when moving to a JSON-only build, stop the service
+and use the newer build's CLI to run
+`orca profile state rollback --latest-json --profile-id <id>` for **every**
+profile the older build may open, then install the older binary manually.
+Without `--profile-id`, the command prepares only the active profile. This
+explicit handoff archives the SQLite authority and publishes the current JSON;
+ordinary exports write revisioned `.sqlite-export.N.json` files and do not
+prepare a downgrade. Orca's updater refuses JSON-only targets automatically.
 
 ```bash
 set -euo pipefail
@@ -898,9 +907,9 @@ sudo rm -rf -- "$ORCA_RESTORE"
 trap - EXIT
 ```
 
-Restoring the backup is required, not optional: swapping only the binary leaves
-the newer `orca-data.json` in place, where an older build can discard state it
-does not understand. Keep the pre-upgrade backup until the new version is proven
+Restoring the complete backup is required for this rollback procedure: swapping
+only the binary leaves the newer SQLite authority and stale legacy JSON in
+place. Keep the pre-upgrade backup until the new version is proven
 on your host. The `orca-rollback-*` directory inside `.config` is also retained
 deliberately. The post-upgrade binary and version record are retained in
 `/opt/orca` with the same `rollback-current-<timestamp>` suffix. Inspect these

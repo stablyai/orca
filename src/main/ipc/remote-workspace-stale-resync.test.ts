@@ -321,6 +321,8 @@ describe('workspace.stale resync', () => {
     'never publishes an older read after a newer $source notification ($order)',
     async ({ source, order }) => {
       let receive: ((data: Buffer) => void) | undefined
+      // Keep both frames in one decoder pass for the ordering assertions.
+      const deliveryClock = vi.spyOn(Date, 'now').mockReturnValue(Date.now())
       const mux = new SshChannelMultiplexer({
         write: () => {},
         onData: (callback) => {
@@ -349,6 +351,7 @@ describe('workspace.stale resync', () => {
         receive?.(
           Buffer.concat(messages.map((message, index) => encodeJsonRpcFrame(message, index + 1, 0)))
         )
+        deliveryClock.mockRestore()
         if (source === 'own') {
           expect(getCachedRemoteWorkspaceSnapshot('target-1')?.hostObservationToken).toBe(
             initial.hostObservationToken
@@ -365,6 +368,7 @@ describe('workspace.stale resync', () => {
         expect(sent.map((event) => event.snapshot.revision)).toEqual([3])
         expect(sent[0].sourceClientId).toBe(sourceClientId)
       } finally {
+        deliveryClock.mockRestore()
         mux.dispose()
       }
     }

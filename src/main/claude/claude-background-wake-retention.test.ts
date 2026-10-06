@@ -15,6 +15,7 @@ import { backgroundWakeCapture } from './claude-captured-fold-steer-frames.test-
 import { MOVED_TO_BACKGROUND } from './claude-captured-task-frames.test-fixture'
 import { hostWithParent, parent, producer } from './claude-child-work-producer-harness.test-fixture'
 import { PROVIDER_SESSION_ID } from './claude-structured-session-test-support'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -30,7 +31,6 @@ async function wiredSession() {
   let sequence = 0
   const journal = {
     cursor: () => ({ epoch: 'epoch-1', sequence: ++sequence }),
-    isReadOnly: false,
     lastActivityAt: () => 1,
     snapshot: () => ({
       items: [...run.journalItems.values()]
@@ -40,11 +40,12 @@ async function wiredSession() {
     })
   }
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([
       [
         parent.sessionId,
         {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the feed reads only the cursor, read-only flag, activity clock and snapshot served here.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the feed reads only the cursor, activity clock and snapshot served here.
           journal: journal as unknown as Journal,
           params: {
             location: {

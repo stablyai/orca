@@ -140,7 +140,9 @@ export function createBrowserPageCreateActions(
         }
         delete nextRemoteBrowserPageHandlesByPageId[pageId]
         const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+        const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
         delete nextBrowserAnnotationsByPageId[pageId]
+        delete nextBrowserAnnotationMarkerIdsByPageId[pageId]
         const nextBrowserCertificateFailuresByPageId = {
           ...s.browserCertificateFailuresByPageId
         }
@@ -178,7 +180,8 @@ export function createBrowserPageCreateActions(
           ),
           remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
           browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
-          browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
+          browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
+          browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
         }
       })
 

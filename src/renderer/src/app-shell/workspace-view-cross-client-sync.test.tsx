@@ -270,6 +270,40 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(after.hideCliCreatedWorkspaces).toBe(before.hideCliCreatedWorkspaces)
   })
 
+  it('persists a left sidebar close across an unrelated sync and restores it on startup', async () => {
+    act(() => {
+      store.getState().toggleSidebar()
+      authority.set({ sidebarWidth: 320 })
+    })
+    deliverBroadcasts()
+    expect(store.getState().sidebarOpen).toBe(false)
+    await flushDesktopDebounce()
+    expect(authority.get().sidebarOpen).toBe(false)
+
+    const restarted = createUIStore()
+    restarted.getState().hydratePersistedUI(authority.get(), 'startup')
+    expect(restarted.getState().sidebarOpen).toBe(false)
+    expect(restarted.getState().sidebarWidth).toBe(320)
+  })
+
+  it('persists a left sidebar reopen while the close acknowledgement is still pending', async () => {
+    holdAcks = true
+    act(() => store.getState().toggleSidebar())
+    await flushDesktopDebounce()
+    expect(authority.get().sidebarOpen).toBe(false)
+
+    act(() => store.getState().toggleSidebar())
+    deliverBroadcasts()
+    expect(store.getState().sidebarOpen).toBe(true)
+    await resolveAcks()
+    await flushDesktopDebounce()
+    await resolveAcks()
+    deliverBroadcasts()
+    expect(authority.get().sidebarOpen).toBe(true)
+    expect(store.getState().sidebarOpen).toBe(true)
+    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
+  })
+
   it('a mobile tap must not revert a desktop change the mobile mirror has not seen', async () => {
     const mobile = createMobileClient(authority)
     mobile.sync()

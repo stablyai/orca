@@ -14,7 +14,10 @@ import type {
   AgentSessionResumeTrigger
 } from '../../../shared/agent-session-resume-marker'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { createStructuredAgentSessionRestartCandidateReader } from './structured-agent-session-restart-candidates'
+import {
+  createNewerOrcaChats,
+  createStructuredAgentSessionRestartCandidateReaders
+} from './structured-agent-session-restart-candidates'
 import {
   continuationFailureOutcome,
   createStructuredAgentSessionRestartFailureLedger
@@ -44,6 +47,8 @@ import {
 import type { StructuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import { createStructuredAgentSessionRestartWitnesses } from './structured-agent-session-restart-witnesses'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 type LiveSession = StructuredAgentSessionRestartOfferSession
 
@@ -66,7 +71,8 @@ export type StructuredAgentSessionRestartResume = {
     sessions?: StructuredAgentSessionResumeCandidate[]
     failed?: StructuredAgentSessionResumeFailure[]
   }>
-  /** Named sessions forget their offer or failure; unnamed, every durable record goes. */
+  /** Named sessions forget their offer or failure; unnamed, every record this host
+   *  lists goes (a newer Orca's stay). */
   dismiss: (sessionIds?: readonly string[]) => Promise<number>
   /** The chat's agent proved a start: its offer ends unless the start is a resume's own. */
   onAgentStarted: (sessionId: string) => void
@@ -77,6 +83,8 @@ export function createStructuredAgentSessionRestartResume(
     store: AgentSessionRecordStore
     adapter: StructuredAgentSessionAdapter
     recoveryCapsule?: AgentSessionRecoveryCapsule
+    logger: StructuredAgentSessionLogger
+    journalDatabase: Pick<JournalHostDatabase, 'readOnly'>
   },
   sessions: ReadonlyMap<string, LiveSession>,
   surfaces: StructuredAgentSessionRestartResumeSurfaces
@@ -96,33 +104,39 @@ export function createStructuredAgentSessionRestartResume(
   const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
     sessions,
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
+    logger: deps.logger,
     now: surfaces.now,
     enqueue: enqueueRecoveryOperation
   })
-  const derive = createStructuredAgentSessionRestartCandidateReader({
+  const newerOrca = createNewerOrcaChats(() => deps.journalDatabase.readOnly)
+  const { derive, deriveAtSend } = createStructuredAgentSessionRestartCandidateReaders({
     sessions,
     getRecord: deps.store.getRecord,
     adapter: deps.adapter,
-    movedOn: withdrawal.movedOn
+    movedOn: withdrawal.movedOn,
+    savedByNewerOrca: newerOrca.has
   })
   const failures = createStructuredAgentSessionRestartFailureLedger({
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
     getRecord: deps.store.getRecord,
     adapter: deps.adapter,
     retryable: (marker) => derive([marker], 'may-be-held').candidates.length === 1,
+    savedByNewerOrca: newerOrca.has,
     reveal: (markers) => revealMarkers(markers),
+    logger: deps.logger,
     now: surfaces.now,
     enqueue: enqueueRecoveryOperation
   })
 
-  const { readMarkers, readActionMarkers, revealMarkers, retireSuperseded } =
+  const { readMarkers, readActionMarkers, revealMarkers, revealEvery, retireSuperseded } =
     createStructuredAgentSessionRestartOfferRecords({
       ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
       readFailedMarkers: async () => (await failures.read()).map((failure) => failure.marker),
       hasSession: (sessionId) => sessions.has(sessionId),
       reveal: async (sessionId) => {
-        await surfaces.revealSession(sessionId).catch(() => null)
+        newerOrca.note(sessionId, await surfaces.revealSession(sessionId).catch(() => null))
       },
+      logger: deps.logger,
       now: surfaces.now,
       enqueue: enqueueRecoveryOperation
     })
@@ -139,12 +153,13 @@ export function createStructuredAgentSessionRestartResume(
 
   const continuationHost: StructuredAgentSessionContinuationHost = {
     ...surfaces,
+    logger: deps.logger,
     sessions,
     conversationFence: (sessionId) =>
       deps.store.getRecord(sessionId)
         ? structuredAgentSessionConversationFence(deps.store, sessionId)
         : null,
-    stillResumable: (marker) => derive([marker], 'may-be-held').candidates.length === 1
+    stillResumable: (marker) => deriveAtSend([marker], 'may-be-held').candidates.length === 1
   }
 
   /** One explicit action: reserve the offers, then continue each through `continueOne`, a few at
@@ -188,7 +203,9 @@ export function createStructuredAgentSessionRestartResume(
           admission,
           consumeMarker: async (sessionId) => {
             const marker = markersBySession.get(sessionId)
-            return marker !== undefined && derive([marker], 'may-be-held').candidates.length === 1
+            return (
+              marker !== undefined && deriveAtSend([marker], 'may-be-held').candidates.length === 1
+            )
           },
           resume: async (sessionId) => {
             const marker = markersBySession.get(sessionId)
@@ -206,7 +223,10 @@ export function createStructuredAgentSessionRestartResume(
         await enqueueRecoveryOperation(() =>
           deps.recoveryCapsule!.rollbackResume(operationId, surfaces.now())
         ).catch(() => {
-          console.warn('[structured-agent-session] restart offer rollback failed')
+          deps.logger.warn('rolling back a restart offer reservation failed', {
+            scope: 'restart-offer-rollback',
+            operationId
+          })
         })
       }
       throw error
@@ -280,7 +300,9 @@ export function createStructuredAgentSessionRestartResume(
       remainingCandidates = await list()
       remainingFailures = await failures.list()
     } catch {
-      console.warn('[structured-agent-session] restart offer refresh failed after action')
+      deps.logger.warn('refreshing restart offers after an action failed', {
+        scope: 'restart-offer-refresh'
+      })
     }
     return {
       resumed,
@@ -299,7 +321,12 @@ export function createStructuredAgentSessionRestartResume(
     listFailures: failures.list,
     // Do not let a teardown witness already captured in this host republish after explicit
     // dismissal. A later capture is a new interruption and may create a fresh offer normally.
-    dismiss: (sessionIds) => failures.dismiss(sessionIds, witnesses.clear),
+    // "Dismiss all" keeps what this host does not list, so it reveals every record's chat first.
+    dismiss: (sessionIds) =>
+      failures.dismiss(sessionIds, async () => {
+        witnesses.clear()
+        await revealEvery()
+      }),
     continueAfterRestart,
     onAgentStarted: withdrawal.onAgentStarted
   }

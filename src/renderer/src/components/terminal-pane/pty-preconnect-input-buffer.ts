@@ -29,6 +29,7 @@ type PreconnectInputWriter = {
 
 export type PtyPreconnectInputBuffer = {
   isBuffering: () => boolean
+  hasPendingInput: () => boolean
   enqueue: (
     data: string,
     kind: 'ordinary' | 'immediate',
@@ -191,6 +192,7 @@ export function createPtyPreconnectInputBuffer(
 
   return {
     isBuffering: () => buffering,
+    hasPendingInput: () => pending.length > 0 || activeAcceptedInput !== null,
     enqueue(data, kind, inputKind, onRetained) {
       const input = createInput(data, kind, inputKind)
       const retained = retain(input)

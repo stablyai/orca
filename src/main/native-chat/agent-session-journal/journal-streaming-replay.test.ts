@@ -117,40 +117,40 @@ describe('streaming journal replay', () => {
     expect(checkpoints.map((entry) => entry.busy)).toEqual([0, 0])
   })
 
-  it('keeps the prefix but latches read-only for a future row beyond a gap', () => {
+  it('reads past a gap to a future row, which names the newer row and no damage', () => {
     put(anchor())
     put(revision(2))
     put(revision(4))
     put({ ...revision(5), v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION + 1 })
     const loaded = replayJournal(opened.db, sessionId)!
-    expect(loaded).toMatchObject({ readOnly: true, corrupt: true, malformedRows: 0 })
-    expect(loaded.truncateFrom).toBeUndefined()
+    expect(loaded).toMatchObject({ newer: { sequence: 5 }, damage: null })
     expect(loaded.state.items.get('message-1')?.revision).toBe(2)
     expect(loaded.state.lastSequence).toBe(2)
     const checkpoint = opened.db.pragma('wal_checkpoint(TRUNCATE)') as { busy: number }[]
     expect(checkpoint[0].busy).toBe(0)
   })
 
-  it('keeps gap repair precedence when a later row is malformed', () => {
+  it('names the first damage when a later row is malformed too', () => {
     put(anchor())
     put(revision(2))
     put(revision(4))
     insertTestJournalRowJson(opened.db, sessionId, 5, '{')
     const loaded = replayJournal(opened.db, sessionId)!
     expect(loaded).toMatchObject({
-      readOnly: false,
-      corrupt: true,
-      malformedRows: 1,
-      truncateFrom: 4
+      newer: null,
+      damage: { sequence: 3, cause: 'sequence-gap' }
     })
     expect(loaded.state.lastSequence).toBe(2)
   })
 
-  it('rejects an unanchored prefix before a later gap', () => {
+  it('names a missing epoch row before a later gap', () => {
     put(revision(1))
     put(revision(3))
     const loaded = replayJournal(opened.db, sessionId)!
-    expect(loaded).toMatchObject({ readOnly: false, corrupt: true, truncateFrom: 1 })
+    expect(loaded).toMatchObject({
+      newer: null,
+      damage: { sequence: 1, cause: 'no-epoch-row' }
+    })
     expect(loaded.state.items.size).toBe(0)
     expect(loaded.state.lastSequence).toBe(0)
   })

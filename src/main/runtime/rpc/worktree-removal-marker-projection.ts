@@ -7,7 +7,7 @@ import type {
 import {
   projectPendingWorktreeRemovals,
   type PendingWorktreeRemovals
-} from '../../worktree-background-removal'
+} from '../../worktree-removal-listing'
 import type { RpcContext } from './core'
 
 // Why no in-process default: callers without negotiation (the CLI, host-side readers) print or act

@@ -82,12 +82,17 @@ vi.mock('../ipc/worktree-symlinks', () => ({
 
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
 import type { PreparationRearmHolder } from '../worktree-create-preparation'
+import {
+  createWorktreeCreateTimingRecorder,
+  type WorktreeCreateTimingRecorder
+} from '../worktree-create-timing'
 
 const worktreePath = resolve('/worktrees', 'app')
 
 function createWorktree(
   request: Partial<RuntimeManagedWorktreeCreateArgs> = {},
-  rearm: PreparationRearmHolder = { fire: () => {} }
+  rearm: PreparationRearmHolder = { fire: () => {} },
+  timing: WorktreeCreateTimingRecorder = createWorktreeCreateTimingRecorder()
 ) {
   const store = {
     getSettings: () => ({
@@ -109,7 +114,8 @@ function createWorktree(
     refreshRemoteTrackingBase: mocks.refresh,
     fetchRemote: mocks.fetch,
     onWorktreeMetadataPersisted: () => undefined,
-    rearm
+    rearm,
+    timing
   })
 }
 
@@ -213,6 +219,41 @@ describe('runtime prepared-worktree replenishment', () => {
     // The slot was consumed before the failure, so the caller's `finally` must find a real thunk.
     rearm.fire()
     expect(mocks.rearm).toHaveBeenCalledOnce()
+  })
+})
+
+describe('runtime create timing', () => {
+  it('times the add with the prepared-checkout consume inside it, and lists the worktrees', async () => {
+    mocks.listing.mockResolvedValue({
+      created: mocks.created,
+      worktrees: [mocks.created, mocks.created, mocks.created],
+      listingComplete: true
+    })
+    const timing = createWorktreeCreateTimingRecorder()
+
+    await createWorktree({}, undefined, timing)
+
+    expect(mocks.consume).toHaveBeenCalledWith(expect.objectContaining({ timing }))
+    const finished = timing.finish()
+    expect(finished.phases.map((phase) => phase.phase)).toEqual(
+      expect.arrayContaining([
+        'resolve_name',
+        'git_worktree_add',
+        'list_created_worktree',
+        'persist_metadata',
+        'copy_worktreeinclude'
+      ])
+    )
+    expect(finished).toMatchObject({ executionHost: 'local', worktreeCount: 3 })
+  })
+
+  it('records a sparse create as a miss without consulting the prepared checkout', async () => {
+    const timing = createWorktreeCreateTimingRecorder()
+
+    await createWorktree({ sparseCheckout: { directories: ['src'] } }, undefined, timing)
+
+    expect(mocks.consume).not.toHaveBeenCalled()
+    expect(timing.finish().preparedCheckout).toEqual({ status: 'miss', reason: 'sparse_checkout' })
   })
 })
 

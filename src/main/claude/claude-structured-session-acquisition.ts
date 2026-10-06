@@ -9,6 +9,7 @@ import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
+import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
 import {
   readClaudeCapabilities,
   readClaudeFrameString,
@@ -120,6 +121,7 @@ export async function acquireClaudeSession({
       }
       // The CLI's idle releases its doubted sends; a late echo still accepts one it goes on to run.
       if (claudeSessionStateEndsTurn(message) && sessions.get(sessionId) === liveSession) {
+        settleClaudeTurnEndWaiters(liveSession)
         deps.onSessionIdle?.({ sessionId })
       }
     }
@@ -143,6 +145,7 @@ export async function acquireClaudeSession({
         message,
         ...(startsTurn ? { startsTurn: true } : {}),
         ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
+        ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
         ...observedAt
       })
     )
@@ -150,13 +153,9 @@ export async function acquireClaudeSession({
       settle()
     }
   }
-  const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
-    sessionId,
-    prompts,
-    currentTurnId: () => translator?.currentTurnId ?? null,
-    emit: (event) =>
-      callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
-  })
+  const emit = (event: Parameters<typeof callbacks.emit>[2]): void =>
+    callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
+  const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({ sessionId, prompts, emit })
 
   try {
     const launch = await resolveClaudeAcquisitionLaunch({
@@ -198,7 +197,12 @@ export async function acquireClaudeSession({
             childEnded ??= error
             initProof.reject(error)
           },
-          onExit: (error) => {
+          onExit: (error, exit) => {
+            if (exit?.expected) {
+              // The end of a close Orca began; that close settles it, or finishes it now.
+              callbacks.finishClose(sessionId, attempt)
+              return
+            }
             // The child exited on its own; marked in place, as the fault report may hold this error.
             withObservedProviderExit(error)
             childEnded ??= error
@@ -216,8 +220,6 @@ export async function acquireClaudeSession({
       deps.now ? { now: deps.now } : {}
     )
     acquisitions.assertCurrent(sessionId, attempt)
-    const emit = (event: Parameters<typeof callbacks.emit>[2]): void =>
-      callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
     if (connection.pid === undefined) {
       // A pid-less spawn always reports its error next; surface that, not the missing pid.
       await initProof.promise

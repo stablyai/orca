@@ -36,13 +36,13 @@ export async function rewindStructuredAgentSession(
     const result = await admitAndRunAgentSessionMutation<AgentSessionRewindResult>({
       store,
       adapter: context.deps.adapter,
+      logger: context.deps.logger,
       callerKey: caller.callerKey,
       envelope: params.envelope,
       // Only the provider can do this, so an agent at rest is started first.
       prepareSession: openWithAgent(context, params.envelope),
       journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
-      flushStreamedEvents: context.flushStreamedEvents,
       now: context.now,
       plan: {
         method: 'agentSession.rewind',
@@ -77,9 +77,6 @@ export async function rewindStructuredAgentSession(
           if (conversationCommandBlocked(ctx, record, context.readChildWork(sessionId))) {
             return rewindRefusal('busy')
           }
-          if (ctx.journal.isReadOnly) {
-            return rewindRefusal('unsupported')
-          }
           const snapshot = ctx.journal.snapshot()
           const providerKeys = new Map(
             snapshot.submissions.flatMap((submission) =>
@@ -99,13 +96,14 @@ export async function rewindStructuredAgentSession(
           }
           const selected = snapshot.items.findIndex((item) => item.itemId === params.itemId)
           const key = selected === -1 ? null : parseAgentJournalItemKey(providerKey(params.itemId))
+          // The head belongs to the record's provider: the record store refuses any other.
           const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
-          if (!key || !head || key.provider !== head.provider) {
+          if (!key || !head || key.provider !== record.provider) {
             return rewindRefusal('invalid-target')
           }
           let boundary = selected
-          if (key.provider === 'codex' && head.provider === 'codex') {
-            if (key.threadId !== head.threadId) {
+          if (key.provider === 'codex') {
+            if (key.threadId !== head.nativeId) {
               return rewindRefusal('invalid-target')
             }
             boundary = snapshot.items.findIndex((item) => {
@@ -212,7 +210,7 @@ export async function rewindStructuredAgentSession(
           })
           const journal = context.sessions.get(sessionId)!.journal
           await attachContext.runtimeState.flushEventSink(sessionId)
-          await recoverStructuredRewind(store, sessionId, journal, fence)
+          await recoverStructuredRewind(context.deps, sessionId, journal, fence)
           context.publish(sessionId, journal)
           return { ok: true, value: { itemId: params.itemId, epoch: journal.cursor().epoch } }
         }

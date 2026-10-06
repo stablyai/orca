@@ -53,7 +53,7 @@ vi.mock('./preview-grid-claim', () => ({
   createPreviewGridClaim: () => ({ schedule: vi.fn(), dispose: vi.fn() })
 }))
 vi.mock('./preview-terminal-box-fit', () => ({
-  createPreviewBoxFit: () => ({ schedule: vi.fn() })
+  createPreviewBoxFit: () => ({ schedule: vi.fn(), dispose: vi.fn() })
 }))
 vi.mock('./preview-terminal-ligatures', () => ({ syncPreviewTerminalLigatures: vi.fn() }))
 vi.mock('./preview-terminal-compatibility', () => ({

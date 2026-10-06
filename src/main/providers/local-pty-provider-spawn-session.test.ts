@@ -53,10 +53,6 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
-vi.mock('../daemon/pty-subprocess/bun-pty-process-capabilities', () => ({
-  canUseBunPty: () => false
-}))
-
 vi.mock('./macos-tcc-login-shell', async (importOriginal) => ({
   ...(await importOriginal<typeof MacosTccLoginShell>()),
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock

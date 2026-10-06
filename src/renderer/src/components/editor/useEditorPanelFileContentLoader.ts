@@ -3,7 +3,8 @@ import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { getDiskBaselineSignature } from './diff-content-signature'
-import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
+import { getRuntimeFileReadScope } from '@/runtime/runtime-file-client'
+import { readEditorCsvFileContent } from './csv/csv-file-content'
 import { RuntimeRpcCallError, settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connection-phase'
@@ -19,6 +20,7 @@ import {
 } from './editor-panel-content-types'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
 import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-owner'
+import { editorTabFileAccess } from '@/lib/local-file-access'
 
 const inFlightFileReads = new Map<string, InFlightContentRead<FileContent>>()
 
@@ -44,7 +46,7 @@ type UseEditorPanelFileContentLoaderParams = {
 // the signature was taken over). Best-effort metadata — a failure here must
 // not convert an already-delivered load into an error view, hence the guard.
 function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
-  if (result.isBinary || result.loadError) {
+  if (result.isBinary || result.loadError || result.csvPreview) {
     return
   }
   try {
@@ -120,7 +122,6 @@ export function useEditorPanelFileContentLoader({
             ? undefined
             : readSettings?.activeRuntimeEnvironmentId?.trim()
           if (isLiveTailLogTab) {
-            await window.api.fs.authorizeExternalPath({ targetPath: filePath })
             readConnectionId = undefined
           } else {
             const currentState = useAppStore.getState()
@@ -155,17 +156,21 @@ export function useEditorPanelFileContentLoader({
               throw new Error('External local files are not available for remote workspaces.')
             }
             if (!externalSshOwnerId) {
-              // Why: client-local external tabs need their main-process path grant
-              // refreshed because that authorization is only held in memory.
-              await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-              // Why: that grant covers the client path, so this read must stay off the
-              // worktree's SSH host.
+              // Why: a client-local external tab names a client path, so this read must stay off
+              // the worktree's SSH host.
               readConnectionId = undefined
             }
           }
         }
         const readScope = getRuntimeFileReadScope(readSettings, readConnectionId)
-        const key = inFlightReadKey(readScope, filePath)
+        const access = restoredOpenFile
+          ? editorTabFileAccess(useAppStore.getState(), restoredOpenFile)
+          : undefined
+        const allowPagedPreview =
+          !restoredOpenFile?.isDirty &&
+          (!/\.(csv|tsv)$/i.test(filePath) || useAppStore.getState().editorDrafts[id] === undefined)
+        // Keep file authorization and editable drafts isolated between concurrent reads.
+        const key = `${inFlightReadKey(readScope, filePath)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}`
         const registeredRead = inFlightFileReads.get(key)
         if (
           options?.force &&
@@ -178,15 +183,19 @@ export function useEditorPanelFileContentLoader({
         }
         let pending = inFlightFileReads.get(key)
         if (!pending) {
-          const promise = readRuntimeFileContent({
-            settings: readSettings,
-            filePath,
-            relativePath: readRelativePath,
-            worktreeId: readWorktreeId,
-            connectionId: readConnectionId,
-            expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
-            includeLocalLogMetadata: isLiveTailLogTab
-          }) as Promise<FileContent>
+          const promise = readEditorCsvFileContent(
+            {
+              settings: readSettings,
+              filePath,
+              relativePath: readRelativePath,
+              worktreeId: readWorktreeId,
+              connectionId: readConnectionId,
+              expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
+              includeLocalLogMetadata: isLiveTailLogTab,
+              access
+            },
+            allowPagedPreview
+          )
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightFileReads.set(key, pending)
           queueMicrotask(() => {
@@ -198,6 +207,14 @@ export function useEditorPanelFileContentLoader({
         const result = await pending.promise
         if (fileReadGenerationRef.current[id] !== generation) {
           return
+        }
+        if (result.csvPreview && useAppStore.getState().editorDrafts[id] !== undefined) {
+          throw new Error(
+            'CSV grew too large for editing. Your draft has been kept; reopen the file to preview it.'
+          )
+        }
+        if (result.csvPreview || restoredOpenFile?.csvPreviewOnly) {
+          useAppStore.getState().setCsvPreviewOnly(id, Boolean(result.csvPreview))
         }
         delete fileLoadRetryAttemptsRef.current[id]
         setFileContents((prev) => ({ ...prev, [id]: result }))

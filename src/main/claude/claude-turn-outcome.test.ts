@@ -12,6 +12,12 @@ import {
 import { describeNativeChatTurnStatus } from '../../shared/native-chat-turn-status'
 import { selectStructuredAgentSettledTurns } from '../../shared/structured-agent-session-turn-timing'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { JournalStopEvent } from '../native-chat/agent-session-journal/journal-row-schema'
+import {
+  personStopDecidesTurn,
+  type JournalLatestStop
+} from '../native-chat/agent-session-journal/journal-stop-turn-end'
+import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
 import { claudeResultOutcome } from './claude-result-outcome'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { claudeResultFailure } from './claude-structured-provider-fallback'
@@ -233,9 +239,31 @@ describe('a turn end the host inferred', () => {
   })
 })
 
-describe("a user's Stop inside a live turn", () => {
+describe("a person's Stop inside a live turn", () => {
   // Claude CLIs before 2.1.91 send no terminal_reason, and later ones may omit it.
   const cutShort = { type: 'result', subtype: 'error_during_execution', is_error: true }
+
+  /** A sink whose journal's latest Stop event is `stop`, answering by the journal's own rule. */
+  function sinkWithStop(stop: JournalLatestStop | null) {
+    const state = sinkState()
+    const journal = createJournalReducerState('orca-session', 'epoch-1')
+    journal.queuePauseMarks.latestStop = stop
+    return {
+      ...state,
+      sink: {
+        ...state.sink,
+        journalStopDecidesTurn: (turnId: string, endedAt: number) =>
+          personStopDecidesTurn(journal, turnId, endedAt)
+      }
+    }
+  }
+
+  function stopOf(
+    turnId: string,
+    reason: JournalStopEvent['reason'] = 'user-stop'
+  ): JournalLatestStop {
+    return { sequence: 9, event: { reason, turnId, at: 1 } }
+  }
 
   function settledTurn(items: ReturnType<typeof sinkState>['items'], turnId: string) {
     return items
@@ -251,18 +279,17 @@ describe("a user's Stop inside a live turn", () => {
     ).length
   }
 
-  it('reads an error result with no terminal reason as the cancellation it asked for', () => {
-    const state = sinkState()
+  // Whose end it was is the journal's Stop rule to say as it writes the end (`turnEndAfterStop`).
+  it("leaves an error result with no terminal reason after a person's Stop of the turn to that Stop", () => {
+    const state = sinkWithStop(stopOf('user-1'))
     const translator = createClaudeJournalTranslator({ sink: state.sink })
     translator.handle(userTurn('user-1'))
 
-    expect(translator.recordTurnStop('user-1', 'user-stop')).toBe(true)
     translator.handle({ type: 'message', sessionId: 'orca-session', message: cutShort })
 
-    expect(settledTurn(state.items, 'user-1')).toMatchObject({
-      state: 'interrupted',
-      outcome: 'cancellation'
-    })
+    const turn = settledTurn(state.items, 'user-1')
+    expect(turn).toMatchObject({ state: 'interrupted' })
+    expect(turn).not.toHaveProperty('outcome')
     expect(providerRows(state.items)).toBe(0)
   })
 
@@ -273,7 +300,7 @@ describe("a user's Stop inside a live turn", () => {
       { ...cutShort, terminal_reason: 'api_error', result: 'API Error' }
     ]
   ])('keeps a result with %s and no Stop a failure', (_label, frame) => {
-    const state = sinkState()
+    const state = sinkWithStop(null)
     const translator = createClaudeJournalTranslator({ sink: state.sink })
     translator.handle(userTurn('user-1'))
 
@@ -287,11 +314,10 @@ describe("a user's Stop inside a live turn", () => {
   })
 
   it('keeps a turn that finished during the Stop a success', () => {
-    const state = sinkState()
+    const state = sinkWithStop(stopOf('user-1'))
     const translator = createClaudeJournalTranslator({ sink: state.sink })
     translator.handle(userTurn('user-1'))
 
-    translator.recordTurnStop('user-1', 'user-stop')
     translator.handle({
       type: 'message',
       sessionId: 'orca-session',
@@ -302,15 +328,12 @@ describe("a user's Stop inside a live turn", () => {
   })
 
   it('does not carry a Stop onto the next turn', () => {
-    const state = sinkState()
+    // The Stop named user-1, which a newer send superseded before its result.
+    const state = sinkWithStop(stopOf('user-1'))
     const translator = createClaudeJournalTranslator({ sink: state.sink })
     translator.handle(userTurn('user-1'))
-    translator.recordTurnStop('user-1', 'user-stop')
-    // Superseded before its result: the Stop was for user-1 only.
     translator.handle(userTurn('user-2'))
     translator.handle({ type: 'message', sessionId: 'orca-session', message: cutShort })
-    // A late Stop names a turn that already ended.
-    expect(translator.recordTurnStop('user-2', 'user-stop')).toBe(false)
     translator.handle(userTurn('user-3'))
     translator.handle({ type: 'message', sessionId: 'orca-session', message: cutShort })
 
@@ -319,10 +342,9 @@ describe("a user's Stop inside a live turn", () => {
   })
 
   it('ends the Stop with its turn, so a result after the turn settled reads on its own', () => {
-    const state = sinkState()
+    const state = sinkWithStop(stopOf('user-1'))
     const translator = createClaudeJournalTranslator({ sink: state.sink })
     translator.handle(userTurn('user-1'))
-    translator.recordTurnStop('user-1', 'user-stop')
     translator.handle({
       type: 'message',
       sessionId: 'orca-session',
@@ -334,24 +356,11 @@ describe("a user's Stop inside a live turn", () => {
     expect(providerRows(state.items)).toBe(1)
   })
 
-  it('forgets a Stop the CLI refused', () => {
-    const state = sinkState()
+  it.each(['host-stop', 'evict'] as const)('does not read a %s as the person asking', (reason) => {
+    const state = sinkWithStop(stopOf('user-1', reason))
     const translator = createClaudeJournalTranslator({ sink: state.sink })
     translator.handle(userTurn('user-1'))
 
-    translator.recordTurnStop('user-1', 'user-stop')
-    translator.withdrawTurnStop('user-1')
-    translator.handle({ type: 'message', sessionId: 'orca-session', message: cutShort })
-
-    expect(settledTurn(state.items, 'user-1')).toMatchObject({ outcome: 'failure' })
-  })
-
-  it('does not read a host stop as the user asking', () => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
-    translator.handle(userTurn('user-1'))
-
-    translator.recordTurnStop('user-1', 'host-stop')
     translator.handle({ type: 'message', sessionId: 'orca-session', message: cutShort })
 
     expect(settledTurn(state.items, 'user-1')).toMatchObject({ outcome: 'failure' })

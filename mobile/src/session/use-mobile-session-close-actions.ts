@@ -15,6 +15,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     terminals,
     terminalsRef,
     setSessionTabs,
+    setFileDocs,
     sessionTabsRef,
     reconcileBufferedDraftsRef,
     closedTabTombstonesRef,
@@ -118,6 +119,16 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         })
       )
       if (response.accepted) {
+        if (tab.type === 'file') {
+          setFileDocs((prev) => {
+            if (!prev.has(tab.id)) {
+              return prev
+            }
+            const next = new Map(prev)
+            next.delete(tab.id)
+            return next
+          })
+        }
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
         reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {

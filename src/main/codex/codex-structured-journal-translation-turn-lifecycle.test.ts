@@ -26,6 +26,8 @@ import {
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import type { CodexSession } from './codex-structured-session-state'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -218,12 +220,12 @@ describe('codex turn lifecycle rows', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: THREAD_ID }
+        providerHandle: codexProviderHandle(THREAD_ID)
       },
       now: () => 9_000,
       stateDirectory: join(root, SESSION_ID)
     })
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       sessionId: SESSION_ID,

@@ -1,8 +1,9 @@
 # Cline and Prime Agent readiness: what the transcripts show
 
 Both agents paint their composer with cursor addressing on the alternate screen, so the line-folded
-text tail cannot see it (#23268, #22153). Their readiness is read off the live screen by
-`isClineComposerReadyScreen` and `isPrimeAgentComposerReadyScreen`, through the same tiering as
+text tail cannot see it (#23268, #22153). Their readiness is read off the live screen by the
+`composer_ready` rules in `src/main/runtime/agent-state-rules/cline.json` and `prime-agent.json`,
+through the same tiering as
 Antigravity ([`antigravity-readiness-evidence.md`](./antigravity-readiness-evidence.md)): a pane
 with an output clock is believed only once quiet, and when a trustworthy screen exists it decides,
 so the quiet-process lane cannot settle a dialog it cannot see. Without a readable screen (a

@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 import type { BrowserUserAgentMode } from '../../shared/browser-user-agent-mode'
+import type { GrabIntent } from '../../shared/browser-grab-types'
 
 export const browserPageInteractionAndSessionsApi = {
   onContextMenuRequested: (
@@ -105,9 +106,14 @@ export const browserPageInteractionAndSessionsApi = {
   }) => ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
   extractHoverPayload: (args: { browserPageId: string }) =>
     ipcRenderer.invoke('browser:extractHoverPayload', args),
-  onGrabModeToggle: (callback: (browserPageId: string) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, browserPageId: string) =>
-      callback(browserPageId)
+  onGrabModeToggle: (
+    callback: (browserPageId: string, intent: GrabIntent) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      browserPageId: string,
+      intent: GrabIntent
+    ) => callback(browserPageId, intent)
     ipcRenderer.on('browser:grabModeToggle', listener)
     return () => ipcRenderer.removeListener('browser:grabModeToggle', listener)
   },

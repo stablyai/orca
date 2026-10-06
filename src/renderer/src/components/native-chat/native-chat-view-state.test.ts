@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { NativeChatMessage, NativeChatSession } from '../../../../shared/native-chat-types'
-import { selectNativeChatViewState } from './native-chat-view-state'
+import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
 
 const message: NativeChatMessage = {
   id: 'a',
@@ -101,5 +101,32 @@ describe('selectNativeChatViewState', () => {
       kind: 'ready',
       isWorking: true
     })
+  })
+})
+
+describe('structuredChatHistoryPhase', () => {
+  const reopened = { lifecycle: null, transportEnabled: true }
+
+  it('reads a reopened chat until its first read settles', () => {
+    expect(structuredChatHistoryPhase(reopened, 'idle')).toBe('reading')
+    expect(structuredChatHistoryPhase(reopened, 'loading')).toBe('reading')
+    expect(structuredChatHistoryPhase(reopened, 'ready')).toBe('known')
+  })
+
+  it('reads a resume only while its launch is in flight', () => {
+    const resume = { launch: { kind: 'resume' as const }, transportEnabled: false }
+    expect(structuredChatHistoryPhase({ ...resume, lifecycle: 'pending' }, 'ready')).toBe('reading')
+    expect(structuredChatHistoryPhase({ ...resume, lifecycle: 'failed' }, 'ready')).toBe('unread')
+    expect(
+      structuredChatHistoryPhase({ ...resume, lifecycle: 'visibility-unknown' }, 'ready')
+    ).toBe('unread')
+  })
+
+  it('knows a chat this pane started new, and a cancelled launch', () => {
+    const fresh = { launch: { kind: 'new' as const }, lifecycle: null, transportEnabled: true }
+    expect(structuredChatHistoryPhase(fresh, 'idle')).toBe('known')
+    expect(
+      structuredChatHistoryPhase({ lifecycle: 'cancelled', transportEnabled: false }, 'ready')
+    ).toBe('known')
   })
 })

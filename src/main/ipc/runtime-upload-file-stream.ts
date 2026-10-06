@@ -5,7 +5,6 @@ import type {
   RuntimeUploadFileStreamRequest,
   StagedRuntimeUploadFileIdentity
 } from '../../shared/runtime-upload-staging-contract'
-import { authorizeExternalPath } from './filesystem-auth'
 import { formatByteCeiling, REMOTE_IMPORT_MAX_FILE_BYTES } from './runtime-import-limits'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
@@ -38,9 +37,6 @@ export async function streamExternalFileToRuntime(
   args: RuntimeUploadFileStreamArgs
 ): Promise<{ byteLength: number }> {
   const sourcePath = resolveEntrySourcePath(args.sourceRootPath, args.entryRelativePath)
-
-  // Why: parity with staging — an OS drop authorizes the paths it hands over.
-  authorizeExternalPath(sourcePath)
 
   // Why: relativePath is the hidden .orca-upload-<nonce> temp destination, so a
   // dropped file names its source instead of a path the user never chose.
@@ -189,7 +185,7 @@ async function sendChunk(
 }
 
 function resolveEntrySourcePath(sourceRootPath: string, entryRelativePath: string): string {
-  // Why: staging resolves before authorizing, so the streamer has to agree on
+  // Why: staging resolves the source first, so the streamer has to agree on
   // the same absolute path or the two checks can disagree.
   const root = resolve(sourceRootPath)
   return entryRelativePath ? join(root, entryRelativePath) : root

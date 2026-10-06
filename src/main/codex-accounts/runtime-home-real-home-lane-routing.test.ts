@@ -12,7 +12,7 @@ import {
   getSharedRuntimeAuthProvenancePath,
   getSystemCodexAuthPath,
   getSystemCodexHomePath,
-  setShellStartupEnvProbeSupportedForTest,
+  setRealHomeRoutableForTest,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
   testState,
@@ -68,9 +68,11 @@ describe('CodexRuntimeHomeService', () => {
     )
     mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
     writeFileSync(markerPath, '{}\n', 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ realHomeRoutable: true }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
+    // Why: an unusable hook lane is the migration-eligible route onto the mirror.
+    service.setRealHomeLaneGate(() => false)
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
     expect(
       hasCompletedCodexSessionBackfillMarker(markerPath, join(getSystemCodexHomePath(), 'sessions'))
@@ -138,19 +140,18 @@ describe('CodexRuntimeHomeService', () => {
   })
 
   it('routes host system default to the real home', async () => {
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: true }))
+    const store = createStore(createSettings({ realHomeRoutable: true }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
     expect(service.isHostSystemDefaultRealHome()).toBe(true)
-    expect(service.getSelectedHostCodexHomeRoute()).toBe('real-home')
     expect(service.prepareForCodexLaunch()).toBeNull()
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([
       getRuntimeCodexHomePath(),
       getSystemCodexHomePath()
     ])
     service.setRealHomeLaneGate(() => false)
-    expect(service.getSelectedHostCodexHomeRoute()).toBe('shared-home')
+    expect(service.isHostSystemDefaultRealHome()).toBe(false)
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
     const markerPath = join(
       testState.userDataDir,
@@ -231,7 +232,7 @@ describe('CodexRuntimeHomeService', () => {
   it('seeds shared auth for a pane-local custom home on the real-home lane', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-token')
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: true }))
+    const store = createStore(createSettings({ realHomeRoutable: true }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     const customHome = join(testState.fakeHomeDir, 'pane-custom-codex-home')
@@ -266,7 +267,7 @@ describe('CodexRuntimeHomeService', () => {
       `${JSON.stringify({ owner: 'system-default', authJson: retainedAuth })}\n`,
       'utf-8'
     )
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: true }))
+    const store = createStore(createSettings({ realHomeRoutable: true }))
     try {
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
@@ -338,12 +339,12 @@ describe('CodexRuntimeHomeService', () => {
       ''
     ].join('\n')
     writeFileSync(getSystemCodexAuthPath(), oldSystemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(createSettings({ realHomeRoutable: false }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(oldSystemAuth)
 
-    setShellStartupEnvProbeSupportedForTest(true)
+    setRealHomeRoutableForTest(true)
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     writeFileSync(join(getSystemCodexHomePath(), 'config.toml'), systemConfig, 'utf-8')
     writeFileSync(
@@ -369,12 +370,12 @@ describe('CodexRuntimeHomeService', () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
     const managedAuth = createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(createSettings({ realHomeRoutable: false }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
     writeFileSync(getRuntimeCodexAuthPath(), managedAuth, 'utf-8')
 
-    setShellStartupEnvProbeSupportedForTest(true)
+    setRealHomeRoutableForTest(true)
     const restartedService = new CodexRuntimeHomeService(store as never)
     restartedService.setRealHomeLaneGate(() => true)
 

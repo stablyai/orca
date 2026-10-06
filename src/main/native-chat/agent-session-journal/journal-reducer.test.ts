@@ -551,7 +551,7 @@ describe('submission and dispatch state machine', () => {
     expect(state.receipts.get('cm_1')).toBeTruthy()
   })
 
-  it('keeps a refused write rejected and leaves its bubble where it was', () => {
+  it('keeps a refused write rejected, at its rejection, whatever comes after', () => {
     const state = fold([
       submission,
       {
@@ -579,7 +579,8 @@ describe('submission and dispatch state machine', () => {
       submittedAt: submission.ts,
       reason: 'provider_write_failed: closed before enqueue'
     })
-    expect(renderJournalState(state).items[0]?.sequence).toBe(submission.seq)
+    // It sits where it was rejected; the late `pending` moves nothing.
+    expect(renderJournalState(state).items[0]?.sequence).toBe(2)
   })
 
   it('ignores a dispatch for a submission this epoch never saw', () => {

@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split class members.
+import { RipgrepSearchDiagnostics } from '../../shared/ripgrep-search-diagnostics'
 import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
 import { RuntimeFileCommandsWithSearchRuntimeFiles } from './runtime-file-commands-search-runtime-files'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
@@ -50,20 +51,26 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
 
     return new Promise<SearchResult>((resolvePromise, rejectPromise) => {
       const searchKey = `${this.host.getRuntimeId()}:${authorizedRootPath}`
-      const rgArgs = buildRgArgs(options.query, authorizedRootPath, options)
+      const rgArgs = buildRgArgs(options.query, '.', options)
       const previousChild = this.activeRuntimeTextSearches.get(searchKey)
       if (previousChild) {
         killSpawnedRipgrepProcess(previousChild)
       }
 
       const acc = createAccumulator()
-      const lines = new SearchSubprocessLineAccumulator(Number.MAX_SAFE_INTEGER)
+      const lines = new SearchSubprocessLineAccumulator()
+      const diagnostics = new RipgrepSearchDiagnostics()
       let resolved = false
       let processErrorObserved = false
       let unavailableExitObserved = false
       let child: ChildProcessHandle | null = null
       const transformAbsPath = wslDistroForOutput
-        ? (p: string): string => (p.startsWith('/') ? toWindowsWslPath(p, wslDistroForOutput) : p)
+        ? (p: string): string | null =>
+            p.includes('\\')
+              ? null
+              : p.startsWith('/')
+                ? toWindowsWslPath(p, wslDistroForOutput)
+                : p
         : undefined
 
       const finish = (result: SearchResult | PromiseLike<SearchResult>): void => {
@@ -77,7 +84,10 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
         cleanupListeners()
         resolvePromise(result)
       }
-      const resolveOnce = (): void => finish(finalize(acc))
+      const resolveOnce = (code = 0, signal: NodeJS.Signals | null = null): void => {
+        const error = diagnostics.failure(code, signal, acc)
+        finish(error ? Promise.reject(error) : finalize(acc))
+      }
       const rejectUnavailable = (): void => finish(Promise.reject(bundledRipgrepUnavailableError()))
 
       let killTimeout: ReturnType<typeof setTimeout> | null = null
@@ -133,10 +143,16 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
 
       nextChild.stdout?.setEncoding('utf-8')
       const onStdoutData = (chunk: string): void => {
-        lines.push(chunk, processLine)
+        if (!lines.push(chunk, processLine)) {
+          acc.truncated = true
+          if (child) {
+            killSpawnedRipgrepProcess(child)
+          }
+          resolveOnce()
+        }
       }
-      const onStderrData = (): void => {
-        // Drain stderr so rg cannot block on a full pipe.
+      const onStderrData = (chunk: Buffer): void => {
+        diagnostics.append(chunk)
       }
       const onError = (error: NodeJS.ErrnoException): void => {
         processErrorObserved = true
@@ -171,7 +187,10 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
             })
           return
         }
-        resolveOnce()
+        finish(Promise.reject(error))
+        if (child) {
+          killSpawnedRipgrepProcess(child)
+        }
       }
       const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
         // Why first: this code is above rg's own 0/1/2, so the unavailable check would otherwise
@@ -190,11 +209,11 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
           rejectUnavailable()
           return
         }
-        const tail = lines.finish()
+        const tail = !signal && (code === 0 || code === 1) ? lines.finish() : null
         if (tail !== null) {
           processLine(tail)
         }
-        resolveOnce()
+        resolveOnce(code ?? -1, signal)
       }
 
       nextChild.stdout?.on('data', onStdoutData)
@@ -229,7 +248,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
       worktree: target.worktree,
       path: joinWorktreeRelativePath(
         target.worktree.path,
-        normalizeRuntimeRelativePath(relativePath)
+        normalizeRuntimeRelativePath(relativePath, target.worktree.path)
       ),
       executionHostId: target.executionHostId
     }))

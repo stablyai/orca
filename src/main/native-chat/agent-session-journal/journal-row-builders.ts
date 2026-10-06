@@ -5,8 +5,10 @@ import type {
   AgentJournalProducerLinkage,
   AgentJournalRowAttribution,
   AgentJournalTurnScope,
-  AgentSessionProviderHandle
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import {
   agentJournalLinkageFields,
@@ -28,6 +30,7 @@ import {
 } from './journal-row-schema'
 import { boundInlineText, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import { assertSubmissionIdUnused } from './journal-write-guards'
+import { turnEndAfterStop } from './journal-stop-turn-end'
 import type { ResolveDispatchInput } from './journal-store-contracts'
 
 type RowBuilder<T> = (seq: number, ts: number) => T
@@ -62,7 +65,7 @@ export function journalTombstoneRowBuilder(
 
 export function journalSubmissionRowBuilder(
   state: () => JournalReducerState,
-  providerHandle: AgentSessionProviderHandle,
+  identity: Pick<AgentSessionJournalIdentity, 'providerHandle' | 'agent'>,
   input: {
     clientMessageId: string
     payloadFingerprint: string
@@ -84,7 +87,7 @@ export function journalSubmissionRowBuilder(
     const queuedMessageId = consume?.messageId ?? input.queuedMessageId
     return buildJournalSubmissionRow({
       state: state(),
-      providerHandle,
+      providerHandle: agentSessionJournalProviderHandle(identity),
       ...input,
       ...(queuedMessageId !== undefined ? { queuedMessageId } : {}),
       seq,
@@ -109,6 +112,17 @@ export function journalDispatchRowBuilder(
     providerItemId,
     reason: boundedDispatchReason(input),
     ...(input.state === 'rejected' ? { rejection: input.rejection } : {}),
+    // Every rejection states its turn, null for none, so a reader tells it from an older row.
+    ...(input.state === 'rejected'
+      ? {
+          answeredInTurn: input.answeredInTurn
+            ? {
+                turnItemId: agentJournalItemKey(input.answeredInTurn.turn),
+                via: input.answeredInTurn.via
+              }
+            : null
+        }
+      : {}),
     ...journalRowBase(state().epoch, seq, input.fence, ts),
     ...(input.recovered ? { recovered: input.recovered } : {}),
     ...(input.state === 'pending' ? { turnScope: input.turnScope } : {})
@@ -200,7 +214,13 @@ export function journalLifecycleBatchRowBuilder(
             current.tombstones.get(resolved) ?? 0
           )) + 1
       revisions.set(resolved, revision)
-      return journalLifecycleMutationRow(mutation, itemId, revision)
+      return journalLifecycleMutationRow(
+        mutation.kind === 'item'
+          ? { ...mutation, body: turnEndAfterStop(current, resolved, mutation.body) }
+          : mutation,
+        itemId,
+        revision
+      )
     })
     const row: JournalLifecycleBatchRow = {
       kind: 'lifecycle-batch',
@@ -252,12 +272,13 @@ export function buildJournalItemRow(input: {
       input.state.items.get(resolved)?.revision ?? 0,
       input.state.tombstones.get(resolved) ?? 0
     ) + 1
+  const body = turnEndAfterStop(input.state, resolved, input.body)
   return {
     kind: 'item',
     itemId,
     revision,
-    body: input.body,
-    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [input.body]),
+    body,
+    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [body]),
     ...(input.recovered ? { recovered: input.recovered } : {}),
     turnScope: input.turnScope,
     ...agentJournalLinkageFields(input.linkage)
@@ -292,7 +313,7 @@ export function buildJournalSubmissionRow(input: {
   state: JournalReducerState
   clientMessageId: string
   payloadFingerprint: string
-  providerHandle: AgentSessionProviderHandle
+  providerHandle: AgentSessionJournalProviderHandle
   body: AgentJournalMessageItem
   seq: number
   fence: number

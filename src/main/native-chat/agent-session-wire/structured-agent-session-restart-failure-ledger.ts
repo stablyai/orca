@@ -31,6 +31,7 @@ import {
   type StructuredAgentSessionResumeOutcome
 } from './structured-agent-session-restart-resume-runner'
 import { RESTART_CONTINUATION_SUPERSEDED } from './structured-agent-session-restart-continuation'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 type FailureCapsule = Pick<
   AgentSessionRecoveryCapsule,
@@ -57,10 +58,11 @@ export type StructuredAgentSessionRestartFailureLedger = {
       failureReason: (sessionId: string) => string
     }
   ) => Promise<void>
-  /** Named sessions forget their offer or failure; unnamed, every durable record goes. */
+  /** Named sessions forget their offer or failure; unnamed, every record this host
+   *  lists goes (a newer Orca's stay). */
   dismiss: (
     sessionIds: readonly string[] | undefined,
-    beforeClearAll: () => void
+    beforeClearAll: () => void | Promise<void>
   ) => Promise<number>
 }
 
@@ -77,8 +79,12 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
   adapter: StructuredAgentSessionAdapter
   /** The predicate a retry applies to the failure's marker. */
   retryable: (marker: AgentSessionResumeMarker) => boolean
+  /** Whether a newer Orca saved the chat: its failure is kept for that Orca but not shown here,
+   *  where no retry can land. */
+  savedByNewerOrca: (sessionId: string) => boolean
   /** Makes the failed chats readable here, so `retryable` reads each one's journal. */
   reveal: (markers: readonly AgentSessionResumeMarker[]) => Promise<void>
+  logger: StructuredAgentSessionLogger
   now: () => number
   /** The capsule's single mutation lane, shared with the offer's own operations. */
   enqueue: <T>(operation: () => Promise<T>) => Promise<T>
@@ -88,7 +94,9 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
       return (await deps.capsule?.listFailed(deps.now())) ?? []
     } catch {
       // Recovery is advisory; a malformed capsule must not make ordinary chat actions unusable.
-      console.warn('[structured-agent-session] reading recovery capsule failed')
+      deps.logger.warn('reading restart failures from the recovery capsule failed', {
+        scope: 'recovery-capsule-read'
+      })
       return []
     }
   }
@@ -97,7 +105,11 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     failure: AgentSessionResumeFailureRecord
   ): StructuredAgentSessionResumeFailure[] => {
     const record = deps.getRecord(failure.marker.sessionId)
-    if (!record || !adapterSupportsRecord(deps.adapter, record)) {
+    if (
+      !record ||
+      !adapterSupportsRecord(deps.adapter, record) ||
+      deps.savedByNewerOrca(failure.marker.sessionId)
+    ) {
       return []
     }
     const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)
@@ -149,6 +161,15 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     ])
     for (const outcome of outcomes) {
       const resumed = outcome.outcome === 'resumed'
+      // A newer Orca's refusal spends nothing: the rollback below reopens the offer for the Orca
+      // that can continue it, and nothing is filed for a chat no retry here could continue.
+      if (
+        !resumed &&
+        outcome.reason === 'agent_session_journal_unreadable' &&
+        outcome.details?.reason === 'journalWrittenByNewerOrca'
+      ) {
+        continue
+      }
       // Ineligible means the offer no longer applies (record gone, conversation forked), and
       // superseded means the user's own message came first: nothing to retry, and the offer is spent.
       const failure = resumed
@@ -176,21 +197,30 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     await deps
       .enqueue(() => capsule.completeResume(operationId, completed, deps.now()))
       .catch(() => {
-        console.warn('[structured-agent-session] restart offer completion failed')
+        deps.logger.warn('completing a restart offer failed', {
+          scope: 'restart-offer-complete',
+          operationId
+        })
       })
     // Filed before the rollback so a failure the user must act on is never reopened as an offer
     // that would silently re-run it.
     await deps
       .enqueue(() => capsule.failResume(operationId, failures, deps.now()))
       .catch(() => {
-        console.warn('[structured-agent-session] restart failure record failed')
+        deps.logger.warn('recording a restart failure failed', {
+          scope: 'restart-failure-record',
+          operationId
+        })
       })
     // This only reopens rows still owned by this operation. Rows removed by completeResume stay
     // removed, even when the write of a later bookkeeping step fails.
     await deps
       .enqueue(() => capsule.rollbackResume(operationId, deps.now()))
       .catch(() => {
-        console.warn('[structured-agent-session] restart offer rollback failed')
+        deps.logger.warn('rolling back a restart offer failed', {
+          scope: 'restart-offer-rollback',
+          operationId
+        })
       })
   }
 
@@ -203,8 +233,10 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
         if (sessionIds !== undefined) {
           return (await deps.capsule?.dismiss(sessionIds, deps.now())) ?? 0
         }
-        beforeClearAll()
-        return (await deps.capsule?.clearAll(deps.now())) ?? 0
+        await beforeClearAll()
+        // A newer Orca's offers and failures were never shown here, so "dismiss all" keeps them.
+        const keep = (marker: AgentSessionResumeMarker) => deps.savedByNewerOrca(marker.sessionId)
+        return (await deps.capsule?.clearAll(deps.now(), keep)) ?? 0
       })
   }
 }

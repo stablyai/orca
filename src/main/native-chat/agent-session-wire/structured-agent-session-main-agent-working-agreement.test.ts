@@ -37,6 +37,8 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const CALLER = { callerKey: 'client-1' }
 const PROVIDER_ROW = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1' }
@@ -62,6 +64,7 @@ beforeEach(async () => {
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire: async (input) => {
@@ -76,7 +79,7 @@ beforeEach(async () => {
           acquisitionGeneration: 'generation-1',
           link: {
             linkId: `link-${input.fence}`,
-            handle: { provider: 'codex' as const, threadId: THREAD },
+            handle: codexProviderHandle(THREAD),
             origin: 'created' as const,
             mintedAtFence: input.fence,
             observedAt: NOW

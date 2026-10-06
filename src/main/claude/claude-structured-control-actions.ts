@@ -5,7 +5,6 @@ import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-req
 import { settleCancelledClaudeDispatchWaiters } from './claude-structured-dispatch'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import type { ClaudeSession } from './claude-structured-session-state'
-import type { StructuredAgentSessionStopCause } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 
 const INTERRUPT_CANCEL_QUEUED_CAPABILITY = 'interrupt_cancel_queued_v1'
 
@@ -27,8 +26,7 @@ export async function cancelClaudeTurn(
   session: ClaudeSession,
   timeoutMs: number | undefined,
   isCurrent: ClaudeTurnCancellationGuard = () => true,
-  onDispatchSettledLate?: ClaudeLateDispatchSettlement,
-  stopped?: { turnId: string; cause: StructuredAgentSessionStopCause }
+  onDispatchSettledLate?: ClaudeLateDispatchSettlement
 ): Promise<{ cancelled: boolean }> {
   // The SDK interrupt is session-scoped. Re-check the caller's turn/fence
   // immediately before issuing it so a delayed request cannot stop a later turn.
@@ -36,10 +34,6 @@ export async function cancelClaudeTurn(
     return { cancelled: false }
   }
   const cancelQueued = supportsClaudeQueuedInterruptCancellation(session)
-  // Recorded before the interrupt goes out, so the result it provokes finds it.
-  if (stopped) {
-    session.translator?.recordTurnStop(stopped.turnId, stopped.cause)
-  }
   try {
     const receipt = await session.connection.interrupt({
       ...(cancelQueued ? { cancelQueued: true } : {}),
@@ -58,12 +52,9 @@ export async function cancelClaudeTurn(
     }
     return { cancelled: true }
   } catch (error) {
+    // The CLI refused. Any other error leaves the interrupt's effect unknown. Either way the Stop
+    // ends the child next, so its Stop event stands.
     if (error instanceof ClaudeControlRequestError) {
-      // The CLI refused, so the turn runs on and its own end means what it says. Any other error
-      // leaves the interrupt's effect unknown, and the stop the user asked for stands.
-      if (stopped) {
-        session.translator?.withdrawTurnStop(stopped.turnId)
-      }
       return { cancelled: false }
     }
     throw error
@@ -104,6 +95,32 @@ export async function stopClaudeBackgroundTasks(
     throw failure.error
   }
   return { cancelled }
+}
+
+/** Stops the tasks while `session` is still the one the host asked about, then publishes its child
+ *  work so the host's records follow every acknowledged stop. */
+export async function stopCurrentClaudeBackgroundTasks(input: {
+  sessions: ReadonlyMap<string, ClaudeSession>
+  session: ClaudeSession
+  sessionId: string
+  fence: number
+  taskIds: readonly string[]
+  timeoutMs: number | undefined
+  publishChildWork: (session: ClaudeSession) => void
+}): Promise<{ cancelled: boolean }> {
+  const { sessions, session, sessionId, fence } = input
+  const acquisitionGeneration = session.acquisitionGeneration
+  const isCurrent = () =>
+    sessions.get(sessionId) === session &&
+    session.fence === fence &&
+    session.acquisitionGeneration === acquisitionGeneration
+  try {
+    return await stopClaudeBackgroundTasks(session, input.timeoutMs, isCurrent, input.taskIds)
+  } finally {
+    if (isCurrent()) {
+      input.publishChildWork(session)
+    }
+  }
 }
 
 export async function answerClaudePrompt(

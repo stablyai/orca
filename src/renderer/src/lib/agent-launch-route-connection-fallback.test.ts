@@ -41,17 +41,19 @@ describe('launch route transcript readability', () => {
       buildAgentLaunchRouteInput(store, { agent: 'grok', workspace: WORKSPACE })
         .nativeChatTranscriptIsLocalReadable
     ).toBe(true)
-    expect(planAgentSessionLaunch(store, { agent: 'grok', workspace: WORKSPACE }).route).toBe(
-      'legacy-native-chat'
-    )
+    expect(
+      planAgentSessionLaunch(store, { requestId: 'request-1', agent: 'grok', workspace: WORKSPACE })
+        .route
+    ).toBe('legacy-native-chat')
   })
 
   it('keeps a remote repo off native chat through the same fallback', () => {
     const store = storeWithAmbiguousWorktreeRows('build-box')
 
-    expect(planAgentSessionLaunch(store, { agent: 'grok', workspace: WORKSPACE }).route).toBe(
-      'terminal-tui'
-    )
+    expect(
+      planAgentSessionLaunch(store, { requestId: 'request-2', agent: 'grok', workspace: WORKSPACE })
+        .route
+    ).toBe('terminal-tui')
   })
 
   it('has no repo to fall back to when the workspace names none', () => {
@@ -59,6 +61,7 @@ describe('launch route transcript readability', () => {
 
     expect(
       planAgentSessionLaunch(store, {
+        requestId: 'request-3',
         agent: 'grok',
         workspace: { kind: 'git-worktree', worktreeId: WORKTREE_ID }
       }).route

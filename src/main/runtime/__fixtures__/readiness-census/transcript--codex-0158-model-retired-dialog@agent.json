@@ -1,0 +1,15 @@
+{
+  "description": "codex recording at 120x40 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-135: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "136-157: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "158-163: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "164-166: now=blocked:codex-model-migration-prompt edge=blocked:codex-model-migration-prompt quiet=blocked:codex-model-migration-prompt wait=blocked:codex-model-migration-prompt@start"
+    ],
+    "clockless": [
+      "0-163: verdict=pending:closed wait=pending",
+      "164-166: verdict=blocked:codex-model-migration-prompt wait=blocked:codex-model-migration-prompt@start"
+    ]
+  }
+}

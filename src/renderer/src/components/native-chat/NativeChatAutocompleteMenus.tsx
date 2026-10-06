@@ -39,6 +39,14 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   const emptyText = noMatches ? getPickerEmptyText(autocomplete) : null
   const collision = commands.find((item) => item.skillCollision)
   const duplicate = skills.find((item) => item.sources.length > 1)
+  // One sentence for the line and the screen reader, so the two never disagree.
+  const skillErrorText =
+    autocomplete.skillErrorKind === 'unavailable'
+      ? translate(
+          'components.native-chat.composer.skillsUnavailableHost',
+          "Skills aren't available in SSH chats"
+        )
+      : translate('components.native-chat.composer.skillsLoadFailed', "Couldn't load skills")
 
   let optionIndex = 0
   return (
@@ -71,17 +79,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
       ) : null}
       {autocomplete.skillStatus === 'error' ? (
         <PickerStatus>
-          <span className="min-w-0 flex-1">
-            {autocomplete.skillErrorKind === 'unavailable'
-              ? translate(
-                  'components.native-chat.composer.skillsUnavailableHost',
-                  'Skills are unavailable for this host'
-                )
-              : translate(
-                  'components.native-chat.composer.skillsLoadFailed',
-                  'Could not load skills from this host'
-                )}
-          </span>
+          <span className="min-w-0 flex-1">{skillErrorText}</span>
           {autocomplete.skillErrorKind !== 'unavailable' ? (
             <button
               type="button"
@@ -114,10 +112,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
         {autocomplete.skillStatus === 'loading'
           ? translate('components.native-chat.composer.loadingSkills', 'Loading skills...')
           : autocomplete.skillStatus === 'error'
-            ? translate(
-                'components.native-chat.composer.skillsLoadFailed',
-                'Could not load skills from this host'
-              )
+            ? skillErrorText
             : emptyText
               ? emptyText
               : autocomplete.skillsEnabled

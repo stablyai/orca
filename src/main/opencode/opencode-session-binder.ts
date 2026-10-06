@@ -10,8 +10,10 @@ import {
   type CorrelatedSession,
   type SessionOwnership
 } from '../../shared/agent-hook-listener/opencode-session-correlation'
-import { readOpenCodeDatabase } from '../ai-vault/session-scanner-opencode-sqlite-open'
-import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
+import type {
+  BinderSessionRow,
+  OpenCodeSessionCursor
+} from '../foreign-sqlite-readers/opencode-binder-sessions-result'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { isOpenCodeClientProcess, type ProcessIdentityRow } from './opencode-client-sweep'
@@ -23,9 +25,9 @@ import type { HookListenerState } from '../../shared/agent-hook-listener/listene
  *
  * Each round: read new sessions from the shared server's SQLite store,
  * snapshot panes, sweep for live clients, correlate, bind. Everything the
- * round needs is injected so the decision core stays unit-testable; only
- * the SQLite reader below touches disk, reusing ai-vault's guarded open
- * (read-only + query_only + busy timeout).
+ * round needs is injected so the decision core stays unit-testable; the
+ * store read runs on the foreign SQLite reader worker
+ * (foreign-sqlite-readers/readers/opencode-binder-sessions.ts).
  */
 
 /** One pane snapshot feeding a binder round. */
@@ -35,14 +37,6 @@ export type BinderPaneSnapshot = {
   directory: string | null
   worktreeId: string | null
   shellPid: number | null
-}
-
-/** One session store row feeding a binder round. */
-export type BinderSessionRow = {
-  id: string
-  directory: string
-  createdAtMs: number
-  parentId: string | null
 }
 
 /** Everything one binder round needs, injected for tests. */
@@ -58,12 +52,6 @@ export type BinderRoundDeps = {
 /** Ownership decisions from one binder round. */
 export type BinderRoundResult = {
   ownerships: SessionOwnership[]
-}
-
-/** Position in the session store; composite so same-millisecond rows are never skipped. */
-export type OpenCodeSessionCursor = {
-  ms: number
-  id: string
 }
 
 /** Cursor before anything was ever read. */
@@ -210,68 +198,6 @@ export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult
     })
   ]
   return { ownerships }
-}
-
-/**
- * Sessions newer than `cursor`, oldest first. The composite
- * `(time_created, id)` position means rows sharing a millisecond with the
- * cursor — including rows the LIMIT cut off last round — are re-listed
- * instead of permanently skipped. Unknown shapes read as empty so an opencode
- * schema move degrades to unbound sessions, never a crash. Fail-open [] on
- * any read error for the same reason.
- */
-export function listOpenCodeDbSessions(
-  dbPath: string,
-  cursor: OpenCodeSessionCursor
-): BinderSessionRow[] {
-  try {
-    return readOpenCodeDatabase({
-      dbPath,
-      read: (db) => {
-        // Why `session` only: OpenCode 1 writes it; OpenCode 2 writes `session_v2`, and its
-        // posts name their own pane, so its sessions must never bind.
-        const table = 'session'
-        if (
-          !tableExists(db, table) ||
-          !columnExists(db, table, 'directory') ||
-          !columnExists(db, table, 'time_created')
-        ) {
-          return []
-        }
-        const parent = columnExists(db, table, 'parent_id') ? 'parent_id' : 'NULL'
-        const rows: unknown[] = db
-          .prepare(
-            `SELECT id, directory, time_created, ${parent} AS parent_id FROM ${table} WHERE time_created > ? OR (time_created = ? AND id > ?) ORDER BY time_created ASC, id ASC LIMIT 500`
-          )
-          .all(cursor.ms, cursor.ms, cursor.id)
-        const sessions: BinderSessionRow[] = []
-        for (const row of rows) {
-          if (typeof row !== 'object' || row === null) {
-            continue
-          }
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: node:sqlite returns plain row objects; the object check above plus the per-field validation below reject anything else.
-          const record = row as Record<string, unknown>
-          if (
-            typeof record.id !== 'string' ||
-            typeof record.directory !== 'string' ||
-            typeof record.time_created !== 'number'
-          ) {
-            continue
-          }
-          sessions.push({
-            id: record.id,
-            directory: record.directory,
-            createdAtMs: record.time_created,
-            parentId: typeof record.parent_id === 'string' ? record.parent_id : null
-          })
-        }
-        return sessions
-      }
-    })
-  } catch (err) {
-    console.warn('[opencode-binder] session store read failed; skipping round', err)
-    return []
-  }
 }
 
 /** Default database path for the local shared server. */

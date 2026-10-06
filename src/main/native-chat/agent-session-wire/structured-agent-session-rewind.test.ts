@@ -1,4 +1,7 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../shared/agent-session-journal-types'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -29,6 +32,8 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const caller = { callerKey: 'desktop' }
 let directory: string
@@ -74,7 +79,7 @@ beforeEach(async () => {
           mintedAtFence: input.fence,
           observedAt: HOST_TEST_NOW,
           origin: acquires.length === 1 ? 'created' : 'resumed',
-          handle: { provider: 'codex', threadId: HOST_TEST_THREAD }
+          handle: codexProviderHandle(HOST_TEST_THREAD)
         }
       }
     },
@@ -92,6 +97,7 @@ beforeEach(async () => {
     closeSession: async () => true
   }
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
     journalDatabase: openTestJournalHostDatabase(directory),
@@ -261,6 +267,26 @@ describe('host rewind', () => {
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
     expect(rewind).toHaveBeenCalledTimes(1)
   })
+  // The stream's failure is the stream's to recover from; its stale error is not the rewind's.
+  it("rewinds after the chat's event sink failed, its error never failing the rewind", async () => {
+    const target = await seed()
+    const request = await params(target)
+    const refused = vi
+      .spyOn(AgentSessionJournal.prototype, 'appendItem')
+      .mockRejectedValueOnce(new Error('disk full'))
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    sink.appendItem(
+      { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'tip', ordinal: 1 },
+      hostTestMessage('refused'),
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await vi.waitFor(() => expect(refused).toHaveBeenCalled())
+    refused.mockRestore()
+
+    expect(await host.rewind(caller, request)).toMatchObject({ ok: true })
+    expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toHaveLength(1)
+  })
+
   it('refuses a rewind racing an active turn before provider execution', async () => {
     const target = await seed()
     sink.appendItem(
@@ -454,6 +480,48 @@ describe('host rewind', () => {
       { itemId: agentJournalItemKey(turnRow('kept')), body: keptTurn }
     ])
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
+  })
+
+  it("keeps a newer Orca's item of an unknown kind, in its place, through a Codex provider hydration", async () => {
+    expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
+    const message = (turnId: string) => ({
+      provider: 'codex' as const,
+      threadId: HOST_TEST_THREAD,
+      turnId,
+      ordinal: 0
+    })
+    const newerRow = { provider: 'orca' as const, clientMessageId: 'newer-card' }
+    // A kind this build does not know; no provider's history holds it.
+    const newerBody: AgentJournalItemBody = JSON.parse(
+      JSON.stringify({ kind: 'plan-card', steps: [{ text: 'by a newer build' }] })
+    )
+    sink.appendItem(message('kept'), hostTestMessage('kept'), {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    sink.appendItem(newerRow, newerBody, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    sink.appendItem(message('drop'), hostTestMessage('drop'), {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await host.flushStreamedEvents(HOST_TEST_SESSION)
+    const items = [{ identity: message('kept'), body: hostTestMessage('kept from provider') }]
+    rewind.mockImplementationOnce(async (input) => {
+      await input.onPrepared?.(items)
+      return { ok: true, items }
+    })
+
+    expect(
+      await host.rewind(caller, await params(agentJournalItemKey(message('drop'))))
+    ).toMatchObject({ ok: true })
+
+    expect(
+      (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId, body }) => ({
+        itemId,
+        body
+      }))
+    ).toEqual([
+      { itemId: agentJournalItemKey(message('kept')), body: hostTestMessage('kept from provider') },
+      { itemId: agentJournalItemKey(newerRow), body: newerBody }
+    ])
   })
 
   it('keeps each kept turn opened by the message that opened it, under its provider key', async () => {

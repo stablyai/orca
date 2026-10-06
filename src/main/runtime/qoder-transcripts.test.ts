@@ -48,3 +48,25 @@ describe('captured Qoder 1.1.64 startup', () => {
     }
   )
 })
+
+describe('captured Qoder China 1.1.65 startup', () => {
+  it.each(['qoder-cn-startup', 'qoder-cn-signin'])('checks the composer in %s', async (fixture) => {
+    const data = readFileSync(join(__dirname, '__fixtures__', `${fixture}.txt`), 'utf8')
+    const title = extractLastOscTitle(
+      data.replaceAll(`${String.fromCharCode(27)}]0;${String.fromCharCode(7)}`, '')
+    )
+    expect(getAgentLabel(normalizeTerminalTitle(title ?? ''))).toBe('Qoder CLI CN')
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: title ?? '',
+      foregroundProcess: 'qoderclicn',
+      launchAgent: 'qoder-cn',
+      data,
+      size: { cols: 120, rows: 40 }
+    })
+    expect((await runtime.showTerminal(handle)).agentIdentity).toBe('qoder-cn')
+    const readiness = await runtime
+      .waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 800 })
+      .catch(() => null)
+    expect(readiness?.satisfied ?? false).toBe(false)
+  })
+})

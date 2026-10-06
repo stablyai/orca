@@ -443,10 +443,10 @@ describe('orca root help', () => {
     await main([], '/tmp/repo')
 
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
-      'account add               Add a managed Claude or Codex account on this Orca host'
+      'account add               Add a managed agent account on this Orca host'
     )
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
-      'account list              List managed Claude and Codex accounts on this Orca host'
+      'account list              List managed agent accounts on this Orca host'
     )
     logSpy.mockRestore()
   })

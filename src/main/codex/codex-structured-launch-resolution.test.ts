@@ -5,6 +5,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { createCodexStructuredLaunchResolver } from './codex-structured-launch-resolution'
 import { codexStructuredPermissionPolicyForSettings } from './codex-structured-permission-policy'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'session-1'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -105,9 +106,10 @@ describe('codex structured launch resolution', () => {
   it('resumes the last thread this session actually proved, not one a caller names', async () => {
     const launch = await resolverFor(
       record({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
         providerHandleChain: [
-          { handle: { provider: 'codex', threadId: 'thread-old' } },
-          { handle: { provider: 'codex', threadId: 'thread-current' } }
+          { handle: codexProviderHandle('thread-old') },
+          { handle: codexProviderHandle('thread-current') }
         ] as AgentSessionRecord['providerHandleChain']
       })
     )({ identity: IDENTITY })
@@ -121,7 +123,7 @@ describe('codex structured launch resolution', () => {
       mintedAtFence: number
     ): AgentSessionProviderHandleLink => ({
       linkId: `link-${mintedAtFence}`,
-      handle: { provider: 'codex', threadId: 't' },
+      handle: codexProviderHandle('t'),
       origin,
       mintedAtFence,
       observedAt: 1
@@ -204,8 +206,9 @@ describe('codex structured launch resolution', () => {
     const resolveRollout = vi.fn(async () => '/home/work/.codex/sessions/rollout.jsonl')
     const launch = await resolverFor(
       record({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
         providerHandleChain: [
-          { handle: { provider: 'codex', threadId: 'thread-current' } }
+          { handle: codexProviderHandle('thread-current') }
         ] as AgentSessionRecord['providerHandleChain']
       }),
       async (id) => `/repos/${id}`,

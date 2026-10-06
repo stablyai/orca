@@ -47,7 +47,9 @@ function createContext(replay: string, attemptGeneration: number): ReattachPaylo
 }
 
 describe('reattach payload context', () => {
-  beforeEach(() => installTerminalTestGlobals())
+  beforeEach(async () => {
+    await installTerminalTestGlobals()
+  })
 
   afterEach(async () => restoreTerminalTestGlobals())
 

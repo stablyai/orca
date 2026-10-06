@@ -28,6 +28,7 @@ import {
   hasPersistedStructuredAgentSessionStore,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const HOST_ID = 'local'
 
@@ -258,6 +259,7 @@ describe('structured agent-session runtime install', () => {
   it('holds stop until the model catalog has written its coalesced save', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
     await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory,
       hostId: HOST_ID,
       claimKeyId: 'key-1',
@@ -297,6 +299,7 @@ describe('structured agent-session runtime install', () => {
     __setWindowsProcessTreeLoaderForTests(() => null)
     try {
       const host = await ensureStructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         stateDirectory,
         hostId: HOST_ID,
         claimKeyId: 'key-1',

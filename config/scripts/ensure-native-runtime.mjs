@@ -8,9 +8,13 @@ import { basename, dirname, resolve } from 'node:path'
 import {
   ensureWindowsProcessTreeCommandLinePatch,
   inspectWindowsProcessTreeAddon,
+  nodeGypRebuildInvocation,
+  nodeGypRebuildTimeoutMs,
   stageWindowsProcessTreeNodeAddonApiHeaders,
   windowsProcessTreeAddonPath
 } from './windows-process-tree-gyp-rebuild.mjs'
+import { describeProcessFailure, runProcessSync } from './script-child-process.mjs'
+import { disableMsbuildFileTrackingOnWindows } from './msbuild-file-tracking.mjs'
 
 const require = createRequire(import.meta.url)
 const { assertNodePtyJobOwnership, nodePtyAddonPath } = require('./node-pty-job-ownership.cjs')
@@ -400,33 +404,39 @@ function rebuildNodeRuntimeModules(moduleNames) {
       moduleDir = realpathSync(moduleDir)
     }
     console.warn(`[native-runtime] Rebuilding ${moduleName} with node-gyp.`)
-    runPnpm(['exec', 'node-gyp', 'rebuild'], { cwd: moduleDir })
+    // pnpm exec inside an installed addon cannot discover the root build tool.
+    runNodeGyp(
+      moduleName,
+      nodeGypRebuildInvocation(
+        process.arch,
+        moduleDir,
+        process.env.npm_config_node_gyp || undefined
+      )
+    )
     if (moduleName === 'node-pty' && process.platform === 'win32') {
       runNodeScript([resolve(moduleDir, 'scripts', 'post-install.js')])
     }
   }
 }
 
-function runPnpm(args, { cwd = projectDir } = {}) {
-  // cmd.exe resolves both Corepack's pnpm.cmd and pnpm 12's native pnpm.exe.
-  const command = 'pnpm'
+function runNodeGyp(moduleName, { args, cwd }) {
   const env =
-    process.platform === 'linux' && args.includes('node-gyp')
+    process.platform === 'linux'
       ? { ...process.env, CXXFLAGS: `${process.env.CXXFLAGS ?? ''} -std=gnu++2a`.trim() }
-      : process.env
-  const result = spawnSync(command, args, {
+      : disableMsbuildFileTrackingOnWindows({ ...process.env })
+  const result = runProcessSync({
+    program: process.execPath,
+    args,
     cwd,
+    env,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
-    env
+    timeoutMs: nodeGypRebuildTimeoutMs(moduleName)
   })
-
-  if (result.error || result.status !== 0) {
-    console.error(`[native-runtime] ${command} ${args.join(' ')} failed in ${cwd}.`)
-    if (result.error) {
-      console.error(formatError(result.error))
-    }
-    process.exit(result.status ?? 1)
+  if (result.code !== 0) {
+    console.error(
+      `[native-runtime] node-gyp rebuild failed in ${cwd}: ${describeProcessFailure(result)}`
+    )
+    process.exit(result.code ?? 1)
   }
 }
 

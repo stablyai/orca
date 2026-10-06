@@ -125,29 +125,36 @@ export type NativeChatTurnMembership = {
   drawOrder: readonly number[] | null
 }
 
+type NativeChatTurnMember = { id: string; role: NativeChatRole; unsent?: true }
+
 /**
  * Places each row in its turn. A user entry that anchors a turn, or is scoped to none, keys
  * itself; one delivered into a running turn (a steer) takes that turn's key. A host that states no
  * scope is read by journal order instead (`nativeChatJournalOrderTurnKeys`). `opensTurn` narrows
- * which rows may key themselves, for rows that interleave a subagent's with the conversation's.
+ * which rows may key themselves, for rows that interleave a subagent's with the conversation's. A
+ * message shown as not sent is in no turn, so it is never the live one.
  */
 export function nativeChatTurnMembership(
-  messages: readonly { id: string; role: NativeChatRole }[],
+  messages: readonly NativeChatTurnMember[],
   journal?: NativeChatTurnJournal | null,
   opensTurn: NativeChatOpensTurn = nativeChatUserRowOpensTurn
 ): NativeChatTurnMembership {
+  const opens: NativeChatOpensTurn = (message) => !isUnsent(message) && opensTurn(message)
   if (!journal) {
-    const turnKeys = nativeChatRowTurnKeys(messages, null, opensTurn)
+    const turnKeys = withoutUnsent(messages, nativeChatRowTurnKeys(messages, null, opens))
     return { turnKeys, liveTurnKey: newestUserTurnKey(messages, turnKeys), drawOrder: null }
   }
   const anchors = structuredAgentTurnAnchors(journal.items, journal.submissions)
   const running = liveStructuredAgentSessionTurnScope(journal.items)
   if (!hostStatesTurnScopes(journal.items)) {
     const recordKeys = namedRecordKeys(journal.items, anchors)
-    const turnKeys = nativeChatRowTurnKeys(
+    const turnKeys = withoutUnsent(
       messages,
-      nativeChatJournalOrderTurnKeys(journal.items, recordKeys),
-      opensTurn
+      nativeChatRowTurnKeys(
+        messages,
+        nativeChatJournalOrderTurnKeys(journal.items, recordKeys),
+        opens
+      )
     )
     const runningNamed = running.kind === 'turn' ? recordKeys.get(running.turnItemId) : null
     return {
@@ -160,6 +167,9 @@ export function nativeChatTurnMembership(
   const anchoring = new Set(anchors.values())
   const scopes = new Map(journal.items.map((item) => [item.itemId, item.turnScope]))
   const turnKeys = messages.map((message) => {
+    if (message.unsent === true) {
+      return undefined
+    }
     const scope = scopes.get(message.id)
     const turnKey =
       scope?.kind === 'turn' && scope.turnItemId ? anchors.get(scope.turnItemId) : undefined
@@ -173,6 +183,18 @@ export function nativeChatTurnMembership(
     liveTurnKey: runningKey ?? newestUserTurnKey(messages, turnKeys),
     drawOrder: nativeChatTurnDrawOrder(messages, turnKeys, anchoring)
   }
+}
+
+function isUnsent(message: { id: string; role: NativeChatRole }): boolean {
+  return 'unsent' in message && message.unsent === true
+}
+
+/** An unsent row neither keys a turn nor inherits the one before it. */
+function withoutUnsent(
+  messages: readonly NativeChatTurnMember[],
+  turnKeys: (string | undefined)[]
+): (string | undefined)[] {
+  return turnKeys.map((turnKey, index) => (messages[index]?.unsent === true ? undefined : turnKey))
 }
 
 /** Each root record's anchor, or null for a record that names no opener (only older hosts write
@@ -225,9 +247,11 @@ function commandTurnRunning(items: readonly AgentJournalRenderItem[]): boolean {
 }
 
 function newestUserTurnKey(
-  messages: readonly { role: NativeChatRole }[],
+  messages: readonly NativeChatTurnMember[],
   turnKeys: readonly (string | undefined)[]
 ): string | undefined {
-  const index = messages.findLastIndex((message) => message.role === 'user')
+  const index = messages.findLastIndex(
+    (message) => message.role === 'user' && message.unsent !== true
+  )
   return index === -1 ? undefined : turnKeys[index]
 }

@@ -1,5 +1,6 @@
 import {
   isolatedScanRoots,
+  writeJcodeSessionFixture,
   writeMuseScannerFixture,
   writeOpenCode2SqliteFixture
 } from './session-scanner-test-fixtures'
@@ -34,6 +35,7 @@ export async function writeEveryAgentVault(root: string): Promise<EveryAgentVaul
   const { ompSessionFile, primeAgentSessionFile } = await writeLogAgentFixtures(roots)
   await writeDocumentAgentFixtures(root, roots, antigravitySessionId)
   await writeMuseScannerFixture(roots.museSessionsDir)
+  await writeJcodeSessionFixture(roots)
   roots.opencodeDbPaths = [await writeOpenCode2SqliteFixture(root)]
   writeOpenCodeSqliteDatabase(roots.zcodeDbPath, [
     {

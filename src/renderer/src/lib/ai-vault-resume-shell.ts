@@ -1,5 +1,8 @@
 import type { AppState } from '@/store/types'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
+import { getAiVaultResumeWorkspaceExecutionHostId } from './ai-vault-resume-target'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../shared/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
@@ -73,4 +76,51 @@ export function getAiVaultResumeWorkspacePath(
       .flat()
       .find((candidate) => candidate.id === targetWorktreeId)?.path ?? null
   )
+}
+
+export function getAiVaultResumeWorkspaceWslDistro(
+  state: Pick<AppState, 'folderWorkspaces' | 'repos' | 'worktreesByRepo'> &
+    Partial<
+      Pick<
+        AppState,
+        'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings' | 'projectGroups'
+      >
+    >,
+  workspaceId: string | null | undefined
+): string | null | undefined {
+  const workspacePath = getAiVaultResumeWorkspacePath(state, workspaceId)
+  const workspaceKey = workspaceId ? parseWorkspaceKey(workspaceId) : null
+  const runtimeState = {
+    activeRepoId: state.activeRepoId ?? null,
+    activeWorktreeId: state.activeWorktreeId ?? null,
+    projects: state.projects ?? [],
+    settings: state.settings ?? null,
+    folderWorkspaces: state.folderWorkspaces,
+    projectGroups: state.projectGroups ?? [],
+    repos: state.repos,
+    worktreesByRepo: state.worktreesByRepo
+  }
+  if (workspaceKey?.type === 'folder') {
+    if (
+      getAiVaultResumeWorkspaceExecutionHostId(runtimeState, workspaceId ?? null) !==
+      LOCAL_EXECUTION_HOST_ID
+    ) {
+      return null
+    }
+    if (getFolderWorkspaceCandidateRepos(runtimeState, workspaceKey.folderWorkspaceId).length > 1) {
+      return undefined
+    }
+  }
+  const runtime = getLocalProjectExecutionRuntimeContext(
+    runtimeState,
+    workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId,
+    CLIENT_PLATFORM
+  )
+  if (runtime?.status === 'repair-required') {
+    return undefined
+  }
+  if (runtime?.status === 'resolved') {
+    return runtime.runtime.kind === 'wsl' ? runtime.runtime.distro : null
+  }
+  return workspacePath ? (parseWslUncPath(workspacePath)?.distro ?? null) : null
 }

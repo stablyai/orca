@@ -5,6 +5,7 @@ import type { JSONContent } from '@tiptap/react'
 // draft would be lost on every TUI/GUI round-trip. Mirrors the attachment cache
 // so both halves of an unsent message survive toggles and reconnects.
 
+import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 
 const draftCache = new Map<string, { text: string; document?: JSONContent }>()
@@ -28,10 +29,6 @@ export function writeNativeChatDraftCache(scopeKey: string, draft: string): void
   })
 }
 
-export function appendNativeChatDraftText(draft: string, text: string): string {
-  return draft === '' ? text : `${draft.trimEnd()}\n\n${text}`
-}
-
 // Only a write from outside the composer notifies; its own writes already hold the text.
 const appendListeners = new Map<string, Set<(text: string) => void>>()
 
@@ -42,7 +39,7 @@ export function appendNativeChatDraftCache(scopeKey: string, text: string): void
   }
   writeNativeChatDraftCache(
     scopeKey,
-    appendNativeChatDraftText(readNativeChatDraftCache(scopeKey), text)
+    appendReturnedDraftText(readNativeChatDraftCache(scopeKey), text)
   )
   appendListeners.get(scopeKey)?.forEach((listener) => listener(text))
 }

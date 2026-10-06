@@ -1,14 +1,17 @@
 export type { TerminalCreateOptions } from './runtime-terminal-contracts'
+export type { Worktree } from '../../shared/worktree/types'
 export type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 export {
   createTerminalRevealWarning,
   ownerSurfacing,
   resolveTerminalPresentation
 } from './orca-runtime-core'
-export { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
-export { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+export { makePaneKey } from '../../shared/stable-pane-id'
 export { randomUUID } from 'node:crypto'
-export { admitStablePaneAdoption } from './runtime-terminal-pane-identity'
+export {
+  admitStablePaneAdoption,
+  allocateTerminalPaneIdentity
+} from './runtime-terminal-pane-identity'
 export {
   copySleepingAgentLaunchConfig,
   inferCapturedClaudeAgentTeamsMode,

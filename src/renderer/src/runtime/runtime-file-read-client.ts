@@ -17,12 +17,21 @@ import {
   hasRemoteRuntimeOwner
 } from './runtime-file-routing'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import type { LocalFileAccess } from '../../../shared/local-file-access'
 
 const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
 const REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE =
   'Remote file download requires a newer Orca server. Update the headless server and try again.'
 
 type RemoteFileDownloadArgs = NonNullable<ReturnType<typeof getRemoteFileArgs>>
+
+// Why local only: an SSH read is the remote host's to check, and its relay never sees this field.
+export function localAccess(
+  connectionId: string | undefined,
+  access: LocalFileAccess | undefined
+): { access?: LocalFileAccess } {
+  return access && !connectionId ? { access } : {}
+}
 
 export async function readRuntimeFileContent({
   settings,
@@ -31,15 +40,18 @@ export async function readRuntimeFileContent({
   worktreeId,
   connectionId,
   expectedExternalSshTargetId,
-  includeLocalLogMetadata
+  includeLocalLogMetadata,
+  access
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
   assertExternalSshReadOwnership(settings, connectionId, expectedExternalSshTargetId)
   const target = getActiveRuntimeTarget(settings)
-  if (target.kind !== 'environment') {
-    return window.api.fs.readFile({ filePath, connectionId, includeLocalLogMetadata })
-  }
-  if (!worktreeId) {
-    return window.api.fs.readFile({ filePath, connectionId, includeLocalLogMetadata })
+  if (target.kind !== 'environment' || !worktreeId) {
+    return window.api.fs.readFile({
+      filePath,
+      connectionId,
+      includeLocalLogMetadata,
+      ...localAccess(connectionId, access)
+    })
   }
   if (!canReadRelativeRuntimeFile(relativePath)) {
     throw new Error('Remote file is outside the owning runtime worktree')
@@ -78,7 +90,8 @@ export async function readRuntimeFileContent({
 
 export async function readRuntimeFilePreview(
   context: RuntimeFileOperationArgs,
-  filePath: string
+  filePath: string,
+  access?: LocalFileAccess
 ): Promise<RuntimeFilePreviewResult> {
   assertExternalSshReadOwnership(
     context.settings,
@@ -90,7 +103,11 @@ export async function readRuntimeFilePreview(
     if (hasRemoteRuntimeOwner(context)) {
       throw new Error('Remote file is outside the owning runtime worktree')
     }
-    return window.api.fs.readFile({ filePath, connectionId: context.connectionId })
+    return window.api.fs.readFile({
+      filePath,
+      connectionId: context.connectionId,
+      ...localAccess(context.connectionId, access)
+    })
   }
   return callRuntimeRpc<RuntimeFilePreviewResult>(
     remoteArgs.target,

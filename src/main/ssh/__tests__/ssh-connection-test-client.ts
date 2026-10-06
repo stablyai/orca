@@ -6,6 +6,7 @@ export type MockSshClient = {
   setNoDelay: ReturnType<typeof vi.fn>
   _sock: Socket | undefined
   lastExecCommand?: string
+  lastShellWindow?: unknown
   lastConnectConfig?: unknown
   on: (event: string, handler: (...args: unknown[]) => void) => void
   off: (event: string, handler: (...args: unknown[]) => void) => void
@@ -203,6 +204,15 @@ export function createSsh2Module(): Ssh2ModuleMock {
         pendingExecCallback = cb
         return
       }
+      cb(undefined, { close: vi.fn() })
+    }
+    lastShellWindow?: unknown
+    shell(
+      window: unknown,
+      _options: unknown,
+      cb: (err: Error | undefined, channel: unknown) => void
+    ) {
+      this.lastShellWindow = window
       cb(undefined, { close: vi.fn() })
     }
     sftp(cb: (err: Error | undefined, channel: unknown) => void) {

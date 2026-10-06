@@ -1,3 +1,4 @@
+import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import {
   hasPendingAgentResultText,
@@ -6,9 +7,10 @@ import {
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import {
   shouldPollHookTranscript,
+  hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
-import { CodexSubagentPollScheduler } from '../../../shared/codex-subagent-poll-scheduler'
+import { AgentTranscriptPollScheduler } from '../../../shared/agent-transcript-poll-scheduler'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
@@ -24,7 +26,7 @@ type TranscriptPoll = {
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
-  private readonly transcriptPollScheduler = new CodexSubagentPollScheduler<TranscriptPoll>(
+  private readonly transcriptPollScheduler = new AgentTranscriptPollScheduler<TranscriptPoll>(
     CODEX_SUBAGENT_POLL_MS,
     (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
   )
@@ -55,11 +57,15 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (source !== 'codex' && source !== 'muse') {
       return
     }
-    this.transcriptPollScheduler.clear(original.paneKey)
     if (!shouldPollHookTranscript(this.state, source, original)) {
+      this.transcriptPollScheduler.clear(original.paneKey)
       return
     }
-    this.transcriptPollScheduler.schedule(original.paneKey, { source, body, original })
+    this.transcriptPollScheduler.schedule(
+      original.paneKey,
+      { source, body, original },
+      hookTranscriptWatchPath(this.state, source, original.paneKey)
+    )
   }
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
@@ -73,7 +79,10 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
-    const normalized = normalizeHookPayload(this.state, source, body, this.env)
+    const normalized =
+      source === 'codex'
+        ? pollCodexTranscriptStatus(this.state, original)
+        : normalizeHookPayload(this.state, source, body, this.env)
     if (!normalized) {
       return
     }

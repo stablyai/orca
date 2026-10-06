@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import { useEffect, useRef, useState } from 'react'
 import { Copy, ExternalLink, Eye, Pencil } from 'lucide-react'
 import {
@@ -12,7 +13,7 @@ import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { getEditorHeaderCopyState } from './editor-header'
 import { splitPathForDisplay } from './editor-path-display'
@@ -88,7 +89,7 @@ export function EditorPanelHeaderPath({
         }}
       >
         {isRenaming ? (
-          <input
+          <ImeInput
             ref={renameInputRef}
             data-editor-header-rename-input="true"
             aria-label={translate(

@@ -45,6 +45,8 @@ import {
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -65,7 +67,7 @@ const spawnChild: StructuredAgentSessionAdapter['acquire'] = async ({ fence, spa
   acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
   link: {
     linkId: `link-${fence}`,
-    handle: { provider: 'codex' as const, threadId: THREAD },
+    handle: codexProviderHandle(THREAD),
     origin: store.getRecord(SESSION)?.providerHandleChain.length
       ? ('resumed' as const)
       : ('created' as const),
@@ -76,6 +78,7 @@ const spawnChild: StructuredAgentSessionAdapter['acquire'] = async ({ fence, spa
 
 async function startHost(): Promise<void> {
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire,
@@ -771,9 +774,10 @@ describe('an eviction between acceptance and handover', () => {
   })
 })
 
-// A close abandons what is queued before it stops the child, so a release that then fails still
-// leaves every queued message rejected as closed, never blamed on the provider.
-describe('a close that stops the child and then fails', () => {
+// A close abandons what is queued before it stops the child, so a wind-down step that then fails
+// (reported, never the close's failure) still leaves every queued message rejected as closed,
+// never blamed on the provider.
+describe('a close that stops the child and then a wind-down step fails', () => {
   const END_CHILD = {
     evict: () => host.close(SESSION, 'evict')
   } satisfies Partial<Record<StructuredAgentSessionChildEndCause, () => Promise<void>>>
@@ -801,8 +805,7 @@ describe('a close that stops the child and then fails', () => {
       const id = await accept('hello')
       await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
 
-      await expect(END_CHILD[end]()).rejects.toThrow()
-      expect(host.hasSession(SESSION)).toBe(true)
+      await expect(END_CHILD[end]()).resolves.toBeUndefined()
       started.resolve()
 
       await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))

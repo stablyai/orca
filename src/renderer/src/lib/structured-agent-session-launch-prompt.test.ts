@@ -49,6 +49,7 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     await expect(
       settleStructuredAgentLaunchPrompt({
         launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+        target: { kind: 'local' },
         options: { prompt: 'review this', onPromptDelivered },
         stagedEntry
       })
@@ -78,6 +79,7 @@ describe('settleStructuredAgentLaunchPrompt', () => {
 
     await settleStructuredAgentLaunchPrompt({
       launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+      target: { kind: 'local' },
       options: { prompt: 'review this' },
       stagedEntry
     })

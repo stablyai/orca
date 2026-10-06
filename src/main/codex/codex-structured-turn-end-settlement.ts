@@ -17,7 +17,9 @@ import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
 } from '../../shared/agent-session-failure-words'
+import type { AgentJournalAnsweredTurnIdentity } from '../../shared/agent-session-journal-types'
 import type { CodexTurnEnd } from './codex-structured-dispatch-echo'
+import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
 import type { CodexSession } from './codex-structured-session-state'
 import {
   readCodexThreadId,
@@ -41,6 +43,8 @@ export function codexDispatchRejection(
 export type CodexTurnEndSettlement = {
   clientMessageId: string
   state: 'rejected'
+  /** The turn Codex answered the send into, whose end settled it, and how the send joined it. */
+  answeredInTurn: AgentJournalAnsweredTurnIdentity
 } & AgentJournalDispatchRejection
 
 function errorDetail(params: unknown): ProviderDiagnostic | undefined {
@@ -80,19 +84,27 @@ export function codexTurnEndRejection(end: CodexTurnEnd): AgentJournalDispatchRe
 /** Settles the sends bound to the turn this admitted notification ended. */
 export function settleCodexSendsInEndedTurn(
   session: Pick<CodexSession, 'threadId' | 'dispatchEchoes'>,
-  method: string,
-  params: unknown,
+  frame: { sessionId: string; method: string; params: unknown },
   settle: (settlement: CodexTurnEndSettlement) => void
 ): void {
-  const turnId = readCodexTurnId(params)
-  const end = readCodexTurnEnd(method, params)
-  if (!turnId || !end || (readCodexThreadId(params) ?? session.threadId) !== session.threadId) {
+  const turnId = readCodexTurnId(frame.params)
+  const end = readCodexTurnEnd(frame.method, frame.params)
+  if (
+    !turnId ||
+    !end ||
+    (readCodexThreadId(frame.params) ?? session.threadId) !== session.threadId
+  ) {
     return
   }
   const rejection = codexTurnEndRejection(end)
-  for (const clientMessageId of session.dispatchEchoes.endTurn(session.threadId, turnId, end)) {
+  const turn = codexTurnLifecycleIdentity(frame.sessionId, turnId)
+  for (const { clientMessageId, via } of session.dispatchEchoes.endTurn(
+    session.threadId,
+    turnId,
+    end
+  )) {
     if (rejection) {
-      settle({ clientMessageId, state: 'rejected', ...rejection })
+      settle({ clientMessageId, state: 'rejected', answeredInTurn: { turn, via }, ...rejection })
     }
   }
 }

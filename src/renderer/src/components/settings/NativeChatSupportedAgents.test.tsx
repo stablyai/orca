@@ -17,7 +17,9 @@ const EXPECTED_SUPPORTED_AGENTS = [
   'openclaude',
   'codex',
   'grok',
-  'omp'
+  'omp',
+  'opencode',
+  'opencode2'
 ] as const satisfies readonly TuiAgent[]
 const SUPPORTED_AGENTS_LABEL_KEY = 'auto.components.settings.NativeChatSupportedAgents.label'
 
@@ -35,13 +37,14 @@ function getRenderedChips(): { agent: string; label: string; role: string }[] {
 describe('NativeChatSupportedAgents', () => {
   afterEach(async () => {
     await i18n.changeLanguage('en')
+    i18n.removeResourceBundle('test', 'translation')
   })
 
   it('keeps the advertised list and support predicate on the independent contract', () => {
     expect(NATIVE_CHAT_SUPPORTED_AGENT_LIST).toEqual(EXPECTED_SUPPORTED_AGENTS)
     for (const entry of getAgentCatalog()) {
       expect(isNativeChatSupportedAgent(entry.id), entry.id).toBe(
-        EXPECTED_SUPPORTED_AGENTS.includes(entry.id as (typeof EXPECTED_SUPPORTED_AGENTS)[number])
+        EXPECTED_SUPPORTED_AGENTS.some((agent) => agent === entry.id)
       )
     }
   })
@@ -58,15 +61,15 @@ describe('NativeChatSupportedAgents', () => {
     }
   })
 
-  it('omits agents native chat cannot render, including OpenCode', () => {
+  it('omits agents outside the supported transcript contract', () => {
     const rendered = getRenderedChips().map((chip) => chip.agent)
 
     for (const entry of getAgentCatalog()) {
-      if (!isNativeChatSupportedAgent(entry.id)) {
+      if (!EXPECTED_SUPPORTED_AGENTS.some((agent) => agent === entry.id)) {
         expect(rendered).not.toContain(entry.id)
       }
     }
-    expect(rendered).not.toContain('opencode')
+    expect(rendered).not.toContain('cursor')
   })
 
   it('keeps the label in the English catalog', () => {
@@ -83,8 +86,9 @@ describe('NativeChatSupportedAgents', () => {
   })
 
   it('renders the English fallback when the active locale lacks the label key', async () => {
-    await i18n.changeLanguage('es')
-    expect(i18n.getResource('es', 'translation', SUPPORTED_AGENTS_LABEL_KEY)).toBeUndefined()
+    i18n.addResourceBundle('test', 'translation', {})
+    await i18n.changeLanguage('test')
+    expect(i18n.getResource('test', 'translation', SUPPORTED_AGENTS_LABEL_KEY)).toBeUndefined()
 
     const markup = renderToStaticMarkup(<NativeChatSupportedAgents />)
 

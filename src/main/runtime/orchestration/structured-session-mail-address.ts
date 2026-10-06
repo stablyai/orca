@@ -1,5 +1,5 @@
 /**
- * A structured agent session as a mail address: `session:<id>`, the Orca-minted id every agent is
+ * A structured agent session as a mail address: `orca_session_id:<id>`, the Orca-minted id every agent is
  * told is its public address. Recipient routing and pointer delivery both read these rules off the
  * durable session record, so the two can never disagree about which sessions mail can reach.
  *
@@ -35,11 +35,7 @@ export function lookupOrcaAgentSession(
   }
   const owner = store
     .listRecords()
-    .find((candidate) =>
-      candidate.providerHandleChain.some(({ handle }) =>
-        handle.provider === 'claude' ? handle.sessionId === id : handle.threadId === id
-      )
-    )
+    .find((candidate) => candidate.providerHandleChain.some(({ handle }) => handle.nativeId === id))
   return owner ? { kind: 'provider-id', orcaSessionId: owner.sessionId } : { kind: 'unknown' }
 }
 

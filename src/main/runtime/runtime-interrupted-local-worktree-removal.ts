@@ -18,6 +18,11 @@ import { restoreMissingWorktreeGitFile } from '../git/worktree-git-file-restore'
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
+import {
+  assertUnregisteredRemovalLeftover,
+  differentCheckoutAtPathError,
+  isUnregisteredRemovalLeftover
+} from '../worktree-removal-leftover'
 import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import type { WorktreeRemovalRecord } from '../worktree-removal-records'
 import {
@@ -31,6 +36,8 @@ type InterruptedWorktreeRemovalHost = {
   acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
   closeWatchers: (path: string) => Promise<void>
   preservedBranchCleanup: Pick<RuntimePreservedBranchCleanup, 'preserveHead' | 'remember'>
+  /** A retry's teardown: terminals may have opened in the leftover since the failed delete. */
+  stopPtys?: () => Promise<void>
   /** Drops the worktree's host state (metadata, history, caches), as every removal path does. */
   purge: (record: WorktreeRemovalRecord) => void
   onRemoved: (record: WorktreeRemovalRecord) => void
@@ -61,6 +68,7 @@ export function interruptedLocalWorktreeRemovalJob(
           return host.acquireWatcherRemoval(path)
         },
         closeWatchers: host.closeWatchers,
+        stopPtys: host.stopPtys,
         preserveBranchHead: (result, fallbackHead) =>
           host.preservedBranchCleanup.preserveHead(result, fallbackHead),
         // remember() clears the cleanup target when no branch was preserved.
@@ -89,6 +97,7 @@ type InterruptedLocalWorktreeRemovalArgs = Pick<
   store: Store
   record: WorktreeRemovalRecord
   acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
+  stopPtys?: () => Promise<void>
   stopSignal: AbortSignal
 }
 
@@ -138,12 +147,14 @@ async function finishInterruptedLocalWorktreeRemoval(
   }
   const gitLink = await readCheckoutGitLink(record.worktreePath)
   // Why: the finish forces, so a checkout created at this path since the quit must not be taken.
-  // Git deletes the checkout, `.git` included, before it drops the registration, so a `.git` at an
-  // unregistered path belongs to a new checkout.
-  if (deletable ? !isRecordedCheckout(deletable, record) : gitLink === 'present') {
-    throw new Error(
-      `A different checkout is now at ${record.worktreePath}; Orca left it in place. Delete it again to remove it.`
-    )
+  // At an unregistered path, only a `.git` naming the admin entry Git removed is this checkout's
+  // own leftover (Git drops the registration even when its delete fails partway).
+  if (
+    deletable
+      ? !isRecordedCheckout(deletable, record)
+      : !(await isUnregisteredRemovalLeftover(repo.path, record.worktreePath))
+  ) {
+    throw differentCheckoutAtPathError(record.worktreePath)
   }
   // Why: Git deletes `.git` wherever it falls in directory order (early on NTFS) and refuses to
   // remove a checkout left without it; restoring the link from Git's admin entry lets Git finish.
@@ -153,6 +164,14 @@ async function finishInterruptedLocalWorktreeRemoval(
     gitCanRemove = await restoreMissingWorktreeGitFile(repo.path, deletable.path, localOptions)
   }
   const gate = await args.acquireWatcherRemoval(record.worktreePath)
+  if (args.stopPtys) {
+    try {
+      await args.stopPtys()
+    } catch (error) {
+      await gate.finish(false)
+      throw error
+    }
+  }
   if (deletable && gitCanRemove) {
     return finishRuntimeLocalWorktreeRemoval(finishArgs, deletable, gate, args.stopSignal)
   }
@@ -165,6 +184,10 @@ async function finishInterruptedLocalWorktreeRemoval(
       repo.path,
       record.worktreePath,
       record.deleteBranch && record.branch ? { name: record.branch, head: record.head } : null,
+      // Why only unregistered: a registered checkout here was just proven to be the recorded one.
+      deletable
+        ? async () => {}
+        : () => assertUnregisteredRemovalLeftover(repo.path, record.worktreePath, localOptions),
       localOptions
     )
     removed = true

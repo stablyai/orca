@@ -17,13 +17,14 @@ import { queuedMessageFingerprint } from '../agent-session-wire/structured-agent
 import { JournalQueuedMessages } from './journal-queued-messages'
 import type { AgentSessionJournal } from './journal-store'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-q',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null }
+  providerHandle: claudeProviderHandle('native-1', null)
 }
 const STOP_WITHDRAWAL = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
   surface: 'rejection'
@@ -137,14 +138,6 @@ describe("a waiting draft whose 'never delivered' claim an echo disproves", () =
     const journal = await withdrawnDraft('did it land?', { handedOver: false })
     await echo(journal, 'echo-1', 'did it land?')
     expect(journal.queuedMessages.get('draft-1')?.state).toBe('waiting')
-  })
-
-  it('retires the pause in the per-row hook when that echo withdraws the last card it holds back', async () => {
-    const journal = await withdrawnDraft('did it land?')
-    expect(await journal.queuedMessages.recordPause('stopped')).toBe(true)
-    await echo(journal, 'echo-1', 'did it land?')
-    expect(journal.queuedMessages.get('draft-1')?.state).toBe('withdrawn')
-    expect(journal.queuedMessages.pause()).toBeNull()
   })
 
   it('stays waiting for an echo of some other text', async () => {

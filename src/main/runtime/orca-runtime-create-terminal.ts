@@ -9,14 +9,15 @@ import { recordPtySurface, spawnSurfaceClaimSequence } from './pty-recorded-surf
 export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   async createTerminal(
     worktreeSelector?: string,
-    opts: dependencies.TerminalCreateOptions = {}
+    opts: dependencies.TerminalCreateOptions = {},
+    // Internal creation evidence; RPC and preload callers never supply it.
+    created?: dependencies.Worktree
   ): Promise<dependencies.RuntimeTerminalCreate> {
     if (opts.startupAgent && worktreeSelector === undefined) {
       throw new Error(`startupAgent ${opts.startupAgent} requires a workspace selector.`)
     }
     const callerColors = dependencies.normalizeColorQueryReplyColors(opts.terminalColorQueryReplies)
-    // Why: only a paired client sends colours here; a client that predates
-    // terminal.setViewerColors reports its theme to a headless host only this way.
+    // Older paired clients report their theme only at creation.
     if (callerColors) {
       dependencies.setPairedViewerColors(callerColors)
     }
@@ -33,22 +34,14 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
       if (!this.ptyController?.spawn) {
         throw new Error('runtime_unavailable')
       }
-      const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+      const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, created)
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
       const reportPtySpawnCommitted = createPtySpawnCommitReporter(launchOpts.onPtySpawnCommitted)
       const cwd =
         this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
-      const hintedTabId = launchOpts.tabId?.trim()
-      const canAdoptPaneIdentity =
-        hintedTabId !== undefined &&
-        dependencies.isValidHostTerminalTabId(hintedTabId) &&
-        launchOpts.leafId !== undefined &&
-        dependencies.isTerminalLeafId(launchOpts.leafId)
-      let tabId = canAdoptPaneIdentity ? (hintedTabId as string) : dependencies.randomUUID()
-      let leafId = canAdoptPaneIdentity ? (launchOpts.leafId as string) : dependencies.randomUUID()
-      let paneKey = dependencies.makePaneKey(tabId, leafId)
+      let { tabId, leafId, paneKey } = dependencies.allocateTerminalPaneIdentity(launchOpts)
       const claimedStablePaneCreate = this.ptyController.claimStablePaneCreate?.({
         worktreeId: workspace.id,
         connectionId: workspace.connectionId,
@@ -110,7 +103,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           releaseStablePaneCreate?.()
           throw error
         }
-        const env = this.buildTerminalWorkspaceEnv(
+        const env = await this.buildTerminalWorkspaceEnv(
           workspace,
           {
             ...baseEnv,
@@ -128,7 +121,8 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         }
         let result: Awaited<ReturnType<NonNullable<dependencies.RuntimePtyController['spawn']>>>
         try {
-          launchOpts.onPtySpawnDispatched?.()
+          const { launchAgent } = launchOpts
+          launchOpts.onPtySpawnDispatched?.({ launchConfig: effectiveLaunchConfig, launchAgent })
           result = await this.ptyController.spawn({
             cols: 120,
             rows: 40,
@@ -299,6 +293,13 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
     }
     // The renderer owns this spawn, so this process cannot see when it is requested.
     opts.onPtySpawnDispatched?.()
-    return createDesktopTerminal(this, worktreeSelector, opts, presentation, rendererWindow)
+    return createDesktopTerminal(
+      this,
+      worktreeSelector,
+      opts,
+      presentation,
+      rendererWindow,
+      created
+    )
   }
 }

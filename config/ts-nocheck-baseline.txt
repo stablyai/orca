@@ -163,7 +163,6 @@ src/main/runtime/runtime-file-commands-revoke-terminal-file-grants-for-client.ts
 src/main/runtime/runtime-file-commands-search-local-runtime-files.ts
 src/main/runtime/runtime-file-commands-search-remote-quick-open-file-paths.ts
 src/main/runtime/runtime-file-commands-search-runtime-files.ts
-src/main/runtime/runtime-file-commands-ssh-file-watcher-rearm.ts
 src/main/runtime/runtime-file-commands-terminal-artifact-access.ts
 src/main/runtime/runtime-file-commands-terminal-file-paths.ts
 src/main/runtime/runtime-file-commands-write-file-explorer-file.ts

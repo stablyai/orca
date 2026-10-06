@@ -3,8 +3,8 @@
  *
  * Two properties are pinned here, because both were false at some point in this lane:
  *
- * - a worker is TAUGHT the same thing whichever mode it runs in, byte for byte once the handle and
- *   dispatch id are normalised. The sub-dispatch section used to be withheld from a structured
+ * - a worker is TAUGHT the same thing whichever mode it runs in, byte for byte once how it is named
+ *   and the dispatch id are normalised. The sub-dispatch section used to be withheld from a structured
  *   worker, which is a two-tier capability model dressed as a preamble tweak;
  * - a structured worker can actually BE a coordinator. `worker-start` used to resolve `--from`
  *   through `showTerminal`, which needs a PTY, so the capability the preamble withheld was in fact
@@ -26,6 +26,7 @@ import { inspectWorkerTerminal } from './orchestration/worker/worker-observation
 const WORKTREE = 'repo::wt'
 const STRUCTURED_HANDLE = 'structworker_worker'
 const TERMINAL_HANDLE = 'term_worker'
+const STRUCTURED_ORCA_SESSION_ID = 'orca_session_id:sess_worker'
 
 const structuredPreambles: string[] = []
 // The session host the code under test reads; a structural fake, so no host type is claimed.
@@ -211,9 +212,18 @@ describe('a worker cannot tell which mode it is running in', () => {
     expect(terminal.mode.mode).toBe('terminal')
     const structuredPreamble = structuredPreambles[0] as string
     const terminalPreamble = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] as string
-    expect(normalizePreamble(structuredPreamble, STRUCTURED_HANDLE, structured.dispatchId)).toBe(
-      normalizePreamble(terminalPreamble, TERMINAL_HANDLE, terminal.dispatchId)
-    )
+    const selfLine = `\nYour Orca session ID is: ${STRUCTURED_ORCA_SESSION_ID}`
+    expect(
+      normalizePreamble(
+        structuredPreamble.replace(selfLine, ''),
+        STRUCTURED_ORCA_SESSION_ID,
+        structured.dispatchId
+      )
+    ).toBe(normalizePreamble(terminalPreamble, TERMINAL_HANDLE, terminal.dispatchId))
+    // A session worker is named by its Orca session ID; a terminal worker's text is main's.
+    expect(structuredPreamble).toContain(`${selfLine}\n`)
+    expect(structuredPreamble).not.toContain(STRUCTURED_HANDLE)
+    expect(terminalPreamble).not.toContain('Orca session ID')
     // The section the structured lane used to withhold, asserted by name so the equality above
     // cannot pass by both preambles losing it.
     expect(structuredPreamble).toContain('=== SUB-DISPATCH ===')
@@ -234,6 +244,10 @@ describe('a worker cannot tell which mode it is running in', () => {
 
     expect(result).toMatchObject({ state: 'ready' })
     expect(showTerminal).not.toHaveBeenCalled()
+    // Its sub-worker is told the coordinator's Orca session ID, not the handle it was minted.
+    expect(vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1]).toContain(
+      "Your coordinator's Orca session ID is: orca_session_id:sess_coord\n"
+    )
     expect(vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1]).toContain(
       '=== SUB-DISPATCH ==='
     )

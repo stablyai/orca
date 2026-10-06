@@ -10,11 +10,12 @@ import {
 } from '../../runtime/agent-session-older-build-lease.test-fixture'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { supervisedPosixLaunch } from '../../codex/codex-app-server-posix-supervisor'
+import { supervisedPosixLaunch } from '../../provider-process/provider-process-supervisor'
 import {
   resolveStructuredSessionRecovery,
   type StructuredSessionRecoveryResolutionDeps
 } from './structured-agent-session-recovery-resolution'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const MATCHED: AgentSessionOwnerProbe = { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
@@ -81,7 +82,7 @@ async function liveOwner(store: AgentSessionRecordStore, pid = 4242) {
     fence,
     link: {
       linkId: 'link-recovery',
-      handle: { provider: 'codex', threadId: 'thread-recovery' },
+      handle: codexProviderHandle('thread-recovery'),
       origin: 'created',
       mintedAtFence: fence,
       observedAt: NOW

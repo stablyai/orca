@@ -78,6 +78,92 @@ function makeAnnotation(overrides?: Partial<BrowserPageAnnotation>): BrowserPage
 }
 
 describe('formatBrowserAnnotationsAsMarkdown', () => {
+  it('keeps single-URL output byte-for-byte compatible', () => {
+    expect(formatBrowserAnnotationsAsMarkdown([makeAnnotation()])).toBe(
+      [
+        '## Design Feedback: /pricing',
+        '',
+        '**URL:** https://example.com/pricing',
+        '**Browser tab id:** page-1',
+        '**Viewport:** 1280x720',
+        '',
+        '### 1. <App> <PricingCta> button "Start free trial"',
+        '**Intent:** change',
+        '**Selector:** `main.pricing > button.primary`',
+        '**Location:** `main > .pricing > button`',
+        '**Source:** src/components/PricingCta.tsx:42:8',
+        '**React:** <App> <PricingCta>',
+        '**Bounds:** x=400, y=300, 148x44',
+        '**Classes:** `primary`',
+        '**Text:** "Start free trial"',
+        '**Nearby text:**',
+        '- Pro',
+        '- $29/month',
+        '**Nearby elements:**',
+        '- span "$29/month"',
+        '**Computed styles:**',
+        '- display: inline-flex',
+        '- position: relative',
+        '- width: 148px',
+        '- height: 44px',
+        '- margin: 0px',
+        '- padding: 12px 24px',
+        '- color: rgb(255, 255, 255)',
+        '- background: rgb(99, 102, 241)',
+        '- border: 0px none',
+        '- border-radius: 8px',
+        '- font-family: Geist, sans-serif',
+        '- font-size: 16px',
+        '- font-weight: 600',
+        '- line-height: 20px',
+        '- text-align: center',
+        '**Full DOM path:** `html > body > main.pricing > button.primary`',
+        '**HTML:**',
+        '````html',
+        '<button class="primary">Start free trial</button>',
+        '````',
+        '**Feedback:** Make this primary action more obvious.'
+      ].join('\n')
+    )
+  })
+
+  it('groups interleaved captured URLs in first-seen order with global numbers and captured viewports', () => {
+    const first = makeAnnotation()
+    first.payload.page.viewportWidth = 800
+    const second = makeAnnotation({ id: 'note-b', comment: 'B feedback' })
+    second.payload.page.sanitizedUrl = 'https://example.com/account'
+    second.payload.page.viewportWidth = 1024
+    second.payload.target.sourceFile = 'src/Account.tsx:10:1'
+    const third = makeAnnotation({ id: 'note-a2', comment: 'A again' })
+    third.payload.page.viewportWidth = 1440
+    third.payload.target.sourceFile = 'src/PricingChanged.tsx:3:1'
+
+    const markdown = formatBrowserAnnotationsAsMarkdown([first, second, third])
+    expect(markdown.match(/^### \d+\./gm)).toEqual(['### 1.', '### 3.', '### 2.'])
+    const [pricing, account] = markdown.split('## Design Feedback: ').slice(1)
+    expect(pricing).toContain('/pricing')
+    expect(pricing).toContain('**URL:** `https://example.com/pricing`')
+    expect(pricing).toContain('**Viewport:** 800x720')
+    expect(pricing).toContain('**Viewport:** 1440x720')
+    expect(pricing).toContain('src/PricingChanged.tsx:3:1')
+    expect(pricing).not.toContain('B feedback')
+    expect(account).toContain('/account')
+    expect(account).toContain('**URL:** `https://example.com/account`')
+    expect(account).toContain('**Viewport:** 1024x720')
+    expect(account).toContain('src/Account.tsx:10:1')
+    expect(account).toContain('**Feedback:** B feedback')
+  })
+
+  it('escapes and bounds added mixed-page context with the existing inline formatting', () => {
+    const first = makeAnnotation()
+    const second = makeAnnotation({ browserPageId: 'page`id\n## injected' })
+    second.payload.page.sanitizedUrl = 'invalid`url\n## injected'
+    const markdown = formatBrowserAnnotationsAsMarkdown([first, second])
+    expect(markdown).toContain('**URL:** ``invalid`url ## injected``')
+    expect(markdown).toContain('**Browser tab id:** ``page`id ## injected``')
+    expect(markdown).not.toContain('\n## injected')
+  })
+
   it('includes agent-useful selectors, source, react tree, styles, and feedback', () => {
     const markdown = formatBrowserAnnotationsAsMarkdown([makeAnnotation()])
 

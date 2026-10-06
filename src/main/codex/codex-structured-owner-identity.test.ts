@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { codexProcessIdentity, codexProviderHandleLink } from './codex-structured-owner-identity'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY = {
   sessionId: 'session-identity',
   workspaceId: 'workspace-1',
   hostId: 'local',
   agent: 'codex' as const,
-  providerHandle: { kind: 'codex' as const, threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 describe('codex process identity', () => {

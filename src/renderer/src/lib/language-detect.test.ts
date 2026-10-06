@@ -124,6 +124,27 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\repo\\force-app\\classes\\ACCOUNTSERVICE.CLS')).toBe('apex')
   })
 
+  it('maps Ruby DSL extensions to the ruby language id (case-insensitive)', () => {
+    expect(detectLanguage('lib/tasks/devise.rake')).toBe('ruby')
+    expect(detectLanguage('config.ru')).toBe('ruby')
+    expect(detectLanguage('app/views/posts/index.json.jbuilder')).toBe('ruby')
+    expect(detectLanguage('lib/tasks/install.thor')).toBe('ruby')
+    expect(detectLanguage('C:\\repo\\lib\\tasks\\DEVISE.RAKE')).toBe('ruby')
+  })
+
+  it('maps Ruby DSL filenames to the ruby language id', () => {
+    expect(detectLanguage('rails/Guardfile')).toBe('ruby')
+    expect(detectLanguage('deploy/Capfile')).toBe('ruby')
+    expect(detectLanguage('ios/Podfile')).toBe('ruby')
+    expect(detectLanguage('homebrew/Brewfile')).toBe('ruby')
+    expect(detectLanguage('C:\\vms\\Vagrantfile')).toBe('ruby')
+  })
+
+  it('keeps near-miss Ruby DSL names off the ruby language id', () => {
+    expect(detectLanguage('report.rake.bak')).toBe('plaintext')
+    expect(detectLanguage('ruby.rakex')).toBe('plaintext')
+  })
+
   it.each([
     'templates/base.twig',
     'templates/node--article.html.twig',

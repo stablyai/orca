@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -27,6 +28,8 @@ import {
   stopStructuredAgentSessionRuntime,
   waitForStructuredAgentSessionRecovery
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'claude-integration-1'
 const PROVIDER_SESSION = claudeSessionIdForOrcaSession(SESSION)
@@ -234,6 +237,7 @@ beforeEach(async () => {
     publishStructuredAgentSessionTab: vi.fn(),
     ensureStructuredAgentSessionHost: () =>
       ensureStructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         stateDirectory: root,
         hostId: 'local',
         claimKeyId: 'key-1',
@@ -766,29 +770,46 @@ describe('a structured Claude session over agentSession.*', () => {
     ).resolves.toMatchObject({ turnId: 'provider-opened-assistant', cancelled: true })
     expect(claude.live().calls.at(-1)).toMatchObject({ subtype: 'interrupt' })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test-only view of the host's store; only `getRecord` is read.
     const host = getStructuredAgentSessionHost() as unknown as {
       deps: {
         store: {
           getRecord: (sessionId: string) => {
-            providerHandleChain: { handle: { provider: string; leafUuid?: string | null } }[]
+            providerHandleChain: { handle: { transport: string; resumeCursor?: string } }[]
           }
         }
       }
     }
     // A completed turn advances the durable resume point in place while the owner is live.
     expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)?.handle).toMatchObject({
-      provider: 'claude',
-      leafUuid: 'assistant-leaf'
+      transport: 'claude-sdk',
+      resumeCursor: 'assistant-leaf'
     })
+    // A Claude Stop ends its child once Claude ends the stopped turn, so the chat rests; the next
+    // open resumes the conversation.
     const old = claude.live()
-    const resumed = await ok<{ fence: number }>('agentSession.ensure', ensureParams(created.fence))
-    expect(resumed.fence).toBe(created.fence + 1)
+    old.handlers.onMessage?.({
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      session_id: PROVIDER_SESSION,
+      uuid: 'interrupted-result'
+    })
+    await vi.waitFor(() => expect(leaseOf(SESSION).claimStatus).toBe('released'))
     expect(old.closed).toBe(true)
-    // Claude owns where the conversation continues; the stored leaf is the last completed turn.
+    const rested = leaseOf(SESSION)
+    const resumed = await ok<{ fence: number }>(
+      'agentSession.ensure',
+      ensureParams(rested.runtimeFence)
+    )
+    expect(resumed.fence).toBe(rested.runtimeFence + 1)
+    expect(claude.live()).not.toBe(old)
+    // Claude owns where the conversation continues; the stored leaf is the stopped turn's, which
+    // Claude ended with its own result.
     expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
     expect(claude.live().launch.options).not.toHaveProperty('resumeSessionAt')
     const lastCompletedTurn = {
-      handle: { provider: 'claude', sessionId: PROVIDER_SESSION, leafUuid: 'assistant-leaf' },
+      handle: claudeProviderHandle(PROVIDER_SESSION, 'provider-opened-assistant'),
       origin: 'resumed'
     }
     expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject(

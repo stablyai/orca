@@ -101,7 +101,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     const stateReconciledPayload =
       terminalOwnedPayload.connectionId &&
       terminalOwnedPayload.payload.agentType === 'codex' &&
-      terminalOwnedPayload.hookEventName
+      (terminalOwnedPayload.hookEventName || terminalOwnedPayload.payload.mainAgent)
         ? {
             ...terminalOwnedPayload,
             payload: reconcileRemoteCodexState(

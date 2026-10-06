@@ -17,6 +17,8 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { storedTestAgentSessionRecord } from './agent-session-record-store-test-harness'
 
 const NOW = 1_800_000_000_000
 const IMPORTED = 'session-alpha-1'
@@ -44,7 +46,7 @@ const legacyFile = (): string =>
   JSON.stringify({
     schemaVersion: 2,
     hostId: 'local',
-    records: { [IMPORTED]: agentSessionRecordFixture() },
+    records: { [IMPORTED]: storedTestAgentSessionRecord(agentSessionRecordFixture()) },
     operations: {},
     retiredClaimKeys: [],
     unusableRecords: {}
@@ -60,7 +62,7 @@ function databaseVersion(): number {
 }
 
 /** The runtime at startup, rooted at `root`, with its PTY daemon stubbed. */
-function startupRuntime(onError: (input: { scope: string; error: unknown }) => void) {
+function startupRuntime(log: ReturnType<typeof recordingStructuredAgentSessionLogger>) {
   const runtime = new OrcaRuntimeService()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the runtime's own protected members; the test roots the host at `root` and stubs the PTY daemon.
   const internal = runtime as unknown as {
@@ -72,13 +74,13 @@ function startupRuntime(onError: (input: { scope: string; error: unknown }) => v
   internal.hasPersistedStructuredAgentSessionStore = () => true
   internal.ensureStructuredAgentSessionHost = () =>
     ensureStructuredAgentSessionHost({
+      logger: log.logger,
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
-      onError
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
     })
   internal.refreshMobileSessionPtyRecords = async () => new Set<string>()
   return {
@@ -88,11 +90,11 @@ function startupRuntime(onError: (input: { scope: string; error: unknown }) => v
   }
 }
 
-function importReports(onError: ReturnType<typeof vi.fn>): unknown[] {
-  return onError.mock.calls
-    .map(([input]) => input)
-    .filter((input) => input.scope === 'structured-agent-session-record-import')
-    .map((input) => input.error)
+/** Each import report the install logged, its kind as the entry's outcome. */
+function importReports(log: ReturnType<typeof recordingStructuredAgentSessionLogger>): unknown[] {
+  return log.entries
+    .filter((entry) => entry.fields.scope === 'legacy-record-import')
+    .map(({ fields: { scope: _scope, outcome, ...rest } }) => ({ kind: outcome, ...rest }))
 }
 
 // A read that can clear: the file's own permissions, as a locked-down or mid-restore profile has.
@@ -101,13 +103,13 @@ it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
   async () => {
     await writeLegacy(legacyFile())
     await chmod(legacyAgentSessionStorePath(root), 0o000)
-    const onError = vi.fn()
-    const first = startupRuntime(onError)
+    const log = recordingStructuredAgentSessionLogger()
+    const first = startupRuntime(log)
 
     await first.runtime.restoreStructuredAgentSessionTabs()
     const host = await first.host()
 
-    expect(importReports(onError)).toEqual([
+    expect(importReports(log)).toEqual([
       {
         kind: 'unavailable',
         error: expect.objectContaining({ message: 'agent_session_store_corrupt' })
@@ -142,7 +144,7 @@ it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     await stopStructuredAgentSessionRuntime()
 
     await chmod(legacyAgentSessionStorePath(root), 0o600)
-    const second = startupRuntime(vi.fn())
+    const second = startupRuntime(recordingStructuredAgentSessionLogger())
     await second.runtime.restoreStructuredAgentSessionTabs()
     const relaunched = await second.host()
 
@@ -156,12 +158,12 @@ it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
 
 it('installs over a file no read will make usable, reports it once, and leaves it untouched', async () => {
   await writeLegacy('{ truncated')
-  const onError = vi.fn()
-  const { runtime, host } = startupRuntime(onError)
+  const log = recordingStructuredAgentSessionLogger()
+  const { runtime, host } = startupRuntime(log)
 
   await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).resolves.toBeUndefined()
 
-  expect(importReports(onError)).toEqual([
+  expect(importReports(log)).toEqual([
     { kind: 'unusable', error: expect.objectContaining({ message: 'agent_session_store_corrupt' }) }
   ])
   expect((await host()).legacyRecordImportOwed()).toBe(false)

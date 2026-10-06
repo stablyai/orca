@@ -30,6 +30,7 @@ import {
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { resolveBaselineReleaseRef } from './release-checkout'
@@ -62,6 +63,8 @@ import {
   type RpcReply
 } from './versioned-agent-session-wire'
 import { openTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
@@ -78,13 +81,14 @@ beforeAll(async () => {
   baseline = await loadAgentSessionWireBuild(baselineRef)
 }, SUITE_TIMEOUT_MS)
 
-function runtimeStub(): unknown {
+function runtimeStub(overrides: Record<string, unknown> = {}): unknown {
   const subscriptions = new RuntimeSubscriptionRegistry()
   return {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     ensureStructuredAgentSessionHost: async () => undefined,
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
+    structuredAgentSessionLaunchSeedOptions: () => undefined,
     resolveStructuredAgentSessionCreateIntent: async () => {
       const {
         envelope: _envelope,
@@ -97,7 +101,8 @@ function runtimeStub(): unknown {
     registerSubscriptionCleanup: subscriptions.register.bind(subscriptions),
     registerOwnedSubscriptionCleanup: subscriptions.registerOwned.bind(subscriptions),
     cleanupSubscription: subscriptions.cleanup.bind(subscriptions),
-    cleanupSubscriptionsByPrefix: subscriptions.cleanupByPrefix.bind(subscriptions)
+    cleanupSubscriptionsByPrefix: subscriptions.cleanupByPrefix.bind(subscriptions),
+    ...overrides
   }
 }
 
@@ -242,6 +247,74 @@ describe('cross-version structured agent sessions', () => {
     })
   })
 
+  // Released phones ask createSupport whether a launch should be a chat at all, and the host's
+  // setting answered; a client that picks the mode itself advertises that it does.
+  describe('a client that leaves the launch mode to the host', () => {
+    const SEED = { model: 'seeded-model' }
+    const settingOff = (): unknown =>
+      runtimeStub({
+        getClientSettings: () => ({ experimentalStructuredNativeChat: false }),
+        structuredAgentSessionLaunchSeedOptions: () => SEED
+      })
+    // The release's own list, so the day a release ships the launch-mode capability this still
+    // describes a client without it.
+    const released = (...extra: string[]): RpcClientIdentity => ({
+      clientKind: 'mobile',
+      clientCapabilities: [
+        ...baseline.capabilities.filter(
+          (capability) => capability !== STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+        ),
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        ...extra
+      ]
+    })
+    const createSupport = (build: AgentSessionWireBuild, client: RpcClientIdentity) =>
+      callBuild(
+        build,
+        'agentSession.createSupport',
+        paramsFor('agentSession.createSupport'),
+        client,
+        settingOff()
+      )
+
+    beforeEach(async () => {
+      for (const build of [current, baseline]) {
+        await build.installStructuredHost(installableHost(structuredHostStub(SESSION, WORKSPACE)))
+      }
+    })
+
+    afterEach(async () => {
+      for (const build of [current, baseline]) {
+        await build.installStructuredHost(null)
+      }
+    })
+
+    it('is refused by a host whose setting is off, exactly as the release refused it', async () => {
+      const replies = await createSupport(current, released())
+      expect(replies).toHaveLength(1)
+      expect(replies[0]).toMatchObject({
+        ok: false,
+        error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+      })
+      if (baseline.methodNames.includes('agentSession.createSupport')) {
+        // Older clients read the existing refusal fields and ignore additive error metadata.
+        expect(replies[0]).toMatchObject({
+          error: (await createSupport(baseline, released()))[0]?.error
+        })
+      }
+    })
+
+    it('is supported once it picks the mode itself, with the host seed as an extra field', async () => {
+      const replies = await createSupport(
+        current,
+        released(STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY)
+      )
+      expect(replies).toHaveLength(1)
+      // `supported` is all an older desktop or phone reads; the seed rides beside it.
+      expect(replies[0]).toMatchObject({ ok: true, result: { supported: true, seedOptions: SEED } })
+    })
+  })
+
   describe('a client that predates the turn item', () => {
     beforeEach(() => turnItemSkew.install(SESSION, WORKSPACE))
     afterEach(() => setStructuredAgentSessionHost(null))
@@ -260,6 +333,8 @@ describe('cross-version structured agent sessions', () => {
     it('registers the whole surface on the new build', () => {
       expect(current.capabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
       expect(current.capabilities).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
+      // The host admits by client capability, so a client may pick each launch mode itself.
+      expect(current.capabilities).toContain(STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY)
       expect(current.methodNames.filter((name) => name.startsWith('agentSession.'))).toHaveLength(
         STRUCTURED_CALLS.length
       )
@@ -475,6 +550,7 @@ describe('cross-version structured agent sessions', () => {
       root = await mkdtemp(join(tmpdir(), 'orca-cross-version-ai-vault-'))
       store = await openTestAgentSessionRecordStore(root)
       const host = new StructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         store,
         adapter: {
           acquire: async ({ fence }) => ({
@@ -486,7 +562,7 @@ describe('cross-version structured agent sessions', () => {
             },
             link: {
               linkId: `link-${fence}`,
-              handle: { provider: 'codex', threadId: THREAD },
+              handle: codexProviderHandle(THREAD),
               origin: 'created',
               mintedAtFence: fence,
               observedAt: NOW
@@ -677,7 +753,7 @@ describe('cross-version structured agent sessions', () => {
             },
             link: {
               linkId: `link-${fence}`,
-              handle: { provider: 'codex', threadId: THREAD },
+              handle: codexProviderHandle(THREAD),
               // A restarted host re-proves the thread it inherited; only the first
               // owner of a session may claim to have created it.
               origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
@@ -701,6 +777,7 @@ describe('cross-version structured agent sessions', () => {
     async function bootHost(generation: string): Promise<StructuredAgentSessionHost> {
       store = await openTestAgentSessionRecordStore(root)
       const host = new StructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         store,
         adapter: adapter(),
         journalDatabase: openTestJournalHostDatabase(root),

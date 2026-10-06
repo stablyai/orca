@@ -65,6 +65,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       // Why: the system default runs Codex on the user's own ~/.codex.
       // Returning null tells the PTY/env layer to inject no managed CODEX_HOME;
       // the retired mirror is refreshed only for pre-rollout PTYs.
+      this.copyMirrorLoginIntoEmptySystemHome()
       this.reconcileLegacySharedHomeForRetainedPanes()
       return null
     }

@@ -94,7 +94,7 @@ describe('launchAgentInNewTab terminal tab activation', () => {
   it('shows terminals in the worktree it launched into', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ requestId: 'request-1', agent: 'codex', worktreeId: 'wt-1' })
 
     expect(mockCreateTab.mock.calls[0]?.[3]).not.toHaveProperty('activate')
     // Why: an unscoped call targets the active worktree — the main window — whatever worktree the
@@ -117,6 +117,7 @@ describe('launchAgentInNewTab terminal tab activation', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
+      requestId: 'request-2',
       agent: 'codex',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })

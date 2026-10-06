@@ -29,6 +29,8 @@ import {
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -95,6 +97,7 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire: vi.fn(async ({ fence }) => ({
@@ -106,7 +109,7 @@ beforeEach(async () => {
         },
         link: {
           linkId: `link-${fence}`,
-          handle: { provider: 'codex' as const, threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'created' as const,
           mintedAtFence: fence,
           observedAt: NOW

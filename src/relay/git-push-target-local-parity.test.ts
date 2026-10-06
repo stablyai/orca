@@ -61,6 +61,16 @@ function scriptGit(fixture: GitConfigFixture) {
       if (args[0] === 'symbolic-ref') {
         return { stdout: `${fixture.branch}\n`, stderr: '' }
       }
+      if (args[0] === 'config' && args[1] === '--list') {
+        return {
+          stdout: Array.from(
+            configValues,
+            ([key, value]) =>
+              `${key.replace(/[^.]+$/, (variable) => variable.toLowerCase())}\n${value}\0`
+          ).join(''),
+          stderr: ''
+        }
+      }
       if (args[0] === 'config' && args[1] === '--get') {
         const value = configValues.get(args[2] ?? '')
         // Why throw: `git config --get` exits 1 for a missing key, and the resolver's
@@ -99,6 +109,7 @@ async function pushOverRelay(fixture: GitConfigFixture): Promise<string[]> {
   const script = scriptGit(fixture)
   vi.spyOn(handler as unknown as GitSpyTarget, 'git').mockImplementation((args) => script.run(args))
   await dispatcher.callRequest('git.push', { worktreePath: WORKTREE_PATH })
+  expect(script.calls.filter((args) => args[0] === 'config')).toEqual([['config', '--list', '-z']])
   return pushArgv(script.calls)
 }
 
@@ -106,6 +117,7 @@ async function pushLocally(fixture: GitConfigFixture): Promise<string[]> {
   const script = scriptGit(fixture)
   gitExecFileAsyncMock.mockImplementation((args: string[]) => script.run(args))
   await gitPush(WORKTREE_PATH)
+  expect(script.calls.filter((args) => args[0] === 'config')).toEqual([['config', '--list', '-z']])
   return pushArgv(script.calls)
 }
 
@@ -123,6 +135,35 @@ beforeEach(() => {
 })
 
 describe('relay/desktop push-target parity', () => {
+  it.each([
+    [
+      { branch: 'feature/fix', pushRemote: 'fork', pushDefault: 'other', branchRemote: 'origin' },
+      'fork'
+    ],
+    [{ branch: 'feature/fix', pushDefault: 'fork', branchRemote: 'origin' }, 'fork'],
+    [{ branch: 'feature/fix', branchRemote: 'fork' }, 'fork']
+  ] as const)(
+    'first-publishes to the configured remote without branch.merge (%j)',
+    async (fixture, remote) => {
+      await expectSamePushArgv(fixture, ['push', '--set-upstream', remote, 'HEAD'])
+    }
+  )
+
+  it('normalizes a URL-valued remote on first publish', async () => {
+    await expectSamePushArgv(
+      {
+        branch: 'feature/fix',
+        pushRemote: 'git@example.invalid:contributor/repo.git',
+        remotes: { fork: 'git@example.invalid:contributor/repo.git' }
+      },
+      ['push', '--set-upstream', 'fork', 'HEAD']
+    )
+  })
+
+  it('keeps a local-repository push remote out of first-publish targets', async () => {
+    await expectSamePushArgv({ branch: 'feature/fix', pushDefault: '.' }, FIRST_PUBLISH)
+  })
+
   it('sends a review branch to the fork its pushDefault names', async () => {
     await expectSamePushArgv(
       {

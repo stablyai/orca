@@ -204,10 +204,6 @@ vi.mock('../right-sidebar/status-display', () => ({
   STATUS_LABELS: {}
 }))
 
-vi.mock('./SortableTab', () => ({
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca-close-all-context-menus'
-}))
-
 vi.mock('./drop-indicator', () => ({
   ACTIVE_TAB_INDICATOR_CLASSES: 'active-tab-indicator',
   getDropIndicatorClasses: () => '',
@@ -260,7 +256,7 @@ async function renderEditorFileTab(
     hasTabsToRight: false,
     hasTabsToLeft: false,
     tabCount: 1,
-    statusByRelativePath: new Map(),
+    gitStatus: null,
     onActivate,
     onClose: () => {},
     onCloseOthers: () => {},
@@ -462,7 +458,8 @@ describe('EditorFileTab rename menu', () => {
       oldPath: '/repo/untitled-5.md',
       newName: '日本語.md',
       worktreeId: 'wt-1',
-      worktreePath: '/repo'
+      worktreePath: '/repo',
+      documentScoped: false
     })
   })
 

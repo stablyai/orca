@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  THREAD_ID,
   USER_MESSAGE,
   adapterFor,
   answerWithOpenedTurn,
@@ -132,6 +133,11 @@ describe('Codex structured Fast mode dispatch', () => {
         models: [expect.objectContaining({ supportsFastMode: true })],
         fastModeSupport: { supported: true },
         current: { fastMode: true }
+      })
+      // Ended, so the next send starts a turn rather than steering into this one.
+      codex.connections[0].handlers.onNotification?.('turn/completed', {
+        threadId: THREAD_ID,
+        turn: { id: 'turn-recovered', status: 'completed' }
       })
       await adapter.dispatch({
         sessionId: 'session-1',

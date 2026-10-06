@@ -36,6 +36,8 @@ import {
   structuredQuestionTranscript
 } from '../../renderer/src/components/native-chat/structured-agent-question-projection'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -78,7 +80,7 @@ beforeEach(async () => {
         },
         link: {
           linkId: `link-${fence}`,
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'created',
           mintedAtFence: fence,
           observedAt: HOST_TEST_NOW
@@ -93,6 +95,7 @@ beforeEach(async () => {
   }
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
     journalDatabase: openTestJournalHostDatabase(root),
@@ -204,6 +207,7 @@ function drawnPromptRows(): string[][] {
       client.items,
       [],
       client.submissions,
+      { rejectedInPlace: true },
       projectStructuredQuestionMessages
     )
   )
@@ -241,9 +245,9 @@ describe('a Codex ask with several questions', () => {
     ])
     // Mobile draws the shared projection in journal order, one row per question.
     expect(
-      projectStructuredAgentSessionMessages(client.items, [], client.submissions).map(
-        ({ blocks }) => (blocks[0]?.type === 'text' ? blocks[0].text.split('\n')[0] : null)
-      )
+      projectStructuredAgentSessionMessages(client.items, [], client.submissions, {
+        rejectedInPlace: false
+      }).map(({ blocks }) => (blocks[0]?.type === 'text' ? blocks[0].text.split('\n')[0] : null))
     ).toEqual(ASKED.map(({ question }) => question))
   })
 

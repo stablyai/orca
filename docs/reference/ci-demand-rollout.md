@@ -3,30 +3,41 @@
 This implements the September 28 runner-demand analysis. The baseline inventory
 covered September 27 04:00–September 28 04:00 UTC: 4,028 workflow runs, with
 463 stratified job samples. Estimated occupancy was 1,081 runner-hours, dominated
-by PR unit shards (414 hours) and Bun qualification (262 hours). These are
+by PR unit shards (414 hours) and Bun qualification (262 hours, since replaced by the
+pinned-Node headless lanes). These are
 sampled sums of job durations across different runner pools, not billing totals
 or a guaranteed forecast of savings.
 
 ## What runs now
 
-| Work                         | Ordinary draft update                                                          | Ready PR / final checks                       | Main reference                          |
-| ---------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------- | --------------------------------------- |
-| Static analysis and types    | Immediately                                                                    | Immediately                                   | Existing workflows                      |
-| Unit suite                   | Full, with shadow selection evidence                                           | Full                                          | Existing daily Node 24/26 x86 suite     |
-| Packages                     | After successful static analysis and types                                     | Same                                          | Existing release workflows              |
-| Bun persistence              | Linux x64 for ordinary runtime changes; all six platforms for sensitive inputs | All six platforms when Bun inputs changed     | Full nightly qualification at 11:30 UTC |
-| Bun glibc/musl qualification | Sensitive inputs only, after persistence succeeds                              | Both architectures after persistence succeeds | Both architectures                      |
-| E2E                          | Existing targeted routing                                                      | Existing targeted routing                     | One complete run at 17:00 UTC           |
+| Work                                   | Ordinary draft update                      | Ready PR / final checks                                                                            | Main reference                                                                      |
+| -------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Static analysis and types              | Immediately                                | Immediately                                                                                        | Existing workflows                                                                  |
+| Unit suite                             | Full, with shadow selection evidence       | Full                                                                                               | Existing daily Node 24/26 x86 suite                                                 |
+| Packages                               | After successful static analysis and types | Same                                                                                               | Existing release workflows                                                          |
+| Headless Node persistence              | Deferred until ready                       | Linux x64 for ordinary runtime changes; explicit platform families or all six for sensitive inputs | All six platforms for relevant main pushes; full nightly qualification at 11:30 UTC |
+| Headless Node glibc/musl qualification | Deferred until ready                       | Linux-specific or full qualification, after persistence succeeds                                   | Both architectures for relevant main pushes and nightly qualification               |
+| E2E                                    | Existing targeted routing                  | Existing targeted routing                                                                          | One complete run at 17:00 UTC                                                       |
 
-Bun-sensitive inputs include root/toolchain files, configuration, native code,
-resources, platform-specific paths, persistence, SQLite, orcad, providers,
-daemon, SSH, relay, and child-process code. Dependency discovery failure, a
-missing event or an incomplete diff retains full qualification. An unrelated
-change still skips Bun through the existing dependency classifier. No native
-artifact is shared across platforms or ABIs. The routine draft reduction is an
-explicit coverage-placement change; it does not assert identical per-update
-coverage. Every non-draft synchronize event and the ready-for-review event
-restores full qualification.
+Headless draft updates carry no verdict; readiness starts the checks. Relevant
+ready PRs retain Linux x64 smoke coverage. Explicit Windows or macOS paths add both
+architectures in that family, while Linux paths add Linux ARM and the glibc/musl
+lanes. Root/toolchain inputs, native build inputs, shared execution/storage paths,
+SSH, providers and relay changes retain every platform. Missing or incomplete
+change evidence and failed import analysis also retain full qualification.
+Unrelated changes skip through the dependency classifier. Relevant main pushes
+qualify all six platforms and both Linux compatibility architectures; detection
+uses the whole push before qualification can supersede an older relevant run.
+
+The detector checks known build inputs with the pinned Node toolchain first.
+Other paths install dependencies for import analysis; an uncertain result never
+skips qualification. This changes setup cost, not the qualification policy.
+
+Windows server prebuilds are cached separately by architecture and pinned build
+inputs, including the runner image. Only successful qualification on main publishes
+them. Consumers validate the payload and still run the pinned-Node load/spawn smoke;
+a cache miss or invalid payload builds fresh. Nightly, manual and release builds
+remain fresh. No native artifact is shared across platforms or ABIs.
 
 Expensive PR jobs wait for static/type success. This reduces fan-out for failed
 or rapidly superseded commits without sleeping on a runner. Successful isolated
@@ -34,7 +45,21 @@ PRs pay the extra stage latency. Existing per-PR cancellation remains in place.
 Package assertions, native boundaries, SSH/folder coverage, cache warming and
 slow-test assertions are retained.
 
+The daemon running-work test imports the shared probe directly, with the daemon's
+process inspector supplied as its callback. The renderer keeps its existing
+adapter and forwarding tests. This removes a mocked renderer dependency from the
+headless graph without changing the probe algorithm or skipping backend tests.
+At validation, the graph fell from 6,018 inputs (1,070 renderer inputs) to 4,879
+inputs (no renderer inputs), including nine added shared-probe cases. Renderer
+adapter changes no longer qualify the headless matrix; shared probe and daemon
+test changes still do. Future actual renderer imports remain discoverable.
+
 ## Unit selection rollout
+
+PR planning runs alongside typechecking after their shared dependency setup; an
+explicit join publishes its artifact before the unit matrix can start. Static
+analysis's Node 24 install also prepares the native cache before matrix fan-out.
+The daily compatibility workflow retains its separate planner and cache primer.
 
 `ci-unit-plan.mjs` discovers the same include/exclude set as Vitest and follows
 static imports, re-exports, literal dynamic imports, CommonJS requires and the

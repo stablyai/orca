@@ -1,3 +1,4 @@
+import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
@@ -80,6 +81,7 @@ export function cleanupTerminalPaneMount(args: {
         | undefined
       return {
         ptyId,
+        workspaceOwner: captureNotificationTransportOwner(paneTransportsRef.current.get(pane.id)),
         paneId: pane.id,
         leafId: pane.leafId,
         drivesTabTitle: manager.getActivePane()?.id === pane.id,

@@ -7,6 +7,7 @@ import {
   isAgentInterruptInputIntent,
   isNavigationEscapeIntent,
   requiresDoubleEscapeInterrupt,
+  shouldIgnoreInterruptIntent,
   type AgentInterruptInferenceRequest
 } from '../../../shared/agent-interrupt-intent'
 import {
@@ -42,8 +43,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     }
     const payload = existing.payload
     const agentType: AgentType | undefined = payload.agentType
-    // Why: Droid's Ctrl+C exits the CLI (handled by PTY lifecycle) rather than interrupting the current turn.
-    if (agentType === 'droid' && request.intent === 'ctrl-c') {
+    if (shouldIgnoreInterruptIntent(agentType, request.intent)) {
       return false
     }
     // Why: these agents use the first Escape as a TUI cancel that can leave the turn running; only a double Escape infers an interrupt.

@@ -85,6 +85,7 @@ export type VisibleWorktreeOptions = {
   defaultHostId: ExecutionHostId
   worktreeLineageById: Record<string, WorktreeLineage>
   injectLineageAncestors?: boolean
+  preserveLineageParentOrder?: boolean
   forcedVisibleWorktreeIds?: readonly string[]
 }
 
@@ -175,6 +176,10 @@ export function computeVisibleWorktrees(
 
   // Apply cached sort order. Items not yet in the cache (e.g. brand-new
   // worktrees before the next sortEpoch bump) are appended at the end.
+  // Manual placement belongs to the parent, even when a hidden child has a higher rank.
+  if (opts.injectLineageAncestors !== false && opts.preserveLineageParentOrder) {
+    all = addVisibleLineageAncestors(all, lineageAncestorById, opts.worktreeLineageById)
+  }
   const orderIndex = getSortedWorktreeRankIndex(sortedIds)
   all.sort((a, b) => {
     const ai = orderIndex.get(a.id) ?? Infinity
@@ -182,7 +187,7 @@ export function computeVisibleWorktrees(
     return ai - bi
   })
 
-  return opts.injectLineageAncestors === false
+  return opts.injectLineageAncestors === false || opts.preserveLineageParentOrder
     ? all
     : addVisibleLineageAncestors(all, lineageAncestorById, opts.worktreeLineageById)
 }
@@ -248,6 +253,7 @@ let _publishedVisibleIds: string[] | null = null
 export type VisibleWorktreeShortcutTarget = {
   id: string
   executionHostId?: Worktree['hostId']
+  lineageGroupKey?: string
 }
 let _publishedVisibleShortcutTargets: VisibleWorktreeShortcutTarget[] | null = null
 
@@ -259,6 +265,12 @@ export function setVisibleWorktreeShortcutTargets(
   targets: VisibleWorktreeShortcutTarget[] | null
 ): void {
   _publishedVisibleShortcutTargets = targets
+}
+
+export function getPublishedVisibleWorktreeShortcutTargets():
+  | readonly VisibleWorktreeShortcutTarget[]
+  | null {
+  return _publishedVisibleShortcutTargets
 }
 
 export function getVisibleWorktreeIds(): string[] {

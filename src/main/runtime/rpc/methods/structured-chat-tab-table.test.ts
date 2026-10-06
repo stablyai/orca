@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 /**
  * A chat tab's pointer to the conversation it shows, driven end to end: a real record store on disk,
  * the real structured host, the real runtime, and the real RPC handlers. Only the provider is faked.
@@ -8,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -37,6 +39,8 @@ import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { commitStructuredAgentSessionCreate } from './structured-agent-session-create'
 import { closeStructuredAgentSessionChild } from '../../structured-agent-session-close'
 import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
 
 const WORKTREE = `id:${HOST_TEST_LOCATION.workspaceId}`
 const SOURCE_TAB = `structured-agent-session-${HOST_TEST_SESSION}`
@@ -72,10 +76,9 @@ function providerAdapter(): StructuredAgentSessionAdapter {
           mintedAtFence: input.fence,
           observedAt: HOST_TEST_NOW,
           origin: 'created' as const,
-          handle: {
-            provider: 'codex' as const,
-            threadId: `00000000-0000-4000-8000-${String(acquisitions).padStart(12, '0')}`
-          }
+          handle: codexProviderHandle(
+            `00000000-0000-4000-8000-${String(acquisitions).padStart(12, '0')}`
+          )
         }
       }
     }),
@@ -92,6 +95,7 @@ function providerAdapter(): StructuredAgentSessionAdapter {
 async function openHost(): Promise<void> {
   store = await openTestAgentSessionRecordStore(directory)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: providerAdapter(),
     journalDatabase: openTestJournalHostDatabase(directory),
@@ -221,6 +225,45 @@ describe('a chat tab across /clear', () => {
     expect(store.listVisibleSessionIds()).toEqual([current])
   })
 
+  // Each press carries its own operation id, so a later /clear is a new call the host answers.
+  it('answers a /clear pressed again after it committed with that clear, starting nothing', async () => {
+    await createChat(HOST_TEST_SESSION)
+    const replacement = await clear(HOST_TEST_SESSION)
+    const started = acquisitions
+    expect(await clear(HOST_TEST_SESSION)).toBe(replacement)
+    expect(acquisitions).toBe(started)
+    expect((await snapshot()).tabs.map((tab) => tab.id)).toEqual([`agent-session:${replacement}`])
+  })
+
+  it('answers a retyped /clear whose answer was lost with that clear, the tab on its replacement', async () => {
+    await createChat(HOST_TEST_SESSION)
+    const persist = store.recordOperationOutcome.bind(store)
+    let lost = false
+    vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async (input) => {
+      if (!lost && input.outcome.status === 'succeeded' && input.outcome.conversationCommand) {
+        lost = true
+        throw new Error('connection lost')
+      }
+      return persist(input)
+    })
+    const lostAnswer = await call('agentSession.conversationCommand', {
+      command: 'clear',
+      envelope: envelopeFor('agentSession.conversationCommand', HOST_TEST_SESSION, {
+        command: 'clear'
+      })
+    })
+    expect(lostAnswer.result?.ok).not.toBe(true)
+    const started = acquisitions
+    const replacement = await clear(HOST_TEST_SESSION)
+    expect(acquisitions).toBe(started)
+    expect(store.getSessionTabId(replacement)).toBe(SOURCE_TAB)
+    expect((await snapshot()).tabs.map((tab) => tab.id)).toEqual([`agent-session:${replacement}`])
+    expect(await send(replacement, 'after the retry')).toMatchObject({
+      ok: true,
+      result: { ok: true }
+    })
+  })
+
   it('reveals a cleared conversation in its own tab without activating the current chat', async () => {
     await createChat(HOST_TEST_SESSION)
     const replacement = await clear(HOST_TEST_SESSION)
@@ -261,9 +304,22 @@ describe('a chat tab across /clear', () => {
     expect(await send(replacement, 'still here')).toMatchObject({ ok: true, result: { ok: true } })
   })
 
+  // A worktree delete closes every chat in it; one that never started must not ask to be forced.
+  it('closes a replacement that never started as settled', async () => {
+    await createChat(HOST_TEST_SESSION)
+    const replacement = await clear(HOST_TEST_SESSION)
+    expect(await closeStructuredAgentSessionChild(replacement)).toEqual({
+      stopped: true,
+      closeAttempted: true
+    })
+  })
+
   it('puts a cleared chat back under the tab id it had when its close does not land', async () => {
     await createChat(HOST_TEST_SESSION)
     const replacement = await clear(HOST_TEST_SESSION)
+    // Its agent starts on its first message; only a running agent has a close that can fail.
+    expect(await send(replacement, 'first message')).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(store.getRecord(replacement)?.lease.claimStatus).toBe('live'))
     closeSession.mockResolvedValue(false)
 
     const outcome = await closeStructuredAgentSessionChild(replacement)
@@ -283,6 +339,86 @@ describe('a chat tab across /clear', () => {
       present: true,
       sessionIds: [replacement]
     })
+  })
+})
+
+describe('other clients after a /clear from this window', () => {
+  const STRUCTURED = [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  ]
+  const clients = {
+    window: { clientKind: 'runtime' as const, clientCapabilities: STRUCTURED },
+    phone: { clientKind: 'mobile' as const, clientCapabilities: STRUCTURED }
+  }
+
+  /** The chat tabs a client lists, as that client is sent them. */
+  async function listedChats(context: RpcDispatchStreamingOptions) {
+    const response = await dispatcher.dispatch(
+      {
+        id: 'list',
+        authToken: 'token',
+        method: 'session.tabs.list',
+        params: { worktree: WORKTREE }
+      },
+      context
+    )
+    const listed: { result?: { tabs?: { type: string }[] } } = JSON.parse(JSON.stringify(response))
+    return (listed.result?.tabs ?? []).filter((tab) => tab.type === 'agent-session')
+  }
+
+  /** The session list each client keeps: the latest status the host published per session. */
+  function sessionList(id: string): Map<string, AgentSessionStatusSummary | null> {
+    const latest = new Map<string, AgentSessionStatusSummary | null>()
+    host.subscribeStatus({
+      id,
+      emit: (event) => {
+        if (event.type === 'snapshot') {
+          event.sessions.forEach((session) => latest.set(session.sessionId, session))
+        } else if (event.type === 'status') {
+          latest.set(event.session.sessionId, event.session)
+        }
+      }
+    })
+    return latest
+  }
+
+  it('shows another window and a phone the replacement the marker names, with nothing unread', async () => {
+    await createChat(HOST_TEST_SESSION)
+    const lists = { window: sessionList('window-b'), phone: sessionList('phone') }
+    const replacement = await clear(HOST_TEST_SESSION)
+    // The stored pointer is the only source of the id: nothing a client holds can derive it.
+    expect(store.getRecord(HOST_TEST_SESSION)?.conversationCommand).toMatchObject({
+      phase: 'committed',
+      replacementSessionId: replacement
+    })
+    expect(store.getSessionTabId(replacement)).toBe(SOURCE_TAB)
+
+    for (const context of Object.values(clients)) {
+      expect(await listedChats(context)).toEqual([
+        expect.objectContaining({ sessionId: replacement, replacesSessionId: HOST_TEST_SESSION })
+      ])
+    }
+    // Never started, so no client lists a turn for it to be unread.
+    for (const list of Object.values(lists)) {
+      expect(list.get(replacement)?.status ?? null).toBeNull()
+      expect(list.get(replacement)?.turnOutcome).toBeUndefined()
+    }
+
+    expect(await send(replacement, 'first message')).toMatchObject({
+      ok: true,
+      result: { ok: true }
+    })
+    await vi.waitFor(() => {
+      for (const list of Object.values(lists)) {
+        expect(list.get(replacement)).toMatchObject({ sessionId: replacement, status: 'working' })
+      }
+    })
+    for (const context of Object.values(clients)) {
+      expect(await listedChats(context)).toEqual([
+        expect.objectContaining({ sessionId: replacement })
+      ])
+    }
   })
 })
 
@@ -390,7 +526,7 @@ describe('a create that reserves its tab', () => {
 })
 
 describe('a chat tab over records a newer Orca wrote', () => {
-  it('opens a closed chat from history for reading', async () => {
+  it("opens a closed chat's tab from history, whose chat does not load", async () => {
     await createChat(HOST_TEST_SESSION)
     await host.close(HOST_TEST_SESSION, 'user-close')
     await host.setSessionTabVisibility(HOST_TEST_SESSION, false)
@@ -402,13 +538,13 @@ describe('a chat tab over records a newer Orca wrote', () => {
 
     expect(await call('agentSession.reveal', { sessionId: HOST_TEST_SESSION })).toMatchObject({
       ok: true,
-      result: { ok: true, readable: true }
+      result: { ok: true, readable: false }
     })
 
     expect((await snapshot()).activeTabId).toBe(`agent-session:${HOST_TEST_SESSION}`)
     expect(warn).toHaveBeenCalledWith(
-      '[structured-agent-session] recording an opened chat tab failed',
-      expect.anything()
+      '[agent-session] tab-visibility-open: recording an opened chat tab failed',
+      expect.objectContaining({ scope: 'tab-visibility-open', sessionId: HOST_TEST_SESSION })
     )
   })
 })
@@ -426,8 +562,8 @@ describe('a chat tab whose restore index cannot be written', () => {
     expect(created.ok ? created.value.tabId : null).toBeUndefined()
     expect((await snapshot()).activeTabId).toBe(`agent-session:${HOST_TEST_SESSION}`)
     expect(warn).toHaveBeenCalledWith(
-      '[structured-agent-session] recording an opened chat tab failed',
-      failure
+      '[agent-session] tab-visibility-open: recording an opened chat tab failed',
+      { scope: 'tab-visibility-open', sessionId: HOST_TEST_SESSION, error: failure }
     )
     expect(store.getSessionTabId(HOST_TEST_SESSION)).toBeNull()
   })

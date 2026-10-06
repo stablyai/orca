@@ -42,8 +42,8 @@ export function agentLaunchSurfaceFactory(
   context: RpcContext,
   attachOperationId?: string,
   operationCallerKey?: string,
-  // False when the launch selects the chat for its paired caller instead of for everyone.
-  activateChat = true,
+  // True when the launch shows its surface to the paired caller itself rather than to everyone.
+  callerPresentsSurface = false,
   terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch()
 ): AgentLaunchSurfaceFactory {
   return {
@@ -80,7 +80,7 @@ export function agentLaunchSurfaceFactory(
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
         // The user asked for this chat, so it takes the surface — unlike a dispatched worker.
-        activate: activateChat
+        activate: !callerPresentsSurface
       })
       if (!created.ok) {
         // The caller named this session, so a taken id is its answer, not an opaque refusal; and not
@@ -121,13 +121,21 @@ export function agentLaunchSurfaceFactory(
       options
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
+      let promptRodeLaunchCommand = false
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
         // `cursor-agent` — so the runtime builds the configured launcher.
         startupAgent: agent,
-        // Folded into that launcher by the same startup plan a new agent tab is built from, so an
-        // argv agent's prompt is in its argv at exec time rather than typed in afterwards.
-        ...(startupPrompt ? { startupPrompt } : {}),
+        // Offered to that launcher's startup plan; it rides only when the typed line can carry it,
+        // and the runtime reports which so an uncarried prompt is pasted once the agent is ready.
+        ...(startupPrompt
+          ? {
+              startupPrompt,
+              onStartupPromptCarry: (carried: boolean) => {
+                promptRodeLaunchCommand = carried
+              }
+            }
+          : {}),
         ...(agentArgs !== undefined ? { agentArgs } : {}),
         ...(cwd ? { cwd } : {}),
         // The model the user picked outranks configured args here too, as it does on a chat.
@@ -143,13 +151,17 @@ export function agentLaunchSurfaceFactory(
         // The runtime already minted this pane and baked it into the PTY's env and its own reveal;
         // dropping it here was what left a client with no way to name the tab it just asked for.
         ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
-        ...(terminal.warning ? { warning: terminal.warning } : {})
+        // Its only warning is that the host could not reveal the tab, which the caller shows itself.
+        ...(terminal.warning && !callerPresentsSurface ? { warning: terminal.warning } : {}),
+        ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {})
       }
     },
-    deliverTerminalPrompt: async ({ handle, prompt }) =>
+    deliverTerminalPrompt: async ({ handle, agent, freshLaunch, prompt }) =>
       deliverTerminalAgentLaunchPrompt({
         runtime: context.runtime,
         handle,
+        agent,
+        freshLaunch,
         text: prompt.text
       })
   }

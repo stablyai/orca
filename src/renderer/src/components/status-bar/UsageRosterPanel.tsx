@@ -5,6 +5,7 @@ import { SettingsSegmentedControl } from '@/components/settings/SettingsFormCont
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { translate } from '@/i18n/i18n'
 import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
+import { CURSOR_MODELS_BUCKET_NAME } from '../../../../shared/cursor-usage-buckets'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import {
   clampUsedPercent,
@@ -72,6 +73,16 @@ export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | n
   return { ...tightest, label: shortLabel(p, tightest, true) }
 }
 
+export function getUsageHeadlineSection(p: ProviderRateLimits): UsageSection | null {
+  if (p.provider === 'cursor') {
+    const primary = usedSections(p).find((section) => section.label === CURSOR_MODELS_BUCKET_NAME)
+    if (primary) {
+      return { ...primary, label: shortLabel(p, primary, true) }
+    }
+  }
+  return getTightestUsageSection(p)
+}
+
 // The soonest-resetting window summarizes the agent's next reset in one line.
 function soonestResetLabel(sections: UsageSection[], now: number): string | null {
   const resets = sections
@@ -133,7 +144,7 @@ export function UsageRow({
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   const reset = hasUsage ? soonestResetLabel(sections, now) : null
-  const tightest = mode === 'compact' ? getTightestUsageSection(p) : null
+  const tightest = mode === 'compact' ? getUsageHeadlineSection(p) : null
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
@@ -282,7 +293,7 @@ export function UsageRosterPanel({
               label: translate('auto.components.status.bar.UsageRosterPanel.compact', 'Compact'),
               tooltip: translate(
                 'auto.components.status.bar.UsageRosterPanel.compactTooltip',
-                'Condensed usage: only the tightest window'
+                'Condensed usage: one summary per provider'
               )
             }
           ]}

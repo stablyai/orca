@@ -84,7 +84,7 @@ export type AgentStatusCacheIdentity = {
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
 export type AgentStatusClearIpcPayload =
-  | { paneKey: string }
+  | { paneKey: string; statusUnavailable?: true }
   | {
       transient: true
       connectionId: string

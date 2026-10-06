@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
+import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat-cut-turn-notice'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
+import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
 import {
   activeStructuredAgentSessionTurnId,
   isStructuredAgentSessionThinking
@@ -97,10 +100,11 @@ export function useMobileStructuredAgentSession(args: {
   // Old host ⇒ exactly today's behavior: no delivery field, no cards, plain Stop.
   const queueCapable = hostSupport?.queuedMessages === true
   const promptCancelSupported = hostSupport?.promptCancel ?? null
+  const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
-  const operationIdsRef = useRef(new Map<string, string>())
   const commandPendingRef = useRef(false)
-  useEffect(() => () => operationIdsRef.current.clear(), [])
+  // Against a host that predates the quiet repeated Stop, a Stop of a turn still being stopped joins it.
+  const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
   const { state, stateRef, queuedMessages, queuePause, loadingOlder, loadEarlier } =
     useMobileStructuredAgentState(stateArgs)
@@ -109,10 +113,8 @@ export function useMobileStructuredAgentSession(args: {
   const mutate = useMobileStructuredAgentMutate({
     client,
     sessionId,
-    sessionKey,
     enabled,
     stateRef,
-    operationIds: operationIdsRef.current,
     onSendError
   })
 
@@ -147,7 +149,6 @@ export function useMobileStructuredAgentSession(args: {
     queueCapable,
     stateRef,
     commandPending: commandPendingRef,
-    operationIds: operationIdsRef.current,
     controller: sendController,
     onSendError
   })
@@ -159,12 +160,28 @@ export function useMobileStructuredAgentSession(args: {
     onSendError
   })
 
+  // What the transcript reads, as desktop does: the journal plus the one notice a cut turn with no
+  // row gets.
+  const transcriptItems = useMemo(
+    () =>
+      withNativeChatCutTurnNotices(state.items, {
+        agentName: TUI_AGENT_DISPLAY_NAMES[agent === 'codex' ? 'codex' : 'claude']
+      }),
+    [agent, state.items]
+  )
   const messages = useMemo(
-    () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
-    [state.items, state.submissions]
+    // Off: the phone hands a rejected message back to its composer, so a row would show it twice.
+    () =>
+      projectStructuredAgentSessionMessages(transcriptItems, [], state.submissions, {
+        rejectedInPlace: false
+      }),
+    [transcriptItems, state.submissions]
   )
   const turnId = activeStructuredAgentSessionTurnId(state.items)
-  const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)
+  const turnTiming = useMobileStructuredAgentTurnTiming(
+    { ...state, items: transcriptItems },
+    turnId
+  )
   const activityText =
     selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null
   const thinking = isStructuredAgentSessionThinking(state.items)
@@ -197,15 +214,23 @@ export function useMobileStructuredAgentSession(args: {
       requestMobileStructuredAgentSessionCancel({
         client,
         enabled,
+        hostAnswersRepeatedStops,
+        inFlight: inFlightStopsRef.current,
         onSendError,
-        operationIds: operationIdsRef.current,
         prompt,
         promptCancelSupported,
         sessionId,
-        sessionKey,
         stateRef
       }),
-    [client, enabled, onSendError, promptCancelSupported, sessionId, sessionKey, stateRef]
+    [
+      client,
+      enabled,
+      hostAnswersRepeatedStops,
+      onSendError,
+      promptCancelSupported,
+      sessionId,
+      stateRef
+    ]
   )
 
   return {
@@ -215,6 +240,7 @@ export function useMobileStructuredAgentSession(args: {
       status,
       transcriptLoading: status === 'loading',
       error: state.error,
+      readFailedFinally: status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
       hasMore: state.hasOlder,
       loadingEarlier: loadingOlder,
       loadEarlier

@@ -55,11 +55,13 @@ export function createBrowserCloseActions(
         const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
         delete nextBrowserPagesByWorkspace[tabId]
         const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+        const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
         const nextBrowserCertificateFailuresByPageId = {
           ...s.browserCertificateFailuresByPageId
         }
         for (const page of closedPages) {
           delete nextBrowserAnnotationsByPageId[page.id]
+          delete nextBrowserAnnotationMarkerIdsByPageId[page.id]
           delete nextBrowserCertificateFailuresByPageId[page.id]
         }
         docPageIdsToRelease = closedPages.filter((page) => page.docLocation).map((page) => page.id)
@@ -168,7 +170,8 @@ export function createBrowserCloseActions(
           recentlyClosedBrowserPagesByWorkspace: nextRecentlyClosedBrowserPagesByWorkspace,
           remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
           browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
-          browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
+          browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
+          browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
         }
       })
 

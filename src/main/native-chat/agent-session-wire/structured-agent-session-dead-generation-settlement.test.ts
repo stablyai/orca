@@ -17,6 +17,7 @@ import {
   unfinishedStructuredAgentSessionWorkWasInterrupted
 } from './structured-agent-session-dead-generation-settlement'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const UNEXPECTED_PROVIDER_EXIT_OUTCOME =
   'The agent stopped while this response was in progress. You can continue in this conversation.'
@@ -34,7 +35,7 @@ beforeEach(async () => {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: THREAD }
+      providerHandle: codexProviderHandle(THREAD)
     },
     database: openTestJournalHostDatabase(root),
     now: () => 1_000
@@ -100,7 +101,7 @@ describe('dead structured-session generation settlement', () => {
         verdict: { state: 'unverifiable' },
         showUnexpectedExitOutcome: false
       })
-    ).resolves.toBe(true)
+    ).resolves.toEqual({ ok: true })
 
     const snapshot = journal.snapshot()
     expect(snapshot.submissions).toEqual([
@@ -135,9 +136,9 @@ describe('dead structured-session generation settlement', () => {
       showUnexpectedExitOutcome: true
     }
 
-    await expect(settleStructuredAgentSessionDeadGeneration(input)).resolves.toBe(true)
+    await expect(settleStructuredAgentSessionDeadGeneration(input)).resolves.toEqual({ ok: true })
     const settledCursor = journal.cursor()
-    await expect(settleStructuredAgentSessionDeadGeneration(input)).resolves.toBe(true)
+    await expect(settleStructuredAgentSessionDeadGeneration(input)).resolves.toEqual({ ok: true })
 
     expect(journal.cursor()).toEqual(settledCursor)
     expect(
@@ -166,7 +167,7 @@ describe('dead structured-session generation settlement', () => {
           detail: providerDiagnostic('stack frame '.repeat(4_000), 'log')
         })
       })
-    ).resolves.toBe(true)
+    ).resolves.toEqual({ ok: true })
 
     const statuses = journal
       .snapshot()
@@ -258,7 +259,7 @@ describe('dead structured-session generation settlement', () => {
         verdict: { state: 'interrupted', completedAt: 1_000 },
         showUnexpectedExitOutcome: false
       })
-    ).resolves.toBe(true)
+    ).resolves.toEqual({ ok: true })
   })
 
   it('settles a live unknown submission even when no unfinished item remains', async () => {
@@ -285,7 +286,7 @@ describe('dead structured-session generation settlement', () => {
         verdict: { state: 'interrupted', completedAt: 1_000 },
         showUnexpectedExitOutcome: false
       })
-    ).resolves.toBe(true)
+    ).resolves.toEqual({ ok: true })
 
     expect(journal.submissions()).toEqual([
       expect.objectContaining({
@@ -403,7 +404,7 @@ describe('dead structured-session generation settlement', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: THREAD }
+        providerHandle: codexProviderHandle(THREAD)
       },
       database: openTestJournalHostDatabase(root),
       now: () => 1_000
@@ -463,7 +464,7 @@ describe('whether a dead generation interrupted anything', () => {
           1_000
         )
       })
-    ).resolves.toBe(true)
+    ).resolves.toEqual({ ok: true })
 
     const snapshot = journal.snapshot()
     expect(snapshot.items.some((item) => item.body.kind === 'status')).toBe(false)

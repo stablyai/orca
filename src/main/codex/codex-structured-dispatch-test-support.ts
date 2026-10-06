@@ -9,10 +9,12 @@ import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
 } from './codex-app-server-connection'
+import { CodexAppServerUnsupportedError } from './codex-app-server-session'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 export const CODEX_TEST_THREAD_ID = 'thread-abc'
 
@@ -35,6 +37,13 @@ export type LateSettlement = Parameters<
   NonNullable<CodexStructuredSessionAdapterDeps['onDispatchSettledLate']>
 >[0]
 
+/** A Codex with no `turn/steer`, unless the test routes one. */
+export const refuseUnroutedSteer: CodexTestRoute = () => {
+  throw new CodexAppServerUnsupportedError(
+    'codex app-server does not support turn/steer: method not found'
+  )
+}
+
 /** A `codex app-server` whose turn traffic the test drives by hand. */
 export function fakeCodexAppServer(routes: Record<string, CodexTestRoute> = {}): {
   connections: FakeConnection[]
@@ -42,7 +51,7 @@ export function fakeCodexAppServer(routes: Record<string, CodexTestRoute> = {}):
   routes: Record<string, CodexTestRoute>
 } {
   const connections: FakeConnection[] = []
-  const openConnection = (async (launch, handlers = {}) => {
+  const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -51,7 +60,8 @@ export function fakeCodexAppServer(routes: Record<string, CodexTestRoute> = {}):
       closed: false,
       request: async (method, params) => {
         connection.calls.push({ method, params })
-        return routes[method]?.(params) ?? {}
+        const route = routes[method] ?? (method === 'turn/steer' ? refuseUnroutedSteer : undefined)
+        return route?.(params) ?? {}
       },
       notify: () => {},
       respond: () => {},
@@ -63,7 +73,7 @@ export function fakeCodexAppServer(routes: Record<string, CodexTestRoute> = {}):
     }
     connections.push(connection)
     return connection
-  }) as typeof openCodexAppServerConnection
+  }
   routes['thread/start'] ??= () => ({
     thread: { id: CODEX_TEST_THREAD_ID, path: '/rollouts/abc.jsonl' }
   })
@@ -105,7 +115,7 @@ export async function acquiredCodexAdapter(input: {
     workspaceId: 'ws-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: CODEX_TEST_THREAD_ID }
+    providerHandle: codexProviderHandle(CODEX_TEST_THREAD_ID)
   }
   await adapter.acquire({
     identity,
@@ -152,14 +162,17 @@ export async function openAfterTurnStarts(
 }
 
 /** An acquired adapter over a fake Codex that keeps Codex's own turn bookkeeping. */
-export async function codexTurnLifecycleRig(options: { requestTimeoutMs?: number } = {}) {
+export async function codexTurnLifecycleRig(
+  options: { requestTimeoutMs?: number; legacyStartAnswers?: boolean } = {}
+) {
+  const { legacyStartAnswers, ...adapterOptions } = options
   const codex = fakeCodexAppServer()
   const notify = (method: string, params: unknown): void =>
     codex.connections.at(-1)?.handlers.onNotification?.(method, params)
-  const turns = codexTurnLifecycleFake(CODEX_TEST_THREAD_ID, () => notify)
+  const turns = codexTurnLifecycleFake(CODEX_TEST_THREAD_ID, () => notify, { legacyStartAnswers })
   Object.assign(codex.routes, turns.routes)
   const settlements: LateSettlement[] = []
-  const adapter = await acquiredCodexAdapter({ codex, settlements, ...options })
+  const adapter = await acquiredCodexAdapter({ codex, settlements, ...adapterOptions })
   const send = (clientMessageId: string) =>
     adapter.dispatch({
       sessionId: 'session-1',

@@ -1,8 +1,14 @@
+import type * as WorktreeAdmin from '../shared/git-worktree-admin'
 import { describe, expect, it, vi } from 'vitest'
 import * as path from 'node:path'
 import { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
 import { removeWorktreeOp } from './git-handler-worktree-ops'
+
+vi.mock('../shared/git-worktree-admin', async (importActual) => ({
+  ...(await importActual<typeof WorktreeAdmin>()),
+  annotateWorktreeLocksFromAdmin: async (_repoPath: string, rows: unknown[]) => rows
+}))
 
 function removeWorktreeWithCapabilityCache(
   git: GitExec,

@@ -106,7 +106,8 @@ const BLOCKER_REASON: Record<
   'remote-execution-host': 'remote_execution_host',
   'project-runtime': 'wsl_execution_runtime',
   'runtime-capability': 'structured_sessions_unavailable',
-  'runtime-capability-unknown': 'structured_support_unknown'
+  'runtime-capability-unknown': 'structured_support_unknown',
+  'client-capability': 'structured_sessions_unavailable'
 }
 
 /** The host's own create-support verdict (`agentSession.createSupport`) in this vocabulary. */
@@ -138,11 +139,16 @@ export function decideAgentLaunchMode(args: {
       detail: `Started ${vocabulary.terminal}, the default for new agent tabs in your settings.`
     }
   }
+  // A worker placed on another runtime starts through federation, which creates terminal agents
+  // only; this host cannot answer for that runtime's structured support.
+  if (placement.on) {
+    return downgraded('remote_execution_host', vocabulary)
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; isAgentSessionHandleProvider rejects it and the launch downgrades to a terminal.
   const agent = placement.agent as TuiAgent
   const support = resolveStructuredNativeChatSupport({
     agent,
-    executionHostId: placement.on ? `runtime:${placement.on}` : 'local',
+    executionHostId: 'local',
     reusesTerminal: Boolean(placement.terminal),
     hostCapabilities: RUNTIME_CAPABILITIES,
     // The floating workspace has nowhere to keep a session, so it is decided here rather than left

@@ -48,7 +48,7 @@ function readCompatibleState(
 }
 
 export function normalizeCompatibleLifecycleEvent(
-  source: 'qoder' | 'codebuddy',
+  source: 'qoder' | 'qoder-cn' | 'codebuddy',
   state: HookListenerState,
   eventName: unknown,
   promptText: string,

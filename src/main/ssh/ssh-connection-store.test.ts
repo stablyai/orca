@@ -161,6 +161,44 @@ describe('SshConnectionStore', () => {
     expect(sshStore.listTargets()).toEqual([userTarget])
   })
 
+  it('clears the runtime ladder decision when the runtime choice or endpoint changes', () => {
+    const resolution = {
+      rung: 'legacy' as const,
+      pinnedRefusal: 'missing_lib',
+      glibc: '2.31',
+      runtimeSha256: 'a'.repeat(64),
+      orcaMajor: 1
+    }
+    mockStore.addSshTarget({
+      id: 'ssh-ladder',
+      label: 'Ladder',
+      host: 'ladder.example.com',
+      port: 22,
+      username: 'user',
+      remoteRuntime: 'pinned-node',
+      remoteRuntimeResolution: resolution
+    })
+
+    sshStore.updateTarget('ssh-ladder', { label: 'Renamed', remoteRuntime: 'pinned-node' })
+    expect(mockStore.updateSshTarget).toHaveBeenLastCalledWith('ssh-ladder', {
+      label: 'Renamed',
+      remoteRuntime: 'pinned-node'
+    })
+
+    sshStore.updateTarget('ssh-ladder', { remoteRuntime: 'legacy' })
+    expect(mockStore.updateSshTarget).toHaveBeenLastCalledWith('ssh-ladder', {
+      remoteRuntime: 'legacy',
+      remoteRuntimeResolution: undefined
+    })
+
+    sshStore.updateTarget('ssh-ladder', { remoteRuntimeResolution: resolution })
+    sshStore.updateTarget('ssh-ladder', { host: 'other.example.com' })
+    expect(mockStore.updateSshTarget).toHaveBeenLastCalledWith('ssh-ladder', {
+      host: 'other.example.com',
+      remoteRuntimeResolution: undefined
+    })
+  })
+
   describe('importFromSshConfig', () => {
     function candidate(overrides: Partial<SshTarget> & { configHost: string }): SshTarget {
       return {

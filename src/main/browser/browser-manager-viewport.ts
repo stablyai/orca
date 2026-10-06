@@ -77,7 +77,13 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     const prev = this.annotationViewportBridgeOpsByTabId.get(browserTabId) ?? Promise.resolve()
     const next = prev
       .catch(() => {})
-      .then(() => this.doSetAnnotationViewportBridgeImpl(options, resolveGuest))
+      .then(() => {
+        // A newer document invalidation retires geometry still waiting in the queue.
+        if (this.annotationViewportBridgeOpsByTabId.get(browserTabId) !== next) {
+          return false
+        }
+        return this.doSetAnnotationViewportBridgeImpl(options, resolveGuest)
+      })
     this.annotationViewportBridgeOpsByTabId.set(browserTabId, next)
     try {
       return await next

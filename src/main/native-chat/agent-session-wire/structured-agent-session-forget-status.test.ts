@@ -24,6 +24,8 @@ import { attachStructuredAgentSession } from './structured-agent-session-attach-
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 // Everything before the journal is out of scope here; what matters is what the orchestration does
 // when the attach throws after acquisition.
@@ -42,7 +44,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'repo-1::/workspace/app',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: SESSION }
+  providerHandle: codexProviderHandle(SESSION)
 }
 
 const SUBJECT = makeStructuredAgentStatusSubject(
@@ -146,6 +148,7 @@ async function workingSession(): Promise<{
   const server = new AgentHookServer()
   const records = new Map([[SESSION, ownerRecord()]])
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions,
     getRecord: (sessionId) => records.get(sessionId) ?? null,
     now: () => 1,
@@ -189,7 +192,7 @@ function attachContext(
       discardEventSink: () => undefined
     },
     sessions,
-    subscribers: { reset: () => undefined, snapshot: () => undefined, publish: () => undefined },
+    subscribers: { snapshot: () => undefined, publish: () => undefined },
     tasks: { trackAttach: <T>(task: Promise<T>) => task },
     reconcileLeases: async () => null,
     serialize: <T>(_sessionId: string, task: () => Promise<T>) => task(),

@@ -12,6 +12,7 @@ import {
   canSetStructuredAgentSessionOption,
   commitStructuredAgentSessionOptionValues,
   lockedStructuredAgentSessionOptionSnapshot,
+  pendingModelListStructuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionPicks,
   structuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionView,
@@ -89,7 +90,7 @@ export function useStructuredAgentSessionOptions(args: {
     unloadedTurnRevisions: args.unloadedTurnRevisions
   })
 
-  useHostModelCatalogUpgrade({
+  const awaitingHostModelList = useHostModelCatalogUpgrade({
     agent,
     sessionId,
     target,
@@ -103,6 +104,8 @@ export function useStructuredAgentSessionOptions(args: {
     activeOptionRecordRef,
     updateOptionState
   })
+  // The running provider's own list ends the wait for the host's.
+  const modelListPending = awaitingHostModelList && optionState.catalogSource !== 'live'
 
   // What a settled pick must remember so the next launch starts where the user left off.
   const rememberOptionPicks = useCallback(
@@ -205,8 +208,9 @@ export function useStructuredAgentSessionOptions(args: {
     const snapshot = structuredAgentSessionOptionSnapshot(
       structuredAgentSessionOptionView(optionState, launchSeedOptions, held)
     )
-    return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
-  }, [acceptsPicks, held, launchSeedOptions, optionState])
+    const shown = acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
+    return modelListPending ? pendingModelListStructuredAgentSessionOptionSnapshot(shown) : shown
+  }, [acceptsPicks, held, launchSeedOptions, modelListPending, optionState])
   const setStructuredOption = useCallback(
     async (id: string, value: string | boolean): Promise<boolean> => {
       const view = structuredAgentSessionOptionView(optionStateRef.current, launchSeedOptions, held)
@@ -214,6 +218,8 @@ export function useStructuredAgentSessionOptions(args: {
       if (
         !optionCatalog ||
         encoded === null ||
+        // A typed `/model` reaches here without the picker.
+        optionSnapshot.some((descriptor) => descriptor.id === id && descriptor.choicesPending) ||
         !canSetStructuredAgentSessionOption(view, id, value)
       ) {
         return false
@@ -234,6 +240,7 @@ export function useStructuredAgentSessionOptions(args: {
       held,
       launchSeedOptions,
       optionCatalog,
+      optionSnapshot,
       optionStateRef,
       pendingOptionRef,
       sendStructuredOption,

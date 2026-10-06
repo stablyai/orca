@@ -1,6 +1,6 @@
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 
-// Why rows, from each dialog's first `·` on: codex-terminal-readiness.ts takes a `·` after the
+// Why rows, from each dialog's first `·` on: codex.json's provisional_startup takes a `·` after the
 // startup header for the live chat's footer, so each dialog must be matched by the time that `·`
 // lands. Why not headings: Codex 0.157+ paints them by cell diff over its startup screen, so the
 // text copy can lose letters and spaces (`updat available`); these rows are fixed literals.

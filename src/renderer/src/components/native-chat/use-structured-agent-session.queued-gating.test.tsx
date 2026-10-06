@@ -54,7 +54,6 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
     mocks.outboxArgs.push(args)
     return {
       outbox: outboxEntries,
-      blockedClientMessageId: null,
       error: null,
       send: vi.fn(),
       retry: vi.fn(),
@@ -159,6 +158,46 @@ describe('against a capable host', () => {
     })
   })
 
+  // The host's queue would hold a send behind a prompt nothing here can settle.
+  it('sends immediately while every pending prompt is one this build cannot answer', () => {
+    const approval = (subject: Record<string, unknown>): AgentJournalRenderItem =>
+      JSON.parse(
+        JSON.stringify({
+          itemId: `approval-${String(subject.kind)}`,
+          revision: 1,
+          sequence: 2,
+          observedAt: 1,
+          body: {
+            kind: 'approval',
+            title: 'Review',
+            detail: null,
+            subject,
+            options: [{ id: 'allow', label: 'Approve' }],
+            resolution: {
+              state: 'pending',
+              selectedOptionId: null,
+              resolvedBy: null,
+              resolvedAt: null
+            }
+          }
+        })
+      )
+    const newer = approval({ kind: 'diff', path: 'a.ts' })
+    items = [newer]
+    render()
+    expect(mocks.outboxArgs.at(-1)?.queueDelivery).toEqual({
+      capability: 'supported',
+      enabled: false
+    })
+    mocks.outboxArgs.length = 0
+    items = [newer, approval({ kind: 'plan', text: 'do it' })]
+    render()
+    expect(mocks.outboxArgs.at(-1)?.queueDelivery).toEqual({
+      capability: 'supported',
+      enabled: true
+    })
+  })
+
   it('Stop is a plain cancel: drafts stay as cards and no text lands in the composer', async () => {
     queuedMessages = [{ ...draft('draft-1'), paused: true }]
     const { result } = render(false)
@@ -211,7 +250,8 @@ describe('against a capable host', () => {
     )
   })
 
-  it("an unconfirmed /clear's next press replays its operation id (the host refuses any other)", async () => {
+  // The host finds an earlier /clear from its own journal, so the client keeps no id for it.
+  it("an unconfirmed /clear's next press goes out under its own id", async () => {
     items = []
     mocks.call.mockImplementation(async (_target, method) =>
       method === 'agentSession.conversationCommand'
@@ -235,7 +275,7 @@ describe('against a capable host', () => {
       .filter(([, method]) => method === 'agentSession.conversationCommand')
       .map(([, , params]) => ConversationCommandParams.parse(params).envelope.clientOperationId)
     expect(ids).toHaveLength(2)
-    expect(ids[1]).toBe(ids[0])
+    expect(ids[1]).not.toBe(ids[0])
   })
 
   it('a mid-turn queue send is never a transcript bubble, before or after the host holds it', () => {

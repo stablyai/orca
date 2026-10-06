@@ -18,10 +18,13 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'codex_read_restore_fixture'
 const WORKSPACE_ID = 'repo-1::/tmp/workspace'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a literal record the read path only reads; its fields match the record shape.
 const RECORD = {
   schemaVersion: 2,
   sessionId: SESSION_ID,
@@ -35,7 +38,7 @@ const RECORD = {
   providerHandleChain: [
     {
       linkId: 'codex-1-thread-1',
-      handle: { provider: 'codex', threadId: 'thread-1' },
+      handle: codexProviderHandle('thread-1'),
       origin: 'created',
       mintedAtFence: 1,
       observedAt: 1
@@ -55,7 +58,7 @@ let journalRoot: string
 const openDeps = () => ({
   store,
   journalDatabase: openTestJournalHostDatabase(journalRoot),
-  adapter: {}
+  logger: recordingStructuredAgentSessionLogger().logger
 })
 const opened: AgentSessionJournal[] = []
 

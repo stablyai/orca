@@ -88,6 +88,9 @@ export const RELAY_VERSION_FILENAME = '.version'
 /** Written last by the installer; its absence means a torn install. */
 export const RELAY_INSTALL_COMPLETE_FILENAME = '.install-complete'
 
+/** PID of the last relay daemon that bound a socket from this version dir; GC liveness evidence. */
+export const RELAY_PID_FILENAME = '.relay-pid'
+
 /** Artifacts every relay must have; the remote install probe requires each one. */
 export function relayArtifactFilenames(isWindows: boolean): string[] {
   return RELAY_ARTIFACTS.filter(

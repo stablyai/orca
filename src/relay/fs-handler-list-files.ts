@@ -1,3 +1,4 @@
+import { RipgrepFilenameDecoder } from '../shared/ripgrep-filename-decoder'
 /**
  * Ripgrep-based file listing for Quick Open.
  * Why a full rewrite vs. the older execFile+maxBuffer version: on a home-dir
@@ -6,7 +7,7 @@
  * matching files" even though the file existed on disk. This implementation:
  *   - streams via spawn (no maxBuffer failure mode)
  *   - prunes traversal at rg level using the shared blocklist globs
- *   - runs a second --no-ignore-vcs pass for ignored files
+ *   - includes gitignored files, preserving primary-first order for bounded listings
  *   - honors excludePathPrefixes for nested linked worktrees
  *   - rejects (not resolves) on timeout / spawn error / signal exit so
  *     the UI shows a load error instead of a false-empty list
@@ -76,10 +77,8 @@ export function listFilesWithRg(
       }
       // Why: correctness backstop. The rg globs prune most blocklisted dirs,
       // but a glob edge case could still surface e.g. a .git/ or .npm/ hit.
-      if (!shouldIncludeQuickOpenPath(relPath)) {
-        return true
-      }
-      if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
+      const excluded = shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)
+      if (!shouldIncludeQuickOpenPath(relPath) || excluded) {
         return true
       }
       if (attemptRanker) {
@@ -95,8 +94,16 @@ export function listFilesWithRg(
 
     const runPassOnce = (args: string[]): Promise<void> =>
       new Promise((passResolve, passReject) => {
+        // A completed pass may queue its continuation before cancellation settles the request.
+        if (done || signal?.aborted) {
+          return passResolve()
+        }
         const attemptRanker =
           searchQuery === undefined ? null : new QuickOpenPathRanker(searchQuery, maxResults ?? 16)
+        const filenameDecoder = new RipgrepFilenameDecoder((error) => {
+          killSpawnedRipgrepProcess(child)
+          rejectPass(error)
+        })
         let passBuf = ''
         let passDone = false
         let passFileCount = 0
@@ -116,7 +123,7 @@ export function listFilesWithRg(
           child = spawn(command, ['--no-messages', ...args], {
             cwd: rootPath,
             env,
-            stdio: ['ignore', 'pipe', 'pipe'],
+            stdio: ['ignore', 'pipe', 'ignore'],
             windowsHide: true
           })
         } catch (error) {
@@ -126,14 +133,9 @@ export function listFilesWithRg(
               )
             : error
         }
-        let timer: ReturnType<typeof setTimeout> | null = null
         const cleanup = (): void => {
-          if (timer) {
-            clearTimeout(timer)
-            timer = null
-          }
+          clearTimeout(timer)
           child.stdout?.off('data', handleStdoutData)
-          child.stderr?.off('data', handleStderrData)
           child.off('error', handleError)
           child.off('close', handleClose)
           absorbPendingRipgrepSpawnError(child, {
@@ -141,14 +143,14 @@ export function listFilesWithRg(
             unavailableExitObserved
           })
         }
-        const rejectPass = (error: Error): void => {
+        const rejectPass = (error: unknown): void => {
           if (passDone) {
             return
           }
           passDone = true
           passBuf = ''
           cleanup()
-          passReject(error)
+          passReject(error instanceof Error ? error : new Error(String(error)))
         }
         const resolvePass = (): void => {
           if (passDone) {
@@ -165,8 +167,11 @@ export function listFilesWithRg(
           if (launchFailureCheck) {
             return
           }
-          launchFailureCheck = retryRipgrepOnPathAfterLaunchFailure(command, rootPath, error).then(
-            async (retryOnPath) => {
+          launchFailureCheck = retryRipgrepOnPathAfterLaunchFailure(command, rootPath, error)
+            .then(async (retryOnPath) => {
+              if (passDone || done) {
+                return
+              }
               if (retryOnPath) {
                 // Why: runPass retries a launch failure once, and the retry resolves to PATH rg.
                 rejectPass(new RipgrepLaunchFailureError('bundled rg failed to start'))
@@ -178,27 +183,32 @@ export function listFilesWithRg(
                 (await classifyRipgrepLaunchFailure(
                   rootPath,
                   [command, pathRipgrepCommand()],
-                  env
+                  env,
+                  signal
                 )) === 'cwd-unreachable'
                   ? ripgrepMissingCwdError(rootPath)
                   : new RipgrepUnavailableError()
               )
-            }
-          )
+            })
+            .catch(rejectPass)
         }
         children.push({ child, isDone: () => passDone, reject: rejectPass })
 
-        timer = setTimeout(() => {
+        const timer = setTimeout(() => {
           // Discard residual buffer on abnormal exit — a truncated byte
           // sequence could look like a valid path.
           killSpawnedRipgrepProcess(child)
           rejectPass(new Error('rg list timed out'))
         }, LIST_FILES_TIMEOUT_MS)
 
-        function handleStdoutData(chunk: string): void {
-          passBuf += chunk
+        function handleStdoutData(chunk: Buffer | string): void {
+          const decoded = filenameDecoder.decode(chunk)
+          if (decoded === null) {
+            return
+          }
+          passBuf += decoded
           let start = 0
-          let idx = passBuf.indexOf('\n', start)
+          let idx = passBuf.indexOf('\0', start)
           while (idx !== -1) {
             if (processLine(passBuf.substring(start, idx), attemptRanker)) {
               passFileCount++
@@ -207,12 +217,9 @@ export function listFilesWithRg(
               return
             }
             start = idx + 1
-            idx = passBuf.indexOf('\n', start)
+            idx = passBuf.indexOf('\0', start)
           }
           passBuf = start < passBuf.length ? passBuf.substring(start) : ''
-        }
-        function handleStderrData(): void {
-          /* drain to prevent backpressure stalls */
         }
         function handleError(err: NodeJS.ErrnoException): void {
           processErrorObserved = true
@@ -248,6 +255,9 @@ export function listFilesWithRg(
             rejectPass(new Error(`rg killed by ${signal}`))
             return
           }
+          if (!filenameDecoder.finish()) {
+            return
+          }
           // Flush residual line only on clean exit.
           if (passBuf) {
             if (processLine(passBuf, attemptRanker)) {
@@ -259,18 +269,14 @@ export function listFilesWithRg(
           // (e.g. EACCES on .ssh), but rg also returns 2 for fatal errors
           // (bad flag, invalid glob). Only trust exit 2 when rg emitted at
           // least one parseable path — otherwise treat it as a real failure.
-          if (code === 0 || code === 1) {
-            resolvePass()
-          } else if (code === 2 && passFileCount > 0) {
+          if (code === 0 || code === 1 || (code === 2 && passFileCount > 0)) {
             resolvePass()
           } else {
             rejectPass(new Error(`rg exited with code ${code}`))
           }
         }
 
-        child.stdout?.setEncoding('utf-8')
         child.stdout?.on('data', handleStdoutData)
-        child.stderr?.on('data', handleStderrData)
         child.once('error', handleError)
         child.once('close', handleClose)
       })
@@ -284,10 +290,7 @@ export function listFilesWithRg(
       })
 
     const killSurvivors = (reason: string): void => {
-      // Why: when one pass rejects, Promise.all surfaces the error immediately
-      // but the sibling rg keeps running up to LIST_FILES_TIMEOUT_MS. Kill it
-      // so repeated Quick Open opens don't pile up orphan rg processes on the
-      // remote.
+      // Cancellation or a reached budget must stop any admitted scan or retry.
       for (const entry of children) {
         if (entry.isDone()) {
           continue
@@ -322,21 +325,13 @@ export function listFilesWithRg(
     }
     signal?.addEventListener('abort', onAbort, { once: true })
 
+    // Without a result budget, the broader pass already contains every primary path.
     const passes =
-      searchQuery !== undefined
+      searchQuery !== undefined || maxResults === undefined
         ? runPass(ignoredPass)
-        : (() => {
-            const primaryPass = runPass(primary)
-            return maxResults === undefined
-              ? children[0]?.child.pid === undefined
-                ? primaryPass.then(() => runPass(ignoredPass))
-                : Promise.all([primaryPass, runPass(ignoredPass)])
-              : // Why: deterministic primary-first budgeting prevents a large ignored
-                // tree from starving ordinary source paths on a remote host.
-                primaryPass.then(() =>
-                  files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
-                )
-          })()
+        : runPass(primary).then(() =>
+            files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
+          )
 
     passes
       .then(() => {
@@ -353,7 +348,7 @@ export function listFilesWithRg(
         }
         done = true
         signal?.removeEventListener('abort', onAbort)
-        killSurvivors('rg list canceled after sibling failure')
+        killSurvivors('rg list canceled after failure')
         reject(err instanceof Error ? err : new Error(String(err)))
       })
   })

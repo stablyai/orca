@@ -19,6 +19,8 @@ import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import * as legacyImport from '../agent-session-journal/journal-legacy-import'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'codex_adopting_session'
@@ -100,7 +102,7 @@ function adapter(): StructuredAgentSessionAdapter {
         process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
         link: {
           linkId: 'resumed-link',
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'resumed',
           mintedAtFence: fence,
           observedAt: NOW
@@ -122,6 +124,7 @@ async function attach(
 ) {
   store ??= await openTestAgentSessionRecordStore(root!)
   return performAttach({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: sessionAdapter,
     openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -233,6 +236,7 @@ describe('adopting a provider conversation on create', () => {
     await writeCodexRollout(transcriptPath, 'valid source')
     store = await openTestAgentSessionRecordStore(root)
     const host = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: adapter(),
       journalDatabase: openTestJournalHostDatabase(root),

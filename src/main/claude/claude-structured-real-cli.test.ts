@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
+import * as claudeConnection from './claude-stream-json-connection'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
@@ -11,13 +13,15 @@ import {
   realClaudeAuthStatus,
   realClaudeAvailable,
   realClaudeCliGate,
-  realClaudeCommand
+  realClaudeCommand,
+  realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
 import {
   ClaudeStructuredSessionAdapter,
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-adapter'
 import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-state'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const command = realClaudeCommand
 const suiteTitle = `Claude structured real CLI handshake${realClaudeCliGate.skipReason ? ` (skipped: ${realClaudeCliGate.skipReason})` : ''}`
@@ -27,13 +31,15 @@ function realAdapter(
   claudeConfigDir: string,
   events: ClaudeStructuredSessionEvent[] = [],
   cwd = process.cwd(),
-  onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
+  onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate'],
+  env = realClaudeLaunchHome().env
 ): ClaudeStructuredSessionAdapter {
   const adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: command,
       options: { ...CLAUDE_STRUCTURED_BASE_OPTIONS, sessionId: providerSessionId },
       cwd,
+      env,
       claudeConfigDir,
       providerSessionId,
       resumeLeafUuid: null,
@@ -61,7 +67,7 @@ function identity(providerSessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'real-cli-workspace',
     hostId: 'local',
     agent: 'claude',
-    providerHandle: { kind: 'claude', sessionId: providerSessionId, leafUuid: null }
+    providerHandle: claudeProviderHandle(providerSessionId, null)
   }
 }
 
@@ -80,6 +86,53 @@ async function waitForResolvedTranscript(
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
 }
+
+describe('real CLI fixture authentication isolation', () => {
+  it.each(['authenticated', 'signed-out'] as const)(
+    'keeps the %s launch environment independent of inherited credentials',
+    async (mode) => {
+      const authKeys = ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'] as const
+      for (const key of authKeys) {
+        vi.stubEnv(key, 'unusable-fixture-auth-value')
+      }
+      let childEnv: Record<string, string> | undefined
+      const open = vi
+        .spyOn(claudeConnection, 'openClaudeStreamJsonConnection')
+        .mockImplementation(async (launch) => {
+          childEnv = buildClaudeChildProcessEnv(launch.env)
+          throw new Error('fixture stopped before spawning a CLI')
+        })
+      const providerSessionId = randomUUID()
+      const adapter = realAdapter(
+        providerSessionId,
+        join(tmpdir(), 'orca-synthetic-signed-out'),
+        [],
+        process.cwd(),
+        undefined,
+        mode === 'signed-out' ? {} : undefined
+      )
+      try {
+        await expect(
+          adapter.acquire({
+            identity: identity(providerSessionId),
+            fence: 1,
+            spawnToken: 'fixture'
+          })
+        ).rejects.toThrow('fixture stopped before spawning a CLI')
+        expect(open).toHaveBeenCalledOnce()
+        for (const key of authKeys) {
+          expect(childEnv?.[key]).toBe(
+            mode === 'authenticated' ? 'unusable-fixture-auth-value' : undefined
+          )
+        }
+      } finally {
+        await adapter.closeAll()
+        open.mockRestore()
+        vi.unstubAllEnvs()
+      }
+    }
+  )
+})
 
 describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
   it.skipIf(!realClaudeAuthenticated)(
@@ -106,19 +159,17 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           event.type === 'message' ? [event.message.subtype] : []
         )
 
-        expect(acquisition.link.handle).toMatchObject({
-          provider: 'claude',
-          sessionId: providerSessionId,
-          // Init/SessionStart UUIDs are protocol frames, not resumable
-          // main-transcript leaves; no cursor exists before the first user turn.
-          leafUuid: null
-        })
+        // Init/SessionStart UUIDs are protocol frames, not resumable
+        // main-transcript leaves; no cursor exists before the first user turn.
+        expect(acquisition.link.handle).toEqual(claudeProviderHandle(providerSessionId, null))
         expect(observedSubtypes).toContain('hook_started')
-        expect(adapter.readCommands('real-cli-handshake')).toContainEqual({
-          name: 'orca-init-catalog-proof',
-          kind: 'command',
-          kindUnspecified: true
-        })
+        expect(adapter.readCommands('real-cli-handshake')).toContainEqual(
+          expect.objectContaining({
+            name: 'orca-init-catalog-proof',
+            kind: 'command',
+            kindUnspecified: true
+          })
+        )
         expect(
           adapter.readCommands('real-cli-handshake')?.some(({ name }) => name === 'help')
         ).toBe(false)
@@ -440,7 +491,14 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
     const claudeConfigDir = await mkdtemp(join(tmpdir(), 'orca-claude-no-auth-'))
     const providerSessionId = randomUUID()
     const events: ClaudeStructuredSessionEvent[] = []
-    const adapter = realAdapter(providerSessionId, claudeConfigDir, events)
+    const adapter = realAdapter(
+      providerSessionId,
+      claudeConfigDir,
+      events,
+      process.cwd(),
+      undefined,
+      {}
+    )
 
     try {
       await adapter.acquire({

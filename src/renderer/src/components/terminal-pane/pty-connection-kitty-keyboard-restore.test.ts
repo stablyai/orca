@@ -135,14 +135,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 
 // Why: xterm and the pane mirror must end every restore on the same kitty flags.
 describe('connectPanePty kitty keyboard restore', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {

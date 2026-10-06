@@ -20,6 +20,7 @@ import {
   webSessionOpenFilesForWorktree
 } from './state-equality-files'
 import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/structured-agent-session-launch-registry'
+import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
@@ -126,6 +127,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
   )
   const mirroredAgentTabs = buildMirroredAgentTabs(
     snapshot,
+    executionHostIdForSessionTabsOwner(environmentId),
     hostGroupIdByTabId,
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length + mirroredEditorTabs.length,

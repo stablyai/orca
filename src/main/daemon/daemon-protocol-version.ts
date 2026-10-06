@@ -1,6 +1,8 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
-// v38 answers OSC 10/11 for each session's whole life from pushed host colours; older owners stay attachable.
-export const PROTOCOL_VERSION = 38
+// v40 rolls the #25130/#24636 shell-wrapper changes and the wider agent list (jcode, qoder-cn,
+// dsb; resume claims for qoder-cn/qwen-code/cursor/jcode) into a fresh daemon; older owners stay attachable.
+export const PROTOCOL_VERSION = 40
+export const CODEX_FISH_SHELL_FUNCTION_DAEMON_PROTOCOL_VERSION = 39
 // Why: older daemons reject `setColorQueryReplyColors` as an unknown request type.
 export const COLOR_QUERY_REPLY_COLORS_DAEMON_PROTOCOL_VERSION = 38
 export const CODEX_NO_DAEMON_SHELL_LAUNCH_DAEMON_PROTOCOL_VERSION = 37
@@ -33,7 +35,7 @@ export const CLEAN_DISCONNECT_PROTOCOL_VERSION = 24
 export const MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION = 29
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39
 ] as const
 
 export function supportsColorQueryReplyColors(protocolVersion: number): boolean {

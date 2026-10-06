@@ -20,6 +20,9 @@ import { createTrackedJournalOpener } from '../agent-session-journal/journal-hos
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'recency-session'
 const CODEX_THREAD = 'thread-parent'
@@ -52,7 +55,7 @@ async function openSession() {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'claude',
-      providerHandle: { kind: 'codex', threadId: CODEX_THREAD }
+      providerHandle: codexProviderHandle(CODEX_THREAD)
     },
     now: tick,
     stateDirectory: join(root, SESSION)
@@ -60,6 +63,7 @@ async function openSession() {
   // The host's status row and child records, which the feed writes into and reads back.
   const server = new AgentHookServer()
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([
       [
         SESSION,
@@ -81,7 +85,7 @@ async function openSession() {
   })
   const events: AgentSessionStatusEvent[] = []
   feed.subscribe({ id: 'list-1', emit: (event) => events.push(event) })
-  const deferred = createDeferredStructuredAgentSessionEventSink()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   deferred.bind({ journal, fence: 1, publish: () => feed.publish(SESSION, journal) })
   const drain = async (): Promise<void> => {
     expect(await deferred.drained()).toEqual({ ok: true })

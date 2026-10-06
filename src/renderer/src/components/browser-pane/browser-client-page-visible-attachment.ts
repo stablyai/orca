@@ -3,12 +3,28 @@ import {
   registerWebviewDragPassthroughSurface
 } from './host-guest/webview-drag-passthrough'
 import { registerBrowserClientPagePositionSync } from './browser-client-page-position-driver'
+import type { BrowserClientPageRendererIdentity as RendererPageIdentity } from '../../../../shared/browser-client-page-renderer-protocol'
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
 
 export type BrowserClientPageVisibleAttachment = {
   webview: Electron.WebviewTag
   nextMetadataRevision(): number
   detach(): void
+}
+
+export function findBrowserClientRetainedPageForAttachment(
+  pages: Map<string, RetainedPage>,
+  identity: Pick<RendererPageIdentity, 'browserPageId' | 'pageHostGeneration'>
+): RetainedPage | undefined {
+  for (const page of pages.values()) {
+    if (
+      page.identity.browserPageId === identity.browserPageId &&
+      page.identity.pageHostGeneration === identity.pageHostGeneration
+    ) {
+      return page
+    }
+  }
+  return undefined
 }
 
 export function attachBrowserClientRetainedPage(

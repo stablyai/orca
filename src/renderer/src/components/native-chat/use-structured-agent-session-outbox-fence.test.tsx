@@ -20,6 +20,10 @@ import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-sessio
 import { enqueueStructuredAgentSessionLaunchPrompt } from './structured-agent-session-outbox-storage'
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+
+const NO_JOURNAL_ITEMS: readonly AgentJournalRenderItem[] = []
+
 // Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
 afterEach(cleanup)
 
@@ -65,6 +69,7 @@ function render(fence: number | null = 1) {
   return renderHook(
     (props) =>
       useStructuredAgentSessionOutbox({
+        journalItems: NO_JOURNAL_ITEMS,
         sessionId: 'session-1',
         target: LOCAL_TARGET,
         fence: props.fence,
@@ -106,12 +111,12 @@ describe('an outbox on a host that accepts a send before any agent has it', () =
     expect(mocks.call).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps a blocked head blocked across a fence change; only Retry sends it', async () => {
+  it('keeps a failed send held across a fence change; only Retry sends it', async () => {
     mocks.call.mockRejectedValueOnce(new Error('send failed')).mockResolvedValue({ ok: true })
     const { result, rerender } = render()
 
     act(() => expect(result.current.send('hello')).toBe(true))
-    await waitFor(() => expect(result.current.blockedClientMessageId).not.toBeNull())
+    await waitFor(() => expect(result.current.outbox[0]?.lastFailure).toBeDefined())
     rerender({ fence: 2 })
     await settle()
     expect(mocks.call).toHaveBeenCalledTimes(1)
@@ -138,6 +143,7 @@ describe('an outbox on a host that accepts a send before any agent has it', () =
     const delivery = await act(async () =>
       settleStructuredAgentLaunchPrompt({
         launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+        target: { kind: 'local' },
         options: { prompt: 'launch notes' },
         stagedEntry: staged
       })

@@ -32,6 +32,8 @@ import {
   getStructuredAgentSessionReadOwner,
   resetStructuredAgentSessionReadOwnersForTests
 } from '../../src/renderer/src/components/native-chat/structured-agent-session-read-owner'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'cursor-body-regression'
 const target = { kind: 'local' } as const
@@ -55,7 +57,7 @@ async function fixture() {
       workspaceId: 'folder-workspace',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     stateDirectory: join(root, 'journal')
   })
@@ -125,6 +127,7 @@ describe('structured session cursor/body regression', () => {
       const { journal, appendOutput, accept } = await fixture()
       let hostSummary: AgentSessionStatusSummary | undefined
       const feed = new StructuredAgentSessionStatusFeed({
+        logger: createStructuredAgentSessionLogger(),
         sessions: new Map([
           [
             SESSION,

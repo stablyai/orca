@@ -21,6 +21,8 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'claude stream-json exited (code 1): claude: not signed in'
@@ -37,7 +39,7 @@ beforeEach(async () => {
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       // A resume continues the chain the first start created.
       origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
       mintedAtFence: fence,
@@ -47,6 +49,7 @@ beforeEach(async () => {
   }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire,

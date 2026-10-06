@@ -189,7 +189,8 @@ describe('remote terminal snapshot outcome reasons', () => {
         rows: 24,
         seq: 0,
         source: undefined,
-        pendingEscapeTailAnsi: undefined
+        pendingEscapeTailAnsi: undefined,
+        carriesNormalBuffer: true
       }
     })
     await expect(stream.serializeBuffer({ scrollbackRows: 100 })).resolves.toMatchObject({

@@ -270,7 +270,7 @@ describe('buildRelayUnattendedGitEnv', () => {
     expect(env.GIT_CONFIG_VALUE_0).toBe('false')
     expect(env.GIT_CONFIG_KEY_1).toBe('credential.guiPrompt')
     expect(env.GIT_CONFIG_VALUE_1).toBe('false')
-    expect(env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
+    expect(env.GIT_SSH_COMMAND).toBeUndefined()
     expect(env.LC_ALL).toBe('en_US.UTF-8')
     expect(env.PATH?.split(':')).toEqual(expect.arrayContaining(['/custom/bin', '/usr/bin']))
   })

@@ -101,7 +101,7 @@ it('delivers catalog changes through existing frames without resending them on o
     })
     coalescer.flush()
     expect(state.commands).toEqual(commands)
-    subscribers.reset(sessionId, journal, 'epoch_changed', 8)
+    subscribers.snapshot(sessionId, journal, 8)
     expect(state.commands).toEqual(commands)
     commands = undefined
     subscribers.open({

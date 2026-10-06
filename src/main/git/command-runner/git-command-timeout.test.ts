@@ -5,6 +5,7 @@ describe('gitCommandTimeoutMs', () => {
   it.each([
     [['status', '--porcelain=v2'], 120_000],
     [['show', 'HEAD:file'], 120_000],
+    [['diff-tree', '--root', '-r', 'HEAD'], 120_000],
     [['fetch', 'origin'], undefined],
     [['checkout', 'main'], undefined],
     [['unknown'], undefined]

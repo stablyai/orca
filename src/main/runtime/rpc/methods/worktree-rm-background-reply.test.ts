@@ -1,9 +1,10 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
   WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import { RpcDispatcher } from '../dispatcher'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { WORKTREE_METHODS } from './worktree'

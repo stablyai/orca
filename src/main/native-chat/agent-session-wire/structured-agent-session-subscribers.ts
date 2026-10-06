@@ -4,10 +4,7 @@
 // ago gets a reset while a caught-up one gets a batch from the same publish.
 // Nothing raw reaches a subscriber — every event carries reducer output.
 
-import type {
-  AgentJournalCursor,
-  AgentJournalResetReason
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
@@ -103,7 +100,8 @@ export class AgentSessionSubscribers {
       })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
     }
-    return () => this.close(input.sessionId, input.id)
+    const { sessionId, id } = subscriber
+    return () => this.close(sessionId, id)
   }
 
   close(sessionId: string, id: string): void {
@@ -141,39 +139,18 @@ export class AgentSessionSubscribers {
     }
   }
 
-  /** Force every subscriber back to a bounded tail page — recovery, epoch
-   *  rollover, an unreadable schema. */
-  reset(
-    sessionId: string,
-    journal: AgentSessionJournal,
-    reason: AgentJournalResetReason,
-    fence: number,
-    backgroundTasks?: AgentSessionBackgroundTaskState | null
-  ): void {
-    this.replay(sessionId, journal, fence, backgroundTasks, { type: 'reset', reset: reason })
-  }
-
+  /** Every subscriber back to a bounded tail page. */
   snapshot(
     sessionId: string,
     journal: AgentSessionJournal,
     fence: number,
     backgroundTasks?: AgentSessionBackgroundTaskState | null
   ): void {
-    this.replay(sessionId, journal, fence, backgroundTasks, { type: 'snapshot' })
-  }
-
-  private replay(
-    sessionId: string,
-    journal: AgentSessionJournal,
-    fence: number,
-    backgroundTasks: AgentSessionBackgroundTaskState | null | undefined,
-    frame: { type: 'snapshot' } | { type: 'reset'; reset: AgentJournalResetReason }
-  ): void {
     const page = readAgentSessionHydrationPage(journal, fence)
     const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
       this.emit(subscriber, {
-        ...frame,
+        type: 'snapshot',
         sessionId,
         page,
         fence,
@@ -203,6 +180,24 @@ export class AgentSessionSubscribers {
         hostNow
       })
       subscriber.fence = fence
+    }
+  }
+
+  /** Re-sends the `/` surface to each subscriber whose view of it is out of date. */
+  republishCommands(): void {
+    const hostNow = this.now()
+    for (const sessionId of this.bySession.keys()) {
+      for (const subscriber of this.subscribers(sessionId)) {
+        if ((this.hooks.readCommands?.(sessionId) ?? null) !== subscriber.commands) {
+          this.emit(subscriber, {
+            type: 'batch',
+            sessionId,
+            batch: emptyAgentSessionBatch(subscriber.cursor),
+            fence: subscriber.fence,
+            hostNow
+          })
+        }
+      }
     }
   }
 

@@ -1,5 +1,6 @@
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type {
+  AgentJournalAnsweredTurnIdentity,
   AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
@@ -40,7 +41,10 @@ export type ResolveDispatchInput = {
     | { state: 'pending'; turnScope: AgentJournalTurnScope }
     /** `reason` is what released clients print, `rejection` what newer ones read: both from
      *  `agentSessionFailureWords`, never written by hand. */
-    | ({ state: 'rejected' } & AgentJournalDispatchRejection)
+    | ({
+        state: 'rejected'
+        answeredInTurn?: AgentJournalAnsweredTurnIdentity
+      } & AgentJournalDispatchRejection)
     | { state: 'unknown'; reason?: string | null }
   )
 
@@ -70,6 +74,10 @@ export type JournalLifecycleBatchInput = {
   mutations: readonly JournalLifecycleMutationInput[]
   fence: number
   recovered?: true
+  /** Rejects the sends still queued with this first, in the same append: a failed start's row
+   *  follows the messages it failed, and no reader meets one without the other. With none still
+   *  queued, the batch is not written either. */
+  rejectsQueued?: AgentJournalDispatchRejection
 }
 
 export type JournalSubmissionInput = {
@@ -94,6 +102,9 @@ export type JournalSubmissionConsume = {
   /** The host process handing it off, stamped on the draft so a hand-off withdrawn back to
    *  waiting belongs to the process that sent it, not the one that first wrote the card. */
   hostInstance?: string
+  /** The queue's own send: refused in the consume's transaction while the queue's pause, as
+   *  this host instance derives it, holds the card. Send-now omits it. */
+  yieldsToPause?: { hostInstance: string }
 }
 
 export type JournalItemAppendInput = {

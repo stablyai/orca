@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
+import { useNativeChatRestartOfferEnabled } from './native-chat-restart-offer-gate'
 import { RotateCcw } from 'lucide-react'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
@@ -64,10 +65,8 @@ function selectedByDefault(failure: ResumeFailure | undefined): boolean {
 }
 
 export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
-  const structuredEnabled = useAppStore(
-    (store) => store.settings?.experimentalStructuredNativeChat === true
-  )
-  const { candidates, failed, listedAt } = useNativeChatRestartOffer(structuredEnabled)
+  const offerEnabled = useNativeChatRestartOfferEnabled()
+  const { candidates, failed, listedAt } = useNativeChatRestartOffer(offerEnabled)
   const rows = useMemo<ResumeCandidate[]>(() => [...candidates, ...failed], [candidates, failed])
   const failureBySession = useMemo(
     () => new Map(failed.map((failure) => [failure.sessionId, failure])),
@@ -172,7 +171,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     })
   }
 
-  if (!structuredEnabled || !open || rows.length === 0) {
+  if (!offerEnabled || !open || rows.length === 0) {
     return null
   }
 

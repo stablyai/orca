@@ -312,6 +312,24 @@ describe('structured worker dispatch preamble', () => {
     expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(true)
   })
 
+  it('reads a queued answer as unacknowledged', async () => {
+    const host: PreambleHost = {
+      ...hostWithSubmission({ dispatchState: 'accepted', reason: null }),
+      send: async () => ({
+        ok: true,
+        replayed: false,
+        fence: 7,
+        cursor: { epoch: 'epoch-1', sequence: 1 },
+        value: { clientMessageId: 'c1', queued: { messageId: 'c1', position: 0, state: 'waiting' } }
+      })
+    }
+    await expect(send(host)).rejects.toMatchObject({
+      code: 'operation_unknown',
+      message:
+        'The dispatch preamble was submitted but not acknowledged (unknown): no reason given.'
+    })
+  })
+
   it('keeps a rejected preamble a proven failure under a code of its own', async () => {
     const error = await send(
       hostWithSubmission({ dispatchState: 'rejected', reason: 'fence moved' })

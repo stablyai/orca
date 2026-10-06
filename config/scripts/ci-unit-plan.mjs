@@ -25,7 +25,7 @@ export function prepareUnitPlan(env = process.env) {
     plan = planUnitSelection({
       files,
       changed: diff.stdout.split('\0').filter(Boolean),
-      graph: collectUnitDependencyGraph(),
+      graph: collectUnitDependencyGraph,
       timings: readTimingBaseline('unit').timings,
       event,
       mode: env.ORCA_UNIT_SELECTION_MODE

@@ -5,11 +5,9 @@ import process from 'node:process'
 
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
+import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
-// Why: test-only modules live beside their spec as `*-test-harness.ts` / `*-test-rig.ts` / `*-fixtures.ts` here, not under `__tests__/`.
-const TEST_SUPPORT_FILE_PATTERN =
-  /[.-](?:test-harness|test-rig|test-fixtures?|test-state|test-support|fixtures?)\.[cm]?[jt]sx?$/
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
 const LOCALIZATION_CALL_NAMES = new Set(['t', 'translate'])
 const USER_VISIBLE_JSX_ATTRIBUTES = new Set([
@@ -78,13 +76,7 @@ function normalizePath(root, filePath) {
 
 export function isSkippedFile(root, filePath) {
   const relative = normalizePath(root, filePath)
-  if (
-    relative.endsWith('.d.ts') ||
-    relative.includes('.test.') ||
-    relative.includes('.spec.') ||
-    relative.includes('/__tests__/') ||
-    TEST_SUPPORT_FILE_PATTERN.test(relative)
-  ) {
+  if (relative.endsWith('.d.ts') || isTestOnlySourcePath(relative)) {
     return true
   }
   return relative.split('/').some((part) => SKIP_PATH_PARTS.has(part))

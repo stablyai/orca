@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { CircleDot, ExternalLink, GitMerge, LoaderCircle, RefreshCw, Send, X } from 'lucide-react'
 import { VisuallyHidden } from 'radix-ui'
 import { Button } from '@/components/ui/button'
@@ -202,7 +203,7 @@ export function GitLabItemDialogView({
               {/* Why: comment composer at the top of the footer so the
                   primary actions row stays visually grouped at the bottom. */}
               <div className="flex items-end gap-2">
-                <textarea
+                <ImeTextarea
                   value={commentDraft}
                   onChange={(event) => updateCommentDraft(event.target.value)}
                   placeholder={translate(

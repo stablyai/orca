@@ -87,7 +87,9 @@ test('manual drag survives activity and persisted-profile reload', async ({
       createdIds.includes(id)
     )
     const sourceId = createdIds.at(-1)!
-    const targetId = initialOrder.find((id) => id !== sourceId)!
+    // Why: dropping before the row that already follows the source is a no-op that keeps Smart sort.
+    const sourceIndex = initialOrder.indexOf(sourceId)
+    const targetId = initialOrder.find((id, index) => id !== sourceId && index !== sourceIndex + 1)!
     await dragBefore(first.page, sourceId, targetId)
 
     const manualOrderAfterDrag = await first.page.evaluate((ids) => {

@@ -5,7 +5,6 @@
 import { describe, expect, it } from 'vitest'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 import {
-  admitStructuredAgentSessionOutboxEntry,
   createStructuredAgentSessionOutboxEntry,
   parseStructuredAgentSessionOutboxEntry,
   stageStructuredAgentSessionOutboxEntryForSend,
@@ -14,6 +13,7 @@ import {
   type StructuredAgentSessionOutboxEntry,
   type StructuredAgentSessionOutboxState
 } from './structured-agent-session-outbox'
+import { admitStructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox-admission'
 import { structuredAgentSessionEntryAttempt } from './structured-agent-session-outbox-delivery'
 import { disposeStructuredAgentSessionSendResult } from './structured-agent-session-send-disposition'
 import { withdrawUnsentStructuredAgentSessionOutboxEntries } from './structured-agent-session-outbox-stop-withdrawal'
@@ -104,7 +104,6 @@ describe('outbox queue delivery', () => {
         at('sent-plain', 'dispatching', null)
       ],
       [],
-      null,
       null
     )
     // Its state is left to its answer: only the mark holds it back.
@@ -114,7 +113,7 @@ describe('outbox queue delivery', () => {
       ['probed', 'queued', true]
     ])
     // The drain never admits the marked one it would otherwise send.
-    expect(admitStructuredAgentSessionOutboxEntry(next.slice(2), null)).toEqual({
+    expect(admitStructuredAgentSessionOutboxEntry(next.slice(2))).toEqual({
       state: 'blocked',
       entry: next[2]
     })
@@ -138,16 +137,10 @@ describe('outbox queue delivery', () => {
       disposeStructuredAgentSessionSendResult({
         entries,
         entry: attempt.wire,
-        blockedClientMessageId: null,
         result: refusal,
         createOperationId: () => operations.shift() ?? 'spent'
       })
-    const stopped = withdrawUnsentStructuredAgentSessionOutboxEntries(
-      [staged],
-      [],
-      null,
-      'client-1'
-    )
+    const stopped = withdrawUnsentStructuredAgentSessionOutboxEntries([staged], [], 'client-1')
     const withStop = answer(stopped)
     const withoutStop = answer([staged])
     expect(
@@ -156,6 +149,5 @@ describe('outbox queue delivery', () => {
     expect(
       withoutStop.entries.map((candidate) => [candidate.clientMessageId, candidate.state])
     ).toEqual([['rotated-2', 'rejected']])
-    expect(withStop.blockedClientMessageId).toBeNull()
   })
 })

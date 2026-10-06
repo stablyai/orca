@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import { useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -242,7 +243,7 @@ export function NativeChatQuestionCard({
                       AskUserQuestion tool result: it reaches the model but never the command
                       parser, so `/compact` and friends are inert, while a skill name can
                       still be acted on. */}
-                  <input
+                  <ImeInput
                     ref={answerInputRef}
                     disabled={isSubmitting}
                     value={otherText[index]}

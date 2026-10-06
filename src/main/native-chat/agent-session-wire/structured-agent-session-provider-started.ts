@@ -24,7 +24,6 @@ export type StructuredAgentSessionProviderStartedContext = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
   publishStatus?: (sessionId: string) => void
-  onBarrierError: (sessionId: string, error: unknown) => void
 }
 
 export function settleStructuredAgentSessionProviderStarted(
@@ -46,7 +45,11 @@ export function settleStructuredAgentSessionProviderStarted(
     try {
       await persistStartedOptions(context, event)
     } catch (error) {
-      context.onBarrierError(event.sessionId, error)
+      context.deps.logger.warn('recording what a started provider reported failed', {
+        scope: 'provider-started-options',
+        sessionId: event.sessionId,
+        error
+      })
     } finally {
       context.publishStatus?.(event.sessionId)
     }

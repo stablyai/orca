@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
   focusGroup: vi.fn(),
   mountsByTabId: new Map<string, number>(),
   unmountsByTabId: new Map<string, number>(),
-  groupIdByTabId: new Map<string, string | undefined>()
+  groupIdByTabId: new Map<string, string | undefined>(),
+  targetByTabId: new Map<string, unknown>()
 }))
 
 vi.mock('@/store', async () => {
@@ -34,7 +35,8 @@ vi.mock('@/store', async () => {
 })
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (state: MockAppState) => state.runtimeEnvironmentId
+  getExecutionHostIdForWorktree: (state: MockAppState) =>
+    state.runtimeEnvironmentId ? `runtime:${state.runtimeEnvironmentId}` : 'local'
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
@@ -55,14 +57,17 @@ vi.mock('./NativeChatView', async () => {
       tabId,
       groupId,
       isVisible,
-      isFocusedGroup
+      isFocusedGroup,
+      target
     }: {
       tabId: string
       groupId?: string
       isVisible: boolean
       isFocusedGroup: boolean
+      target: unknown
     }) {
       mocks.groupIdByTabId.set(tabId, groupId)
+      mocks.targetByTabId.set(tabId, target)
       useEffect(() => {
         mocks.mountsByTabId.set(tabId, (mocks.mountsByTabId.get(tabId) ?? 0) + 1)
         return () => {
@@ -95,10 +100,29 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     mocks.mountsByTabId.clear()
     mocks.unmountsByTabId.clear()
     mocks.groupIdByTabId.clear()
+    mocks.targetByTabId.clear()
     mocks.store?.setState(createState(FIRST_TAB_ID))
   })
 
   afterEach(cleanup)
+
+  // Two hosts can publish the same workspace id; each tab records which one holds its chat.
+  it('reads each chat from the host recorded on its tab, not its workspace', () => {
+    const state = createState(FIRST_TAB_ID)
+    const [first, second] = state.unifiedTabsByWorktree[WORKTREE_ID]!
+    mocks.store?.setState({
+      unifiedTabsByWorktree: {
+        [WORKTREE_ID]: [{ ...first!, executionHostId: 'runtime:server-1' }, second!]
+      }
+    })
+    render(<StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />)
+
+    expect(mocks.targetByTabId.get(FIRST_TAB_ID)).toEqual({
+      kind: 'environment',
+      environmentId: 'server-1'
+    })
+    expect(mocks.targetByTabId.get(SECOND_TAB_ID)).toEqual({ kind: 'local' })
+  })
 
   it('keeps materialized chat surfaces mounted while activation only swaps visibility', () => {
     const view = render(

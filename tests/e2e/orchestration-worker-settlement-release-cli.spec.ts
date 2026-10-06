@@ -13,6 +13,7 @@ import {
   FAKE_AGENT_WINDOWS_SHELL
 } from './helpers/fake-agent-command-override'
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
+import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-settlement-release-'))
 const cliLedgerPath = path.join(fakeCliDir, 'cli.jsonl')
@@ -23,10 +24,7 @@ const fakeCodexCommand = buildFakeAgentCommandOverride(
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
-if (process.argv.slice(2).includes('app-server')) {
-  process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
-  process.exit(2)
-}
+${FAKE_CODEX_LAUNCH_PROBES_SOURCE}
 let acknowledged = false
 ${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')

@@ -21,6 +21,8 @@ import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/ag
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-codex-children'
 const PARENT = 'thread-parent'
@@ -42,7 +44,7 @@ async function openJournal(root: string): Promise<AgentSessionJournal> {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: PARENT }
+      providerHandle: codexProviderHandle(PARENT)
     },
     database: openTestJournalHostDatabase(root),
     now: () => 1_000
@@ -52,7 +54,7 @@ async function openJournal(root: string): Promise<AgentSessionJournal> {
 async function session() {
   const root = await mkdtemp(join(tmpdir(), 'orca-codex-children-'))
   let journal = await openJournal(root)
-  const deferred = createDeferredStructuredAgentSessionEventSink()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const activities: (AgentSessionTurnActivity | null)[] = []
   deferred.bind({
     journal,

@@ -15,6 +15,7 @@ import type { AgentSessionLease } from '../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -137,7 +138,7 @@ describe('a create retried after recovery released its reservation', () => {
       fence: 1,
       link: {
         linkId: 'link-1',
-        handle: { provider: 'codex', threadId: 'thread-1' },
+        handle: codexProviderHandle('thread-1'),
         origin: 'created',
         mintedAtFence: 1,
         observedAt: NOW

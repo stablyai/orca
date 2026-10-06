@@ -15,13 +15,17 @@ import { createJournalReducerState, applyJournalRow } from './journal-reducer'
 import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import {
+  agentSessionJournalProviderHandle,
+  claudeProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-q',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null }
+  providerHandle: claudeProviderHandle('native-1', null)
 }
 const BODY: AgentJournalMessageItem = {
   kind: 'message',
@@ -132,7 +136,7 @@ describe('the persisted row', () => {
     ts: 1,
     clientMessageId: 'handoff-1',
     payloadFingerprint: 'fp',
-    providerHandle: IDENTITY.providerHandle,
+    providerHandle: agentSessionJournalProviderHandle(IDENTITY),
     body: BODY,
     queuedMessageId: 'draft-1'
   }

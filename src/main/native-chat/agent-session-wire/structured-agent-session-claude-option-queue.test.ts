@@ -16,6 +16,8 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const CALLER = { callerKey: 'client-claude' }
 const CLAUDE_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f61'
@@ -54,7 +56,7 @@ function adapter(): StructuredAgentSessionAdapter {
       process: { hostId: 'local', pid: 4200, processStartTimeMs: NOW, spawnToken },
       link: {
         linkId: `claude-native-${fence}`,
-        handle: { provider: 'claude', sessionId: CLAUDE_SESSION, leafUuid: 'native-leaf' },
+        handle: claudeProviderHandle(CLAUDE_SESSION, 'native-leaf'),
         origin: acquire.mock.calls.length === 1 ? 'created' : 'resumed',
         mintedAtFence: fence,
         observedAt: NOW
@@ -83,6 +85,7 @@ beforeEach(async () => {
   optionWritable = Promise.resolve()
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
     journalDatabase: openTestJournalHostDatabase(root),

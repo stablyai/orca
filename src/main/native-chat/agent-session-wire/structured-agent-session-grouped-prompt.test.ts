@@ -24,6 +24,8 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -124,7 +126,7 @@ beforeEach(async () => {
     },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
       mintedAtFence: fence,
       observedAt: NOW
@@ -133,6 +135,7 @@ beforeEach(async () => {
   answerPrompt = vi.fn(async ({ commit }) => commit())
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
     journalDatabase: openTestJournalHostDatabase(root),
@@ -221,5 +224,58 @@ describe('grouped question admission', () => {
       refusal: { code: 'agent_session_operation_invalid' }
     })
     expect(answerPrompt).not.toHaveBeenCalled()
+  })
+})
+
+describe('a grouped question answered again', () => {
+  const answers = [
+    { questionId: 'q1', optionIds: ['target-web'] },
+    { questionId: 'q2', optionIds: [], other: 'SSH host' }
+  ]
+
+  async function answer(
+    prompt: { itemId: string; revision: number },
+    given: typeof answers
+  ): ReturnType<StructuredAgentSessionHost['respondToPrompt']> {
+    const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, answers: given }
+    return host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:question', fields),
+      kind: 'question',
+      ...fields
+    })
+  }
+
+  it('answers a re-click with the same answers from the resolution it holds', async () => {
+    expect((await host.attach(CALLER, attachParams())).ok).toBe(true)
+    const prompt = await seedGroupedQuestion()
+    const first = await answer(prompt, answers)
+
+    // The reply to the first was lost, so the re-click still names the revision it saw.
+    const again = await answer(prompt, answers)
+
+    expect(first.ok).toBe(true)
+    expect(again).toEqual({ ...first, replayed: false })
+    expect(answerPrompt).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses different answers to a resolved question as moved on', async () => {
+    expect((await host.attach(CALLER, attachParams())).ok).toBe(true)
+    const prompt = await seedGroupedQuestion()
+    await answer(prompt, answers)
+
+    const different = await answer(prompt, [
+      { questionId: 'q1', optionIds: ['target-mobile'] },
+      { questionId: 'q2', optionIds: [], other: 'SSH host' }
+    ])
+
+    expect(different).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_item_revision_stale',
+        details: { reason: 'promptMoved' },
+        resolution: { answers }
+      }
+    })
+    expect(answerPrompt).toHaveBeenCalledTimes(1)
   })
 })

@@ -11,7 +11,7 @@ import { visibleNonBlankTerminalLines } from './terminal-tail-read'
 
 const DEFAULT_CHUNK_CHARS = 64
 
-/** `screenLines` are readLiveTerminalScreenLines' rows; `ruledScreenLines` readScreenRuledLines'. */
+/** `screenLines` are readLiveTerminalScreenLines' rows; `ruledScreenLines` readRuledScreen's. */
 export type TranscriptReplayFrame = {
   screenLines: string[]
   ruledScreenLines: string[]
@@ -20,6 +20,41 @@ export type TranscriptReplayFrame = {
 
 export function readRuntimeFixture(name: string): string {
   return readFileSync(join(__dirname, '__fixtures__', `${name}.txt`), 'utf8')
+}
+
+export type TimedRuntimeFixture = {
+  /** The recorded PTY reads, in order; they concatenate to the whole `.txt`. */
+  chunks: string[]
+  /** ms since spawn at which each read arrived. */
+  times: number[]
+  promptSentAtMs?: number
+  /** When recording stopped; no bytes arrived between the last read and this. */
+  recordedUntilMs?: number
+}
+
+/** `<name>.timing.json` holds each read as [ms since spawn, UTF-16 length]. */
+export function readTimedRuntimeFixture(name: string): TimedRuntimeFixture {
+  const data = readRuntimeFixture(name)
+  const timing: {
+    chunks: [number, number][]
+    promptSentAtMs?: number
+    recordedUntilMs?: number
+  } = JSON.parse(readFileSync(join(__dirname, '__fixtures__', `${name}.timing.json`), 'utf8'))
+  const chunks: string[] = []
+  let offset = 0
+  for (const [, length] of timing.chunks) {
+    chunks.push(data.slice(offset, offset + length))
+    offset += length
+  }
+  if (offset !== data.length) {
+    throw new Error(`${name}.timing.json covers ${offset} of ${data.length} chars`)
+  }
+  return {
+    chunks,
+    times: timing.chunks.map(([at]) => at),
+    ...(timing.promptSentAtMs !== undefined ? { promptSentAtMs: timing.promptSentAtMs } : {}),
+    ...(timing.recordedUntilMs !== undefined ? { recordedUntilMs: timing.recordedUntilMs } : {})
+  }
 }
 
 /** Resizes the grid before chunk `atChunk`, as a PTY resize landing mid-paint would. */
@@ -32,7 +67,7 @@ export async function* replayTranscript(
   rows: number,
   resize?: TranscriptReplayResize
 ): AsyncGenerator<TranscriptReplayFrame> {
-  const chunks = typeof data === 'string' ? splitIntoChunks(data) : data
+  const chunks = typeof data === 'string' ? splitTranscriptIntoChunks(data) : data
   const emulator = new HeadlessEmulator({ cols, rows })
   let lines: string[] = []
   let partialLine = ''
@@ -85,7 +120,7 @@ export async function finalReadProjection(
 ): Promise<{ lines: string[]; draft?: string }> {
   const emulator = new HeadlessEmulator({ cols, rows })
   try {
-    for (const chunk of splitIntoChunks(readRuntimeFixture(name))) {
+    for (const chunk of splitTranscriptIntoChunks(readRuntimeFixture(name))) {
       await emulator.write(chunk)
     }
     return projectTerminalVisibleLines(emulator)
@@ -94,7 +129,8 @@ export async function finalReadProjection(
   }
 }
 
-function splitIntoChunks(data: string): string[] {
+/** The fixed-size chunks a string transcript replays as, for suites driving their own sink. */
+export function splitTranscriptIntoChunks(data: string): string[] {
   const chunks: string[] = []
   for (let offset = 0; offset < data.length; offset += DEFAULT_CHUNK_CHARS) {
     chunks.push(data.slice(offset, offset + DEFAULT_CHUNK_CHARS))

@@ -12,7 +12,6 @@ import { holdAgentSessionInventory } from './structured-agent-session-inventory-
 import type { Tab } from '../../shared/tab-types'
 import {
   resolveTerminalCloseTarget,
-  terminalSurfaceCloseMutation,
   type PaneCloseResolution,
   type RendererTerminalClose,
   type TerminalSurfaceCloseOptions
@@ -25,6 +24,7 @@ import { retireTerminalSurfacesFromSnapshot } from './mobile-session-terminal-re
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { captureAcknowledgedTerminalTabRetirement } from './workspace-session-terminal-tab-retirement-identity'
+import { closeLeafOrTab } from '../persistence/terminal-topology/terminal-topology-commit'
 
 export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
   // Why: headless serve backs browser panes with offscreen WebContents that live
@@ -131,7 +131,7 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     let refusal: Error | undefined
     try {
       refusal = await store.runDurableMutation(
-        terminalSurfaceCloseMutation({
+        closeLeafOrTab({
           worktreeId,
           target,
           options,

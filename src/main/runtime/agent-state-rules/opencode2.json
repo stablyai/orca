@@ -1,0 +1,15 @@
+{
+  "id": "opencode2",
+  "engineVersion": 1,
+  "profile": { "hooks": "authoritative" },
+  "anchors": [],
+  "rules": [
+    {
+      "id": "name_title",
+      "why": "Its `OC |` rest title is OpenCode's title anchor (opencode.json), which every pane reads. Its name is its only other rest sign, so it settles once held, with no quiet asked.",
+      "priority": 100,
+      "when": { "region": "title", "status": "idle" },
+      "answer": { "state": "idle", "strength": "weak", "requiresQuiet": false }
+    }
+  ]
+}

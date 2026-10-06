@@ -44,6 +44,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       releaseDeferredCwdFence()
       return Promise.resolve(null)
     }
+    if (session.buffersInputOnlyForReattach) {
+      // Why: keys typed for the shell this pane meant to reattach must not run in its replacement.
+      session.transport.abandonPreconnectInput?.()
+    }
     session.authoritativeReattachGeneration += 1
     // Every fresh connect creates or rebinds a PTY. Do not let a legacy
     // response that omits `incarnationId` inherit the predecessor's fence.

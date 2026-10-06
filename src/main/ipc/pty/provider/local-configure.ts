@@ -21,6 +21,7 @@ import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
 import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
 import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
+import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
 export function configureLocalPtyProvider(args: {
   runtime?: OrcaRuntimeService
@@ -41,6 +42,13 @@ export function configureLocalPtyProvider(args: {
       getSettings ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto') : undefined,
     pwshAvailable: () => isPwshAvailableAsync(),
     buildSpawnEnv: async (id, baseEnv, ctx) => {
+      await prepareAntigravityAccountForLaunch({
+        launchAgent: ctx?.launchAgent,
+        command: ctx?.command,
+        isWsl: ctx?.isWsl,
+        env: baseEnv,
+        envIsComplete: true
+      })
       const codexSelectionTarget: CodexAccountSelectionTarget =
         ctx?.isWsl === true
           ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }
@@ -81,6 +89,7 @@ export function configureLocalPtyProvider(args: {
         }),
         launchCommand: ctx?.command,
         launchAgent: ctx?.launchAgent,
+        shellPath: ctx?.shellPath,
         isWsl: ctx?.isWsl,
         wslDistro: ctx?.wslDistro ?? null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),

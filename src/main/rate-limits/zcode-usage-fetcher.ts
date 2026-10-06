@@ -26,6 +26,14 @@ type ZcodeUsageCredentials = {
   authProvenance: string
 }
 
+/** A GLM Coding Plan key saved through Orca's AI Provider Accounts; takes priority over the ZCode CLI config. */
+export type ZcodePlanCredential = {
+  apiKey: string
+  baseUrl: string
+}
+
+export const ZCODE_PLAN_CREDENTIAL_SOURCE = 'orca-plan'
+
 // Why readers and not casts: both JSON sources are outside our control — a user-edited
 // config file and a remote response — so their shape is a guess until something checks it.
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -75,6 +83,10 @@ function failed(
   }
 }
 
+function redactCredential(error: string, apiKey: string): string {
+  return error.replaceAll(apiKey, '[redacted]')
+}
+
 function readCredentials(configPath: string): ZcodeUsageCredentials | null {
   let config: Record<string, unknown> | null
   try {
@@ -102,8 +114,20 @@ function readCredentials(configPath: string): ZcodeUsageCredentials | null {
   ) {
     return null
   }
+  return resolveUsageCredentials(apiKey, baseURL, mainProvider)
+}
+
+function resolveUsageCredentials(
+  key: string,
+  baseUrl: string,
+  identity: string
+): ZcodeUsageCredentials | null {
+  const apiKey = key.trim()
+  if (!apiKey || /[\r\n]/.test(apiKey)) {
+    return null
+  }
   try {
-    const parsed = new URL(baseURL)
+    const parsed = new URL(baseUrl)
     if (
       parsed.protocol !== 'https:' ||
       !SUPPORTED_HOSTS.has(parsed.hostname) ||
@@ -112,15 +136,21 @@ function readCredentials(configPath: string): ZcodeUsageCredentials | null {
       return null
     }
     return {
-      apiKey: apiKey.trim(),
+      apiKey,
       quotaUrl: `${parsed.origin}/api/monitor/usage/quota/limit`,
       authProvenance: createHmac('sha256', CREDENTIAL_IDENTITY_KEY)
-        .update(JSON.stringify([mainProvider, parsed.origin, apiKey.trim()]))
+        .update(JSON.stringify([identity, parsed.origin, apiKey]))
         .digest('hex')
     }
   } catch {
     return null
   }
+}
+
+export function hasZcodeCliPlanCredentials(
+  configPath = join(homedir(), '.zcode', 'cli', 'config.json')
+): boolean {
+  return readCredentials(configPath) !== null
 }
 
 function asNumber(value: unknown): number | null {
@@ -182,14 +212,28 @@ function asWindow(limit: QuotaLimit | undefined): RateLimitWindow | null {
 export async function fetchZcodeRateLimits(
   options: {
     configPath?: string
+    planCredential?: ZcodePlanCredential | null
     signal?: AbortSignal
   } = {}
 ): Promise<ProviderRateLimits> {
   const configPath = options.configPath ?? join(homedir(), '.zcode', 'cli', 'config.json')
-  const credentials = readCredentials(configPath)
+  const planCredentials = options.planCredential
+    ? resolveUsageCredentials(
+        options.planCredential.apiKey,
+        options.planCredential.baseUrl,
+        ZCODE_PLAN_CREDENTIAL_SOURCE
+      )
+    : null
+  if (!planCredentials && options.planCredential) {
+    // Why: a saved-but-unusable key must surface as its own error; silently
+    // falling back to the CLI config would show a different account's quota.
+    return failed('The saved GLM Coding Plan API key is unusable', 'parse', '')
+  }
+  const credentials = planCredentials ?? readCredentials(configPath)
   if (!credentials) {
     return unavailable('ZCode Coding Plan credentials are not configured')
   }
+  const credentialSource = planCredentials ? ZCODE_PLAN_CREDENTIAL_SOURCE : configPath
 
   let response: Response
   try {
@@ -208,7 +252,10 @@ export async function fetchZcodeRateLimits(
     })
   } catch (error) {
     return failed(
-      error instanceof Error ? error.message : 'ZCode quota request failed',
+      redactCredential(
+        error instanceof Error ? error.message : 'ZCode quota request failed',
+        credentials.apiKey
+      ),
       'network',
       credentials.authProvenance
     )
@@ -239,7 +286,11 @@ export async function fetchZcodeRateLimits(
   ) {
     const msg = payload?.msg
     const message = typeof msg === 'string' ? msg : 'Invalid ZCode quota response'
-    return failed(message, 'parse', credentials.authProvenance)
+    return failed(
+      redactCredential(message, credentials.apiKey),
+      'parse',
+      credentials.authProvenance
+    )
   }
 
   const limits = reported.filter((value): value is QuotaLimit => isRecord(value))
@@ -270,7 +321,7 @@ export async function fetchZcodeRateLimits(
     status: 'ok',
     usageMetadata: {
       source: 'web',
-      credentialSource: configPath,
+      credentialSource,
       authProvenance: credentials.authProvenance
     }
   }

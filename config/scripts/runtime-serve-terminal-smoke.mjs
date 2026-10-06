@@ -198,7 +198,7 @@ function resolveLaunch(userDataDir) {
     label: `electron (${serveEntry})`,
     command: override ?? 'npx',
     args: override ? serveArgs : ['electron', ...serveArgs],
-    env: {}
+    env: { ORCA_DEV_USER_DATA_PATH: userDataDir }
   }
 }
 

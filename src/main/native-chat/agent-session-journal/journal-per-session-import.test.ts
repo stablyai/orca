@@ -2,7 +2,10 @@
 // that chat's open: verbatim, and deleted only once the copy reads back as the file. A file that
 // reappears after a downgrade is set aside on disk, and the chat keeps this build's history.
 
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+} from '../../../shared/agent-session-journal-types'
 import type * as NodeFs from 'node:fs'
 import { existsSync, rmSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -23,11 +26,14 @@ import {
   liveTestJournalRows,
   loadTestJournal,
   openTestJournalHostDatabase,
-  readTestJournalRows
+  readTestJournalRows,
+  SAVED_BY_NEWER_ORCA
 } from './journal-host-database-test-support'
 import { journalDirectoryFor, legacyJournalDatabaseFile } from './journal-paths'
-import { importPerSessionJournal } from './journal-per-session-import'
+import { importPerSessionJournal, previewPerSessionJournal } from './journal-per-session-import'
 import { readJournalSessionEpoch, type JournalStoredRow } from './journal-row-table'
+import { createStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
@@ -39,7 +45,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'ws-1',
   hostId: 'local',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 let root: string
@@ -169,7 +175,7 @@ function alteringFirstCopiedRead(
   }
 }
 
-const losingFirstCopiedRow = alteringFirstCopiedRead((rows) => rows.slice(1))
+const losingLastCopiedRow = alteringFirstCopiedRead((rows) => rows.slice(0, -1))
 
 /** Every row still there and still parsing, but the reply's words changed. */
 const garblingCopiedReply = alteringFirstCopiedRead((rows) =>
@@ -221,6 +227,7 @@ describe('importing a per-chat journal', () => {
 
     const journal = await openChat()
     const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
+      logger: createStructuredAgentSessionLogger(),
       sessions: new Map([[IDENTITY.sessionId, { journal, child: null }]]),
       now: () => clock,
       enqueue: (operation) => operation()
@@ -234,25 +241,25 @@ describe('importing a per-chat journal', () => {
     await writeLegacyJournal(epoch, rows)
     const database = openTestJournalHostDatabase(root)
     const turns: { published: boolean; copied: number }[] = []
-    let ticking = true
     const tick = (): void => {
       turns.push({
         published: readJournalSessionEpoch(database.db, IDENTITY.sessionId) !== null,
         copied: rowCount(database.db)
       })
-      if (ticking) {
-        setImmediate(tick)
-      }
+      pending = setImmediate(tick)
     }
-    setImmediate(tick)
+    let pending = setImmediate(tick)
 
-    await importPerSessionJournal({
-      database,
-      identity: IDENTITY,
-      legacyDirectory: legacyDir(),
-      batchRows: 1
-    })
-    ticking = false
+    try {
+      await importPerSessionJournal({
+        database,
+        identity: IDENTITY,
+        legacyDirectory: legacyDir(),
+        batchRows: 1
+      })
+    } finally {
+      clearImmediate(pending)
+    }
 
     // Other work ran while rows were copied, and none of it could see a partly copied chat.
     expect(turns.filter((turn) => !turn.published && turn.copied > 0).length).toBeGreaterThan(0)
@@ -331,23 +338,21 @@ describe('importing a per-chat journal', () => {
       })
     )
     const between: number[] = []
-    let copying = true
     const tick = (): void => {
       // What a live chat's append would commit under, between two copy batches.
       between.push(synchronous())
-      if (copying) {
-        setImmediate(tick)
-      }
+      pending = setImmediate(tick)
     }
 
-    setImmediate(tick)
+    let pending = setImmediate(tick)
     await importPerSessionJournal({
       database,
       identity: IDENTITY,
       legacyDirectory: legacyDir(),
       batchRows: 1
     })
-    copying = false
+    // A flag would still let the queued tick read the database after teardown closes it.
+    clearImmediate(pending)
 
     // 2 is FULL, 1 is NORMAL.
     expect(commits.slice(0, rows.length)).toEqual(rows.map(() => 1))
@@ -385,7 +390,7 @@ describe('importing a per-chat journal', () => {
       database,
       identity: IDENTITY,
       legacyDirectory: legacyDir(),
-      openSource: losingFirstCopiedRow
+      openSource: losingLastCopiedRow
     }
     const before = await readFile(legacyJournalDatabaseFile(legacyDir()))
 
@@ -408,6 +413,75 @@ describe('importing a per-chat journal', () => {
     expect(readTestJournalRows(database.db, IDENTITY.sessionId, epoch)).toEqual(rows)
     expect(journal.cursor()).toEqual({ epoch, sequence: rows.length })
     expect(rowCount(database.db)).toBe(rows.length)
+  })
+
+  it('opens a file whose chat has no rows as a fresh chat, losing nothing', async () => {
+    const { epoch } = await historyRows()
+    await writeLegacyJournal(epoch, [])
+    const database = openTestJournalHostDatabase(root)
+    const db = new Database(legacyJournalDatabaseFile(legacyDir()))
+    db.prepare('INSERT INTO journal_sessions VALUES (?, ?, ?)').run(IDENTITY.sessionId, epoch, 1)
+    db.close()
+
+    await expect(
+      previewPerSessionJournal({ database, identity: IDENTITY, legacyDirectory: legacyDir() })
+    ).resolves.toBeNull()
+    const journal = await openChat()
+
+    expect(journal.snapshot().items).toEqual([])
+    expect(journal.cursor().sequence).toBe(1)
+  })
+
+  it('keeps a damaged file whole, copies none of it, and refuses the chat on every open', async () => {
+    const { epoch, rows } = await historyRows()
+    // A gap: the reply's row is gone from the file.
+    await writeLegacyJournal(
+      epoch,
+      rows.filter((row) => row.seq !== 2)
+    )
+    const database = openTestJournalHostDatabase(root)
+    const before = await readFile(legacyJournalDatabaseFile(legacyDir()))
+    const unloadable = {
+      refusal: { message: 'Unable to load this chat.', details: { reason: 'journalCorrupt' } }
+    }
+    const input = { database, identity: IDENTITY, legacyDirectory: legacyDir() }
+
+    await expect(previewPerSessionJournal(input)).rejects.toMatchObject(unloadable)
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(importPerSessionJournal(input)).rejects.toMatchObject(unloadable)
+    }
+    await expect(openChat()).rejects.toMatchObject(unloadable)
+
+    expect((await readFile(legacyJournalDatabaseFile(legacyDir()))).equals(before)).toBe(true)
+    expect(readJournalSessionEpoch(database.db, IDENTITY.sessionId)).toBeNull()
+    expect(rowCount(database.db)).toBe(0)
+    expect(
+      database.db.prepare('SELECT count(*) AS total FROM journal_imports').get()
+    ).toMatchObject({ total: 0 })
+  })
+
+  it("keeps a newer Orca's file whole, copies none of it, and refuses the chat as a newer Orca's", async () => {
+    const { epoch, rows } = await historyRows()
+    const last = rows.at(-1)!
+    const newer = {
+      ...last,
+      rowJson: JSON.stringify({
+        ...JSON.parse(last.rowJson),
+        v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION + 1
+      })
+    }
+    await writeLegacyJournal(epoch, [...rows.slice(0, -1), newer])
+    const database = openTestJournalHostDatabase(root)
+    const before = await readFile(legacyJournalDatabaseFile(legacyDir()))
+    const input = { database, identity: IDENTITY, legacyDirectory: legacyDir() }
+
+    await expect(previewPerSessionJournal(input)).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+    await expect(importPerSessionJournal(input)).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+    await expect(openChat()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+
+    expect((await readFile(legacyJournalDatabaseFile(legacyDir()))).equals(before)).toBe(true)
+    expect(readJournalSessionEpoch(database.db, IDENTITY.sessionId)).toBeNull()
+    expect(rowCount(database.db)).toBe(0)
   })
 
   // A copy that keeps every count but not every byte is no copy: the file is all there is.

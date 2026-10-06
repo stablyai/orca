@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { readNativeSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-options'
@@ -96,7 +97,7 @@ it('persists resumed provider options atomically with owner proof', async () => 
     fence,
     link: {
       linkId: 'codex-options-1',
-      handle: { provider: 'codex', threadId: 'thread-options' },
+      handle: codexProviderHandle('thread-options'),
       origin: 'created',
       mintedAtFence: fence,
       observedAt: NOW

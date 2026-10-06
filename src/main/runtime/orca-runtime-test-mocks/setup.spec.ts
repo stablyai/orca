@@ -350,6 +350,7 @@ vi.mock('../../ssh/ssh-target-registry', () => ({
 }))
 
 vi.mock('../../preflight/agent-detection', () => ({
+  detectAgentCommandsOnHost: vi.fn(async () => new Set(['qodercli'])),
   detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgents: detectRemoteAgentsMock
 }))

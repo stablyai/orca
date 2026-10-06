@@ -8,6 +8,7 @@
 // the async boundary every awaiting caller was written against.
 
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { journalOpenRefusalError } from '../native-chat/agent-session-journal/journal-open-failure'
 import { AgentSessionJournalError } from '../native-chat/agent-session-journal/journal-write-guards'
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
@@ -102,6 +103,31 @@ export class AgentSessionStoreTransactions {
     const run = this.queue.then(() => this.commit(apply, options.inMemoryWhenReadOnly === true))
     this.queue = run.catch(() => {})
     return run
+  }
+
+  /**
+   * `apply`'s rows, written inside a journal transaction the caller runs and adopted once it
+   * commits. Exact without the queue: `write` and `committed` run in one synchronous step, so no
+   * store transaction can commit between the draft's staging and its adoption.
+   */
+  receipt(apply: (draft: AgentSessionStoreState) => void): JournalOperationReceipt {
+    let staged: StagedStoreTransaction<void> | null = null
+    return {
+      write: (db) => {
+        if (this.journalDatabase.readOnly) {
+          throw readOnlyStoreRefusal()
+        }
+        staged = this.stage(apply)
+        const writes = staged.writes
+        if (writes) {
+          writeAgentSessionStoreRows(db, writes)
+        }
+      },
+      committed: () => {
+        staged?.adopt()
+        staged = null
+      }
+    }
   }
 
   private commit<T>(apply: (draft: AgentSessionStoreState) => T, inMemoryWhenReadOnly: boolean): T {

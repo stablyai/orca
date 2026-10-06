@@ -183,6 +183,29 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     vi.unstubAllGlobals()
   })
 
+  it('uses the receiving paired subscription over the tab’s execution host', () => {
+    store.setState({
+      runtimeEnvironments: [
+        {
+          id: 'env-1',
+          name: 'Paired server',
+          createdAt: 1,
+          updatedAt: 1,
+          lastUsedAt: null,
+          runtimeId: null,
+          endpoints: [],
+          preferredEndpointId: 'endpoint'
+        }
+      ]
+    })
+    dispatchStructuredTurnCompletionAttention(
+      { ...structuredTab(), executionHostId: 'local' },
+      completion(),
+      { kind: 'environment', environmentId: 'env-1' }
+    )
+    expect(onlyDispatch().notificationSourceId).toBe('runtime:env-1')
+  })
+
   it('lights workspace bold, the amber pane dot and the tab dot for a successful turn', () => {
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     expect(indicators()).toEqual({

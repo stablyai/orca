@@ -62,7 +62,7 @@ const cases = callerProfileCases()
 
 async function launch(profile: AgentLaunchCallerProfile) {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  return launchAgentInNewTab({ ...profile.args })
+  return launchAgentInNewTab({ requestId: 'request-1', ...profile.args })
 }
 
 describe('agent launch caller arguments and permission bypass', () => {
@@ -116,7 +116,7 @@ describe('agent launch caller arguments and permission bypass', () => {
     async (agent, _mode, bypassFlag) => {
       const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-      launchAgentInNewTab({ agent, worktreeId: 'wt-1' })
+      launchAgentInNewTab({ requestId: 'request-2', agent, worktreeId: 'wt-1' })
 
       expect(queuedStartupCommand(store)).toContain(bypassFlag)
     }
@@ -128,7 +128,7 @@ describe('agent launch caller arguments and permission bypass', () => {
       store.settings = { ...store.settings, agentDefaultArgs: { [agent]: '' } }
       const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-      launchAgentInNewTab({ agent, worktreeId: 'wt-1' })
+      launchAgentInNewTab({ requestId: 'request-3', agent, worktreeId: 'wt-1' })
 
       // A stored empty string owns the key, so it beats the shipped bypass default.
       expect(queuedStartupCommand(store)).not.toContain(bypassFlag)
@@ -138,7 +138,7 @@ describe('agent launch caller arguments and permission bypass', () => {
   it('carries a bypass posture that lives in the environment rather than in argv', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'goose', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ requestId: 'request-4', agent: 'goose', worktreeId: 'wt-1' })
 
     // Goose has no bypass flag; its default posture is an env var, and a migration that carried
     // only argv would silently downgrade it.
@@ -148,7 +148,12 @@ describe('agent launch caller arguments and permission bypass', () => {
   it('restores the shipped bypass default when a caller passes agentArgs as undefined', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', agentArgs: undefined })
+    launchAgentInNewTab({
+      requestId: 'request-5',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      agentArgs: undefined
+    })
 
     // Characterized, not endorsed: an explicit `undefined` is indistinguishable from an omitted
     // key here, so a caller that resolved "apply no saved arguments" to `undefined` gets the
@@ -160,7 +165,12 @@ describe('agent launch caller arguments and permission bypass', () => {
   it('launches without any arguments when a caller passes agentArgs as null', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', agentArgs: null })
+    launchAgentInNewTab({
+      requestId: 'request-6',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      agentArgs: null
+    })
 
     expect(queuedStartupCommand(store)).toBe('codex')
     expect(queuedStartupPayload(store)?.agentArgsOverride).toBeNull()
@@ -170,7 +180,12 @@ describe('agent launch caller arguments and permission bypass', () => {
     store.settings = { ...store.settings, agentDefaultArgs: { codex: '--model stored' } }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', agentArgs: '--model per-launch' })
+    launchAgentInNewTab({
+      requestId: 'request-7',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      agentArgs: '--model per-launch'
+    })
 
     expect(queuedStartupCommand(store)).toBe("codex '--model' 'per-launch'")
   })
@@ -179,7 +194,7 @@ describe('agent launch caller arguments and permission bypass', () => {
     store.settings = { ...store.settings, agentDefaultEnv: { codex: { CODEX_PROFILE: 'team' } } }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ requestId: 'request-8', agent: 'codex', worktreeId: 'wt-1' })
 
     const payload = queuedStartupPayload(store)
     expect(payload?.env).toEqual({ CODEX_PROFILE: 'team' })
@@ -200,7 +215,11 @@ describe('agent launch caller arguments and permission bypass', () => {
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    const result = launchAgentInNewTab({
+      requestId: 'request-9',
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
 
     expect(result?.startupPlan.sessionOptions).toEqual({
       model: 'gpt-5.2-codex',
@@ -221,7 +240,11 @@ describe('agent launch caller arguments and permission bypass', () => {
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    const result = launchAgentInNewTab({
+      requestId: 'request-10',
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
 
     expect(result?.startupPlan.sessionOptions).toBeUndefined()
     expect(queuedStartupCommand(store)).not.toContain("'-m'")

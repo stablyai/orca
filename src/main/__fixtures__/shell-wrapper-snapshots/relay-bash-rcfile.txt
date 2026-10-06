@@ -26,6 +26,12 @@ fi
 [[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"
 [[ -n "${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
+if [ -n "${ORCA_CLI_BIN_DIR:-}" ]; then
+  case "${PATH:-}" in
+    "$ORCA_CLI_BIN_DIR"|"$ORCA_CLI_BIN_DIR":*) ;;
+    *) export PATH="$ORCA_CLI_BIN_DIR${PATH:+:$PATH}" ;;
+  esac
+fi
 # Why: OMP does not auto-load Orca's managed status extension; wrap only
 # interactive launch invocations so subcommands such as `omp config` keep
 # their normal argv shape.

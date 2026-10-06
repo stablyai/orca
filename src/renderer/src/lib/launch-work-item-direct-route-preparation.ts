@@ -7,6 +7,7 @@ import type {
   AgentSessionLaunchPlan,
   planAgentSessionLaunch
 } from '@/lib/agent-session-launch-plan'
+import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   buildDirectWorkItemStartup,
   resolveDirectWorkItemAgent
@@ -39,6 +40,8 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   launchPlatform?: NodeJS.Platform
   repoProjectRuntime?: Parameters<typeof buildDirectWorkItemStartup>[0]['repoProjectRuntime']
   planLaunch: typeof planAgentSessionLaunch
+  /** The start action this launch serves. */
+  requestId: AgentLaunchRequestId
 }): Promise<DirectWorkItemAgentLaunchPreparation> {
   const launchConnectionId = getConnectionId(args.worktreeId) ?? args.repoConnectionId
   const agentSelection = await resolveDirectWorkItemAgent({
@@ -93,6 +96,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
     effectiveAgent === null
       ? null
       : args.planLaunch(args.latestStore, {
+          requestId: args.requestId,
           agent: effectiveAgent,
           workspace: { kind: 'git-worktree', worktreeId: args.worktreeId, repoId: args.repoId },
           prompt: args.draftContent,

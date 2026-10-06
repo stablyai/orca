@@ -18,8 +18,6 @@ import {
   getFolderWorkspacePathStatusTitle
 } from './folder-workspace-path-status'
 import { toast } from 'sonner'
-import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
-import { revealRepoInProjectFilter } from '@/components/sidebar/project-filter-reveal'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
@@ -33,6 +31,7 @@ import {
   type WorktreeActivationSurfaceSelection
 } from './worktree-activation-surface-selection'
 import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
+import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
 
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
@@ -84,6 +83,7 @@ export function activateAndRevealFolderWorkspace(
   opts?: WorktreeActivationSurfaceSelection & {
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     revealInSidebar?: boolean
+    showWorkspaceList?: boolean
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
     executionHostId?: ExecutionHostId
@@ -165,6 +165,9 @@ export function activateAndRevealFolderWorkspace(
         seedUserDefaultSurface
       )
 
+  if (opts?.showWorkspaceList) {
+    state.setSidebarBody('workspaces')
+  }
   if (opts?.revealInSidebar !== false) {
     state.revealWorktreeInSidebar(
       workspaceKey,
@@ -286,21 +289,12 @@ export function activateAndRevealWorktree(
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
   }
 
-  // 5. Lift the sidebar filters hiding the target — reveal needs the card rendered, else it silently no-ops.
+  // 5. Explicit list requests leave the activity view only now that activation has committed.
+  if (opts?.showWorkspaceList) {
+    state.setSidebarBody('workspaces')
+  }
   if (opts?.clearSidebarFilters !== false) {
-    revealRepoInProjectFilter(state, wt.repoId)
-    if (
-      state.hideAutomationGeneratedWorkspaces &&
-      wt.automationProvenance?.kind === 'created-by-automation'
-    ) {
-      state.setHideAutomationGeneratedWorkspaces(false)
-    }
-    if (state.hideCliCreatedWorkspaces && wt.cliProvenance?.kind === 'created-by-cli') {
-      state.setHideCliCreatedWorkspaces(false)
-    }
-    if (state.hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(wt)) {
-      state.setHideDetachedHeadWorkspaces(false)
-    }
+    liftSidebarFiltersHidingWorktree(wt)
   }
 
   // 6. Reveal in sidebar
@@ -340,6 +334,7 @@ export function activateAndRevealWorkspace(
   opts?: WorktreeActivationSurfaceSelection & {
     executionHostId?: ExecutionHostId
     revealInSidebar?: boolean
+    showWorkspaceList?: boolean
     /** Worktree-only: folder workspaces are never filter-hidden. */
     clearSidebarFilters?: boolean
   }

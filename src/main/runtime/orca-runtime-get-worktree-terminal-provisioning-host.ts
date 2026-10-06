@@ -1,23 +1,21 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithActivateManagedWorktree } from './orca-runtime-activate-managed-worktree'
-import type {
-  WorktreeProvisionTerminalOptions,
-  WorktreeTerminalProvisioningHost
-} from './runtime-worktree-terminal-provisioning'
-import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import type { WorktreeTerminalProvisioningHost } from './runtime-worktree-terminal-provisioning'
 import type { WorktreeStartupReadinessHost } from './runtime-worktree-startup-readiness'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { prepareWorktreeCreateForRepo } from '../worktree-create-preparation'
 import { getWorktreeCreatePrefetchGitOptions } from '../project-runtime-git-options'
+import type { Worktree } from '../../shared/worktree/types'
 
 export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRuntimeWithActivateManagedWorktree {
-  protected getWorktreeTerminalProvisioningHost(): WorktreeTerminalProvisioningHost {
+  protected getWorktreeTerminalProvisioningHost(
+    createdWorktree?: Worktree
+  ): WorktreeTerminalProvisioningHost {
     return {
       canSpawn: () => Boolean(this.ptyController?.spawn),
       createTerminal: (selector, options) =>
-        this.createTerminal(selector, options as TerminalCreateOptions),
-      splitTerminal: (handle, options) =>
-        this.splitTerminal(handle, options as WorktreeProvisionTerminalOptions),
+        this.createTerminal(selector, options, createdWorktree),
+      splitTerminal: (handle, options) => this.splitTerminal(handle, options, createdWorktree),
       setTabColor: async (worktreeId, tabId, color) => {
         await this.setMobileSessionTabProps(`id:${worktreeId}`, { tabId, color })
       },
@@ -55,7 +53,8 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
       baseBranch: args.baseBranch,
       runtime: this,
       gitOptions: getWorktreeCreatePrefetchGitOptions(store, repo),
-      prepareCheckout: (base) => prepareWorktreeCreateForRepo(store, repo, base)
+      prepareCheckout: (base, beforeMaterialization) =>
+        prepareWorktreeCreateForRepo(store, repo, base, beforeMaterialization)
     })
   }
 }

@@ -200,6 +200,84 @@ describe('relay observability', () => {
     })
   })
 
+  it('splits non-drain 503s from scheduled drain-return deferrals', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    for (let index = 0; index < 40; index++) {
+      observability.recordAssignmentUnavailable('drain-return-deferred')
+    }
+    observability.recordAssignmentUnavailable('sticky-lane')
+    observability.recordAssignmentUnavailable('relay_capacity_exhausted')
+    observability.recordAssignmentUnavailable('relay_capacity_exhausted')
+    observability.flush(counts)
+    observability.flush(counts)
+
+    expect(entries[0]).toMatchObject({
+      assign503sByCauseDelta: {
+        'drain-return-deferred': 40,
+        'sticky-lane': 1,
+        relay_capacity_exhausted: 2
+      },
+      assignNonDrain503sDelta: 3
+    })
+    expect(entries[1]).toMatchObject({ assign503sByCauseDelta: {}, assignNonDrain503sDelta: 0 })
+  })
+
+  it('reports lane slot service times only for windows that served the lane', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    for (let ms = 1; ms <= 100; ms++) {
+      observability.recordAdmissionServiceMs('sticky', ms)
+      observability.recordAdmissionServiceMs('drain-return', ms * 10)
+    }
+    observability.flush(counts)
+    observability.flush(counts)
+
+    expect(entries[0]).toMatchObject({
+      stickyServiceMsP50: 50,
+      stickyServiceMsP99: 99,
+      drainReturnServiceMsP50: 500,
+      drainReturnServiceMsP95: 950
+    })
+    expect(entries[1]).not.toHaveProperty('stickyServiceMsP50')
+    expect(entries[1]).not.toHaveProperty('drainReturnServiceMsP50')
+  })
+
+  it('sums lock waiters per role and table over the samples taken', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    observability.recordDatabaseLockWaitSample([
+      { waiterRole: 'cell', table: 'relay_cells', holderRole: 'cell', waiters: 3 },
+      { waiterRole: 'director', table: 'relay_cells', holderRole: 'cell', waiters: 1 },
+      { waiterRole: 'cell', table: 'relay_assignments', holderRole: 'director', waiters: 2 }
+    ])
+    observability.recordDatabaseLockWaitSample([])
+    observability.recordDatabaseLockWaitSample([
+      { waiterRole: 'cell', table: 'relay_cells', holderRole: 'cell', waiters: 1 }
+    ])
+    observability.flush(counts)
+
+    expect(entries[0]).toMatchObject({
+      dbLockWaitSamplesDelta: 3,
+      dbLockWaitersByKeyDelta: {
+        'cell:relay_cells:cell': 4,
+        'director:relay_cells:cell': 1,
+        'cell:relay_assignments:director': 2
+      },
+      dbCellRowLockWaitersDirectorDelta: 1,
+      dbCellRowLockWaitersCellDelta: 4
+    })
+  })
+
   it('aggregates coarse region requests, selections, fallbacks, and outages', () => {
     const entries: Array<Record<string, unknown>> = []
     const observability = new RelayObservability(

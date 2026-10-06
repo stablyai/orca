@@ -33,7 +33,7 @@ import {
   type CodexManagedTrustGrantPlan,
   type ExpectedManagedEntry
 } from './codex-managed-trust-grant-plan'
-import { isCodexStateDbBackfillPending } from './codex-state-db'
+import { readCodexStateDbBackfillPendingState } from './codex-state-db'
 import {
   clearCodexTrustGrantCooldown,
   countCodexTrustGrantCooldowns,
@@ -294,8 +294,9 @@ export async function grantManagedCodexHookTrust(
       diagnostics.ledgerHits += 1
       return { lane: 'rpc', entries: ledgerEntries }
     }
-    if (isCodexStateDbBackfillPending(plan.runtimeHomePath)) {
-      // Why: a short trust RPC can refresh Codex's abandoned lease and strand every pane again.
+    if (readCodexStateDbBackfillPendingState(plan.runtimeHomePath) !== 'not-pending') {
+      // Why: a short trust RPC can refresh Codex's abandoned lease and strand every pane again;
+      // an unreadable index may be mid-backfill, so it takes the same fallback.
       return fallback(plan, 'retry-cached')
     }
 
