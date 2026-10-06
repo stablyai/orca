@@ -337,7 +337,12 @@ describe('context usage on journal rows', () => {
 
   it('counts a turn opening as activity, whatever frame opened it', () => {
     const onOpen = vi.fn()
-    const turn = new ClaudeOpenTurn({ sink: journal().sink, settleChildren: () => {}, onOpen })
+    const turn = new ClaudeOpenTurn({
+      sink: journal().sink,
+      settleChildren: () => {},
+      endOpenWork: () => {},
+      onOpen
+    })
     turn.open(
       { sessionId: 'claude-session', turnId: 'turn-a', startedAt: 1_000, userItemId: 'turn-a' },
       1_000

@@ -29,6 +29,8 @@ function Harness({
   settledTurns,
   turnJournal,
   workingStartedAt,
+  thinking,
+  lineYields,
   scopeKey = 'host\0worktree\0tab-a'
 }: {
   messages: readonly NativeChatMessage[]
@@ -37,6 +39,8 @@ function Harness({
   settledTurns?: NativeChatSettledTurns
   turnJournal?: NativeChatTurnJournal
   workingStartedAt?: number | null
+  thinking?: boolean
+  lineYields?: boolean
   scopeKey?: string
 }): React.JSX.Element {
   const disclosure = useMobileNativeChatTurnDisclosure({
@@ -46,6 +50,8 @@ function Harness({
     settledTurns,
     turnJournal,
     workingStartedAt,
+    thinking,
+    lineYields,
     scopeKey
   })
   return createElement('result', { disclosure })
@@ -759,5 +765,67 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     const rows = messages.map((message, index) => disclosure.resolveRow(index, message))
     expect(rows.map((row) => row.activeTurnIsWorking)).toEqual([false, false, true])
     expect(rows[0].turnStatus?.workedSeconds).toBe(4)
+  })
+})
+
+describe('the open reasoning block the live line discloses', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  const block = (id: string, state: 'running' | 'completed'): NativeChatMessage => ({
+    id,
+    role: 'reasoning',
+    blocks: [{ type: 'text', text: `${id} weighs two approaches` }],
+    timestamp: null,
+    source: 'transcript',
+    state
+  })
+  const show = (
+    messages: NativeChatMessage[],
+    props: { thinking?: boolean; lineYields?: boolean }
+  ) =>
+    act(() => {
+      const element = createElement(Harness, { messages, enabled: true, ...props })
+      if (renderer) {
+        renderer.update(element)
+      } else {
+        renderer = create(element)
+      }
+    })
+  const latest = () => renderer!.root.findByType('result').props.disclosure
+
+  it('hides only that block, and lands it open once it ends if the reader opened it live', () => {
+    const prompt = userMessage('u1')
+    show([prompt, block('r-1', 'running')], { thinking: true })
+    expect(latest().liveLine).toMatchObject({
+      reasoning: { message: { id: 'r-1' } },
+      reasoningExpanded: false
+    })
+    expect(latest().resolveRow(1, block('r-1', 'running')).reasoningIsLive).toBe(true)
+    act(() => latest().onToggleReasoning('reasoning:r-1'))
+    expect(latest().liveLine.reasoningExpanded).toBe(true)
+
+    // Closed while the turn works on: the line discloses nothing, and the row draws open.
+    show([prompt, block('r-1', 'completed')], { thinking: false })
+    expect(latest().liveLine).toMatchObject({ reasoning: null })
+    const row = latest().resolveRow(1, block('r-1', 'completed'))
+    expect(row).toMatchObject({ reasoningIsLive: false, reasoningExpanded: true })
+
+    // The next block starts collapsed.
+    show([prompt, block('r-1', 'completed'), block('r-2', 'running')], { thinking: true })
+    expect(latest().liveLine).toMatchObject({
+      reasoning: { message: { id: 'r-2' } },
+      reasoningExpanded: false
+    })
+  })
+
+  it('discloses nothing, and hides nothing, while a prompt takes the line', () => {
+    show([userMessage('u1'), block('r-1', 'running')], { thinking: true, lineYields: true })
+    expect(latest().liveLine).toBeNull()
+    expect(latest().resolveRow(1, block('r-1', 'running')).reasoningIsLive).toBe(false)
   })
 })
