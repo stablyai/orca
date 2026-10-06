@@ -1,0 +1,9 @@
+[ {
+   "description": "",
+   "devtoolsFrontendUrl": "/devtools/inspector.html?ws=127.0.0.1:9441/devtools/page/E41A08ED74C7224732F054F2E8D7A686",
+   "id": "E41A08ED74C7224732F054F2E8D7A686",
+   "title": "Orca",
+   "type": "page",
+   "url": "http://localhost:5174/",
+   "webSocketDebuggerUrl": "ws://127.0.0.1:9441/devtools/page/E41A08ED74C7224732F054F2E8D7A686"
+} ]
