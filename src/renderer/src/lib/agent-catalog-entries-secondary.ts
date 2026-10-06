@@ -189,7 +189,7 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.mirror_label', 'Mirror'),
       cmd: 'mirror',
       faviconDomain: 'reflection.ai',
-      homepageUrl: 'https://platform.reflection.ai'
+      homepageUrl: 'https://developers.reflection.ai/mirror-cli-reference'
     }
   ]
 }
