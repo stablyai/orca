@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
+import { getWorktreeGitHubIssueRepository } from '../../../../shared/worktree/github-issue-repository'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import { isWebClient, type WorktreeCardProps } from './worktree-card-model'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
@@ -51,6 +52,11 @@ export function useWorktreeCardLifecycleEffects({
     showIssue: boolean
     showLinearIssue: boolean
   }): void {
+  const { linkedIssue, linkedWorkItem } = worktree
+  const issueRepository = useMemo(
+    () => getWorktreeGitHubIssueRepository({ linkedIssue, linkedWorkItem }),
+    [linkedIssue, linkedWorkItem]
+  )
   useEffect(() => {
     if (
       !newCardStyle ||
@@ -114,13 +120,18 @@ export function useWorktreeCardLifecycleEffects({
     }
 
     const issueNumber = worktree.linkedIssue
+    const ownerRepo = issueRepository
 
     // Why: fallback poll behind activity triggers; stopped while hidden to avoid waking idle workspaces.
     return installWindowVisibilityInterval({
-      run: () => void fetchIssue(repo.path, issueNumber, { repoId: repo.id }),
+      run: () =>
+        void fetchIssue(repo.path, issueNumber, {
+          repoId: repo.id,
+          ...(ownerRepo ? { ownerRepo } : {})
+        }),
       intervalMs: 5 * 60_000
     })
-  }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
+  }, [repo, isFolder, worktree.linkedIssue, issueRepository, fetchIssue, issueCacheKey, showIssue])
 
   useEffect(() => {
     if (
@@ -135,7 +146,11 @@ export function useWorktreeCardLifecycleEffects({
     ) {
       return
     }
-    void fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+    const ownerRepo = issueRepository
+    void fetchIssue(repo.path, worktree.linkedIssue, {
+      repoId: repo.id,
+      ...(ownerRepo ? { ownerRepo } : {})
+    })
   }, [
     newCardStyle,
     hoverDetailsOpen,
@@ -143,6 +158,7 @@ export function useWorktreeCardLifecycleEffects({
     repo,
     isFolder,
     worktree.linkedIssue,
+    issueRepository,
     fetchIssue,
     issueCacheKey
   ])

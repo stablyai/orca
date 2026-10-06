@@ -3,6 +3,7 @@ import type { IssueInfo } from '../../shared/github/pull-request-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapIssueInfo } from './mappers'
 import type { LocalGitExecOptions } from './gh-utils'
+import { isValidGitHubApiRepository } from './github-api-repository-validation'
 import {
   getIssueGitHubApiRepository,
   resolveGitHubRepoExecution,
@@ -29,28 +30,28 @@ export type IssueListResult = {
  * Get a single issue by number.
  * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
  *
- * Why this path doesn't take a preference: linked-issue lookups persist a
- * number to a worktree at creation time. Routing detail lookups through the
- * live per-repo preference would silently flip an existing link to a
- * different repo after the user toggled the selector — the opposite of what
- * #1186 / the parent design doc guard against. List and create paths honor
- * preference; number-resolution stays on the heuristic.
+ * Linked URLs pin the repository; number-only legacy links retain the heuristic.
  */
 export async function getIssue(
   repoPath: string,
   issueNumber: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  repositoryOverride?: unknown
 ): Promise<IssueInfo | null> {
+  if (repositoryOverride != null && !isValidGitHubApiRepository(repositoryOverride)) {
+    return null
+  }
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
-    () => getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
+    repositoryOverride ??
+      (() => getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions)),
     connectionId,
     localGitOptions
   )
   // Why: a connection-backed request has no local cwd, so the non-GitHub
   // fallback below would let gh target its default repository. Refuse instead.
-  if (connectionId && !ownerRepo) {
+  if ((connectionId || repositoryOverride != null) && !ownerRepo) {
     return null
   }
   await acquire()

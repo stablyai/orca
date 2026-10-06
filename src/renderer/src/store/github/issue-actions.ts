@@ -2,8 +2,10 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { sourceScopedRepoCacheKey } from './cache-identity'
+import { issueCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import { isFresh, withBoundedCacheEntry } from './cache-policy'
 import { debouncedSaveCache } from './cache-persistence'
 import { inflightIssueRequests } from './request-coordination'
@@ -25,7 +27,7 @@ export const createIssueActions = (
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
-      String(number),
+      issueCacheSuffix(number, options?.ownerRepo),
       requestSettings,
       repo?.connectionId,
       repo?.executionHostId,
@@ -56,15 +58,30 @@ export const createIssueActions = (
             ? await callRuntimeRpc<IssueInfo | null>(
                 { kind: 'environment', environmentId: requestContext.target.environmentId },
                 'github.issue',
-                { repo: requestContext.target.runtimeRepoId, number },
+                {
+                  repo: requestContext.target.runtimeRepoId,
+                  number,
+                  ...(options?.ownerRepo ? { ownerRepo: options.ownerRepo } : {})
+                },
                 { timeoutMs: 30_000 }
               )
             : await window.api.gh.issue({
                 repoPath,
                 repoId,
                 number,
-                sourceContext: options?.sourceContext
+                sourceContext: options?.sourceContext,
+                ...(options?.ownerRepo ? { ownerRepo: options.ownerRepo } : {})
               })
+        if (issue && options?.ownerRepo) {
+          const link = parseGitHubIssueOrPRLink(issue.url)
+          if (
+            link?.type !== 'issue' ||
+            link.number !== number ||
+            githubRepoIdentityKey(link.slug) !== githubRepoIdentityKey(options.ownerRepo)
+          ) {
+            throw new Error('Issue lookup returned a different repository')
+          }
+        }
         set((s) => ({
           issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
             data: issue,

@@ -54,6 +54,7 @@ export type GithubWorkItemApi = {
     repoId?: string
     sourceContext?: TaskSourceContext | null
     number: number
+    ownerRepo?: GitHubOwnerRepo
   }) => Promise<IssueInfo | null>
   workItem: (args: {
     repoPath: string

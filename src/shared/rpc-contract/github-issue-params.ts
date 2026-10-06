@@ -4,7 +4,8 @@ import { requiredString } from './rpc-param-primitives'
 import { IssueUpdate } from './github-issue-update-params'
 
 export const Issue = RepoSelector.extend({
-  number: z.number().int().positive()
+  number: z.number().int().positive(),
+  ownerRepo: SlugRepo.optional()
 })
 
 export const CreateIssue = RepoSelector.extend({
