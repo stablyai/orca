@@ -18587,7 +18587,8 @@
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Close Others",
-          "closeTabsToLeft": "Close Tabs To The Left"
+          "closeTabsToLeft": "Close Tabs To The Left",
+          "copyGithubPath": "Copy Github Path"
         }
       }
     },
