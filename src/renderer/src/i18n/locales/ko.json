@@ -8532,12 +8532,6 @@
           "4808966c41": "SSH 대상 제거"
         },
         "SshTargetForm": {
-          "httpProxyUrl": "HTTP 프록시",
-          "httpProxyUrlPlaceholder": "http://proxy.example.com:8080",
-          "httpProxyUrlHelp": "이 호스트의 터미널에 HTTP_PROXY/HTTPS_PROXY로 적용됩니다. 이 머신이 아닌 호스트 자체에서 접근 가능해야 합니다. http, https, socks, socks4, socks5 URL을 지원합니다.",
-          "httpProxyBypassRules": "프록시 제외 규칙",
-          "httpProxyBypassRulesPlaceholder": "localhost, 127.0.0.1, *.internal",
-          "httpProxyBypassRulesHelp": "선택 사항. 호스트는 쉼표, 세미콜론 또는 줄바꿈으로 구분합니다.",
           "fea9cb402e": "취소",
           "1b19b00e93": "제한된 시간 초과는 60초에서 7일 사이여야 합니다.",
           "137e88ce8d": "Orca가 이 호스트에서 연결 해제된 뒤에도 원격 터미널은 계속 실행됩니다.",

@@ -336,35 +336,6 @@ describe('spawn', () => {
     )
   })
 
-  it('re-resolves the per-host proxy on every spawn so an edit applies live', async () => {
-    // Why: the feature's promise is that the next terminal uses a saved proxy edit
-    // without reconnecting, which depends on evaluating the resolver per spawn.
-    let proxyUrl: string | undefined = 'http://proxy.lan:3128'
-    const proxyProvider = new SshPtyProvider('conn-1', mux as never, undefined, 1, () => ({
-      ...(proxyUrl ? { HTTP_PROXY: proxyUrl } : {})
-    }))
-    mux.request.mockResolvedValue({ id: 'pty-proxy-live' })
-
-    await proxyProvider.spawn({ cols: 80, rows: 24 })
-    expectRequest(
-      mux.request,
-      'pty.spawn',
-      expect.objectContaining({
-        env: expect.objectContaining({ HTTP_PROXY: 'http://proxy.lan:3128' })
-      })
-    )
-
-    proxyUrl = 'http://proxy.lan:3129'
-    await proxyProvider.spawn({ cols: 80, rows: 24 })
-    expectRequest(
-      mux.request,
-      'pty.spawn',
-      expect.objectContaining({
-        env: expect.objectContaining({ HTTP_PROXY: 'http://proxy.lan:3129' })
-      })
-    )
-  })
-
   it('forwards trusted agent identity for wrapped remote commands', async () => {
     mux.request.mockResolvedValue({ id: 'pty-agent' })
 

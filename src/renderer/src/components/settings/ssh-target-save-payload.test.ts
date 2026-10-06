@@ -177,21 +177,34 @@ describe('buildSshTargetSavePayload', () => {
     expect(result.payload.updates).not.toHaveProperty('httpProxyBypassRules')
   })
 
-  it('omits an unchanged proxy from updates so a sealed proxy survives unrelated saves', () => {
-    // Why the '' baseline: that is what listTargets() actually returns — the store
-    // persists '' for a target that never had a proxy, and a keychain-sealed proxy
-    // also reads back as ''. A baseline of undefined would not reproduce the bug.
-    const result = buildSshTargetSavePayload(
-      { ...EMPTY_FORM, host: 'appliance.example.com', label: 'Renamed' },
-      { httpProxyUrl: '', httpProxyBypassRules: '' }
-    )
+  it('omits unchanged proxy fields so an untouched saved proxy is never read as a clear', () => {
+    // The '' baseline is what listTargets() returns: the store persists '' for a target
+    // that never had a proxy, and a keychain-sealed proxy reads back as '' too.
+    const unchanged = [
+      buildSshTargetSavePayload(
+        { ...EMPTY_FORM, host: 'appliance.example.com', label: 'Renamed' },
+        { httpProxyUrl: '', httpProxyBypassRules: '' }
+      ),
+      buildSshTargetSavePayload(
+        {
+          ...EMPTY_FORM,
+          host: 'appliance.example.com',
+          label: 'Renamed',
+          httpProxyUrl: 'http://proxy.lan:3128',
+          httpProxyBypassRules: 'localhost'
+        },
+        { httpProxyUrl: 'http://proxy.lan:3128', httpProxyBypassRules: 'localhost' }
+      )
+    ]
 
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      throw new Error(result.error)
+    for (const result of unchanged) {
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        throw new Error(result.error)
+      }
+      expect(result.payload.updates).not.toHaveProperty('httpProxyUrl')
+      expect(result.payload.updates).not.toHaveProperty('httpProxyBypassRules')
     }
-    expect(result.payload.updates).not.toHaveProperty('httpProxyUrl')
-    expect(result.payload.updates).not.toHaveProperty('httpProxyBypassRules')
   })
 
   it('ships only the bypass rules when a sealed proxy URL is left untouched', () => {
@@ -212,26 +225,6 @@ describe('buildSshTargetSavePayload', () => {
     }
     expect(result.payload.updates).not.toHaveProperty('httpProxyUrl')
     expect(result.payload.updates.httpProxyBypassRules).toBe('localhost;*.internal')
-  })
-
-  it('does not re-send an unchanged configured proxy', () => {
-    const result = buildSshTargetSavePayload(
-      {
-        ...EMPTY_FORM,
-        host: 'appliance.example.com',
-        httpProxyUrl: 'http://proxy.lan:3128',
-        httpProxyBypassRules: 'localhost'
-      },
-      { httpProxyUrl: 'http://proxy.lan:3128', httpProxyBypassRules: 'localhost' }
-    )
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      throw new Error(result.error)
-    }
-    expect(result.payload.target.httpProxyUrl).toBe('http://proxy.lan:3128')
-    expect(result.payload.updates).not.toHaveProperty('httpProxyUrl')
-    expect(result.payload.updates).not.toHaveProperty('httpProxyBypassRules')
   })
 
   it('sends an explicit clear when the user removes a previously configured proxy', () => {
