@@ -126,6 +126,15 @@ proxy URL such as `https://orca.example.com/runtime` (`http(s)` is normalized
 to `ws(s)`). Wildcard addresses such as `*`, `0.0.0.0`, and `::` cannot be
 advertised.
 
+Use `--bind <addr>` to pin the listener to one address instead of the default
+all-interfaces bind. `--bind 127.0.0.1` together with `--pairing-address` is
+the recommended shape when the server is reached through an SSH port-forward,
+an overlay network, or a reverse proxy: the listener stays local and the
+tunnel is the only way in. The value is a literal IP address (`localhost`
+maps to `127.0.0.1`); `0.0.0.0` asks for every interface. Without `--bind`
+the bind behavior is unchanged. A non-wildcard `--bind` cannot be combined
+with `--mobile-pairing`, which needs an all-interfaces bind for QR pairing.
+
 The command writes one ready block to stdout after the listener bind and
 pairing initialization complete:
 
