@@ -35,3 +35,25 @@ export const getUsagePercentageDisplayEntry = createLocalizedCatalog(() => ({
     ...translateSearchKeyword('auto.components.settings.appearance.search.896eb53fd4', 'status bar')
   ]
 }))
+
+export const getStatusBarUsageWindowsEntry = createLocalizedCatalog(() => ({
+  title: translate(
+    'auto.components.settings.appearance.search.statusBarUsageWindowsTitle',
+    'Status-bar usage windows'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.search.statusBarUsageWindowsDescription',
+    'Pick which limits each provider shows on the status bar. Pick none to keep the default summary.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('auto.components.settings.appearance.search.00a028f25f', 'usage'),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.896eb53fd4',
+      'status bar'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.statusBarUsageWindowsLimits',
+      'limits'
+    )
+  ]
+}))

@@ -24,6 +24,21 @@ const mocks = vi.hoisted(() => ({
     settingsSearchQuery: 'automations',
     statusBarItems: [],
     toggleStatusBarItem: vi.fn(),
+    // The usage-window picker lists providers from here; empty keeps it on its no-data line.
+    rateLimits: {
+      claude: null,
+      codex: null,
+      gemini: null,
+      opencodeGo: null,
+      kimi: null,
+      antigravity: null,
+      minimax: null,
+      grok: null,
+      cursor: null,
+      zcode: null
+    },
+    statusBarUsageWindows: {},
+    setStatusBarUsageWindows: vi.fn(),
     usagePercentageDisplay: 'used' as 'used' | 'remaining',
     setUsagePercentageDisplay: vi.fn(),
     recordFeatureInteraction: vi.fn(),

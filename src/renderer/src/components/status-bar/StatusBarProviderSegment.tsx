@@ -21,7 +21,14 @@ import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterP
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
+import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { isCursorUsageBucket } from '../../../../shared/cursor-usage-buckets'
+import type { StatusBarUsageWindowKey } from '../../../../shared/status-bar-usage-windows'
+import {
+  formatPickedUsageResets,
+  selectPickedUsageWindows,
+  type PickedUsageWindow
+} from './status-bar-provider-usage'
 
 function MiniBar({
   usedPct,
@@ -80,14 +87,35 @@ export function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX
 export type UsageTone = 'urgent' | 'warning' | 'normal'
 
 /** Urgency by consumption, matching the usage bar colors, whatever % display the user chose. */
-export function getUsageTone(p: ProviderRateLimits): UsageTone {
-  const tightest = getTightestUsageSection(p)
-  const used = tightest ? clampUsedPercent(tightest.window.usedPercent) : 0
+export function getUsageTone(
+  p: ProviderRateLimits,
+  pickedWindows?: readonly StatusBarUsageWindowKey[]
+): UsageTone {
+  const used = getFooterUsedPercent(p, pickedWindows) ?? 0
   return used >= USAGE_URGENT_PERCENT
     ? 'urgent'
     : used >= USAGE_WARNING_PERCENT
       ? 'warning'
       : 'normal'
+}
+
+function maxPickedUsedPercent(picks: readonly PickedUsageWindow[]): number | null {
+  return picks.length > 0
+    ? Math.max(...picks.map((pick) => clampUsedPercent(pick.window.usedPercent)))
+    : null
+}
+
+/** The consumption the footer summarizes: the user's pinned windows when set, else the tightest. */
+function getFooterUsedPercent(
+  p: ProviderRateLimits,
+  pickedWindows?: readonly StatusBarUsageWindowKey[]
+): number | null {
+  const picked = maxPickedUsedPercent(selectPickedUsageWindows(p, pickedWindows))
+  if (picked !== null) {
+    return picked
+  }
+  const tightest = getTightestUsageSection(p)
+  return tightest ? clampUsedPercent(tightest.window.usedPercent) : null
 }
 
 /**
@@ -96,12 +124,14 @@ export function getUsageTone(p: ProviderRateLimits): UsageTone {
  */
 export function UsageOverflowChip({
   hidden,
-  display
+  display,
+  pickedWindowsFor
 }: {
   hidden: readonly ProviderRateLimits[]
   display: UsagePercentageDisplay
+  pickedWindowsFor?: (p: ProviderRateLimits) => readonly StatusBarUsageWindowKey[] | undefined
 }): React.JSX.Element {
-  const tones = hidden.map(getUsageTone)
+  const tones = hidden.map((p) => getUsageTone(p, pickedWindowsFor?.(p)))
   const tone = tones.includes('urgent')
     ? 'urgent'
     : tones.includes('warning')
@@ -109,11 +139,9 @@ export function UsageOverflowChip({
       : 'normal'
   const names = hidden
     .map((p) => {
-      const tightest = getTightestUsageSection(p)
+      const used = getFooterUsedPercent(p, pickedWindowsFor?.(p))
       const name = getProviderDisplayName(p.provider)
-      return tightest
-        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display)}`
-        : name
+      return used !== null ? `${name} ${formatUsagePercentageLabel(used, display)}` : name
     })
     .join(', ')
   return (
@@ -302,16 +330,46 @@ function formatCompactExtraUsage(balance: ProviderRateLimits['extraUsage']): str
       })
 }
 
+function PickedProviderUsage({
+  picks,
+  display
+}: {
+  picks: readonly PickedUsageWindow[]
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
+  const now = useResetCountdownClock(picks.map((pick) => pick.window.resetsAt))
+  return (
+    <span
+      className="inline-flex items-center gap-1.5"
+      title={formatPickedUsageResets(picks, now) || undefined}
+    >
+      {picks.map((pick, index) => {
+        const startsGroup = pick.group !== null && pick.group !== picks[index - 1]?.group
+        return (
+          <React.Fragment key={pick.key}>
+            {index > 0 ? <span className="text-muted-foreground">·</span> : null}
+            {startsGroup ? <span>{pick.group}</span> : null}
+            <WindowLabel w={pick.window} label={pick.label} display={display} />
+          </React.Fragment>
+        )
+      })}
+    </span>
+  )
+}
+
 export function ProviderSegment({
   p,
   compact,
   display,
-  mode = 'verbose'
+  mode = 'verbose',
+  pickedWindows
 }: {
   p: ProviderRateLimits | null
   compact: boolean
   display: UsagePercentageDisplay
   mode?: StatusBarUsageMode
+  /** Windows the user pinned for this provider; they replace the default summary in every mode. */
+  pickedWindows?: readonly StatusBarUsageWindowKey[]
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
@@ -363,11 +421,20 @@ export function ProviderSegment({
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error' && !calm
   const showBalance = isExtraUsageActive(p)
+  const picks = selectPickedUsageWindows(p, pickedWindows)
+  const pickedMaxUsed = maxPickedUsedPercent(picks)
 
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {mode === 'verbose' ? (
+      {pickedMaxUsed !== null ? (
+        <>
+          {mode === 'verbose' && !compact ? (
+            <MiniBar usedPct={pickedMaxUsed} display={display} />
+          ) : null}
+          <PickedProviderUsage picks={picks} display={display} />
+        </>
+      ) : mode === 'verbose' ? (
         <>
           {tightest && !compact ? (
             <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />

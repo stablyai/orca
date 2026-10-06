@@ -27,6 +27,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   )
   const statusBarUsageMode = normalizeStatusBarUsageMode(useAppStore((s) => s.statusBarUsageMode))
   const setStatusBarUsageMode = useAppStore((s) => s.setStatusBarUsageMode)
+  const statusBarUsageWindows = useAppStore((s) => s.statusBarUsageWindows)
   const [usageMenuOpen, setUsageMenuOpen] = useState(false)
   const usageMenuFocusHandoff = useStatusBarMenuFocusHandoff()
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
@@ -285,6 +286,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showSsh,
     statusBarItems,
     statusBarUsageMode,
+    statusBarUsageWindows,
     toggleStatusBarItem,
     usageMenuFocusHandoff,
     usageMenuOpen,

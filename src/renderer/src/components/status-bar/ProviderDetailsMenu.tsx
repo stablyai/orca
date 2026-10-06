@@ -46,6 +46,7 @@ export function ProviderDetailsMenu({
   const usagePercentageDisplay = normalizeUsagePercentageDisplay(
     useAppStore((s) => s.usagePercentageDisplay)
   )
+  const pickedWindows = useAppStore((s) => s.statusBarUsageWindows[provider.provider])
   const menuFocusHandoff = useStatusBarMenuFocusHandoff()
 
   const handleOpenChange = (nextOpen: boolean): void => {
@@ -104,7 +105,12 @@ export function ProviderDetailsMenu({
           {iconOnly ? (
             <ProviderLetterBadge p={provider} />
           ) : (
-            <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
+            <ProviderSegment
+              p={provider}
+              compact={compact}
+              display={usagePercentageDisplay}
+              pickedWindows={pickedWindows}
+            />
           )}
         </button>
       </DropdownMenuTrigger>
