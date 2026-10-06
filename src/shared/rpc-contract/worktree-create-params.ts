@@ -6,6 +6,7 @@ import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { sleepingAgentLaunchConfigSchema } from '../workspace-session-sleeping-agents'
 import { isTuiAgent } from '../tui-agent-config'
 import { LaunchSourceParam } from './launch-source-param'
+import { LaunchPreferences } from './agent-session-params'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -111,6 +112,8 @@ export const WorktreeCreate = z
     // workspaces execute in a different shell than the client process.
     startupAgent: OptionalTuiAgent,
     startupPrompt: OptionalString,
+    // Per-launch model/effort for `startupAgent`; the host validates them against its catalog.
+    startupLaunchPreferences: LaunchPreferences.omit({ mode: true }).optional(),
     // Which surface asked for the agent the host launches from `startupAgent` or `startupDraft`.
     launchSource: LaunchSourceParam.optional(),
     // Why: task-driven mobile creates need desktop parity: the host chooses
@@ -144,6 +147,12 @@ export const WorktreeCreate = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'startupPrompt requires startupAgent'
+      })
+    }
+    if (params.startupLaunchPreferences !== undefined && params.startupAgent === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'startupLaunchPreferences requires startupAgent'
       })
     }
   })

@@ -134,6 +134,10 @@ export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-comman
 // status.worktreeCreateIdempotency carries the optional host retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
+// Why: older hosts strip worktree.create's startupLaunchPreferences, so the CLI sends
+// --model/--effort only to a host advertising this instead of launching on the default model.
+export const WORKTREE_CREATE_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY =
+  'worktree.create-launch-preferences.v1' as const
 // Scope of the claim: a hook that RUNS and fails cannot delete the checkout. It does not promise
 // the hook was found — an SSH host whose orca.yaml cannot be read answers "no hook" and the removal
 // proceeds, because a failed read is indistinguishable from an absent file across the relay
@@ -384,6 +388,7 @@ export const RUNTIME_CAPABILITIES = [
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  WORKTREE_CREATE_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,

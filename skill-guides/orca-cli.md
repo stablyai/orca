@@ -40,7 +40,7 @@ Use `--no-parent` and omit `--base-branch` for independent top-level handoffs un
 
 Custom Codex model/effort handoff:
 
-`worktree create --agent codex` uses Orca's configured launcher; it has no per-call model/effort flags or arbitrary Codex argument forwarding. For a request such as `gpt-6-astra xhigh`, create the worktree, launch Codex through `terminal create --command` with `--model` and `-c model_reasoning_effort=...`, wait for TUI readiness, then send the prompt. For a full handoff, stop after confirming the send was accepted.
+`worktree create --agent codex --model <id> --effort <level>` launches with that model and effort for this one launch (`--effort` requires `--model`; the runtime refuses a value the agent cannot apply, and an older runtime refuses both flags with `incompatible_runtime`). There is no arbitrary Codex argument forwarding. For other Codex arguments, or on an older runtime, create the worktree, launch Codex through `terminal create --command` with `--model` and `-c model_reasoning_effort=...`, wait for TUI readiness, then send the prompt. For a full handoff, stop after confirming the send was accepted.
 
 **Extra first terminal:** when no repo default-terminal configuration supplies a primary terminal, bare `worktree create` (no `--agent`) opens a fallback shell before the later `terminal create --command ...` adds the agent. Configured default tabs are materialized instead and may run real commands. Prefer `--agent` whenever the built-in launcher is enough. When custom argv forces the two-step path, close a prior terminal only after `terminal list` or `terminal show` confirms it is an unused shell.
 

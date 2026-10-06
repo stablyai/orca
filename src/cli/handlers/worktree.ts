@@ -39,6 +39,7 @@ import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
 import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
 import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-context'
+import { getOptionalStartupLaunchPreferences } from './worktree-create-launch-preferences'
 
 function getEnvParentWorkspace(): string | undefined {
   const workspaceId = process.env.ORCA_WORKSPACE_ID
@@ -180,6 +181,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const explicitParentWorktree = explicitParent.parentWorktree
     const explicitParentWorkspace = explicitParent.parentWorkspace
     const startupAgent = getOptionalStartupAgent(flags)
+    const startupLaunchPreferences = await getOptionalStartupLaunchPreferences(
+      flags,
+      startupAgent,
+      client
+    )
     const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
     const envParentWorkspace =
@@ -233,6 +239,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         ? {
             startupAgent,
             startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? '',
+            ...(startupLaunchPreferences ? { startupLaunchPreferences } : {}),
             launchSource: 'cli'
           }
         : {})

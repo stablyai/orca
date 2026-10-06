@@ -1,6 +1,10 @@
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { InvalidArgumentError } from '../core'
+import { resolveWorkerLaunchPreferences } from './orchestration/worker/worker-launch-preferences'
 import type { WorktreeCreate } from './worktree-create-schemas'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
@@ -9,6 +13,23 @@ type CreateProvenance = Pick<
   ManagedWorktreeCreateArgs,
   'automationProvenance' | 'cliProvenance' | 'creatorProvenance'
 >
+
+/** The same catalog check worker-start runs, so a value the agent cannot apply fails the create
+ *  before a checkout exists instead of launching on a setting it never took. */
+function resolveStartupLaunchPreferences(
+  agent: TuiAgent,
+  requested: NonNullable<WorktreeCreateParams['startupLaunchPreferences']>
+): Pick<ManagedWorktreeCreateArgs, 'startupLaunchPreferences'> {
+  try {
+    const { preferences } = resolveWorkerLaunchPreferences({ agent, ...requested })
+    return preferences ? { startupLaunchPreferences: preferences } : {}
+  } catch (error) {
+    if (error instanceof OrchestrationError) {
+      throw new InvalidArgumentError(error.message)
+    }
+    throw error
+  }
+}
 
 /** Wire params → runtime create args. Kept out of the method table so the mapping can grow with
  *  the schema without the table becoming unreadable. */
@@ -78,6 +99,9 @@ export function buildManagedWorktreeCreateArgs(
       : undefined,
     ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
     ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
+    ...(params.startupAgent && params.startupLaunchPreferences
+      ? resolveStartupLaunchPreferences(params.startupAgent, params.startupLaunchPreferences)
+      : {}),
     ...(params.launchSource ? { startupLaunchSource: params.launchSource } : {}),
     startupDraft: params.startupDraft,
     lineage: {

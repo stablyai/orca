@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { WorktreeCreate } from './worktree-create-schemas'
+import { InvalidArgumentError } from '../core'
 
 const PROVENANCE = {
   automationProvenance: undefined,
@@ -53,5 +54,46 @@ describe('buildManagedWorktreeCreateArgs', () => {
         parentWorkspaceOrigin: 'manual'
       }).lineage
     ).toMatchObject({ parentWorkspaceOrigin: 'manual' })
+  })
+
+  it('forwards per-launch model and effort for the startup agent', () => {
+    expect(
+      build({
+        repo: 'id:repo-1',
+        name: 'task',
+        startupAgent: 'codex',
+        startupLaunchPreferences: { model: 'gpt-5.6-sol', effort: 'high' }
+      })
+    ).toMatchObject({
+      startupAgent: 'codex',
+      startupLaunchPreferences: { model: 'gpt-5.6-sol', effort: 'high' }
+    })
+    expect(build({ repo: 'id:repo-1', name: 'task', startupAgent: 'codex' })).not.toHaveProperty(
+      'startupLaunchPreferences'
+    )
+  })
+
+  it('refuses an effort the startup agent model does not offer', () => {
+    // Why: the same catalog check worker-start runs, so a typo fails before a checkout exists
+    // instead of launching the agent on a setting it never applied.
+    const refused = () =>
+      build({
+        repo: 'id:repo-1',
+        name: 'task',
+        startupAgent: 'codex',
+        startupLaunchPreferences: { model: 'gpt-5.5', effort: 'max' }
+      })
+    expect(refused).toThrow(InvalidArgumentError)
+    expect(refused).toThrow('Agent codex model gpt-5.5 does not support effort max.')
+  })
+
+  it('requires a startup agent for launch preferences', () => {
+    expect(
+      WorktreeCreate.safeParse({
+        repo: 'id:repo-1',
+        name: 'task',
+        startupLaunchPreferences: { model: 'gpt-5.6-sol' }
+      }).success
+    ).toBe(false)
   })
 })

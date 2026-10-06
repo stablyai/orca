@@ -201,12 +201,20 @@ describe('a structured launch that creates its own worktree', () => {
       target: {
         kind: 'create-worktree',
         // Exactly what mobile sends `worktree.create` today.
-        create: { repo: 'id:repo-1', name: 'task', startupAgent: 'claude', startupDraft: 'url' }
+        create: {
+          repo: 'id:repo-1',
+          name: 'task',
+          startupAgent: 'claude',
+          startupDraft: 'url',
+          startupLaunchPreferences: { model: 'opus' }
+        }
       }
     })
     const passed = h.createWorktree.mock.calls[0]?.[0]
     expect(passed?.create).not.toHaveProperty('startupAgent')
     expect(passed?.create).not.toHaveProperty('startupDraft')
+    // The launch carries its own model and effort; a create's copy would be a second answer.
+    expect(passed?.create).not.toHaveProperty('startupLaunchPreferences')
     expect(passed?.create).toMatchObject({ repo: 'id:repo-1', name: 'task' })
   })
 })
