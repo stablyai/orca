@@ -2,7 +2,7 @@ import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useLayoutEffect, useRef } from 'react'
-import { ImageOff } from 'lucide-react'
+import { ImageOff, PenLine } from 'lucide-react'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
@@ -20,6 +20,8 @@ import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPre
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
+import { useNativeChatComposerCollapsed } from './native-chat-composer-collapse-store'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 export type NativeChatComposerFieldProps = {
   /** Pane identity published to the drop pipeline so a native file drop lands
@@ -146,6 +148,8 @@ export function NativeChatComposerField({
   goalMode
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
+  const [collapsed, setCollapsed] = useNativeChatComposerCollapsed(draftScopeKey)
+  const showLabel = translate('components.native-chat.composer.expand', 'Show message box')
   // Value the IME started from, and whether a programmatic clear was dropped on top of it.
   const compositionBaseRef = useRef('')
   const droppedDraftClearRef = useRef(false)
@@ -180,8 +184,37 @@ export function NativeChatComposerField({
 
   return (
     <div className="shrink-0 bg-chat-canvas">
-      {/* Extra bottom padding keeps the input box off the window rim. */}
-      <div className="px-3 pt-2 pb-4 sm:px-4">
+      {collapsed ? (
+        <div className="relative h-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* Same pill treatment as the transcript's Jump to latest button. */}
+              <button
+                type="button"
+                aria-label={showLabel}
+                onClick={() => setCollapsed(false)}
+                className="absolute right-4 bottom-3 z-10 flex size-8 items-center justify-center rounded-full border border-border bg-card/90 text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <PenLine className="size-4" />
+                {draft.trim() !== '' || imageAttachments.length > 0 ? (
+                  // Why: a hidden draft is easy to forget; the dot says one is waiting.
+                  <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-primary" />
+                ) : null}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left" sideOffset={6}>
+              {showLabel}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      ) : null}
+      {/* Why: collapsed hides the box visually but keeps the editor mounted and focusable, so
+          the draft and IME survive and any focus that lands in it (typing redirected from the
+          transcript, paste, dictation, a returned message) brings it back. */}
+      <div
+        className={cn('px-3 pt-2 pb-4 sm:px-4', collapsed && 'sr-only')}
+        onFocusCapture={collapsed ? () => setCollapsed(false) : undefined}
+      >
         <div className="relative mx-auto w-full max-w-(--chat-content-max-width)">
           {autocomplete.mode === 'slash' ? (
             <NativeChatPickerMenu
@@ -311,6 +344,13 @@ export function NativeChatComposerField({
                 contextUsage={contextUsage}
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
                 onExitGoalMode={goalMode?.active ? goalMode.exit : undefined}
+                onCollapse={(event) => {
+                  setCollapsed(true)
+                  // Why: hand focus to the chat root, whose typing redirect brings the box back.
+                  event.currentTarget
+                    .closest<HTMLElement>('[data-native-chat-root="true"]')
+                    ?.focus({ preventScroll: true })
+                }}
               />
             </div>
           </div>

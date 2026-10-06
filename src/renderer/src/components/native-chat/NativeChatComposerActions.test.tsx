@@ -165,4 +165,29 @@ describe('NativeChatComposerActions', () => {
     expect(screen.getByRole('img', { name: explanation })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(false)
   })
+
+  it('offers a collapse button only when the composer can collapse', () => {
+    const onCollapse = vi.fn()
+    const props = {
+      attachDisabled: false,
+      dictationDisabled: false,
+      sendDisabled: false,
+      isWorking: false,
+      isDictating: false,
+      isDictationHoldMode: false,
+      onAttach: vi.fn(),
+      onDictationToggle: vi.fn(),
+      onDictationHoldStart: vi.fn(),
+      onDictationHoldEnd: vi.fn(),
+      onSend: vi.fn(),
+      sessionOptionsSurface: null,
+      sessionOptionsSnapshot: []
+    }
+    const { rerender } = render(<NativeChatComposerActions {...props} />)
+    expect(screen.queryByRole('button', { name: 'Hide message box' })).toBeNull()
+
+    rerender(<NativeChatComposerActions {...props} onCollapse={onCollapse} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Hide message box' }))
+    expect(onCollapse).toHaveBeenCalledOnce()
+  })
 })

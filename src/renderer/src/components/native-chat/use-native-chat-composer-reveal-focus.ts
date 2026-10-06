@@ -86,6 +86,11 @@ export function useNativeChatComposerRevealFocus({
         finish()
         return
       }
+      // Why: focusing a collapsed composer expands it; a reveal is not the user asking for that.
+      if (composerRef.current?.isCollapsed?.() === true) {
+        finish()
+        return
+      }
       composerRef.current?.focus()
       attempts += 1
       if (attempts < REVEAL_FOCUS_FRAMES) {

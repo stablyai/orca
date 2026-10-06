@@ -112,4 +112,6 @@ export type NativeChatComposerHandle = {
   pasteFromClipboard: () => void
   /** Whether a node is inside the composer's own input, not merely the chat pane. */
   contains: (node: Node | null) => boolean
+  /** The user collapsed the message box; automatic focus must leave it collapsed. */
+  isCollapsed?: () => boolean
 }
