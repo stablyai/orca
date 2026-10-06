@@ -197,12 +197,19 @@ describe('WorktreeOpenInMenu', () => {
   })
 
   it('keeps a runtime-owned workspace local-only when no runtime is focused', async () => {
-    const [entry] = getWorktreeOpenInEntries([], 'Finder')
+    const [vsCode, entry] = getWorktreeOpenInEntries(
+      [{ id: 'vscode', label: 'VS Code', command: 'code' }],
+      'Finder'
+    )
 
     expect(getOpenInEntryAvailability(entry, mockState.settings, null, 'runtime-1')).toEqual({
       disabled: true,
       metadata: 'Local only'
     })
+    // Why: an unresolved host arrives as a runtime owner, never as a Remote SSH target.
+    expect(
+      getOpenInEntryAvailability(vsCode, mockState.settings, null, 'unresolved-owner')
+    ).toEqual({ disabled: true, metadata: 'Local only' })
     await openWorktreePath({
       target: 'file-manager',
       worktreePath: '/tmp/workspace',
