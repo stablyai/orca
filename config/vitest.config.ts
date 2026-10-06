@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { defaultExclude, defineConfig } from 'vitest/config'
 import { UNIT_INCLUDE, UNIT_EXCLUDE } from './scripts/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
+import RuntimeSequencer from './scripts/vitest-runtime-sequencer.mjs'
 import { NODE_RUNTIME_INCLUDE } from './scripts/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 
@@ -20,6 +21,7 @@ const transforms = {
 }
 const testOptions = {
   environment: 'node',
+  clearMocks: false,
   env: { ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
@@ -39,6 +41,7 @@ const testOptions = {
 }
 const projects = [
   {
+    extends: false,
     ...transforms,
     test: {
       ...testOptions,
@@ -49,6 +52,7 @@ const projects = [
     }
   },
   {
+    extends: false,
     ...transforms,
     test: {
       ...testOptions,
@@ -65,9 +69,9 @@ export default defineConfig({
   ...transforms,
   test: {
     ...testOptions,
+    sequence: { sequencer: balancedShards ? TimingSequencer : RuntimeSequencer },
     ...(balancedShards
       ? {
-          sequence: { sequencer: TimingSequencer },
           reporters: ['default', resolve('config/scripts/ci-unit-timing-reporter.mjs')]
         }
       : {}),

@@ -134,6 +134,7 @@ export function loadInitialWebSessionTabs({
           frames: applicable.map((snapshot, index) => ({
             environmentId,
             worktreeId: snapshot.worktree,
+            snapshot,
             decision: decisions[index]!,
             expectedEnvironmentConnectionGeneration,
             expectedEnvironmentPairingRevision,

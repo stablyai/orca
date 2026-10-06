@@ -1,8 +1,8 @@
 // What became of the offers an action spent, kept for the surfaces that must still name them.
 //
-// The toast that reports a chat Orca could not carry on is gone in seconds and the reattach spends
-// the offer, so without this record nothing durable would point at the chat the user has to
-// continue by hand. The capsule holds the record; this decides what goes in and when it leaves.
+// The reattach spends the offer, so this record is what the status bar and the resume dialog list,
+// with a retry, for a chat Orca could not carry on. The capsule holds the record; this decides what
+// goes in and when it leaves.
 //
 // A record ends when the chat's agent is started again outside a resume action — the host retires
 // it at that start, with the offer — or by a successful retry, or a dismissal.

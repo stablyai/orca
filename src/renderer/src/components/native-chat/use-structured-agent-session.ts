@@ -13,10 +13,7 @@ import {
   supportsStructuredAgentSessionPromptCancel,
   supportsStructuredAgentSessionQuestionAnswers
 } from '@/runtime/structured-agent-session-client'
-import {
-  useStructuredAgentSessionHostQueuesMessagesState,
-  useStructuredAgentSessionHostStopsConversation
-} from '@/runtime/structured-agent-session-host-capability'
+import { useStructuredAgentSessionHostQueuesMessagesState } from '@/runtime/structured-agent-session-host-capability'
 import { hasUnsentStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox-stop-withdrawal'
 import {
   legacyAgentSessionSelectedOptionId,
@@ -28,6 +25,7 @@ import {
 } from './structured-agent-session-message-projection'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
+import { useStructuredAgentSessionStop } from './use-structured-agent-session-stop'
 import { useStructuredAgentSessionTransport } from './use-structured-agent-session-transport'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
@@ -38,6 +36,7 @@ import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-
 import { outboxOutsideQueuedCards } from './structured-agent-session-queued-cards'
 import { structuredAgentSessionStartFailureFacts } from './structured-agent-session-delivery-notices'
 import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
+import { structuredAgentSessionNewSendsQueue } from '../../../../shared/structured-agent-session-outbox-delivery'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
 import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat-cut-turn-notice'
 import { useStructuredAgentSessionRewind } from './use-native-chat-rewind'
@@ -61,12 +60,15 @@ export function useStructuredAgentSession(args: {
   composerScopeKey?: string
   /** The chat-wide "queue follow-ups" setting; off keeps mid-turn sends immediate. */
   queueFollowUps?: boolean
+  /** The host says a person's Stop is still ending this session's work. */
+  hostStopping?: boolean
   /** The host's rewind latch and what follows a message returned by a rewind. */
   rewind?: NativeChatRewindHost
 }) {
   const {
     agent,
     composerScopeKey,
+    hostStopping = false,
     isVisible,
     launch,
     providerStarting = false,
@@ -114,14 +116,20 @@ export function useStructuredAgentSession(args: {
     mutate,
     ...(launch ? { launch } : {})
   })
-  // Only a capable host may see `delivery` or the queuedMessage RPCs; against
-  // anything older this client must look exactly like today's.
+  // Only a capable host may see `delivery`; a card any host publishes shows, with its actions.
   const queueCapability = useStructuredAgentSessionHostQueuesMessagesState(target)
   const queueCapable = queueCapability === 'supported'
   const queuedMessageIds = useMemo(
     () => (transportState.queuedMessages ?? []).map((message) => message.messageId),
     [transportState.queuedMessages]
   )
+  const stopControl = useStructuredAgentSessionStop({
+    sessionId,
+    target,
+    transportState,
+    hostStopping,
+    mutate
+  })
   const prompts = pendingStructuredSessionPrompts(transportState.journalItems)
   // A host's queue waits on any pending prompt, and nothing here can settle one this build cannot
   // answer: the send must start a turn, after which the card's cancel works.
@@ -139,7 +147,8 @@ export function useStructuredAgentSession(args: {
     journalItems: transportState.journalItems,
     composerScopeKey,
     queueDelivery,
-    queuedMessageIds
+    queuedMessageIds,
+    stopping: stopControl.stopping
   })
 
   const threadGoal = useStructuredAgentSessionThreadGoal({
@@ -178,13 +187,9 @@ export function useStructuredAgentSession(args: {
     blocked: conversationBusy || commandPending.current || queuedMessageIds.length > 0,
     write
   })
-  // A host that takes a Stop naming no turn gets Stop from the send until the work settles; every
-  // Stop before a turn opens needs that form. An older host can stop only a turn it has opened.
-  const stopsConversation =
-    useStructuredAgentSessionHostStopsConversation(target) && transportState.fence !== null
   const canStop =
     transportState.turnId !== null ||
-    (stopsConversation &&
+    (stopControl.stopsConversation &&
       (transportState.isWorking ||
         hasUnsentStructuredAgentSessionOutboxEntry(outbox, transportState.submissions)))
   // A queued send is a card, never a transcript bubble.
@@ -204,8 +209,7 @@ export function useStructuredAgentSession(args: {
   const messages = useStructuredAgentSessionMessages(
     transcriptItems,
     transcriptOutbox,
-    transportState.submissions,
-    queuedMessageIds
+    transportState.submissions
   )
   const queuedController = useStructuredAgentSessionQueuedMessages({
     enabled: queueCapable && transportState.fence !== null,
@@ -235,6 +239,8 @@ export function useStructuredAgentSession(args: {
           )
       }),
     journalItems: transcriptItems,
+    /** The host's newest turn record, which places a live turn whose record is not loaded. */
+    latestTurn: transportState.latestTurn,
     subagentRoster: transportState.subagentRoster,
     messages,
     status: transportEnabled ? state.status : 'ready',
@@ -252,8 +258,6 @@ export function useStructuredAgentSession(args: {
     failedHere: outboxController.failedHere,
     /** The journal's rows for sent messages, which carry a rejected message's whole fact. */
     submissions: transportState.submissions,
-    /** The host's queued cards, which hold their own rejected hand-offs. */
-    queuedMessageIds,
     // A message typed during a command queues behind it on the host.
     send: (...input: Parameters<typeof outboxController.send>) =>
       // Legacy: an older host refuses sends while a command runs; removable once those hosts age out.
@@ -268,19 +272,12 @@ export function useStructuredAgentSession(args: {
     backgroundTasks: transportState.backgroundTasks,
     turnId: transportState.turnId,
     canStop,
-    stop: () => {
-      if (stopsConversation) {
-        // Unsent text this client still owns goes back to its composer — a local move.
-        // Host-held drafts are never withdrawn by a Stop: the host pauses them and
-        // they stay visible as cards, on every device, until the user acts on one.
-        outboxController.withdrawUnsent()
-        return mutate('agentSession.cancel', 'agentSession.cancel', {})
-      }
-      return transportState.turnId
-        ? mutate('agentSession.cancel', 'agentSession.cancel', { turnId: transportState.turnId })
-        : Promise.resolve(null)
-    },
+    stopPressed: stopControl.pressed,
+    stop: () => stopControl.stop(transportState.turnId, outboxController.withdrawUnsent),
     queuedMessages: queuedController,
+    /** A send made now while the agent works is held as a queued card: the host queues, and this
+     *  send asks it to (the setting is on and no pending prompt blocks the queue). */
+    sendsQueue: structuredAgentSessionNewSendsQueue(queueDelivery),
     cancel: async (turnId: string, prompt?: StructuredPromptCancelTarget) => {
       // Capability negotiation must complete before mutate fingerprints the payload:
       // older hosts reject the strict prompt field.

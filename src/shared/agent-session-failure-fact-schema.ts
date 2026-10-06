@@ -6,5 +6,8 @@ import { z } from 'zod'
 export const AgentSessionFailureFactSchema = z.object({
   kind: z.string().min(1),
   detail: z.object({ text: z.string(), audience: z.string().min(1) }).optional(),
-  refusal: z.object({ code: z.string().min(1), details: z.looseObject({}).optional() }).optional()
+  refusal: z.object({ code: z.string().min(1), details: z.looseObject({}).optional() }).optional(),
+  argumentProblem: z
+    .object({ agent: z.string(), option: z.string(), problem: z.string() })
+    .optional()
 })

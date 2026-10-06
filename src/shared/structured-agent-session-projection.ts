@@ -5,6 +5,8 @@ import {
 } from './agent-status-field-normalization'
 import {
   AGENT_JOURNAL_MESSAGE_SEND_MODES,
+  AGENT_JOURNAL_MESSAGE_STATES,
+  type AgentJournalMessageItem,
   type AgentJournalMessageSendMode,
   type AgentJournalRenderItem,
   type AgentJournalSubmission
@@ -34,6 +36,7 @@ import {
 
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
+import { readAgentMessageSource } from './agent-session-message-source'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
 import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
 
@@ -136,6 +139,20 @@ function isAgentJournalMessageSendMode(value: string): value is AgentJournalMess
   return AGENT_JOURNAL_MESSAGE_SEND_MODES.some((mode) => mode === value)
 }
 
+/** A state this build cannot name reads as completed: a newer host's row is never live here. */
+function messageLifecycle(
+  body: AgentJournalMessageItem
+): Pick<NativeChatMessage, 'state' | 'completedAt'> {
+  const state: string | undefined = body.state
+  if (state === undefined) {
+    return {}
+  }
+  return {
+    state: AGENT_JOURNAL_MESSAGE_STATES.find((known) => known === state) ?? 'completed',
+    ...(body.completedAt !== undefined ? { completedAt: body.completedAt } : {})
+  }
+}
+
 const projectedItems = new WeakMap<AgentJournalRenderItem, NativeChatMessage | null>()
 
 /** Deliberately NOT scoped by producer: every agent's rows are projected, and
@@ -165,7 +182,10 @@ export function projectStructuredItemToNativeChat(
   // Reducer updates replace journal items, so unchanged rows keep their render caches.
   const projected = itemBlocks(item)
   const sentAs = item.body.kind === 'message' ? item.body.sentAs : undefined
+  const lifecycle = item.body.kind === 'message' ? messageLifecycle(item.body) : {}
   const command = item.body.kind === 'message' ? item.body.command : undefined
+  // Read here too: a client's journal comes off the wire, from a host of any version.
+  const from = item.body.kind === 'message' ? readAgentMessageSource(item.body.from) : undefined
   const message: NativeChatMessage | null = projected
     ? {
         ...agentJournalItemRowOrigin(item),
@@ -174,7 +194,9 @@ export function projectStructuredItemToNativeChat(
         blocks: projected.blocks,
         // A send mode this build cannot name renders as an ordinary message.
         ...(sentAs !== undefined && isAgentJournalMessageSendMode(sentAs) ? { sentAs } : {}),
-        ...(command ? { command } : {})
+        ...lifecycle,
+        ...(command ? { command } : {}),
+        ...(from && projected.role === 'user' ? { from } : {})
       }
     : null
   projectedItems.set(item, message)

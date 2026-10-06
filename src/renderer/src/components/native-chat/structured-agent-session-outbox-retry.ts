@@ -74,10 +74,12 @@ export function retryStructuredAgentSessionOutboxEntry(args: {
   }
 }
 
-/** The user's own Retry is what a Stop, or a failure saved on the message, left it waiting for. */
+/** The user's own Retry is what a Stop, or a failure saved on the message, left it waiting for. It
+ *  is a new send, so it no longer waits behind the turn a Stop was ending when it was first sent. */
 function retriedByUser({
   outlivedStop: _retried,
   lastFailure: _sentAgain,
+  sentWhileStopping: _sentNow,
   ...entry
 }: StructuredAgentSessionOutboxEntry): StructuredAgentSessionOutboxEntry {
   return entry

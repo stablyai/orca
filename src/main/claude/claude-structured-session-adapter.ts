@@ -226,6 +226,14 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     const session = this.sessions.get(sessionId)
     return session ? claudeHoldsDispatch(session) : false
   }
+  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
+    const session = this.sessions.get(sessionId)
+    return (
+      session?.acquisitionGeneration === acquisitionGeneration &&
+      session.connection.pid !== undefined &&
+      session.connection.exitVerdict.root === 'live'
+    )
+  }
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     settleClaudePromptFreeingChild(this.asker(request), answerClaudeStructuredPrompt)
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>

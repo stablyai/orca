@@ -39,6 +39,7 @@ import {
   HANDED_TO_TERMINAL,
   launchCommandPrompt,
   promptReceipt,
+  settledAtCreation,
   settleLaunchPromptDisposal
 } from './agent-launch-prompt-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -75,7 +76,13 @@ export type AgentLaunchExecution = {
   onSurfacePublished?: (surface: AgentLaunchPublishedSurface) => void
 }
 
-export type AgentLaunchPublishedSurface = Pick<AgentLaunchResult, 'outcome' | 'worktreeId'>
+/**
+ * The launch as it stands once its surface exists: a complete result whose prompt receipt says only
+ * what creation itself settled — carried on the launch command, a draft the host never delivers, or
+ * a submit still `unconfirmed`. Complete so a host that dies during the delivery still leaves a
+ * truthful answer behind.
+ */
+export type AgentLaunchPublishedSurface = AgentLaunchResult
 
 export async function executeAgentLaunch(
   execution: AgentLaunchExecution
@@ -105,11 +112,12 @@ export async function executeAgentLaunch(
   if (intent.reuseTerminal) {
     const reused = published(execution, {
       outcome: { kind: 'terminal', handle: intent.reuseTerminal.handle },
-      worktreeId: existingWorktreeId(intent.target)
+      worktreeId: existingWorktreeId(intent.target),
+      receipt: preflight,
+      ...promptReceipt(intent, settledAtCreation(intent, {}))
     })
     return {
       ...reused,
-      receipt: preflight,
       ...promptReceipt(
         intent,
         await deliverTerminalLaunchPrompt(execution, intent.reuseTerminal.handle, {
@@ -128,12 +136,13 @@ export async function executeAgentLaunch(
         handle: placed.startupTerminalHandle,
         ...(placed.startupTerminalPaneKey ? { paneKey: placed.startupTerminalPaneKey } : {})
       },
-      worktreeId: placed.worktreeId
+      worktreeId: placed.worktreeId,
+      receipt: preflight,
+      ...(placed.warning ? { warning: placed.warning } : {}),
+      ...promptReceipt(intent, settledAtCreation(intent, placed))
     })
     return {
       ...startup,
-      receipt: preflight,
-      ...(placed.warning ? { warning: placed.warning } : {}),
       ...promptReceipt(
         intent,
         placed.promptRodeLaunchCommand
@@ -183,11 +192,15 @@ export async function executeAgentLaunch(
   // not start while looking at it. Telling those apart needs `createManagedWorktree` to stop
   // multiplexing "couldn't copy untracked files" and "startup terminal failed" into one string.
   const warning = combineLaunchWarnings(placed.warning, created.warning)
-  const surface = published(execution, { outcome: created.outcome, worktreeId: placed.worktreeId })
-  return {
-    ...surface,
+  const surface = published(execution, {
+    outcome: created.outcome,
+    worktreeId: placed.worktreeId,
     receipt: settled,
     ...(warning ? { warning } : {}),
+    ...promptReceipt(intent, settledAtCreation(intent, created))
+  })
+  return {
+    ...surface,
     ...promptReceipt(intent, await settleLaunchPromptDisposal(execution, created))
   }
 }
@@ -292,16 +305,7 @@ async function createSurface(
 }
 
 /**
- * A structured session cannot apply launch arguments, so a launch that carried some and got one
- * anyway has to say so.
- *
- * Reported rather than routed around: the arguments field is a TUI concern by an explicit decision
- * (the Agent SDK and app-server version their option sets independently of the interactive CLI's,
- * and the launch command names the CLI binary, so both apply to terminal launches only), so
- * downgrading here would override a stated user preference on the strength of a field that is not
- * evidence about the surface. `null` warns too: "no arguments" is also unapplied, and the structured
- * path still reads the bypass-permissions bit out of the user's *settings* default, so a caller that
- * asked for none can get a session running with more permission than it requested.
+ * Structured chat uses saved Arguments, so a per-call override still needs a truthful warning.
  */
 function ignoredStructuredAgentArgsWarning(
   intent: AgentLaunchIntent
@@ -310,7 +314,7 @@ function ignoredStructuredAgentArgsWarning(
     ? undefined
     : {
         warning:
-          'Started a structured chat session, which does not apply launch arguments; the requested arguments were ignored.'
+          'Started a structured chat session using saved agent Arguments; the per-launch argument override was ignored.'
       }
 }
 

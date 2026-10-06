@@ -31,9 +31,33 @@ function parseTitle(value: unknown): AiVaultSessionTitle {
   ) {
     throw new Error('invalid session title')
   }
+  const owner: unknown = record.structuredSession
+  if (
+    owner !== undefined &&
+    (typeof owner !== 'object' ||
+      owner === null ||
+      !('workspaceId' in owner) ||
+      typeof owner.workspaceId !== 'string' ||
+      !owner.workspaceId.trim() ||
+      owner.workspaceId.length > 4096 ||
+      !('sessionId' in owner) ||
+      typeof owner.sessionId !== 'string' ||
+      !owner.sessionId.trim() ||
+      owner.sessionId.length > 512)
+  ) {
+    throw new Error('invalid structured session title owner')
+  }
   return {
     agent: record.agent,
     sessionId: record.sessionId,
-    title: record.title.trim()
+    title: record.title.trim(),
+    ...(owner &&
+    typeof owner === 'object' &&
+    'workspaceId' in owner &&
+    typeof owner.workspaceId === 'string' &&
+    'sessionId' in owner &&
+    typeof owner.sessionId === 'string'
+      ? { structuredSession: { workspaceId: owner.workspaceId, sessionId: owner.sessionId } }
+      : {})
   }
 }

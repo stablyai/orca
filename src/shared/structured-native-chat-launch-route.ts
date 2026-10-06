@@ -29,7 +29,6 @@ export type NativeChatDefaultSettings = Pick<
 export type StructuredNativeChatBlocker =
   | 'reused-terminal'
   | 'agent-without-structured-session'
-  | 'floating-workspace'
   /** The launch names a start directory outside its workspace, which only a PTY can apply. The
    *  configured launch command and arguments are not read: they apply to terminal launches only. */
   | 'custom-start-directory'
@@ -105,9 +104,6 @@ export function resolveStructuredNativeChatSupport(
   const builtInAgent = isAgentSessionHandleProvider(input.agent)
   if (!builtInAgent && !input.hostStructuredAgents?.includes(input.agent)) {
     return { supported: false, blocker: 'agent-without-structured-session' }
-  }
-  if (input.workspaceKind === 'floating') {
-    return { supported: false, blocker: 'floating-workspace' }
   }
   if (input.startsOutsideWorkspaceRoot === true) {
     return { supported: false, blocker: 'custom-start-directory' }

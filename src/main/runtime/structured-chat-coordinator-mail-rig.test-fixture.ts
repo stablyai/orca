@@ -157,11 +157,11 @@ export async function userTexts(sessionId: string): Promise<string[]> {
   )
 }
 
-/** A supervised terminal worker under the coordinator's Run, and its worker_done. */
+/** A supervised terminal worker under the coordinator's Run, and its worker_done; its dispatch id. */
 export async function finishWorker(
   taskId: string,
   worker: { handle: string; paneKey: string } = { handle: 'term_worker', paneKey: WORKER_PANE }
-): Promise<void> {
+): Promise<string> {
   const started = db.createStartingWorkerDispatch({
     creator: { kind: 'system' },
     maxDepth: Number.MAX_SAFE_INTEGER,
@@ -184,6 +184,7 @@ export async function finishWorker(
     type: 'worker_done',
     payload: JSON.stringify({ taskId, dispatchId: started.dispatch.id, outcome: 'succeeded' })
   })
+  return started.dispatch.id
 }
 
 export async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: string }> {
@@ -254,6 +255,7 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
     resolveCodexCommand: () => '/usr/local/bin/codex',
+    resolveLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     openCodexConnection: codex.openConnection,
@@ -271,6 +273,10 @@ export function startRuntime(): OrcaRuntimeService {
   vi.spyOn(started, 'ensureStructuredAgentSessionHost').mockResolvedValue()
   vi.spyOn(started, 'getTerminalPaneKey').mockImplementation((handle) =>
     handle === 'term_worker' ? WORKER_PANE : handle === 'term_worker_2' ? WORKER_2_PANE : null
+  )
+  // The exact process `finishWorker` records, so a worker's report is accepted and settles.
+  vi.spyOn(started, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
+    handle === 'term_worker' || handle === 'term_worker_2' ? `runtime_test:${handle}:1` : null
   )
   return started
 }

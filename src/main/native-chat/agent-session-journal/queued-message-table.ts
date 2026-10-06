@@ -14,20 +14,22 @@ import type {
   AgentJournalMessageItem
 } from '../../../shared/agent-session-journal-types'
 import {
-  readAgentSessionMessageSource,
-  serializeAgentSessionMessageSource,
-  type AgentSessionMessageSource
-} from '../../../shared/agent-session-message-source'
+  QUEUED_MESSAGE_PAUSED_KEPT,
+  type QUEUED_MESSAGE_PAUSED_SEND_FAILED
+} from '../../../shared/agent-session-queued-message-wire'
 import { rejectedDraftSettlement } from './journal-dispatch-settlement'
-import { readStoredRejectionFact } from './journal-dispatch-reducer'
+import { readStoredQueuedMessageRow } from './queued-message-stored-row'
 
 export type QueuedMessageState = 'waiting' | 'dispatched' | 'returned' | 'withdrawn'
 
-/** Why ONE waiting draft is held from auto-sending: its conversion failed.
- *  Stored on the row, so it survives handle eviction and restart; a wire marker
- *  (it publishes as `pausedReason`). A Stop or a restart pauses the whole queue
- *  instead. A reader treats an unknown stored value as a plain hold. */
-export type QueuedMessageHoldReason = 'send_failed'
+/** Why ONE waiting draft is held from auto-sending: its conversion failed (`send_failed`), or it
+ *  is a send the host accepted and kept across a restart or a close (`kept`). Stored on the row, so
+ *  it survives handle eviction and restart; a wire marker (it publishes as `pausedReason`). A Stop
+ *  or a restart pauses the whole queue instead. A reader treats an unknown stored value as a plain
+ *  hold. */
+export type QueuedMessageHoldReason =
+  | typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
+  | typeof QUEUED_MESSAGE_PAUSED_KEPT
 
 /** Definitively unsettled: what Stop, /clear, Edit and the budget count, and
  *  what the published list shows. Pending/unknown/accepted deliveries and
@@ -64,12 +66,10 @@ export type QueuedMessageRow = {
   /** Where the journal stood when it was queued: a Stop's pause holds only cards queued before
    *  it. Null on rows from builds before it was recorded, which read as queued before any Stop. */
   queuedAt: AgentJournalCursor | null
-  /** Who it is from: the person, or another agent through Orca. */
-  source: AgentSessionMessageSource
 }
 
 const COLUMNS =
-  'session_id, message_id, position, body_json, fingerprint, created_at, host_instance, state, hold_reason, returned_reason, returned_rejection, settled_at, settled_by_op, consumed_as, carried_from, queued_epoch, queued_sequence, source_json'
+  'session_id, message_id, position, body_json, fingerprint, created_at, host_instance, state, hold_reason, returned_reason, returned_rejection, settled_at, settled_by_op, consumed_as, carried_from, queued_epoch, queued_sequence'
 
 export function insertQueuedMessage(
   db: Database.Database,
@@ -81,18 +81,20 @@ export function insertQueuedMessage(
     hostInstance: string
     carriedFrom?: string
     queuedAt: AgentJournalCursor
-    source: AgentSessionMessageSource
     now: number
+    /** Absent: after every other card. */
+    position?: number
+    holdReason?: QueuedMessageHoldReason
   }
 ): QueuedMessageRow {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the statement selects exactly one aliased numeric column; better-sqlite3 types rows as unknown.
   const highest = db
     .prepare('SELECT COALESCE(MAX(position), 0) AS p FROM queued_messages WHERE session_id = ?')
     .get(input.sessionId) as { p?: number } | undefined
-  const position = Number(highest?.p ?? 0) + 1
+  const position = input.position ?? Number(highest?.p ?? 0) + 1
   db.prepare(
     `INSERT INTO queued_messages (${COLUMNS})
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', NULL, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?)`
   ).run(
     input.sessionId,
     input.messageId,
@@ -101,10 +103,10 @@ export function insertQueuedMessage(
     input.fingerprint,
     input.now,
     input.hostInstance,
+    input.holdReason ?? null,
     input.carriedFrom ?? null,
     input.queuedAt.epoch,
-    input.queuedAt.sequence,
-    serializeAgentSessionMessageSource(input.source)
+    input.queuedAt.sequence
   )
   return {
     sessionId: input.sessionId,
@@ -115,15 +117,14 @@ export function insertQueuedMessage(
     createdAt: input.now,
     hostInstance: input.hostInstance,
     state: 'waiting',
-    holdReason: null,
+    holdReason: input.holdReason ?? null,
     returnedReason: null,
     returnedRejection: null,
     settledAt: null,
     settledByOp: null,
     consumedAs: null,
     carriedFrom: input.carriedFrom ?? null,
-    queuedAt: input.queuedAt,
-    source: input.source
+    queuedAt: input.queuedAt
   }
 }
 
@@ -131,7 +132,7 @@ export function listQueuedMessages(db: Database.Database, sessionId: string): Qu
   return db
     .prepare(`SELECT ${COLUMNS} FROM queued_messages WHERE session_id = ? ORDER BY position ASC`)
     .all(sessionId)
-    .flatMap((row) => toStoredRow(row) ?? [])
+    .flatMap((row) => readStoredQueuedMessageRow(row) ?? [])
 }
 
 export function getQueuedMessage(
@@ -142,7 +143,7 @@ export function getQueuedMessage(
   const row = db
     .prepare(`SELECT ${COLUMNS} FROM queued_messages WHERE session_id = ? AND message_id = ?`)
     .get(sessionId, messageId)
-  return row === undefined ? null : toStoredRow(row)
+  return row === undefined ? null : readStoredQueuedMessageRow(row)
 }
 
 /**
@@ -230,8 +231,8 @@ export function withdrawQueuedMessages(
  * dispatched → returned, or back to waiting (`rejectedDraftSettlement`),
  * matched on the draft's CURRENT hand-off (`consumed_as`), so a re-send refused
  * again still settles while a late duplicate of an earlier refusal matches
- * nothing. A draft back to waiting keeps its position and carries no refusal;
- * its spent submissions stay findable by their `queuedMessageId` link.
+ * nothing. A draft back to waiting keeps its position and carries no refusal, held as `kept`
+ * when the settlement says so; its spent submissions stay findable by their `queuedMessageId` link.
  */
 export function settleRejectedQueuedMessage(
   db: Database.Database,
@@ -240,20 +241,26 @@ export function settleRejectedQueuedMessage(
     consumedRef: string
     reason: string | null
     rejection: UnreadAgentSessionFailureFact | undefined
+    /** Who asked for the rejected hand-off (`AgentJournalSubmission.origin`). */
+    origin: 'client' | 'host' | undefined
     now: number
   }
 ): boolean {
-  const settlement = rejectedDraftSettlement({ reason: input.reason, rejection: input.rejection })
+  const settlement = rejectedDraftSettlement(input)
   const changed =
     settlement.state === 'waiting'
       ? db
           .prepare(
             `UPDATE queued_messages
-             SET state = 'waiting', hold_reason = NULL, consumed_as = NULL,
+             SET state = 'waiting', hold_reason = ?, consumed_as = NULL,
                  returned_reason = NULL, returned_rejection = NULL, settled_at = NULL, settled_by_op = NULL
              WHERE session_id = ? AND state = 'dispatched' AND consumed_as = ?`
           )
-          .run(input.sessionId, input.consumedRef)
+          .run(
+            settlement.kept ? QUEUED_MESSAGE_PAUSED_KEPT : null,
+            input.sessionId,
+            input.consumedRef
+          )
       : db
           .prepare(
             `UPDATE queued_messages
@@ -282,91 +289,5 @@ export function queuedMessagesSettledByOp(
        WHERE session_id = ? AND settled_by_op = ? ORDER BY position ASC`
     )
     .all(sessionId, settledByOp)
-    .flatMap((row) => toStoredRow(row) ?? [])
-}
-
-function toStoredRow(row: unknown): QueuedMessageRow | null {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: rows come from this file's own SELECTs, which name exactly these columns; better-sqlite3 types them as unknown.
-  const record = row as {
-    session_id: string
-    message_id: string
-    position: number
-    body_json: string
-    fingerprint: string
-    created_at: number
-    host_instance: string
-    state: string
-    hold_reason: string | null
-    returned_reason: string | null
-    returned_rejection: string | null
-    settled_at: number | null
-    settled_by_op: string | null
-    consumed_as: string | null
-    carried_from: string | null
-    queued_epoch: string | null
-    queued_sequence: number | null
-    source_json: string | null
-  }
-  let body: AgentJournalMessageItem
-  try {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: body_json is written only by insertQueuedMessage from a schema-validated AgentJournalMessageItem.
-    body = JSON.parse(record.body_json) as AgentJournalMessageItem
-  } catch {
-    // Our own writer stringified it; an unreadable body is corruption, and a
-    // row we cannot re-materialize must not masquerade as an empty message.
-    return null
-  }
-  const state = record.state
-  if (
-    state !== 'waiting' &&
-    state !== 'dispatched' &&
-    state !== 'returned' &&
-    state !== 'withdrawn'
-  ) {
-    return null
-  }
-  return {
-    sessionId: record.session_id,
-    messageId: record.message_id,
-    position: record.position,
-    body,
-    fingerprint: record.fingerprint,
-    createdAt: record.created_at,
-    hostInstance: record.host_instance,
-    state,
-    holdReason: record.hold_reason,
-    returnedReason: record.returned_reason,
-    returnedRejection: storedRejection(record.returned_rejection),
-    settledAt: record.settled_at,
-    settledByOp: record.settled_by_op,
-    consumedAs: record.consumed_as,
-    carriedFrom: record.carried_from,
-    queuedAt:
-      record.queued_epoch !== null && typeof record.queued_sequence === 'number'
-        ? { epoch: record.queued_epoch, sequence: record.queued_sequence }
-        : null,
-    source: storedSource(record.source_json)
-  }
-}
-
-function storedSource(json: string | null): AgentSessionMessageSource {
-  let stored: unknown = null
-  try {
-    stored = json === null ? null : JSON.parse(json)
-  } catch {
-    // An unreadable value is read as no value; the source reader decides what that means.
-  }
-  return readAgentSessionMessageSource(stored)
-}
-
-function storedRejection(json: string | null): UnreadAgentSessionFailureFact | null {
-  if (json === null) {
-    return null
-  }
-  try {
-    return readStoredRejectionFact(JSON.parse(json)) ?? null
-  } catch {
-    // The refusal stays readable from `returned_reason`; a bad fact must not lose the card.
-    return null
-  }
+    .flatMap((row) => readStoredQueuedMessageRow(row) ?? [])
 }

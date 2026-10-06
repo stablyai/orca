@@ -28,6 +28,7 @@ import {
   handleCodexSessionExit
 } from './codex-structured-session-close'
 import { restoredCodexSessionOptions } from './codex-structured-session-options'
+import { startBackgroundCodexCatalogRefresh } from './codex-structured-background-catalog'
 import {
   codexAcquireCatalogAccess,
   codexAcquireFastModeCatalog
@@ -48,8 +49,7 @@ import {
 import type { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { deliverCodexServerRequest } from './codex-structured-provider-events'
-
-const TURN_BOUNDARIES: ReadonlySet<string> = new Set(['turn/started', 'turn/completed'])
+import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -142,25 +142,14 @@ export async function acquireCodexStructuredSession(input: {
         env: buildCodexStructuredChildEnvironment(launch, acquireInput.spawnToken, sessionId)
       },
       {
-        onNotification: (method, params) => {
-          // Stamped at receipt, ahead of any pre-publication buffering or retry.
-          const observedAt = TURN_BOUNDARIES.has(method) ? (deps.now?.() ?? Date.now()) : undefined
-          const dispatchSequenceAtReceipt =
-            method === 'turn/started' ? dispatchEchoes.latestSequence() : undefined
-          input.deliver(
-            acquisition,
-            sessionId,
-            () =>
-              notificationRetries.handle(
-                sessionId,
-                method,
-                params,
-                observedAt,
-                dispatchSequenceAtReceipt
-              ),
-            Buffer.byteLength(JSON.stringify(params ?? null), 'utf8')
-          )
-        },
+        onNotification: codexAcquisitionNotificationHandler({
+          acquisition,
+          sessionId,
+          dispatchEchoes,
+          notificationRetries,
+          deliver: input.deliver,
+          now: deps.now ?? Date.now
+        }),
         onServerRequest: (request) =>
           input.deliver(
             acquisition,
@@ -234,12 +223,10 @@ export async function acquireCodexStructuredSession(input: {
     acquisitions.assertCurrent(sessionId, attempt)
     const options = restoredCodexSessionOptions(acquireInput.options)
     const catalogAccess = codexAcquireCatalogAccess(deps, launch)
-    const fastModeCatalog = await codexAcquireFastModeCatalog({
-      connection,
+    const fastModeCatalog = codexAcquireFastModeCatalog({
       catalogAccess,
       opened,
-      restoreNeedsCatalog: options.get('fastMode') === 'true' || options.has('serviceTier'),
-      timeoutMs: deps.requestTimeoutMs
+      restoreNeedsCatalog: options.get('fastMode') === 'true' || options.has('serviceTier')
     })
     acquisitions.assertCurrent(sessionId, attempt)
     assertCodexConnectionOpen(connection, sessionId)
@@ -252,10 +239,10 @@ export async function acquireCodexStructuredSession(input: {
       threadId: opened.threadId,
       historyMode: opened.historyMode,
       activeTurnIds: new Set(),
+      abortedTurnIds: new Set(),
       prompts: acquisition.prompts,
       options,
       reportedOptions: reportedCodexThreadOptions(opened),
-      fastModeTierByModel: fastModeCatalog?.fastModeTierByModel ?? new Map(),
       ...(catalogAccess ? { catalogAccess } : {}),
       dispatchEchoes,
       translator,
@@ -270,7 +257,8 @@ export async function acquireCodexStructuredSession(input: {
       ...(unbindReadingControl ? { unbindReadingControl } : {})
     }
     if (fastModeCatalog) {
-      const model = opened.model ?? fastModeCatalog.result.current.model
+      // The model the next turn sends, as turn/start and the background refresh resolve it.
+      const model = options.get('model') ?? opened.model ?? fastModeCatalog.result.current.model
       reconcileCodexFastModeOption(session, {
         fastModeTierByModel: fastModeCatalog.fastModeTierByModel,
         currentFastMode: true,
@@ -283,6 +271,13 @@ export async function acquireCodexStructuredSession(input: {
     for (const event of acquisition.drain()) {
       event()
     }
+    startBackgroundCodexCatalogRefresh({
+      session,
+      sessionId,
+      sessions,
+      timeoutMs: deps.requestTimeoutMs,
+      logger: deps.logger
+    })
     return acquired
   } catch (error) {
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {

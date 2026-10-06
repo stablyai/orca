@@ -85,6 +85,7 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
       resolveEnvironment: context.environment.resolveCodexEnvironment,
+      resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
       ...(deps.resolveCodexPermissionPolicy
         ? { resolvePermissionPolicy: deps.resolveCodexPermissionPolicy }
         : {}),
@@ -115,8 +116,10 @@ function createClaudeAdapter(
     store,
     resolveWorkspacePath: deps.resolveWorkspacePath,
     ...(deps.resolveClaudeCommand ? { resolveClaudeCommand: deps.resolveClaudeCommand } : {}),
+    ...(deps.claudeThinkingDisplay ? { claudeThinkingDisplay: deps.claudeThinkingDisplay } : {}),
     ...(deps.resolveClaudeLaunchEnv ? { resolveClaudeLaunchEnv: deps.resolveClaudeLaunchEnv } : {}),
     resolveClaudeInheritedEnv: context.environment.resolveClaudeInheritedEnv,
+    resolveClaudeLaunchArgs: () => deps.resolveLaunchArgs('claude'),
     resolveClaudeAuthPolicy: deps.resolveClaudeAuthPolicy,
     ...(deps.resolveClaudePermissionMode
       ? { resolveClaudePermissionMode: deps.resolveClaudePermissionMode }

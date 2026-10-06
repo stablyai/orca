@@ -95,6 +95,7 @@ describe('grouping a Codex thread restored from full history', () => {
           turnKey: turnKeys[index],
           role: message.role,
           rendersProse: true,
+          draws: true,
           outlivesTurn: false,
           reportsFailure: false,
           reportsCompaction: false

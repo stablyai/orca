@@ -36,6 +36,7 @@ import {
 import { suppressCancelledStructuredSessionTabs } from '../structured-agent-session-tab-retirement'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
+import { publishAiVaultSavedTitle } from '@/components/right-sidebar/ai-vault-session-result-cache'
 
 /** The host saying it no longer publishes this worktree at all, rather than publishing an empty one. */
 function isWorktreeRetraction(
@@ -58,6 +59,7 @@ export type StructuredSessionSnapshotApplyOptions = {
   onRetiredEpochDrop?: (worktreeId: string, publicationEpoch: string) => void
   /** Collects accepted publications so lifecycle listeners run after the store patch settles. */
   onAcceptedAgentSession?: (worktreeId: string, sessionId: string) => void
+  onAcceptedSnapshot?: (snapshot: RuntimeMobileSessionTabsResult) => void
 }
 
 export function applyStructuredSessionTabSnapshots(
@@ -66,10 +68,15 @@ export function applyStructuredSessionTabSnapshots(
   options: StructuredSessionSnapshotApplyOptions = {}
 ): void {
   const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
+  const acceptedSnapshots: RuntimeMobileSessionTabsResult[] = []
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
     (state) =>
       applyLocalStructuredSessionTabSnapshots(state, snapshots, owner, undefined, {
         ...options,
+        onAcceptedSnapshot: (snapshot) => {
+          acceptedSnapshots.push(snapshot)
+          options.onAcceptedSnapshot?.(snapshot)
+        },
         onAcceptedAgentSession: (worktreeId, sessionId) => {
           acceptedAgentSessions.push({ worktreeId, sessionId })
           options.onAcceptedAgentSession?.(worktreeId, sessionId)
@@ -78,6 +85,9 @@ export function applyStructuredSessionTabSnapshots(
     { frames: [] }
   )
   settleStructuredSessionMirror()
+  for (const snapshot of acceptedSnapshots) {
+    publishAiVaultSavedTitle(snapshot, LOCAL_EXECUTION_HOST_ID)
+  }
   markStructuredAgentSessionLaunchesPublished(LOCAL_EXECUTION_HOST_ID, acceptedAgentSessions)
   if (options.authoritative) {
     startStructuredAgentLaunchCancellationCleanup(LOCAL_EXECUTION_HOST_ID, (sessionId) =>
@@ -158,6 +168,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       }
     )
     next = patch === next ? next : ({ ...next, ...patch } as State)
+    options.onAcceptedSnapshot?.(effectiveSnapshot)
     if (isWorktreeRetraction(effectiveSnapshot)) {
       // A retraction was applied above — the mirrored rows must go — but it is not a publication
       // to fence later frames against. Recording it would retire the renderer's own epoch, which

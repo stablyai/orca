@@ -237,6 +237,8 @@ async function startOrcadRuntime(
     // PTY agent on this host, and the store is the only place `worktree.ps` and the mobile
     // projection read from — unwired, orcad lists no PTY agents at all.
     onTerminalAgentStatus: (event) => agentHookServer.ingestTerminalStatus(event),
+    onClaudeTerminalEvidence: (paneKey, evidence) =>
+      agentHookServer.observeClaudeTerminalEvidence(paneKey, evidence),
     // Why here too and not only on the desktop: orcad serves `worktree.ps` and `agentSession.*`,
     // so without these a headless host publishes its structured chats nowhere and lists no agents.
     getAgentStatusSnapshot: () =>

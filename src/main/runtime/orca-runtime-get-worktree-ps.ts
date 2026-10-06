@@ -14,9 +14,16 @@ import { compareWorktreePs } from './runtime-worktree-status-projection'
 import type { Repo } from '../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from './structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import {
+  createStructuredAgentSessionLogger,
+  neverThrowingStructuredAgentSessionLogger
+} from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../agent-hooks/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../agent-hooks/first-work-rename-runtime'
+import { createStructuredChatNamingHandler } from '../native-chat/structured-chat-naming'
+import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { buildWorktreeListingPage } from './worktree-listing-host-scope'
@@ -26,6 +33,9 @@ import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell
 import { claudeStructuredPermissionModeForSettings } from '../claude/claude-structured-permission-mode'
 import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-structured-permission-policy'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
+import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
+import { structuredAgentConfiguredArgs } from '../native-chat/structured-agent-configured-args'
+import { claudeThinkingDisplaySupport } from '../claude/claude-thinking-display-support'
 
 export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   async getWorktreePs(
@@ -133,33 +143,71 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
     })
   }
 
+  /** The durable record store alone, without the chat host: launch admission needs only its
+   *  ledger. A host installed later is built on this same store. */
+  async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
+    const { store } = await openAgentSessionRecordStoreOnce({
+      stateDirectory: getProfileUserDataPath(),
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
+    })
+    return store
+  }
+
   /**
    * Installs the structured agent-session host on first use. Lazy for the same
    * reason the orchestration DB is: the profile's user-data path is not final
-   * until the app is ready, and a runtime nobody drives a chat session on
-   * should never open the record store.
+   * until the app is ready, and a runtime nobody drives a chat session on never
+   * builds the chat host. The record store it sits on may already be open, from
+   * a launch's admission.
    */
   async ensureStructuredAgentSessionHost(): Promise<void> {
+    const logger = createStructuredAgentSessionLogger()
+    const nameChat = createStructuredChatNamingHandler(
+      structuredChatNamingDeps(
+        () => this.requireStore(),
+        {
+          resolveWorkspace: async (workspaceId) => {
+            const target = await this.resolveRuntimeFileTarget(`id:${workspaceId}`)
+            return { path: target.worktree.path, executionHostId: target.executionHostId }
+          },
+          getAgentEnvResolvers: () => this.getCommitMessageAgentEnvironmentResolvers(),
+          hasOpenDispatch: (record) =>
+            structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record),
+          onNamed: (workspaceId, sessionId) =>
+            this.refreshStructuredConversationTabTitle(workspaceId, sessionId)
+        },
+        logger
+      )
+    )
     await installStructuredAgentSessionHost({
       stateDirectory: getProfileUserDataPath(),
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,
       // The host's local trace file (the desktop's or orcad's own), plus the console.
-      logger: createStructuredAgentSessionLogger(),
+      logger,
       // Resolves folder workspaces as well as git worktrees, so a chat session
       // in a plain folder lands in the folder rather than failing to resolve.
       resolveWorkspacePath: async (workspaceId) =>
         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
+      resolveClaudeCommand: () =>
+        resolveStructuredAgentCommand('claude', this.requireStore().getSettings()),
+      resolveCodexCommand: (options) =>
+        resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
+      resolveLaunchArgs: (agent) =>
+        structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
       resolveLaunchEnvOverlay: () =>
         resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings().agentDefaultEnv),
       resolveClaudeLaunchEnv: () =>
         resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv),
+      // Wired only here, so a test runtime never runs a real `claude --version`.
+      claudeThinkingDisplay: claudeThinkingDisplaySupport,
       resolveShellEnvironmentPolicy: () =>
         nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
       resolveClaudeAuthPolicy: () =>
         claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
       // Re-read per acquisition, like the auth policy above it: the Agent Permissions setting is
-      // the one copy of this fact, and the configured CLI arguments never reach a structured launch.
+      // the one copy of this fact, even when Arguments contain permission flags.
       resolveClaudePermissionMode: () =>
         claudeStructuredPermissionModeForSettings(this.requireStore().getSettings()),
       resolveCodexPermissionPolicy: () =>
@@ -171,6 +219,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       // workspace rename listens to instead of `agentStatus:set`.
       onSessionStatusChanged: (summary, options) => {
         this.onStructuredSessionStatusForMail(summary)
+        nameChat(summary, options)
         void maybeAutoRenameWorkspaceOnFirstStructuredTurn(
           summary,
           options,

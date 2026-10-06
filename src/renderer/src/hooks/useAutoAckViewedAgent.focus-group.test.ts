@@ -82,7 +82,7 @@ describe('useAutoAckViewedAgent focus-group transitions', () => {
   })
 
   it('rescans when focusing a group whose structured tab becomes visible', () => {
-    renderHook(() => useAutoAckViewedAgent(false))
+    renderHook(() => useAutoAckViewedAgent())
     expect(useAppStore.getState().unreadAgentCompletionPanes[CHAT_SUBJECT]).toBe('agent-completion')
 
     act(() => {

@@ -228,7 +228,7 @@ export async function acquireClaudeSession({
       { ...input, pid: connection.pid },
       deps.readProcessStartTime
     ).catch((error: unknown) => {
-      // A child that already ended explains why its start time could not be read.
+      // A child that already ended explains a missing pid or a failed read.
       throw childEnded ?? error
     })
     acquisitions.assertCurrent(sessionId, attempt)

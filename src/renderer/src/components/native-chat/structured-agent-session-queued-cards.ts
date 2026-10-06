@@ -4,6 +4,10 @@
 import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
+import {
+  readAgentMessageSource,
+  type AgentMessageSource
+} from '../../../../shared/agent-session-message-source'
 import { handedOffQueuedMessageIds } from '../../../../shared/structured-agent-session-draft-hand-off'
 import {
   structuredAgentSessionEntryAsksToQueue,
@@ -37,6 +41,8 @@ export type QueuedMessageCard = {
   returnedReason?: string | null
   /** The typed fact the returned card's submission settled with; read like its `rejection`. */
   returnedRejection?: UnreadAgentSessionFailureFact
+  /** Another agent's card: who sent it. */
+  from?: AgentMessageSource
 }
 
 function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string {
@@ -76,6 +82,7 @@ export function projectQueuedMessageCards(
                 ? 'awaiting-answer'
                 : 'turn'
     behindReturned = behindReturned || message.state === 'returned'
+    const from = readAgentMessageSource(message.body.from)
     return {
       messageId: message.messageId,
       position: message.position,
@@ -86,7 +93,8 @@ export function projectQueuedMessageCards(
       ...(message.returnedReason !== undefined ? { returnedReason: message.returnedReason } : {}),
       ...(message.returnedRejection !== undefined
         ? { returnedRejection: message.returnedRejection }
-        : {})
+        : {}),
+      ...(from ? { from } : {})
     }
   })
 }

@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
@@ -16,6 +17,7 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
 vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
+vi.mock('./use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
 vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
@@ -25,6 +27,7 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { readOutbox } from './structured-agent-session-outbox-storage'
+import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
 
 const NOT_SIGNED_IN = {
   kind: 'refused',
@@ -107,6 +110,17 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     expect(mocks.retryLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
   })
 
+  it('keys a floating chat launch by its owner even before any path context exists', () => {
+    mocks.ownerWorktreeId = FLOATING_TERMINAL_WORKTREE_ID
+    mocks.fileLinkContext = null
+    mocks.launchLifecycle = 'failed'
+    render(sessionView())
+
+    expect(mocks.lifecycleLookup).toHaveBeenCalledWith(FLOATING_TERMINAL_WORKTREE_ID, 'session-1')
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(mocks.retryLaunch).toHaveBeenCalledWith(FLOATING_TERMINAL_WORKTREE_ID, 'session-1')
+  })
+
   it('words why a failed launch failed beside Retry from the refusal, never its code', () => {
     mocks.launchLifecycle = 'failed'
     mocks.launchFailure = NOT_SIGNED_IN
@@ -150,6 +164,27 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
 
     expect(screen.getByText('Chat could not be started.')).toBeTruthy()
     expect(screen.queryByText(/agent_session_/)).toBeNull()
+  })
+
+  it('shows the saved Arguments cause and correction beside launch Retry', () => {
+    mocks.launchLifecycle = 'failed'
+    mocks.launchFailure = agentSessionRefusalFailure({
+      code: 'agent_session_operation_invalid',
+      details: {
+        reason: 'attachFailed',
+        argumentProblem: { agent: 'Codex', option: '--remote', problem: 'unsupportedOption' }
+      }
+    })
+    render(sessionView())
+
+    expect(
+      screen.getByText(
+        "Codex couldn't start. Saved Arguments contain an unsupported option (--remote). Edit them in Settings > Agents > Arguments."
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText('Chat could not be started.')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(mocks.retryLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
   })
 
   it('keeps a stale reason off a launch that is no longer failed', () => {

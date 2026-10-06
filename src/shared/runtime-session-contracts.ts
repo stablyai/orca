@@ -79,7 +79,8 @@ export type RuntimeStatus = {
   worktreeCreateIdempotency?: {
     dedupeTtlMs: number
   }
-  /** True only when this Windows host can prove process creation times for PID ownership. */
+  /** True only when this Windows host can read process creation times. TEMPORARY: read only by
+   *  older clients, which keep re-probing WSL until it is true; remove after their window. */
   windowsProcessStartTimeAvailable?: boolean
   /**
    * Optional for mixed-version peers. Absence means the host predates structured
@@ -260,6 +261,12 @@ export type RuntimeMobileSessionTabsResult = {
   tabGroupLayout?: TabGroupLayoutNode | null
   retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]
   tabs: RuntimeMobileSessionClientTab[]
+  /** Saved host title publication, including for a conversation whose tab has closed. */
+  structuredConversationTitle?: {
+    sessionId: string
+    agent: 'claude' | 'codex'
+    title: string
+  }
   /**
    * Set while a freshly started runtime has not yet taken back the client-hosted pages its paired
    * hosts are still holding. Such a snapshot is authoritative about terminals, which it rehydrated

@@ -17,12 +17,11 @@ import type { RpcContext } from '../core'
 /** The paired client whose view this launch should move, or null when it moves the host's. */
 export function agentLaunchCallerNavigationId(
   target: AgentLaunchTarget,
-  context: Pick<RpcContext, 'clientKind' | 'pairedDeviceId'>
+  context: Pick<RpcContext, 'caller'>
 ): string | null {
-  if (target.kind !== 'existing' || context.clientKind === undefined) {
-    return null
-  }
-  return context.pairedDeviceId?.trim() || null
+  return target.kind === 'existing' && context.caller?.kind === 'paired-device'
+    ? context.caller.deviceId
+    : null
 }
 
 /** Bookkeeping, never a gate: the agent already runs, so a failure here only leaves the view as it was. */

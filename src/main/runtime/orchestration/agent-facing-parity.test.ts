@@ -120,6 +120,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
     resolveStructuredTarget: () => ({ sessionId: CHAT_SESSION, dispatchId: null }),
     // The runtime's wiring of the structured lane.
     getCliCommand: localOrchestrationCliCommand,
+    senderName: () => null,
     host: {
       readSessionFacts: async () => ({ submissions: [] }),
       currentFence: () => 1,

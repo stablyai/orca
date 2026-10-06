@@ -38,7 +38,14 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
 }))
 
 // Fields that can name a party: the caller in ORCHESTRATION_CALLER_PARAM, a target in ORCHESTRATION_TARGET_PARAM.
-const PARTY_NAMING_FIELDS = ['to', 'from', 'terminal', 'callerTerminalHandle', 'sessionId'] as const
+const PARTY_NAMING_FIELDS = [
+  'to',
+  'from',
+  'terminal',
+  'callerTerminalHandle',
+  'sessionId',
+  'address'
+] as const
 // `method field` pairs with such a field that is neither, so never resolves as a party.
 const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
   'orchestration.run from': 'retired; refused before any handler',
@@ -95,9 +102,9 @@ describe('orchestration session callers at the dispatch entry', () => {
       })
       .sort()
 
-    // The population: 43 registered methods carrying 27 party-naming fields.
-    expect(registry.size).toBe(43)
-    expect(partyNaming).toHaveLength(27)
+    // The population: 44 registered methods carrying 28 party-naming fields.
+    expect(registry.size).toBe(44)
+    expect(partyNaming).toHaveLength(28)
     expect(partyNaming).toEqual(
       [
         ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(

@@ -31,7 +31,7 @@ export const fileDirectoryEntriesSchema = salvagingArray(
  * The capped flat list an older desktop answers when `files.readDir` is not allowlisted.
  *
  * `files` and `truncated` are both required and both read unguarded: directoryCacheFromFileList
- * walks `files` and splits each `relativePath` (file-list-fallback.ts:48), and
+ * walks `files` and splits each `relativePath` (file-list-fallback.ts:34), and
  * MobileFileExplorerPanel.tsx:136 publishes `truncated` into the state that draws the "Showing
  * first 5000" note. A row without a string `relativePath` drops — it can name no directory — where
  * main crashed the whole fallback on it.

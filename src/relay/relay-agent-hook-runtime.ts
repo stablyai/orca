@@ -71,6 +71,9 @@ export class RelayAgentHookRuntime {
   }
 
   private registerPtyEnvironment(): void {
+    this.ptyHandler.setClaudeTerminalEvidenceListener((paneKey, evidence) => {
+      this.hookServer.claudeTerminalInterrupts.observe(paneKey, evidence)
+    })
     this.ptyHandler.setAgentPresenceTrigger((paneKey) => {
       void this.hookServer.checkAgentPresence(paneKey)
     })

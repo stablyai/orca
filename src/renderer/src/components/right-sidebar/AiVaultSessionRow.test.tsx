@@ -10,6 +10,7 @@ import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { VaultSessionRow } from './AiVaultSessionRow'
+import { useAppStore } from '@/store'
 
 const session = {
   id: 'local:gemini:sess-1:/home/a/.gemini/s.json',
@@ -57,6 +58,7 @@ afterEach(() => {
   cleanup()
   vi.clearAllMocks()
   delete (window as unknown as { api?: unknown }).api
+  useAppStore.setState({ unifiedTabsByWorktree: {} })
 })
 
 function renderRow(
@@ -148,6 +150,102 @@ describe('VaultSessionRow details toggle', () => {
 })
 
 describe('VaultSessionRow native session actions', () => {
+  it('updates an open row from live chat titles while preserving manual names', () => {
+    const publish = (label: string, customLabel: string | null = null) =>
+      act(() => {
+        useAppStore.setState({
+          unifiedTabsByWorktree: {
+            'worktree-1': [
+              {
+                id: 'tab-1',
+                entityId: 'session-native',
+                groupId: 'group-1',
+                worktreeId: 'worktree-1',
+                contentType: 'agent-session',
+                agentSessionAgent: 'codex',
+                label,
+                customLabel,
+                color: null,
+                sortOrder: 0,
+                createdAt: 1
+              }
+            ]
+          }
+        })
+      })
+    publish('Codex Chat')
+    renderRow({
+      session: {
+        ...session,
+        agent: 'codex',
+        title: 'Cached provider title',
+        structuredSession: { sessionId: 'session-native', workspaceId: 'worktree-1' }
+      }
+    })
+    expect(screen.getByText('Codex Chat')).toBeTruthy()
+    expect(screen.queryByText('Cached provider title')).toBeNull()
+    publish('auth/login')
+    expect(screen.getByText('auth/login')).toBeTruthy()
+    publish('auth/login', 'Manual name')
+    expect(screen.getByText('Manual name')).toBeTruthy()
+    expect(screen.queryByText('auth/login')).toBeNull()
+    publish('auth/login')
+    expect(screen.getByText('auth/login')).toBeTruthy()
+  })
+
+  it('shows a manual structured-tab rename ahead of the host title', () => {
+    useAppStore.setState({
+      unifiedTabsByWorktree: {
+        'worktree-1': [
+          {
+            id: 'tab-1',
+            entityId: 'session-native',
+            groupId: 'group-1',
+            worktreeId: 'worktree-1',
+            contentType: 'agent-session',
+            agentSessionAgent: 'codex',
+            label: 'auth/login',
+            customLabel: 'Manual name',
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    renderRow({
+      session: {
+        ...session,
+        agent: 'codex',
+        title: 'auth/login',
+        structuredSession: { sessionId: 'session-native', workspaceId: 'worktree-1' }
+      }
+    })
+    expect(screen.getByText('Manual name')).toBeTruthy()
+    expect(screen.queryByText('auth/login')).toBeNull()
+    act(() => {
+      useAppStore.setState({
+        unifiedTabsByWorktree: {
+          'worktree-1': [
+            {
+              id: 'tab-1',
+              entityId: 'session-native',
+              groupId: 'group-1',
+              worktreeId: 'worktree-1',
+              contentType: 'agent-session',
+              agentSessionAgent: 'codex',
+              label: 'auth/login',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        }
+      })
+    })
+    expect(screen.getByText('auth/login')).toBeTruthy()
+  })
   it('shows the jump action instead of Resume for an open structured session', async () => {
     const onJumpToOriginalPane = vi.fn()
     const onResume = vi.fn()

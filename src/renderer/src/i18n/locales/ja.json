@@ -12,7 +12,18 @@
   },
   "settings": {
     "chat": {
-      "description": "チャットの外観を選びます。"
+      "description": "チャットの外観と名前の付け方を選びます。",
+      "names": {
+        "title": "チャット名",
+        "description": "選択したツールが最初のメッセージから新規チャットの名前を生成します。名前が生成されない場合は、Claude Chat または Codex Chat のままです。",
+        "enable": "チャットに自動で名前を付ける",
+        "recipe": "チャット名",
+        "recipeDescription": "新規チャットの最初のメッセージから短い名前を生成します。",
+        "customCommandDescription": "「カスタムコマンド」を選ぶレシピで共有するコマンドです。{prompt} を使うと入力を引数として渡し、使わない場合は標準入力で渡します。",
+        "saveFailed": "チャット名の設定を保存できませんでした。",
+        "searchAgent": "Agent",
+        "searchTemplate": "コマンドテンプレート"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABCまたはU.S. — OptionはAlt/Escシーケンスを送信します",
@@ -70,7 +81,15 @@
         "wide": "広い",
         "full": "全幅",
         "pixels": "px",
-        "reset": "リセット"
+        "reset": "リセット",
+        "matchTerminalInterface": "ターミナルの外観に合わせる",
+        "matchTerminalInterfaceDescription": "チャット全体にターミナルと同じフォントと配色を使用します。ターミナルのテーマを変更すると、チャットにも反映されます。",
+        "contrast": "コントラスト",
+        "contrastDescription": "背景に対するチャットの文字の明るさを調整します。右端にすると、以前の明るい表示になります。",
+        "softer": "柔らかく",
+        "sharper": "くっきり",
+        "terminalControlledHint": "ターミナルの外観設定に従います。",
+        "terminalControlledTooltip": "ターミナルの外観に合わせています。変更するには「ターミナルの外観に合わせる」をオフにしてください。"
       }
     },
     "browser": {
@@ -7157,7 +7176,7 @@
             "shellEnvToggleLabel": "シェル環境の使用の切り替え",
             "structuredTitle": "更新された構造化ネイティブチャットを使用する",
             "structuredCopy": "新規の Codex および Claude の Agent を構造化チャットとして開きます。オフにすると、ターミナルを使用したチャットで開きます。既存のチャットはそのまま残ります。",
-            "structuredScope": "このマシンと、対応するバージョンを実行しているペアリング済みの Orca サーバーで動作します。古いサーバーはターミナルチャットのままです。WSL および SSH ホストは引き続きターミナルチャットを使用し、Orca がプロセスの開始時間を読み取ることができない限り、Windows はターミナルチャットにフォールバックします。",
+            "structuredScope": "このマシンと、対応するバージョンを実行しているペアリング済みの Orca サーバーで動作します。古いサーバーはターミナルチャットのままです。WSL および SSH ホストは引き続きターミナルチャットを使用します。",
             "structuredToggleLabel": "更新された構造化ネイティブチャットの切り替え",
             "resumeTitle": "再起動後に作業中のチャットを自動的に再開する",
             "resumeCopy": "Orca が終了するかアップデートをインストールすると、Orca が再度開かれたときに作業中だったチャットが自動的に再開されます。",
@@ -8321,8 +8340,8 @@
           "3c88ec55d6": "検索条件に一致する設定が見つかりませんでした:「",
           "c7ad095d96": "設定を読み込んでいます…",
           "acc7bbdefd": "もう一度 ESC を押して設定を終了します",
-          "43b68e10f0": "Git AI Author の変更が保存されていません。離れるとそれらは破棄されます。",
-          "17bdee4ff1": "保存されていない Git AI Author の変更を破棄しますか?",
+          "43b68e10f0": "未保存の AI 設定があります。移動すると変更は破棄されます。",
+          "17bdee4ff1": "未保存の AI 設定を破棄しますか？",
           "084d8fac5b": "プライバシーとセキュリティ",
           "23931df7e8": "リモートホスト",
           "mobile_group": "モバイル",
@@ -14349,18 +14368,11 @@
             "88ffb502e5": "Markdown ノートを開く",
             "629528690b": "新規 Markdown ノート",
             "3215fc73e9": "新規ターミナル",
-            "da508bd7f5": "保存",
-            "918c2139f3": "保存しないでください",
-            "e7bf09d4d4": "キャンセル",
-            "690b6fb98a": "未保存の変更",
             "bbc177f98f": "有効化",
             "adc281394d": "閉じる",
             "8cf80db43b": "Agent が Orca を通じて調整できるように、Orca CLI と Agent スキルをセットアップします。",
             "2a3c5ddf5e": "オーケストレーションを有効にする",
-            "d6b563ae24": "エディターを読み込み中…",
             "8b14ba6c17": "新規ブラウザタブ",
-            "b085fb58b5": "このファイルには保存されていない変更が含まれています。",
-            "5ddc688c52": "「{{value0}}」には未保存の変更があります。閉じる前に保存しますか?",
             "25d7817f79": "ターミナル"
           },
           "FloatingTerminalToggleButton": {
@@ -17339,16 +17351,12 @@
         "listLabel": "再開されるチャット",
         "dontAskAgain": "二度と質問しないでください (自動的に再開します)",
         "dontAskAgainHint": "これは、「設定」→「実験的機能」→「チャット UI」でオフにできます。",
-        "continuedOne": "1 つのチャットを再開し、続行を依頼しました",
-        "continuedMany": "{{value0}} チャットを再開し、続行するよう依頼しました",
+        "continuedOne": "1 件のチャットを再開しました",
+        "continuedMany": "{{value0}} 件のチャットを再開しました",
         "selectAgent": "{{value0}} チャット「{{value1}}」を {{value2}} で再開します",
         "resumeSelected": "{{value0}} チャットを再開",
         "resumeSelectedOne": "1 チャットを再開",
-        "continueUnconfirmed": "{{value0}}チャットについては継続配信は未確認です。別のメッセージを送信する前に、それらを開いて確認してください。",
-        "continueUnconfirmed_one": "{{value0}}チャットは継続配信未確認です。別のメッセージを送信する前に、開いて確認してください。",
-        "continueUnconfirmed_other": "{{value0}}チャットについては継続配信は未確認です。別のメッセージを送信する前に、それらを開いて確認してください。",
         "dismissAll": "すべて閉じる",
-        "dismissUnconfirmed": "履歴書のオファーの拒否は確認されていません。ステータスバーにまだ表示されている可能性があります。",
         "notContinuedOne": "1 件のチャットを再開できませんでした",
         "notContinuedMany": "{{value0}} 件のチャットを再開できませんでした",
         "notConfirmedOne": "1 件のチャットが再開されたことを確認できませんでした",
@@ -17356,7 +17364,6 @@
         "notConfirmedOtherOne": "他のチャット 1 件が再開されたことを確認できませんでした",
         "notConfirmedOtherMany": "他のチャット {{value0}} 件が再開されたことを確認できませんでした",
         "show": "表示",
-        "dismiss": "閉じる",
         "activityUnnamed": "名前なし",
         "activityApproval": "承認待ち: {{value0}}",
         "activityQuestion": "回答待ち: {{value0}}",
@@ -17452,8 +17459,8 @@
       "NativeChatResumeFailureGuidance": {
         "unconfirmed": "Orca は “continue” メッセージが配信されたことを確認できませんでした。別のメッセージを送る前にチャットを開いて確認してください。",
         "superseded": "チャットを開いて返信してください。再起動の直後に新規作業が届いたため、Orca は “continue” メッセージを送信しませんでした。",
-        "conflict": "別の Orca ウィンドウまたはターミナルがこのセッションをまだ保持しています。閉じてから再試行してください。",
-        "ownershipUnknown": "Orca はこのセッションを所有するプロセスを確認中です。少し待ってから再試行してください。",
+        "conflict": "このチャットは別の Orca ウィンドウまたはターミナルで開かれています。そちらで閉じてから再試行してください。",
+        "ownershipUnknown": "このチャットはまだ再開できる状態ではありません。少し待ってから再試行してください。",
         "notAttached": "チャットが再接続されませんでした。再試行するか、開いて新しいターンを開始してください。",
         "dispatchRejected": "Agent が “continue” メッセージを拒否しました。チャットを開いて自分で送信してください。",
         "unsupported": "このチャットは Orca で再開できません。開いて停止位置を確認してください。",
@@ -17568,6 +17575,7 @@
       }
     },
     "native-chat": {
+      "reasoning": "推論",
       "contextMenu": {
         "copyOrcaSessionId": "Orca セッション ID をコピー",
         "orcaSessionIdCopied": "Orca セッション ID をコピーしました",
@@ -17581,6 +17589,7 @@
         "sendToTryAgain": "もう一度試すには、メッセージを送信してください。",
         "sendAgainToTryOnceMore": "メッセージをもう一度送信して、再度お試しください。",
         "couldNotStart": "{{agent}} を起動できませんでした。",
+        "editSavedArguments": "設定 > Agent > 引数で編集してください。",
         "couldNotRestart": "{{agent}} を再起動できませんでした。",
         "notSignedIn": "{{agent}} は選択したアカウントでサインインしていません。",
         "signInFirst": "先にサインインしてください。",
@@ -17590,6 +17599,7 @@
         "managedAccountEnvOverride": "この Claude の起動では独自の Anthropic サインイン変数が設定されています。管理対象の Claude アカウントを使用するには、それらを削除してください。",
         "accountSwitchInProgress": "Claude アカウントの切り替え中です。完了してからもう一度お試しください。",
         "managedAccountUnsupported": "WSL に Claude アカウントが追加されている間、Claude チャットには Windows の Claude アカウントが必要です。",
+        "launchFolderMissing": "このチャットが実行されていたフォルダーは存在しなくなりました。このチャットを続けるには、フォルダーを復元してください。",
         "chooseClaudeAccount": "Claude アカウントの設定で選択または追加してください。",
         "chooseClaudeAccountThenRunCommand": "Claude アカウントの設定で選択または追加してから、/{{command}} をもう一度実行してください。",
         "chooseClaudeAccountThenSend": "Claude アカウントの設定で選択または追加してから、メッセージをもう一度送信してください。",
@@ -17627,6 +17637,10 @@
         "stopRefusedQuoted": "{{agent}} は停止しませんでした: {{detail}}。",
         "noTurnToStop": "{{agent}} には停止できる実行中のターンがありませんでした。",
         "answerUnconfirmed": "回答は記録されましたが、Agent は確認しませんでした。",
+        "argumentsMissingValue": "保存された引数の {{option}} に値が必要です。",
+        "argumentsMultipleValues": "保存された引数の {{option}} に複数の値が指定されています。",
+        "argumentsPositionalPrompt": "保存された引数にプロンプトが含まれています。",
+        "argumentsUnsupportedOption": "保存された引数に未対応のオプション（{{option}}）が含まれています。",
         "hostFault": "Orca で問題が発生したため、この操作は完了しませんでした。",
         "hostFaultTryAgain": "Orca で問題が発生したため、この操作は完了しませんでした。もう一度お試しください。",
         "hostStopped": "{{agent}} の起動が完了しなかったため、Orca が停止しました。",
@@ -17661,6 +17675,7 @@
         "updateOrcaToOpenChat": "開くには Orca を更新してください。",
         "unsupported": "このチャットを実行しているコンピューターに新しいバージョンの Orca が必要です。そのコンピューターで Orca を更新してから、もう一度お試しください。",
         "notAvailable": "このチャットでは利用できません。",
+        "cannotRunHere": "Orca はここでこの Agent をチャットで実行できません。",
         "unreachable": "Orca は Agent に接続できませんでした。",
         "recordFailed": "Orca はこれをチャットの履歴に保存できませんでした。",
         "conversationCleared": "この会話はクリアされました。",
@@ -17744,7 +17759,7 @@
         "commands": "コマンド",
         "skills": "スキル",
         "loadingSkills": "スキルを読み込み中…",
-        "skillsUnavailableHost": "SSH チャットではスキルを利用できません",
+        "skillsUnavailableHost": "SSH チャットではスキルを一覧表示できません",
         "skillsLoadFailed": "スキルを読み込めませんでした",
         "retrySkills": "再試行",
         "skillCommandCollision": "スキル名でもあります - Agent が判断します",
@@ -17762,7 +17777,8 @@
         "imagePreviewUnavailable": "プレビューは利用できません",
         "workspaceAttachmentMismatch": "ファイルはソースワークスペースにのみ添付できます。",
         "attachmentOwnerChanged": "このワークスペースは接続中にホストを変更しました。ファイルを再度ドロップしてください。",
-        "attachmentUnreadable": "ドロップされたファイルを読み取れませんでした。"
+        "attachmentUnreadable": "ドロップされたファイルを読み取れませんでした。",
+        "tooManyAttachments": "一度に添付できるファイルは {{value0}} 個以下です。"
       },
       "tool": {
         "running": "実行中…",
@@ -17861,6 +17877,9 @@
       "status": {
         "responding": "Agent が応答中です",
         "working": "処理中…",
+        "stopping": "停止中…",
+        "queueAfterStop": "停止後に実行するメッセージをキューに追加",
+        "sendAfterStop": "停止後に実行するメッセージを送信",
         "thinking": "考え",
         "workingFor": "{{value0}} 処理中",
         "workedFor": "{{value0}} で完了",
@@ -17903,6 +17922,10 @@
       "loadingEarlier": "読み込み中…",
       "loadEarlier": "以前のメッセージをロードする",
       "loadingEarlierMessages": "以前のメッセージを読み込み中…",
+      "prompt": {
+        "collapse": "折りたたむ",
+        "expand": "展開"
+      },
       "question": {
         "step": "ステップ {{value0}}",
         "other": "他の…",
@@ -17920,8 +17943,7 @@
         "deny": "拒否",
         "cancel": "キャンセル",
         "reason": "理由",
-        "blockedPath": "ブロックされたパス",
-        "askRule": "質問ルール",
+        "needsAccess": "アクセスが必要なパス",
         "plan": {
           "file": "計画ファイル"
         }
@@ -17961,7 +17983,8 @@
         "details": "詳細",
         "plan": "プラン",
         "historyRepaired": "このチャットの履歴の一部を読み込めませんでした。",
-        "historyItemTooLarge": "チャットのこの部分は大きすぎるため表示できません。"
+        "historyItemTooLarge": "チャットのこの部分は大きすぎるため表示できません。",
+        "stoppedBeforeStart": "Agent の開始前に停止しました"
       },
       "providerFrame": {
         "byteLength": "{{value0}}バイト"
@@ -17991,13 +18014,19 @@
         "countTasksMany": "{{value0}} タスク",
         "headerTotal": "{{value0}} バックグラウンドタスク",
         "stateWorking": "実行中",
+        "stateWorkingCount": "{{value0}} 実行中",
         "stateMonitoring": "監視",
+        "stateMonitoringCount": "{{value0}} 監視",
         "stateWaiting": "待機中",
+        "stateWaitingCount": "{{value0}} 待機中",
         "stateBlocked": "ブロックされました",
+        "stateBlockedCount": "{{value0}} ブロックされました",
         "stateDone": "終わり",
+        "stateDoneCount": "{{value0}} 終わり",
         "stateIdle": "止まった",
-        "stateUnverifiable": "最近の更新なし",
-        "stateUnverifiableCount": "{{value0}} は最近の更新なし",
+        "stateIdleCount": "{{value0}} 止まった",
+        "stateUnverifiable": "状態を取得できません",
+        "stateUnverifiableCount": "{{value0}} は状態を取得できません",
         "reasonWaiting": "承認が必要です",
         "reasonBlocked": "失敗した",
         "groupAgents": "Agent",
@@ -18022,12 +18051,12 @@
           "idle": "idle",
           "failed": "失敗した",
           "stopped": "止まった",
-          "unverifiable": "最近の更新なし",
+          "unverifiable": "状態を取得できません",
           "workingCount": "{{value0}} は動作しています",
           "idleCount": "{{value0}} アイドル状態",
           "failedCount": "{{value0}} 件失敗",
           "stoppedCount": "{{value0}} が停止しました",
-          "unverifiableCount": "{{value0}} は最近の更新なし"
+          "unverifiableCount": "{{value0}} 件は状態を取得できません"
         },
         "startedOne": "1 人のサブ Agent を解雇しました",
         "startedN": "{{value0}} サブ Agent をキックオフしました",
@@ -18049,6 +18078,10 @@
         "summary": "コンテキスト: {{used}} / {{window}} トークン ({{percent}}%)、最後の応答から推定。",
         "used": "コンテキスト: {{used}} トークン使用済み、最後の応答から推定。",
         "unreported": "このセッションではコンテキストの使用量を表示できません。"
+      },
+      "agentMessage": {
+        "messageFrom": "送信元:",
+        "unnamedSender": "Agent"
       },
       "goal": {
         "placeholder": "目標を説明し、最良の結果を得るために測定可能な結果を​​定義する",
@@ -18096,13 +18129,17 @@
         "turnOffQueueing": "キューへの追加をオフにする",
         "withdrawnHold": "送信前に停止されました",
         "pausedSendFailed": "送信できませんでした。「送信」を押して再試行してください。",
+        "pausedKept": "まだ送信されていません。「送信」を押すと送信されます。",
         "paused": "一時停止中",
         "queuePausedStopped": "中断したため、キューを一時停止しました",
         "queuePausedRestarted": "Orca が再起動したため、キューを一時停止しました",
         "queuePausedCleared": "会話を消去したため、キューを一時停止しました",
         "queuePaused": "キューは一時停止中です",
-        "resume": "再開"
+        "resume": "再開",
+        "from": "送信元: {{names}}"
       },
+      "thought": "考えました",
+      "thoughtForDuration": "{{duration}} 考えました",
       "structuredSessionHostDeclined": "{{value0}} をターミナルで開きました",
       "structuredSessionHostDeclinedDescription": "このサーバーはこのワークスペースで {{value0}} チャットを実行できません。",
       "structuredSessionHostUnreachable": "{{value0}} に接続できませんでした",
@@ -18585,7 +18622,9 @@
     "clientHosted": {
       "preparationFailed": "このデスクトップ上でリモートブラウザを起動できませんでした。ペアリングされた接続を確認して、もう一度試してください。",
       "unavailableTitle": "クライアントホスト型ブラウザは利用不可",
-      "unavailableDescription": "このページは別のデスクトップに接続されているか、もう利用できません。",
+      "unavailableDescription": "このページは現在このデスクトップでは利用できません。",
+      "unavailableOtherDesktopDescription": "このページは別のデスクトップで開かれています。",
+      "unavailableHostOfflineDescription": "{{host}} はオフラインです。再接続されると、このページはここで再読み込みされます。",
       "download": {
         "started": "{{filename}}をダウンロード中…",
         "completed": "{{filename}}をダウンロードしました",

@@ -13,7 +13,6 @@
  */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import type { MessageRow, OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
 import type { OrchestrationCliCommand } from './cli-command'
@@ -26,6 +25,7 @@ import {
   type StructuredPointerSubmission
 } from './structured-pointer-operation-id'
 import { structuredMailSource } from './structured-mail-source'
+import type { SenderNameResolver } from './agent-message-sender'
 import {
   retainReasonForDispatch,
   structuredDispatchDelivered,
@@ -67,8 +67,8 @@ export type StructuredMailboxPointerHost = {
     dispatchId: string | null
     operationId: string
     expectedRuntimeFence: number
+    /** Names its senders as `from`. */
     body: AgentJournalMessageItem
-    source: AgentMessageSource
   }) => Promise<StructuredPointerSendOutcome>
   /** Current lease fence; `null` when no record backs the session any more. */
   currentFence: (sessionId: string) => number | null
@@ -86,6 +86,8 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
   resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
   /** The CLI name the PTY lane types for a local agent, so both lanes send the same pointer. */
   getCliCommand: () => OrchestrationCliCommand
+  /** What Orca calls a sender now, snapshotted onto the message; null when it has no name. */
+  senderName: SenderNameResolver
   host: StructuredMailboxPointerHost
   onRetain?: (input: {
     mailboxHandle: string
@@ -219,7 +221,14 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           type: 'text',
           text: formatMessagePointer(unread.length, mailboxHandle, this.deps.getCliCommand()).trim()
         }
-      ]
+      ],
+      from: structuredMailSource({
+        db,
+        mailboxHandle,
+        dispatchId: target.dispatchId,
+        batch: unread,
+        senderName: this.deps.senderName
+      })
     }
     const staged = unread.map((message) => message.id)
     const operation = resolveStructuredPointerOperation({
@@ -247,13 +256,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       dispatchId: target.dispatchId,
       operationId: operation.operationId,
       expectedRuntimeFence: fence,
-      body,
-      source: structuredMailSource({
-        db,
-        mailboxHandle,
-        dispatchId: target.dispatchId,
-        batch: unread
-      })
+      body
     })
     if (outcome.kind === 'unattached') {
       this.retain(mailboxHandle, sessionId, 'session-not-attached', reservedTypes)

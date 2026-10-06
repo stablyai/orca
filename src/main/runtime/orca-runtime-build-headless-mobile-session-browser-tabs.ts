@@ -279,17 +279,18 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     })
   }
 
-  protected emitMobileSessionTabsSnapshot(snapshot: RuntimeMobileSessionTabsSnapshot): void {
+  protected emitMobileSessionTabsSnapshot(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    metadata: Pick<RuntimeMobileSessionTabsResult, 'structuredConversationTitle'> = {}
+  ): void {
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
-    const result = this.toMobileSessionTabsResult(snapshot)
-    const changeSequence = ++this.mobileSessionTabsChangeSequence
+    const result = { ...this.toMobileSessionTabsResult(snapshot), ...metadata }
+    const sequence = ++this.mobileSessionTabsChangeSequence
     for (const subscription of this.mobileSessionTabListeners) {
-      subscription.listener(
-        this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-        changeSequence
-      )
+      const navigationId = subscription.clientNavigationId
+      subscription.listener(this.projectMobileSessionTabsForClient(result, navigationId), sequence)
     }
   }
 

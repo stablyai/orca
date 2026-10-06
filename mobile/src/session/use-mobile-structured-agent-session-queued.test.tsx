@@ -533,7 +533,8 @@ describe('mobile structured queued messages', () => {
           state: 'waiting',
           paused: false,
           needsAttention: false,
-          caption: null
+          caption: null,
+          attribution: null
         }
       ])
       // A frame without the field leaves the list alone; null empties it.
@@ -568,12 +569,28 @@ describe('mobile structured queued messages', () => {
       expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['same-id'])
     })
 
-    it('shows no cards from an incapable host even if a list arrives', async () => {
-      await mountSession(
-        LEGACY,
-        snapshotEvent({ queuedMessages: [queuedDraft({ messageId: 'draft-1' })] })
+    // A host that does not queue sends still keeps a message it accepted and never sent across a
+    // restart or a close, and publishes it as a card; only queueing a new send is gated.
+    it('shows the cards a host that does not queue sends publishes', async () => {
+      await mountSession(LEGACY)
+      act(() =>
+        listener?.(
+          batchEvent(
+            [
+              queuedDraft({ messageId: 'kept-1', paused: true, pausedReason: 'kept' }),
+              queuedDraft({ messageId: 'behind', position: 2 })
+            ],
+            [],
+            { reason: 'restarted' }
+          )
+        )
       )
-      expect(hook!.queued.cards).toEqual([])
+      expect(hook!.queued.cards.map(({ messageId, caption }) => ({ messageId, caption }))).toEqual([
+        { messageId: 'kept-1', caption: 'Not sent yet — tap Send to send it' },
+        { messageId: 'behind', caption: null }
+      ])
+      // The kept card is held on its own, so Resume would send the card behind it.
+      expect(hook!.queued.pause).toEqual({ reason: 'restarted' })
     })
   })
 

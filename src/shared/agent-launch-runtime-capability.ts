@@ -29,9 +29,15 @@ export const AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY = 'agent.launch.prompt
 export const AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY =
   'agent.launch.replay-required.v1' as const
 
+// A client that reads `prompt.outcome: 'unconfirmed'` on a replayed launch. Without it, a launch
+// whose host stopped mid-delivery replays as `agent_session_operation_unknown`, as it always has.
+export const AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY =
+  'agent.launch.prompt-unconfirmed.v1' as const
+
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY
 ] as const

@@ -52,6 +52,7 @@ import {
 } from './structured-agent-session-restart-resume-host'
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import { createStructuredAgentSessionConversationDelivery } from './structured-agent-session-host-delivery'
+import type * as conversation from './structured-agent-session-host-delivery'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
@@ -67,6 +68,7 @@ export class StructuredAgentSessionHost {
       this.subscribers.publish(sessionId, journal)
       this.conversationDelivery.afterCommit(sessionId, journal)
     },
+    deliverSettleEdge: (id, journal) => this.conversationDelivery.afterSettleEdge(id, journal),
     logger: sessionLogger.deferredStructuredAgentSessionLogger(() => this.deps.logger),
     onOpened: (sessionId) => this.queued.drain.schedule(sessionId),
     now: () => this.now()
@@ -90,9 +92,7 @@ export class StructuredAgentSessionHost {
   private readonly reconcileLeases: ReturnType<typeof createRestartReconciler>
   private readonly restore: ReturnType<typeof createStructuredAgentSessionHostRestore>
   private readonly lifetime: StructuredAgentSessionConversationLifetime
-  private readonly conversationDelivery: ReturnType<
-    typeof createStructuredAgentSessionConversationDelivery
-  >
+  private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
   private readonly backgroundTasks: StructuredAgentSessionBackgroundTaskChannel
   /** Public because the RPC surface addresses it directly; see the restart-resume collaborator. */
@@ -109,8 +109,8 @@ export class StructuredAgentSessionHost {
       (sessionId) => this.lifetime.conversation(sessionId),
       this.clientDelivery.readChildWork
     )
-    this.runtimeState = new StructuredAgentSessionHostRuntimeState(deps, (sessionId, error) =>
-      this.eventRecovery.recoverAfterSinkFailure(sessionId, error)
+    this.runtimeState = new StructuredAgentSessionHostRuntimeState(deps, this.sessions, (id, e) =>
+      this.eventRecovery.recoverAfterSinkFailure(id, e)
     )
     this.reconcileLeases = createRestartReconciler({
       store: deps.store,
@@ -252,19 +252,21 @@ export class StructuredAgentSessionHost {
 
   attach(
     caller: StructuredAgentSessionCaller,
-    params: AgentSessionAttachParams
+    params: AgentSessionAttachParams,
+    options?: Parameters<typeof attachStructuredAgentSession>[3]
   ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionAttachResult>> {
-    return attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
+    return attachStructuredAgentSession(this.attachContext(), caller.callerKey, params, options)
   }
 
   /** Test barrier: every write has landed by its call's return, so no production path needs it. */
-  flushStreamedEvents = (sessionId: string): Promise<void> =>
-    this.runtimeState.flushEventSink(sessionId)
+  flushStreamedEvents = (id: string): Promise<void> => this.runtimeState.flushEventSink(id)
 
   // Trigger inlined rather than imported: `AgentSessionResumeTrigger` in shared is the canonical
   // type, and this file has no line budget left for the import.
-  /** Quit: no exit or recovery settled after this starts a child or hands a message over. */
-  stopDelivery = (): void => this.conversationDelivery.dispose()
+  /** Quit: no exit or recovery settled after this starts a child or hands a message over, and the
+   *  queue hands no card over. */
+  stopDelivery = (): void =>
+    [this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
 
   async flushAllStreamedEvents(options?: { trigger?: 'quit' | 'update' }): Promise<void> {
     this.stopDelivery()

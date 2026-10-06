@@ -42,6 +42,7 @@ export type PaneManagerLike = {
   resetWebglTextureAtlases(): void
   hasWebglRenderer(paneId: number): boolean
   getNumericIdForLeaf(leafId: string): number | null
+  getLeafId(paneId: number): string | null
 }
 
 export type ExplorerFileSummary = Pick<OpenFile, 'id' | 'filePath' | 'relativePath'>

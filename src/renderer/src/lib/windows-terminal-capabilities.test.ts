@@ -69,7 +69,6 @@ function stubTerminalCapabilityApi(args: {
   wslDistros?: string[]
   gitBashAvailable?: boolean
   hostPlatform?: NodeJS.Platform | null
-  windowsProcessStartTimeAvailable?: boolean
 }): {
   wslIsAvailable: ReturnType<typeof vi.fn>
   wslListDistros: ReturnType<typeof vi.fn>
@@ -82,10 +81,7 @@ function stubTerminalCapabilityApi(args: {
   const pwshIsAvailable = vi.fn().mockResolvedValue(args.pwshAvailable)
   const isGitBashAvailable = vi.fn().mockResolvedValue(args.gitBashAvailable ?? false)
   const runtimeGetStatus = vi.fn().mockResolvedValue({
-    hostPlatform: 'hostPlatform' in args ? args.hostPlatform : 'win32',
-    ...(args.windowsProcessStartTimeAvailable !== undefined
-      ? { windowsProcessStartTimeAvailable: args.windowsProcessStartTimeAvailable }
-      : {})
+    hostPlatform: 'hostPlatform' in args ? args.hostPlatform : 'win32'
   })
 
   vi.stubGlobal('window', {
@@ -590,8 +586,7 @@ describe('windows terminal capabilities', () => {
     const { wslIsAvailable, wslListDistros } = stubTerminalCapabilityApi({
       wslAvailable: false,
       pwshAvailable: true,
-      wslDistros: [],
-      windowsProcessStartTimeAvailable: true
+      wslDistros: []
     })
     wslIsAvailable.mockResolvedValueOnce(false).mockResolvedValue(true)
     wslListDistros.mockResolvedValueOnce([]).mockResolvedValue(['Ubuntu'])

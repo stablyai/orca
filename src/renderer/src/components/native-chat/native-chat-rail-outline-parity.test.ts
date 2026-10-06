@@ -9,6 +9,7 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { buildNativeChatRailItems } from './native-chat-message-rail-items'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
@@ -18,8 +19,6 @@ import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
-
-const NO_CARDS: readonly string[] = []
 
 function row(sequence: number, body: AgentJournalItemBody, itemId = `item-${sequence}`) {
   return { itemId, revision: 1, sequence, observedAt: 1_000 + sequence, body }
@@ -70,7 +69,7 @@ const JOURNAL: AgentJournalRenderItem[] = [
 /** The renderer's own path from journal items to rail items, as the list runs it. */
 function loadedRailItems(items: AgentJournalRenderItem[], submissions: AgentJournalSubmission[]) {
   const projected = createNativeChatMessageListProjection()(
-    projectStructuredAgentSessionMessages(items, [], submissions, NO_CARDS)
+    projectStructuredAgentSessionMessages(items, [], submissions)
   ).conversation
   const messages = omitNativeChatThreadGoalRows(projectNativeChatTaskListFrames(projected))
   let turn: string | undefined
@@ -121,6 +120,35 @@ describe('conversation outline parity with the loaded rail', () => {
       'item-11',
       'item-12'
     ])
+  })
+
+  // The host serves this outline to clients of every version, so it lists what it always listed.
+  it('leaves out a send a Stop took back, which the transcript still draws', () => {
+    const stopped: AgentJournalSubmission = {
+      ...REJECTED,
+      clientMessageId: 'client-stopped',
+      reason: DISPATCH_REJECTED_CANCELLED
+    }
+    const journal = [
+      ...JOURNAL,
+      user(13, [{ type: 'text', text: 'never ran' }], agentJournalSubmissionKey('client-stopped'))
+    ]
+    const outline = projectAgentSessionConversationOutline(journal, [REJECTED, stopped])
+    // The rejected message is the desktop's own in-place row, as above.
+    const rejectedId = agentJournalSubmissionKey(REJECTED.clientMessageId)
+    const loaded = loadedRailItems(journal, [REJECTED, stopped]).filter(
+      (item) => item.id !== rejectedId
+    )
+
+    expect(outline.map((entry) => entry.itemId)).toEqual(loaded.map((item) => item.id))
+    expect(outline.map((entry) => entry.itemId)).not.toContain(
+      agentJournalSubmissionKey('client-stopped')
+    )
+    expect(
+      projectStructuredAgentSessionMessages(journal, [], [REJECTED, stopped]).map(
+        (message) => message.id
+      )
+    ).toContain(agentJournalSubmissionKey('client-stopped'))
   })
 
   it('carries each entry its creation sequence and image count', () => {

@@ -20,16 +20,18 @@ scripts:
       (_, index) => `  - <<: *shared\n    title: tab${index}`
     ).join('\n')
 
-    expect(
-      parseOrcaYaml(`
+    const parsed = parseOrcaYaml(`
 shared: &shared
   command: pnpm dev
 defaultTabs:
 ${tabs}
 `)
-    ).toMatchObject({
+    expect(parsed).toMatchObject({
       defaultTabs: expect.arrayContaining([{ title: 'tab39', command: 'pnpm dev' }])
     })
+    expect(parsed?.defaultTabs).toEqual(
+      Array.from({ length: 40 }, (_, index) => ({ title: `tab${index}`, command: 'pnpm dev' }))
+    )
   })
 
   it('rejects nested aliases that expand exponentially', () => {

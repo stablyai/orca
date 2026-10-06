@@ -61,6 +61,9 @@ function Probe({
   return null
 }
 
+// One past NATIVE_FILE_DROP_MAX_PATHS.
+const pathsOverDropLimit = Array.from({ length: 257 }, (_, index) => `/external/${index}.png`)
+
 let root: Root | null = null
 
 async function renderProbe(args: {
@@ -139,6 +142,31 @@ describe('useNativeChatExternalAttachments', () => {
     })
     expect(attachResolvedPaths).toHaveBeenCalledWith(['/local/a.txt'])
     expect(mocks.uploadNativeChatAttachmentPaths).not.toHaveBeenCalled()
+  })
+
+  it('rejects a whole batch over the drop path limit, like a drop does', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
+    const attachResolvedPaths = vi.fn()
+    const setNotice = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths, setNotice })
+    await act(async () => {
+      probe.latest().attachExternalPaths(pathsOverDropLimit)
+    })
+    expect(setNotice).toHaveBeenCalledExactlyOnceWith('Attach 256 or fewer files at a time.')
+    expect(mocks.stat).not.toHaveBeenCalled()
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
+  it('reports a remote runtime before the path limit, since trimming would not help', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'runtime' })
+    const setNotice = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths: vi.fn(), setNotice })
+    await act(async () => {
+      probe.latest().attachExternalPaths(pathsOverDropLimit)
+    })
+    expect(setNotice).toHaveBeenCalledExactlyOnceWith(
+      'Local attachments are not available for remote sessions.'
+    )
   })
 
   it('waits for the local file check and skips rejected paths without blocking other files', async () => {

@@ -264,6 +264,7 @@ describe('structured agent-session runtime install', () => {
       hostId: HOST_ID,
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory!,
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveEnvironment: async () => ({})
     })
@@ -286,7 +287,7 @@ describe('structured agent-session runtime install', () => {
     expect(stopped).toBe(true)
   })
 
-  it('does not infer Windows process identity support from an injected reader', async () => {
+  it('supports native Windows creation without the process-table addon', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
     const originalPlatform = process.platform
     const location: AgentSessionExecutionLocation = {
@@ -305,11 +306,14 @@ describe('structured agent-session runtime install', () => {
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => stateDirectory!,
         resolveEnvironment: async () => ({}),
+        resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
         readProcessStartTime: async () => 1_700_000_000_000
       })
 
-      expect(host.supportsCreate(location, 'codex')).toBe(false)
+      // No addon means no creation times; chat no longer depends on them.
+      expect(host.supportsCreate(location, 'codex')).toBe(true)
+      expect(host.supportsCreate(location, 'claude')).toBe(true)
     } finally {
       __setWindowsProcessTreeLoaderForTests()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })

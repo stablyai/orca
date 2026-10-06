@@ -47,6 +47,8 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
+import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
@@ -324,6 +326,28 @@ describe('a send is answered at acceptance', () => {
 })
 
 describe('a start the chat needed and did not get', () => {
+  it('shows a saved Arguments refusal on the resumed chat row and rejected message', async () => {
+    await host.close(SESSION, 'evict')
+    acquire.mockRejectedValueOnce(
+      new AgentSessionPreSpawnError(
+        new StructuredAgentArgumentsError('Codex', '--unsafe=private', 'unsupportedOption')
+      )
+    )
+    const id = await accept('first')
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+    const sentence =
+      "Codex couldn't restart. Saved Arguments contain an unsupported option (--unsafe). Edit them in Settings > Agents > Arguments. Send your message to try again."
+    expect(await errorRows()).toEqual([sentence])
+    expect(await submission(id)).toMatchObject({
+      reason: sentence,
+      rejection: {
+        kind: 'restartFailed',
+        argumentProblem: { agent: 'Codex', option: '--unsafe', problem: 'unsupportedOption' }
+      }
+    })
+    expect(JSON.stringify(await host.journalSnapshot(SESSION))).not.toContain('private')
+  })
+
   it('writes one error row and rejects every queued message with it; the next send starts (W3)', async () => {
     await host.close(SESSION, 'evict')
     acquire.mockRejectedValueOnce(new Error('spawn codex ENOENT'))
@@ -648,18 +672,33 @@ describe('a start whose failure the delivery loop settles before the exit is pub
 })
 
 describe('Stop withdraws what is queued', () => {
-  it('withdraws a crash leftover ahead of any delivery step (W17a)', async () => {
+  it('never meets a crash leftover: the open it runs settles it first (W17a)', async () => {
     await writeAsEarlierProcess(async (journal, fence) => {
+      await journal.appendSubmission({
+        ...earlierSubmission('person', 'p', true),
+        origin: 'client',
+        source: USER_MESSAGE_SOURCE,
+        fence
+      })
       await journal.appendSubmission({ ...earlierSubmission('leftover', 'l', true), fence })
     })
 
-    // Stop's own open wakes the delivery loop, whose first step queues behind this Stop.
     expect(await stop()).toMatchObject({ ok: true })
 
+    // A person's message is kept as a held card, which no Stop withdraws; the rest is rejected.
+    const hostRestarted = agentSessionFailureWords(agentSessionFailureFact('hostRestarted'), {
+      surface: 'rejection'
+    })
+    expect(await submission('person')).toMatchObject({
+      dispatchState: 'rejected',
+      ...hostRestarted
+    })
     expect(await submission('leftover')).toMatchObject({
       dispatchState: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
+      ...hostRestarted
     })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(page.ok && page.page.queuedMessages?.map((card) => card.messageId)).toEqual(['person'])
     expect(acquire).toHaveBeenCalledTimes(1)
   })
 

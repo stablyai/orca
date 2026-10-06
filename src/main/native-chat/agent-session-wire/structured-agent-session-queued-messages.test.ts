@@ -13,6 +13,7 @@ import {
 } from '../../../shared/agent-session-wire'
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
 import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import {
@@ -637,16 +638,15 @@ describe('/clear', () => {
     })
   })
 
-  it('carries who each card is from', async () => {
-    const notice = {
-      message: 'mail-notice',
-      mailbox: 'run:r1',
-      dispatchId: null,
-      messages: []
-    } as const
-    const source: AgentMessageSource = { kind: 'agent', senders: [], orchestration: notice }
+  it("carries who each card is from on its body, fingerprinted for the replacement's echo", async () => {
+    const party = { address: 'term_peer', terminalHandle: 'term_peer', orcaSessionId: null }
+    const from: AgentMessageSource = {
+      kind: 'agent',
+      senders: [{ party, name: 'Claude' }],
+      orchestration: { message: 'mail-notice', mailbox: 'run:r1', dispatchId: null, messages: [] }
+    }
     const working = await workingSend()
-    await send('pointer', 'queue-if-active', { internal: true, source }).result
+    await send('pointer', 'queue-if-active', { internal: true, from }).result
     await send('typed', 'queue-if-active').result
     await stop()
     await settleAccepted(working, 'a')
@@ -655,11 +655,13 @@ describe('/clear', () => {
     if (!replacementId) {
       throw new Error('expected a replacement session')
     }
-    const journal = host.collaboratorsForTests().sessions.get(replacementId)?.journal
-    expect(journal?.queuedMessages.list().map((row) => row.source)).toEqual([
-      source,
-      { kind: 'user' }
-    ])
+    const rows =
+      host.collaboratorsForTests().sessions.get(replacementId)?.journal.queuedMessages.list() ?? []
+    expect(rows.map((row) => row.body.from)).toEqual([from, undefined])
+    // The sender is outside the fingerprint, or the provider's echo of the text would not match.
+    expect(rows[0]?.fingerprint).toBe(
+      agentSessionSendBodyFingerprint(replacementId, hostTestMessage('pointer'))
+    )
   })
 
   it("the replacement's 'cleared' pause lifts through Resume exactly like a Stop's", async () => {

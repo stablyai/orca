@@ -13,7 +13,9 @@ import type { AgentSessionStoreState } from './agent-session-record-store-file'
 
 /**
  * How the failed attempt's provider process was accounted for.
- * - `exit-proven`: cleanup observed the whole tree gone.
+ * - `exit-proven`: cleanup observed the whole tree gone. On Windows it is the provider close's own
+ *   proof: the root left on its own after its stdin ended, with its descendants not addressed (as
+ *   with Codex), or a forced `taskkill /T` reported the tree terminated.
  * - `root-exit-observed`: the owner root's exit was observed first-hand, so the
  *   identity this lease is keyed on is dead, but its descendants were not proven
  *   gone. Releases the lease and says exactly that, claiming nothing more.

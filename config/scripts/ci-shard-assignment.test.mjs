@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BaseSequencer } from 'vitest/node'
+import RuntimeSequencer from './vitest-runtime-sequencer.mjs'
 import { balanceFiles } from './ci-shard-assignment.mjs'
 import { discoverE2eFiles, planE2e } from './ci-e2e-shard-plan.mjs'
 import { parseTimingLog } from './ci-shard-timing-import.mjs'
@@ -37,7 +37,7 @@ describe('timing-weighted shard selection', () => {
     expect(() => balanceFiles(['a'], 0, {})).toThrow('count')
   })
 
-  it('uses the post-filter Vitest discovery unchanged across eight shards and retains default sort', async () => {
+  it('uses the post-filter Vitest discovery unchanged across eight shards', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-unit-shards-'))
     directories.push(directory)
     vi.stubEnv('ORCA_SHARD_MANIFEST', join(directory, 'assignment.json'))
@@ -49,7 +49,7 @@ describe('timing-weighted shard selection', () => {
       const sequencer = new TimingSequencer({
         config: { root: process.cwd(), shard: { index, count: 8 } }
       })
-      expect(sequencer.sort).toBe(BaseSequencer.prototype.sort)
+      expect(sequencer.sort).toBe(RuntimeSequencer.prototype.sort)
       selected.push(...(await sequencer.shard(specs)))
       const manifest = JSON.parse(readFileSync(join(directory, 'assignment.json'), 'utf8'))
       expect(manifest.selectedShard).toBe(index)

@@ -68,7 +68,7 @@ export function useStructuredAgentSessionOutbox(args: {
   submissions: readonly AgentJournalSubmission[]
   /** The loaded journal rows: a rejected message stays here until the row that draws it loads. */
   journalItems: readonly AgentJournalRenderItem[]
-  /** The composer that gets back what a Stop withdrew from this client's outbox. */
+  /** The composer that gets back, when empty, what a Stop took from this client's outbox. */
   composerScopeKey?: string
   /** The host's queued-messages capability and the user's setting; a send stamped
    *  `delivery: 'queue-if-active'` is held as a draft only while the agent is working. */
@@ -77,6 +77,8 @@ export function useStructuredAgentSessionOutbox(args: {
    *  its entry here under the draft's own id; once the host visibly holds the draft, the
    *  entry retires so the same text can never come back twice. */
   queuedMessageIds?: readonly string[]
+  /** The chat reads Stopping: a send made now is marked as made while stopping. */
+  stopping?: boolean
 }) {
   const {
     composerScopeKey,
@@ -85,13 +87,14 @@ export function useStructuredAgentSessionOutbox(args: {
     queueDelivery = NO_QUEUE_DELIVERY,
     queuedMessageIds,
     sessionId,
+    stopping: sentWhileStopping = false,
     submissions,
     target
   } = args
   const { capability: queueCapability, enabled: queueEnabled } = queueDelivery
   // What resends and drops a send in flight besides a Retry or a new send; see the hook.
   const owner = useStructuredAgentSessionOutboxOwnerChange(target, fence)
-  const restoreWithdrawn = useStructuredAgentSessionWithdrawnRestore(sessionId, composerScopeKey)
+  const restoreWithdrawn = useStructuredAgentSessionWithdrawnRestore(composerScopeKey)
   // The outbox lives in the session's store, shared with every other writer; this view holds it
   // open and drains it. Loading maps what a previous owner left mid-send.
   const load = useCallback(
@@ -158,7 +161,6 @@ export function useStructuredAgentSessionOutbox(args: {
     // The reconcile returns `current` itself when no entry changed, so a batch that changes
     // nothing writes nothing.
     if (admittedInFlight || next !== current) {
-      restoreWithdrawn.byHost(current, submissions)
       commitStructuredAgentSessionOutbox(sessionId, [...next])
     }
     // Keyed on the entry actually in flight, which is no longer always the head: the journal
@@ -178,7 +180,7 @@ export function useStructuredAgentSessionOutbox(args: {
     ) {
       setError(null)
     }
-  }, [journalItems, restoreWithdrawn, sessionId, submissions])
+  }, [journalItems, sessionId, submissions])
 
   // The one place that owns the refs, the React state and the storage write.
   const applyDisposition = useCallback(
@@ -271,14 +273,22 @@ export function useStructuredAgentSessionOutbox(args: {
         return false
       }
       // Whether it asks to be queued is decided when it first goes out.
-      if (!appendStructuredAgentSessionOutboxMessage(sessionId, text, attachments)) {
+      if (
+        !appendStructuredAgentSessionOutboxMessage(
+          sessionId,
+          text,
+          attachments,
+          undefined,
+          sentWhileStopping
+        )
+      ) {
         setError(agentSessionWriteNoticeText(STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED))
         return false
       }
       setError(null)
       return true
     },
-    [sessionId]
+    [sentWhileStopping, sessionId]
   )
 
   const { withdrawUnsent } = useStructuredAgentSessionOutboxOwnership({

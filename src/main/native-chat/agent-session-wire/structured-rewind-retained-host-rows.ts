@@ -6,7 +6,10 @@
 
 import { parseCodexGoalJournalItemId } from '../../codex/codex-goal-journal-identity'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_ITEM_BODY_KINDS } from '../../../shared/agent-session-journal-schemas'
+import {
+  AGENT_JOURNAL_ITEM_BODY_KINDS,
+  isAdmissibleAgentJournalMessageBody
+} from '../../../shared/agent-session-journal-schemas'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
@@ -93,13 +96,30 @@ export function retainedRowReplacement(row: RetainedRow): AgentJournalProducerLi
 }
 
 /** A provider item the old epoch held keeps that row's scope, producer and first-seen time; only
- *  its body is the provider's. */
+ *  its body is the provider's, and a user message keeps the sender the host recorded on it. */
 function withHeldAttribution(item: RetainedRow, held: RetainedRow | undefined): RetainedRow {
   if (!held) {
     return item
   }
-  const { itemId: _itemId, body: _body, ...attribution } = held
-  return { ...item, ...attribution }
+  const { itemId: _itemId, body: heldBody, ...attribution } = held
+  return { ...item, ...attribution, body: withHeldSender(item.body, heldBody) }
+}
+
+/** The provider's copy of a user message, with the sender the host recorded on it put back: no
+ *  provider ever carries it. */
+function withHeldSender(
+  provider: RetainedRow['body'],
+  held: RetainedRow['body']
+): RetainedRow['body'] {
+  if (
+    !isAdmissibleAgentJournalMessageBody(held) ||
+    !isAdmissibleAgentJournalMessageBody(provider)
+  ) {
+    return provider
+  }
+  return held.from !== undefined && held.role === 'user' && provider.role === 'user'
+    ? Object.assign({}, provider, { from: held.from })
+    : provider
 }
 
 /** Provider turn id → the item id of its turn record: the turn's own, or the command turn that

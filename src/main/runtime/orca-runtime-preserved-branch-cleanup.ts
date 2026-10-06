@@ -10,6 +10,7 @@ import type {
   RuntimeTerminalAgentStatusEvent
 } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
+import type { ClaudeTerminalEvidence } from '../../shared/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
@@ -61,6 +62,10 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     | null
 
   protected readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
+
+  protected readonly onClaudeTerminalEvidence:
+    | ((paneKey: string, evidence: ClaudeTerminalEvidence) => void)
+    | null
 
   protected terminalSideEffectLocalConsumerAvailable = false
 

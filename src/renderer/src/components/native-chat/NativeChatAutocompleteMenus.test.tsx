@@ -127,7 +127,7 @@ describe('NativeChatPickerMenu', () => {
       />
     )
 
-    expect(screen.getAllByText("Skills aren't available in SSH chats")).toHaveLength(2)
+    expect(screen.getAllByText("Skills can't be listed in SSH chats")).toHaveLength(2)
     expect(screen.queryByText("Couldn't load skills")).toBeNull()
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
   })

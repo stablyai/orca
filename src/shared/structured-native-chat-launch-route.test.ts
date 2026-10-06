@@ -63,7 +63,6 @@ describe('per-launch structured feasibility', () => {
     ['a reused PTY agent', { reusesTerminal: true }, 'reused-terminal'],
     ['grok', { agent: 'grok' }, 'agent-without-structured-session'],
     ['openclaude', { agent: 'openclaude' }, 'agent-without-structured-session'],
-    ['a floating workspace', { workspaceKind: 'floating' }, 'floating-workspace'],
     ['a custom start directory', { startsOutsideWorkspaceRoot: true }, 'custom-start-directory'],
     ['an SSH host', { executionHostId: 'ssh:host-a' }, 'remote-execution-host'],
     ['a missing capability', { hostCapabilities: [] }, 'runtime-capability'],
@@ -106,9 +105,14 @@ describe('per-launch structured feasibility', () => {
     ).toEqual({ supported: false, blocker: 'project-runtime' })
   })
 
-  it('supports a folder workspace without widening floating scope', () => {
-    expect(support({ workspaceKind: 'folder' })).toEqual({ supported: true })
-  })
+  // Why floating is supported: its configured directory resolves like any other workspace, so a
+  // session can be filed under it. Workspace kind no longer refuses anything on its own.
+  it.each(['folder', 'floating', 'git-worktree'] as const)(
+    'supports a local %s workspace',
+    (workspaceKind) => {
+      expect(support({ workspaceKind })).toEqual({ supported: true })
+    }
+  )
 })
 
 describe('agents beyond Claude and Codex', () => {

@@ -2,6 +2,7 @@
 import { OrchestrationStructuredMailboxPointerDelivery } from './orchestration/structured-mailbox-pointer-delivery'
 import { createStructuredMailboxPointerHost } from './orchestration/structured-mailbox-pointer-host'
 import { localOrchestrationCliCommand } from './orchestration/cli-command'
+import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-names'
 import { isStructuredWorkerHandle } from './structured-worker-identity'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { OrcaRuntimeWithRuntimeId } from './orca-runtime-runtime-id'
@@ -255,8 +256,19 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
       resolveStructuredTarget: (mailboxHandle) =>
         this.resolveStructuredMailboxTarget(mailboxHandle),
       getCliCommand: localOrchestrationCliCommand,
+      senderName: (party, reportedDispatchId) =>
+        this.orchestrationSenderNames.nameOf(party, reportedDispatchId),
       host: createStructuredMailboxPointerHost()
     })
+
+  /** What Orca calls an agent that sends through it; public for every such send site. */
+  readonly orchestrationSenderNames = new RuntimeOrchestrationSenderNames({
+    getDb: () => this._orchestrationDb,
+    getHandleRecord: (handle) => this.handles.get(handle),
+    getPtyAgents: (ptyId) => this.ptysById.get(ptyId),
+    getTerminalPaneKey: (handle) => this.getTerminalPaneKey(handle),
+    getWorkspaceSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId)
+  })
 
   protected readonly orchestrationMailboxNotifications =
     new OrchestrationMailboxNotificationCoordinator<RuntimeMessageWaiter>({

@@ -22,7 +22,10 @@ import {
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../shared/protocol-version'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
+import {
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from '../../shared/agent-launch-runtime-capability'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../shared/remote-runtime-client-capabilities'
 import { supportsAgentLaunch } from '../runtime/rpc/methods/agent-launch'
@@ -61,6 +64,12 @@ const REMOTE_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
   // Unsettled, not a decision: the local tabs sync reads the census's `authoritative` label
   // (local-structured-session-tabs-sync/inventory-refresh.ts), which main drops without this.
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY
+]
+
+/** Advertised to main and deliberately NOT to a remote host yet. */
+const LOCAL_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
+  // Read by the desktop's own launches first; a remote host is told when its launches move over.
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY
 ]
 
 function missingFrom(
@@ -104,9 +113,9 @@ describe('desktop renderer runtime client capabilities', () => {
     expect(missingFrom(PAIRED_HOST_RECEIVES, DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES)).toEqual(
       [...REMOTE_ONLY_BY_DECISION].sort()
     )
-    // The same renderer reads structured chats on either host, so it claims nothing only locally.
+    // The same renderer reads structured chats on either host, so only a recorded decision is local.
     expect(missingFrom(DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES, PAIRED_HOST_RECEIVES)).toEqual(
-      []
+      [...LOCAL_ONLY_BY_DECISION].sort()
     )
   })
 })

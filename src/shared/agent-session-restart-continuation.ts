@@ -8,8 +8,8 @@
 // Sending this needs the user's OPT-IN, not their presence: the restart prompt's resume sends it,
 // and so does a launch the user ticked "resume automatically" for. That is acceptable because the
 // work being continued is the user's own, the wording above tells the agent to VERIFY its last
-// action before repeating it, and the launch reports what it did. Reattaching without a send
-// remains a separate operation that never comes here.
+// action before repeating it, and each chat it reaches carries a note saying so. Reattaching
+// without a send remains a separate operation that never comes here.
 
 import type { AgentSessionResumeMarker } from './agent-session-resume-marker'
 

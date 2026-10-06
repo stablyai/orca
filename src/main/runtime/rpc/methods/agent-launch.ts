@@ -146,12 +146,21 @@ async function resolveUnlaunchedIntent(
   return intent
 }
 
+/** What a launch admitted under an operation id carries into its execution. */
+type ReplaySafeLaunch = {
+  attachOperationId: string
+  callerKey: string
+  terminalSpawn: TerminalSpawnDispatch
+  /** Records the surface the moment it exists, an owed prompt as `unconfirmed`. Fired, never
+   *  awaited: the ledger's transactions run in order, so the final settle still lands after it, and
+   *  the prompt never waits on bookkeeping. */
+  recordSurface: (provisional: AgentLaunchResult) => void
+}
+
 async function runAgentLaunch(
   intent: AgentLaunchIntent,
   context: RpcContext,
-  attachOperationId?: string,
-  operationCallerKey?: string,
-  terminalSpawn?: TerminalSpawnDispatch
+  replaySafe?: ReplaySafeLaunch
 ): Promise<AgentLaunchResult> {
   const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
   return executeAgentLaunch({
@@ -159,19 +168,19 @@ async function runAgentLaunch(
     intent,
     surfaces: agentLaunchSurfaceFactory(
       context,
-      attachOperationId,
-      operationCallerKey,
+      replaySafe?.attachOperationId,
+      replaySafe?.callerKey,
       callerNavigationId !== null,
-      terminalSpawn
+      replaySafe?.terminalSpawn
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
-    ...(callerNavigationId !== null
-      ? {
-          onSurfacePublished: (surface) =>
-            selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
-        }
-      : {})
+    onSurfacePublished: (surface) => {
+      replaySafe?.recordSurface(surface)
+      if (callerNavigationId !== null) {
+        selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
+      }
+    }
   })
 }
 
@@ -259,13 +268,12 @@ async function executeReplaySafeAgentLaunch(
   const terminalSpawn = trackTerminalSpawnDispatch()
   let result: AgentLaunchResult
   try {
-    result = await runAgentLaunch(
-      intent,
-      context,
-      admission.attachOperationId,
-      admission.callerKey,
-      terminalSpawn
-    )
+    result = await runAgentLaunch(intent, context, {
+      attachOperationId: admission.attachOperationId,
+      callerKey: admission.callerKey,
+      terminalSpawn,
+      recordSurface: (provisional) => void settleQuietly(admission.record(provisional))
+    })
   } catch (error) {
     const failedWithoutEffects = launchFailureWithoutEffectsCode(
       error,
@@ -277,7 +285,8 @@ async function executeReplaySafeAgentLaunch(
     }
     throw new AgentLaunchExecutionError(error, failedWithoutEffects !== null)
   }
-  // Settlement is bookkeeping; failure leaves the truthful `unknown` refusal for later retries.
+  // Bookkeeping: a failure leaves the first write, whose owed prompt replays as `unconfirmed` (or as
+  // `unknown` to a caller that cannot read it), never as `not-delivered`.
   await settleQuietly(admission.settle(result))
   return result
 }

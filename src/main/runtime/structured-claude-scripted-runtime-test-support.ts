@@ -230,6 +230,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => directory,
         resolveClaudeCommand: () => '/usr/local/bin/claude',
+        resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ stripAuthEnv: false }),
         openClaudeConnection: openConnection,
         readProcessStartTime

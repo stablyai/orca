@@ -17,6 +17,7 @@ import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
 import type { AgentSessionProviderHandle } from './agent-session-provider-handle'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
+import type { AgentMessageSource } from './agent-session-message-source'
 
 export { type AgentType }
 
@@ -100,6 +101,11 @@ export type AgentJournalBoundedPayload = {
 export const AGENT_JOURNAL_MESSAGE_SEND_MODES = ['goal'] as const
 export type AgentJournalMessageSendMode = (typeof AGENT_JOURNAL_MESSAGE_SEND_MODES)[number]
 
+/** Whether the provider is still producing a message. Persisted and open for growth: a reader
+ *  that cannot place a value reads it as `completed`. */
+export const AGENT_JOURNAL_MESSAGE_STATES = ['running', 'completed'] as const
+export type AgentJournalMessageState = (typeof AGENT_JOURNAL_MESSAGE_STATES)[number]
+
 export type AgentJournalMessageItem = {
   kind: 'message'
   role: NativeChatRole
@@ -110,6 +116,16 @@ export type AgentJournalMessageItem = {
   /** Present on a conversation command the user sent, such as `/compact`. The text is what the
    *  user typed; this names the command so no reader parses it. Open like `sentAs`. */
   command?: { name: string }
+  /** Present on a message another agent sent through Orca; absent, the person's. Host-written,
+   *  outside every fingerprint, never sent to the provider. */
+  from?: AgentMessageSource
+  /** Written on reasoning rows. ABSENT MEANS UNKNOWN — an older host, or a row from before the
+   *  field — and never reads as live. The row's `observedAt` is when it started. */
+  state?: AgentJournalMessageState
+  /** Host clock when the host saw the message end: its own end, or the end of the turn or
+   *  stream that cut it off. Absent only when no end was seen live — history, a crash sweep — so
+   *  no duration is claimed. */
+  completedAt?: number
 }
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
@@ -478,6 +494,15 @@ export type AgentJournalSubmission = {
    *  A person's turn is what ends a Stop's queue pause. The snapshot still carries it; no released
    *  client reads it. */
   origin?: 'client' | 'host'
+  /** Who it is from: the kind of its `AgentSessionMessageSource` ('user' or 'agent'), so a restart
+   *  or a close keeps only a person's unsent send as a card. Only the kind: the senders stay on the
+   *  card, host-only, and publishing them here would need a strip. A newer build's kind is kept as
+   *  written, never read as absent. Absent when its sender named none (a dispatch preamble, a restart continuation). */
+  source?: { kind: string }
+  /** On a rejected send the host kept as a card: that card's message id. The text lives on the
+   *  card, so no surface draws this send, before or after the card is sent, edited or deleted.
+   *  Recorded in the rejection's own transaction (`journal-unsent-send-hold.ts`). */
+  keptAsQueuedMessageId?: string
 }
 
 /** Durable answer to "did my send land?", keyed by client message id. Only an

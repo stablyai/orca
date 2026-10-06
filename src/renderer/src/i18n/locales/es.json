@@ -12,7 +12,18 @@
   },
   "settings": {
     "chat": {
-      "description": "Elige el aspecto de los chats."
+      "description": "Elige cómo se ven y se nombran los chats.",
+      "names": {
+        "title": "Nombres de chats",
+        "description": "Usa un agente para nombrar los chats nuevos a partir de su primer mensaje. Si no se genera un nombre, se mantienen como Claude Chat o Codex Chat.",
+        "enable": "Nombrar chats automáticamente",
+        "recipe": "Nombre del chat",
+        "recipeDescription": "Genera un nombre breve a partir del primer mensaje de un chat nuevo.",
+        "customCommandDescription": "Línea de comandos compartida por las recetas que seleccionan Comando personalizado. Usa {prompt} para pasar la entrada como argumento; de lo contrario, se envía por la entrada estándar.",
+        "saveFailed": "No se pudo guardar la configuración de nombres de chats.",
+        "searchAgent": "agente",
+        "searchTemplate": "plantilla de comandos"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC o EE. UU. — Option envía secuencias Alt/Esc",
@@ -70,7 +81,15 @@
         "wide": "Amplio",
         "full": "Completo",
         "pixels": "px",
-        "reset": "Restablecer"
+        "reset": "Restablecer",
+        "matchTerminalInterface": "Usar la interfaz del terminal",
+        "matchTerminalInterfaceDescription": "Usa la fuente y los colores de la interfaz del terminal para todo el chat. Se mantiene sincronizado si cambias el tema del terminal.",
+        "contrast": "Contraste",
+        "contrastDescription": "Ajusta el brillo del texto del chat sobre el fondo. El extremo derecho recupera el aspecto anterior, más brillante.",
+        "softer": "Más suave",
+        "sharper": "Más nítido",
+        "terminalControlledHint": "Lo controla la interfaz del terminal.",
+        "terminalControlledTooltip": "Coincide con la interfaz del terminal. Desactiva Usar la interfaz del terminal para cambiarlo."
       }
     },
     "browser": {
@@ -7173,7 +7192,7 @@
             "resumeCopy": "Cuando Orca se cierra o instala una actualización, los chats que estaban trabajando se reanudan automáticamente al volver a abrir Orca.",
             "structuredTitle": "Utilice el chat nativo estructurado actualizado",
             "structuredCopy": "Abra nuevos agentes de Codex y Claude como chats estructurados. Si está desactivado, los abre en el chat respaldado por la terminal. Los chats que ya existen permanecen como están.",
-            "structuredScope": "Se ejecuta en esta máquina y en servidores Orca emparejados que ejecutan una versión que lo admita; los servidores más antiguos mantienen el chat de terminal. Los hosts WSL y SSH continúan usando el chat de terminal y Windows recurre a él a menos que Orca pueda leer las horas de inicio del proceso.",
+            "structuredScope": "Se ejecuta en esta máquina y en servidores Orca emparejados que ejecutan una versión que lo admita; los servidores más antiguos mantienen el chat de terminal. Los hosts WSL y SSH continúan usando el chat de terminal.",
             "structuredToggleLabel": "Alternar chat nativo estructurado actualizado",
             "resumeTitle": "Reanudar los chats de trabajo automáticamente después de reiniciar",
             "resumeToggleLabel": "Alternar reanudación automática después de un reinicio"
@@ -8299,8 +8318,8 @@
           "3c88ec55d6": "No se encontraron configuraciones para \"",
           "c7ad095d96": "Cargando ajustes...",
           "acc7bbdefd": "Presiona ESC de nuevo para salir de ajustes",
-          "43b68e10f0": "Tienes cambios no guardados de Git AI Author. Al salir se descartarán.",
-          "17bdee4ff1": "¿Descartar cambios no guardados de Git AI Author?",
+          "43b68e10f0": "Hay cambios de IA sin guardar. Se descartarán al salir.",
+          "17bdee4ff1": "¿Descartar los cambios de IA sin guardar?",
           "084d8fac5b": "Privacidad y seguridad",
           "23931df7e8": "Hosts remotos",
           "mobile_group": "Móvil",
@@ -14349,18 +14368,11 @@
             "88ffb502e5": "Abrir nota Markdown",
             "629528690b": "Nueva nota Markdown",
             "3215fc73e9": "Nueva terminal",
-            "da508bd7f5": "Guardar",
-            "918c2139f3": "No guardar",
-            "e7bf09d4d4": "Cancelar",
-            "690b6fb98a": "Cambios no guardados",
             "bbc177f98f": "Habilitar",
             "adc281394d": "Descartar",
             "8cf80db43b": "Configura la CLI de Orca y el skill de agente para que los agentes puedan coordinarse a través de Orca.",
             "2a3c5ddf5e": "Habilitar orquestación",
-            "d6b563ae24": "Cargando editor...",
             "8b14ba6c17": "Nueva pestaña del navegador",
-            "b085fb58b5": "Este archivo tiene cambios no guardados.",
-            "5ddc688c52": "\"{{value0}}\" tiene cambios no guardados. ¿Quieres guardar antes de cerrar?",
             "25d7817f79": "terminal"
           },
           "FloatingTerminalToggleButton": {
@@ -17334,7 +17346,6 @@
         "notConfirmedOtherOne": "No se pudo confirmar que 1 otro chat se reanudó",
         "notConfirmedOtherMany": "No se pudo confirmar que {{value0}} otros chats se reanudaron",
         "show": "Mostrar",
-        "dismiss": "Descartar",
         "activityApproval": "Esperando tu aprobación: {{value0}}",
         "activityMidReply": "Estaba respondiendo",
         "activityMonitorMany": "Supervisando {{value0}} tareas en segundo plano",
@@ -17351,16 +17362,12 @@
         "listLabel": "Chats que se reanudarían",
         "dontAskAgain": "No volver a preguntar (reanudar automáticamente)",
         "dontAskAgainHint": "Puedes desactivarlo en Ajustes → Experimental → Interfaz de chat.",
-        "continuedOne": "Se reanudó 1 chat y se le pidió continuar",
-        "continuedMany": "Se reanudaron {{value0}} chats y se les pidió continuar",
+        "continuedOne": "Se reanudó 1 chat",
+        "continuedMany": "Se reanudaron {{value0}} chats",
         "selectAgent": "Reanudar {{value0}} chat \"{{value1}}\" en {{value2}}",
         "resumeSelected": "Reanudar {{value0}} chats",
         "resumeSelectedOne": "Reanudar 1 chat",
-        "continueUnconfirmed": "La entrega de la continuación no está confirmada para {{value0}} chats. Ábrelos para comprobarlo antes de enviar otro mensaje.",
-        "continueUnconfirmed_one": "La entrega de la continuación no está confirmada para {{value0}} chat. Ábrelo para comprobarlo antes de enviar otro mensaje.",
-        "continueUnconfirmed_other": "La entrega de la continuación no está confirmada para {{value0}} chats. Ábrelos para comprobarlo antes de enviar otro mensaje.",
-        "dismissAll": "Descartar todo",
-        "dismissUnconfirmed": "No se confirmó el descarte de la oferta de reanudación; es posible que siga en la barra de estado."
+        "dismissAll": "Descartar todo"
       },
       "NativeChatResumeOutcomeRow": {
         "openChat": "Abrir chat",
@@ -17375,8 +17382,8 @@
       "NativeChatResumeFailureGuidance": {
         "unconfirmed": "Orca no pudo confirmar que el mensaje “continue” se entregó. Abre el chat y compruébalo antes de enviar otro.",
         "superseded": "Abre el chat y responde. Llegó trabajo nuevo justo después del reinicio, así que Orca no envió su mensaje “continue”.",
-        "conflict": "Otra ventana de Orca o terminal aún conserva esta sesión. Ciérrala e inténtalo de nuevo.",
-        "ownershipUnknown": "Orca aún está determinando qué proceso posee esta sesión. Espera un momento e inténtalo de nuevo.",
+        "conflict": "Este chat está abierto en otra ventana de Orca o en una terminal. Ciérralo allí e inténtalo de nuevo.",
+        "ownershipUnknown": "Este chat aún no está listo para reanudarse. Espera un momento e inténtalo de nuevo.",
         "notAttached": "El chat no se reconectó. Reinténtalo o ábrelo para empezar un turno nuevo.",
         "dispatchRejected": "El agente rechazó el mensaje “continue”. Abre el chat y envía uno tú mismo.",
         "unsupported": "Orca no puede reanudar este chat. Ábrelo para ver dónde se detuvo.",
@@ -17533,6 +17540,7 @@
   },
   "components": {
     "native-chat": {
+      "reasoning": "Razonamiento",
       "contextMenu": {
         "copyOrcaSessionId": "Copiar ID de sesión de Orca",
         "orcaSessionIdCopied": "ID de sesión de Orca copiado",
@@ -17546,6 +17554,7 @@
         "sendToTryAgain": "Envíe su mensaje para volver a intentarlo.",
         "sendAgainToTryOnceMore": "Vuelva a enviar su mensaje para intentarlo de nuevo.",
         "couldNotStart": "{{agent}} no pudo iniciarse.",
+        "editSavedArguments": "Edítalos en Ajustes > Agentes > Argumentos.",
         "couldNotRestart": "{{agent}} no pudo reiniciarse.",
         "notSignedIn": "{{agent}} no tiene la sesión iniciada con la cuenta seleccionada.",
         "signInFirst": "Inicie sesión primero.",
@@ -17555,6 +17564,7 @@
         "managedAccountEnvOverride": "Este inicio de Claude define sus propias variables de inicio de sesión de Anthropic. Quítelas para usar una cuenta de Claude administrada.",
         "accountSwitchInProgress": "Hay un cambio de cuenta de Claude en curso. Vuelva a intentarlo cuando termine.",
         "managedAccountUnsupported": "Mientras haya una cuenta de Claude agregada en WSL, los chats de Claude necesitan una cuenta de Claude de Windows.",
+        "launchFolderMissing": "La carpeta en la que se ejecutaba este chat ya no existe. Restáurela para continuar este chat.",
         "chooseClaudeAccount": "Elija o agregue una en la configuración de Cuentas de Claude.",
         "chooseClaudeAccountThenRunCommand": "Elija o agregue una en la configuración de Cuentas de Claude y vuelva a ejecutar /{{command}}.",
         "chooseClaudeAccountThenSend": "Elija o agregue una en la configuración de Cuentas de Claude y vuelva a enviar su mensaje.",
@@ -17592,6 +17602,10 @@
         "stopRefusedQuoted": "{{agent}} no se detuvo: {{detail}}.",
         "noTurnToStop": "{{agent}} no tenía ningún turno en curso que detener.",
         "answerUnconfirmed": "Su respuesta se registró, pero el agente no la confirmó.",
+        "argumentsMissingValue": "Los argumentos guardados necesitan un valor para {{option}}.",
+        "argumentsMultipleValues": "Los argumentos guardados asignan más de un valor a {{option}}.",
+        "argumentsPositionalPrompt": "Los argumentos guardados incluyen un mensaje.",
+        "argumentsUnsupportedOption": "Los argumentos guardados contienen una opción no compatible ({{option}}).",
         "hostFault": "Orca tuvo un problema, así que esto no se completó.",
         "hostFaultTryAgain": "Orca tuvo un problema, así que esto no se completó. Vuelva a intentarlo.",
         "hostStopped": "{{agent}} no terminó de iniciarse, así que Orca lo detuvo.",
@@ -17626,6 +17640,7 @@
         "updateOrcaToOpenChat": "Actualice Orca para abrirlo.",
         "unsupported": "Esto requiere una versión más reciente de Orca en el equipo que ejecuta este chat. Actualice Orca allí y vuelva a intentarlo.",
         "notAvailable": "Esto no está disponible en este chat.",
+        "cannotRunHere": "Orca no puede ejecutar este agente en un chat aquí.",
         "unreachable": "Orca no pudo comunicarse con el agente.",
         "recordFailed": "Orca no pudo guardar esto en el historial del chat.",
         "conversationCleared": "Esta conversación se borró.",
@@ -17709,7 +17724,7 @@
         "commands": "Comandos",
         "skills": "Habilidades",
         "loadingSkills": "Cargando habilidades…",
-        "skillsUnavailableHost": "Las habilidades no están disponibles en los chats SSH",
+        "skillsUnavailableHost": "Las habilidades no se pueden listar en los chats SSH",
         "skillsLoadFailed": "No se pudieron cargar las habilidades",
         "retrySkills": "Reintentar",
         "skillCommandCollision": "También es un nombre de habilidad - el agente decide",
@@ -17727,7 +17742,8 @@
         "imagePreview": "Vista previa de la imagen a tamaño completo",
         "workspaceAttachmentMismatch": "Los archivos solo se pueden adjuntar a su espacio de trabajo de origen.",
         "attachmentOwnerChanged": "Este espacio de trabajo cambió de host durante la conexión; vuelve a soltar los archivos.",
-        "attachmentUnreadable": "No se pudieron leer los archivos soltados."
+        "attachmentUnreadable": "No se pudieron leer los archivos soltados.",
+        "tooManyAttachments": "Adjunta {{value0}} archivos o menos a la vez."
       },
       "tool": {
         "running": "Ejecutando…",
@@ -17825,6 +17841,9 @@
       },
       "status": {
         "responding": "El agente está respondiendo",
+        "stopping": "Deteniendo…",
+        "queueAfterStop": "Pon en cola un mensaje para que se ejecute después de detenerse",
+        "sendAfterStop": "Envía un mensaje para que se ejecute después de detenerse",
         "interruptedAfter": "Interrumpido tras {{value0}}",
         "failedAfter": "Falló tras {{value0}}",
         "working": "Trabajando…",
@@ -17868,6 +17887,10 @@
       "loadingEarlier": "Cargando…",
       "loadEarlier": "Cargar mensajes anteriores",
       "loadingEarlierMessages": "Cargando mensajes anteriores…",
+      "prompt": {
+        "collapse": "Contraer",
+        "expand": "Expandir"
+      },
       "question": {
         "step": "Paso {{value0}}",
         "other": "Otro…",
@@ -17885,8 +17908,7 @@
         "deny": "Denegar",
         "cancel": "Cancelar",
         "reason": "Motivo",
-        "blockedPath": "Ruta bloqueada",
-        "askRule": "Regla de solicitud",
+        "needsAccess": "Necesita acceso a",
         "plan": {
           "file": "Archivo de plan"
         }
@@ -17909,17 +17931,17 @@
       "subagents": {
         "unnamed": "Subagente",
         "state": {
-          "failedCount": "{{value0}} fallidas",
+          "failedCount": "{{value0}} con error",
           "working": "trabajando",
           "failed": "falló",
           "stopped": "detenido",
-          "unverifiable": "sin actualización reciente",
-          "unverifiableCount": "{{value0}} sin actualización reciente",
+          "unverifiable": "estado no disponible",
+          "unverifiableCount": "{{value0}} con estado no disponible",
           "completed": "completado",
-          "idle": "idle",
+          "idle": "inactivo",
           "workingCount": "{{value0}} trabajando",
-          "idleCount": "{{value0}} inactivo",
-          "stoppedCount": "{{value0}} detenido"
+          "idleCount": "{{value0}} inactivo(s)",
+          "stoppedCount": "{{value0}} detenido(s)"
         },
         "startedOne": "Inició 1 subagente",
         "startedN": "Inició {{value0}} subagentes",
@@ -17943,13 +17965,17 @@
         "turnOffQueueing": "Desactivar la cola",
         "withdrawnHold": "Detenido antes de enviarse",
         "pausedSendFailed": "No se pudo enviar. Pulsa Enviar para reintentar.",
+        "pausedKept": "Aún no se ha enviado. Pulsa Enviar para enviarlo.",
         "paused": "En pausa",
         "queuePausedStopped": "Cola en pausa porque interrumpiste",
         "queuePausedRestarted": "Cola en pausa porque Orca se reinició",
         "queuePausedCleared": "Cola en pausa después de que borraste la conversación",
         "queuePaused": "Cola en pausa",
-        "resume": "Reanudar"
+        "resume": "Reanudar",
+        "from": "De {{names}}"
       },
+      "thought": "Pensó",
+      "thoughtForDuration": "Pensó durante {{duration}}",
       "receipt": {
         "cancelled": "Cancelado",
         "unavailable": "Respuesta seleccionada no disponible",
@@ -17984,15 +18010,21 @@
         "countTasksMany": "{{value0}} tareas",
         "headerTotal": "{{value0}} tareas en segundo plano",
         "stateWorking": "trabajando",
+        "stateWorkingCount": "{{value0}} trabajando",
         "stateMonitoring": "supervisando",
+        "stateMonitoringCount": "{{value0}} supervisando",
         "stateWaiting": "esperando",
+        "stateWaitingCount": "{{value0}} esperando",
         "stateBlocked": "bloqueado",
-        "stateDone": "listo",
+        "stateBlockedCount": "{{value0}} en estado bloqueado",
+        "stateDone": "terminado",
+        "stateDoneCount": "{{value0}} en estado terminado",
         "stateIdle": "detenido",
-        "stateUnverifiable": "sin actualización reciente",
-        "stateUnverifiableCount": "{{value0}} sin actualización reciente",
-        "reasonWaiting": "necesita aprobación",
-        "reasonBlocked": "falló",
+        "stateIdleCount": "{{value0}} en estado detenido",
+        "stateUnverifiable": "estado no disponible",
+        "stateUnverifiableCount": "{{value0}} con estado no disponible",
+        "reasonWaiting": "aprobación pendiente",
+        "reasonBlocked": "con error",
         "groupShell": "Shell",
         "groupMonitors": "Monitores",
         "groupWorkflows": "Flujos de trabajo"
@@ -18024,7 +18056,8 @@
         "details": "Detalles",
         "plan": "Plan",
         "historyRepaired": "No se pudo cargar parte del historial de este chat.",
-        "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla."
+        "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla.",
+        "stoppedBeforeStart": "Detenido antes de que el agente empezara"
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
@@ -18051,6 +18084,10 @@
         "summary": "Contexto: {{used}} / {{window}} tokens ({{percent}} %), estimado a partir de la última respuesta.",
         "used": "Contexto: {{used}} tokens usados, estimado a partir de la última respuesta.",
         "unreported": "El uso del contexto no está disponible para esta sesión."
+      },
+      "agentMessage": {
+        "messageFrom": "Mensaje de",
+        "unnamedSender": "un agente"
       },
       "goal": {
         "placeholder": "Describe tu objetivo y define resultados medibles para obtener mejores resultados",
@@ -18585,7 +18622,9 @@
     "clientHosted": {
       "preparationFailed": "No se pudo iniciar el navegador remoto en este escritorio. Comprueba la conexión emparejada y vuelve a intentarlo.",
       "unavailableTitle": "Navegador alojado en el cliente no disponible",
-      "unavailableDescription": "Esta página está asociada a otro escritorio o ya no está disponible.",
+      "unavailableDescription": "Esta página no está disponible en este escritorio en este momento.",
+      "unavailableOtherDesktopDescription": "Esta página está abierta en otro escritorio.",
+      "unavailableHostOfflineDescription": "{{host}} está sin conexión. Esta página se volverá a cargar aquí cuando se reconecte.",
       "download": {
         "started": "Descargando {{filename}}…",
         "completed": "{{filename}} descargado",

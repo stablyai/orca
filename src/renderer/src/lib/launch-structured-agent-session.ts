@@ -232,9 +232,8 @@ export function abandonStructuredAgentSessionLaunchIntent(
 }
 
 /**
- * Only the host that will execute the session can answer whether it supports creating one there —
- * on Windows that means reading the provider child's process start time, which a client cannot
- * observe. Both providers ask: the host classifies per agent, and Codex inherits the
+ * Only the host that will execute the session can answer whether it supports creating one there.
+ * Both providers ask: the host classifies per agent, and Codex inherits the
  * unresolvable-selector retry above along with the probe. The unknown branch stays on the chat for
  * reconciliation: a retry may follow a create whose reply was lost. Answers the seed create will use.
  */

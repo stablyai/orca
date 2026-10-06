@@ -8,6 +8,7 @@ import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import {
@@ -112,6 +113,9 @@ export function journalDispatchRowBuilder(
     providerItemId,
     reason: boundedDispatchReason(input),
     ...(input.state === 'rejected' ? { rejection: input.rejection } : {}),
+    ...(input.state === 'rejected' && input.keptAsQueuedMessageId !== undefined
+      ? { keptAsQueuedMessageId: input.keptAsQueuedMessageId }
+      : {}),
     // Every rejection states its turn, null for none, so a reader tells it from an older row.
     ...(input.state === 'rejected'
       ? {
@@ -321,6 +325,7 @@ export function buildJournalSubmissionRow(input: {
   handoverRecorded?: true
   queuedMessageId?: string
   origin?: 'client' | 'host'
+  source?: Pick<AgentSessionMessageSource, 'kind'>
 }): JournalSubmissionRow {
   return {
     kind: 'submission',
@@ -331,6 +336,8 @@ export function buildJournalSubmissionRow(input: {
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
     ...(input.handoverRecorded ? { handoverRecorded: true } : {}),
     ...(input.queuedMessageId !== undefined ? { queuedMessageId: input.queuedMessageId } : {}),
-    ...(input.origin !== undefined ? { origin: input.origin } : {})
+    ...(input.origin !== undefined ? { origin: input.origin } : {}),
+    // The kind only; who the senders are is on the message body.
+    ...(input.source !== undefined ? { source: { kind: input.source.kind } } : {})
   }
 }

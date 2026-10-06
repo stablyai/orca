@@ -201,9 +201,19 @@ function attachContext(
   } as unknown as StructuredAgentSessionAttachContext
 }
 
-const attachParams = {
-  envelope: { sessionId: SESSION, clientOperationId: 'op-1' }
-} as unknown as Parameters<typeof attachStructuredAgentSession>[2]
+const attachParams: Parameters<typeof attachStructuredAgentSession>[2] = {
+  envelope: {
+    sessionId: SESSION,
+    clientOperationId: 'op-1',
+    expectedRuntimeFence: 1,
+    payloadFingerprint: 'fixture-payload'
+  },
+  location: ownerRecord().location,
+  provider: 'codex',
+  agent: 'codex',
+  accountHome: ownerRecord().accountHome,
+  runtimeKind: 'native'
+}
 
 describe('a session that leaves the host without an explicit close', () => {
   it('forgets the retained exact subject after the record and live session are deleted first', async () => {

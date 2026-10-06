@@ -22,6 +22,7 @@ import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-hand
 import { retirePairedRuntimeBrowserClientHostEnvironment } from '../browser/paired-runtime-browser-client-host-runtime'
 import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-environment-browser-client-host-handler'
 import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
+import { watchRuntimeEnvironmentPreference } from './runtime-environment-preference'
 
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
 const getUserDataPath = (): string => app.getPath('userData')
@@ -75,8 +76,11 @@ export function invalidateRuntimeEnvironmentTransport(environmentId: string): Pr
 }
 
 const pendingSubscriptions = new Map<string, PendingRuntimeSubscription>()
+let stopPreferenceWatch: (() => void) | undefined
 
 export function registerRuntimeEnvironmentHandlers(store: Store): void {
+  stopPreferenceWatch?.()
+  stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath())
   for (const pending of pendingSubscriptions.values()) {
     pending.close()
   }

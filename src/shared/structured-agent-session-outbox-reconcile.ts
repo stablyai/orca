@@ -22,9 +22,15 @@ export function reconcileStructuredAgentSessionOutbox(
   // none changed: a caller re-reading every journal batch writes nothing then.
   const next = entries.flatMap((entry) => {
     const submission = settled.get(entry.clientMessageId)
-    // Settled by the host: its history shows one delivered; a withdrawn one goes back to the
-    // composer.
+    // Settled by the host: its history shows one delivered, and one a Stop took back in place.
     if (submission?.dispatchState === 'accepted' || dispatchWasWithdrawn(submission)) {
+      return []
+    }
+    // The host kept it as a card, which carries the text from here, edited or deleted included.
+    if (
+      submission?.dispatchState === 'rejected' &&
+      submission.keptAsQueuedMessageId !== undefined
+    ) {
       return []
     }
     if (submission?.dispatchState === 'rejected') {

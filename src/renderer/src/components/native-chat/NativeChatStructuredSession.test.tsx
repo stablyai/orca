@@ -1,3 +1,4 @@
+import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
 import { getDefaultSettings } from '../../../../shared/constants'
 // @vitest-environment happy-dom
 
@@ -20,6 +21,7 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
 vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
+vi.mock('./use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
 vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
@@ -37,7 +39,17 @@ describe('NativeChatStructuredSession', () => {
     useAppStore.setState({
       settings: {
         ...getDefaultSettings('/tmp'),
-        nativeChatAppearance: { fontSize: 18, codeFontSize: 11, width: 'wide' }
+        theme: 'dark',
+        nativeChatAppearance: {
+          fontSize: 18,
+          codeFontSize: 11,
+          width: 'wide',
+          matchTerminalInterface: true,
+          contrast: 120
+        },
+        terminalFontFamily: 'Consolas',
+        terminalFontSize: 16,
+        terminalColorOverrides: { background: '#112233', foreground: '#ddeeff' }
       }
     })
     const { container } = render(
@@ -51,22 +63,84 @@ describe('NativeChatStructuredSession', () => {
       />
     )
     const root = container.querySelector<HTMLElement>('[data-native-chat-root]')
-    expect(root?.style.getPropertyValue('--chat-font-size')).toBe('18px')
-    expect(root?.style.getPropertyValue('--chat-code-font-size')).toBe('11px')
+    expect(root?.style.colorScheme).toBe('dark')
+    expect(root?.style.color).toBe('var(--foreground)')
+    expect(root?.dataset.nativeChatScheme).toBe('dark')
+    expect(root?.style.getPropertyValue('--chat-source-background')).toBe('#112233')
+    expect(root?.style.getPropertyValue('--chat-source-foreground')).toBe('#ddeeff')
+    expect(root?.style.getPropertyValue('--chat-code-font-family')).toContain('Consolas')
+    expect(root?.style.getPropertyValue('--chat-font-family')).toContain('Consolas')
+    expect(root?.style.getPropertyValue('--chat-foreground-mix')).toBe('100%')
+    expect(root?.style.getPropertyValue('--chat-font-size')).toBe('16px')
+    expect(root?.style.getPropertyValue('--chat-code-font-size')).toBe('16px')
     expect(root?.style.getPropertyValue('--chat-content-max-width')).toBe('60rem')
     act(() =>
       useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), nativeChatAppearance: { width: 'full' } }
+        settings: {
+          ...getDefaultSettings('/tmp'),
+          theme: 'dark',
+          nativeChatAppearance: { width: 'full' }
+        }
       })
     )
+    expect(root?.style.colorScheme).toBe('')
+    expect(root?.style.color).toBe('')
+    expect(root?.dataset.nativeChatScheme).toBeUndefined()
+    expect(root?.style.getPropertyValue('--chat-source-background')).toBe('')
+    expect(root?.style.getPropertyValue('--chat-source-foreground')).toBe('')
+    expect(root?.style.getPropertyValue('--chat-font-family')).toBe('')
+    expect(root?.style.getPropertyValue('--chat-foreground-mix')).toBe('78%')
     expect(root?.style.getPropertyValue('--chat-font-size')).toBe('14px')
     expect(root?.style.getPropertyValue('--chat-content-max-width')).toBe('none')
     act(() => useAppStore.setState({ settings: original }))
   })
 
+  it('skips appearance work on unrelated settings writes and updates the root for appearance changes', () => {
+    const original = useAppStore.getState().settings
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      theme: 'dark' as const,
+      nativeChatAppearance: { matchTerminalInterface: true }
+    }
+    useAppStore.setState({ settings })
+    const resolveColors = vi.spyOn(terminalThemeSelection, 'resolveConfiguredTerminalColors')
+    const view = render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="appearance-subscription-tab"
+        sessionId="appearance-subscription-session"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const initialResolutions = resolveColors.mock.calls.length
+    act(() =>
+      useAppStore.setState({
+        settings: { ...settings, terminalFontSize: settings.terminalFontSize + 1 }
+      })
+    )
+    expect(resolveColors).toHaveBeenCalledTimes(initialResolutions + 1)
+    expect(
+      view.container
+        .querySelector<HTMLElement>('[data-native-chat-root]')
+        ?.style.getPropertyValue('--chat-font-size')
+    ).toBe(`${settings.terminalFontSize + 1}px`)
+    act(() => useAppStore.setState({ settings: { ...settings, terminalFontFamily: 'Menlo' } }))
+    expect(resolveColors).toHaveBeenCalledTimes(initialResolutions + 2)
+    expect(
+      view.container
+        .querySelector<HTMLElement>('[data-native-chat-root]')
+        ?.style.getPropertyValue('--chat-code-font-family')
+    ).toContain('Menlo')
+    view.unmount()
+    useAppStore.setState({ settings: original })
+  })
+
   afterEach(() => {
     cleanup()
     resetStructuredSessionMocks()
+    vi.restoreAllMocks()
   })
 
   it("gives the composer this pane shows the conversation's own draft, and Stop returns text there", () => {
@@ -306,6 +380,8 @@ describe('NativeChatStructuredSession', () => {
         body: {
           kind: 'approval',
           title: 'Allow command?',
+          blockedPath: '/outside/repo/.git/config',
+          matchedAskRule: { source: 'projectSettings', toolName: 'Bash' },
           detail: 'pnpm test',
           options: [
             { id: 'allow', label: 'Allow' },
@@ -341,6 +417,9 @@ describe('NativeChatStructuredSession', () => {
       awaitingInput: 'shown'
     })
     expect(mocks.approvalCardProps?.approval.title).toBe('Allow command?')
+    // The card decides whether to show the path; the ask rule never reaches it.
+    expect(mocks.approvalCardProps?.approval.blockedPath).toBe('/outside/repo/.git/config')
+    expect(mocks.approvalCardProps?.approval).not.toHaveProperty('matchedAskRule')
     expect(screen.queryByTestId('structured-composer')).toBeNull()
     expect(document.querySelector('[data-native-chat-background-tasks="true"]')).not.toBeNull()
 

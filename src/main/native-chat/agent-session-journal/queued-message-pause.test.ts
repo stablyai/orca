@@ -29,6 +29,7 @@ import {
 } from './queued-message-pause'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { QUEUED_MESSAGE_PAUSED_KEPT } from '../../../shared/agent-session-queued-message-wire'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -63,7 +64,6 @@ function queueDraft(journal: AgentSessionJournal, messageId: string, carriedFrom
     body: message(messageId),
     fingerprint: `fp-${messageId}`,
     hostInstance: HOST,
-    source: { kind: 'user' },
     ...(carriedFrom ? { carriedFrom } : {})
   })
 }
@@ -496,8 +496,7 @@ describe("a restart's pause", () => {
       messageId: 'draft-restart',
       body: message('written before the restart'),
       fingerprint: 'fp-draft-restart',
-      hostInstance: 'proc-0',
-      source: { kind: 'user' }
+      hostInstance: 'proc-0'
     })
     expect(reason(journal)).toBe('restarted')
     await queueDraft(journal, 'draft-legacy')
@@ -518,6 +517,23 @@ describe("a restart's pause", () => {
       ['draft-legacy', HOST, null],
       ['draft-failed', HOST, 'send_failed']
     ])
+  })
+
+  it('adoption and Resume keep a kept card held: only its own Send, Edit or Delete releases it', async () => {
+    const journal = await open()
+    const kept = await journal.queuedMessages.insert({
+      messageId: 'kept',
+      body: message('kept across a restart'),
+      fingerprint: 'fp-kept',
+      hostInstance: 'proc-0',
+      holdReason: QUEUED_MESSAGE_PAUSED_KEPT
+    })
+    expect(kept.holdReason).toBe(QUEUED_MESSAGE_PAUSED_KEPT)
+    expect(await journal.queuedMessages.adopt(HOST)).toBe(true)
+    expect(journal.queuedMessages.get('kept')).toMatchObject({
+      hostInstance: HOST,
+      holdReason: QUEUED_MESSAGE_PAUSED_KEPT
+    })
   })
 
   it('an adoption with nothing to adopt changes nothing and fires no commit notification', async () => {
@@ -594,6 +610,31 @@ describe('which cards the pauses in force hold', () => {
       ['after', 'restarted']
     ])
     expect(resumableQueuePause(pausesOver(cards), cards)?.reason).toBe('stopped')
+  })
+
+  // Held on its own, as a card whose send failed: the queue goes past it, and Resume is offered
+  // over the cards a pause holds behind it.
+  it('a kept card is skipped like a send_failed one; the cards behind it still send', () => {
+    const behind = card('behind', 2)
+    const kept = [card('kept', 1, { holdReason: QUEUED_MESSAGE_PAUSED_KEPT }), behind]
+    expect(holding(kept, 0)).toEqual([
+      ['kept', null],
+      ['behind', null]
+    ])
+    expect(nextSendableQueuedCard(pausesOver(kept, 0), kept)).toBe(behind)
+    expect(resumableQueuePause(pausesOver(kept, 0), kept)).toBeNull()
+    const restarted = [kept[0]!, card('dead', 2, { hostInstance: DEAD })]
+    expect(nextSendableQueuedCard(pausesOver(restarted, 0), restarted)).toBeNull()
+    expect(resumableQueuePause(pausesOver(restarted, 0), restarted)?.reason).toBe('restarted')
+  })
+
+  // A dead process's card held on its own waits for its own Send, so it pauses no other card.
+  it('a card held on its own from a dead process starts no restart pause', () => {
+    for (const holdReason of [QUEUED_MESSAGE_PAUSED_KEPT, 'send_failed']) {
+      const cards = [card('held', 1, { hostInstance: DEAD, holdReason }), card('live', 2)]
+      expect(pausesOver(cards, 0)).toEqual([])
+      expect(nextSendableQueuedCard(pausesOver(cards, 0), cards)?.messageId).toBe('live')
+    }
   })
 
   it("a /clear's pause that holds nothing never hides a restart's", () => {

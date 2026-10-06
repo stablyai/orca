@@ -10,7 +10,10 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../shared/protocol-version'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
+import {
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from '../../shared/agent-launch-runtime-capability'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../shared/agent-session-background-task-child-views-capability'
 
 /**
@@ -39,5 +42,8 @@ export const DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES: readonly RuntimeCapab
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   // Without this `supportsAgentLaunch` refuses the renderer outright, while the same renderer
   // targeting a remote host is admitted — the asymmetry this constant exists to close.
-  AGENT_LAUNCH_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  // A replay after a restart mid-delivery answers the running agent with an `unconfirmed` prompt,
+  // which the desktop reads, rather than refusing it as unknown.
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY
 ] as const

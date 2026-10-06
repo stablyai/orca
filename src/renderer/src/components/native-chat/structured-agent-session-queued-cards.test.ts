@@ -159,6 +159,21 @@ describe('queued message cards', () => {
     ).toBe('awaiting-answer')
   })
 
+  // A kept card is held on its own, like a failed one: the host sends the cards behind it.
+  it('a card behind a kept or a send_failed card is not held by it', () => {
+    const cards = projectQueuedMessageCards(
+      [
+        draft('failed', 1, { paused: true, pausedReason: 'send_failed' }),
+        draft('after-failed', 2),
+        draft('kept', 3, { paused: true, pausedReason: 'kept' }),
+        draft('behind', 4)
+      ],
+      [],
+      IDLE
+    )
+    expect(cards.map((card) => card.hold)).toEqual(['paused', 'turn', 'paused', 'turn'])
+  })
+
   it('steers the newest card', () => {
     const cards = projectQueuedMessageCards([draft('a', 1), draft('b', 2)], [], IDLE)
     expect(newestSteerableQueuedMessageCard(cards)?.messageId).toBe('b')
@@ -229,5 +244,27 @@ describe('queued message cards', () => {
       entry('queued', { state: 'dispatching', lastAttemptAt: 2, sentDelivery: 'queue-if-active' })
     ]
     expect(ids(outboxOutsideQueuedCards(sent, [], true, unknown))).toEqual(['plain'])
+  })
+})
+
+describe("another agent's card", () => {
+  it('carries who it is from, read through the shared reader', () => {
+    const from = {
+      kind: 'agent' as const,
+      senders: [
+        {
+          party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+          name: 'Coder'
+        }
+      ],
+      orchestration: null
+    }
+    const agentDraft = draft('a', 1)
+    const cards = projectQueuedMessageCards(
+      [{ ...agentDraft, body: { ...agentDraft.body, from } }, draft('b', 2)],
+      [],
+      { hasPendingPrompt: false }
+    )
+    expect(cards.map((card) => card.from)).toEqual([from, undefined])
   })
 })

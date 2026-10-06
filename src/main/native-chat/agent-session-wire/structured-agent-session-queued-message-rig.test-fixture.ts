@@ -1,20 +1,18 @@
-// One real-host rig for the mid-turn queue suites: store, journal, adapter
-// mocks, and the send/stop/draft helpers every suite shares.
+// One real-host rig for the mid-turn queue suites: store, journal, the scripted provider
+// (`...-rig-provider.test-fixture.ts`), and the send/stop/draft helpers every suite shares.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, vi, type Mock } from 'vitest'
+import { expect, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
 import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { rotateStructuredAgentSessionHostInstanceForTests } from './structured-agent-session-queued-pause'
 import {
@@ -28,11 +26,14 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import {
+  createQueuedRigProvider,
+  type QueuedRigProviderOptions
+} from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 export const QUEUED_RIG_CALLER = { callerKey: 'client-1' }
-type RigSendOptions = { internal?: true; source?: AgentMessageSource }
+type RigSendOptions = { internal?: true; from?: AgentMessageSource }
 
 export function eventually(assertion: () => void | Promise<void>): Promise<void> {
   return vi.waitFor(assertion, { timeout: 10_000 })
@@ -40,80 +41,23 @@ export function eventually(assertion: () => void | Promise<void>): Promise<void>
 
 export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessageTestRig>>
 
-/** `restartable`: a child started for a chat whose chain already names a thread resumes it, so a
- *  chat whose child closed or died can start another. `starting`: every child stays starting. */
 export async function createQueuedMessageTestRig(
-  options: {
-    restartable?: true
-    starting?: true
+  options: QueuedRigProviderOptions & {
     /** Lets a test sweep idle chats on its own `tick`. */
     idleSweep?: { idleMs: number; intervalMs: number }
-    /** The provider's Stop ends its child, as Claude's does. */
-    stopEndsSession?: true
   } = {}
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
-  // Admitted: the message is written and unanswered, so the session owes work
-  // until the test settles it.
-  const dispatch: Mock<StructuredAgentSessionAdapter['dispatch']> = vi.fn(async () => ({
-    state: 'admitted' as const
-  }))
-  const awaitStarted: Mock<NonNullable<StructuredAgentSessionAdapter['awaitStarted']>> = vi.fn(
-    async () => undefined
-  )
-  // The provider's receipt of a /compact; its end arrives later, as `finishCompact` writes it.
-  const compact: Mock<NonNullable<StructuredAgentSessionAdapter['compact']>> = vi.fn(async () => ({
-    state: 'accepted' as const,
-    providerIdentity: null
-  }))
-  const cancelTurn: Mock<StructuredAgentSessionAdapter['cancelTurn']> = vi.fn(async () => ({
-    cancelled: true
-  }))
-  const closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>> = vi.fn(
-    async () => true
-  )
-  let events: StructuredAgentSessionEventSink | undefined
   const store = await openTestAgentSessionRecordStore(root)
+  const provider = createQueuedRigProvider(store, options)
+  const { dispatch, awaitStarted, compact, cancelTurn, closeSession } = provider
   const makeHost = () =>
     new StructuredAgentSessionHost({
       agents: claudeAndCodexDeclared(),
       logger: createStructuredAgentSessionLogger(),
       store,
-      adapter: {
-        acquire: async ({ identity, fence, spawnToken, events: sink }) => {
-          events = sink
-          const resumes =
-            options.restartable === true &&
-            (store.getRecord(identity.sessionId)?.providerHandleChain.length ?? 0) > 0
-          return {
-            process: {
-              hostId: 'local',
-              pid: 4242,
-              processStartTimeMs: 1_700_000_000_000,
-              spawnToken
-            },
-            acquisitionGeneration: 'generation-1',
-            ...(options.starting ? { providerChildPhase: 'starting' as const } : {}),
-            link: {
-              linkId: `link-${fence}`,
-              handle: codexProviderHandle(THREAD),
-              origin: resumes ? ('resumed' as const) : ('created' as const),
-              mintedAtFence: fence,
-              observedAt: NOW
-            }
-          }
-        },
-        dispatch,
-        awaitStarted,
-        closeSession,
-        releaseAcquisition: vi.fn(async () => true),
-        compact,
-        cancelTurn,
-        ...(options.stopEndsSession ? { stopEndsSession: () => true } : {}),
-        answerPrompt: vi.fn(async () => undefined),
-        setOption: vi.fn(async () => undefined)
-      },
+      adapter: provider.adapter,
       journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-1',
@@ -140,16 +84,18 @@ export async function createQueuedMessageTestRig(
   }
 
   /** A client's send, as the `agentSession.send` RPC hands it to the host;
-   *  `internal` is a host-side sender (orchestration mail, a restart continuation), and `source`
-   *  who it is from. */
+   *  `internal` is a host-side sender (orchestration mail, a restart continuation), and `from`
+   *  the agent it is from. */
   function send(text: string, delivery?: 'queue-if-active', options?: RigSendOptions) {
-    const body = hostTestMessage(text)
+    const body = { ...hostTestMessage(text), ...(options?.from ? { from: options.from } : {}) }
     const clientOperationId = hostTestOperationId()
-    const fields = { body, ...(delivery ? { delivery } : {}) }
+    // Fingerprinted as the host digests a send: the message without its sender.
+    const fields = { body: agentSessionMessagePayload(body), ...(delivery ? { delivery } : {}) }
     const result = host.send(QUEUED_RIG_CALLER, {
       envelope: envelope(fields, 'agentSession.send', clientOperationId),
       ...fields,
-      ...(options?.internal ? { source: options.source } : { userSend: true as const })
+      body,
+      ...(options?.internal ? {} : { userSend: true as const })
     })
     return { id: clientOperationId, result }
   }
@@ -253,31 +199,6 @@ export async function createQueuedMessageTestRig(
     })
   }
 
-  /** What the provider's translator writes when a /compact's turn ends, as a success. */
-  function finishCompact(): void {
-    const { command } = compact.mock.calls.at(-1)![0]
-    events!.appendLifecycleBatch!(
-      `turn-completed:${command.clientMessageId}`,
-      [
-        {
-          kind: 'item',
-          identity: command.identity,
-          body: { ...command.running, state: 'completed', outcome: 'success', completedAt: NOW },
-          turnScope: AGENT_JOURNAL_THREAD_SCOPE
-        }
-      ],
-      { lifecycle: true }
-    )
-  }
-
-  /** The event sink the provider writes through. */
-  function providerEvents(): StructuredAgentSessionEventSink {
-    if (!events) {
-      throw new Error('no provider bound')
-    }
-    return events
-  }
-
   /** A host-process restart, as the queue sees it: the conversation closes, and
    *  opens afresh under a new instance id while its rows survive. The close is an eviction, whose
    *  Stop event ends a person's Stop pause if work runs; a quit writes none, so a test of that
@@ -291,6 +212,12 @@ export async function createQueuedMessageTestRig(
   function crashRestartHostProcess(): void {
     rotateStructuredAgentSessionHostInstanceForTests()
     host = makeHost()
+  }
+
+  /** The app quits — the host's own teardown runs — and a new host opens the same state. */
+  async function quitRestartHostProcess(): Promise<void> {
+    await host.flushAllStreamedEvents()
+    crashRestartHostProcess()
   }
 
   /** The queue's published pause: null when it sends on its own. */
@@ -324,8 +251,8 @@ export async function createQueuedMessageTestRig(
     closeSession,
     awaitStarted,
     compact,
-    finishCompact,
-    providerEvents,
+    finishCompact: provider.finishCompact,
+    providerEvents: provider.providerEvents,
     envelope,
     send,
     stop,
@@ -340,6 +267,7 @@ export async function createQueuedMessageTestRig(
     settleRejected,
     restartHostProcess,
     crashRestartHostProcess,
+    quitRestartHostProcess,
     queuePause,
     resume,
     dispose

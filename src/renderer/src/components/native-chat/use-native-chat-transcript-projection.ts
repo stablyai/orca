@@ -5,6 +5,7 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import type { NativeChatSubagentRow } from '../../../../shared/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { projectNativeChatTaskListFrames } from './native-chat-task-list-frames'
 import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
@@ -15,7 +16,8 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 export function useNativeChatTranscriptProjection(
   session: NativeChatLiveSession,
   journalItems: readonly AgentJournalRenderItem[] | undefined,
-  journalSubmissions: readonly AgentJournalSubmission[] | undefined
+  journalSubmissions: readonly AgentJournalSubmission[] | undefined,
+  latestTurn?: AgentSessionLatestTurn | null
 ): {
   messages: NativeChatMessage[]
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
@@ -30,9 +32,11 @@ export function useNativeChatTranscriptProjection(
     () =>
       projectMessages(
         session.messages,
-        journalItems ? { items: journalItems, submissions: journalSubmissions ?? [] } : null
+        journalItems
+          ? { items: journalItems, submissions: journalSubmissions ?? [], latestTurn }
+          : null
       ),
-    [journalItems, journalSubmissions, projectMessages, session.messages]
+    [journalItems, journalSubmissions, latestTurn, projectMessages, session.messages]
   )
   const messages = useMemo(() => {
     const projected = projectNativeChatTaskListFrames(projection.conversation)

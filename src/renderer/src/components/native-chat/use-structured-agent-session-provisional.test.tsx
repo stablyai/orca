@@ -6,7 +6,7 @@ import type { StructuredAgentSessionState } from '../../../../shared/structured-
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
-  hold: vi.fn<(args: { enabled?: boolean }) => void>(),
+  hold: vi.fn((_args: { enabled?: boolean }) => ({ error: null })),
   read: vi.fn<(args: { isVisible?: boolean }) => void>(),
   outbox: vi.fn<(args: { fence: number | null; submissions: readonly unknown[] }) => void>(),
   send: vi.fn<(text: string) => boolean>(),

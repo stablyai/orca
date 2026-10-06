@@ -205,6 +205,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   try {
     const document = parseDocument(content, {
       keepSourceTokens: false,
+      merge: true,
       logLevel: 'silent',
       prettyErrors: false,
       uniqueKeys: true

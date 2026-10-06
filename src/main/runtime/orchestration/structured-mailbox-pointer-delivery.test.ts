@@ -73,6 +73,7 @@ function harness(options: {
     resolveStructuredTarget: (mailboxHandle) =>
       mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
     getCliCommand: () => 'orca-dev',
+    senderName: (party) => (party.address === 'term_coord' ? 'Coordinator' : null),
     host: {
       readSessionFacts: async () => (attached ? { submissions } : null),
       currentFence: () => 4,
@@ -170,9 +171,9 @@ describe('structured mailbox pointer delivery', () => {
     expect(send.mock.calls[0]![0].body.blocks[0]).toMatchObject({
       text: expect.stringContaining('orca-dev orchestration check')
     })
-    expect(send.mock.calls[0]![0].source).toMatchObject({
+    expect(send.mock.calls[0]![0].body.from).toMatchObject({
       kind: 'agent',
-      senders: [{ party: { address: 'term_coord' } }],
+      senders: [{ party: { address: 'term_coord' }, name: 'Coordinator' }],
       orchestration: {
         message: 'mail-notice',
         mailbox: 'dispatch:d1',
@@ -422,6 +423,7 @@ describe('forgetting one settled worker', () => {
           : null
       },
       getCliCommand: () => 'orca',
+      senderName: () => null,
       host: {
         readSessionFacts: async () => (attached ? { submissions: [] } : null),
         currentFence: () => 4,

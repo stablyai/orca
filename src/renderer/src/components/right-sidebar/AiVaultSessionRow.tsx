@@ -27,6 +27,8 @@ import {
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import { AiVaultSearchEvidence } from './AiVaultSearchEvidence'
+import { useAppStore } from '@/store'
+import { aiVaultSessionDisplayTitle } from './ai-vault-structured-title-projection'
 
 export function VaultSessionRow({
   session,
@@ -93,6 +95,9 @@ export function VaultSessionRow({
     ? translate('aiVault.continueInCli', 'Continue in CLI')
     : defaultResumeLabel
   const updatedAt = session.updatedAt ?? session.modifiedAt
+  const title = useAppStore((state) =>
+    aiVaultSessionDisplayTitle(session, state.unifiedTabsByWorktree)
+  )
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   // Computed once so the dropdown menu and the context menu never disagree.
@@ -119,7 +124,7 @@ export function VaultSessionRow({
         agent: session.agent,
         sessionId: session.sessionId,
         ...(session.structuredSession ? { structuredSession: session.structuredSession } : {}),
-        title: session.title,
+        title,
         command: resumeStartup.command,
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
@@ -134,7 +139,7 @@ export function VaultSessionRow({
       })
       window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
     },
-    [realHomeResumeStartup, resumeDisabled, session, resumeStartup]
+    [realHomeResumeStartup, resumeDisabled, session, resumeStartup, title]
   )
 
   return (
@@ -179,7 +184,7 @@ export function VaultSessionRow({
                 window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
               }}
             >
-              {session.title}
+              {title}
             </div>
             <SessionRowTrailingActions
               session={session}

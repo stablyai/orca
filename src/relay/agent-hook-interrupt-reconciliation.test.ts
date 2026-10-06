@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import type { RemoteAgentInterruptRequest } from '../shared/agent-hook-interrupt-reconciliation'
 import { makePaneKey } from '../shared/stable-pane-id'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../shared/agent-status-types'
 import { RelayAgentHookServer } from './agent-hook-server'
 
 const PANE = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
@@ -67,6 +68,40 @@ async function fixture() {
 }
 
 describe('relay interrupt owner reconciliation', () => {
+  it.each(['current', 'replacement before busy', 'replacement after Escape', 'stale', 'retired'])(
+    'fences native Escape evidence against a %s PTY owner',
+    async (scenario) => {
+      const host = await fixture()
+      const clock = vi.spyOn(Date, 'now')
+      try {
+        if (scenario === 'replacement before busy') {
+          host.replaceLaunch()
+        }
+        if (scenario === 'stale') {
+          clock.mockReturnValue(Date.now() + AGENT_STATUS_STALE_AFTER_MS + 1)
+        }
+        host.forward.mockClear()
+        const native = host.server.claudeTerminalInterrupts
+        native.observe(PANE, { kind: 'title', title: '◐ Task' })
+        native.observe(PANE, { kind: 'input', data: '\x1b[27u' })
+        if (scenario === 'replacement after Escape') {
+          host.replaceLaunch()
+        }
+        if (scenario === 'retired') {
+          host.retire()
+        }
+        native.observe(PANE, { kind: 'title', title: '✳ Task' })
+        expect(host.forward).toHaveBeenCalledTimes(scenario === 'current' ? 1 : 0)
+        if (scenario === 'current') {
+          expect(host.forward.mock.lastCall?.[0].payload.mainAgent?.outcome).toBe('cancellation')
+        }
+      } finally {
+        clock.mockRestore()
+        host.close()
+      }
+    }
+  )
+
   it.each(['revision', 'launch', 'session', 'intent', 'pane'])(
     'refuses a wrong %s proof',
     async (field) => {

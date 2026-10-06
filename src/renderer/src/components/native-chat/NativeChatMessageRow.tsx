@@ -13,10 +13,13 @@ import type {
 } from '../../../../shared/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
 import { NativeChatToolRun } from './NativeChatToolRun'
+import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
+import { nativeChatBlocksInOwnWords } from './native-chat-stopped-before-start-row'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
+import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import {
   NativeChatAgentControls,
   NativeChatImageAttachments,
@@ -92,7 +95,6 @@ export const MessageRow = memo(function MessageRow({
   onLinkClick,
   allowFileUriLinks = false,
   deliveryNotice,
-  folded = false,
   subagentRoster,
   subagentDisclosure,
   inSubagentSection = false,
@@ -112,8 +114,6 @@ export const MessageRow = memo(function MessageRow({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   deliveryNotice?: NativeChatDeliveryNotice
-  /** Behind a folded turn: the row keeps only what outlives the turn. */
-  folded?: boolean
   /** On a roster row: its list's state and the subagents whose rows open below it. */
   subagentRoster?: NativeChatSubagentRosterState
   subagentDisclosure?: NativeChatSubagentDisclosure
@@ -124,14 +124,15 @@ export const MessageRow = memo(function MessageRow({
   rewind?: NativeChatRewindSurface
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
+  const blocks = nativeChatBlocksInOwnWords(message.blocks)
   // One pass per block set, shared with the list that decides whether this row
   // occupies a slot — so "draws nothing" means the same thing to both.
   const { backgroundTasks, hasImages, markdown, prose, subagentGroups, tools } =
-    deriveNativeChatRowContent(message.blocks)
+    deriveNativeChatRowContent(blocks)
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
-  const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
+  const providerFrame = blocks.find((block) => block.type === 'text' && block.providerFrame)
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -152,14 +153,8 @@ export const MessageRow = memo(function MessageRow({
     return null
   }
 
-  // Behind a folded turn this row is the work, not the answer. Rows that outlive
-  // their turn never reach here — the fold leaves them out.
-  if (folded) {
-    return null
-  }
-
   const notice = isSystem
-    ? message.blocks.find(
+    ? blocks.find(
         (block) =>
           block.type === 'text' && (block.presentation !== undefined || block.tone !== undefined)
       )
@@ -185,10 +180,29 @@ export const MessageRow = memo(function MessageRow({
   }
 
   if (isUser) {
+    // Another agent's message is the agent's turn input too, but is not the person's: it reads
+    // left-aligned under its sender rather than as their bubble.
+    const from = message.from
     return (
-      <div ref={rowRef} className="group relative flex flex-col items-end gap-0.5">
+      <div
+        ref={rowRef}
+        className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
+      >
+        {from ? (
+          <NativeChatAgentMessageSenders
+            from={from}
+            chatWorktreeId={runtimeContext?.worktreeId ?? null}
+          />
+        ) : null}
         {/* A distinct surface separates the user's prompt from the assistant's prose. */}
-        <div className="max-w-[80%] rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-sm native-chat-message-text text-chat-foreground-strong">
+        <div
+          className={cn(
+            'max-w-[80%] text-sm native-chat-message-text',
+            from
+              ? 'select-text border-l-2 border-border/60 pl-3 text-chat-foreground'
+              : 'rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-chat-foreground-strong'
+          )}
+        >
           {markdown ? (
             <>
               <NativeChatImageAttachments
@@ -248,9 +262,22 @@ export const MessageRow = memo(function MessageRow({
     )
   }
 
-  // Plain assistant prose is the copyable unit; reasoning/system asides stay
-  // chrome-free. Controls reveal on hover/keyboard focus and stay visible on touch.
-  const showControls = !isReasoning && !isSystem && markdown.length > 0
+  if (isReasoning) {
+    return (
+      <div ref={rowRef}>
+        <NativeChatReasoningRow
+          message={message}
+          turnIsWorking={activeTurnIsWorking}
+          markdown={markdown}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+        />
+      </div>
+    )
+  }
+
+  // Assistant controls reveal on hover and keyboard focus; system asides stay chrome-free.
+  const showControls = !isSystem && markdown.length > 0
 
   return (
     <div
