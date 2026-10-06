@@ -9,6 +9,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import { normalizeStoredAutomationWorktreeRetention } from '../../../shared/automation-worktree-retention'
 import { getAutomationLegacyRepoId } from '../../../shared/automation-run-identity'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import {
@@ -96,12 +97,23 @@ export function normalizeAutomationSessionReuse(automation: Automation): Automat
     automation.workspaceMode,
     automation.setupDecision
   )
-  return {
+  const normalized: Automation = {
     ...automation,
     precheck: normalizeAutomationPrecheck(automation.precheck),
     setupDecision,
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
   }
+  if (
+    automation.workspaceMode !== 'new_per_run' ||
+    !Object.hasOwn(automation, 'worktreeRetention')
+  ) {
+    delete normalized.worktreeRetention
+    return normalized
+  }
+  normalized.worktreeRetention = normalizeStoredAutomationWorktreeRetention(
+    automation.worktreeRetention
+  )
+  return normalized
 }
 
 export function normalizeAutomationSetupDecisionForWorkspaceMode(

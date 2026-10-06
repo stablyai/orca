@@ -8,6 +8,7 @@
  * `orca automations show` unable to complete the recovery it is named in.
  */
 
+import { formatAutomationWorktreeRetention } from '../shared/automation-worktree-retention'
 import type { Automation, AutomationRun } from '../shared/automations-types'
 import type { AutomationListItem } from '../shared/automation-list-scope'
 import type { AutomationOwnerPrecondition } from '../shared/automation-owner-precondition'
@@ -91,6 +92,10 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     `workspaceMode: ${automation.workspaceMode}`,
     `workspaceId: ${automation.workspaceId ?? 'null'}`,
     `baseBranch: ${automation.baseBranch ?? 'null'}`,
+    `worktreeRetention: ${formatAutomationWorktreeRetention(
+      automation.workspaceMode,
+      automation.worktreeRetention
+    )}`,
     `reuseSession: ${automation.reuseSession}`,
     `target: ${automation.executionTargetType}:${automation.executionTargetId}`,
     // Omitted rather than guessed: a host that reports no owner has none to report.

@@ -1,4 +1,6 @@
 import { AutomationService } from '../automations/service'
+import { createNewPerRunWorktreeSettlement } from '../automations/new-per-run-worktree-settlement'
+import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { createHeadlessAutomationOutputSnapshotBuffer } from '../automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from '../automations/headless-workspace-create'
 import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
@@ -17,6 +19,11 @@ export function initializeMainProcessAutomations(): AutomationService {
     codexUsage,
     terminalObserver: createRuntimeAutomationRunTerminalObserver(runtime),
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
+    newPerRunSettlement: createNewPerRunWorktreeSettlement({
+      store,
+      runtime,
+      localGitOptionsForRepo: (repo) => getLocalProjectWorktreeGitOptions(store, repo)
+    }),
     // Why: desktop clients mirror remote-host automations, but only a server process should execute remote_host_service-owned schedules.
     allowRemoteHostScheduling: state.isServeMode,
     headlessDispatcher: state.isServeMode
@@ -39,10 +46,19 @@ export function initializeMainProcessAutomations(): AutomationService {
             workspaceId = created.worktree.id
             workspaceDisplayName = created.worktree.displayName ?? null
             if (!terminalHandle) {
-              throw new Error(
-                created.warning ||
-                  'Automation workspace was created, but no agent terminal started.'
-              )
+              return {
+                workspaceId,
+                workspaceDisplayName,
+                terminalSessionId,
+                terminalPaneKey,
+                terminalPtyId,
+                completion: Promise.resolve({
+                  status: 'dispatch_failed' as const,
+                  error:
+                    created.warning ||
+                    'Automation workspace was created, but no agent terminal started.'
+                })
+              }
             }
           } else {
             if (!automation.workspaceId) {

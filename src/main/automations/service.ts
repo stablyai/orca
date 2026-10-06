@@ -24,6 +24,7 @@ import {
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
+import type { NewPerRunWorktreeSettlement } from './new-per-run-worktree-settlement'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledRefusal,
@@ -55,6 +56,7 @@ export class AutomationService {
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
+  private readonly newPerRunSettlement: NewPerRunWorktreeSettlement | null
   /** Installed by desktop IPC registration, where external probes live; null on
    *  runtime servers. Orca's own automation traffic parks queued external
    *  probes behind this lease, whichever transport carried it. */
@@ -70,6 +72,7 @@ export class AutomationService {
       headlessDispatcher?: HeadlessAutomationDispatcher
       terminalObserver?: AutomationRunTerminalObserver
       onAutomationsChanged?: PublishAutomationsChanged
+      newPerRunSettlement?: NewPerRunWorktreeSettlement
     } = {}
   ) {
     this.store = store
@@ -80,6 +83,7 @@ export class AutomationService {
     this.headlessDispatcher = opts.headlessDispatcher ?? null
     this.publish = opts.onAutomationsChanged ?? null
     this.runs = createAutomationRunWriter(store, this.publish)
+    this.newPerRunSettlement = opts.newPerRunSettlement ?? null
     this.completionWatcher = opts.terminalObserver
       ? new AutomationRunCompletionWatcher({
           observer: opts.terminalObserver,
@@ -211,6 +215,7 @@ export class AutomationService {
       return run
     }
     this.completionWatcher?.forget(run.id)
+    await this.newPerRunSettlement?.settle(run)
     // Why: the renderer's mark-completed effect can re-fire for the same run
     // before refresh() flips its status snapshot off 'dispatched'. Re-running
     // collectRunUsage advances the attribution window and can rewrite an
