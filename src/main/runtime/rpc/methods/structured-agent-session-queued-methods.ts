@@ -1,6 +1,6 @@
 // The queued-message actions: Send-now and Delete on one card, and Resume on a
-// paused queue. All gated on agent-session.queued-messages.v1; an older host
-// lacks the methods entirely.
+// paused queue. Not gated on agent-session.queued-messages.v1: a host without it
+// still publishes the cards it kept unsent. A host older than the queue lacks them.
 
 import { defineMethod } from '../core'
 import {

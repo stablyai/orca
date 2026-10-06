@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
   USER_MESSAGE_SOURCE,
-  type AgentMessageSource
+  type AgentSessionMessageSource
 } from '../../../shared/agent-session-message-source'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
@@ -198,7 +198,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     /** A person's send at a chat surface; it outranks any `source`. */
     userSend?: true
     /** Who a host-side send is from. */
-    source?: AgentMessageSource
+    source?: AgentSessionMessageSource
   }
 ): Promise<
   | { ok: true; value: AgentSessionSendResult }
@@ -271,8 +271,16 @@ export type QueuedMessageDrainDeps = {
  */
 export class StructuredAgentSessionQueuedMessageDrain {
   private readonly scheduled = new Set<string>()
+  private disposed = false
 
   constructor(private readonly deps: QueuedMessageDrainDeps) {}
+
+  /** Quit, with delivery: a hand-off made now could only be settled by the next process, so a
+   *  quit leaves the cards exactly as a crash does. Read by the step at its start, and again
+   *  right before it appends, since quit can land while it awaits. */
+  dispose(): void {
+    this.disposed = true
+  }
 
   schedule(sessionId: string): void {
     const journal = this.deps.sessions.get(sessionId)?.journal
@@ -319,7 +327,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
 
   private async step(sessionId: string): Promise<void> {
     const session = this.deps.sessions.get(sessionId)
-    if (!session) {
+    if (this.disposed || !session) {
       return
     }
     const journal = session.journal
@@ -342,7 +350,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
     // Live facts only, through the one gate; the backlog is never a gate, so a
     // lone draft drains. Whatever clears a hold publishes or commits, which
     // re-derives this step.
-    if (structuredQueueHold({ journal, record, fence }) !== null) {
+    if (this.disposed || structuredQueueHold({ journal, record, fence }) !== null) {
       return
     }
     // Always a fresh id: the submission names its draft by `queuedMessageId`, never by id equality.
