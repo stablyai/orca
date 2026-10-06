@@ -1,9 +1,9 @@
 import { createRequire } from 'node:module'
 import fs from 'node:fs'
-const root = '/Users/m4air/orca/workspaces/orca/pr25658-review-qa-3'
-const base = '/Users/m4air/orca-qa/pr-25658/remote-released-parent'
+const root = '/Users/m4air/orca/workspaces/orca/pr25658-review-qa-2'
+const base = '/Users/m4air/orca-qa/pr-25658/remote'
 const { chromium } = createRequire(`${root}/package.json`)('@playwright/test')
-const report = { sha: '37f4353d0905d621c104f33fafdb9889a263b1fa', results: [], screenshots: [], failures: [] }
+const report = { sha: '354c3efb70d0214bf8a9bdb44aab7baf50d4ae65', results: [], screenshots: [], failures: [] }
 const save = () => fs.writeFileSync(`${base}/complete-geometry.json`, JSON.stringify(report, null, 2))
 const assert = (truth, message) => { if (!truth) throw new Error(message) }
 let page
@@ -82,7 +82,7 @@ async function holdDrag(fraction) {
 try {
   fs.mkdirSync(`${base}/shots`, { recursive: true })
   const browser = await chromium.connectOverCDP('http://127.0.0.1:9441')
-  page = browser.contexts().flatMap(c => c.pages()).find(p => p.url().includes(':5175/'))
+  page = browser.contexts().flatMap(c => c.pages()).find(p => p.url().includes(':5174/'))
   assert(page, 'intended renderer missing'); page.setDefaultTimeout(15000)
   report.identity = await page.evaluate(() => window.api.app.getIdentity())
   assert(report.identity.devRepoRoot === root, 'wrong app root')

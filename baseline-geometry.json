@@ -1,0 +1,46 @@
+{
+  "sha": "4ee3dddb3625ee4966e6e60d3f172f4ed0f30599",
+  "screenshots": [
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/baseline-dark-default.png",
+    "/Users/m4air/orca-qa/pr-25658/remote-released-parent/shots/baseline-narrow-20-18.png"
+  ],
+  "observations": [
+    {
+      "name": "dark-default",
+      "viewport": {
+        "width": 1480,
+        "height": 1500
+      }
+    },
+    {
+      "name": "narrow-20-18",
+      "viewport": {
+        "width": 980,
+        "height": 1300
+      }
+    }
+  ],
+  "identity": {
+    "name": "Orca: 4ee3dddb36",
+    "isDev": true,
+    "devLabel": "pr25658-review-qa-3 @ 4ee3dddb36",
+    "devBranch": "4ee3dddb36",
+    "devWorktreeName": "pr25658-review-qa-3",
+    "devRepoRoot": "/Users/m4air/orca/workspaces/orca/pr25658-review-qa-3",
+    "dockBadgeLabel": null
+  },
+  "surface": {
+    "previewPresent": false,
+    "inputs": [
+      {
+        "label": "Text size",
+        "value": "14"
+      },
+      {
+        "label": "Code text size",
+        "value": "12"
+      }
+    ],
+    "text": "Match terminal interfaceUse your terminal interface's font and colors for the whole chat. Stays in sync if you change your terminal theme later.ContrastHow bright chat text is against the background. The right end matches the older, brighter look.SofterSharper100Text sizeMessages, tool activity and the message box. ⌘= / ⌘- in a chat change this too.· Default: 14pxCode text sizeCode blocks, inline code, commands and tool output.· Default: 12pxWidthHow wide messages and the message box can grow in a wide pane.ComfortableWideFullReset chat appearanceRestore the defaults above.Reset"
+  }
+}

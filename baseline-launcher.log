@@ -1,0 +1,251 @@
+[orca-dev] Prepared wrapper in /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/out/bin
+/Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/out/electron-dev/6adaa45325ea/Orca: 4ee3dddb36.app: replacing existing signature
+[orca-dev] Instance: pr25658-review-qa-3 @ 4ee3dddb36
+[orca-dev] Background launch: window stays off screen; automate through CDP
+[orca-dev] Remote debugging on http://127.0.0.1:9441
+[orca-dev] Web client bundle missing; skipping pairing web build. Run `pnpm run build:web` or set ORCA_DEV_WEB_PREPARE=1 when you need browser pairing.
+rolldown-vite v7.3.1 building ssr environment for development...
+(node:79420) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[2Ktransforming...[2Ktransforming...[2Ktransforming...[2Ktransforming...[2Ktransforming...[2Ktransforming...[2Ktransforming...[2Ktransforming...[2Ktransforming...[2Ktransforming...✓ 6915 modules transformed.
+rendering chunks...
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/github/gh-account-token.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/git/command-runner/gh-bound-account-env.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/github/gh-account-binding-inventory.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/persistence/tracking-repos/repo-update-operations.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-target-registry.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/browser-network-execution-route-dispatch.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/automations/external-manager-discovery.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/automations/external-manager-relay.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/preflight-remote-windows-terminal-capabilities.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/remote-home-path.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/remote-repo-registration.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-active-relay-sessions.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connect-flow.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connection-handlers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connection-state-callbacks.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-port-forward-persistence.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-relay-session-callbacks.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-session-teardown.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-target-crud-handlers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-worktree-create-root-registration.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/preflight/agent-command-detection.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/preflight/agent-detection.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/orca-runtime-resolve-authoritative-terminal-wait-permission.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/orca-runtime-resolve-browser-network-execution-host-for-worktree.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/orca-runtime-terminal-create-deduplication.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/rpc/methods/client-events.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/rpc/methods/ssh.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-deploy.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-provider-authority.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/browser-network-execution-route-dispatch.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/local-ssh-browser-route.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/host-repo-catalog-snapshot.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connect-attempt-registry.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connect-flow.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connection-handlers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-connection-state-callbacks.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-relay-session-callbacks.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-renderer-broadcast.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-target-crud-handlers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/worktrees/listing/host-qualified-worktree-listing.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/worktrees/listing/register-detected-worktree-handlers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/worktrees/metadata/host-lineage-listing.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/provisioned-root-ssh-adoption.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/sftp-upload.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-connection.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-filesystem-file-upload.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-filesystem-provider.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-deploy-helpers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-install-transfers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-session.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-deploy-helpers.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-connection.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/orcad-deployment-target.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/orcad-remote-node-runtime.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/remote-install-gc.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/remote-install-previous-version.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/remote-node-runtime-store-gc.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/remote-node-runtime-store-lock.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-build-toolchain.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-deploy.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-endpoint-incumbent.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-endpoint-takeover.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-gc-claim.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-gc-tombstone.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-install-lock.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-install-transfers.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-native-deps-cache-gc.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-native-deps-cache-install.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-opencode-runtime.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-pinned-node-install.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-repair-lock.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-reset.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-ripgrep-cache-gc.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-ripgrep-install.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-runtime-self-test.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-session.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-superseded-endpoints.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-relay-versioned-install.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-remote-node-addon-resolution.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-remote-node-install-guidance.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-remote-node-resolution.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-remote-platform-detection.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-filesystem-provider-sftp.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ssh/ssh-connection.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-filesystem-download.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-filesystem-provider.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/providers/ssh-sftp-filesystem-provider.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/browser-network-execution-route-dispatch.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/local-ssh-browser-route.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/rpc/methods/browser-network-tunnel.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ai-vault/cached-session-list.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ai-vault/session-scanner-background.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ai-vault/session-scanner-service-spawn.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault-delete.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault-subagent-list.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/native-chat/transcript-opencode-database.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/orca-runtime-state-fields.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/runtime-ai-vault-commands.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/runtime/structured-agent-session-create-adoption.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/browser.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ai-vault/ssh-session-list.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/automations/precheck-runner.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ephemeral-vm-runtime-ssh.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault-search.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault-session-title-routing.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ai-vault.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/filesystem-import-ssh.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/remote-workspace-connected-clients.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/remote-workspace-relay-sync.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/remote-workspace.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/nested-repo-import-handler.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/nested-repo-scan-ipc.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/repos/remote-repo-clone.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/window/attach-main-window-services.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/local-ssh-browser-route.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/startup/main-process-quit.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/local-ssh-browser-partitions.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/local-ssh-browser-partitions.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/browser.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-session-teardown.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/window/main-window-webview-security.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/browser-route-partition-storage-runtime.ts is dynamically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/ssh-session-teardown.ts but also statically imported by /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/browser/browser-session-startup.ts, /Users/m4air/orca/workspaces/orca/pr25658-review-qa-3/src/main/ipc/runtime-environment-connectivity-handlers.ts, dynamic import will not move module into another chunk.
+
+out/main/chunks/ssh-filesystem-provider-sftp-BBizE80A.js                         0.05 kB
+out/main/chunks/ssh-relay-deploy-helpers-eKidEbA0.js                             0.05 kB
+out/main/chunks/local-ssh-browser-route-DN-EB07A.js                              0.07 kB
+out/main/chunks/browser-network-execution-route-dispatch-B4DH3MqJ.js             0.07 kB
+out/main/chunks/sftp-upload-D82gbO44.js                                          0.11 kB
+out/main/chunks/color-validation-DgEprjbm.js                                     0.11 kB │ map:      0.28 kB
+out/main/chunks/definitive-filesystem-absence-DvQkovTC.js                        0.13 kB │ map:      1.10 kB
+out/main/chunks/runtime-client-error-BQRJ8_hV.js                                 0.17 kB │ map:      0.47 kB
+out/main/persistence/profile-state/legacy-json/profile-state-export-path.js      0.21 kB
+out/main/browser-window-close-preload.js                                         0.22 kB │ map:      1.19 kB
+out/main/chunks/ssh-provider-authority-Dci3U5yx.js                               0.23 kB
+out/main/persistence/profile-state/profile-state-active-location.js              0.24 kB
+out/main/chunks/wsl-env-C3vsrcwy.js                                              0.26 kB │ map:      0.87 kB
+out/main/persistence/profile-state/profile-state-storage-classification.js       0.26 kB
+out/main/chunks/absolute-dir-override-BXFKpCpv.js                                0.26 kB │ map:      1.16 kB
+out/main/gitlab/project-ref-parser.js                                            0.26 kB
+out/main/chunks/filesystem-watcher-event-batch-DQ_37oiQ.js                       0.32 kB │ map:      1.48 kB
+out/main/chunks/wsl-executable-path-u_h5IeOj.js                                  0.33 kB │ map:      0.96 kB
+out/main/chunks/storage-capacity-error-BNgoxGj-.js                               0.35 kB │ map:      1.17 kB
+out/main/chunks/stt-audio-resample-0TAq8rlT.js                                   0.36 kB │ map:      1.56 kB
+out/main/chunks/profile-state-storage-paths-yFe7Q2jR.js                          0.41 kB │ map:      1.10 kB
+out/main/persistence/profile-state/profile-state-backup-path.js                  0.42 kB
+out/main/chunks/opencode-data-directory-CVWgv7f3.js                              0.45 kB │ map:      1.02 kB
+out/main/chunks/agent-session-host-status-rows-CPLKc-Ty.js                       0.47 kB │ map:      1.81 kB
+out/main/chunks/port-scan-command-protocol-BtGCUHes.js                           0.47 kB │ map:      1.79 kB
+out/main/chunks/ssh-target-registry-B4Fn00pa.js                                  0.47 kB
+out/main/chunks/windows-system-binary-Bl95LYSZ.js                                0.47 kB │ map:      1.90 kB
+out/main/chunks/profile-state-storage-classification-Ctur1PDP.js                 0.51 kB │ map:      1.63 kB
+out/main/chunks/app-environment-BNjELml7.js                                      0.54 kB │ map:      4.12 kB
+out/main/chunks/cursor-profile-result-DF4lw8EV.js                                0.54 kB │ map:      1.89 kB
+out/main/chunks/profile-state-authority-marker-08WWQwwa.js                       0.56 kB │ map:      1.57 kB
+out/main/wsl-transcript-fs-process-entry.js                                      0.57 kB │ map:      2.48 kB
+out/main/chunks/worker-thread-entry-path-DP_R3Acx.js                             0.57 kB │ map:      2.77 kB
+out/main/startup/http1-compatibility-marker.js                                   0.59 kB
+out/main/chunks/codex-home-wsl-env-BoSUSstA.js                                   0.59 kB │ map:      1.39 kB
+out/main/chunks/event-loop-yield-DQ6mzHr9.js                                     0.60 kB │ map:      2.74 kB
+out/main/chunks/gh-account-token-DXH79UsJ.js                                     0.61 kB
+out/main/claude-accounts/keychain.js                                             0.62 kB
+out/main/chunks/chunk-BbcaJTa5.js                                                0.68 kB
+out/main/chunks/own-retained-string-BGvzeGnf.js                                  0.69 kB │ map:      3.82 kB
+out/main/persistence/profile-state/profile-state-domain-reader.js                0.71 kB
+out/main/chunks/startup-diagnostics-iB6ba99z.js                                  0.78 kB │ map:      2.15 kB
+out/main/chunks/terminal-scrollback-policy-58FXVlQ2.js                           0.78 kB │ map:      3.59 kB
+out/main/persistence/profile-state/profile-state-access.js                       0.79 kB
+out/main/chunks/hang-detection-marker-F0DM56uY.js                                0.80 kB │ map:      2.58 kB
+out/main/chunks/profile-state-export-path-Ge9ULXKA.js                            0.82 kB │ map:      2.27 kB
+out/main/chunks/macos-native-provider-paths-DI9voYio.js                          0.82 kB │ map:      1.76 kB
+out/main/chunks/priority-semaphore-BescTPZq.js                                   0.85 kB │ map:      2.99 kB
+out/main/chunks/map-with-concurrency-DHA8SbLX.js                                 0.90 kB │ map:      3.21 kB
+out/main/chunks/browser-route-partition-storage-runtime-Bd62L7ST.js              0.91 kB
+out/main/chunks/profile-state-versioned-export-CkOBK-rb.js                       0.92 kB │ map:      3.03 kB
+out/main/chunks/cached-session-list-C1lO2QDM.js                                  0.93 kB
+out/main/chunks/tui-agent-display-names-BtlubHK7.js                              1.00 kB │ map:      2.50 kB
+out/main/chunks/local-ssh-browser-partitions-DY4-UtYZ.js                         1.07 kB
+out/main/chunks/http1-compatibility-marker-CefWLjCE.js                           1.08 kB │ map:      4.41 kB
+out/main/chunks/windows-terminal-shell-BcFJgzmq.js                               1.19 kB │ map:      5.02 kB
+out/main/persistence/profile-state/legacy-json/profile-state-recovery.js         1.22 kB
+out/main/chunks/tui-agent-selection-C8aKB0m1.js                                  1.22 kB │ map:      3.81 kB
+out/main/port-scan-command-worker-entry.js                                       1.23 kB │ map:      7.25 kB
+out/main/profile-state-backup-worker-entry.js                                    1.23 kB │ map:      1.71 kB
+out/main/agent-hooks/managed-agent-hook-controls.js                              1.25 kB
+out/main/chunks/orca-profiles-D3GgV0ON.js                                        1.28 kB │ map:     10.15 kB
+out/main/chunks/wsl-transcript-fs-process-operations-m4p39JNi.js                 1.30 kB │ map:      5.35 kB
+out/main/chunks/session-scanner-opencode-sqlite-list-D-TpMkTb.js                 1.38 kB │ map:      6.43 kB
+out/main/persistence/profile-state/profile-state-database-recovery.js            1.41 kB
+out/main/chunks/project-ref-parser-Dv35EtH9.js                                   1.42 kB │ map:      6.29 kB
+out/main/chunks/local-build-feed-server-C0tTFmfO.js                              1.42 kB │ map:      4.41 kB
+out/main/doc-preview-link-preload.js                                             1.42 kB │ map:      8.08 kB
+out/main/chunks/opencode-database-discovery-WqHQos8C.js                          1.43 kB │ map:      5.63 kB
+out/main/chunks/profile-state-domain-reader-DrVxqD6S.js                          1.44 kB │ map:      5.73 kB
+out/main/chunks/surrogate-safe-text-slice-B7C0itnm.js                            1.45 kB │ map:      5.82 kB
+out/main/chunks/profile-state-read-snapshot-DHLUbgKh.js                          1.45 kB │ map:      4.26 kB
+out/main/chunks/profile-state-access-h6yhcS7u.js                                 1.48 kB │ map:      4.96 kB
+out/main/main-thread-hang-watchdog-entry.js                                      1.50 kB │ map:      6.26 kB
+out/main/chunks/profile-state-recovery-pQjNV27O.js                               1.54 kB │ map:      5.33 kB
+out/main/chunks/windows-transient-lock-removal-CdfAcIZe.js                       1.54 kB │ map:      5.65 kB
+out/main/chunks/plugin-host-protocol-Bui7CnHS.js                                 1.63 kB │ map:      6.11 kB
+out/main/chunks/profile-state-writer-errors-Chl4a2V6.js                          1.64 kB │ map:      4.67 kB
+out/main/chunks/profile-state-writer-protocol-CAV-D7Wp.js                        1.65 kB │ map:      5.70 kB
+out/main/chunks/json-text-structure-limit-BaVZy6RM.js                            1.71 kB │ map:      5.44 kB
+out/main/chunks/profile-state-backup-path-DJTJ2lfI.js                            1.76 kB │ map:      4.73 kB
+out/main/chunks/watcher-directory-identity-Ow-fWd1O.js                           1.95 kB │ map:      8.08 kB
+out/main/chunks/node-bounded-json-stringify-Dp4VsUML.js                          2.07 kB │ map:      7.75 kB
+out/main/chunks/profile-storage-paths-Yezdd4tj.js                                2.10 kB │ map:      4.85 kB
+out/main/chunks/capability-probe-cache-B2D3Ta_U.js                               2.11 kB │ map:      8.12 kB
+out/main/persistence/profile-state/profile-state-recovery-command.js             2.12 kB
+out/main/chunks/wsl-paths-BA3xaxFo.js                                            2.13 kB │ map:     10.56 kB
+out/main/chunks/growing-byte-buffer-CgOKoTiJ.js                                  2.22 kB │ map:      6.33 kB
+out/main/chunks/profile-state-database-recovery-DVW72ime.js                      2.26 kB │ map:      7.07 kB
+out/main/chunks/durable-file-write-C--uQ6ux.js                                   2.31 kB │ map:     10.44 kB
+out/main/chunks/computer-use-key-spec-Brct96a2.js                                2.33 kB │ map:      7.54 kB
+out/main/chunks/node-bounded-file-reader-Dw3uCoHA.js                             2.46 kB │ map:      7.66 kB
+out/main/chunks/immediate-kill-reply-budget-c5wdkoQN.js                          2.52 kB │ map:     11.09 kB
+out/main/chunks/execution-host-CipXx283.js                                       2.55 kB │ map:     11.99 kB
+out/main/chunks/harden-database-files-D05EpFO9.js                                2.56 kB │ map:      6.44 kB
+out/main/chunks/profile-state-active-location-Dk9ZQ7SW.js                        2.57 kB │ map:      7.35 kB
+out/main/orca-profiles/profile-index-store.js                                    2.58 kB
+out/main/chunks/profile-state-backup-job-DYpDkZ3G.js                             2.60 kB │ map:      8.59 kB
+out/main/chunks/ssh-B0ME9Tny.js                                                  2.60 kB
+out/main/chunks/wsl-login-shell-command-CYKCIYUj.js                              2.62 kB │ map:      7.43 kB
+out/main/plugin-host-entry.js                                                    2.78 kB │ map:     12.44 kB
+out/main/warp-theme-parser-worker.js                                             2.97 kB │ map:     10.86 kB
+out/main/chunks/terminal-custom-themes-BShH2bM3.js                               3.02 kB │ map:      9.85 kB
+out/main/chunks/main-process-ndjson-framer-CSxCXdKo.js                           3.06 kB │ map:     14.96 kB
+out/main/chunks/profile-state-database-quarantine-BzKmLGgt.js                    3.07 kB │ map:     10.14 kB
+out/main/chunks/muse-session-log-D1iAfqVK.js                                     3.11 kB │ map:     11.73 kB
+out/main/chunks/cross-platform-path-Sz6r0YLF.js                                  3.13 kB │ map:     15.91 kB
+out/main/chunks/id-DyE9NDaT.js                                                   3.22 kB │ map:     13.38 kB
+out/main/profile-state-writer-worker-entry.js                                    3.27 kB │ map:      6.26 kB
+out/main/chunks/sync-database-BudBVS8W.js                                        3.45 kB │ map:     11.85 kB
+out/main/chunks/clipboard-text-BX_BjjTd.js                                       3.63 kB │ map:     14.06 kB
+out/main/chunks/daemon-process-start-time-BgCMraSF.js                            3.69 kB │ map:     12.37 kB
+out/main/chunks/fs-utils-CbTVde3u.js                                             3.79 kB │ map:     15.64 kB
+out/main/chunks/win32-utils-DZkl0ZSY.js                                          3.86 kB │ map:     15.46 kB
+out/main/chunks/keychain-Bo6FxjYZ.js                                             3.86 kB │ map:     14.37 kB
+out/main/chunks/wsl-browser-network-execution-route-BYFuhWFU.js                  4.31 kB │ map:     14.93 kB
+out/main/chunks/profile-state-migration-Cg41Y_OP.js                              4.36 kB │ map:     12.39 kB
+out/main/chunks/wsl-browser-network-relay-launch-D-gqMluf.js                     4.48 kB │ map:     15.11 kB
+out/main/persistence/profile-state/profile-state-offline-settings.js             4.49 kB │ map:      9.85 kB
+out/main/chunks/workspace-statuses-CMXGwa7h.js                                   4.51 kB │ map:     18.06 kB
+out/main/chunks/macos-computer-use-permissions-DqBctYz1.js                       4.73 kB │ map:     15.86 kB
+out/main/chunks/profile-index-store-B-WjRti_.js                                  4.84 kB │ map:     18.37 kB
+out/main/chunks/grok-session-paths-6w0-Bg_B.js                                   4.85 kB │ map:     19.40 kB
+out/main/parcel-watcher-process-entry.js                                         4.97 kB │ map:     27.83 kB
+out/main/chunks/codex-home-paths-BnsWo0Zn.js                                     5.08 kB │ map:     21.14 kB
+out/main/chunks/abort-signal-reason-Dam3YwFy.js                                  5.97 kB │ map:     28.33 kB
+out/main/chunks/profile-state-documents-D8HzjXLR.js                              6.05 kB │ map:     23.82 kB
+out/main/stt-worker.js                                                           6.21 kB │ map:     24.05 kB
+out/main/chunks/tui-agent-config-BNjfA_iy.js                                     6.31 kB │ map:     19.72 kB
+out/main/chunks/profile-state-access-owner-xo0-Uy_D.js                           6.79 kB │ map:     20.98 kB
+out/main/chunks/wsl-BYp4tO4b.js                                                  7.36 kB │ map:     42.09 kB
+out/main/chunks/ssh-browser-network-execution-route-DRdUcWna.js                  8.08 kB │ map:     27.77 kB
+out/main/chunks/plugin-manifest-BygBb-qW.js                                      8.48 kB │ map:     30.38 kB
+out/main/chunks/profile-state-recovery-command-Dkf5ispl.js                       8.77 kB │ map:     28.94 kB
+out/main/chunks/secure-file-C0EUgWjI.js                                          9.03 kB │ map:     50.18 kB
+out/main/chunks/foreign-sqlite-reader-entry-path-BnMnnzNf.js                     9.60 kB │ map:     42.70 kB
+out/main/chunks/tui-agent-startup-shell-C3TpUAA8.js                              9.96 kB │ map:     53.04 kB
+out/main/chunks/local-build-switch-B776vmhj.js                                  10.87 kB │ map:     28.09 kB
+out/main/chunks/run-process-BnFlYEYs.js                                         11.10 kB │ map:     71.65 kB
+out/main/chunks/worktree-logic-De9qF5HE.js                                      11.93 kB │ map:     54.14 kB
+out/main/chunks/host-readable-transcript-path-CQ5M-80j.js                       12.46 kB │ map:     50.85 kB
+out/main/chunks/windows-native-registry-Cz5Ce1Ev.js                             13.06 kB │ map:     69.78 kB
+out/main/chunks/pty-descendant-exit-verification-BUe89aXr.js                    14.07 kB │ map:     76.61 kB
+out/main/chunks/own-chromium-tree-kill-guard-BD6OJfbe.js                        14.54 kB │ map:     76.37 kB
+out/main/chunks/codex-session-bridge-D4JoPk3E.js                                14.87 kB │ map:     54.07 kB
+out/main/chunks/profile-state-sqlite-authority-CjMJHBYp.js                      14.90 kB │ map:     52.39 kB
+out/main/chunks/profile-state-database-CjagdR0H.js                              15.41 kB │ map:     54.22 kB
+out/main/chunks/codex-rollout-session-meta-BMsybu6Q.js                          16.83 kB │ map:     71.14 kB
+out/main/chunks/schema-helpers-DrzECHpF.js                                      17.35 kB │ map:     79.73 kB
+out/main/chunks/session-scanner-opencode-sqlite-open-C3cRkoiJ.js                26.10 kB │ map:    107.78 kB
+out/main/foreign-sqlite-reader-entry.js                                         27.35 kB │ map:    110.05 kB
+out/main/chunks/keybindings-TiIg6SLV.js                                         31.55 kB │ map:    104.79 kB
+out/main/usage-scan-worker-entry.js                                             40.53 kB │ map:    189.04 kB
+out/main/computer-sidecar.js                                                    40.85 kB │ map:    161.47 kB
+out/main/chunks/windows-shell-args-DviZ6yF0.js                                  56.44 kB │ map:    128.29 kB
+out/main/chunks/constants-CACuFmEy.js                                           57.21 kB │ map:    226.42 kB
+out/main/session-scanner-service-entry.js                                       67.90 kB │ map:    384.29 kB
+out/main/chunks/schemas-ZmZPMU9_.js                                            102.43 kB │ map:    508.82 kB
+out/main/chunks/session-scanner-service-protocol-CHlCl0-k.js                   107.36 kB │ map:    514.73 kB
+out/main/daemon-entry.js                                                       114.12 kB │ map:    445.78 kB
+out/main/chunks/managed-agent-hook-controls-BD26kHTy.js                        273.60 kB │ map:  1,189.23 kB
+out/main/chunks/daemon-cgroup-scope-DaM6V8hV.js                                442.60 kB │ map:  1,510.89 kB
+out/main/chunks/zh-C7XhJh-N.js                                                 736.88 kB │ map:  1,059.40 kB
+out/main/chunks/es-EwKkPCTq.js                                                 844.00 kB │ map:  1,166.56 kB
+out/main/chunks/fr-CxO-86DP.js                                                 869.18 kB │ map:  1,191.48 kB
+out/main/chunks/ko-CPAMBc_w.js                                                 887.21 kB │ map:  1,209.75 kB
+out/main/chunks/ja-BzxjLPZQ.js                                               1,012.64 kB │ map:  1,335.15 kB
+out/main/index.js                                                            8,697.29 kB │ map: 36,626.28 kB
+✓ built in 8.62s
+
+electron main process built successfully
+
+-----
+
+rolldown-vite v7.3.1 building ssr environment for development...
+[2Ktransforming...✓ 281 modules transformed.
+rendering chunks...
+out/preload/index.js  388.62 kB
+✓ built in 182ms
+
+electron preload scripts built successfully
+
+-----
+
+dev server running for the electron renderer process at:
+
+  ➜  Local:   http://127.0.0.1:5175/
+
+starting electron app...
+
+
+DevTools listening on ws://127.0.0.1:9441/devtools/browser/db9cd449-a460-414b-8105-962e99b70dc0
+(node:79979) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 closed listeners added to [BrowserWindow]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `Electron --trace-warnings ...` to show where the warning was created)
+[ws-transport] Failed to bind port 6769 (listen EADDRINUSE: address already in use 127.0.0.1:6769), trying next candidate
+[ws-transport] All configured ports failed to bind, using an OS-assigned port
+[codex-trust-grant] granted 9 managed hook entries via codex app-server (host=native, wrote=true, 417ms)
+[pty:history:gc] Skipped: live worktree set is empty
+[skills] scan roots=18 present=0 walked=18 skills=0 ms=58 ids=home-codex,home-agents,home-claude,home-grok,home-opencode,home-pi,home-omp,home-hermes,home-prime-agent,home-gemini,home-antigravity,home-cursor
+[skills] scan roots=18 present=0 walked=18 skills=0 ms=1 ids=home-codex,home-agents,home-claude,home-grok,home-opencode,home-pi,home-omp,home-hermes,home-prime-agent,home-gemini,home-antigravity,home-cursor
+[79979:1005/201717.006152:ERROR:content/browser/gpu/gpu_process_host.cc:1108] GPU process exited unexpectedly: exit_code=15
+[79979:1005/201717.072188:ERROR:content/browser/network_service_instance_impl.cc:721] Network service crashed or was terminated, restarting service.
+[runtime-graph] Renderer notifications suspended: renderer-process-gone
+[runtime-graph] reload revision=1 window=1 outcome=failure durationMs=0
