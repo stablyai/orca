@@ -123,6 +123,8 @@ const WorktreeList = React.memo(function WorktreeList({
     agentSendTargetWorktreeId
   })
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({
+    hostScopedPinnedGroups:
+      filterState.workspaceHostScope !== 'all' || filterState.visibleWorkspaceHostIds !== null,
     collapsedGroups,
     agentSendTargetWorktreeId,
     groupBy,

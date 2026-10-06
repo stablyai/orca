@@ -219,9 +219,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
       activate,
-      // Why: the CLI pairs as a runtime device but is not a viewer, so caller-scoped
-      // delivery would make --activate a no-op against a remote runtime.
-      ...(activate ? { navigation: 'all' as const } : {}),
+      // CLI activation targets its runtime's desktop, never unrelated paired viewers.
+      ...(activate ? { navigation: 'host' as const } : {}),
       ...(setupDecision ? { setupDecision } : {}),
       parentWorktree: explicitParentWorktree,
       ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),

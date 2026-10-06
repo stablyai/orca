@@ -41,7 +41,7 @@ import { readClaudeTranscriptEntryUuid } from './claude-transcript-entry-uuid'
 import { persistClaudeTurnResumePoint } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
 import { resolveClaudeAcquisitionLaunch } from './claude-structured-acquisition-launch'
-import { agentModelCatalogSessionAccess } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
+import { claudeAcquireCatalogAccess } from './claude-structured-acquire-catalog'
 import {
   bindClaudeConnectionJournalControls,
   createClaudeJournalFailureHandler
@@ -257,11 +257,7 @@ export async function acquireClaudeSession({
     })
     const session = publication.session
     liveSession = session
-    const catalogAccess = agentModelCatalogSessionAccess(
-      deps.modelCatalog,
-      'claude',
-      launch.claudeConfigDir
-    )
+    const catalogAccess = claudeAcquireCatalogAccess(deps.modelCatalog, launch.claudeConfigDir)
     if (catalogAccess) {
       session.catalogAccess = catalogAccess
     }

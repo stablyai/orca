@@ -270,7 +270,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     /** Revalidate after preparation, immediately before writing to the provider. */
     beforeDispatch?: () => Promise<void>
   }): Promise<AgentSessionDispatchOutcome>
-  /** `agent` answers for a session with no child running, from the provider alone. */
+  /** How this session narrows its agent's declared rewind; `agent` answers for one with no child
+   *  running. The router applies the declaration first, so an adapter's answer never widens it. */
   rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport
   recoverRewind?(input: {
     sessionId: string
@@ -324,10 +325,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
      *  start a new goal rather than rewrite that one's objective in place. */
     replacesGoal: boolean
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
-  /** Whether this session can change its goal; `agent` answers one at rest. */
-  supportsThreadGoal?(sessionId: string, agent?: string): boolean
-  /** Whether this session writes context facts to its turn rows; `agent` answers one at rest. */
-  recordsContextUsage?(sessionId: string, agent?: string): boolean
   /** Stops exactly the tasks `taskIds` names, which the host resolves from its child records. */
   stopBackgroundTasks?(input: {
     sessionId: string

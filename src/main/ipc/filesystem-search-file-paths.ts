@@ -40,6 +40,8 @@ export async function searchQuickOpenFilePaths(
   rootPath: string,
   store: Store,
   args: {
+    includeIgnored?: boolean
+    followSymlinks?: boolean
     query: string
     limit: number
     excludePaths?: string[]
@@ -57,9 +59,15 @@ export async function searchQuickOpenFilePaths(
   )
   const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
 
-  const excludePathPrefixes = buildExcludePathPrefixes(authorizedRootPath, args.excludePaths)
-  const { ignoredPass } = buildRgArgsForQuickOpen({
+  const excludePathPrefixes = [
+    ...new Set([
+      ...buildExcludePathPrefixes(rootPath, args.excludePaths),
+      ...buildExcludePathPrefixes(authorizedRootPath, args.excludePaths)
+    ])
+  ]
+  const { primary, ignoredPass } = buildRgArgsForQuickOpen({
     searchRoot: '.',
+    followSymlinks: args.followSymlinks,
     excludePathPrefixes,
     forceSlashSeparator: sep === '\\'
   })
@@ -67,7 +75,7 @@ export async function searchQuickOpenFilePaths(
   const scanOnce = async (): Promise<QuickOpenFilePathSearchResult> => {
     const ranker = new QuickOpenPathRanker(args.query, args.limit)
     await scanRipgrepPaths({
-      args: ignoredPass,
+      args: args.includeIgnored === false ? primary : ignoredPass,
       authorizedRootPath,
       excludePathPrefixes,
       localGitOptions,

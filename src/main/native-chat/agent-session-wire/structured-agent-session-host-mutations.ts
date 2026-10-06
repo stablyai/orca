@@ -161,7 +161,7 @@ export async function setStructuredAgentSessionOption(
       },
       run: (ctx) =>
         atRest()
-          ? recordStructuredAgentSessionOptionIntent(context.deps.store, ctx, params)
+          ? recordStructuredAgentSessionOptionIntent(context.deps, ctx, params)
           : plan.run(ctx)
     },
     openForProviderWrite(context, params.envelope)

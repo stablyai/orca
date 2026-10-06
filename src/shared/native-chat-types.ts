@@ -15,7 +15,9 @@ import type { AgentSessionFailureFact } from './agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
   AgentJournalPosition,
-  AgentJournalProducerLinkage
+  AgentJournalProducerLinkage,
+  AgentJournalToolCallEnding,
+  AgentJournalToolCallState
 } from './agent-session-journal-types'
 import type { AgentType } from './agent-status-types'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
@@ -71,7 +73,9 @@ export type NativeChatToolCallBlock = NativeChatToolMetadata & {
   /** Provider-supplied identity within this item stream; absent on legacy transcripts and peers. */
   callId?: string
   /** Provider lifecycle when the structured app-server path can supply it. */
-  state?: 'running' | 'completed' | 'failed'
+  state?: AgentJournalToolCallState
+  /** See the journal tool-call item: read with `state` through `agentJournalToolCallLifecycle`. */
+  endedAs?: AgentJournalToolCallEnding
 }
 
 /** One resolved hunk from a provider's edit result, carrying true file ranges. */
@@ -222,6 +226,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
+  /** On a conversation command the user sent, such as `/compact`: the command it names. */
+  command?: { name: string }
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
   /** Shown as not sent: in no turn, so a newer turn's bar and clock never land on it. Drawn where

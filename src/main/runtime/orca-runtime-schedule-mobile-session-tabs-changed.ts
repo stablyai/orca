@@ -73,16 +73,12 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
   ): RuntimeMobileSessionTabsResult {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
+      const publishedEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
+      if (publishedEpoch === null) {
+        this.notifyEmptyWorktreeOnPublication(worktreeId)
+      }
       return this.projectMobileSessionTabsForClient(
-        {
-          worktree: worktreeId,
-          publicationEpoch: UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH,
-          snapshotVersion: 0,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
-        },
+        this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch),
         clientNavigationId
       )
     }
@@ -90,6 +86,52 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
       this.toMobileSessionTabsResult(snapshot),
       clientNavigationId
     )
+  }
+
+  // Why: only an unpublished graph is "ask me later"; once it publishes, a worktree with no entry
+  // really has no tabs, and saying so lets a client open its first terminal.
+  protected emptyMobileSessionTabsResult(
+    worktreeId: string,
+    publishedEpoch: number | null
+  ): RuntimeMobileSessionTabsResult {
+    return {
+      worktree: worktreeId,
+      publicationEpoch:
+        publishedEpoch === null
+          ? UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
+          : `empty:${publishedEpoch}`,
+      snapshotVersion: 0,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    }
+  }
+
+  // Why: a publication only notifies worktrees it has entries for, so a client told "ask me later"
+  // about an empty worktree would otherwise never hear the answer.
+  protected notifyEmptyWorktreeOnPublication(worktreeId: string): void {
+    if (this.worktreesAwaitingSessionTabsPublication.has(worktreeId)) {
+      return
+    }
+    this.worktreesAwaitingSessionTabsPublication.add(worktreeId)
+    const onPublished = (): void => {
+      this.sessionTabsInventoryWaiters.delete(onPublished)
+      this.worktreesAwaitingSessionTabsPublication.delete(worktreeId)
+      const publishedEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
+      if (publishedEpoch === null || this.mobileSessionTabsByWorktree.has(worktreeId)) {
+        return
+      }
+      const result = this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch)
+      const changeSequence = ++this.mobileSessionTabsChangeSequence
+      for (const subscription of this.mobileSessionTabListeners) {
+        subscription.listener(
+          this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
+          changeSequence
+        )
+      }
+    }
+    this.sessionTabsInventoryWaiters.add(onPublished)
   }
 
   protected emitMobileSessionTabsSnapshotToClient(

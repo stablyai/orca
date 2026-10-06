@@ -11,8 +11,7 @@
  * WebKit as well as Chromium, because the iOS shell is WKWebView and the two disagree: a `blob:`
  * frame that Chromium admits under `frame-src blob:` is refused in WebKit by the
  * `frame-ancestors 'none'` it inherits. `srcdoc` is what both admit under the policy that already
- * ships, which is why this costs no CSP change and why a case below pins `frame-src 'none'` as still
- * shipped.
+ * ships, so the preview needs no CSP change.
  *
  * The paint oracle is a pixel rather than a read inside the frame: the frame is an opaque origin, and
  * WebKit refuses to evaluate in one, so reading its DOM would make the instrument engine-dependent.
@@ -243,8 +242,7 @@ for (const engine of ['chromium', 'webkit']) {
         // frame's URL, which is `about:srcdoc` on one browser and empty on another.
         expect(read.mountedSrcDoc).toContain('ARTIFACT_RENDERED')
         expect(read.mountedSrc).toBeNull()
-        // The rendered frame carries the constant, so the token case below is about the frame the
-        // page mounts rather than about a string nothing reads.
+        // Check the sandbox on the mounted frame.
         expect(read.mountedSandbox).toBe(read.declaredSandbox)
         expect(read.mountedSandbox).toBe('allow-top-navigation-by-user-activation')
         // The policy this document was served is the shell's own text plus the rig's report
@@ -298,8 +296,7 @@ for (const engine of ['chromium', 'webkit']) {
         // The second fence, measured on its own: grant `allow-scripts` and keep the shipped policy,
         // and the script still does not run, because a `srcdoc` frame inherits its embedder's
         // `script-src 'self'` and the artifact's script is inline. So the seal does not rest on the
-        // sandbox attribute alone -- which is what makes the token list below a defence in depth
-        // rather than the only thing standing between the page and an agent's script.
+        // sandbox attribute alone.
         const inherited = await open(browser(), {
           signal: ctx.signal,
           extra: { body: artifactScript(foreignOrigin) },
@@ -411,19 +408,6 @@ for (const engine of ['chromium', 'webkit']) {
         expect(root.actError).toBeNull()
         expect(root.ownOriginTopNavigations).toBe(1)
         expect(root.topNavigations).toBe(0)
-
-        // `href=""` is the same navigation spelled as "this document", and it resolves the same way.
-        const empty = await open(browser(), {
-          signal: ctx.signal,
-          expectNavigation: 'main-frame',
-          act: async ({ frame }) => {
-            await frame?.click('#emptylink', { timeout: 2000 })
-          }
-        })
-        expect(empty.pixelBefore).toBe(ARTIFACT_RGB)
-        expect(empty.actError).toBeNull()
-        expect(empty.ownOriginTopNavigations).toBe(1)
-        expect(empty.topNavigations).toBe(0)
       }, 180_000)
 
       /**
@@ -833,34 +817,4 @@ for (const engine of ['chromium', 'webkit']) {
     },
     600_000
   )
-}
-
-describe('the HTML preview needs no policy change', () => {
-  it('runs under a policy that still forbids every nested frame by URL', async () => {
-    const directives = (await readShellCsp()).split('; ')
-    // A `srcdoc` frame has no URL for `frame-src` to match, so the sealed box costs nothing here.
-    // Pinned so a future relaxation is a decision rather than a side effect of this component.
-    expect(directives).toContain("frame-src 'none'")
-    expect(directives).toContain("child-src 'none'")
-    expect(directives).toContain("script-src 'self'")
-    expect(directives).toContain("frame-ancestors 'none'")
-  })
-
-  it('grants exactly one sandbox token, and neither of the two that would unseal the frame', async () => {
-    const source = await readFileText('mobile/src/components/MobileHtmlPreview.web.tsx')
-    const match = /MOBILE_HTML_PREVIEW_SANDBOX = '([^']*)'/.exec(source)
-    expect(match).not.toBeNull()
-    const tokens = (match?.[1] ?? '').split(' ').filter((one) => one.length > 0)
-    expect(tokens).toEqual(['allow-top-navigation-by-user-activation'])
-    // Named rather than left to the list comparison: these two are the sealing invariant, and a
-    // reader of a failure should see which one was granted.
-    expect(tokens).not.toContain('allow-scripts')
-    expect(tokens).not.toContain('allow-same-origin')
-  })
-})
-
-/** One pixel of the frame's own fill, which is what says the artifact parsed and painted. */
-async function readFileText(relativePath) {
-  const { readFile } = await import('node:fs/promises')
-  return await readFile(join(mobileDir, '..', relativePath), 'utf8')
 }

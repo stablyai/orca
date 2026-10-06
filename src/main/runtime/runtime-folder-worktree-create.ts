@@ -23,6 +23,7 @@ import type {
 type RuntimeFolderWorktreeCreateDeps = {
   store: RuntimeStore
   ptySpawnAvailable: boolean
+  provisionInBackground?: () => boolean
   createTerminal: (
     selector: string,
     options: TerminalCreateOptions
@@ -177,7 +178,13 @@ export async function createRuntimeFolderWorktree(args: {
       undefined,
       args.startup && !didSpawnStartup ? args.startup : undefined
     )
-  } else if (deps.ptySpawnAvailable && !didSpawnStartup && !args.createdWithAgent) {
+  }
+  if (
+    (!shouldActivate || deps.provisionInBackground?.() === true) &&
+    deps.ptySpawnAvailable &&
+    !didSpawnStartup &&
+    !args.createdWithAgent
+  ) {
     try {
       await deps.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {

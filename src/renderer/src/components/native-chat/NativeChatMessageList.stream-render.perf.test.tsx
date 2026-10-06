@@ -85,7 +85,6 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
         session={sessionWith(messages)}
         isWorking={true}
         expandSignal={false}
-        fontScale={1}
       />
     )
 
@@ -104,7 +103,6 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
           session={sessionWith(streaming)}
           isWorking={true}
           expandSignal={false}
-          fontScale={1}
         />
       )
     }
@@ -149,7 +147,6 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
         journalItems={items}
         isWorking={false}
         expandSignal={false}
-        fontScale={1}
       />
     )
     const { rerender } = render(view([user, diff]))

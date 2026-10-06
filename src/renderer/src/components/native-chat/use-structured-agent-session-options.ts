@@ -96,9 +96,8 @@ export function useStructuredAgentSessionOptions(args: {
     target,
     optionCatalog,
     enabled: args.isVisible,
-    // A resumed conversation may keep its own model, so only a new one runs the listed default —
-    // and only Codex's listing names the configured model; Claude's settings or env may pick another.
-    namesDefault: launch?.kind === 'new' && agent === 'codex',
+    // A resumed conversation may keep its own model, so only a new one runs the listed default.
+    namesDefault: launch?.kind === 'new' && optionCatalog?.hostListingNamesConfiguredModel === true,
     ...(launch?.worktree ? { worktree: launch.worktree } : {}),
     fence,
     activeOptionRecordRef,
@@ -284,6 +283,8 @@ export function useStructuredAgentSessionOptions(args: {
     threadGoal: support?.threadGoal,
     /** Absent from a host that predates it or a session that writes no context facts. */
     contextUsage: support?.contextUsage,
+    /** Undefined until this fence's options read answers. */
+    rewind: support?.fence === fence ? support.rewind : undefined,
     optionSnapshot,
     optionSurface,
     setStructuredOption

@@ -73,6 +73,7 @@ async function startupTerminalOptions(startupPaneKey?: string) {
 describe('startRuntimeLocalWorktreeTerminals reserved startup pane', () => {
   it('propagates the pin and refuses an unpinned fallback when startup fails', async () => {
     const { createTerminal, ports } = createPorts()
+    ports.provisionInBackground = () => true
     const failure = new Error('pinned auth unavailable')
     createTerminal.mockRejectedValue(failure)
     await expect(
@@ -117,6 +118,31 @@ describe('startRuntimeLocalWorktreeTerminals reserved startup pane', () => {
 })
 
 describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
+  it.each([false, true])(
+    'provisions a headless activated workspace without a viewer (setup=%s)',
+    async (withSetup) => {
+      const { ports } = createPorts()
+      ports.provisionInBackground = () => true
+      const setup = withSetup ? { runnerScriptPath: '/repo/setup.sh', envVars: {} } : undefined
+      await startRuntimeLocalWorktreeTerminals({
+        request: { repoSelector: `id:${repo.id}`, name: 'headless', activate: true },
+        repo,
+        worktree,
+        setup,
+        ports
+      })
+      expect(ports.provision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          worktreeId: worktree.id,
+          hasStartupTerminal: false,
+          surfaceOwner: false,
+          ...(setup ? { setup } : {})
+        })
+      )
+      expect(ports.createTerminal).not.toHaveBeenCalled()
+    }
+  )
+
   it.each([
     ['Blank Terminal', undefined, 1],
     ['an agent', 'codex' as const, 0]

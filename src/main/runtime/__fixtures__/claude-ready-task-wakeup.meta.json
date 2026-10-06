@@ -1,0 +1,11 @@
+{
+  "capturedAt": "2026-10-06T04:06:33.762Z",
+  "platform": "darwin",
+  "command": [
+    "claude"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "Claude Code 2.1.291; native ready-title capture in existing workspace; no prompt submitted",
+  "exitCode": 129
+}

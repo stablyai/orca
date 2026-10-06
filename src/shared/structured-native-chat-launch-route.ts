@@ -14,6 +14,7 @@ import type { GlobalSettings } from './global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from './protocol-version'
 import type { TuiAgent } from './tui-agent'
@@ -29,10 +30,9 @@ export type StructuredNativeChatBlocker =
   | 'reused-terminal'
   | 'agent-without-structured-session'
   | 'floating-workspace'
-  /** The agent's launch command is overridden, or the launch names its own working directory:
-   *  a process shape only a PTY can produce. The configured *arguments* are not read here —
-   *  they are a terminal concern the structured transports do not share a vocabulary with. */
-  | 'tui-launch-command'
+  /** The launch names a start directory outside its workspace, which only a PTY can apply. The
+   *  configured launch command and arguments are not read: they apply to terminal launches only. */
+  | 'custom-start-directory'
   | 'remote-execution-host'
   | 'project-runtime'
   | 'runtime-capability'
@@ -57,9 +57,12 @@ export type StructuredNativeChatSupportInput = {
   /** Host-derived. Absent means the kind was never established, which is not evidence of any kind. */
   workspaceKind?: WorkspaceLaunchKind
   projectRuntime?: ProjectExecutionRuntimeResolution | null
-  requiresTuiLaunchCommand?: boolean
+  startsOutsideWorkspaceRoot?: boolean
   /** An existing PTY agent keeps its execution transport. */
   reusesTerminal?: boolean
+  /** The agents the host listed through `agentSession.agents`. Absent: none learned, so only
+   *  Claude and Codex, which every structured host runs, can be offered. */
+  hostStructuredAgents?: readonly string[]
 }
 
 /** The user's default for a new agent tab: native chat rather than the raw TUI. */
@@ -99,14 +102,15 @@ export function resolveStructuredNativeChatSupport(
   if (input.reusesTerminal === true) {
     return { supported: false, blocker: 'reused-terminal' }
   }
-  if (!isAgentSessionHandleProvider(input.agent)) {
+  const builtInAgent = isAgentSessionHandleProvider(input.agent)
+  if (!builtInAgent && !input.hostStructuredAgents?.includes(input.agent)) {
     return { supported: false, blocker: 'agent-without-structured-session' }
   }
   if (input.workspaceKind === 'floating') {
     return { supported: false, blocker: 'floating-workspace' }
   }
-  if (input.requiresTuiLaunchCommand === true) {
-    return { supported: false, blocker: 'tui-launch-command' }
+  if (input.startsOutsideWorkspaceRoot === true) {
+    return { supported: false, blocker: 'custom-start-directory' }
   }
   const projectRuntime = input.projectRuntime
   if (projectRuntime?.status === 'repair-required' || projectRuntime?.runtime.kind === 'wsl') {
@@ -115,7 +119,14 @@ export function resolveStructuredNativeChatSupport(
   if (input.hostCapabilities === null) {
     return { supported: false, blocker: 'runtime-capability-unknown' }
   }
-  if (!input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)) {
+  if (
+    !input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) ||
+    // A host that does not advertise its registered agents accepts only Claude and Codex.
+    (!builtInAgent &&
+      !input.hostCapabilities.includes(
+        STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+      ))
+  ) {
     return { supported: false, blocker: 'runtime-capability' }
   }
   if (host.kind === 'runtime') {

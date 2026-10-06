@@ -24,8 +24,12 @@ import {
   attach,
   CALLER,
   envelope,
-  hostTestState
+  hostTestState,
+  replaceHostTestState
 } from './structured-agent-session-host-test-harness'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { StructuredAgentRegistry } from './structured-agent-registry'
+import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION,
@@ -251,7 +255,9 @@ it('hands over a message held behind the command when the command ends just as t
     if (
       !ended &&
       read?.startsWith('compact:') &&
-      new Error('who reads').stack?.includes('StructuredAgentSessionDeliveryLoop.prepare')
+      /at (?:StructuredAgentSessionDeliveryLoop\.)?prepare \(.*structured-agent-session-delivery-loop/.test(
+        new Error('who reads').stack ?? ''
+      )
     ) {
       ended = true
       finish({ outcome: 'success' })
@@ -331,6 +337,33 @@ it('says only that the compaction failed when the provider refused it without wo
       }
     ])
   )
+})
+
+it('refuses the command for an agent that does not declare compaction, whatever its adapter has', async () => {
+  const declared = CODEX_STRUCTURED_AGENT.capabilities
+  const agents = new StructuredAgentRegistry([
+    {
+      definition: {
+        ...CODEX_STRUCTURED_AGENT,
+        capabilities: { ...declared, compact: false, threadGoal: false, rewind: false }
+      },
+      adapter: state.host.deps.adapter
+    }
+  ])
+  replaceHostTestState({
+    store: state.store,
+    host: new StructuredAgentSessionHost({ ...state.host.deps, agents })
+  })
+  state = hostTestState()
+  await attach()
+  const params = compactParams()
+
+  await expect(state.host.conversationCommand(CALLER, params)).resolves.toMatchObject({
+    ok: true,
+    value: { state: 'completed', failure: { kind: 'commandRefused' } }
+  })
+  expect(compact).not.toHaveBeenCalled()
+  expect(await commandTurn(params.envelope.clientOperationId)).toBeUndefined()
 })
 
 it('refuses the command at handover when the provider opened a turn meanwhile (B3)', async () => {

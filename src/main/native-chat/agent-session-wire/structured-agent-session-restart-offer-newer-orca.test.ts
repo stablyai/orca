@@ -154,11 +154,13 @@ it('still offers a damaged chat, and files its failure when acting on it', async
 // "Dismiss all" ends what the person was shown. A newer Orca's offer was never shown here, so it
 // stays, byte for byte, for the Orca that can act on it.
 it.each([
-  ['after the dialog listed the offers', true],
-  ['on a host that has not listed them yet', false]
+  ['after the dialog listed the offers', true, undefined],
+  ['on a host that has not listed them yet', false, undefined],
+  // A remote client that cannot show every agent dismisses through its audience.
+  ['for a client shown only Codex', false, (agent: string) => agent === 'codex']
 ])(
   "dismisses every listed offer and leaves a newer Orca's hidden one as it was, %s",
-  async (_when, listFirst) => {
+  async (_when, listFirst, audience) => {
     const NEWER = 'session-newer-orca'
     // A second chat, made before the restart; a newer Orca then saves it with a row this build
     // can't place.
@@ -189,7 +191,7 @@ it.each([
         SESSION
       ])
     }
-    await host.restartResume.dismiss()
+    await host.restartResume.dismiss(undefined, audience)
 
     const left = await new AgentSessionRecoveryCapsule(root).list(NOW)
     expect(left.map((offer) => offer.sessionId)).toEqual([NEWER])

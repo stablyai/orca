@@ -22,11 +22,12 @@ import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 /** The root's own exit was seen first-hand. The lease follows the root, so a descendant
- *  left unverified or seen alive does not hold it. */
+ *  left unverified or seen alive does not hold it. A failed spawn had no process to exit. */
 export function claudeRootExitObserved(
   connection: ClaudeStreamJsonConnection | null | undefined
 ): boolean {
-  return connection?.exitVerdict.root === 'exited'
+  const verdict = connection?.exitVerdict
+  return verdict?.root === 'exited' && verdict.processless !== true
 }
 
 export function claudeAcquisitionCleanupError(
@@ -34,7 +35,7 @@ export function claudeAcquisitionCleanupError(
   cause: unknown
 ): Error {
   const verdict = connection?.exitVerdict
-  if (verdict?.root === 'processless') {
+  if (verdict?.processless === true) {
     return new AgentSessionPreSpawnError(cause)
   }
   return claudeRootExitObserved(connection)
@@ -57,7 +58,7 @@ export async function resolveClaudeAcquisitionError(input: {
       prompt.settle(null)
     }
     const closed = (await input.attempt.connection?.close()) ?? true
-    if (input.attempt.connection?.exitVerdict.root === 'processless') {
+    if (input.attempt.connection?.exitVerdict.processless === true) {
       acquisitionError = new AgentSessionPreSpawnError(input.error)
     } else if (!closed) {
       acquisitionError = claudeAcquisitionCleanupError(input.attempt.connection, input.error)

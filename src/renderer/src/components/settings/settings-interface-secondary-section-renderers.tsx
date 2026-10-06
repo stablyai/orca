@@ -1,5 +1,6 @@
 import { StatsPane } from '../stats/StatsPane'
 import { AppearancePane } from './AppearancePane'
+import { ChatSettingsSection } from './ChatSettingsSection'
 import { InputPane } from './InputPane'
 import { NotificationsPane } from './NotificationsPane'
 import { ShortcutsPane } from './ShortcutsPane'
@@ -33,6 +34,18 @@ export function renderAppearanceSettingsSection(context: SettingsRenderContext):
         />
       ) : null}
     </SettingsSection>
+  )
+}
+
+export function renderChatSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+  const { model, navigation, view } = context
+  return (
+    <ChatSettingsSection
+      settings={model.settings}
+      updateSettings={model.updateSettings}
+      searchEntries={navigation.getSectionSearchEntries('chat')}
+      isMounted={view.isSectionMounted('chat')}
+    />
   )
 }
 

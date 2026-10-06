@@ -300,6 +300,49 @@ describe('release checkout materialization', () => {
     expect(relative(cacheRoot, checkout.root)).not.toMatch(/^\.\./)
   }, 180_000)
 
+  // v1.4.221 still needs the pinned test-only parser for its dense match path.
+  // Default cache root: package resolution must walk up into the repo's node_modules.
+  it('runs the released dense parser with its retained test dependency', async () => {
+    const checkout = await materializeReleaseCheckout('v1.4.221')
+    const ripgrep = await importReleaseCheckoutModule(
+      checkout,
+      '/src/shared/ripgrep-dense-match-json.ts'
+    )
+    const callExport = (name: string, ...args: unknown[]): unknown => {
+      const exported = ripgrep[name]
+      if (typeof exported !== 'function') {
+        throw new Error(`v1.4.221 ripgrep-dense-match-json has no ${name} export`)
+      }
+      return exported(...args)
+    }
+    const limits = { structuralTokens: 64, nestingDepth: 8 }
+
+    expect(callExport('parseRipgrepMatchJson', '{"type":"match"}', 1, limits)).toEqual({
+      type: 'match'
+    })
+    expect(callExport('parseDenseRipgrepMatchJson', '{"type":"match"}', 1, 8)).toEqual({
+      type: 'match',
+      data: { submatches: [] }
+    })
+    const match = {
+      type: 'match',
+      data: {
+        path: { text: 'src/example.ts' },
+        lines: { text: 'hit hit\n' },
+        line_number: 7,
+        submatches: [
+          { start: 0, end: 3 },
+          { start: 4, end: 7 }
+        ]
+      }
+    }
+    expect(callExport('parseDenseRipgrepMatchJson', JSON.stringify(match), 1, 8)).toEqual({
+      ...match,
+      data: { ...match.data, submatches: [{ start: 0, end: 3 }] }
+    })
+    expect(() => callExport('parseDenseRipgrepMatchJson', '{"type":', 1, 8)).toThrow()
+  }, 180_000)
+
   it('keeps an import live while another colliding release label materializes', async () => {
     // Squash-merged history has no merge parents; create two distinct refs with colliding labels.
     const scope = `refs/orca-checkout-test/${randomUUID()}`

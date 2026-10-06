@@ -7,7 +7,7 @@ import {
   CodexAppServerUnsupportedError,
   isCodexMethodNotFoundError
 } from './codex-app-server-session'
-import { classifyJsonRpcPrefix } from './codex-app-server-record-prefix'
+import { classifyJsonRpcPrefix } from '../../shared/json-rpc-record-prefix'
 
 const OVERSIZED_REQUEST_ERROR_CODE = -32001
 const MAX_REMEMBERED_TIMEOUTS = 64

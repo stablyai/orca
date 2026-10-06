@@ -23,6 +23,7 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const relaunchedRoots: string[] = []
 
@@ -80,6 +81,7 @@ async function relaunch(): Promise<StructuredAgentSessionHost> {
   })
   const store = await openTestAgentSessionRecordStore(relaunched)
   const host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),

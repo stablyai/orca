@@ -9,6 +9,7 @@ import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import {
   AgentSessionAcquisitionRefusal,
   type StructuredAgentSessionAdapter
@@ -66,6 +67,7 @@ let ownerProbe: AgentSessionOwnerProbe = { outcome: 'pid-absent' }
 async function openHost(): Promise<void> {
   store = await openTestAgentSessionRecordStore(generationRoot())
   host = new StructuredAgentSessionHost({
+    agents: claudeAndCodexDeclared(),
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,

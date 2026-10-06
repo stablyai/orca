@@ -3,6 +3,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { Project } from '../../shared/project-types'
 import { createSettings } from '../codex-accounts/runtime-home-settings-test-fixtures'
 import { assertNativeCodexAccountPlacement } from './runtime-codex-account-placement'
+import { decideAgentLaunchMode } from '../agent-launch/agent-launch-mode'
 
 vi.mock('../wsl', () => ({
   getCachedWslAvailability: () => true,
@@ -33,6 +34,33 @@ function fixture() {
 }
 
 describe('Codex account native placement preflight', () => {
+  it.each(['account-a', 'account-b', 'system'])(
+    'keeps %s pinned to a terminal while an unpinned custom command follows the chat default',
+    (account) => {
+      const settings = {
+        experimentalNativeChat: true,
+        experimentalStructuredNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      }
+      expect(
+        decideAgentLaunchMode({ placement: { agent: 'codex', account }, settings })
+      ).toMatchObject({
+        mode: 'terminal',
+        preferred: 'structured',
+        reason: 'pinned_codex_account'
+      })
+      const f = fixture()
+      Object.assign(f.settings, settings, { agentCmdOverrides: { codex: 'custom-wrapper' } })
+      expect(
+        decideAgentLaunchMode({ placement: { agent: 'codex' }, settings: f.settings })
+      ).toMatchObject({
+        mode: 'structured',
+        reason: 'user_default'
+      })
+      expect(() => assertNativeCodexAccountPlacement(f.args)).toThrow('custom Codex launch command')
+    }
+  )
+
   it.each(['darwin', 'linux', 'win32'])(
     'accepts a native git or folder workspace on %s',
     (platform) => {

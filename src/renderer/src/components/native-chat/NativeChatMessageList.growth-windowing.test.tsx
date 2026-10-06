@@ -107,7 +107,6 @@ describe('transcript follow ownership across growth and appends', () => {
         session={session(transcriptAt(step))}
         isWorking
         expandSignal={false}
-        fontScale={1}
         workingStartedAt={TURN_STARTED_AT}
       />
     )

@@ -49,10 +49,11 @@ describe('daemon scope death watch ownership', () => {
   it('retains the lifetime pipe and uses the verified user bus', () => {
     vi.stubEnv('DBUS_SESSION_BUS_ADDRESS', 'disabled:')
     vi.stubEnv('XDG_RUNTIME_DIR', '/run/user/1000')
-    const child = Object.assign(new ChildProcess(), {
-      stdin: new PassThrough(),
-      stdout: new PassThrough(),
-      stderr: new PassThrough()
+    const stdin = new PassThrough()
+    const child = Object.defineProperties(new ChildProcess(), {
+      stdin: { value: stdin },
+      stdout: { value: new PassThrough() },
+      stderr: { value: new PassThrough() }
     })
     vi.spyOn(child, 'unref').mockImplementation(() => {})
     vi.mocked(spawnProcess).mockReturnValue(child)
@@ -77,13 +78,13 @@ describe('daemon scope death watch ownership', () => {
     expect(vi.mocked(spawnProcess).mock.calls[0][0].env).not.toHaveProperty(
       'DBUS_SESSION_BUS_ADDRESS'
     )
-    expect(child.stdin.writableEnded).toBe(false)
+    expect(stdin.writableEnded).toBe(false)
     expect(child.unref).toHaveBeenCalledOnce()
 
-    child.stdin.emit('error', new Error('pipe failed'))
+    stdin.emit('error', new Error('pipe failed'))
     child.emit('error', new Error('spawn failed'))
     child.emit('exit', 1, null)
-    expect(child.stdin.destroyed).toBe(true)
+    expect(stdin.destroyed).toBe(true)
     expect(opts.log.mock.calls.map(([event]) => event)).toEqual([
       'scope-death-watch-pipe-error',
       'scope-death-watch-error',

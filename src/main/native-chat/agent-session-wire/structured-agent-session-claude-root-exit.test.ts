@@ -19,6 +19,7 @@ import { endExitedStructuredAgentSessionChildUnderSerialize } from './structured
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const NOW = 1_788_727_031_330
 const roots: string[] = []
@@ -121,6 +122,7 @@ describe('Claude root-exit stop', () => {
     const deps = {
       store,
       adapter,
+      agents: NO_STRUCTURED_AGENTS,
       // The one database the store and the journal share, as the runtime installs them.
       journalDatabase: openTestJournalHostDatabase(stateDirectory),
       claimKeyId: 'key-1',

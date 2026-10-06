@@ -13,7 +13,6 @@
  */
 
 import type {
-  AgentSessionHandleProvider,
   AgentSessionProviderHandle,
   AgentSessionProviderHandleNamespace
 } from './agent-session-provider-handle'
@@ -32,13 +31,13 @@ export const CODEX_STRUCTURED_HANDLE_NAMESPACE = {
   agent: 'codex'
 } as const satisfies AgentSessionProviderHandleNamespace
 
-/** The namespace a record's handles live in, from the structured lane it was created on. */
-export function agentSessionProviderHandleNamespace(
-  provider: AgentSessionHandleProvider
-): AgentSessionProviderHandleNamespace {
-  return provider === 'claude'
+/** The typed lanes' namespaces: their handles can only ever be stored in these. */
+function builtInHandleNamespace(agent: string): AgentSessionProviderHandleNamespace | null {
+  return agent === CLAUDE_STRUCTURED_HANDLE_NAMESPACE.agent
     ? CLAUDE_STRUCTURED_HANDLE_NAMESPACE
-    : CODEX_STRUCTURED_HANDLE_NAMESPACE
+    : agent === CODEX_STRUCTURED_HANDLE_NAMESPACE.agent
+      ? CODEX_STRUCTURED_HANDLE_NAMESPACE
+      : null
 }
 
 export function isAgentSessionProviderHandleInNamespace(
@@ -48,15 +47,19 @@ export function isAgentSessionProviderHandleInNamespace(
   return handle.transport === namespace.transport && handle.agent === namespace.agent
 }
 
-/** Whether a handle belongs to a record of this lane. Compares namespaces; never reads its data. */
+/**
+ * Whether a handle belongs to a record of this agent. Compares namespaces; never reads its data.
+ * Claude and Codex handles are pinned to their typed lane's transport. Another agent's handle may be
+ * in any transport: the record store asks only that a chain keep one namespace owned by the
+ * record's agent, and whether this build speaks that transport is asked when the agent would start
+ * (`agentDrivesSession`).
+ */
 export function agentSessionProviderHandleBelongsTo(
   handle: AgentSessionProviderHandle,
-  provider: AgentSessionHandleProvider
+  agent: string
 ): boolean {
-  return isAgentSessionProviderHandleInNamespace(
-    handle,
-    agentSessionProviderHandleNamespace(provider)
-  )
+  const builtIn = builtInHandleNamespace(agent)
+  return builtIn ? isAgentSessionProviderHandleInNamespace(handle, builtIn) : handle.agent === agent
 }
 
 /** Claude's resume cursor is its leaf: the transcript entry a resume continues from. */
@@ -100,11 +103,24 @@ function isNamespacePart(value: unknown): value is string {
   return typeof value === 'string' && NAMESPACE_PART_PATTERN.test(value)
 }
 
+/** An agent id a host may register: the same bounded slug a handle's agent is. Whether a host runs
+ *  it is that host's registry's answer, not this check's. */
+export function isStructuredAgentId(value: unknown): value is string {
+  return isNamespacePart(value)
+}
+
 function isLegacyNamespace(handle: AgentSessionProviderHandleNamespace): boolean {
   return (
     isAgentSessionProviderHandleInNamespace(handle, CLAUDE_STRUCTURED_HANDLE_NAMESPACE) ||
     isAgentSessionProviderHandleInNamespace(handle, CODEX_STRUCTURED_HANDLE_NAMESPACE)
   )
+}
+
+/** Whether builds before the neutral handle read a record of this namespace at all. */
+export function isAgentSessionProviderHandleReadByOlderBuilds(
+  handle: AgentSessionProviderHandleNamespace
+): boolean {
+  return isLegacyNamespace(handle)
 }
 
 /**

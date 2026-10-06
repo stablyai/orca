@@ -12,6 +12,7 @@ import { performSend, type AgentSessionTurnContext } from './structured-agent-se
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const journals = createTrackedJournalOpener()
 
@@ -63,6 +64,8 @@ describe('structured send idempotency', () => {
         sessionId: 'session-1',
         journal,
         fence: 2,
+        agents: NO_STRUCTURED_AGENTS,
+        agent: 'codex',
         adapter: { dispatch } as unknown as StructuredAgentSessionAdapter,
         persistOptions: async () => undefined,
         resolvedBy: 'caller',
@@ -104,6 +107,8 @@ describe('structured send idempotency', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: { dispatch } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'caller',

@@ -31,6 +31,16 @@ export function claudeStartupFailureFact(session: ClaudeSession): SubmissionReje
     : null
 }
 
+export async function awaitClaudeSessionStarted(
+  session: ClaudeSession | undefined
+): Promise<void | SubmissionRejectionFact> {
+  if (!session) {
+    return
+  }
+  await session.startup.settled
+  return claudeStartupFailureFact(session) ?? undefined
+}
+
 /** Resolves when startup lands or `timeoutMs` passes; a stuck start then refuses the write as before. */
 export function claudeStartupSettledWithin(
   session: ClaudeSession | undefined,

@@ -28,6 +28,7 @@ import {
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 const caller = { callerKey: 'desktop' }
 const KEPT = { provider: 'codex' as const, threadId: THREAD, turnId: 'kept', ordinal: 0 }
@@ -80,6 +81,7 @@ function adapter(): StructuredAgentSessionAdapter {
 
 function openHost(): StructuredAgentSessionHost {
   return new StructuredAgentSessionHost({
+    agents: claudeAndCodexDeclared(),
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),

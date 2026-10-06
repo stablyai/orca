@@ -13,10 +13,21 @@ import {
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import { closeClaudeSession } from './claude-structured-session-close'
+import { claudeRootExitObserved, closeClaudeSession } from './claude-structured-session-close'
 import { ClaudeAcquisitionRegistry } from './claude-structured-session-state'
 
 describe('Claude published session close lifecycle', () => {
+  it('never reads a failed spawn as an observed root exit, whatever checks it first', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const connection = claude.connections[0]!
+    connection.exitVerdict = { root: 'exited', tree: 'exited', processless: true }
+    expect(claudeRootExitObserved(connection)).toBe(false)
+    connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+    expect(claudeRootExitObserved(connection)).toBe(true)
+  })
+
   it('reports a proven root exit when published-session close cannot prove descendants', async () => {
     const claude = fakeClaude()
     const adapter = adapterFor(claude)

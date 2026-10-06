@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
+import {
+  decodePersistedAgentSessionProviderHandleChain,
+  encodePersistedAgentSessionProviderHandleChain,
+  isAgentSessionHandleProvider,
+  type AgentSessionProviderHandle,
+  type AgentSessionProviderHandleLink
+} from './agent-session-provider-handle'
 import {
   agentSessionJournalProviderHandle,
   agentSessionProviderHandleFromWire,
@@ -314,5 +320,52 @@ describe('the wire and journal forms', () => {
         providerHandle: { transport: 'acp', agent: 'grok', nativeId: 's' }
       })
     ).toEqual({ kind: 'opaque', agent: 'grok', value: 's' })
+  })
+})
+
+describe('a chat whose saved conversation could not be restored', () => {
+  const acp = (nativeId: string): AgentSessionProviderHandle => ({
+    transport: 'acp',
+    agent: 'grok',
+    nativeId
+  })
+  const link = (
+    linkId: string,
+    nativeId: string,
+    fence: number,
+    extra: Partial<AgentSessionProviderHandleLink> = {}
+  ): AgentSessionProviderHandleLink => ({
+    linkId,
+    handle: acp(nativeId),
+    origin: 'created',
+    mintedAtFence: fence,
+    observedAt: fence * 1_000,
+    ...extra
+  })
+  const lost = (nativeId: string, replacedAt: number) => ({
+    key: agentSessionProviderHandleKey(acp(nativeId)),
+    reason: 'restore-failed',
+    replacedAt
+  })
+  // Opened, reopened, lost and replaced twice, and the second replacement reopened.
+  const chain = [
+    link('l1', 's-1', 1),
+    link('l2', 's-1', 2, { origin: 'resumed' }),
+    link('l3', 's-2', 3, { replaces: lost('s-1', 3_000) }),
+    link('l4', 's-3', 4, { replaces: lost('s-2', 4_000) }),
+    link('l5', 's-3', 7, { origin: 'resumed' })
+  ]
+
+  it('stores the chain as it is held, and reads every link back', () => {
+    const stored = JSON.parse(JSON.stringify(encodePersistedAgentSessionProviderHandleChain(chain)))
+    expect(stored).toEqual(chain)
+    expect(decodePersistedAgentSessionProviderHandleChain(stored)).toEqual(chain)
+  })
+
+  it('refuses a stored replacement that opens the chain or names another conversation', () => {
+    const stored = JSON.parse(JSON.stringify(encodePersistedAgentSessionProviderHandleChain(chain)))
+    expect(decodePersistedAgentSessionProviderHandleChain(stored.slice(2))).toBeNull()
+    stored[3].replaces.key = agentSessionProviderHandleKey(acp('s-1'))
+    expect(decodePersistedAgentSessionProviderHandleChain(stored)).toBeNull()
   })
 })

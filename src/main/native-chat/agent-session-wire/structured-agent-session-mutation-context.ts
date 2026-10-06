@@ -59,6 +59,7 @@ export function mutateStructuredAgentSession<TValue>(
     admitAndRunAgentSessionMutation({
       store: context.deps.store,
       adapter: context.deps.adapter,
+      agents: context.deps.agents,
       logger: context.deps.logger,
       callerKey: caller.callerKey,
       envelope,

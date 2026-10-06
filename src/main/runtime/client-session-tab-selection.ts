@@ -1,6 +1,7 @@
-import type {
-  RuntimeMobileSessionClientTab,
-  RuntimeMobileSessionTabsResult
+import {
+  CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX,
+  type RuntimeMobileSessionClientTab,
+  type RuntimeMobileSessionTabsResult
 } from '../../shared/runtime-types'
 import type { PersistedMobileClientTabSelections } from '../../shared/persisted-state-types'
 import {
@@ -209,7 +210,7 @@ export class ClientSessionTabSelectionStore {
       // Why: an empty snapshot has no topology to project; writing it back would wipe a restart-hydrated selection before tabs arrive.
       return {
         ...closed.snapshot,
-        publicationEpoch: `${snapshot.publicationEpoch}:client-navigation`,
+        publicationEpoch: `${snapshot.publicationEpoch}${CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX}`,
         snapshotVersion: snapshot.snapshotVersion + state.revision
       }
     }
@@ -227,7 +228,7 @@ export class ClientSessionTabSelectionStore {
     })
     return {
       ...projected.snapshot,
-      publicationEpoch: `${snapshot.publicationEpoch}:client-navigation`,
+      publicationEpoch: `${snapshot.publicationEpoch}${CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX}`,
       snapshotVersion: snapshot.snapshotVersion + state.revision
     }
   }

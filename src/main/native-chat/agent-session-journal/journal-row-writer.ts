@@ -76,33 +76,36 @@ export class JournalRowWriter {
   enqueueRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[]
   ): Promise<JournalRow[]> {
-    return this.deps.serialize(() => {
-      assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
-      const first = this.deps.nextSequence()
-      const ts = this.deps.now()
-      const rows = plan().map((build, index) => build(first + index, ts))
-      if (rows.length === 0) {
-        return rows
-      }
-      for (const row of rows) {
-        assertJournalFence(row.fence, this.deps.highestFence())
-      }
-      try {
-        this.deps.database().transaction((db) => {
-          for (const row of rows) {
-            insertJournalRow(db, this.deps.sessionId, row)
-            this.runBookkeeping(db, row)
-          }
-        })
-      } catch (error) {
-        this.deps.rolledBack?.()
-        throw error
-      }
-      for (const row of rows) {
-        this.deps.commit(row)
-      }
+    return this.deps.serialize(() => this.writeRows(plan))
+  }
+
+  /** `enqueueRows`' write, for a caller already running at its own turn in the queue. */
+  writeRows(plan: () => readonly ((seq: number, ts: number) => JournalRow)[]): JournalRow[] {
+    assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
+    const first = this.deps.nextSequence()
+    const ts = this.deps.now()
+    const rows = plan().map((build, index) => build(first + index, ts))
+    if (rows.length === 0) {
       return rows
-    })
+    }
+    for (const row of rows) {
+      assertJournalFence(row.fence, this.deps.highestFence())
+    }
+    try {
+      this.deps.database().transaction((db) => {
+        for (const row of rows) {
+          insertJournalRow(db, this.deps.sessionId, row)
+          this.runBookkeeping(db, row)
+        }
+      })
+    } catch (error) {
+      this.deps.rolledBack?.()
+      throw error
+    }
+    for (const row of rows) {
+      this.deps.commit(row)
+    }
+    return rows
   }
 
   /** Assign the next sequence, make the row durable, and fold it through the SAME reducer

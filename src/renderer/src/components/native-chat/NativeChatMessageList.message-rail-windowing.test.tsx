@@ -85,18 +85,17 @@ describe('revealing a diff from a turn rollup', () => {
         journalItems={withPrompts}
         isWorking={false}
         expandSignal={false}
-        fontScale={1}
       />
     )
     fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
     scrollTranscript(container, 6000)
-    expect(screen.getByText('Edited file')).toBeInTheDocument()
+    expect(screen.getByText('Edited')).toBeInTheDocument()
     scrollTo.mockClear()
     fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
     fireEvent.click(screen.getByRole('button', { name: 'Second prompt' }))
     expect(scrollTo).toHaveBeenCalledTimes(1)
-    expect(screen.queryByText('Edited file')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
 
     scrollTranscript(container, 0)
     scrollTo.mockClear()

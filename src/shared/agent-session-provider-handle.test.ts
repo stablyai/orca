@@ -519,3 +519,178 @@ describe('a transport shared code has never heard of', () => {
     }
   })
 })
+
+describe('replacing a conversation the provider could not restore', () => {
+  const acp = (nativeId: string): AgentSessionProviderHandle => ({
+    transport: 'acp',
+    agent: 'grok',
+    nativeId
+  })
+  const created = link({ handle: acp('s-1') })
+  const resumed = link({
+    linkId: 'link-2',
+    origin: 'resumed',
+    handle: acp('s-1'),
+    mintedAtFence: 2
+  })
+  const lost = {
+    key: agentSessionProviderHandleKey(acp('s-1')),
+    reason: 'restore-failed',
+    replacedAt: 3_000
+  }
+  function fresh(overrides: Partial<AgentSessionProviderHandleLink> = {}) {
+    return link({
+      linkId: 'link-3',
+      handle: acp('s-2'),
+      mintedAtFence: 3,
+      observedAt: 3_000,
+      replaces: lost,
+      ...overrides
+    })
+  }
+
+  it('follows a reopened conversation and keeps every link before it', () => {
+    const chain = appendAgentSessionProviderHandleLink([created, resumed], fresh())
+    expect(chain).toEqual([created, resumed, fresh()])
+    expect(agentSessionProviderHandleChainHead(chain)?.handle.nativeId).toBe('s-2')
+    expect(isAgentSessionProviderHandleChain(chain)).toBe(true)
+    // The fresh conversation then resumes like any other.
+    const reopened = appendAgentSessionProviderHandleLink(
+      chain,
+      link({ linkId: 'link-4', origin: 'resumed', handle: acp('s-2'), mintedAtFence: 4 })
+    )
+    expect(reopened).toHaveLength(4)
+    expect(isAgentSessionProviderHandleChain(reopened)).toBe(true)
+  })
+
+  it('names exactly the head it took over from, on a new root', () => {
+    for (const bad of [
+      fresh({ replaces: { ...lost, key: agentSessionProviderHandleKey(acp('s-9')) } }),
+      fresh({ handle: acp('s-1') }),
+      fresh({ linkId: 'link-2' }),
+      fresh({ replaces: undefined })
+    ]) {
+      expect(() => appendAgentSessionProviderHandleLink([created, resumed], bad)).toThrow(
+        'agent_session_provider_handle_invalid'
+      )
+    }
+    expect(() =>
+      appendAgentSessionProviderHandleLink([created, resumed], fresh({ mintedAtFence: 1 }))
+    ).toThrow('agent_session_provider_handle_stale_fence')
+  })
+
+  it('is only ever a creation, and never opens a chain', () => {
+    expect(() => appendAgentSessionProviderHandleLink([], fresh())).toThrow(
+      'agent_session_provider_handle_invalid'
+    )
+    for (const origin of ['resumed', 'adopted', 'forked'] as const) {
+      expect(() =>
+        appendAgentSessionProviderHandleLink(
+          [created, resumed],
+          fresh({ origin, forkedFromKey: lost.key })
+        )
+      ).toThrow('agent_session_provider_handle_invalid')
+    }
+  })
+
+  it('reads a reason a later build records, but no malformed one', () => {
+    const later = fresh({ replaces: { ...lost, reason: 'transport-retired' } })
+    expect(appendAgentSessionProviderHandleLink([created, resumed], later)).toHaveLength(3)
+    for (const replaces of [
+      { ...lost, reason: '' },
+      { ...lost, reason: 'x'.repeat(65) },
+      { ...lost, replacedAt: -1 },
+      { key: lost.key, reason: lost.reason }
+    ]) {
+      expect(() =>
+        appendAgentSessionProviderHandleLink(
+          [created, resumed],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deliberately malformed stored data the guard must refuse.
+          fresh({ replaces: replaces as AgentSessionProviderHandleLink['replaces'] })
+        )
+      ).toThrow('agent_session_provider_handle_invalid')
+    }
+  })
+
+  it('stays lost when a fresh conversation the agent never saved is superseded in turn', () => {
+    const chain = appendAgentSessionProviderHandleLink([created, resumed], fresh())
+    const superseding = link({
+      linkId: 'link-5',
+      handle: acp('s-3'),
+      mintedAtFence: 5,
+      supersedesKey: agentSessionProviderHandleKey(acp('s-2'))
+    })
+    const superseded = appendAgentSessionProviderHandleLink(chain, superseding)
+    expect(superseded).toEqual([created, resumed, { ...superseding, replaces: lost }])
+    expect(isAgentSessionProviderHandleChain(superseded)).toBe(true)
+    // Unused across many restarts, it still does not grow.
+    const again = appendAgentSessionProviderHandleLink(superseded, {
+      ...superseding,
+      linkId: 'link-6',
+      handle: acp('s-4'),
+      mintedAtFence: 6,
+      supersedesKey: agentSessionProviderHandleKey(acp('s-3'))
+    })
+    expect(again).toHaveLength(3)
+    expect(again.at(-1)?.replaces).toEqual(lost)
+    // A supersession cannot rewrite what was lost, nor land back on it.
+    expect(() =>
+      appendAgentSessionProviderHandleLink(chain, {
+        ...superseding,
+        replaces: { ...lost, replacedAt: 9 }
+      })
+    ).toThrow('agent_session_provider_handle_invalid')
+    expect(() =>
+      appendAgentSessionProviderHandleLink(chain, { ...superseding, handle: acp('s-1') })
+    ).toThrow('agent_session_provider_handle_invalid')
+  })
+
+  it('refuses a supersession key that names no creation in the chain', () => {
+    expect(() =>
+      appendAgentSessionProviderHandleLink(
+        [created, resumed],
+        fresh({ supersedesKey: agentSessionProviderHandleKey(acp('s-9')) })
+      )
+    ).toThrow('agent_session_provider_handle_invalid')
+  })
+
+  it('is refused in a Claude or Codex chain, whose rows older builds read', () => {
+    for (const [first, lost, next] of [
+      [CLAUDE, CLAUDE, claudeProviderHandle('sess-2', null)],
+      [codexProviderHandle('t-1'), codexProviderHandle('t-1'), codexProviderHandle('t-2')]
+    ] as const) {
+      expect(() =>
+        appendAgentSessionProviderHandleLink(
+          [link({ handle: first })],
+          fresh({
+            handle: next,
+            replaces: {
+              key: agentSessionProviderHandleKey(lost),
+              reason: 'restore-failed',
+              replacedAt: 3_000
+            }
+          })
+        )
+      ).toThrow('agent_session_provider_handle_invalid')
+    }
+  })
+
+  it('still supersedes only a creation the provider never saved', () => {
+    const chain = appendAgentSessionProviderHandleLink([created, resumed], fresh())
+    const proven = appendAgentSessionProviderHandleLink(
+      chain,
+      link({ linkId: 'link-4', origin: 'resumed', handle: acp('s-2'), mintedAtFence: 4 })
+    )
+    expect(() =>
+      appendAgentSessionProviderHandleLink(
+        proven,
+        link({
+          linkId: 'link-5',
+          handle: acp('s-3'),
+          mintedAtFence: 5,
+          supersedesKey: agentSessionProviderHandleKey(acp('s-2'))
+        })
+      )
+    ).toThrow('agent_session_provider_handle_invalid')
+  })
+})

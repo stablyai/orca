@@ -7,7 +7,7 @@ import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
-import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'
+import { claudeAndCodexRouter } from './structured-agent-session-adapter-router-test-support'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 function claudeIdentity(sessionId: string): AgentSessionJournalIdentity {
@@ -51,7 +51,7 @@ describe('StructuredAgentSessionAdapterRouter.releaseAcquisition', () => {
     const failure = new Error('root exited')
     const claude = adapterOf(vi.fn().mockRejectedValueOnce(failure).mockResolvedValue(false))
     const codex = adapterOf(vi.fn(async () => false))
-    const router = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () => {})
+    const router = claudeAndCodexRouter({ claude, codex }, async () => {})
     const identity = claudeIdentity('session-1')
     await router.acquire({ identity, fence: 1, spawnToken: 'spawn-1' })
 
@@ -71,7 +71,7 @@ describe('StructuredAgentSessionAdapterRouter.closeSession', () => {
     claude.closeSession = closeSession
     claude.dispatch = dispatch
     const codex = adapterOf(vi.fn(async () => false))
-    const router = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () => {})
+    const router = claudeAndCodexRouter({ claude, codex }, async () => {})
     const identity = claudeIdentity('session-1')
     await router.acquire({ identity, fence: 1, spawnToken: 'spawn-1' })
 
@@ -96,7 +96,7 @@ describe('StructuredAgentSessionAdapterRouter.closeSession', () => {
     })
     const claude = adapterOf(vi.fn(async () => true))
     claude.closeSession = closeSession
-    const router = new StructuredAgentSessionAdapterRouter(
+    const router = claudeAndCodexRouter(
       { claude, codex: adapterOf(vi.fn(async () => false)) },
       async () => {}
     )
@@ -129,7 +129,7 @@ describe('StructuredAgentSessionAdapterRouter optional lifecycle methods', () =>
       const dispatch = vi.fn().mockResolvedValue({ state: 'unknown', reason: 'test' })
       claude.dispatch = dispatch
       const codex = adapterOf(vi.fn(async () => false))
-      const router = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () => {})
+      const router = claudeAndCodexRouter({ claude, codex }, async () => {})
       const identity = claudeIdentity('session-1')
       await router.acquire({ identity, fence: 1, spawnToken: 'spawn-1' })
       const stopSession = router[method]
@@ -156,7 +156,7 @@ describe('StructuredAgentSessionAdapterRouter optional lifecycle methods', () =>
       const claude = adapterOf(vi.fn(async () => true))
       claude.closeSession = closeSession
       const codex = adapterOf(vi.fn(async () => false))
-      const router = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () => {})
+      const router = claudeAndCodexRouter({ claude, codex }, async () => {})
       await router.acquire({
         identity: claudeIdentity('session-1'),
         fence: 1,
@@ -183,7 +183,7 @@ describe('StructuredAgentSessionAdapterRouter.stopEndsSession', () => {
     const claude = adapterOf(vi.fn(async () => true))
     claude.stopEndsSession = () => true
     const codex = adapterOf(vi.fn(async () => false))
-    const router = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () => {})
+    const router = claudeAndCodexRouter({ claude, codex }, async () => {})
 
     expect(router.stopEndsSession('session-1')).toBe(false)
     await router.acquire({ identity: claudeIdentity('session-1'), fence: 1, spawnToken: 'spawn-1' })
@@ -194,7 +194,7 @@ describe('StructuredAgentSessionAdapterRouter.stopEndsSession', () => {
     const claude = adapterOf(vi.fn(async () => true))
     claude.awaitStoppedRequestEnd = vi.fn(async () => undefined)
     const codex = adapterOf(vi.fn(async () => false))
-    const router = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () => {})
+    const router = claudeAndCodexRouter({ claude, codex }, async () => {})
 
     await router.awaitStoppedRequestEnd('session-1', 5)
     expect(claude.awaitStoppedRequestEnd).not.toHaveBeenCalled()
@@ -207,7 +207,7 @@ describe('StructuredAgentSessionAdapterRouter.stopEndsSession', () => {
     const claude = adapterOf(vi.fn(async () => true))
     claude.routePromptCancel = () => ({ kind: 'stop' })
     const codex = adapterOf(vi.fn(async () => false))
-    const router = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () => {})
+    const router = claudeAndCodexRouter({ claude, codex }, async () => {})
 
     expect(router.routePromptCancel({ sessionId: 'session-1', prompt: QUESTION })).toBeUndefined()
     await router.acquire({ identity: claudeIdentity('session-1'), fence: 1, spawnToken: 'spawn-1' })
@@ -222,7 +222,7 @@ describe('StructuredAgentSessionAdapterRouter.closeAll', () => {
     const acquire = vi.fn(async ({ fence, spawnToken }) => acquisition(fence, spawnToken))
     const claude = adapterOf(vi.fn(async () => true))
     claude.acquire = acquire
-    const router = new StructuredAgentSessionAdapterRouter(
+    const router = claudeAndCodexRouter(
       { claude, codex: adapterOf(vi.fn(async () => false)) },
       async () => undefined
     )
@@ -241,7 +241,7 @@ describe('StructuredAgentSessionAdapterRouter.closeAll', () => {
   it('keeps a per-session stop proof and reports no stop for a session it never routed', async () => {
     const claude = adapterOf(vi.fn(async () => true))
     const closeAdapters = vi.fn(async () => undefined)
-    const router = new StructuredAgentSessionAdapterRouter(
+    const router = claudeAndCodexRouter(
       { claude, codex: adapterOf(vi.fn(async () => false)) },
       closeAdapters
     )
@@ -266,7 +266,7 @@ describe('StructuredAgentSessionAdapterRouter.closeAll', () => {
   it('asks the adapters to release an unrouted session rather than answering from the close proof', async () => {
     const claudeRelease = vi.fn(async () => true)
     const codexRelease = vi.fn(async () => false)
-    const router = new StructuredAgentSessionAdapterRouter(
+    const router = claudeAndCodexRouter(
       { claude: adapterOf(claudeRelease), codex: adapterOf(codexRelease) },
       async () => undefined
     )
@@ -284,7 +284,7 @@ describe('StructuredAgentSessionAdapterRouter.closeAll', () => {
     const closeSession = vi.fn(async () => true)
     claude.dispatch = dispatch
     claude.closeSession = closeSession
-    const router = new StructuredAgentSessionAdapterRouter(
+    const router = claudeAndCodexRouter(
       { claude, codex: adapterOf(vi.fn(async () => false)) },
       vi.fn(async () => {
         throw failure
@@ -322,7 +322,7 @@ describe('StructuredAgentSessionAdapterRouter.closeAll', () => {
           resolveAcquire = resolve
         })
     )
-    const router = new StructuredAgentSessionAdapterRouter(
+    const router = claudeAndCodexRouter(
       { claude, codex: adapterOf(vi.fn(async () => false)) },
       async () => undefined
     )

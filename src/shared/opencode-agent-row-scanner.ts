@@ -1,3 +1,5 @@
+import { createTerminalEscapeScanner } from './terminal-escape-scanner'
+
 /**
  * OpenCode's submit readiness: the `<agent> · <model>` row along the bottom of its input box is
  * painted only once its agent list has loaded from its server, and until then it drops an Enter.
@@ -14,25 +16,10 @@
  * screen or turning bracketed paste off withdraws what it established.
  */
 
-const ESC = '\x1b'
 const AGENT_ROW_SEPARATOR = '\u00b7'
 const BOX_BOTTOM_LEFT = '\u2579'
-// Why: a narrow pane never paints the row (OpenCode 2 drops the agent below 44 columns), and nor
-// does a terminal that does not forward the alternate screen; a theme whose raised background is
-// transparent paints no `╹`, so its starts always wait out the grace. Once the box's cursor has shown, the
-// earlier box rule takes over after this grace, so those starts still get their task, as before.
-// 5 s because the row trailed the box by at most 1.8 s in every recorded start, loaded or not.
+// Narrow panes and transparent themes omit the row; retain the earlier box signal after a grace.
 export const OPENCODE_AGENT_ROW_GRACE_MS = 5_000
-// Longest unfinished escape carried into the next read; anything longer is noise, not a split.
-const MAX_CARRIED_ESCAPE_CHARS = 512
-
-/* oxlint-disable no-control-regex -- these match terminal escape sequences, which start with ESC */
-const CSI_RE = /^\x1b\[([?>=<]?)([0-9;]*)([ -/]*[@-~])/
-const UNFINISHED_CSI_RE = /^\x1b\[[?>=<]?[0-9;]*[ -/]*$/
-// OSC and DCS strings (titles, queries) end at BEL or ST; their text is never painted.
-const STRING_RE = /^\x1b[\]P][^\x07\x1b]*(?:\x07|\x1b\\)/
-const STRING_START_RE = /^\x1b[\]P]/
-const STRING_END_RE = /\x07|\x1b\\/
 
 export type OpenCodeAgentRowScan = {
   /** The row exists and the box's cursor is shown: Enter will be taken. */
@@ -44,7 +31,6 @@ export type OpenCodeAgentRowScan = {
 export function createOpenCodeAgentRowScanner(): {
   observe: (data: string) => OpenCodeAgentRowScan
 } {
-  let carry = ''
   let altScreen = false
   // Once a full-screen app has left, a box cursor outside the alternate screen is the shell's.
   let leftAltScreen = false
@@ -118,33 +104,10 @@ export function createOpenCodeAgentRowScanner(): {
     }
   }
 
+  const scanner = createTerminalEscapeScanner({ onCsi, onText })
   return {
     observe(data: string): OpenCodeAgentRowScan {
-      const input = carry + data
-      carry = ''
-      let index = 0
-      while (index < input.length) {
-        const escapeAt = input.indexOf(ESC, index)
-        if (escapeAt === -1) {
-          onText(input.slice(index))
-          break
-        }
-        onText(input.slice(index, escapeAt))
-        const rest = input.slice(escapeAt)
-        const sequence = CSI_RE.exec(rest) ?? STRING_RE.exec(rest)
-        if (sequence) {
-          if (sequence[0][1] === '[') {
-            onCsi(sequence[1], sequence[2], sequence[3])
-          }
-          index = escapeAt + sequence[0].length
-          continue
-        }
-        if (isUnfinishedEscape(rest)) {
-          carry = rest
-          break
-        }
-        index = escapeAt + 2
-      }
+      scanner.observe(data)
       // Leaving the alternate screen clears rowPainted, so it only holds while OpenCode is drawn.
       const graceApplies = boxCursorShown && !rowPainted && (altScreen || !leftAltScreen)
       return {
@@ -153,15 +116,4 @@ export function createOpenCodeAgentRowScanner(): {
       }
     }
   }
-}
-
-function isUnfinishedEscape(rest: string): boolean {
-  if (rest.length > MAX_CARRIED_ESCAPE_CHARS) {
-    return false
-  }
-  return (
-    rest === ESC ||
-    UNFINISHED_CSI_RE.test(rest) ||
-    (STRING_START_RE.test(rest) && !STRING_END_RE.test(rest))
-  )
 }

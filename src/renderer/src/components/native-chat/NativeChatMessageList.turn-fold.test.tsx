@@ -122,7 +122,6 @@ describe('NativeChatMessageList settled turn fold', () => {
         isWorking={false}
         workingStartedAt={startedAt}
         expandSignal={false}
-        fontScale={1}
       />
     )
 
@@ -144,7 +143,6 @@ describe('NativeChatMessageList settled turn fold', () => {
         isWorking={false}
         workingStartedAt={startedAt}
         expandSignal={false}
-        fontScale={1}
       />
     )
 
@@ -170,7 +168,6 @@ describe('NativeChatMessageList settled turn fold', () => {
         isWorking
         workingStartedAt={startedAt}
         expandSignal={false}
-        fontScale={1}
       />
     )
 
@@ -207,7 +204,6 @@ describe('NativeChatMessageList settled turn fold', () => {
           workingStartedAt={null}
           settledTurns={new Map([['user-1', { startedAt, workedSeconds: 70 }]])}
           expandSignal={false}
-          fontScale={1}
         />
       )
 
@@ -254,7 +250,6 @@ describe('NativeChatMessageList settled turn fold', () => {
         isWorking={false}
         workingStartedAt={startedAt}
         expandSignal={false}
-        fontScale={1}
       />
     )
 

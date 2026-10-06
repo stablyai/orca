@@ -3,11 +3,27 @@ import { join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
 import { getSystemCodexHomePath } from './codex-home-paths'
+import {
+  getCodexExplicitHomeHookSourcePath,
+  normalizeCodexHookSourcePath
+} from './config-toml-trust'
 
 /** The user's real `~/.codex` hook files, plus the guard and pristine backup
  *  the real-home lane needs before it is allowed to mutate them. */
 export function getRealHomeHooksJsonPath(): string {
   return join(getSystemCodexHomePath(), 'hooks.json')
+}
+
+/**
+ * Every key Codex may give an entry in ~/.codex/hooks.json: as spelled when it
+ * runs on its default home, resolved when a pane's CODEX_HOME names it. They
+ * differ when ~/.codex or HOME is a symlink, and Orca approves under both.
+ */
+export function getRealHomeHookKeySourcePaths(): [string, ...string[]] {
+  const hooksJsonPath = getRealHomeHooksJsonPath()
+  const spelled = normalizeCodexHookSourcePath(hooksJsonPath)
+  const resolved = getCodexExplicitHomeHookSourcePath(hooksJsonPath)
+  return resolved === spelled ? [spelled] : [spelled, resolved]
 }
 
 export function getRealHomeConfigTomlPath(): string {

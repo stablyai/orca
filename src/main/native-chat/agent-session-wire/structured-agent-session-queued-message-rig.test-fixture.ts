@@ -29,6 +29,7 @@ import {
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 export const QUEUED_RIG_CALLER = { callerKey: 'client-1' }
 type RigSendOptions = { internal?: true; source?: AgentMessageSource }
@@ -76,6 +77,7 @@ export async function createQueuedMessageTestRig(
   const store = await openTestAgentSessionRecordStore(root)
   const makeHost = () =>
     new StructuredAgentSessionHost({
+      agents: claudeAndCodexDeclared(),
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: {
@@ -133,11 +135,7 @@ export async function createQueuedMessageTestRig(
       sessionId,
       clientOperationId,
       expectedRuntimeFence: 1,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method,
-        sessionId,
-        fields
-      })
+      payloadFingerprint: computeAgentSessionPayloadFingerprint({ method, sessionId, fields })
     }
   }
 

@@ -16,7 +16,7 @@ import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import type { CodexSession } from './codex-structured-session-state'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
+import { claudeAndCodexRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD = 'thread-1'
@@ -211,7 +211,7 @@ describe('Codex structured session close lifecycle', () => {
 
   it('routes Codex sink-failure recovery through force-close and preserves unexpected-exit settlement', async () => {
     const { adapter, connections, events } = adapterFixture()
-    const router = new StructuredAgentSessionAdapterRouter(
+    const router = claudeAndCodexRouter(
       { claude: claudeAdapterStub(), codex: adapter },
       async () => {}
     )

@@ -23,13 +23,12 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
   ): Promise<CreateWorktreeResult> {
     // Re-arm a consumed checkout after terminal startup, including failed creates.
     const rearm: PreparationRearmHolder = { fire: () => {} }
-    const launch = await this.prepareWorktreeLaunchAccount(args)
-    args = launch.request
+    const { request, account } = await this.prepareWorktreeLaunchAccount(args)
     try {
-      const result = await trackRuntimeWorkspaceCreate(args, (events) =>
-        this.performManagedWorktreeCreate(args, rearm, events)
+      const result = await trackRuntimeWorkspaceCreate(request, (events) =>
+        this.performManagedWorktreeCreate(request, rearm, events)
       )
-      return launch.account ? { ...result, account: launch.account } : result
+      return account ? { ...result, account } : result
     } finally {
       rearm.fire()
     }
@@ -100,6 +99,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         deps: {
           store: this.store,
           ptySpawnAvailable: Boolean(this.ptyController?.spawn),
+          provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
           createTerminal: (selector, options) => this.createTerminal(selector, options),
           pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
           sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),
@@ -244,6 +244,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       warning,
       ports: {
         canSpawn: Boolean(this.ptyController?.spawn),
+        provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
         createTerminal: (selector, options) => this.createTerminal(selector, options, worktree),
         pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
         sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),

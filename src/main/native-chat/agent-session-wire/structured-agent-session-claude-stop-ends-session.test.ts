@@ -22,6 +22,8 @@ import { CLAUDE_STOP_GRACE_MS } from '../../claude/claude-request-end-wait'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import type { ClaudeStructuredSessionEvent } from '../../claude/claude-structured-session-state'
 import {
+  claudeFrame as frame,
+  claudeWasSent as wrote,
   fakeClaude,
   PROVIDER_SESSION_ID,
   type FakeConnection
@@ -42,6 +44,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 // As Claude Code 2.1.280 advertises them on a turn's system/init frame.
@@ -104,6 +107,7 @@ beforeEach(async () => {
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
     journalDatabase: openTestJournalHostDatabase(root),
@@ -181,10 +185,6 @@ async function dispatch(clientMessageId: string) {
   return { state: submission?.dispatchState, reason: submission?.reason }
 }
 
-function frame(connection: FakeConnection, message: Record<string, unknown>): void {
-  connection.handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
-}
-
 /** Sends a message and lets Claude open its turn and write one reply; returns the turn's id. */
 async function openTurn(connection: FakeConnection, text = 'Write a long reply.'): Promise<string> {
   const clientMessageId = await send(text)
@@ -244,10 +244,6 @@ function stopEventsAtClose(connection: FakeConnection): () => number | undefined
     return close()
   }
   return () => atClose
-}
-
-function wrote(connection: FakeConnection, text: string): boolean {
-  return connection.sent.some((message) => JSON.stringify(message).includes(text))
 }
 
 const INTERRUPTED_RESULT = {

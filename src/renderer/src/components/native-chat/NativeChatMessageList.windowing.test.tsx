@@ -215,20 +215,19 @@ describe('revealing a diff from a turn rollup', () => {
         journalItems={items}
         isWorking={false}
         expandSignal={false}
-        fontScale={1}
       />
     )
     // The rollup rides the turn's last row, which is pinned; the diff it points
     // at is near the top and long gone from the window.
     scrollTranscript(container, 4000)
-    expect(screen.queryByText('Edited file')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
     const mountedBefore = windowState(container).indexes.length
 
     fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     scrollTo.mockClear()
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
 
-    expect(screen.getByText('Edited file')).toBeInTheDocument()
+    expect(screen.getByText('Edited')).toBeInTheDocument()
     expect(screen.getByText('after')).toBeInTheDocument()
     expect(scrollTo).toHaveBeenCalled()
     // Pinned, not paged to: the window is still a window.
@@ -249,7 +248,7 @@ describe('transcript with a hidden scroll root', () => {
       expect(container.querySelector('[data-native-chat-window]')).toBeInTheDocument()
       expect(container.querySelectorAll('[data-index]')).toHaveLength(0)
       expect(screen.queryByText(/^marker-/)).toBeNull()
-      const column = container.querySelector('.max-w-4xl')
+      const column = container.querySelector('[data-native-chat-transcript-column]')
       expect(column?.children).toHaveLength(1)
 
       viewportHeight = VIEWPORT_PX

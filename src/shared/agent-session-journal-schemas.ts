@@ -203,6 +203,21 @@ const ThreadGoalState = openDiscriminatedUnion(
   ])
 )
 
+/** A turn's lifecycle, as the turn item and the legacy status row both carry it. */
+const TurnLifecycleFields = {
+  turnId: z.string(),
+  state: z.string().min(1),
+  // Open like `state`: a verdict a newer build writes must not turn the row
+  // malformed. `readAgentJournalTurnOutcome` is where an unplaceable one
+  // becomes unknown rather than an arm a caller would act on.
+  outcome: z.string().min(1).optional(),
+  userItemId: z.string().min(1).optional(),
+  startedAt: z.number().finite().positive().optional(),
+  requestedAt: z.number().finite().positive().optional(),
+  completedAt: z.number().finite().positive().optional(),
+  durationMs: z.number().finite().nonnegative().optional()
+}
+
 const KnownItemBody = z.discriminatedUnion('kind', [
   MessageBody,
   z.object({
@@ -213,6 +228,8 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     input: z.unknown().optional(),
     callId: ProviderCallId.optional(),
     state: z.string().min(1),
+    // Open like `state`: an ending a newer build writes reads as the `state` beside it.
+    endedAs: z.string().min(1).optional(),
     output: BoundedPayload.optional()
   }),
   z.object({ kind: z.literal('diff'), path: z.string(), patch: BoundedPayload }),
@@ -242,35 +259,14 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     text: z.string(),
     presentation: z.string().optional(),
     tone: z.string().optional(),
-    turnLifecycle: z
-      .object({
-        turnId: z.string(),
-        state: z.string().min(1),
-        outcome: z.string().min(1).optional(),
-        userItemId: z.string().min(1).optional(),
-        startedAt: z.number().finite().positive().optional(),
-        requestedAt: z.number().finite().positive().optional(),
-        completedAt: z.number().finite().positive().optional(),
-        durationMs: z.number().finite().nonnegative().optional()
-      })
-      .optional(),
+    turnLifecycle: z.object(TurnLifecycleFields).optional(),
     providerFrame: ProviderFrame.optional(),
     threadGoal: ThreadGoalState.optional(),
     failure: AgentSessionFailureFactSchema.optional()
   }),
   z.object({
     kind: z.literal('turn'),
-    turnId: z.string(),
-    state: z.string().min(1),
-    // Open like `state`: a verdict a newer build writes must not turn the row
-    // malformed. `readAgentJournalTurnOutcome` is where an unplaceable one
-    // becomes unknown rather than an arm a caller would act on.
-    outcome: z.string().min(1).optional(),
-    userItemId: z.string().min(1).optional(),
-    startedAt: z.number().finite().positive().optional(),
-    requestedAt: z.number().finite().positive().optional(),
-    completedAt: z.number().finite().positive().optional(),
-    durationMs: z.number().finite().nonnegative().optional(),
+    ...TurnLifecycleFields,
     contextUsage: AgentSessionContextUsageSchema.optional(),
     providerTurnId: z.string().min(1).optional()
   })

@@ -29,7 +29,7 @@ describe('Claude structured processless acquisition', () => {
       const connection: ClaudeStreamJsonConnection = {
         pid: undefined,
         closed: true,
-        exitVerdict: { root: 'processless', tree: 'exited' },
+        exitVerdict: { root: 'exited', tree: 'exited', processless: true },
         initializationResult: async () => {
           throw fault
         },

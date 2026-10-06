@@ -608,6 +608,46 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('keeps a chat tab of any agent id, and drops only a malformed id', () => {
+    const chatTab = (id: string, agentSessionAgent: unknown) => ({
+      id,
+      entityId: id,
+      groupId: 'group1',
+      worktreeId: 'wt',
+      contentType: 'agent-session',
+      agentSessionAgent,
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    })
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          chatTab('a', 'grok'),
+          chatTab('b', 'not an agent!'),
+          chatTab('c', 42),
+          chatTab('d', 'claude')
+        ]
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt.map((tab) => [tab.id, tab.agentSessionAgent])).toEqual([
+        ['a', 'grok'],
+        ['b', undefined],
+        ['c', undefined],
+        ['d', 'claude']
+      ])
+    }
+  })
+
   it('degrades an unknown viewMode to the safe default instead of failing parse', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

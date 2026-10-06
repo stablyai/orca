@@ -325,3 +325,13 @@ export function recordingJournalSink(): StructuredAgentSessionEventSink {
 export function tick(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve))
 }
+
+/** Delivers one frame from Claude on `connection`, under the provider session it runs. */
+export function claudeFrame(connection: FakeConnection, message: Record<string, unknown>): void {
+  connection.handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
+}
+
+/** Whether anything sent to Claude on `connection` carries `text`. */
+export function claudeWasSent(connection: FakeConnection, text: string): boolean {
+  return connection.sent.some((message) => JSON.stringify(message).includes(text))
+}

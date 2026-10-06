@@ -31,6 +31,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 const journals = createTrackedJournalOpener()
 
@@ -157,6 +158,7 @@ beforeEach(async () => {
   recoveryCapsule = new TrackedTestRecoveryCapsule(root)
   log = recordingProductionStructuredAgentSessionLogger()
   host = new StructuredAgentSessionHost({
+    agents: claudeAndCodexDeclared(),
     logger: log.logger,
     store,
     adapter: adapter(),

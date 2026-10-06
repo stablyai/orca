@@ -21,6 +21,7 @@ import type {
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
   HOST_TEST_NOW,
@@ -162,6 +163,7 @@ export async function createRestTestRig(
   }
   const hostFor = (overrides: Partial<StructuredAgentSessionHostDeps>) =>
     new StructuredAgentSessionHost({
+      agents: claudeAndCodexAgents(),
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: {

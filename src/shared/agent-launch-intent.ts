@@ -70,11 +70,11 @@ export type AgentLaunchIntent = {
    * caller explicitly wants none, and collapsing the two would make a recipe that clears its args
    * silently inherit whatever the settings happen to hold.
    *
-   * Deliberately NOT a route input. `hasExplicitTuiLaunchCommand` reads the launch *command* and
-   * pointedly not the arguments, because structured chat drives Claude through the Agent SDK and
-   * Codex through app-server, whose option sets are versioned independently of the interactive
-   * CLI's. So args reaching a structured launch are ignored rather than forcing a terminal — the
-   * host says so in `warning` instead of quietly honouring neither the args nor the preference.
+   * Deliberately NOT a route input. Like the configured launch command, arguments are a terminal
+   * concern: structured chat drives Claude through the Agent SDK and Codex through app-server, whose
+   * option sets are versioned independently of the interactive CLI's. So args reaching a structured
+   * launch are ignored rather than forcing a terminal — the host says so in `warning` instead of
+   * quietly honouring neither the args nor the preference.
    */
   agentArgs?: string | null
   /**
@@ -192,6 +192,8 @@ export type AgentLaunchModeReason =
   | 'remote_execution_host'
   | 'reused_terminal'
   | 'agent_without_structured_session'
+  /** Historical name, kept because receipts carry it: the launch asked for a start directory
+   *  outside its workspace. A custom launch command no longer produces it. */
   | 'tui_launch_command'
   | 'structured_sessions_unavailable'
   | 'structured_support_unknown'

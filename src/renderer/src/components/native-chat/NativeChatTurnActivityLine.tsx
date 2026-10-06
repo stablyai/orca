@@ -23,7 +23,7 @@ export function NativeChatTurnActivityLine({
 
   return (
     <div
-      className="flex min-h-6 items-center gap-1.5 text-sm leading-relaxed text-muted-foreground"
+      className="flex min-h-6 items-center gap-1.5 text-sm native-chat-message-text leading-relaxed text-muted-foreground"
       data-native-chat-turn-activity="true"
       aria-live="polite"
       aria-atomic="true"

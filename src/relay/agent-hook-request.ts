@@ -84,6 +84,7 @@ export async function handleRelayHookRequest(
         }
         options.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, stored, env, version)
         options.retryScheduler.scheduleTranscriptPoll(source, hookBody, stored, env, version)
+        options.retryScheduler.armClaudeOwedNotificationExpiry(source, stored.paneKey, env, version)
       }
     }
     res.writeHead(204)

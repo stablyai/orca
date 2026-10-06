@@ -65,6 +65,7 @@ describe('a folder workspace create with a startup agent', () => {
     'retains folder registration after pinned startup fails for $selector',
     async ({ selector, accountId }) => {
       const { createTerminal, deps } = createDeps()
+      deps.provisionInBackground = () => true
       const registration = vi.spyOn(deps.store, 'setWorktreeMeta')
       const failure = new Error('pinned auth unavailable')
       createTerminal.mockRejectedValue(failure)
@@ -97,6 +98,16 @@ describe('a folder workspace create with a startup agent', () => {
       expect(deps.activate).not.toHaveBeenCalled()
     }
   )
+  it('seeds a headless activated folder workspace without a paired viewer', async () => {
+    const { deps, createTerminal } = createDeps()
+    deps.provisionInBackground = () => true
+    const result = await createRuntimeFolderWorktree({
+      request: { repoSelector: `id:${repo.id}`, name: 'headless', activate: true },
+      repo,
+      deps
+    })
+    expect(createTerminal).toHaveBeenCalledWith(`id:${result.worktree.id}`, { surfaceOwner: false })
+  })
 
   it('creates the startup terminal under the pane the caller reserved', async () => {
     expect(await startupTerminalOptions(`${TAB_ID}:${LEAF_ID}`)).toMatchObject({

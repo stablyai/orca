@@ -87,7 +87,7 @@ function PickerTrigger(props: {
             variant="ghost"
             size="xs"
             aria-label={accessibleName}
-            className="max-w-48 text-muted-foreground"
+            className="max-w-48"
           >
             <span className="truncate">{props.label}</span>
             <ChevronDown className="size-3" />
@@ -249,7 +249,7 @@ function NativeChatSessionOptionPickersInner({
       : null
 
   return (
-    <div className="flex min-w-0 items-center gap-0.5">
+    <div className="flex min-w-0 items-center gap-0.5 text-chat-foreground-faint">
       <DropdownMenu
         key={`model:${requestedModelSequence ?? 'idle'}`}
         // Read only when a request remounts the menu: one made while pending is spent shut.

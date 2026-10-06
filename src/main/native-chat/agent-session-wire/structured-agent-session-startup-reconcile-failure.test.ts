@@ -30,6 +30,7 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const writes = vi.hoisted(() => ({ failing: false }))
 
@@ -84,6 +85,7 @@ async function relaunch(
   // The lease-reconcile entries the host logs, by the failure each reports.
   const leaseReconcileLogged = vi.fn()
   const host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: {
       warn: (_message, fields) => {
         if (fields.scope === 'lease-reconcile') {

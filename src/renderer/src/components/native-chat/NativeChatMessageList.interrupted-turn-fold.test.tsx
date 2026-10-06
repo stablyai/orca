@@ -121,7 +121,6 @@ describe('NativeChatMessageList folded turn headers', () => {
         workingStartedAt={null}
         settledTurns={selectStructuredAgentSettledTurns(journal())}
         expandSignal={false}
-        fontScale={1}
       />
     )
 

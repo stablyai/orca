@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import { useFileExplorerHandlers } from './useFileExplorerHandlers'
 import { createFileExplorerRowProjection } from './file-explorer-row-projection'
@@ -15,12 +15,19 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const roots: Root[] = []
 
-afterEach(() => {
+beforeEach(() => {
+  vi.spyOn(DataTransfer.prototype, 'setDragImage').mockImplementation(() => {})
+})
+
+afterEach(async () => {
   roots.splice(0).forEach((root) => {
     act(() => root.unmount())
   })
+  // Let drag ghosts remove themselves before clearing their parent.
+  await new Promise((resolve) => setTimeout(resolve, 0))
   document.body.replaceChildren()
   capturedHandlers = null
+  vi.restoreAllMocks()
 })
 
 async function renderToBody(element: React.JSX.Element): Promise<HTMLDivElement> {

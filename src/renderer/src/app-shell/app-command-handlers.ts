@@ -30,6 +30,8 @@ type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 // Abstraction over a real KeyboardEvent and a synthetic double-tap gesture so one dispatch path serves both; KeybindingInput-compatible.
 export type ShortcutDispatchInput = {
+  isComposing?: boolean
+  altGraph?: boolean
   key?: string
   code?: string
   altKey?: boolean

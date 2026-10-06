@@ -200,6 +200,7 @@ it('pins every foreground and background step to its selected phase', () => {
     ['Check Node runtime pin', staticPhase],
     ['Boot orcad and round-trip a terminal', staticPhase],
     ['Verify the generated RPC params catalog', staticPhase],
+    ['Verify the generated ACP protocol schema', staticPhase],
     ['Verify bundled skill guides', staticPhase],
     ['Verify skill freshness manifest', staticPhase],
     ['Verify localization coverage', staticPhase],

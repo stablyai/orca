@@ -94,4 +94,19 @@ describe('useStructuredAgentSession transcript', () => {
     // The list places rows by the same items, so the notice joins the cut turn.
     expect(result.current.journalItems.at(-1)).toMatchObject({ turnScope: SCOPE })
   })
+
+  it('names any other agent by its own label, never as Claude', () => {
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        agent: 'gemini',
+        target: { kind: 'local' },
+        isVisible: true
+      })
+    )
+
+    expect(result.current.messages.at(-1)).toMatchObject({
+      blocks: [{ text: expect.stringMatching(/^Gemini stopped while/) }]
+    })
+  })
 })

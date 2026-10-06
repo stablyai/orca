@@ -706,7 +706,7 @@ describe('Claude stream-json connection', () => {
       )
 
       await until(
-        () => (connection.exitVerdict.root === 'processless' ? connection.exitVerdict : null),
+        () => (connection.exitVerdict.processless === true ? connection.exitVerdict : null),
         'the processless spawn settlement'
       )
       expect(connection.pid).toBeUndefined()
@@ -717,7 +717,7 @@ describe('Claude stream-json connection', () => {
         true
       ])
       await expect(connection.close()).resolves.toBe(true)
-      expect(connection.exitVerdict).toEqual({ root: 'processless', tree: 'exited' })
+      expect(connection.exitVerdict).toEqual({ root: 'exited', tree: 'exited', processless: true })
     }
   )
 

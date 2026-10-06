@@ -7,13 +7,12 @@
  * get right is which records it accepts and what it answers when the journal cannot be opened.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
-import * as providerSupport from './structured-agent-session-provider-support'
 import { revealStructuredAgentSession } from './structured-agent-session-reveal'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
@@ -39,11 +38,6 @@ afterEach(() => {
 })
 
 describe('the host answer a client acts on', () => {
-  beforeEach(() => {
-    // Eligibility is the router's call; these cases are about what the answer carries.
-    vi.spyOn(providerSupport, 'adapterSupportsRecord').mockReturnValue(true)
-  })
-
   function record(provider: 'claude' | 'codex', workspaceId: string) {
     const base = recordFor(provider, 'session-answered')
     return { ...base, location: { ...base.location, workspaceId } }
@@ -59,7 +53,7 @@ describe('the host answer a client acts on', () => {
 
       await expect(
         revealStructuredAgentSession(
-          { store: { getRecord: () => stored } as never, adapter: {} as never },
+          { store: { getRecord: () => stored } },
           'session-answered',
           open
         )
@@ -76,30 +70,24 @@ describe('the host answer a client acts on', () => {
   it('refuses a session this host holds no record for, opening nothing', async () => {
     const open = vi.fn(async () => undefined)
     await expect(
-      revealStructuredAgentSession(
-        { store: { getRecord: () => null } as never, adapter: {} as never },
-        'session-absent',
-        open
-      )
+      revealStructuredAgentSession({ store: { getRecord: () => null } }, 'session-absent', open)
     ).rejects.toThrow('agent_session_identity_required')
     expect(open).not.toHaveBeenCalled()
   })
 
-  it('refuses a record no adapter of this host supports', async () => {
-    vi.mocked(providerSupport.adapterSupportsRecord).mockReturnValue(false)
+  it('reveals a stored chat without requiring a provider adapter', async () => {
     const open = vi.fn(async () => undefined)
 
     await expect(
       revealStructuredAgentSession(
         {
-          store: { getRecord: () => record('codex', 'workspace-1') } as never,
-          adapter: {} as never
+          store: { getRecord: () => record('codex', 'workspace-1') }
         },
         'session-answered',
         open
       )
-    ).rejects.toThrow('structured_agent_session_unsupported')
-    expect(open).not.toHaveBeenCalled()
+    ).resolves.toMatchObject({ readable: true })
+    expect(open).toHaveBeenCalledOnce()
   })
 
   it('answers not-readable without refusing when the journal could not be opened', async () => {
@@ -107,8 +95,7 @@ describe('the host answer a client acts on', () => {
     await expect(
       revealStructuredAgentSession(
         {
-          store: { getRecord: () => record('codex', 'workspace-1') } as never,
-          adapter: {} as never
+          store: { getRecord: () => record('codex', 'workspace-1') }
         },
         'session-answered',
         async () => {

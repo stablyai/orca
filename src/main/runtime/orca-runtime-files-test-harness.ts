@@ -48,6 +48,7 @@ export function createRuntimeFileCommands(options?: {
   hasRecentNativeChatOutputPath?: ReturnType<typeof vi.fn>
 }) {
   const store = {
+    getSettings: vi.fn(() => ({ followSymlinkedDirectories: false })),
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
   }
   const path = options?.path ?? '/repo'
