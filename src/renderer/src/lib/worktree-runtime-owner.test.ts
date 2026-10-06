@@ -386,51 +386,70 @@ describe('getExplicitRuntimeEnvironmentIdForWorktree', () => {
 })
 
 describe('getLocalOpenRuntimeOwnerForWorktree', () => {
+  const repo = (
+    id: string,
+    owner: Pick<Repo, 'connectionId' | 'executionHostId' | 'projectGroupId'>
+  ): Repo => ({ id, path: `/${id}`, displayName: id, badgeColor: '', addedAt: 0, ...owner })
+  const ownerState = {
+    settings: { activeRuntimeEnvironmentId: 'focused-env' },
+    repos: [
+      repo('local-repo', { executionHostId: 'local' }),
+      repo('legacy-repo', {}),
+      repo('runtime-repo', { executionHostId: 'runtime:owner-env' })
+    ],
+    projectGroups: [],
+    folderWorkspaces: [],
+    worktreesByRepo: {
+      'local-repo': [makeWorktree({ id: 'local-repo::wt-a', repoId: 'local-repo' })],
+      'legacy-repo': [makeWorktree({ id: 'legacy-repo::wt-legacy', repoId: 'legacy-repo' })],
+      'runtime-repo': [makeWorktree({ id: 'runtime-repo::wt-b', repoId: 'runtime-repo' })]
+    }
+  }
+
   it('names the path owner, not the focused runtime, and fails closed without one', () => {
-    expect(getLocalOpenRuntimeOwnerForWorktree(state, 'local-repo::wt-a')).toBeNull()
-    expect(getLocalOpenRuntimeOwnerForWorktree(state, 'runtime-repo::wt-b')).toBe('owner-env')
-    expect(getLocalOpenRuntimeOwnerForWorktree(state, FLOATING_TERMINAL_WORKTREE_ID)).toBeNull()
+    expect(getLocalOpenRuntimeOwnerForWorktree(ownerState, 'local-repo::wt-a')).toBeNull()
+    expect(getLocalOpenRuntimeOwnerForWorktree(ownerState, 'runtime-repo::wt-b')).toBe('owner-env')
+    expect(getLocalOpenSshOwnerForWorktree(ownerState, 'runtime-repo::wt-b')).toBeNull()
+    expect(
+      getLocalOpenRuntimeOwnerForWorktree(ownerState, FLOATING_TERMINAL_WORKTREE_ID)
+    ).toBeNull()
     // Why: unstamped legacy rows keep the single-focused-runtime route file listing uses.
-    expect(getLocalOpenRuntimeOwnerForWorktree(state, 'legacy-repo::wt-legacy')).toBe('focused-env')
-    expect(getLocalOpenRuntimeOwnerForWorktree(state, 'missing-repo::wt')).toBe('unresolved-owner')
-    expect(getLocalOpenRuntimeOwnerForWorktree(state, null)).toBe('unresolved-owner')
+    expect(getLocalOpenRuntimeOwnerForWorktree(ownerState, 'legacy-repo::wt-legacy')).toBe(
+      'focused-env'
+    )
+    expect(getLocalOpenRuntimeOwnerForWorktree(ownerState, 'missing-repo::wt')).toBe(
+      'unresolved-owner'
+    )
+    expect(getLocalOpenRuntimeOwnerForWorktree(ownerState, null)).toBe('unresolved-owner')
   })
 
   it('lets a card name its own host when the same id exists on two hosts', () => {
     const worktreeId = 'local-repo::wt-a'
-    const duplicateState: WorktreeRuntimeOwnerState = {
-      ...state,
+    const duplicateState = {
+      ...ownerState,
       worktreesByRepo: {
         'local-repo': [
-          { id: worktreeId, repoId: 'local-repo', hostId: 'local' },
-          { id: worktreeId, repoId: 'local-repo', hostId: 'runtime:env-1' }
+          makeWorktree({ id: worktreeId, repoId: 'local-repo', hostId: 'local' }),
+          makeWorktree({ id: worktreeId, repoId: 'local-repo', hostId: 'runtime:env-1' })
         ]
       }
     }
 
     expect(getLocalOpenRuntimeOwnerForWorktree(duplicateState, worktreeId)).toBe('unresolved-owner')
     expect(getLocalOpenRuntimeOwnerForWorktree(duplicateState, worktreeId, 'local')).toBeNull()
+    // Why: a host-blind connection lookup reads these rows as ambiguous; the card stays local.
+    expect(getLocalOpenSshOwnerForWorktree(duplicateState, worktreeId, 'local')).toBeNull()
     expect(getLocalOpenRuntimeOwnerForWorktree(duplicateState, worktreeId, 'runtime:env-1')).toBe(
       'env-1'
     )
   })
 
   it('reads the SSH owner from the same route, so a card can name its own host', () => {
-    const repo = (id: string, projectGroupId: string, connectionId: string | null): Repo => ({
-      id,
-      path: `/${id}`,
-      displayName: id,
-      badgeColor: '',
-      addedAt: 0,
-      projectGroupId,
-      connectionId,
-      executionHostId: connectionId ? null : 'local'
-    })
     const sshState = {
       repos: [
-        repo('ssh-repo', 'ssh-group', 'ssh-1'),
-        repo('mixed-ssh', 'mixed-group', 'ssh-1'),
-        repo('mixed-local', 'mixed-group', null)
+        repo('ssh-repo', { projectGroupId: 'ssh-group', connectionId: 'ssh-1' }),
+        repo('mixed-ssh', { projectGroupId: 'mixed-group', connectionId: 'ssh-1' }),
+        repo('mixed-local', { projectGroupId: 'mixed-group', executionHostId: 'local' })
       ],
       projectGroups: [],
       worktreesByRepo: {
@@ -438,9 +457,9 @@ describe('getLocalOpenRuntimeOwnerForWorktree', () => {
         'mixed-local': [makeWorktree({ id: 'mixed-local::wt', repoId: 'mixed-local' })]
       },
       folderWorkspaces: [
-        // Why: same-id folder rows on two hosts; a host-blind lookup takes the local row.
-        makeFolderWorkspace({ id: 'twin', executionHostId: 'local' }),
+        // Why: same-id folder rows on two hosts; a host-blind lookup reads the SSH row first.
         makeFolderWorkspace({ id: 'twin', executionHostId: 'ssh:ssh-1' }),
+        makeFolderWorkspace({ id: 'twin', executionHostId: 'local' }),
         // Why: unpinned folders infer their host from their repos, which the route skips.
         makeFolderWorkspace({ id: 'legacy-ssh', projectGroupId: 'ssh-group' }),
         makeFolderWorkspace({ id: 'legacy-mixed', projectGroupId: 'mixed-group' })
@@ -454,7 +473,9 @@ describe('getLocalOpenRuntimeOwnerForWorktree', () => {
     // Why: an unqualified twin is unresolved, which the runtime sentinel already blocks.
     expect(getLocalOpenRuntimeOwnerForWorktree(sshState, 'folder:twin')).toBe('unresolved-owner')
     expect(getLocalOpenSshOwnerForWorktree(sshState, 'folder:legacy-ssh')).toBe('ssh-1')
-    expect(getLocalOpenSshOwnerForWorktree(sshState, 'folder:legacy-mixed')).toBe(
+    // Why: an ambiguous host is blocked as a runtime, so no editor offers it as Remote SSH.
+    expect(getLocalOpenSshOwnerForWorktree(sshState, 'folder:legacy-mixed')).toBeNull()
+    expect(getLocalOpenRuntimeOwnerForWorktree(sshState, 'folder:legacy-mixed')).toBe(
       'unresolved-owner'
     )
   })

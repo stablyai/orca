@@ -1,7 +1,9 @@
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
-  parseExecutionHostId
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  toSshExecutionHostId
 } from '../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -118,14 +120,40 @@ export function getRuntimeEnvironmentIdForWorktree(
 // Why: an unplaceable or ambiguous owner must not read as local; a non-empty id keeps it blocked.
 const UNRESOLVED_LOCAL_OPEN_OWNER = 'unresolved-owner'
 
+type LocalOpenOwnerState = WorktreeRuntimeOwnerState &
+  Parameters<typeof getConnectionIdFromState>[0]
+
+/** A folder routed local must also read local to the File Explorer's connection lookup. */
 function resolveLocalOpenRoute(
-  state: WorktreeRuntimeOwnerState,
+  state: LocalOpenOwnerState,
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): WorktreeOperationRouteResolution {
-  return executionHostId
+  const resolution = executionHostId
     ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, executionHostId)
     : resolveWorktreeOperationRouteResult(state, worktreeId)
+  const scope = parseWorkspaceKey(worktreeId)
+  if (
+    resolution.kind !== 'resolved' ||
+    resolution.route.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
+    scope?.type !== 'folder' ||
+    // Why: the lookup below reads the first same-id row; a row pinned local already names its host.
+    findFolderWorkspaceOwner(state, scope.folderWorkspaceId, executionHostId)?.executionHostId ===
+      LOCAL_EXECUTION_HOST_ID
+  ) {
+    return resolution
+  }
+  // Why: the folder route skips the repo inference that can name an SSH host or none.
+  const connectionId = getConnectionIdFromState(state, worktreeId)
+  if (connectionId === undefined) {
+    return { kind: 'ambiguous' }
+  }
+  return connectionId
+    ? {
+        kind: 'resolved',
+        route: { executionHostId: toSshExecutionHostId(connectionId), runtimeEnvironmentId: null }
+      }
+    : resolution
 }
 
 /**
@@ -134,7 +162,7 @@ function resolveLocalOpenRoute(
  * Routes like file operations, so a card can name its own host when ids repeat across hosts.
  */
 export function getLocalOpenRuntimeOwnerForWorktree(
-  state: WorktreeRuntimeOwnerState,
+  state: LocalOpenOwnerState,
   worktreeId: string | null | undefined,
   executionHostId?: ExecutionHostId
 ): string | null {
@@ -153,10 +181,9 @@ export function getLocalOpenRuntimeOwnerForWorktree(
 /**
  * SSH connection owning a workspace path, read from the same route as
  * {@link getLocalOpenRuntimeOwnerForWorktree} so both owner dimensions name one host.
- * A route that reads local must also read local to the File Explorer's connection lookup.
  */
 export function getLocalOpenSshOwnerForWorktree(
-  state: WorktreeRuntimeOwnerState & Parameters<typeof getConnectionIdFromState>[0],
+  state: LocalOpenOwnerState,
   worktreeId: string | null | undefined,
   executionHostId?: ExecutionHostId
 ): string | null {
@@ -165,16 +192,9 @@ export function getLocalOpenSshOwnerForWorktree(
   }
   const resolution = resolveLocalOpenRoute(state, worktreeId, executionHostId)
   // Why: an unresolved route is already blocked by the runtime owner's sentinel.
-  if (resolution.kind !== 'resolved') {
-    return null
-  }
-  const routeOwner = getSshTargetIdForExecutionHost(resolution.route.executionHostId)
-  if (routeOwner || resolution.route.runtimeEnvironmentId) {
-    return routeOwner
-  }
-  // Why: the route skips the folder resolver's repo inference; an ambiguous host stays blocked.
-  const connectionId = getConnectionIdFromState(state, worktreeId)
-  return connectionId === undefined ? UNRESOLVED_LOCAL_OPEN_OWNER : connectionId
+  return resolution.kind === 'resolved'
+    ? getSshTargetIdForExecutionHost(resolution.route.executionHostId)
+    : null
 }
 
 export function getExplicitRuntimeEnvironmentIdForWorktree(
