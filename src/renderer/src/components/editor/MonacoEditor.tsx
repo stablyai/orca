@@ -33,6 +33,7 @@ import {
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 import { useEditorModelRekeyCarry } from './model-lifetime/identity/editor-model-rekey-carry'
 import { installMonacoVimMode } from './monaco-vim-mode'
+import { VimCheatsheet } from './VimCheatsheet'
 
 /** Reserved height (px) for the Vim status bar row; keep in sync with the render class. */
 const VIM_STATUS_BAR_HEIGHT = 22
@@ -106,9 +107,10 @@ export default function MonacoEditor({
   const { setupCopy, toastNode } = useContextualCopySetup()
   // Cancel pending throttled writes before snapshotting final scroll on unmount.
   const scrollThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const propsRef = useRef({ relativePath, language, onSave, onContentChange })
-  // Refresh during render so event handlers cannot read one-render-stale props.
-  propsRef.current = { relativePath, language, onSave, onContentChange }
+  const closeFile = useAppStore((s) => s.closeFile)
+  const propsRef = useRef({ relativePath, language, onSave, onContentChange, fileId, closeFile })
+  // Why: assign during render so the ref is current before any handler reads it (a useEffect would leave a one-render stale window).
+  propsRef.current = { relativePath, language, onSave, onContentChange, fileId, closeFile }
   const readOnlyRef = useRef(readOnly)
   readOnlyRef.current = readOnly
   const contentSyncModeRef = useRef<MonacoContentSyncMode>('undoable')
@@ -218,8 +220,10 @@ export default function MonacoEditor({
     }
     let cancelled = false
     let controller: { dispose: () => void } | null = null
-    void installMonacoVimMode(ed, statusNode, () => {
-      propsRef.current.onSave(ed.getValue())
+    void installMonacoVimMode(ed, statusNode, {
+      onWrite: () => propsRef.current.onSave(ed.getValue()),
+      onClose: () => propsRef.current.closeFile(propsRef.current.fileId),
+      editor: ed
     })
       .then((installed) => {
         if (cancelled) {
@@ -317,6 +321,7 @@ export default function MonacoEditor({
   return (
     <div
       ref={editorContainerRef}
+      data-orca-file-editor
       // Why: a flex column lets the Vim status bar occupy a real row below the editor instead of
       // overlaying it. autoHeight editors are content-sized (and never show the bar), so they keep
       // the plain block layout.
@@ -392,10 +397,19 @@ export default function MonacoEditor({
 
       {vimModeEnabled ? (
         <div
-          ref={vimStatusBarRef}
-          className="flex shrink-0 items-center gap-2 overflow-hidden border-t border-border bg-editor-surface px-2 font-mono text-xs text-muted-foreground"
+          // Why: the monaco-vim status node must stay a dedicated element the adapter owns, so the
+          // cheatsheet hint lives as a sibling in this row rather than inside the node React and
+          // monaco-vim would otherwise both mutate.
+          className="flex shrink-0 items-center gap-2 border-t border-border bg-editor-surface px-2"
           style={{ height: VIM_STATUS_BAR_HEIGHT }}
-        />
+        >
+          <div
+            ref={vimStatusBarRef}
+            data-orca-vim-statusbar
+            className="min-w-0 flex-1 overflow-hidden font-mono text-xs text-muted-foreground"
+          />
+          <VimCheatsheet />
+        </div>
       ) : null}
     </div>
   )
