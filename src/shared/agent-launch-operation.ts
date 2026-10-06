@@ -27,6 +27,7 @@ import { parseAgentSessionOperationTimestamp } from './agent-session-host-author
  * conflict merely because the setting moved between the two attempts.
  */
 export type AgentLaunchFingerprintInput = {
+  account?: string
   agent: string
   target:
     | { kind: 'existing'; worktree: string }
@@ -63,6 +64,7 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
   return canonicalAgentSessionDigest({
     method: 'agent.launch',
     agent: input.agent,
+    account: input.account,
     target: input.target,
     prompt: input.prompt,
     sessionOptions: input.sessionOptions,

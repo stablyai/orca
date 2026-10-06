@@ -1,4 +1,5 @@
 import { paneIdentity } from './runtime-terminal-pane-identity'
+import { WorktreeStartupError } from '../../shared/worktree/worktree-startup-error'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -96,6 +97,9 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     try {
       const terminal = await ports.createTerminal(`id:${worktree.id}`, {
         command: sequencedStartup.command,
+        ...(request.startupCodexAccountId !== undefined
+          ? { codexAccountId: request.startupCodexAccountId }
+          : {}),
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
@@ -119,6 +123,9 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       startupTerminalPaneKey = terminal.paneKey ?? null
       startupTerminalPtyId = terminal.ptyId ?? null
     } catch (error) {
+      if (request.startupAccount !== undefined) {
+        throw new WorktreeStartupError(worktree.id, error)
+      }
       warning = appendFailure(warning, worktree.path, 'startup', error)
     }
   }

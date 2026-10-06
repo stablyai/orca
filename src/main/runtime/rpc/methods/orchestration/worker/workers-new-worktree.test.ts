@@ -192,6 +192,25 @@ describe('orchestration new-worktree workers', () => {
     })
   })
 
+  it.each(['account-b', 'system'])(
+    'pins %s through the shared agent-first worktree creation',
+    async (selector) => {
+      mockCreatedWorktree()
+      const id = selector === 'system' ? null : selector
+      const account = {
+        provider: 'codex' as const,
+        requested: selector,
+        effective: { id, email: id ? 'b@example.com' : null }
+      }
+      vi.spyOn(runtime, 'resolveAgentLaunchAccount').mockResolvedValue(account)
+      const { result } = await startWorker({ account: selector })
+      expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+        expect.objectContaining({ startupAgent: 'codex', startupAccount: selector })
+      )
+      expect(result).toMatchObject({ state: 'ready', launch: { account } })
+    }
+  )
+
   it.each(['new-child', 'new-top-level'])(
     'refuses an OpenCode model for %s without probing',
     async (worktree) => {

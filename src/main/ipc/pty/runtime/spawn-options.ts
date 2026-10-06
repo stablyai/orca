@@ -33,6 +33,7 @@ import {
   paneSpawnReservationsByOwnerKey
 } from '../pane/spawn-reservation'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { assertNewCodexAccountPane } from '../../../../shared/agent-launch-account'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
@@ -92,7 +93,7 @@ export async function buildRuntimePtySpawnOptions(
     // differ from main. ORCA_CODEX_HOME asks it to compare/delete the pair.
     ctx.stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
   )
-  if (ctx.codexResumeHomeSelected) {
+  if (ctx.codexResumeHomeSelected || args.codexAccountId !== undefined) {
     ctx.spawnOptions.envToDelete = removeCodexHomeDeletionRequests(ctx.spawnOptions.envToDelete)
   }
   deleteRequestedEnvKeys(ctx.env, ctx.spawnOptions.envToDelete)
@@ -259,6 +260,7 @@ export async function buildRuntimePtySpawnOptions(
       ? paneSpawnReservationsByOwnerKey.get(resolvedPaneSpawnReservationKey!)
       : undefined
     if (existingPaneSpawn) {
+      assertNewCodexAccountPane(args.codexAccountId, existingPaneSpawn)
       const concurrentResult = await existingPaneSpawn.promise
       const concurrentOwner = resolveStablePaneOwner(
         ctx.deps.runtime,

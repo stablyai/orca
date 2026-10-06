@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LaunchAccountParam } from './launch-account-param'
 import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { workspaceSourceSchema } from '../telemetry-events'
@@ -110,6 +111,7 @@ export const WorktreeCreate = z
     // Why: CLI clients should not hardcode agent launch quoting because SSH
     // workspaces execute in a different shell than the client process.
     startupAgent: OptionalTuiAgent,
+    startupAccount: LaunchAccountParam.optional(),
     startupPrompt: OptionalString,
     // Which surface asked for the agent the host launches from `startupAgent` or `startupDraft`.
     launchSource: LaunchSourceParam.optional(),
@@ -127,6 +129,14 @@ export const WorktreeCreate = z
     cliProvenanceRequest: CliWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {
+    if (params.startupAccount !== undefined && params.clientMutationId !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['clientMutationId'],
+        message:
+          'Explicit accounts require agent.launch with an operationId for replay; worktree.create clientMutationId is unsupported.'
+      })
+    }
     assertLinkedWorkItemSourceContextMatch(params, ctx)
     if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
       ctx.addIssue({

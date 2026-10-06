@@ -48,6 +48,8 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/components/right-sidebar/parent-pr-checks-projection-selector.test.ts',
   'src/renderer/src/store/github/cache-persistence.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
+  // Account receipt replay exercises the host's durable Node SQLite ledger.
+  'src/main/runtime/rpc/methods/agent-launch-account-replay.test.ts',
   'src/main/runtime/rpc/ws-transport.test.ts',
   'src/shared/remote-runtime-client.test.ts',
   'src/shared/remote-runtime-connect-bound.test.ts',

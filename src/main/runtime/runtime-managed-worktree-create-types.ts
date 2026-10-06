@@ -49,6 +49,9 @@ export type RuntimeManagedWorktreeCreateArgs = {
   observeSetupCompletion?: boolean
   createdWithAgent?: TuiAgent
   startupAgent?: TuiAgent
+  startupAccount?: string
+  /** Host-resolved launch input; never accepted over RPC. */
+  startupCodexAccountId?: string | null
   startupLaunchPreferences?: AgentLaunchPreferences
   startupPrompt?: string
   /** Main-internal: set by a caller that delivers an uncarried `startupPrompt` itself, so the text

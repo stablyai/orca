@@ -1,5 +1,6 @@
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
+import { resolveWorkerLaunchAccount } from './worker-launch-preferences'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
@@ -123,6 +124,17 @@ export async function startLocalWorker(args: {
     })
   }
   let mode = await resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
+  const account = await resolveWorkerLaunchAccount(
+    runtime,
+    params.account,
+    agent,
+    creationWorktree
+      ? { repo: params.repo ?? creationWorktree.repoId }
+      : { worktree: `id:${resolvedWorktree!.id}` }
+  )
+  if (account) {
+    launch.receipt.account = account
+  }
 
   const startOptions = {
     worktree: requestedWorktree,
@@ -187,6 +199,7 @@ export async function startLocalWorker(args: {
       mode,
       agent,
       launchPreferences: launch.preferences,
+      ...(account ? { codexAccountId: account.effective.id } : {}),
       effects,
       onStage: (stage) => {
         failedStage = stage

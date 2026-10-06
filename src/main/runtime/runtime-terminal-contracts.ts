@@ -44,6 +44,8 @@ export type TerminalCreateOptions = {
   launchToken?: string
   launchAgent?: TuiAgent
   startupAgent?: TuiAgent
+  /** Main-owned account id; null pins the canonical system home. */
+  codexAccountId?: string | null
   /**
    * Initial text offered to `startupAgent`'s launch command, for an agent whose CLI takes a prompt
    * argument. Not a general prompt channel: an agent that takes its text only after start has no

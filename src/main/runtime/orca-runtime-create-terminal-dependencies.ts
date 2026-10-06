@@ -1,4 +1,6 @@
 export type { TerminalCreateOptions } from './runtime-terminal-contracts'
+export { codexAccountSpawnOptions } from '../../shared/agent-launch-account'
+export { resolveTerminalCreateRouting } from './runtime-terminal-create-routing'
 export type { Worktree } from '../../shared/worktree/types'
 export type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 export {

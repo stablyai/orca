@@ -28,6 +28,7 @@ export type LegacyWorkerRecoveryResolution = {
 }
 
 export type TerminalWorkspaceLaunchScope = {
+  executionHostId?: ExecutionHostId
   id: string
   path: string
   connectionId: string | null

@@ -1,6 +1,7 @@
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
 import {
+  getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
@@ -17,8 +18,47 @@ import { resolveCodexSessionBackfillPaths } from '../codex/codex-session-backfil
 import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { CodexRuntimeHomeRouting } from './runtime-home-service-home-routing'
+import { resolveCodexLaunchAccount } from './codex-launch-account'
+import type { AgentLaunchAccountReceipt } from '../../shared/agent-launch-account'
 
 export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
+  resolveLaunchAccount(selector: string): AgentLaunchAccountReceipt {
+    const receipt = resolveCodexLaunchAccount(
+      this.store.getSettings().codexManagedAccounts,
+      selector
+    )
+    this.resolvePinnedLaunchHome(receipt.effective.id)
+    return receipt
+  }
+
+  prepareForPinnedCodexLaunch(accountId: string | null): string {
+    const homePath = this.resolvePinnedLaunchHome(accountId)
+    if (accountId !== null) {
+      this.prepareManagedHomeResourcesForLaunch(homePath)
+    }
+    return homePath
+  }
+
+  private resolvePinnedLaunchHome(accountId: string | null): string {
+    if (accountId === null) {
+      return getSystemCodexHomePath()
+    }
+    const account = this.store
+      .getSettings()
+      .codexManagedAccounts.find((entry) => entry.id === accountId)
+    if (!account || account.managedHomeRuntime === 'wsl') {
+      throw new Error('The pinned Codex account is unavailable on this native host.')
+    }
+    const resolved = this.resolveSelfContainedManagedHome(account)
+    if (resolved.kind === 'indeterminate') {
+      throw new ManagedCodexHomeTemporarilyUnavailableError()
+    }
+    if (resolved.kind !== 'owned') {
+      throw new Error('The pinned Codex account home is untrusted; no agent was launched.')
+    }
+    return resolved.homePath
+  }
+
   protected initializeLastSyncedState(): void {
     const settings = this.store.getSettings()
     const activeAccount = this.getActiveAccount(

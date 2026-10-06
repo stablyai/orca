@@ -228,6 +228,7 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
     isReattach: ctx.result.isReattach === true,
     pinnedByResume: ctx.codexResumeHomeSelected,
+    ...(args.codexAccountId !== undefined ? { pinnedAccountId: args.codexAccountId } : {}),
     launchCodexHomePath: ctx.selectedCodexHomePath,
     target: ctx.codexSelectionTarget,
     settings: ctx.deps.getSettings?.()

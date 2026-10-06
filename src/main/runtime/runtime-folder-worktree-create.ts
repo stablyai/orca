@@ -1,4 +1,5 @@
 import { paneIdentity } from './runtime-terminal-pane-identity'
+import { WorktreeStartupError } from '../../shared/worktree/worktree-startup-error'
 import { randomUUID } from 'node:crypto'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
 import { resolveWorktreeCreateDisplayNameRequest } from '../ipc/worktree-logic'
@@ -133,6 +134,9 @@ export async function createRuntimeFolderWorktree(args: {
     try {
       const terminal = await deps.createTerminal(`id:${worktree.id}`, {
         command: args.startup.command,
+        ...(request.startupCodexAccountId !== undefined
+          ? { codexAccountId: request.startupCodexAccountId }
+          : {}),
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
         env: args.startup.env,
@@ -159,6 +163,9 @@ export async function createRuntimeFolderWorktree(args: {
         surface: 'background'
       }
     } catch (error) {
+      if (request.startupAccount !== undefined) {
+        throw new WorktreeStartupError(worktree.id, error)
+      }
       const message = error instanceof Error ? error.message : String(error)
       warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
       console.warn(`[worktree-create] ${warning}`)

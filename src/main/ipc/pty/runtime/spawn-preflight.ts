@@ -43,6 +43,7 @@ import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { selectRuntimeLaunchCodexHome } from './spawn-codex-home-selection'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
@@ -129,6 +130,9 @@ export async function prepareRuntimePtySpawn(
     ctx.cwd,
     ctx.expectedWslDistro
   )
+  if (args.codexAccountId !== undefined && ctx.codexSelectionTarget.runtime !== 'host') {
+    throw new Error('--account supports native host execution only; WSL launch was refused.')
+  }
   const codexResumePreparation = ctx.preAdoptedStablePane
     ? null
     : ctx.deps.prepareCodexResumeHome({
@@ -185,8 +189,7 @@ export async function prepareRuntimePtySpawn(
   if (args.preAllocatedHandle) {
     ctx.env = { ...ctx.env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
   }
-  const selectLaunchCodexHome = async (): Promise<string | null> =>
-    (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env)) ?? null
+  const selectLaunchCodexHome = () => selectRuntimeLaunchCodexHome(ctx)
   ctx.selectedCodexHomePath =
     !ctx.preAdoptedStablePane && !args.connectionId
       ? getCompatibleSelectedCodexHomePath(
@@ -201,6 +204,9 @@ export async function prepareRuntimePtySpawn(
             : await selectLaunchCodexHome()
         )
       : null
+  if (args.codexAccountId !== undefined && !ctx.selectedCodexHomePath) {
+    throw new Error('The native host could not prepare the pinned Codex account home.')
+  }
   if (
     !ctx.preAdoptedStablePane &&
     args.launchAgent === 'codex' &&
@@ -209,7 +215,10 @@ export async function prepareRuntimePtySpawn(
     const resolution = resolveCodexHomeAfterManagedAuthReadiness({
       selectedCodexHomePath: ctx.selectedCodexHomePath,
       getSettings: () => ctx.deps.getSettings?.(),
-      requiredCodexHomePath: codexResumeHome?.codexHomePath,
+      requiredCodexHomePath:
+        args.codexAccountId !== undefined
+          ? (ctx.selectedCodexHomePath ?? undefined)
+          : codexResumeHome?.codexHomePath,
       target: ctx.codexSelectionTarget,
       resolveCurrent: async () =>
         getCompatibleSelectedCodexHomePath(

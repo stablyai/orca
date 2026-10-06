@@ -95,8 +95,21 @@ async function agentLaunchIntent(
   params: AgentLaunchParams,
   runtime: OrcaRuntimeService
 ): Promise<AgentLaunchIntent> {
+  const account =
+    params.account !== undefined
+      ? await runtime.resolveAgentLaunchAccount({
+          account: params.account,
+          agent: params.agent,
+          terminal: params.reuseTerminal?.handle,
+          cwd: params.cwd,
+          ...(params.target.kind === 'create-worktree'
+            ? { repo: params.target.create.repo }
+            : { worktree: params.target.worktree })
+        })
+      : undefined
   return {
     agent: params.agent,
+    ...(account ? { account } : {}),
     target: await agentLaunchTarget(params, runtime),
     ...(params.prompt ? { prompt: params.prompt } : {}),
     ...(params.sessionOptions ? { sessionOptions: params.sessionOptions } : {}),

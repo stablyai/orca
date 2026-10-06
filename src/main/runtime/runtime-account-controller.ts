@@ -64,6 +64,10 @@ export class RuntimeAccountController {
     return this.services?.claudeAccounts.getRuntimeConfigDir(target) ?? null
   }
 
+  resolveCodexLaunchAccount(selector: string) {
+    return this.requireServices().codexAccounts.runtimeHomeService.resolveLaunchAccount(selector)
+  }
+
   getSnapshot(): AccountsSnapshot {
     const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
     return {

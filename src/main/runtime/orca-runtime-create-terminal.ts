@@ -21,15 +21,12 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
     if (callerColors) {
       dependencies.setPairedViewerColors(callerColors)
     }
-    const presentation = dependencies.resolveTerminalPresentation(opts)
-    const requiresRendererFocus = opts.presentation === 'focused' || opts.focus === true
-    const availableAuthoritativeWindow = this.getAvailableAuthoritativeWindow()
-    const rendererWindow = opts.rendererBacked === true ? availableAuthoritativeWindow : null
-    const shouldCreateInBackground =
-      worktreeSelector !== undefined &&
-      (Boolean(opts.agentSessionClaim) ||
-        (!requiresRendererFocus && opts.rendererBacked !== true) ||
-        availableAuthoritativeWindow === null)
+    const { presentation, rendererWindow, shouldCreateInBackground } =
+      dependencies.resolveTerminalCreateRouting(
+        worktreeSelector,
+        opts,
+        this.getAvailableAuthoritativeWindow()
+      )
     if (shouldCreateInBackground) {
       if (!this.ptyController?.spawn) {
         throw new Error('runtime_unavailable')
@@ -60,16 +57,19 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
-        const adoptedBeforeLaunch = await this.ptyController.adoptStablePane?.({
-          cols: 120,
-          rows: 40,
-          cwd,
-          connectionId: workspace.connectionId,
-          worktreeId: workspace.id,
-          preAllocatedHandle,
-          tabId,
-          leafId
-        })
+        const adoptedBeforeLaunch =
+          launchOpts.codexAccountId !== undefined
+            ? null
+            : await this.ptyController.adoptStablePane?.({
+                cols: 120,
+                rows: 40,
+                cwd,
+                connectionId: workspace.connectionId,
+                worktreeId: workspace.id,
+                preAllocatedHandle,
+                tabId,
+                leafId
+              })
         const launchToken = launchOpts.launchConfig
           ? (launchOpts.launchToken ?? dependencies.randomUUID())
           : undefined
@@ -131,6 +131,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
               ? launchOpts.command
               : (agentTeamsPlan?.command ?? launchOpts.command),
             launchAgent: launchOpts.launchAgent,
+            ...dependencies.codexAccountSpawnOptions(launchOpts.codexAccountId),
             commandDelivery: 'provider',
             startupCommandDelivery: launchOpts.startupCommandDelivery,
             env,

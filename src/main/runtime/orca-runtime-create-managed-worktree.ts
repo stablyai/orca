@@ -23,10 +23,12 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
   ): Promise<CreateWorktreeResult> {
     // Re-arm a consumed checkout after terminal startup, including failed creates.
     const rearm: PreparationRearmHolder = { fire: () => {} }
+    const { request, account } = await this.prepareWorktreeLaunchAccount(args)
     try {
-      return await trackRuntimeWorkspaceCreate(args, (events) =>
-        this.performManagedWorktreeCreate(args, rearm, events)
+      const result = await trackRuntimeWorkspaceCreate(request, (events) =>
+        this.performManagedWorktreeCreate(request, rearm, events)
       )
+      return account ? { ...result, account } : result
     } finally {
       rearm.fire()
     }

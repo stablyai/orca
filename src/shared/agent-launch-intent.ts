@@ -13,6 +13,7 @@
  */
 
 import type { TuiAgent } from './tui-agent'
+import { isAgentLaunchAccountReceipt, type AgentLaunchAccountReceipt } from './agent-launch-account'
 
 /** How a launch's initial text reaches the agent. */
 export type AgentLaunchPromptDelivery =
@@ -55,6 +56,7 @@ export type AgentLaunchTarget =
 export type AgentLaunchReusedTerminal = { handle: string }
 
 export type AgentLaunchIntent = {
+  account?: AgentLaunchAccountReceipt
   agent: TuiAgent
   target: AgentLaunchTarget
   prompt?: AgentLaunchPrompt
@@ -160,6 +162,7 @@ export type AgentLaunchPromptReceipt = {
 } & AgentLaunchPromptDisposal
 
 export type AgentLaunchResult = {
+  account?: AgentLaunchAccountReceipt
   outcome: AgentLaunchOutcome
   /** The workspace the agent runs in, resolved or created. */
   worktreeId: string
@@ -197,6 +200,7 @@ export type AgentLaunchModeReason =
   | 'wsl_execution_runtime'
   | 'codex_on_windows'
   | 'structured_unsupported_on_host'
+  | 'pinned_codex_account'
 
 /** Restates `WorkerStartModeReceipt` in surface-neutral terms so orchestration's receipt and a
  *  mobile or renderer launch report the same vocabulary. */
@@ -226,6 +230,7 @@ export function isAgentLaunchResult(value: unknown): value is AgentLaunchResult 
   return (
     isAgentLaunchOutcome(result.outcome) &&
     typeof result.worktreeId === 'string' &&
+    (result.account === undefined || isAgentLaunchAccountReceipt(result.account)) &&
     isAgentLaunchModeReceipt(result.receipt) &&
     (result.warning === undefined || typeof result.warning === 'string') &&
     (result.prompt === undefined || isAgentLaunchPromptReceipt(result.prompt))
@@ -302,6 +307,7 @@ export function agentLaunchTargetIsCreate(
  *  sets one of these would route itself around the host's decision. */
 export const AGENT_LAUNCH_RESERVED_CREATE_FIELDS = [
   'startupAgent',
+  'startupAccount',
   'startupCommand',
   'startupPrompt',
   'startupDraft',

@@ -35,6 +35,8 @@ export type PtySpawnIpcArgs = {
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: unknown
   launchAgent?: TuiAgent
+  /** Unsupported on the renderer lane; accepted here only to refuse it explicitly. */
+  codexAccountId?: string | null
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   worktreeId?: string

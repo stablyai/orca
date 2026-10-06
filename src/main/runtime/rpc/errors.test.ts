@@ -21,6 +21,7 @@ import {
   refuseUnclassified
 } from '../../../shared/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
+import { WorktreeStartupError } from '../../../shared/worktree/worktree-startup-error'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -30,6 +31,48 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it.each(['runtime_error', 'operation_unknown'])(
+    'reports the retained startup worktree without changing the cause code %s',
+    (code) => {
+      const cause =
+        code === 'runtime_error'
+          ? new Error('pinned auth unavailable')
+          : Object.assign(new Error('startup acceptance uncertain'), {
+              code,
+              data: {
+                requestId: 'request-original',
+                effects: [{ kind: 'terminal', id: 'term-uncertain' }],
+                residualResources: [{ kind: 'terminal', id: 'term-uncertain' }]
+              }
+            })
+      const failure = mapRuntimeError(
+        'req-startup',
+        { runtimeId: 'runtime-1' },
+        new WorktreeStartupError('repo::created', cause)
+      )
+      const effect = { kind: 'worktree', action: 'created', id: 'repo::created' }
+      expect(failure).toMatchObject({
+        ok: false,
+        error: {
+          code,
+          message: cause.message,
+          data: {
+            worktreeId: 'repo::created',
+            effects: expect.arrayContaining([effect]),
+            residualResources: expect.arrayContaining([effect])
+          }
+        }
+      })
+      if (code === 'operation_unknown') {
+        expect(failure.error.data).toMatchObject({
+          requestId: 'request-original',
+          effects: expect.arrayContaining([{ kind: 'terminal', id: 'term-uncertain' }]),
+          residualResources: expect.arrayContaining([{ kind: 'terminal', id: 'term-uncertain' }])
+        })
+      }
+    }
+  )
+
   it('preserves the stable skill failure category and retryability across RPC', () => {
     expect(
       mapRuntimeError(

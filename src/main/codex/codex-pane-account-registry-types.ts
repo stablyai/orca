@@ -7,6 +7,8 @@ export type CodexPaneAccountRecord = {
   accountId: string | null
   /** Absent only on records written before route provenance was introduced. */
   homeRoute?: CodexPaneHomeRoute
+  /** Explicit per-launch selection, independent of the global active account. */
+  pinned?: true
 }
 
 export type CodexPaneAccountRegistryFile = {

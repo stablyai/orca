@@ -40,6 +40,7 @@ export const WORKER_START_VOCABULARY: AgentLaunchModeVocabulary = {
  *  listed but no longer read: a structured worker honours all three, and naming them here keeps
  *  the set of options this decision has considered visible. */
 type WorkerStartModePlacement = {
+  account?: string
   agent?: string
   on?: string
   terminal?: string

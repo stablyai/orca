@@ -9,6 +9,7 @@ import { vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch-pane-already-live'
 import type { RpcContext } from '../core'
+import { resolveCodexLaunchAccount } from '../../../codex-accounts/codex-launch-account'
 
 export const STRUCTURED_PREFERENCE = {
   experimentalNativeChat: true,
@@ -57,6 +58,15 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     })
   )
   return {
+    resolveAgentLaunchAccount: vi.fn(async (args: { account: string }) =>
+      resolveCodexLaunchAccount(
+        [
+          { id: 'account-a', email: 'a@example.com' },
+          { id: 'account-b', email: 'b@example.com' }
+        ],
+        args.account
+      )
+    ),
     getClientSettings: vi.fn(() => options.settings ?? STRUCTURED_PREFERENCE),
     getStructuredAgentSessionCreateSupport: vi.fn(
       async () => options.createSupport ?? { supported: true }

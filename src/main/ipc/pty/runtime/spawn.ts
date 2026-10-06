@@ -53,6 +53,17 @@ export async function spawnPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   args: RuntimePtySpawnArgs
 ) {
+  if (
+    args.codexAccountId !== undefined &&
+    (args.launchAgent !== 'codex' ||
+      args.connectionId ||
+      args.resumeProviderSession ||
+      args.sessionId ||
+      args.adoptedStablePane ||
+      args.agentSessionEnsure)
+  ) {
+    throw new Error('--account requires a fresh native Codex terminal.')
+  }
   const ctx = createRuntimePtySpawnState(deps, args)
   if (!args.adoptedStablePane) {
     const leafId =
@@ -75,6 +86,12 @@ export async function spawnPtyFromRuntimeController(
           args.connectionId
         )
       : null
+    if (
+      args.codexAccountId !== undefined &&
+      (existingOwner || (ownerKey && paneSpawnReservationsByOwnerKey.has(ownerKey)))
+    ) {
+      throw new Error('--account cannot reuse a live or pending terminal pane.')
+    }
     if (ownerKey && !existingOwner && !paneSpawnReservationsByOwnerKey.has(ownerKey)) {
       ctx.paneSpawnReservationKey = ownerKey
       ctx.paneSpawnReservation = reservePaneSpawn(ownerKey)
