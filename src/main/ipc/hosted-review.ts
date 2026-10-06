@@ -125,6 +125,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       currentHeadOid: args.currentHeadOid ?? null,
       ...(args.active === true ? { active: true } : {}),
+      ...(args.force === true ? { force: true } : {}),
       localGitExecOptions: localGitOptions
     })
     if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {

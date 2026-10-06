@@ -20,6 +20,7 @@ export const HOSTED_REVIEW_METHODS = [
         ...(params.admissionTier ? { admissionTier: params.admissionTier } : {}),
         currentHeadOid: params.currentHeadOid ?? null,
         ...(params.active === true ? { active: true } : {}),
+        ...(params.force === true ? { force: true } : {}),
         linkedGitHubPR: params.linkedGitHubPR ?? null,
         ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
         linkedGitLabMR: params.linkedGitLabMR ?? null,

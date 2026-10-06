@@ -30,6 +30,7 @@ describe('options at rest', () => {
     const modelCatalog = createAgentModelCatalogService({
       store: new AgentModelCatalogStore(),
       getRecord: () => record,
+      drivesRecord: () => true,
       resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/homes/a' }),
       probes: { codex: probe }
     })

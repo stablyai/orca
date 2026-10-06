@@ -22,7 +22,7 @@ import {
   type AgentSessionFailureWordsContext
 } from '../../../shared/agent-session-failure-words'
 import { carryQueuedMessagesToClearReplacement } from './structured-agent-session-queued-mutations'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 
 /** A command's `error` is the sentence its row shows. */
 export function conversationCommandFailure(
@@ -44,7 +44,7 @@ export type ConversationReplacement = {
   sourceSessionId: string
   sessionId: string
   workspaceId: string
-  agent: AgentSessionHandleProvider
+  agent: StructuredAgentId
 }
 
 const clearFingerprintOf = (sessionId: string) =>

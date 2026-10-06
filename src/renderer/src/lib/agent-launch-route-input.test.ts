@@ -116,7 +116,7 @@ describe('buildAgentLaunchRouteInput', () => {
       promptDelivery: 'auto-submit',
       launchText: 'fix the flaky test',
       nativeChatTranscriptIsLocalReadable: true,
-      requiresTuiLaunchCommand: false,
+      startsOutsideWorkspaceRoot: false,
       initialSessionOptions: { model: 'gpt-5.4' }
     })
     expect(mocks.getExecutionHostIdForWorktree).toHaveBeenCalledWith(appStore, 'wt-1')
@@ -248,31 +248,33 @@ describe('buildAgentLaunchRouteInput', () => {
     expect(structuredFeasibleFor(store(), args)).toBe(true)
   })
 
-  it.each([
-    ['a cwd', { cwd: '/repo/sub' }, {}],
-    ['a shell command override', {}, { agentCmdOverrides: { codex: 'npx codex' } }]
-  ] as const)('requires a terminal for %s', (_name, tuiCustomization, settingsOverride) => {
-    const input = buildAgentLaunchRouteInput(
-      store({ ...STRUCTURED_SETTINGS, ...settingsOverride }),
-      {
-        agent: 'codex',
-        workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
-        tuiCustomization
-      }
-    )
-    expect(input.requiresTuiLaunchCommand).toBe(true)
+  it('requires a terminal for a cwd outside the workspace root', () => {
+    const input = buildAgentLaunchRouteInput(store(), {
+      agent: 'codex',
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
+      tuiCustomization: { cwd: '/repo/sub' }
+    })
+    expect(input.startsOutsideWorkspaceRoot).toBe(true)
   })
 
-  it.each(['claude', 'codex'] as const)(
-    'lets the host verify a single %s executable override',
-    (agent) => {
-      const input = buildAgentLaunchRouteInput(
-        store({ ...STRUCTURED_SETTINGS, agentCmdOverrides: { [agent]: 'agent-nightly' } }),
-        { agent, workspace: { kind: 'git-worktree', worktreeId: 'wt-1' } }
-      )
-      expect(input.requiresTuiLaunchCommand).toBe(false)
+  // Command values never change the selected chat surface.
+  it.each([
+    ['claude', 'claude-wrapper'],
+    ['codex', 'codex-nightly'],
+    ['claude', 'npx claude'],
+    ['codex', 'wrapper --arg'],
+    ['claude', '/missing/claude'],
+    ['codex', './codex']
+  ] as const)('keeps %s structured with launch command %s', (agent, command) => {
+    const appStore = store({ ...STRUCTURED_SETTINGS, agentCmdOverrides: { [agent]: command } })
+    const args = {
+      agent,
+      workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' }
     }
-  )
+    expect(buildAgentLaunchRouteInput(appStore, args).startsOutsideWorkspaceRoot).toBe(false)
+    expect(routeFor(appStore, args)).toBe('structured-native-chat')
+    expect(structuredFeasibleFor(appStore, args)).toBe(true)
+  })
 
   // The reported P0: `--dangerously-skip-permissions --model Opus` matched no blessed string, so
   // every new Claude tab was silently demoted to the terminal-backed chat. The Arguments field is
@@ -292,7 +294,7 @@ describe('buildAgentLaunchRouteInput', () => {
       workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' }
     }
     expect(routeFor(appStore, args)).toBe('structured-native-chat')
-    expect(buildAgentLaunchRouteInput(appStore, args).requiresTuiLaunchCommand).toBe(false)
+    expect(buildAgentLaunchRouteInput(appStore, args).startsOutsideWorkspaceRoot).toBe(false)
   })
 
   // Grok reads its transcript off local disk, so it is the agent the readability answer routes on.
@@ -410,12 +412,12 @@ describe('buildAgentLaunchRouteInput', () => {
       }
     })
 
-    // The override is this machine's; the server's createSupport applies its own.
-    it("does not apply this machine's launch command override to the server", () => {
+    // A launch command override applies to terminal launches only, here or on the server.
+    it("does not route on this machine's launch command override for the server", () => {
       const settings = { ...STRUCTURED_SETTINGS, agentCmdOverrides: { claude: 'claude-wrapper' } }
       expect(
         buildAgentLaunchRouteInput(pairedStore(CURRENT_SERVER, settings), args)
-          .requiresTuiLaunchCommand
+          .startsOutsideWorkspaceRoot
       ).toBe(false)
       expect(routeFor(pairedStore(CURRENT_SERVER, settings), args)).toBe('structured-native-chat')
     })
@@ -477,7 +479,7 @@ describe('a cwd that names the workspace root', () => {
         workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' },
         tuiCustomization: { cwd }
       }
-      expect(buildAgentLaunchRouteInput(withRoot(), args).requiresTuiLaunchCommand).toBe(false)
+      expect(buildAgentLaunchRouteInput(withRoot(), args).startsOutsideWorkspaceRoot).toBe(false)
       expect(routeFor(withRoot(), args)).toBe('structured-native-chat')
     }
   )
@@ -488,7 +490,7 @@ describe('a cwd that names the workspace root', () => {
       workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' },
       tuiCustomization: { cwd: '/repo/app/packages/web' }
     }
-    expect(buildAgentLaunchRouteInput(withRoot(), args).requiresTuiLaunchCommand).toBe(true)
+    expect(buildAgentLaunchRouteInput(withRoot(), args).startsOutsideWorkspaceRoot).toBe(true)
     expect(routeFor(withRoot(), args)).not.toBe('structured-native-chat')
   })
 
@@ -499,7 +501,7 @@ describe('a cwd that names the workspace root', () => {
         agent: 'codex',
         workspace: { kind: 'folder', worktreeId: workspaceId },
         tuiCustomization: { cwd }
-      }).requiresTuiLaunchCommand
+      }).startsOutsideWorkspaceRoot
     expect(at('/srv/notes/')).toBe(false)
     expect(at('/srv/notes/drafts')).toBe(true)
   })

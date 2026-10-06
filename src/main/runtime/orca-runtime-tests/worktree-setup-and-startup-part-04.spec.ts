@@ -7,6 +7,7 @@ import {
   createSetupRunnerScript,
   detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgentsMock,
+  electronMocks,
   ensurePathWithinWorkspaceMock,
   getEffectiveHooks,
   listWorktrees,
@@ -579,6 +580,8 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
 
+    runtime.markGraphReady(1)
+    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-blank-draft')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-blank-draft')
     vi.mocked(listWorktrees).mockResolvedValue([

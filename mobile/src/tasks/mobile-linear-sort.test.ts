@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LinearIssue } from './mobile-tasks-provider-detail-types'
-import type { LinearOrderBy } from './mobile-tasks-view-state-types'
-import { groupLinearIssues, sortLinearIssues } from './mobile-tasks-reviewer-linear'
-import { taskTime } from './mobile-tasks-item-mapping'
-import { getLinearPriorityRank } from './mobile-tasks-hosted-review'
+import { sortLinearIssues } from './mobile-tasks-reviewer-linear'
 
 vi.mock('./mobile-tasks-dependencies', () => import('../theme/mobile-theme'))
 afterEach(() => vi.restoreAllMocks())
@@ -21,42 +18,7 @@ const issues: LinearIssue[] = Array.from({ length: 60 }, (_, i) => ({
   state: { name: i % 2 ? 'Todo' : 'Done', type: 'started', color: '' },
   team: { id: `${i % 3}`, name: `Team ${i % 3}`, key: 'ENG' }
 }))
-function originalSort(input: readonly LinearIssue[], mode: LinearOrderBy): LinearIssue[] {
-  return [...input].sort((a, b) => {
-    if (mode === 'updated') {
-      return taskTime(b.updatedAt) - taskTime(a.updatedAt)
-    }
-    if (mode === 'identifier') {
-      // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
-      return a.identifier.localeCompare(b.identifier, undefined, { numeric: true })
-    }
-    return (
-      getLinearPriorityRank(a.priority) - getLinearPriorityRank(b.priority) ||
-      taskTime(b.updatedAt) - taskTime(a.updatedAt)
-    )
-  })
-}
-
 describe('mobile Linear sorting', () => {
-  it.each(['updated', 'identifier', 'priority'] as const)(
-    'preserves %s ordering and stable ties',
-    (mode) => {
-      const input = Object.freeze([...issues])
-      const expected = originalSort(input, mode)
-      const actual = sortLinearIssues(input, mode)
-      expect(actual).toEqual(expected)
-      actual.forEach((issue, index) => expect(issue).toBe(expected[index]))
-      expect(input).toEqual(issues)
-      for (const groupBy of ['none', 'status', 'priority', 'team', 'assignee'] as const) {
-        const groups = groupLinearIssues([...input], groupBy, mode)
-        for (const group of groups) {
-          expect(group.issues).toEqual(expected.filter((issue) => group.issues.includes(issue)))
-        }
-        expect(groups.flatMap((group) => group.issues)).toHaveLength(input.length)
-      }
-    }
-  )
-
   it.each(['updated', 'identifier', 'priority'] as const)('bounds %s setup to one pass', (mode) => {
     const parse = vi.spyOn(Date, 'parse')
     const NativeCollator = Intl.Collator

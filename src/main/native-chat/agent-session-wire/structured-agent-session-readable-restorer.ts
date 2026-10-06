@@ -1,15 +1,10 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionReadRestoreDeps } from './structured-agent-session-restart-restore'
 import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
 
 export class StructuredAgentSessionReadableRestorer {
   private restorePromise: Promise<void> | null = null
 
-  constructor(
-    private readonly input: StructuredAgentSessionReadRestoreDeps & {
-      supportsRecord: (record: AgentSessionRecord) => boolean
-    }
-  ) {}
+  constructor(private readonly input: StructuredAgentSessionReadRestoreDeps) {}
 
   restore(sessionIds?: readonly string[]): Promise<void> {
     this.restorePromise ??= this.restoreReadableSessions(sessionIds).catch((error: unknown) => {
@@ -25,10 +20,7 @@ export class StructuredAgentSessionReadableRestorer {
       : null
     const records = this.input.openDeps.store
       .listRecords()
-      .filter(
-        (record) =>
-          this.input.supportsRecord(record) && (!targetOrder || targetOrder.has(record.sessionId))
-      )
+      .filter((record) => !targetOrder || targetOrder.has(record.sessionId))
     if (targetOrder) {
       records.sort(
         (left, right) => targetOrder.get(left.sessionId)! - targetOrder.get(right.sessionId)!

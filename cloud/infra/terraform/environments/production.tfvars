@@ -499,6 +499,10 @@ relay_region_rehome_source_cell_ids = [
 # was otherwise going to strip it from every policy, leaving the alerts firing at nobody.
 relay_alert_notification_channels = ["projects/onorca-cloud/notificationChannels/4879431412695417284"]
 
+# Cells below this RELAY_FIX_LEVEL page after 6 hours. Raise it with a targeted apply of the
+# outdated-image alert once a wave has rolled every serving cell, never mid-wave.
+relay_cell_min_fix_level = 1
+
 # Mobile push gateway. Production is the only environment that runs one; the runtime account,
 # the three Apple secrets, and their accessor bindings already exist and are imported once
 # (see docs/push-gateway.md).

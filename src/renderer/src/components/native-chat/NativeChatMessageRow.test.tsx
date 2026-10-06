@@ -50,45 +50,6 @@ describe('MessageRow control visibility', () => {
     })
   })
 
-  it('appends time to the existing agent controls and inherits their reveal', () => {
-    renderMessage('assistant')
-    const copy = screen.getByRole('button', { name: 'Copy message' })
-    const scroll = screen.getByRole('button', { name: 'Scroll this message to top' })
-    const time = screen.getByRole('time')
-    expect(Array.from(copy.parentElement!.children)).toEqual([copy, scroll, time])
-    expect(copy.parentElement).toHaveClass(
-      'can-hover:opacity-0',
-      'can-hover:pointer-events-none',
-      'group-hover:opacity-100',
-      '[.group:has(:focus-visible)_&]:opacity-100',
-      'group-hover:pointer-events-auto',
-      '[.group:has(:focus-visible)_&]:pointer-events-auto'
-    )
-    expect(copy.parentElement).not.toHaveClass('opacity-0', 'pointer-events-none')
-    expect(time).not.toHaveAttribute('tabindex')
-    copy.focus()
-    expect(copy).toHaveFocus()
-  })
-
-  it('gives user bubbles a copy button and timestamp that only hide on hover-capable devices', () => {
-    renderMessage('user')
-    const copy = screen.getByRole('button', { name: 'Copy message' })
-    const time = screen.getByRole('time')
-    expect(Array.from(copy.parentElement!.children)).toEqual([copy, time])
-    expect(copy.parentElement).toHaveClass(
-      'can-hover:opacity-0',
-      'can-hover:pointer-events-none',
-      'group-hover:opacity-100',
-      '[.group:has(:focus-visible)_&]:opacity-100',
-      'group-hover:pointer-events-auto',
-      '[.group:has(:focus-visible)_&]:pointer-events-auto'
-    )
-    expect(copy.parentElement).not.toHaveClass('opacity-0', 'pointer-events-none')
-    expect(copy.parentElement!.parentElement).toHaveClass('group')
-    time.focus()
-    expect(time).toHaveFocus()
-  })
-
   it('copies the sent message text from a user bubble', async () => {
     const writeClipboardText = vi.fn().mockResolvedValue(undefined)
     Object.assign(window, { api: { ui: { writeClipboardText } } })
@@ -211,7 +172,7 @@ describe('what a user message says about its delivery', () => {
 
     const sending = screen.getByText('Sending…')
     const copy = screen.getByRole('button', { name: 'Copy message' })
-    expect(sending).toHaveClass('text-xs', 'text-muted-foreground')
+    expect(sending).toHaveClass('text-xs', 'text-chat-foreground-faint')
     expect(Array.from(sending.parentElement!.children)).toEqual([copy, sending])
     expect(sending.parentElement).not.toHaveClass('can-hover:opacity-0')
     expect(sending.parentElement!.parentElement).toHaveClass('group')

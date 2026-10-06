@@ -154,7 +154,6 @@ function paging({
       isVisible={isVisible}
       isWorking={false}
       expandSignal={false}
-      fontScale={1}
     />
   )
 }

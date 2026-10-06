@@ -2,10 +2,8 @@ import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  requiresTuiAgentLaunchCommand,
-  resolveStructuredAgentCommand
-} from './structured-agent-command-resolution'
+import { resolveStructuredAgentCommand } from './structured-agent-command-resolution'
+import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 
 const scratch: string[] = []
 afterEach(() => {
@@ -29,7 +27,6 @@ describe('structured agent executable resolution', () => {
     (agent) => {
       const { command } = executable()
       const settings = { agentCmdOverrides: { [agent]: `"${command}"` } }
-      expect(requiresTuiAgentLaunchCommand(settings, agent)).toBe(false)
       expect(resolveStructuredAgentCommand(agent, settings)).toBe(command)
     }
   )
@@ -65,7 +62,7 @@ describe('structured agent executable resolution', () => {
     expect(resolveStructuredAgentCommand('claude', settings)).toBe(second.command)
   })
 
-  it('keeps missing files, directories, relative paths and shell lines on the terminal route', () => {
+  it('uses the stock executable for missing files, directories, relative paths and shell lines', () => {
     const { directory } = executable()
     const folder = join(directory, 'folder')
     mkdirSync(folder)
@@ -77,8 +74,7 @@ describe('structured agent executable resolution', () => {
       'wrapper --flag'
     ]) {
       const settings = { agentCmdOverrides: { claude: command } }
-      expect(requiresTuiAgentLaunchCommand(settings, 'claude')).toBe(true)
-      expect(() => resolveStructuredAgentCommand('claude', settings)).toThrow('one executable file')
+      expect(resolveStructuredAgentCommand('claude', settings)).toBe(resolveCliCommand('claude'))
     }
   })
 
@@ -86,7 +82,7 @@ describe('structured agent executable resolution', () => {
     const { command } = executable()
     chmodSync(command, 0o644)
     expect(
-      requiresTuiAgentLaunchCommand({ agentCmdOverrides: { claude: `"${command}"` } }, 'claude')
-    ).toBe(true)
+      resolveStructuredAgentCommand('claude', { agentCmdOverrides: { claude: `"${command}"` } })
+    ).toBe(resolveCliCommand('claude'))
   })
 })

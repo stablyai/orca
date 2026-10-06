@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
 
@@ -37,6 +38,8 @@ describe('execution host structured launch settings wiring', () => {
     expect(await deps?.resolveLaunchArgs?.('claude')).toEqual(['--model', 'second'])
     expect(await deps?.resolveLaunchArgs?.('codex')).toEqual([])
     settings.agentCmdOverrides = { claude: 'wrapper --arg' }
-    expect(() => deps?.resolveClaudeCommand?.()).toThrow('one executable file')
+    expect(deps?.resolveClaudeCommand?.()).toBe(resolveCliCommand('claude'))
+    settings.agentCmdOverrides = { codex: '/missing/codex' }
+    expect(deps?.resolveCodexCommand?.()).toBe(resolveCliCommand('codex'))
   })
 })

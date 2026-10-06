@@ -4,7 +4,7 @@ import {
   structuredAgentCommandToken
 } from './tui-agent-launch-command-override'
 
-describe('structured agent command routing', () => {
+describe('structured agent command tokens', () => {
   it.each([
     ['claude-nightly', 'claude-nightly'],
     ['/opt/tools/claude', '/opt/tools/claude'],
@@ -17,11 +17,6 @@ describe('structured agent command routing', () => {
     ['~/bin/codex', '~/bin/codex']
   ])('accepts one literal executable %s', (input, token) => {
     expect(structuredAgentCommandToken(input)).toBe(token)
-    for (const agent of ['claude', 'codex'] as const) {
-      expect(hasExplicitTuiLaunchCommand({ agentCmdOverrides: { [agent]: input } }, agent)).toBe(
-        false
-      )
-    }
   })
 
   it.each([
@@ -34,11 +29,8 @@ describe('structured agent command routing', () => {
     'claude | cat',
     'claude\ncodex',
     '"unfinished'
-  ])('keeps shell syntax %s in terminal chat', (command) => {
+  ])('rejects shell syntax %s', (command) => {
     expect(structuredAgentCommandToken(command)).toBeNull()
-    expect(hasExplicitTuiLaunchCommand({ agentCmdOverrides: { claude: command } }, 'claude')).toBe(
-      true
-    )
   })
 
   it('leaves other agents and empty overrides unchanged', () => {
@@ -49,5 +41,16 @@ describe('structured agent command routing', () => {
       false
     )
     expect(hasExplicitTuiLaunchCommand(null, 'codex')).toBe(false)
+  })
+})
+
+describe('hasExplicitTuiLaunchCommand', () => {
+  it('treats a whitespace-only command override as no override', () => {
+    expect(hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: '   ' } }, 'codex')).toBe(
+      false
+    )
+    expect(
+      hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: 'codex-nightly' } }, 'codex')
+    ).toBe(true)
   })
 })

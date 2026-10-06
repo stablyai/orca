@@ -1,8 +1,10 @@
+import { endedRunningAgentJournalToolCall } from '../../shared/agent-journal-tool-call-lifecycle'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
   type AgentJournalItemIdentity,
-  type AgentJournalTurnLifecycle
+  type AgentJournalTurnLifecycle,
+  type AgentJournalTurnLifecycleState
 } from '../../shared/agent-session-journal-types'
 import {
   journalLifecycleItemMutation,
@@ -70,7 +72,8 @@ export function settleCodexJournalSession(input: {
     const translated = streamed
       ? codexStreamingJournalItem(active.item, streamed.text)
       : codexJournalItem(active.item, active.helperName)
-    const body = interruptedBody(translated.body)
+    // The host saw the child go, so its work was cut short.
+    const body = settledActiveBody(translated.body, 'interrupted')
     if (body) {
       mutations.push(settledRow(input.attributionFor, active, body))
     }
@@ -118,6 +121,8 @@ export function settleCodexJournalTurn(input: {
   turnId: string
   /** Null off the primary thread: only the primary turn owns a lifecycle row. */
   turnLifecycle: AgentJournalTurnLifecycle | null
+  /** How Codex ended the turn, on every thread: what a call it left running became. */
+  turnEnd: Extract<AgentJournalTurnLifecycleState, 'completed' | 'interrupted'>
   sink: StructuredAgentSessionEventSink
   streams: CodexStructuredItemStreams
   activeItems: Map<string, CodexActiveJournalItem>
@@ -142,7 +147,7 @@ export function settleCodexJournalTurn(input: {
     const translated = streamed
       ? codexStreamingJournalItem(active.item, streamed.text)
       : codexJournalItem(active.item, active.helperName)
-    const body = interruptedBody(translated.body)
+    const body = settledActiveBody(translated.body, input.turnEnd)
     if (body) {
       mutations.push(settledRow(input.attributionFor, active, body))
     }
@@ -196,12 +201,15 @@ function settledRow(
   return journalLifecycleItemMutation(attributionFor(row.threadId, row.turnId), row.identity, body)
 }
 
-function interruptedBody(body: AgentJournalItemBody | null): AgentJournalItemBody | null {
+function settledActiveBody(
+  body: AgentJournalItemBody | null,
+  turnEnd: 'completed' | 'interrupted'
+): AgentJournalItemBody | null {
   if (!body) {
     return null
   }
   if (body.kind === 'tool-call') {
-    return { ...body, state: 'failed' }
+    return endedRunningAgentJournalToolCall(body, turnEnd)
   }
   if (body.kind === 'message') {
     return body

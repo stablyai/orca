@@ -365,7 +365,7 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     expect(refreshDir).toHaveBeenCalledTimes(2)
   })
 
-  it('purges distinct cached directory renames with one bounded cache scan', () => {
+  it('purges distinct cached directory renames with bounded batch cache scans', () => {
     const root = '/repo'
     const worktreeId = 'watch-reconcile-perf'
     const entries: Record<string, DirCache> = { [root]: cacheWithChildren([]) }
@@ -431,9 +431,8 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     }
 
     expect(setDirCache).toHaveBeenCalledOnce()
-    // One scan, in purgeDirCacheSubtrees. The casing-fallback index stays unbuilt because every
-    // lookup here hits `dirPath in cache` directly.
-    expect(keyVisits).toBe(entryCount)
+    // One index scan for linked-directory detection, then one purge scan for the entire batch.
+    expect(keyVisits).toBe(entryCount * 2)
     expect(expandedPathReads).toBe(expandedPaths.length)
     expect(remainingExpanded).toEqual(new Set())
   })

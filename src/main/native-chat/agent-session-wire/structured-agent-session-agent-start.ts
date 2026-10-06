@@ -29,7 +29,7 @@ import { terminalOwnerRefusalMessage } from '../../../shared/agent-session-legac
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { attachStructuredAgentSessionUnderSerialize } from './structured-agent-session-attach-orchestration'
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
-import { adapterSupportsRecord } from './structured-agent-session-provider-support'
+import { hostCanStartRecord } from './structured-agent-session-provider-support'
 import {
   joinClosingStructuredAgentSessionChild,
   releaseLeaseOfEndedStructuredAgentSessionChild
@@ -133,7 +133,7 @@ async function startStructuredAgentSessionAgent(
       'No structured session exists by that id.'
     )
   }
-  if (!adapterSupportsRecord(context.deps.adapter, record)) {
+  if (!hostCanStartRecord(context.deps, record)) {
     return refuseResume(
       'structured_agent_session_unsupported',
       { reason: 'hostUnsupported' },

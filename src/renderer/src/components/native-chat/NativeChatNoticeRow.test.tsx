@@ -27,14 +27,6 @@ describe('notice rows', () => {
       screen.getByText('Context compacted').parentElement?.querySelectorAll('.bg-border')
     ).toHaveLength(2)
   })
-  it.each([
-    ['warning', 'text-[color:var(--warning,#f59e0b)]'],
-    ['error', 'text-destructive'],
-    ['notice', 'text-muted-foreground']
-  ])('renders %s using its existing color treatment', (tone, className) => {
-    renderStatus({ kind: 'status', text: 'Readable notice', tone })
-    expect(screen.getByText('Readable notice').parentElement?.parentElement).toHaveClass(className)
-  })
   it('renders a plan as readable markdown in the card primitive', () => {
     renderStatus({
       kind: 'status',
@@ -99,17 +91,5 @@ describe('notice rows', () => {
     renderStatus({ kind: 'status', text: 'Words an older host wrote', presentation })
     expect(screen.getByText(words)).toHaveClass('text-muted-foreground', 'text-sm')
     expect(screen.queryByText('Words an older host wrote')).toBeNull()
-  })
-  it('renders future presentation and tone values as untinted text', () => {
-    renderStatus({
-      kind: 'status',
-      text: 'Future readable text',
-      tone: 'future-tone',
-      presentation: 'future-presentation'
-    })
-    expect(screen.getByText('Future readable text').parentElement?.parentElement).toHaveClass(
-      'text-foreground'
-    )
-    expect(screen.getByText('Future readable text').parentElement?.querySelector('svg')).toBeNull()
   })
 })

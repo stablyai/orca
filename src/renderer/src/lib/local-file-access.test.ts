@@ -229,6 +229,7 @@ const USER_NAMED_TAB_OPENERS = [
   'components/browser-pane/navigate/navigate-browser-page-url.ts',
   'components/editor/markdown-preview-link-actions.ts',
   'components/floating-terminal/use-floating-terminal-create-actions.ts',
+  'components/quick-open-file-navigation.ts',
   'components/right-sidebar/ai-vault-session-log-open.ts',
   'components/right-sidebar/source-control/notes/use-note-opening.ts',
   'components/right-sidebar/useFileExplorerHandlers.ts',

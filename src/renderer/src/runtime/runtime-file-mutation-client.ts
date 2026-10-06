@@ -16,17 +16,18 @@ import { localAccess } from './runtime-file-read-client'
 
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
-  dirPath: string
+  dirPath: string,
+  options: { followSymlinks?: boolean } = {}
 ): Promise<DirEntry[]> {
   const remoteArgs = getRemoteFileArgs(context, dirPath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    return window.api.fs.readDir({ dirPath, connectionId: context.connectionId })
+    return window.api.fs.readDir({ dirPath, connectionId: context.connectionId, ...options })
   }
   return callRuntimeRpc<DirEntry[]>(
     remoteArgs.target,
     'files.readDir',
-    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
+    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath, ...options },
     { timeoutMs: 15_000 }
   )
 }

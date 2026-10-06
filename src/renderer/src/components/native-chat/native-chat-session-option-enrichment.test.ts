@@ -59,25 +59,22 @@ describe('native chat session option enrichment', () => {
     expect(paired?.map(({ id }) => id)).toContain('gpt-cli')
   })
 
-  it.each([
-    { command: 'codex-nightly', model: 'gpt-host', structured: true },
-    { command: 'codex-nightly --custom', model: 'gpt-custom', structured: false }
-  ])('discovers the catalog for Command $command', async ({ command, model, structured }) => {
+  it('lists through the CLI when this machine runs a custom launch command', async () => {
     mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
       success: true,
       catalogOrigin: 'probe',
       models: [{ id: 'gpt-custom', label: 'GPT Custom' }]
     })
     const context = {
-      settings: { agentCmdOverrides: { codex: command } },
+      settings: { agentCmdOverrides: { codex: 'codex-nightly' } },
       worktreeId: 'repo::/worktree',
       worktreePath: '/worktree'
     }
 
+    // The structured catalog lists the built-in binary, which this terminal does not run.
     const models = await discoverNativeChatCatalogModels('codex', context, 'local')
-    expect(mocks.callStructuredAgentSession).toHaveBeenCalledTimes(structured ? 1 : 0)
-    expect(mocks.discoverRuntimeCommitMessageModels).toHaveBeenCalledTimes(structured ? 0 : 1)
-    expect(models?.map(({ id }) => id)).toContain(model)
+    expect(mocks.callStructuredAgentSession).not.toHaveBeenCalled()
+    expect(models?.map(({ id }) => id)).toContain('gpt-custom')
   })
 
   it('bounds settled host enrichment entries', async () => {

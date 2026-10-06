@@ -17,6 +17,7 @@ import { performAttach } from './structured-agent-session-attach-flow'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -84,6 +85,7 @@ describe('processless structured session reservation', () => {
 
     await expect(
       performAttach({
+        agents: NO_STRUCTURED_AGENTS,
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter,
@@ -130,6 +132,7 @@ describe('processless structured session reservation', () => {
       }))
     } as unknown as StructuredAgentSessionAdapter
     const input = {
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
@@ -168,6 +171,7 @@ describe('processless structured session reservation', () => {
     const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>()
     const adapter = { supportsCreate, acquire } as unknown as StructuredAgentSessionAdapter
     const input = {
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
@@ -221,6 +225,7 @@ describe('processless structured session reservation', () => {
 
     await expect(
       performAttach({
+        agents: NO_STRUCTURED_AGENTS,
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter,
@@ -288,6 +293,7 @@ describe('processless structured session reservation', () => {
       releaseAcquisition: vi.fn(async () => true)
     } as unknown as StructuredAgentSessionAdapter
     const input = {
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter,

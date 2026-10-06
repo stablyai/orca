@@ -349,6 +349,10 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run verify:rpc-params-catalog
 
+      - name: Verify the generated ACP protocol schema
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: pnpm run verify:acp-protocol
+
       - name: Verify bundled skill guides
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run verify:bundled-skill-guides
@@ -1220,7 +1224,6 @@ jobs:
           src/main/windows-live-tree-kill.win32.test.ts
           src/main/wsl/wsl-runner.test.ts
           src/main/wsl/wsl-guest-environment.test.ts
-          src/main/wsl/wsl-invocation-boundary.test.ts
           src/main/wsl/wsl-executable-path.win32.test.ts
           src/main/wsl/wsl-w1-w3-contract.test.ts
           src/shared/source-scan/source-tree-scan.test.ts

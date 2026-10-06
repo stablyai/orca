@@ -670,11 +670,11 @@ describe('restart', () => {
     expect(status).toMatchObject({ owner: 'native' })
   })
 
-  it('vouches for no owner of a chat this host cannot run', async () => {
+  it('reads stored ownership even when this host cannot start the provider', async () => {
     await attach()
 
     await reboot(async () => ({ outcome: 'pid-absent' }), { supportsCreate: () => false })
-    expect(() => host.handoffStatus(SESSION)).toThrow('structured_agent_session_unsupported')
+    expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
   })
 
   it('releases a session whose owner can never be probed, signalling nothing, and starts over', async () => {

@@ -5,11 +5,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import {
-  hasExplicitTuiLaunchCommand,
-  resolveAgentLaunchRoute,
-  structuredAgentLaunchSupported
-} from './agent-launch-routing'
+import { resolveAgentLaunchRoute, structuredAgentLaunchSupported } from './agent-launch-routing'
 
 const settings = {
   experimentalNativeChat: true,
@@ -92,7 +88,7 @@ describe('resolveAgentLaunchRoute', () => {
     // openclaude and grok render native chat but have no structured adapter.
     expect(route({ agent: 'openclaude' })).toBe('legacy-native-chat')
     expect(route({ agent: 'grok' })).toBe('legacy-native-chat')
-    expect(route({ requiresTuiLaunchCommand: true })).toBe('legacy-native-chat')
+    expect(route({ startsOutsideWorkspaceRoot: true })).toBe('legacy-native-chat')
   })
 
   it('keeps an SSH workspace terminal-backed, since no Orca runtime runs there', () => {
@@ -180,15 +176,6 @@ describe('resolveAgentLaunchRoute', () => {
         }
       })
     ).toBe('legacy-native-chat')
-  })
-
-  it('treats a whitespace-only command override as no override', () => {
-    expect(hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: '   ' } }, 'codex')).toBe(
-      false
-    )
-    expect(
-      hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: 'npx codex' } }, 'codex')
-    ).toBe(true)
   })
 })
 

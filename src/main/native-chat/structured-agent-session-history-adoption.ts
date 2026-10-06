@@ -11,12 +11,14 @@ import {
   agentSessionWireProviderHandle,
   type AgentSessionWireProviderHandle
 } from '../../shared/agent-session-provider-handle-encoding'
+import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
 
 export type StructuredAgentSessionAdoptionOwnership = {
   sessionId: string
-  provider: 'claude' | 'codex'
+  /** Any registered agent's chat may hold the conversation, though only Claude and Codex adopt. */
+  provider: StructuredAgentId
   providerSessionId: string
   lease: AgentSessionLease
 }

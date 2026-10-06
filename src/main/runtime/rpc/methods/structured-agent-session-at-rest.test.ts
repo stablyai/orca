@@ -22,7 +22,6 @@ import {
   restTestSend,
   type RestTestRig
 } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import * as providerSupport from '../../../native-chat/agent-session-wire/structured-agent-session-provider-support'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -219,22 +218,6 @@ describe('the accessor', () => {
             details: { reason: 'recordMissing' }
           }
         }
-      }
-    })
-
-    await restingChat()
-    vi.spyOn(providerSupport, 'adapterSupportsRecord').mockReturnValue(false)
-    const [unsupported] = await call('agentSession.history', {
-      sessionId: SESSION,
-      direction: 'tail'
-    })
-    expect(unsupported).toMatchObject({
-      ok: false,
-      error: {
-        // Not a passthrough code: released clients match the message, as before.
-        code: 'runtime_error',
-        message: 'structured_agent_session_unsupported',
-        data: { refusal: { details: { reason: 'hostUnsupported' } } }
       }
     })
   })

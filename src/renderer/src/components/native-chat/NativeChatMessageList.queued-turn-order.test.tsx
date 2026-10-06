@@ -131,7 +131,6 @@ describe.each([['states each row’s turn', true]])(
           workingStartedAt={Date.now() - 1000}
           settledTurns={new Map([['user-a', { startedAt: 1, workedSeconds: 17 }]])}
           expandSignal={false}
-          fontScale={1}
         />
       )
 
@@ -160,7 +159,6 @@ describe.each([['states each row’s turn', true]])(
             ])
           }
           expandSignal={false}
-          fontScale={1}
         />
       )
 

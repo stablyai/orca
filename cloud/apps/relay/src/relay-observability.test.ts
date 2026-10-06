@@ -9,6 +9,7 @@ import {
   RelayObservability,
   type RelayProcessCounts
 } from './relay-observability.js'
+import { RELAY_FIX_LEVEL } from './relay-fix-level.js'
 
 const counts: RelayProcessCounts = {
   totalConnections: 9,
@@ -57,6 +58,20 @@ function renameStageKeys(bucket: unknown): unknown {
 }
 
 describe('relay observability', () => {
+  it('stamps every runtime metrics line with the fix level', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'cell', cellId: 'production-gce-c25', region: 'asia-east2' },
+      (entry) => entries.push(entry)
+    )
+    observability.flush(counts)
+    expect(entries[0]).toMatchObject({
+      event: 'orca_relay_runtime_metrics',
+      fixLevel: RELAY_FIX_LEVEL
+    })
+    expect(RELAY_FIX_LEVEL).toBeGreaterThanOrEqual(1)
+  })
+
   it('emits safe readiness dependency outcomes', () => {
     const entries: Array<Record<string, unknown>> = []
     const observability = new RelayObservability(

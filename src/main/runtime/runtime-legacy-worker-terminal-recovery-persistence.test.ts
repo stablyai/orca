@@ -200,4 +200,27 @@ describe('legacy worker recovery persistence snapshot budget', () => {
     expect(clone).not.toHaveBeenCalled()
     expect(fixture.flushPendingOrThrowAsync).not.toHaveBeenCalled()
   })
+
+  it('uses the provider that proved absence when a deleted folder has no host lookup', async () => {
+    const fixture = makeFixture(['ssh:remote'], 1)
+    const resolution = makeResolution(100)
+    resolution.resolution = 'exited'
+    resolution.hostId = 'ssh:remote'
+
+    expect(await fixture.persistence.persist([resolution])).toEqual(new Set(['dispatch-100']))
+    expect(fixture.setWorkspaceSession.mock.calls[0][1]).toBe('ssh:remote')
+    expect(fixture.flushPendingOrThrowAsync).toHaveBeenCalledOnce()
+  })
+
+  it('prefers owning-provider evidence over stale workspace host metadata', async () => {
+    const fixture = makeFixture(['local', 'ssh:remote'], 2)
+    const localBefore = structuredClone(fixture.getWorkspaceSession('local'))
+    const resolution = fixture.resolutions[0]
+    resolution.resolution = 'exited'
+    resolution.hostId = 'ssh:remote'
+
+    expect(await fixture.persistence.persist([resolution])).toEqual(new Set(['dispatch-0']))
+    expect(fixture.setWorkspaceSession.mock.calls[0][1]).toBe('ssh:remote')
+    expect(fixture.getWorkspaceSession('local')).toEqual(localBefore)
+  })
 })

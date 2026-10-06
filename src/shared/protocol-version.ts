@@ -62,6 +62,9 @@ export const WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY =
   'worktree.linked-work-item-context.v1' as const
 export const WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY =
   'worktree.github-pr-suppression.v1' as const
+// Legacy clients cannot safely derive a branch name from a qualified ref selector.
+export const REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY =
+  'repo.search-qualified-refs.v1' as const
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
 export const ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY = 'orchestration.federation.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY =
@@ -230,6 +233,14 @@ export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
 // journal and lifecycle surfaces independently from Codex support.
 export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
   'agent-session.structured.claude.v1' as const
+// Why: a host's structured agents are the ones it registered, not a list every build ships. A host
+// advertising this accepts any agent it lists through `agentSession.agents` (with each agent's
+// capability record) in `agentSession.*` params, and refuses one it did not register; a client
+// offers an agent beyond Claude and Codex only to such a host. A client advertising it renders an
+// `agent-session` tab of any agent its host lists; the host withholds every other agent's tabs from
+// a client that does not (an older client would list them with an empty pane).
+export const STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY =
+  'agent-session.structured.registered-agents.v1' as const
 // Why: paired structured clients explicitly hold every visible session surface, allowing the host
 // to stop provider children after the last surface closes without tying lifetime to a transport.
 export const STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY =
@@ -321,6 +332,7 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY
@@ -369,6 +381,7 @@ export const RUNTIME_CAPABILITIES = [
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   JIRA_USER_FIELDS_RUNTIME_CAPABILITY,
@@ -399,6 +412,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,

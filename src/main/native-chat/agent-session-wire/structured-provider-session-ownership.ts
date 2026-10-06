@@ -1,10 +1,10 @@
 import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 
 export type StructuredProviderSessionOwnership = {
   sessionId: string
   workspaceId: string
-  provider: AgentSessionHandleProvider
+  provider: StructuredAgentId
   providerSessionId: string
   lease: AgentSessionLease
 }

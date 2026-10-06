@@ -45,7 +45,7 @@ export function NativeChatMessageTimestamp({
       aria-label={formatters.full.format(date)}
       tabIndex={focusable ? 0 : undefined}
       className={cn(
-        'rounded-md text-xs whitespace-nowrap text-muted-foreground tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'rounded-md text-xs whitespace-nowrap text-chat-foreground-faint tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className
       )}
     >

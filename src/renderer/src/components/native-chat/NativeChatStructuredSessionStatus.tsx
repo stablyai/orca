@@ -62,12 +62,12 @@ export function NativeChatStructuredSessionStatus(props: {
   return (
     <>
       {props.reconnecting && !props.error ? (
-        <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-muted-foreground">
+        <p className="mx-auto w-full max-w-(--chat-content-max-width) px-4 py-1 text-xs text-muted-foreground">
           {translate('components.native-chat.state.reconnecting', 'Reconnecting to this chat…')}
         </p>
       ) : null}
       {props.error || props.composerError ? (
-        <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-destructive">
+        <p className="mx-auto w-full max-w-(--chat-content-max-width) px-4 py-1 text-xs text-destructive">
           {props.error ?? props.composerError}
         </p>
       ) : null}

@@ -432,18 +432,18 @@ describe('pasteDraftWhenAgentReady', () => {
 
   it('best-effort pastes when the ready escape was missed but the agent process is running', async () => {
     testState.inspectRuntimeTerminalProcess.mockResolvedValue({
-      foregroundProcess: 'codex',
+      foregroundProcess: 'gemini',
       hasChildProcesses: false
     })
 
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
-      agent: 'codex'
+      agent: 'gemini'
     })
     await flushMicrotasks()
 
-    await vi.advanceTimersByTimeAsync(20000)
+    await vi.advanceTimersByTimeAsync(8000)
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
@@ -539,7 +539,31 @@ describe('pasteDraftWhenAgentReady', () => {
     )
   })
 
-  it('honors the fallback inspection deadline for pty-bound draft paste', async () => {
+  it.each(['tab', 'pty'] as const)(
+    'never pastes late into a Codex process without composer readiness (%s)',
+    async (target) => {
+      const onTimeout = vi.fn()
+      testState.inspectRuntimeTerminalProcess.mockResolvedValue({ foregroundProcess: 'codex' })
+      const args = {
+        tabId: 'tab-1',
+        content: ISSUE_URL,
+        agent: 'codex' as const,
+        timeoutMs: 1,
+        onTimeout
+      }
+      const promise =
+        target === 'pty'
+          ? pasteDraftToAgentPtyWhenReady({ ...args, ptyId: 'pty-1' })
+          : pasteDraftWhenAgentReady(args)
+      await flushMicrotasks()
+      await vi.advanceTimersByTimeAsync(20_000)
+      await expect(promise).resolves.toBe(false)
+      expect(onTimeout).toHaveBeenCalledTimes(1)
+      expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    }
+  )
+
+  it('ends the Codex readiness wait without a fallback inspection', async () => {
     const onTimeout = vi.fn()
     testState.inspectRuntimeTerminalProcess.mockReturnValue(new Promise(() => {}))
 

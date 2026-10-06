@@ -5,6 +5,7 @@ import type { ControlRenewalFlush } from './control-renewal-batch.js'
 import type { CellInventoryHoldCounts } from './cell-inventory-hold-samples.js'
 import type { PostgresPoolPressureCounts } from './postgres-pool-pressure.js'
 import type { RelayReadinessGraceEvent, RelayReadinessObservation } from './relay-readiness.js'
+import { RELAY_FIX_LEVEL } from './relay-fix-level.js'
 
 export type RelayRuntimeCounts = {
   totalConnections: number
@@ -480,6 +481,7 @@ export class RelayObservability implements RelayRuntimeObserver {
       message: 'Orca Relay runtime metrics',
       event: 'orca_relay_runtime_metrics',
       metricVersion: 2,
+      fixLevel: RELAY_FIX_LEVEL,
       role: this.identity.role,
       cellId: this.identity.cellId,
       region: this.identity.region,

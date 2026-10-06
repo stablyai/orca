@@ -35,7 +35,7 @@ import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
-import { agentConfigDirectoryVariable } from '../../shared/agent-session-account-home'
+import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
@@ -254,7 +254,7 @@ export function createClaudeStructuredLaunchResolver(
         `claude structured sessions run on the local host, not ${record.location.executionHostId}`
       )
     }
-    const pinned = agentConfigDirectoryVariable('claude')
+    const pinned = CLAUDE_STRUCTURED_AGENT.accountHomeVariable
     if (record.accountHome.variable !== pinned) {
       throw new Error(`claude sessions pin ${pinned}, not ${record.accountHome.variable}`)
     }
@@ -269,7 +269,7 @@ export function createClaudeStructuredLaunchResolver(
         gate && hasWslBoundClaudeAccount(gate) ? { reason: 'managedAccountUnsupported' } : {}
       )
     }
-    // A Claude record's chain holds only Claude handles; the record store refuses anything else.
+    // A Claude record's chain holds only Claude handles; the attach admission refuses anything else.
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle ?? null
     if (
       head &&

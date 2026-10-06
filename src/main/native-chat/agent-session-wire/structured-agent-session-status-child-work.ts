@@ -6,7 +6,7 @@
 // to change the minute a "no update" reading shows. The background-task channel, which only an
 // open chat subscribes to, carries every tick.
 
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
@@ -31,7 +31,7 @@ export type StructuredStatusChildWork = {
  *  the two cannot disagree. */
 export function structuredStatusChildWork(
   views: readonly AgentChildWorkView[] | undefined,
-  provider: AgentSessionHandleProvider
+  provider: StructuredAgentId
 ): StructuredStatusChildWork {
   const running = views ? structuredRunningChildWork(views) : []
   if (running.length === 0) {

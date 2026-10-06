@@ -1,8 +1,11 @@
 import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
+import { CODEX_STRUCTURED_HANDLE_NAMESPACE } from '../../shared/agent-session-provider-handle-encoding'
 import { isCodexTurnOptionKey } from './codex-structured-turn-start'
 
 export const CODEX_STRUCTURED_AGENT: StructuredAgentDefinition = {
   agent: 'codex',
+  handleTransport: CODEX_STRUCTURED_HANDLE_NAMESPACE.transport,
+  accountHomeVariable: 'CODEX_HOME',
   capabilities: {
     // A thread with legacy, unpaginated history narrows this to unsupported once it runs.
     rewind: true,

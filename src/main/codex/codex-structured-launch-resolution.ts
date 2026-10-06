@@ -16,7 +16,7 @@ import type { CodexStructuredPermissionPolicy } from './codex-structured-permiss
 import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
-import { agentConfigDirectoryVariable } from '../../shared/agent-session-account-home'
+import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
 
 export type CodexStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
@@ -88,7 +88,7 @@ export function createCodexStructuredLaunchResolver(
     ) {
       throw new Error('codex structured sessions require Windows process creation-time proof')
     }
-    const pinned = agentConfigDirectoryVariable('codex')
+    const pinned = CODEX_STRUCTURED_AGENT.accountHomeVariable
     if (accountHome.variable !== pinned) {
       throw new Error(`codex sessions pin ${pinned}, not ${accountHome.variable}`)
     }
@@ -96,7 +96,7 @@ export function createCodexStructuredLaunchResolver(
     const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const permissionPolicy = deps.resolvePermissionPolicy?.()
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    // A Codex record's chain holds only Codex handles; the record store refuses anything else.
+    // A Codex record's chain holds only Codex handles; the attach admission refuses anything else.
     const resumeThreadId = head?.handle.nativeId ?? null
     // The same saved options every turn sends, so the thread and its turns name one model.
     const model = record.options?.model

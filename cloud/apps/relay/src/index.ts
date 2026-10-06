@@ -33,7 +33,8 @@ const database = await openRelayDatabaseAtBoot({
   databaseUrl: config.databaseUrl,
   dataDir: config.dataDir,
   poolMax: config.databasePoolMax,
-  applicationName: `orca-relay/${config.role}/${config.cellId}`
+  applicationName: `orca-relay/${config.role}/${config.cellId}`,
+  appliesPostgresSchema: config.role !== 'cell'
 })
 await reconcileCellAdmissionAtStartup(config, new RelayAssignmentStore(database))
 const {
@@ -158,7 +159,7 @@ const shutdown = (): void => {
   heartbeat?.stop()
   regionalRehomeWorker?.stop()
   sessions.drain(0)
-  server.close(() => void database.close())
+  server.close(() => void database.close().catch(() => undefined))
 }
 process.once('SIGTERM', shutdown)
 process.once('SIGINT', shutdown)

@@ -27,6 +27,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { StructuredAgentSessionResumeSource } from '../../../../shared/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
 import {
   resolveUncommittedStructuredCreate,
   type StructuredCreateRefused
@@ -36,7 +37,7 @@ export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
   attachParams: AgentSessionAttachParams
   /** Null when the caller supplied its own location; only a resolved worktree publishes a tab. */
-  tab: { workspaceId: string; agent: 'claude' | 'codex' } | null
+  tab: { workspaceId: string; agent: StructuredAgentId } | null
 }
 
 /**
@@ -73,7 +74,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   ensureHost: () => Promise<StructuredAgentSessionHost>
   envelope: AgentSessionMutationEnvelope
   worktree: string
-  agent: 'claude' | 'codex'
+  agent: StructuredAgentId
   caller: StructuredAgentSessionCaller
   resumeFrom?: StructuredAgentSessionResumeSource
   /** Replaces the seed options the host resolves from settings. Orchestration passes the
@@ -109,13 +110,13 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       // must replay rather than conflict.
       ...(args.options ? { options: args.options } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
-      provider: resolved.provider as 'claude' | 'codex',
-      agent: resolved.agent as 'claude' | 'codex',
+      provider: resolved.provider,
+      agent: resolved.agent,
       envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
     },
     tab: {
       workspaceId: resolved.location.workspaceId,
-      agent: resolved.agent as 'claude' | 'codex'
+      agent: resolved.agent
     }
   }
 }
@@ -167,7 +168,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
   caller: StructuredAgentSessionCaller
   envelope: AgentSessionMutationEnvelope
   worktree: string
-  agent: 'claude' | 'codex'
+  agent: StructuredAgentId
   activate: boolean
   options?: Readonly<Record<string, string>>
   tabId?: string

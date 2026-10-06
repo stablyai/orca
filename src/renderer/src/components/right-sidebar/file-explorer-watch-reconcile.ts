@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
-import type { DirCache } from './file-explorer-types'
+import type { DirCache, TreeNode } from './file-explorer-types'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -24,28 +24,44 @@ export type ProcessFileExplorerFsPayloadArgs = {
   worktreeId: string
   cache: Record<string, DirCache>
   expanded: Set<string>
+  followSymlinks?: boolean
   setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
   setSelectedPath: Dispatch<SetStateAction<string | null>>
   refreshDir: (dirPath: string) => void
   refreshTree: () => void
 }
 
-function cachedDirectoryContainsPath(
+function cachedDirectoryChild(
   cache: Record<string, DirCache>,
   cachedDirPath: string,
   childPath: string,
-  childPathIndexes: Map<string, Set<string>>
-): boolean {
+  childPathIndexes: Map<string, Map<string, TreeNode>>
+): TreeNode | undefined {
   let childPaths = childPathIndexes.get(cachedDirPath)
   if (!childPaths) {
-    childPaths = new Set(
-      cache[cachedDirPath]?.children.map((child) =>
-        normalizeRuntimePathForComparison(child.path)
-      ) ?? []
+    childPaths = new Map(
+      cache[cachedDirPath]?.children.map((child) => [
+        normalizeRuntimePathForComparison(child.path),
+        child
+      ]) ?? []
     )
     childPathIndexes.set(cachedDirPath, childPaths)
   }
-  return childPaths.has(normalizeRuntimePathForComparison(childPath))
+  return childPaths.get(normalizeRuntimePathForComparison(childPath))
+}
+
+function hasCachedDirectoryLink(
+  cache: Record<string, DirCache>,
+  pathIndex: ReadonlyMap<string, string>
+): boolean {
+  for (const dirPath of pathIndex.values()) {
+    for (const child of cache[dirPath].children) {
+      if (child.isSymlink && pathIndex.has(normalizeRuntimePathForComparison(child.path))) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadArgs): void {
@@ -67,7 +83,8 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
   }
 
   const dirsToRefresh = new Set<string>()
-  const childPathIndexes = new Map<string, Set<string>>()
+  const childPathIndexes = new Map<string, Map<string, TreeNode>>()
+  let hasLinkedCache: boolean | undefined
   let cachedDirPathIndex: ReadonlyMap<string, string> | undefined
   const cachePathIndex = (): ReadonlyMap<string, string> =>
     (cachedDirPathIndex ??= createCachedDirPathIndex(cache))
@@ -90,6 +107,24 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
     const normalizedPath = canonicalizeFileExplorerWatchPath(currentWorktreePath, evt.absolutePath)
     if (!normalizedPath) {
       continue
+    }
+
+    const parent = parentDirForWatchPath(normalizedPath)
+    const cachedParent = resolveCachedDirPath(cache, parent, currentWorktreePath, cachePathIndex)
+    const updatedChild =
+      evt.kind === 'update' && cachedParent
+        ? cachedDirectoryChild(cache, cachedParent, normalizedPath, childPathIndexes)
+        : undefined
+    const knownFileUpdate =
+      evt.kind === 'update' &&
+      evt.isDirectory !== true &&
+      updatedChild !== undefined &&
+      !updatedChild.isDirectory &&
+      updatedChild.isSymlink === false
+    if (!knownFileUpdate) {
+      hasLinkedCache ??= hasCachedDirectoryLink(cache, cachePathIndex())
+      // Native events name the target, so cached aliases need the existing bounded refresh too.
+      needsFullRefresh ||= hasLinkedCache
     }
 
     if (evt.kind === 'delete') {
@@ -122,8 +157,6 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
         return prev
       })
 
-      const parent = parentDirForWatchPath(normalizedPath)
-      const cachedParent = resolveCachedDirPath(cache, parent, currentWorktreePath, cachePathIndex)
       if (cachedParent) {
         dirsToRefresh.add(cachedParent)
       }
@@ -132,8 +165,6 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
       // previously deferred (#10264) so Explorer stayed stale until focus
       // remounted the tree. Case-insensitive cache lookup covers Windows
       // drive-letter / path casing drift between watcher and worktree path.
-      const parent = parentDirForWatchPath(normalizedPath)
-      const cachedParent = resolveCachedDirPath(cache, parent, currentWorktreePath, cachePathIndex)
       if (cachedParent) {
         dirsToRefresh.add(cachedParent)
       }
@@ -194,13 +225,11 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
         continue
       }
 
-      const parent = parentDirForWatchPath(normalizedPath)
-      const cachedParent = resolveCachedDirPath(cache, parent, currentWorktreePath, cachePathIndex)
       // Windows can classify a new file as update; existing file updates do not invalidate the tree.
       if (
         cachedParent &&
         !dirsToRefresh.has(cachedParent) &&
-        !cachedDirectoryContainsPath(cache, cachedParent, normalizedPath, childPathIndexes)
+        !cachedDirectoryChild(cache, cachedParent, normalizedPath, childPathIndexes)
       ) {
         dirsToRefresh.add(cachedParent)
       }

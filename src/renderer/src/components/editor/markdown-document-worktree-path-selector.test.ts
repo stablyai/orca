@@ -104,3 +104,12 @@ describe('Markdown document worktree path selector', () => {
     expect(selectMarkdownDocumentWorktreePath({ worktreesByRepo: {} }, null)).toBeNull()
   })
 })
+
+it('resolves Markdown document listing roots for non-git folder workspaces', () => {
+  expect(
+    selectMarkdownDocumentWorktreePath(
+      { worktreesByRepo: {}, folderWorkspaces: [{ id: 'folder-id', folderPath: '/notes' }] },
+      'folder:folder-id'
+    )
+  ).toBe('/notes')
+})

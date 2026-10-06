@@ -24,7 +24,6 @@ import {
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
-import { adapterSupportsRecord } from './structured-agent-session-provider-support'
 import { deferredStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type StructuredAgentSessionConversationLifetime = ReturnType<
@@ -130,11 +129,6 @@ export function createStructuredAgentSessionConversationLifetime(host: {
       if (!record) {
         throw agentSessionRefusalError('agent_session_identity_required', {
           reason: 'recordMissing'
-        })
-      }
-      if (!adapterSupportsRecord(deps().adapter, record)) {
-        throw agentSessionRefusalError('structured_agent_session_unsupported', {
-          reason: 'hostUnsupported'
         })
       }
       return serialize(sessionId, async () => {

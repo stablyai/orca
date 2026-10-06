@@ -153,7 +153,7 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     )
 
   protected readonly legacyWorkerRecovery = new RuntimeLegacyWorkerTerminalRecoveryController({
-    preparePlan: () => this.legacyWorkerRecoveryPersistence.prepare(),
+    preparePlan: (dispatchIds) => this.legacyWorkerRecoveryPersistence.prepare(dispatchIds),
     resolveWorkspace: async (candidate) => {
       const scope = await this.resolveTerminalWorkspaceLaunchScope(`id:${candidate.worktreeId}`)
       const resolved = scope.folderWorkspace
@@ -166,7 +166,9 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
         worktrees,
         null,
         undefined,
-        connectionId
+        connectionId,
+        false,
+        { includeForegroundProcessEvidence: false, refreshForegroundAgents: false }
       ),
     runMutation: (worktreeId, operation) => this.runWorktreeTerminalMutation(worktreeId, operation),
     getActivation: (worktreeId) => this.getLegacyWorkerRecoveryActivation(worktreeId),
@@ -185,6 +187,9 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     notifyResolution: (candidate, resolution) =>
       this.notifier?.resolveLegacyWorkerTerminalRecovery?.(candidate.paneKey, resolution),
     canRecoverPersistentLocalPtys: () => this.canRecoverPersistentLocalPtysFn(),
+    isTerminalProvenAbsent: (candidate) => this.isLeafPtyProvenAbsent(candidate.ptyId),
+    hasRequestedReleases: () =>
+      this.getOrchestrationDb().listWorkerTerminalReleaseBacklog(1).length > 0,
     reconcileRequestedReleases: () =>
       reconcileRequestedWorkerTerminalReleases(this as RuntimeCommandSurfaceHost<this>),
     reconcile: (options) => this.reconcileLegacyWorkerTerminals(options),

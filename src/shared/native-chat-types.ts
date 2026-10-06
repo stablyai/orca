@@ -15,7 +15,9 @@ import type { AgentSessionFailureFact } from './agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
   AgentJournalPosition,
-  AgentJournalProducerLinkage
+  AgentJournalProducerLinkage,
+  AgentJournalToolCallEnding,
+  AgentJournalToolCallState
 } from './agent-session-journal-types'
 import type { AgentType } from './agent-status-types'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
@@ -71,7 +73,9 @@ export type NativeChatToolCallBlock = NativeChatToolMetadata & {
   /** Provider-supplied identity within this item stream; absent on legacy transcripts and peers. */
   callId?: string
   /** Provider lifecycle when the structured app-server path can supply it. */
-  state?: 'running' | 'completed' | 'failed'
+  state?: AgentJournalToolCallState
+  /** See the journal tool-call item: read with `state` through `agentJournalToolCallLifecycle`. */
+  endedAs?: AgentJournalToolCallEnding
 }
 
 /** One resolved hunk from a provider's edit result, carrying true file ranges. */

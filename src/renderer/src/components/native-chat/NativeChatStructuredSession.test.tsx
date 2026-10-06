@@ -1,3 +1,4 @@
+import { getDefaultSettings } from '../../../../shared/constants'
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -17,7 +18,7 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
 )
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
-vi.mock('./use-native-chat-font-scale', () => moduleFactories.useNativeChatFontScale())
+vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
 vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
@@ -31,6 +32,38 @@ import { structuredAgentSessionPaneKey } from '../../../../shared/structured-age
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 
 describe('NativeChatStructuredSession', () => {
+  it('applies persisted appearance at the chat root and updates it live', () => {
+    const original = useAppStore.getState().settings
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        nativeChatAppearance: { fontSize: 18, codeFontSize: 11, width: 'wide' }
+      }
+    })
+    const { container } = render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="appearance-tab"
+        sessionId="appearance-session"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const root = container.querySelector<HTMLElement>('[data-native-chat-root]')
+    expect(root?.style.getPropertyValue('--chat-font-size')).toBe('18px')
+    expect(root?.style.getPropertyValue('--chat-code-font-size')).toBe('11px')
+    expect(root?.style.getPropertyValue('--chat-content-max-width')).toBe('60rem')
+    act(() =>
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('/tmp'), nativeChatAppearance: { width: 'full' } }
+      })
+    )
+    expect(root?.style.getPropertyValue('--chat-font-size')).toBe('14px')
+    expect(root?.style.getPropertyValue('--chat-content-max-width')).toBe('none')
+    act(() => useAppStore.setState({ settings: original }))
+  })
+
   afterEach(() => {
     cleanup()
     resetStructuredSessionMocks()

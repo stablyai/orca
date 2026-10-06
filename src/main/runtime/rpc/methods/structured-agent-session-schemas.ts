@@ -3,6 +3,7 @@
 // Strict objects throughout: zod drops unknown keys, and a silently dropped key
 // is how a newer client's field becomes a different effect on an older host.
 export {
+  AgentsParams,
   AttachParams,
   CancelParams,
   ConversationCommandParams,

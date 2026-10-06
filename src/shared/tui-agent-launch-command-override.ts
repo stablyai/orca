@@ -21,13 +21,10 @@ export function structuredAgentCommandToken(command: string): string | null {
   return token && !/[|&;<>(){}[\]*?!]/.test(token) ? token : null
 }
 
-/** Shell lines retain terminal chat; executable overrides can use structured chat. */
+/** Terminal-backed chat skips the structured catalog when its launch command is customized. */
 export function hasExplicitTuiLaunchCommand(
   settings: Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> | null | undefined,
   agent: TuiAgent
 ): boolean {
-  const command = settings?.agentCmdOverrides?.[agent]?.trim()
-  return Boolean(
-    command && ((agent !== 'claude' && agent !== 'codex') || !structuredAgentCommandToken(command))
-  )
+  return Boolean(settings?.agentCmdOverrides?.[agent]?.trim())
 }

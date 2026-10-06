@@ -13,56 +13,59 @@ const MODEL_ROW = {
 }
 
 describe('codex model catalog probe', () => {
-  it('spawns with the same resolved command and env as a structured session launch', async () => {
-    // The env a user's shell/config resolves for sessions, PATH included.
-    const resolveEnvironment = async (): Promise<NodeJS.ProcessEnv> => ({
-      PATH: '/resolved/bin',
-      HOME: '/homes/user',
-      OPENAI_BASE_URL: 'https://gateway.example',
-      DROPPED: undefined
-    })
-    const resolveCommand = vi.fn((options?: { pathEnv?: string | null; homePath?: string }) => {
-      expect(options?.pathEnv).toBe('/resolved/bin')
-      expect(options?.homePath).toBe('/homes/user')
-      return resolveStructuredAgentCommand(
-        'codex',
-        {
-          agentCmdOverrides: { codex: `"${process.execPath}"` }
-        },
-        options
-      )
-    })
-    const invocations: CodexAppServerInvocation[] = []
-    const probe = createCodexModelCatalogProbe({
-      resolveEnvironment,
-      resolveCommand,
-      runSession: async (invocation, body) => {
-        invocations.push(invocation)
-        return body({
-          request: async () => ({ data: [MODEL_ROW], nextCursor: null }),
-          notify: () => {}
-        })
-      }
-    })
-    const success = await probe('/homes/account-a')
-    expect(success.origin).toBe('probe')
-    expect(success.models.map((model) => model.id)).toEqual(['gpt-live'])
-    // The session launch resolves the exact same invocation for the same deps.
-    const sessionInvocation = await resolveCodexStructuredInvocation({
-      resolveEnvironment,
-      resolveCommand
-    })
-    expect(invocations).toHaveLength(1)
-    expect(invocations[0]!.cliPath).toBe(sessionInvocation.command)
-    expect(invocations[0]!.env).toEqual({
-      PATH: '/resolved/bin',
-      HOME: '/homes/user',
-      OPENAI_BASE_URL: 'https://gateway.example',
-      CODEX_HOME: '/homes/account-a'
-    })
-    // A short-lived probe must not start plugin marketplace clones that outlive its teardown.
-    expect(invocations[0]!.args.join(' ')).toContain('features.plugins=false')
-  })
+  it.each([`"${process.execPath}"`, 'npx codex', '/missing/codex', './codex'])(
+    'lists with the session executable for Command %s',
+    async (command) => {
+      // The env a user's shell/config resolves for sessions, PATH included.
+      const resolveEnvironment = async (): Promise<NodeJS.ProcessEnv> => ({
+        PATH: '/resolved/bin',
+        HOME: '/homes/user',
+        OPENAI_BASE_URL: 'https://gateway.example',
+        DROPPED: undefined
+      })
+      const resolveCommand = vi.fn((options?: { pathEnv?: string | null; homePath?: string }) => {
+        expect(options?.pathEnv).toBe('/resolved/bin')
+        expect(options?.homePath).toBe('/homes/user')
+        return resolveStructuredAgentCommand(
+          'codex',
+          {
+            agentCmdOverrides: { codex: command }
+          },
+          options
+        )
+      })
+      const invocations: CodexAppServerInvocation[] = []
+      const probe = createCodexModelCatalogProbe({
+        resolveEnvironment,
+        resolveCommand,
+        runSession: async (invocation, body) => {
+          invocations.push(invocation)
+          return body({
+            request: async () => ({ data: [MODEL_ROW], nextCursor: null }),
+            notify: () => {}
+          })
+        }
+      })
+      const success = await probe('/homes/account-a')
+      expect(success.origin).toBe('probe')
+      expect(success.models.map((model) => model.id)).toEqual(['gpt-live'])
+      // The session launch resolves the exact same invocation for the same deps.
+      const sessionInvocation = await resolveCodexStructuredInvocation({
+        resolveEnvironment,
+        resolveCommand
+      })
+      expect(invocations).toHaveLength(1)
+      expect(invocations[0]!.cliPath).toBe(sessionInvocation.command)
+      expect(invocations[0]!.env).toEqual({
+        PATH: '/resolved/bin',
+        HOME: '/homes/user',
+        OPENAI_BASE_URL: 'https://gateway.example',
+        CODEX_HOME: '/homes/account-a'
+      })
+      // A short-lived probe must not start plugin marketplace clones that outlive its teardown.
+      expect(invocations[0]!.args.join(' ')).toContain('features.plugins=false')
+    }
+  )
 
   it('keeps the listing when config/read never answers', async () => {
     const server = String.raw`

@@ -18,7 +18,7 @@ import {
   type ClaudeCurrentTurn,
   type ClaudeTurnEnd
 } from './claude-turn-lifecycle-item'
-import { writeClaudeTurnRow } from './claude-turn-row-revision'
+import { writeAgentJournalTurnRow } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
 
@@ -198,7 +198,7 @@ export class ClaudeOpenTurn {
     contextUsage?: AgentSessionContextUsage
   ): void {
     const item = claudeTurnLifecycleItem(turn, end)
-    writeClaudeTurnRow(
+    writeAgentJournalTurnRow(
       this.deps.sink,
       { identity: item.identity },
       { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) },

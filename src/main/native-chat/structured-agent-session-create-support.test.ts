@@ -81,44 +81,16 @@ describe('resolveStructuredAgentSessionCreateSupport', () => {
     })
   })
 
-  it.each(['claude', 'codex'] as const)(
-    "refuses %s when this host overrides the agent's launch command",
-    (agent) => {
-      expect(
-        support({
-          agent,
-          getSettings: () => ({ ...HOST_SELECTED, agentCmdOverrides: { [agent]: 'wrapper --arg' } })
-        })
-      ).toEqual({ supported: false, reason: 'agent' })
-    }
-  )
-
-  it.each(['claude', 'codex'] as const)(
-    'supports %s with a verified executable override',
-    (agent) => {
-      expect(
-        support({
-          agent,
-          getSettings: () => ({
-            ...HOST_SELECTED,
-            agentCmdOverrides: { [agent]: `"${process.execPath}"` }
-          })
-        })
-      ).toEqual({ supported: true })
-    }
-  )
-
-  it('refuses a missing executable on the execution host', () => {
-    expect(
-      support({
-        getSettings: () => ({ ...HOST_SELECTED, agentCmdOverrides: { claude: '/missing/claude' } })
-      })
-    ).toEqual({ supported: false, reason: 'agent' })
-  })
-
-  it('ignores a blank launch command override', () => {
-    expect(
-      support({ getSettings: () => ({ ...HOST_SELECTED, agentCmdOverrides: { claude: '  ' } }) })
-    ).toEqual({ supported: true })
+  // Command values never change the selected chat surface.
+  it.each([
+    ['claude', 'claude-wrapper'],
+    ['codex', 'codex-nightly'],
+    ['claude', 'npx claude'],
+    ['codex', 'wrapper --arg'],
+    ['claude', '/missing/claude'],
+    ['codex', './codex']
+  ] as const)('supports %s when this host sets launch command %s', (agent, command) => {
+    const settings = { ...HOST_SELECTED, agentCmdOverrides: { [agent]: command } }
+    expect(support({ agent, getSettings: () => settings })).toEqual({ supported: true })
   })
 })
