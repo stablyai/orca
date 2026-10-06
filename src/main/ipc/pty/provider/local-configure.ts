@@ -42,13 +42,22 @@ export function configureLocalPtyProvider(args: {
       getSettings ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto') : undefined,
     pwshAvailable: () => isPwshAvailableAsync(),
     buildSpawnEnv: async (id, baseEnv, ctx) => {
-      await prepareAntigravityAccountForLaunch({
+      const preparedAccount = await prepareAntigravityAccountForLaunch({
         launchAgent: ctx?.launchAgent,
         command: ctx?.command,
         isWsl: ctx?.isWsl,
+        wslDistro: ctx?.wslDistro,
+        envToDelete: ctx?.envToDelete,
         env: baseEnv,
         envIsComplete: true
       })
+      if (preparedAccount) {
+        if (!ctx?.pinWslDistro) {
+          throw new Error('The prepared WSL account cannot be bound to this terminal')
+        }
+        ctx.pinWslDistro(preparedAccount.wslDistro)
+        ctx.wslDistro = preparedAccount.wslDistro
+      }
       const codexSelectionTarget: CodexAccountSelectionTarget =
         ctx?.isWsl === true
           ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }

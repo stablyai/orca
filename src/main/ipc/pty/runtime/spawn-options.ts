@@ -1,3 +1,4 @@
+import { prepareAntigravityPtySpawnTarget } from '../antigravity-account-spawn-target'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/types'
@@ -34,7 +35,6 @@ import {
 } from '../pane/spawn-reservation'
 import type { RuntimePtySpawnState } from './spawn-state'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
-import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 
 /** Headless spawns need the same host-side environment isolation as desktop spawns. */
@@ -96,11 +96,12 @@ export async function buildRuntimePtySpawnOptions(
     ctx.spawnOptions.envToDelete = removeCodexHomeDeletionRequests(ctx.spawnOptions.envToDelete)
   }
   deleteRequestedEnvKeys(ctx.env, ctx.spawnOptions.envToDelete)
-  await prepareAntigravityAccountForLaunch({
+  await prepareAntigravityPtySpawnTarget(ctx, {
     launchAgent: args.launchAgent,
     command: ctx.launchCommand,
     connectionId: args.connectionId,
     isWsl: ctx.codexSelectionTarget.runtime === 'wsl',
+    wslDistro: ctx.expectedWslDistro,
     env: ctx.env,
     envToDelete: ctx.spawnOptions.envToDelete
   })

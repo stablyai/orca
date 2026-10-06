@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
@@ -8,6 +8,11 @@ import {
 import { delimiter, join } from 'node:path'
 import { _setWslCachesForTests } from '../wsl'
 import { registerPtyHandlers } from './pty'
+import { prepareAntigravityAccountForLaunch } from '../antigravity/native-account-launch'
+vi.mock('../antigravity/native-account-launch', () => ({
+  prepareAntigravityAccountForLaunch: vi.fn()
+}))
+beforeEach(() => vi.mocked(prepareAntigravityAccountForLaunch).mockReset())
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -65,6 +70,37 @@ describe('registerPtyHandlers', () => {
         daemonSpawnAndGetOptions,
         daemonSpawnAndGetEnv
       } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
+
+      it('pins an agy account target in desktop daemon spawn options', async () => {
+        await withWin32Platform(async () => {
+          _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+          setupDaemonAdapter()
+          vi.mocked(prepareAntigravityAccountForLaunch).mockResolvedValueOnce({
+            wslDistro: 'Ubuntu-24.04',
+            authorityId: 'a'.repeat(64)
+          })
+          const options = await daemonSpawnAndGetOptions(
+            undefined,
+            undefined,
+            () => ({
+              httpProxyUrl: '',
+              terminalWindowsShell: 'wsl.exe',
+              terminalWindowsWslDistro: 'Ubuntu',
+              localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+            }),
+            undefined,
+            {
+              cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+              command: 'agy',
+              launchAgent: 'antigravity'
+            }
+          )
+          expect(prepareAntigravityAccountForLaunch).toHaveBeenCalledWith(
+            expect.objectContaining({ isWsl: true, wslDistro: 'Ubuntu' })
+          )
+          expect(options.terminalWindowsWslDistro).toBe('Ubuntu-24.04')
+        })
+      })
 
       // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
       it('strips inherited Claude child-session stamps from a local runtime-created PTY', async () => {

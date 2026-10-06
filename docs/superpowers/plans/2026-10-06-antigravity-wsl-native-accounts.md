@@ -338,21 +338,21 @@ Create `src/main/ipc/pty/antigravity-account-spawn-target.test.ts`；Modify
 `Promise<{ wslDistro: string; authorityId: string } | void>`。Host/无需检查可返回 void；
 WSL 已准备目标的调用方必须把返回发行版写入真正 spawn 的配置，不只检查一个局部变量。
 
-- [ ] **Step 1: 写失败测试。** 桌面 IPC、runtime/headless、LocalPtyProvider 三个入口均
+- [x] **Step 1: 写失败测试。** 桌面 IPC、runtime/headless、LocalPtyProvider 三个入口均
   传实际 target，返回明确发行版写入最终 terminalWindowsWslDistro/相应 spawn context。
   无保险库不访问 guest；外部换账号或文件缺失拒绝；同 subject/authMethod token 刷新
   更新快照并允许；Windows HOME 不当作 guest HOME；用户/HOME/WSLENV 覆盖无法证明时拒绝。
-- [ ] **Step 2: 验证失败。** `pnpm test src/main/antigravity/native-account-launch.test.ts
+- [x] **Step 2: 验证失败。** `pnpm test src/main/antigravity/native-account-launch.test.ts
   src/main/ipc/pty/antigravity-account-spawn-target.test.ts src/main/ipc/pty-daemon-spawn-wsl-runtime.test.ts`。
   预期原代码仍跳过 WSL 或调用方不传发行版。
-- [ ] **Step 3: 实现接线。** 保留非 antigravity 与客户端 SSH skip；实际拥有方执行检查。
+- [x] **Step 3: 实现接线。** 保留非 antigravity 与客户端 SSH skip；实际拥有方执行检查。
   复用现有目标解析和 env 删除规则，校验真正 guest 的 UID/HOME、shell/命令可能改变
   authority 的覆盖。只对相关作用域选择执行准备，不把其他 distro vault 套到当前启动。
   在所有低层入口固定已经检查过的发行版，保持既有 daemon 与非 daemon 启动政策。
-- [ ] **Step 4: 验证通过。** 重跑任务测试并测试文件夹工作区/worktree、完整 env/envToDelete
+- [x] **Step 4: 验证通过。** 重跑任务测试并测试文件夹工作区/worktree、完整 env/envToDelete
   与 SSH 拥有方失败；确认 backend.write 在准备阶段从未自动调用。
   `pnpm tc:node`、`pnpm tc:cli` 与变更门禁通过。
-- [ ] **Step 5: 提交。** 提交 `feat(antigravity): verify selected accounts before WSL launches`。
+- [x] **Step 5: 提交。** 提交 `feat(antigravity): verify selected accounts before WSL launches`。
 
 ## Task 9: 真实 WSL 证据、全量验收与 PR 准备
 

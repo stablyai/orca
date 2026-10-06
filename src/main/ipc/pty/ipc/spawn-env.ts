@@ -1,3 +1,4 @@
+import { prepareAntigravityPtySpawnTarget } from '../antigravity-account-spawn-target'
 import { mkdirSync } from 'node:fs'
 import {
   isTerminalLeafId,
@@ -26,7 +27,6 @@ import { parseValidPaneKey } from '../pane/key-state'
 import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
-import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
@@ -187,11 +187,12 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
   ctx.validatedLeafId = ctx.verifiedLeafId ?? ctx.metadataLeafId
   ctx.spawnTiming.mark('pane_env')
   await assemblePtyIpcSpawnCodexEnv(ctx)
-  await prepareAntigravityAccountForLaunch({
+  await prepareAntigravityPtySpawnTarget(ctx, {
     launchAgent: args.launchAgent,
     command: args.command ?? args.launchConfig?.agentCommand,
     connectionId: args.connectionId,
     isWsl: ctx.codexSelectionTarget.runtime === 'wsl',
+    wslDistro: ctx.expectedWslDistro,
     env: ctx.spawnEnv ?? ctx.baseEnv,
     envToDelete: args.envToDelete
   })

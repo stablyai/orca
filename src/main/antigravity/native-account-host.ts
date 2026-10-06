@@ -143,7 +143,8 @@ export function runAntigravityAccountOperation(
 }
 export async function prepareAntigravityAccountTargetForLaunch(
   target: AntigravityAccountTarget,
-  operation: AntigravityAccountOperation
+  operation: AntigravityAccountOperation,
+  validateAuthority?: () => void
 ): Promise<ResolvedAntigravityWslTarget | null> {
   const entry = await getAccountEntry(target, operation, false)
   return serializeEntry(entry, operation, async () => {
@@ -152,9 +153,11 @@ export async function prepareAntigravityAccountTargetForLaunch(
         'Refresh Accounts to verify the previous Antigravity operation before launching'
       )
     }
-    if ((await entry.store.read(operation)).selectedAccountId) {
-      await entry.service.prepareForLaunch(operation)
+    if (!(await entry.store.read(operation)).selectedAccountId) {
+      return null
     }
+    validateAuthority?.()
+    await entry.service.prepareForLaunch(operation)
     remainingAccountOperationMs(operation)
     return entry.authority
   })

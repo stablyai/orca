@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
 import { prepareAntigravityAccountForLaunch } from './native-account-launch'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
@@ -12,6 +12,7 @@ vi.mock('../../shared/app-environment', () => ({
 vi.mock('./native-account-store', () => ({ createEncryptedAntigravityAccountStore: vi.fn() }))
 vi.mock('./native-account-host', () => ({
   getAntigravityAccountVaultPath: () => '/task/vault',
+  getAntigravityWslAccountVaultRoot: () => '/task/wsl-vault',
   prepareAntigravityAccountTargetForLaunch: vi.fn(async () => {
     await prepareForLaunch()
     return null
@@ -20,7 +21,13 @@ vi.mock('./native-account-host', () => ({
 
 beforeEach(() => {
   vi.mocked(existsSync).mockReset().mockReturnValue(true)
-  vi.mocked(prepareAntigravityAccountTargetForLaunch).mockClear()
+  vi.mocked(prepareAntigravityAccountTargetForLaunch)
+    .mockReset()
+    .mockImplementation(async (_target, _operation, validate) => {
+      validate?.()
+      await prepareForLaunch()
+      return null
+    })
   vi.mocked(createEncryptedAntigravityAccountStore).mockReturnValue({
     read: () => ({ accounts: [], selectedAccountId: 'selected' }),
     write: vi.fn()
@@ -50,7 +57,6 @@ describe('native account verification before agy launch', () => {
       launchAgent: 'antigravity',
       connectionId: 'ssh-owner'
     })
-    await prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity', isWsl: true })
     await prepareAntigravityAccountForLaunch({ launchAgent: 'codex' })
     expect(existsSync).not.toHaveBeenCalled()
     expect(prepareAntigravityAccountTargetForLaunch).not.toHaveBeenCalled()
@@ -105,3 +111,62 @@ describe('native account verification before agy launch', () => {
     }
   })
 })
+
+afterEach(() => vi.restoreAllMocks())
+it('resolves and returns the concrete WSL launch authority without comparing Windows HOME', async () => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  vi.mocked(prepareAntigravityAccountTargetForLaunch).mockResolvedValueOnce({
+    distro: 'Ubuntu-24.04',
+    uid: 1000,
+    home: '/home/u',
+    canonicalHome: '/home/u',
+    authorityId: 'a'.repeat(64),
+    credentialPath: '/home/u/token'
+  })
+  expect(
+    await prepareAntigravityAccountForLaunch({
+      launchAgent: 'antigravity',
+      isWsl: true,
+      wslDistro: null,
+      env: { HOME: 'C:\\Users\\u' },
+      envIsComplete: true
+    })
+  ).toEqual({ wslDistro: 'Ubuntu-24.04', authorityId: 'a'.repeat(64) })
+  expect(prepareAntigravityAccountTargetForLaunch).toHaveBeenCalledWith(
+    { runtime: 'wsl', wslDistro: null },
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    expect.any(Function)
+  )
+})
+it('does not access WSL when no WSL snapshots have ever been stored', async () => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  vi.mocked(existsSync).mockReturnValue(false)
+  await prepareAntigravityAccountForLaunch({
+    launchAgent: 'antigravity',
+    isWsl: true,
+    wslDistro: 'Ubuntu'
+  })
+  expect(prepareAntigravityAccountTargetForLaunch).not.toHaveBeenCalled()
+})
+it.each([
+  { env: { WSLENV: 'HOME/u', HOME: '/other' } },
+  { command: 'HOME=/other agy' },
+  { command: 'sudo -u other agy' }
+])('refuses a WSL startup override whose authority cannot be verified (%j)', async (override) => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  await expect(
+    prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity', isWsl: true, ...override })
+  ).rejects.toThrow('credential authority')
+  expect(prepareForLaunch).not.toHaveBeenCalled()
+})
+
+it.each(['agy; HOME=/other agy', 'agy $(HOME=/other agy)', 'agy && sudo agy'])(
+  'rejects executable shell syntax in a selected WSL launch: %s',
+  async (command) => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    await expect(
+      prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity', isWsl: true, command })
+    ).rejects.toThrow('credential authority')
+    expect(prepareForLaunch).not.toHaveBeenCalled()
+  }
+)

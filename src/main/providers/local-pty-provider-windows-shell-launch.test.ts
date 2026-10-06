@@ -389,6 +389,29 @@ describe('LocalPtyProvider', () => {
       ).toBe('Ubuntu')
     })
 
+    it('pins the checked WSL authority into native spawn arguments and process metadata', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env, ctx) => {
+          ctx?.pinWslDistro?.('Debian')
+          return env
+        }
+      })
+      const result = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo',
+        shellOverride: 'wsl.exe',
+        command: 'agy',
+        terminalWindowsWslDistro: null
+      })
+      expect(spawnMock.mock.calls.at(-1)?.[1]).toEqual(expect.arrayContaining(['-d', 'Debian']))
+      expect(result.wslDistro).toBe('Debian')
+      expect(
+        (await provider.listProcesses()).find((entry) => entry.id === result.id)?.wslDistro
+      ).toBe('Debian')
+    })
+
     it('repro: keeps explicit PowerShell 7 selection when the pwsh probe is cold-false', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const pwshAvailable = vi.fn(() => false)

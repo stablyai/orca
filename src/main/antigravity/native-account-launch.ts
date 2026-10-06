@@ -2,11 +2,13 @@ import { withAntigravityAccountOperation } from './native-account-operation'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { isAntigravityFileStorageHost } from './native-credential-backend'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import {
   prepareAntigravityAccountTargetForLaunch,
+  getAntigravityWslAccountVaultRoot,
   getAntigravityAccountVaultPath
 } from './native-account-host'
 
@@ -15,15 +17,35 @@ export async function prepareAntigravityAccountForLaunch(args: {
   command?: string
   connectionId?: string | null
   isWsl?: boolean
+  wslDistro?: string | null
   env?: NodeJS.ProcessEnv
   envIsComplete?: boolean
   envToDelete?: readonly string[]
-}): Promise<void> {
+}): Promise<{ wslDistro: string; authorityId: string } | void> {
   const agent =
     args.launchAgent ??
     (args.command ? recognizeAgentProcessFromCommandLine(args.command)?.agent : null)
-  // Client snapshots never select accounts for a relay or a client-selected distro.
-  if (agent !== 'antigravity' || args.connectionId || args.isWsl) {
+  // The SSH execution owner prepares its own account.
+  if (agent !== 'antigravity' || args.connectionId) {
+    return
+  }
+  if (args.isWsl) {
+    if (!existsSync(getAntigravityWslAccountVaultRoot())) {
+      return
+    }
+    if (process.platform !== 'win32') {
+      throw new Error('WSL account preparation requires Windows')
+    }
+    const authority = await withAntigravityAccountOperation((operation) =>
+      prepareAntigravityAccountTargetForLaunch(
+        { runtime: 'wsl', wslDistro: args.wslDistro ?? null },
+        operation,
+        () => assertWslLaunchAuthority(args)
+      )
+    )
+    if (authority) {
+      return { wslDistro: authority.distro, authorityId: authority.authorityId }
+    }
     return
   }
   const path = getAntigravityAccountVaultPath()
@@ -52,4 +74,39 @@ export async function prepareAntigravityAccountForLaunch(args: {
   await withAntigravityAccountOperation((operation) =>
     prepareAntigravityAccountTargetForLaunch({ runtime: 'host' }, operation)
   )
+}
+
+function assertWslLaunchAuthority(args: {
+  command?: string
+  env?: NodeJS.ProcessEnv
+  envIsComplete?: boolean
+  envToDelete?: readonly string[]
+}): void {
+  const env = args.envIsComplete ? { ...args.env } : { ...process.env, ...args.env }
+  for (const key of args.envToDelete ?? []) {
+    delete env[key]
+  }
+  const authorityKeys = new Set([
+    'HOME',
+    'USER',
+    'LOGNAME',
+    'SHELL',
+    'WSL_DISTRO_NAME',
+    'WSL_INTEROP',
+    'WSL_USER'
+  ])
+  const transportedAuthority = (env.WSLENV ?? '')
+    .split(':')
+    .some((entry) => authorityKeys.has(entry.split('/')[0]))
+  const command = args.command ? tokenizeStartupCommand(args.command, 'posix') : null
+  const unverifiedCommand =
+    command &&
+    (!command.ok ||
+      command.spans.some((span) => span.divergesFromShell) ||
+      recognizeAgentProcessFromCommandLine(command.tokens[0] ?? '')?.agent !== 'antigravity')
+  if (transportedAuthority || unverifiedCommand) {
+    throw new Error(
+      'This agy launch uses an unverifiable credential authority; remove user, HOME or command wrappers.'
+    )
+  }
 }
