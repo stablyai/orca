@@ -1,3 +1,4 @@
+import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { createHash } from 'node:crypto'
 
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
@@ -149,8 +150,10 @@ export function sanitizeHydratedEntry(
     source === 'claude' && (record.compactTrigger === 'manual' || record.compactTrigger === 'auto')
       ? record.compactTrigger
       : undefined
+  const turnStartedAt = record.turnStartedAt
   return {
     paneKey,
+    agentPresence: readAgentProcessPresence(record.agentPresence),
     source,
     tabId: typeof tabId === 'string' ? tabId : undefined,
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
@@ -170,7 +173,10 @@ export function sanitizeHydratedEntry(
     retainedForLiveness: retainedForLiveness ? true : undefined,
     payload,
     receivedAt,
-    stateStartedAt
+    stateStartedAt,
+    ...(typeof turnStartedAt === 'number' && Number.isFinite(turnStartedAt) && turnStartedAt > 0
+      ? { turnStartedAt }
+      : {})
   }
 }
 

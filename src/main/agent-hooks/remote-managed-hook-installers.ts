@@ -1,3 +1,6 @@
+import { codebuddyHookService } from '../codebuddy/hook-service'
+import { qwenCodeHookService } from '../qwen-code/hook-service'
+import { qoderCnHookService, qoderHookService } from '../qoder/hook-service'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
@@ -12,7 +15,9 @@ import { devinHookService } from '../devin/hook-service'
 import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
+import { jcodeHookService } from '../jcode/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { dshHookService } from '../dsh/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
@@ -61,6 +66,10 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
       })
   ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
+  ['qoder', (sftp, remoteHome) => qoderHookService.installRemote(sftp, remoteHome)],
+  ['qoder-cn', (sftp, remoteHome) => qoderCnHookService.installRemote(sftp, remoteHome)],
+  ['qwen-code', (sftp, remoteHome) => qwenCodeHookService.installRemote(sftp, remoteHome)],
+  ['codebuddy', (sftp, remoteHome) => codebuddyHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],
   ['amp', (sftp, remoteHome) => ampHookService.installRemote(sftp, remoteHome)],
   ['cursor', (sftp, remoteHome) => cursorHookService.installRemote(sftp, remoteHome)],
@@ -76,7 +85,9 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
   ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)],
   ['muse', (sftp, remoteHome) => museHookService.installRemote(sftp, remoteHome)],
-  ['zcode', (sftp, remoteHome) => zcodeHookService.installRemote(sftp, remoteHome)]
+  ['zcode', (sftp, remoteHome) => zcodeHookService.installRemote(sftp, remoteHome)],
+  ['dsh', (sftp, remoteHome) => dshHookService.installRemote(sftp, remoteHome)],
+  ['jcode', (sftp, remoteHome) => jcodeHookService.installRemote(sftp, remoteHome)]
 ]
 
 /** Agents wired into the remote (SSH) hook installer. Exported so an invariant

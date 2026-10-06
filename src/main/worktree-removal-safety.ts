@@ -2,6 +2,7 @@ import { lstat, readFile } from 'node:fs/promises'
 import type { Repo } from '../shared/repo-types'
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
+import { NESTED_WORKTREE_REMOVAL_PREFIX } from '../shared/worktree/nested-removal'
 import { areWorktreePathsEqual } from './ipc/worktree-logic'
 import {
   containsPath,
@@ -128,9 +129,7 @@ export function assertWorktreeDoesNotContainRegisteredWorktree(
     // Why: `git worktree remove --force` treats nested worktrees as ordinary
     // untracked directories and deletes their working files while leaving Git
     // with a prunable child worktree record.
-    throw new Error(
-      `Refusing to delete worktree because it contains another registered worktree: ${nestedWorktree.path}`
-    )
+    throw new Error(`${NESTED_WORKTREE_REMOVAL_PREFIX} ${nestedWorktree.path}`)
   }
 }
 

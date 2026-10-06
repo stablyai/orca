@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -131,7 +132,7 @@ describe('worktree RPC methods', () => {
       pushTarget: { remoteName: 'fork', branchName: 'feature' },
       runHooks: false,
       activate: false,
-      navigation: 'all',
+      navigation: 'host',
       setupDecision: 'skip',
       createdWithAgent: undefined,
       automationProvenance: undefined,

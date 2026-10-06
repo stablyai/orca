@@ -1,6 +1,6 @@
 import {
   getRepoExecutionHostId,
-  getSshTargetIdForExecutionHost,
+  getRepoSshConnectionId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../shared/execution-host'
@@ -8,6 +8,7 @@ import type { Repo } from '../shared/repo-types'
 import { githubAvatarIcon, type RepoIcon } from '../shared/repo-icon'
 import { isUnresolvedSshHostAlias } from '../shared/git-remote-host-alias'
 import { getProjectProviderIdentity } from '../shared/project-host-setup-projection'
+import { getStoredRepoExecutionHostId } from './repo-execution-host'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 
 const NO_IDENTITY_RETRY_TTL_MS = 5 * 60 * 1000
@@ -58,12 +59,13 @@ function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId' | 'executio
   return `${getRepoExecutionHostId(repo)}\0${repo.path}`
 }
 
-// A peer's nested SSH targets belong to its dispatch table, never this client's.
+// A peer's nested SSH targets belong to its dispatch table, never this client's, so a `runtime:`
+// row that names one has no host here to probe. A `runtime:` stamp on its own is how a paired
+// client addresses files registered in *this* process (`getStoredRepoExecutionHostId`), so that row
+// keeps the local probe it has always had — dropping it leaves its identity permanently pending.
 function getRepoProbeHostId(repo: Repo): ExecutionHostId | null {
-  const hostId = getRepoExecutionHostId(repo)
-  return hostId === LOCAL_EXECUTION_HOST_ID || getSshTargetIdForExecutionHost(hostId)
-    ? hostId
-    : null
+  const hostId = getStoredRepoExecutionHostId(repo)
+  return hostId === LOCAL_EXECUTION_HOST_ID && getRepoSshConnectionId(repo) ? null : hostId
 }
 
 function getCurrentRepo(store: RepoIdentityStore, snapshot: Repo): Repo | undefined {
@@ -131,8 +133,7 @@ function writeIdentity(
   gitRemoteIdentity: Repo['gitRemoteIdentity']
 ): boolean {
   // A peer's repo metadata must never be repaired from a client-local probe.
-  const hostId = getRepoProbeHostId(snapshot)
-  if (!hostId) {
+  if (!getRepoProbeHostId(snapshot)) {
     return false
   }
   const current = getCurrentRepo(store, snapshot)
@@ -143,8 +144,11 @@ function writeIdentity(
   const icon = gitRemoteIdentity
     ? getAutomaticGitHubIconRefresh(current, gitRemoteIdentity)
     : undefined
+  // The row's own host, not the probe's: the store matches this argument against the row's stamp,
+  // so a `runtime:` row probed locally is only addressable here under that stamp.
+  const storeHostId = getRepoExecutionHostId(snapshot)
   const update = (updates: Pick<Partial<Repo>, 'gitRemoteIdentity' | 'repoIcon'>): Repo | null => {
-    return store.updateRepo(snapshot.id, updates, hostId)
+    return store.updateRepo(snapshot.id, updates, storeHostId)
   }
   if (icon) {
     return !!update({ ...(writeRemote ? { gitRemoteIdentity } : {}), repoIcon: icon })

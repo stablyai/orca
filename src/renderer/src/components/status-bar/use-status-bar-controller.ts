@@ -8,8 +8,9 @@ import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT, useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
-import { observeStatusBarContainer } from './status-bar-container-observer'
+import { useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { useStatusBarDensity } from './status-bar-density'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
@@ -40,14 +41,18 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
   const usageEmptyStateDismissed = useAppStore((s) => s.usageEmptyStateDismissed)
-  const containerRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
-
-  const [containerWidth, setContainerWidth] = useState(900)
-  const resizeObserverRef = useRef<ResizeObserver | null>(null)
+  const {
+    density: { compact, usageTightestOnly, segmentsIconOnly, collapseUsage },
+    overflowing,
+    collapsedUsageProviders,
+    barRef,
+    usageRef,
+    segmentsRef
+  } = useStatusBarDensity()
 
   useEffect(() => {
     mountedRef.current = true
@@ -66,18 +71,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   useEffect(() => {
     void ensureDetectedAgents()
   }, [ensureDetectedAgents])
-
-  const containerRefCallback = useCallback((node: HTMLDivElement | null) => {
-    if (resizeObserverRef.current) {
-      resizeObserverRef.current.disconnect()
-      resizeObserverRef.current = null
-    }
-    if (node) {
-      containerRef.current = node
-      resizeObserverRef.current = observeStatusBarContainer(node, setContainerWidth)
-      setContainerWidth(node.getBoundingClientRect().width)
-    }
-  }, [])
 
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const handleRefresh = useCallback(async () => {
@@ -99,11 +92,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode } =
+    rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
-  // Why: Antigravity visibility also requires geminiCliOAuthEnabled because its usage snapshot mirrors the Gemini fetch.
   const antigravityUsageConfigured =
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
@@ -115,7 +108,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     minimaxApiKeyConfigured: rateLimits.minimaxApiKeyConfigured,
     opencodeGoApiKeyConfigured: rateLimits.opencodeGoApiKeyConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured,
-    cursorAuthConfigured: rateLimits.cursorAuthConfigured
+    cursorAuthConfigured: rateLimits.cursorAuthConfigured,
+    zcodePlanApiKeyConfigured: rateLimits.zcodePlanApiKeyConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -125,6 +119,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
+  const visibleZcode = getVisibleUsageProvider('zcode', zcode, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -154,6 +149,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   // Why: a Cursor session can come from the IDE alone, so PATH detection of
   // cursor-agent would hide a real meter from IDE-only users.
   const showCursor = visibleCursor !== null && statusBarItems.includes('cursor')
+  // Why: a saved Coding Plan key is site-auth, not a CLI on PATH — a subscriber
+  // without the ZCode CLI must still earn the meter (same exemption as MiniMax/Cursor).
+  const showZcode =
+    visibleZcode !== null &&
+    statusBarItems.includes('zcode') &&
+    (rateLimits.zcodePlanApiKeyConfigured || isStatusBarItemAvailable('zcode', detectedAgentIds))
   // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
@@ -172,11 +173,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showAntigravity ||
     showMiniMax ||
     showGrok ||
-    showCursor
+    showCursor ||
+    showZcode
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -190,10 +192,9 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
     grok?.status === 'fetching' ||
-    cursor?.status === 'fetching'
+    cursor?.status === 'fetching' ||
+    zcode?.status === 'fetching'
 
-  const compact = containerWidth < 900
-  const iconOnly = containerWidth < 500
   const floatingTerminalActionLabel = floatingTerminalOpen
     ? 'Minimize Floating Workspace'
     : 'Show Floating Workspace'
@@ -210,7 +211,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showKimi ? visibleKimi : null,
     showMiniMax ? visibleMiniMax : null,
     showGrok ? visibleGrok : null,
-    showCursor ? visibleCursor : null
+    showCursor ? visibleCursor : null,
+    showZcode ? visibleZcode : null
   ].filter((p): p is ProviderRateLimits => p !== null)
 
   const handleManageAccounts = (): void => {
@@ -243,8 +245,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   return {
     anyFetching,
     anyVisible,
+    barRef,
+    collapseUsage,
+    collapsedUsageProviders,
     compact,
-    containerRefCallback,
     detectedAgentIds,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,
@@ -254,14 +258,16 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     handleUsageDetails,
     handleUsageMenuOpenChange,
     hasVisibleUsageMeters,
-    iconOnly,
     isEmptyUsageState,
     isRefreshing,
     menuOpen,
     menuPoint,
+    overflowing,
     petEnabled,
     recordFeatureInteraction,
     rosterProviders,
+    segmentsIconOnly,
+    segmentsRef,
     setMenuOpen,
     setMenuPoint,
     setStatusBarUsageMode,
@@ -276,7 +282,9 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     toggleStatusBarItem,
     usageMenuFocusHandoff,
     usageMenuOpen,
-    usagePercentageDisplay
+    usagePercentageDisplay,
+    usageRef,
+    usageTightestOnly
   }
 }
 

@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MAX_TIMER_DELAY_MS } from '../../../../shared/timer-delay'
 import {
   __clearSelfWriteRegistryForTests,
   __getSelfWriteRegistrySizeForTests,
   clearSelfWrite,
+  getRecentSelfWrite,
   hasRecentSelfWrite,
   recordSelfWrite,
   SELF_WRITE_REMOTE_TTL_MS
@@ -11,11 +13,13 @@ import {
 describe('editor self-write registry', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    vi.setSystemTime(0)
   })
 
   afterEach(() => {
-    vi.useRealTimers()
     __clearSelfWriteRegistryForTests()
+    vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   it('matches Windows drive paths case-insensitively', () => {
@@ -88,5 +92,83 @@ describe('editor self-write registry', () => {
     expect(hasRecentSelfWrite('/repo/remote.md', 'env-1')).toBe(true)
     vi.advanceTimersByTime(SELF_WRITE_REMOTE_TTL_MS)
     expect(hasRecentSelfWrite('/repo/remote.md', 'env-1')).toBe(false)
+  })
+
+  it('releases expired saved content while idle without another registry read or write', () => {
+    recordSelfWrite('/repo/closed.json', 'saved file content')
+    vi.advanceTimersByTime(750)
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(1)
+    expect(getRecentSelfWrite('/repo/closed.json')?.content).toBe('saved file content')
+
+    vi.advanceTimersByTime(1)
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps a refreshed stamp through the previous deadline', () => {
+    recordSelfWrite('/repo/refresh.json', 'first save')
+    vi.advanceTimersByTime(500)
+    recordSelfWrite('/repo/refresh.json', 'second save')
+    vi.advanceTimersByTime(251)
+    expect(getRecentSelfWrite('/repo/refresh.json')?.content).toBe('second save')
+    expect(vi.getTimerCount()).toBe(1)
+
+    vi.advanceTimersByTime(500)
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('schedules an earlier local expiry without shortening a remote stamp', () => {
+    recordSelfWrite('/repo/same.json', 'remote save', 'env-1', SELF_WRITE_REMOTE_TTL_MS)
+    vi.advanceTimersByTime(100)
+    recordSelfWrite('/repo/same.json', 'local save')
+    expect(vi.getTimerCount()).toBe(1)
+
+    vi.advanceTimersByTime(751)
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(1)
+    expect(getRecentSelfWrite('/repo/same.json', 'env-1')?.content).toBe('remote save')
+    expect(vi.getTimerCount()).toBe(1)
+
+    vi.advanceTimersByTime(2150)
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('cancels expiry work when a failed write clears the last stamp', () => {
+    recordSelfWrite('/repo/failed.json', 'failed save')
+    expect(vi.getTimerCount()).toBe(1)
+    clearSelfWrite('/repo/failed.json')
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('rechecks the existing wall-clock deadline after the clock moves backward', () => {
+    recordSelfWrite('/repo/clock.json', 'saved content')
+    vi.setSystemTime(-1000)
+    vi.advanceTimersByTime(751)
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(1)
+    expect(vi.getTimerCount()).toBe(1)
+
+    vi.advanceTimersByTime(1000)
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears the shared timer when the registry is reset', () => {
+    recordSelfWrite('/repo/reset.json', 'saved content')
+    __clearSelfWriteRegistryForTests()
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('bounds the timer delay after a large backward clock change', () => {
+    const timeout = vi.spyOn(globalThis, 'setTimeout')
+    recordSelfWrite('/repo/clock.json', 'saved content')
+    vi.setSystemTime(-MAX_TIMER_DELAY_MS)
+    vi.advanceTimersByTime(751)
+
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(1)
+    expect(timeout.mock.calls.at(-1)?.[1]).toBe(MAX_TIMER_DELAY_MS)
+    expect(vi.getTimerCount()).toBe(1)
   })
 })

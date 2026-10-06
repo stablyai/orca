@@ -1,7 +1,8 @@
 import { writeFileSync, realpathSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { app } from 'electron'
+import { app, dialog } from 'electron'
 import {
+  PROFILE_STATE_DESKTOP_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_RESULT_PREFIX,
   ProfileStateRecoveryCommandError,
@@ -16,21 +17,81 @@ import { acquireSingleInstanceLock } from './single-instance-lock'
 
 /** The process owning both locks performs recovery before Electron can initialize a runtime. */
 export function runProfileStateRecoveryPreflight(argv: readonly string[] = process.argv): boolean {
+  if (argv.includes(PROFILE_STATE_DESKTOP_RECOVERY_FLAG)) {
+    runDesktopRecovery(argv)
+    return true
+  }
   const index = argv.indexOf(PROFILE_STATE_RECOVERY_FLAG)
   if (index === -1) {
     return false
   }
   process.env.ORCA_BACKGROUND_LAUNCH = '1'
   applyBackgroundActivationPolicy()
-  let response: ProfileStateRecoveryResponse
+  const response =
+    !argv.includes('--serve') || argv.lastIndexOf(PROFILE_STATE_RECOVERY_FLAG) !== index
+      ? invalidLaunch()
+      : runRecoveryRequest(argv[index + 1])
+  let exitCode = response.ok ? 0 : 1
   try {
-    if (!argv.includes('--serve') || argv.lastIndexOf(PROFILE_STATE_RECOVERY_FLAG) !== index) {
-      throw new ProfileStateRecoveryCommandError(
-        'invalid_argument',
-        'Invalid profile-state recovery launch.'
-      )
+    writeFileSync(1, `${PROFILE_STATE_RECOVERY_RESULT_PREFIX}${JSON.stringify(response)}\n`)
+  } catch {
+    // The CLI may have exited while recovery held the locks; never open an Electron error dialog.
+    exitCode = 1
+  }
+  app.exit(exitCode)
+  return true
+}
+
+/** Build the relaunch argv that applies a startup-dialog choice before ordinary startup. */
+export function profileStateDesktopRecoveryArgs(
+  argv: readonly string[],
+  request: { userDataPath: string; selector: { kind: 'current-json' | 'current-sqlite' } }
+): string[] {
+  return [
+    ...stripRecoveryArgs(argv.slice(1)),
+    PROFILE_STATE_DESKTOP_RECOVERY_FLAG,
+    JSON.stringify(request)
+  ]
+}
+
+function runDesktopRecovery(argv: readonly string[]): void {
+  const index = argv.indexOf(PROFILE_STATE_DESKTOP_RECOVERY_FLAG)
+  const response =
+    argv.lastIndexOf(PROFILE_STATE_DESKTOP_RECOVERY_FLAG) !== index ||
+    argv.includes(PROFILE_STATE_RECOVERY_FLAG) ||
+    argv.includes('--serve')
+      ? invalidLaunch()
+      : runRecoveryRequest(argv[index + 1])
+  if (response.ok) {
+    // Why relaunch: ordinary startup must run in a process that never held maintenance.
+    app.relaunch({ args: stripRecoveryArgs(argv.slice(1)) })
+    app.exit(0)
+    return
+  }
+  console.error(`[profile-state] Desktop recovery failed: ${response.message}`)
+  void app
+    .whenReady()
+    .then(() =>
+      dialog.showMessageBox({
+        type: 'error',
+        buttons: ['Quit'],
+        title: 'Orca profile state was not changed',
+        message: 'Orca could not apply the selected profile state.',
+        detail: `${response.message}\n\nReopen Orca to choose again.`
+      })
+    )
+    .catch((error: unknown) => console.warn('[profile-state] Recovery error dialog failed:', error))
+    .finally(() => app.exit(1))
+}
+
+function runRecoveryRequest(payload: string | undefined): ProfileStateRecoveryResponse {
+  try {
+    let raw: unknown
+    try {
+      raw = JSON.parse(payload ?? '')
+    } catch {
+      raw = undefined
     }
-    const raw: unknown = JSON.parse(argv[index + 1] ?? '')
     const parsed = profileStateRecoveryRequestSchema.safeParse(raw)
     if (!parsed.success || !isAbsolute(parsed.data.userDataPath)) {
       throw new ProfileStateRecoveryCommandError(
@@ -50,27 +111,46 @@ export function runProfileStateRecoveryPreflight(argv: readonly string[] = proce
           'Stop Orca before profile-state rollback so no process can write the SQLite database.'
         )
       }
-      response = {
+      return {
         ok: true,
-        result: rollbackProfileState(userDataPath, parsed.data.selector, maintenance)
+        result: rollbackProfileState(
+          userDataPath,
+          parsed.data.selector,
+          maintenance,
+          parsed.data.profileId
+        )
       }
     } finally {
       maintenance.release()
     }
   } catch (error) {
-    response = {
+    return {
       ok: false,
       code: isProfileStateRecoveryCommandError(error) ? error.code : 'runtime_error',
       message: error instanceof Error ? error.message : String(error)
     }
   }
-  let exitCode = response.ok ? 0 : 1
-  try {
-    writeFileSync(1, `${PROFILE_STATE_RECOVERY_RESULT_PREFIX}${JSON.stringify(response)}\n`)
-  } catch {
-    // The CLI may have exited while recovery held the locks; never open an Electron error dialog.
-    exitCode = 1
+}
+
+function invalidLaunch(): ProfileStateRecoveryResponse {
+  return {
+    ok: false,
+    code: 'invalid_argument',
+    message: 'Invalid profile-state recovery launch.'
   }
-  app.exit(exitCode)
-  return true
+}
+
+function stripRecoveryArgs(args: readonly string[]): string[] {
+  const kept: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    if (
+      args[i] === PROFILE_STATE_DESKTOP_RECOVERY_FLAG ||
+      args[i] === PROFILE_STATE_RECOVERY_FLAG
+    ) {
+      i++
+      continue
+    }
+    kept.push(args[i])
+  }
+  return kept
 }

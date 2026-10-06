@@ -8,7 +8,7 @@ import { parseOpenCodeSessionFile } from '../main/ai-vault/session-scanner-openc
 import { createOpenCodeSqliteProcessClient } from '../main/ai-vault/session-scanner-opencode-sqlite-process-client'
 import { buildRelayAiVaultServiceEnv } from '../main/ai-vault/session-scanner-service-env'
 import { resolveOpenCodeDataDirectory } from '../main/opencode/opencode-data-directory'
-import SyncDatabase from '../main/sqlite/sync-database'
+import SyncDatabase, { isSqliteAvailable } from '../main/sqlite/sync-database'
 
 type Reader = Pick<RemoteOpenCodeSessionReader, 'list' | 'parse'> & { dispose(): void }
 
@@ -45,7 +45,7 @@ export function createRelayOpenCodeReader(
     pending ??= (async () => {
       const configured = await readRuntimeExecutable(join(baseDir, 'opencode-sqlite-runtime.json'))
       if (!configured && !(options.canReadSqlite ?? canCurrentRuntimeReadSqlite)()) {
-        throw new Error('OpenCode history is waiting for its database reader on this host.')
+        throw new Error(openCodeReaderUnavailableMessage(process.version))
       }
       if (disposed) {
         throw new Error('OpenCode database reader was disposed.')
@@ -146,7 +146,19 @@ async function readRuntimeExecutable(path: string): Promise<string | undefined> 
   }
 }
 
+/** Rung C runs the relay on the host's Node, which may predate the full node:sqlite surface. */
+export function openCodeReaderUnavailableMessage(nodeVersion: string): string {
+  return (
+    `OpenCode history is unavailable on this host for now: its Node.js ${nodeVersion} has no ` +
+    'complete node:sqlite (22.16 or newer), and Orca has not installed its own Node reader here yet.'
+  )
+}
+
 function canCurrentRuntimeReadSqlite(): boolean {
+  // Why: same admission as the host probes, so Node 22.13–22.15 waits for the pinned runtime.
+  if (!isSqliteAvailable()) {
+    return false
+  }
   let db: SyncDatabase | undefined
   try {
     db = new SyncDatabase(':memory:')

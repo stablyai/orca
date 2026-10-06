@@ -13,6 +13,7 @@ import type {
 // so the writer diffs against this hydrated baseline and persists only what this client changed.
 export type PersistedUIWriteBaseline = {
   sidebarWidth: number
+  sidebarOpen: boolean
   rightSidebarOpen: boolean
   rightSidebarTab: PersistedUIState['rightSidebarTab']
   rightSidebarExplorerView: PersistedUIState['rightSidebarExplorerView']
@@ -23,12 +24,15 @@ export type PersistedUIWriteBaseline = {
   sortBy: PersistedUIState['sortBy']
   projectOrderBy: PersistedUIState['projectOrderBy']
   showSleepingWorkspaces: boolean
+  workspaceHostScope: PersistedUIState['workspaceHostScope']
+  visibleWorkspaceHostIds: PersistedUIState['visibleWorkspaceHostIds']
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
   hideDetachedHeadWorkspaces: boolean
   hideWorkspacesFromOtherDevices: boolean
   alwaysShowDefaultBranchWorkspace: boolean
+  explorerDisplayRootByWorktree: Record<string, string>
   showDotfilesByWorktree: Record<string, boolean>
   filterRepoIds: readonly string[]
   acknowledgedAgentsByPaneKey: Record<string, number>
@@ -52,6 +56,7 @@ export type PersistedUIWriteBaseline = {
 // this module exists to close (see ui-state-schema-parity.ts for the same lesson).
 const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   sidebarWidth: true,
+  sidebarOpen: true,
   rightSidebarOpen: true,
   rightSidebarTab: true,
   rightSidebarExplorerView: true,
@@ -62,12 +67,15 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   sortBy: true,
   projectOrderBy: true,
   showSleepingWorkspaces: true,
+  workspaceHostScope: true,
+  visibleWorkspaceHostIds: true,
   hideDefaultBranchWorkspace: true,
   hideAutomationGeneratedWorkspaces: true,
   hideCliCreatedWorkspaces: true,
   hideDetachedHeadWorkspaces: true,
   hideWorkspacesFromOtherDevices: true,
   alwaysShowDefaultBranchWorkspace: true,
+  explorerDisplayRootByWorktree: true,
   showDotfilesByWorktree: true,
   filterRepoIds: true,
   acknowledgedAgentsByPaneKey: true,
@@ -98,6 +106,10 @@ export function capturePersistedUIWriteBaseline(
 ): PersistedUIWriteBaseline {
   return {
     sidebarWidth: mirror.sidebarWidth,
+    sidebarOpen: mirror.sidebarOpen,
+    workspaceHostScope: mirror.workspaceHostScope,
+    visibleWorkspaceHostIds: mirror.visibleWorkspaceHostIds,
+    explorerDisplayRootByWorktree: mirror.explorerDisplayRootByWorktree,
     rightSidebarOpen: mirror.rightSidebarOpen,
     rightSidebarTab: mirror.rightSidebarTab,
     rightSidebarExplorerView: mirror.rightSidebarExplorerView,
@@ -131,6 +143,7 @@ export function capturePersistedUIWriteBaseline(
   }
 }
 
+/** Compares collection fields by value so hydration does not produce redundant persistence writes from new identities. */
 function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: unknown): boolean {
   // Why by value: every drag and every hydration allocates a fresh order array.
   // Compared by identity, each broadcast would read as an unflushed local edit
@@ -142,7 +155,11 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
   ) {
     return shallow(a, b)
   }
+  if (field === 'visibleWorkspaceHostIds') {
+    return shallow(a, b)
+  }
   if (
+    field === 'explorerDisplayRootByWorktree' ||
     field === 'showDotfilesByWorktree' ||
     field === 'acknowledgedAgentsByPaneKey' ||
     field === 'activityClearedAtByPaneKey' ||

@@ -9,7 +9,7 @@ export type StructuredNewTabLaunchArgs = {
   targetGroupId?: string
   activate?: boolean
   /** Lets a workspace reveal itself after ID allocation but before tab ownership. */
-  beforeOpen?: (sessionId: string) => boolean | void
+  beforeOpen?: (sessionId?: string) => boolean | void
 }
 
 export type StructuredNewTabLaunch = {
@@ -33,7 +33,9 @@ export function launchAgentInStructuredNewTab(
     ...(args.beforeOpen ? { beforeOpen: args.beforeOpen } : {}),
     ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {})
   })
-  if (!launch) {
+  // The new-tab launcher sends a paired server's launch through admission itself.
+  if (!launch?.tab) {
+    launch?.cancel()
     return null
   }
   const structuredSettlement = launch.settlement

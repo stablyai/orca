@@ -36,6 +36,29 @@ import { NativeChatComposerActions } from './NativeChatComposerActions'
 afterEach(() => cleanup())
 
 describe('NativeChatComposerActions', () => {
+  it("disables the Stop control and names it Stopping while a person's Stop is ending the turn", () => {
+    const props = {
+      attachDisabled: false,
+      dictationDisabled: false,
+      isWorking: true,
+      isDictating: false,
+      isDictationHoldMode: false,
+      onAttach: vi.fn(),
+      onDictationToggle: vi.fn(),
+      onDictationHoldStart: vi.fn(),
+      onDictationHoldEnd: vi.fn(),
+      onSend: vi.fn(),
+      sessionOptionsSurface: null,
+      sessionOptionsSnapshot: []
+    }
+    const { rerender } = render(<NativeChatComposerActions {...props} sendDisabled={false} />)
+    expect(screen.getByRole('button', { name: 'Stop the agent' })).toBeTruthy()
+
+    rerender(<NativeChatComposerActions {...props} sendDisabled={false} isStopping />)
+
+    expect(screen.getByRole('button', { name: 'Stopping…' }).hasAttribute('disabled')).toBe(true)
+  })
+
   it('places session option pickers immediately beside dictation', () => {
     render(
       <NativeChatComposerActions
@@ -113,5 +136,56 @@ describe('NativeChatComposerActions', () => {
 
     expect(onSend).not.toHaveBeenCalled()
     expect(onStop).not.toHaveBeenCalled()
+  })
+
+  it('says on the disabled send button what to do to send', () => {
+    render(
+      <NativeChatComposerActions
+        attachDisabled={false}
+        dictationDisabled={false}
+        sendDisabled
+        sendBlockedReason="An image couldn't be brought back. Remove it to send."
+        isWorking={false}
+        isDictating={false}
+        isDictationHoldMode={false}
+        onAttach={vi.fn()}
+        onDictationToggle={vi.fn()}
+        onDictationHoldStart={vi.fn()}
+        onDictationHoldEnd={vi.fn()}
+        onSend={vi.fn()}
+        sessionOptionsSurface={null}
+        sessionOptionsSnapshot={[]}
+      />
+    )
+
+    const send = screen.getByRole('button', {
+      name: "An image couldn't be brought back. Remove it to send."
+    })
+    expect(send.hasAttribute('disabled')).toBe(true)
+  })
+
+  it('marks a draft that could not be saved only after storage refused it', () => {
+    const props = {
+      attachDisabled: false,
+      dictationDisabled: false,
+      sendDisabled: false,
+      isWorking: false,
+      isDictating: false,
+      isDictationHoldMode: false,
+      onAttach: vi.fn(),
+      onDictationToggle: vi.fn(),
+      onDictationHoldStart: vi.fn(),
+      onDictationHoldEnd: vi.fn(),
+      onSend: vi.fn(),
+      sessionOptionsSurface: null,
+      sessionOptionsSnapshot: []
+    }
+    const explanation = "This draft couldn't be saved yet. Orca keeps trying."
+    const { rerender } = render(<NativeChatComposerActions {...props} />)
+    expect(screen.queryByRole('img', { name: explanation })).toBeNull()
+
+    rerender(<NativeChatComposerActions {...props} draftNotSaved />)
+    expect(screen.getByRole('img', { name: explanation })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(false)
   })
 })

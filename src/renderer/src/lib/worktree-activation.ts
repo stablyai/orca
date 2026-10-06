@@ -18,8 +18,6 @@ import {
   getFolderWorkspacePathStatusTitle
 } from './folder-workspace-path-status'
 import { toast } from 'sonner'
-import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
-import { revealRepoInProjectFilter } from '@/components/sidebar/project-filter-reveal'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
@@ -29,10 +27,12 @@ import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-repla
 import { findWorktreeClaimedByNoHost } from '@/lib/worktree-host-qualified-lookup'
 import {
   activationProvidesInitialSurface,
+  activationSeedsUserDefaultSurface,
   type WorktreeActivationOptions,
   type WorktreeActivationSurfaceSelection
 } from './worktree-activation-surface-selection'
 import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
+import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
 
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
@@ -48,7 +48,8 @@ export type ActivateAndRevealResult = {
 function ensureFolderWorkspaceInitialTerminal(
   folderWorkspace: FolderWorkspace,
   startup?: WorktreeStartupPayload,
-  providesInitialSurface?: boolean
+  providesInitialSurface?: boolean,
+  seedUserDefaultSurface?: boolean
 ): string | null {
   if (providesInitialSurface === true && startup === undefined) {
     return null
@@ -62,7 +63,10 @@ function ensureFolderWorkspaceInitialTerminal(
     undefined,
     undefined,
     undefined,
-    { reseedEmptiedWorkspace: providesInitialSurface !== true }
+    {
+      reseedEmptiedWorkspace: providesInitialSurface !== true,
+      ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
+    }
   )
   return primaryTabId
 }
@@ -80,6 +84,7 @@ export function activateAndRevealFolderWorkspace(
   opts?: WorktreeActivationSurfaceSelection & {
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     revealInSidebar?: boolean
+    showWorkspaceList?: boolean
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
     executionHostId?: ExecutionHostId
@@ -129,6 +134,7 @@ export function activateAndRevealFolderWorkspace(
 
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   const providesInitialSurface = activationProvidesInitialSurface(opts)
+  const seedUserDefaultSurface = activationSeedsUserDefaultSurface(opts)
   state.markWorktreeVisited(workspaceKey)
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
@@ -145,16 +151,24 @@ export function activateAndRevealFolderWorkspace(
     resumeSleepingAgentSessionsForWorktree(workspaceKey)
   }
   if (shouldGateAgentActivation) {
-    gateAndReseedEmptyWorkspace(
-      workspaceKey,
-      opts?.providesInitialSurface === true,
-      opts?.executionHostId
-    )
+    gateAndReseedEmptyWorkspace(workspaceKey, {
+      callerProvidesSurface: opts?.providesInitialSurface === true,
+      seedUserDefaultSurface,
+      ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
+    })
   }
   const primaryTabId = shouldGateAgentActivation
     ? null
-    : ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup, providesInitialSurface)
+    : ensureFolderWorkspaceInitialTerminal(
+        folderWorkspace,
+        opts?.startup,
+        providesInitialSurface,
+        seedUserDefaultSurface
+      )
 
+  if (opts?.showWorkspaceList) {
+    state.setSidebarBody('workspaces')
+  }
   if (opts?.revealInSidebar !== false) {
     state.revealWorktreeInSidebar(
       workspaceKey,
@@ -191,6 +205,7 @@ export function activateAndRevealWorktree(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
   )
   const providesInitialSurface = activationProvidesInitialSurface(opts)
+  const seedUserDefaultSurface = activationSeedsUserDefaultSurface(opts)
   // Why: a plain reselect should still reveal the sidebar row but must not restamp focus recency or wake persistence.
   const isPlainAlreadyActiveTerminal =
     !hasActivationWork &&
@@ -249,11 +264,11 @@ export function activateAndRevealWorktree(
     resumeSleepingAgentSessionsForWorktree(worktreeId)
   }
   if (shouldGateAgentActivation) {
-    gateAndReseedEmptyWorkspace(
-      worktreeId,
-      opts?.providesInitialSurface === true,
-      opts?.executionHostId
-    )
+    gateAndReseedEmptyWorkspace(worktreeId, {
+      callerProvidesSurface: opts?.providesInitialSurface === true,
+      seedUserDefaultSurface,
+      ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
+    })
   }
 
   // 4. Ensure a focusable surface exists for externally-created worktrees
@@ -272,6 +287,7 @@ export function activateAndRevealWorktree(
             ...(opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : {}),
             ...(opts?.createNewTerminalForStartup ? { createNewTerminalForStartup: true } : {}),
             ...(providesInitialSurface ? { callerProvidesSurface: true } : {}),
+            ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {}),
             reseedEmptiedWorkspace: !providesInitialSurface
           }
         )
@@ -279,21 +295,12 @@ export function activateAndRevealWorktree(
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
   }
 
-  // 5. Lift the sidebar filters hiding the target — reveal needs the card rendered, else it silently no-ops.
+  // 5. Explicit list requests leave the activity view only now that activation has committed.
+  if (opts?.showWorkspaceList) {
+    state.setSidebarBody('workspaces')
+  }
   if (opts?.clearSidebarFilters !== false) {
-    revealRepoInProjectFilter(state, wt.repoId)
-    if (
-      state.hideAutomationGeneratedWorkspaces &&
-      wt.automationProvenance?.kind === 'created-by-automation'
-    ) {
-      state.setHideAutomationGeneratedWorkspaces(false)
-    }
-    if (state.hideCliCreatedWorkspaces && wt.cliProvenance?.kind === 'created-by-cli') {
-      state.setHideCliCreatedWorkspaces(false)
-    }
-    if (state.hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(wt)) {
-      state.setHideDetachedHeadWorkspaces(false)
-    }
+    liftSidebarFiltersHidingWorktree(wt)
   }
 
   // 6. Reveal in sidebar
@@ -333,6 +340,7 @@ export function activateAndRevealWorkspace(
   opts?: WorktreeActivationSurfaceSelection & {
     executionHostId?: ExecutionHostId
     revealInSidebar?: boolean
+    showWorkspaceList?: boolean
     /** Worktree-only: folder workspaces are never filter-hidden. */
     clearSidebarFilters?: boolean
   }

@@ -1,4 +1,5 @@
 import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {
   cancelStructuredAgentLaunch,
@@ -6,6 +7,7 @@ import {
   type StructuredAgentLaunchOptions
 } from '@/lib/structured-agent-session-launch'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
+import { findIdleEmptyStructuredChat } from '@/lib/structured-agent-session-idle-empty-chat'
 
 export type StructuredAgentLaunchSettlement =
   | {
@@ -15,10 +17,14 @@ export type StructuredAgentLaunchSettlement =
     }
   | {
       kind: 'cancelled'
-      sessionId: string
+      /** Null when the launch was abandoned before its host admitted a chat. */
+      sessionId: string | null
     }
   | { kind: 'visibility-unknown'; sessionId: string }
-  | { kind: 'failed'; error: unknown }
+  /** `notified`: the launch already told the user, so a caller adds no message of its own. */
+  | { kind: 'failed'; error: unknown; notified?: true }
+  /** The owning host declined the chat before anything was created; its terminal opened instead. */
+  | { kind: 'terminal' }
 
 export type StructuredAgentLaunchHooks = {
   onStructuredReady?: (sessionId: string) => void
@@ -29,6 +35,8 @@ export type StructuredAgentLaunchHooks = {
 
 export type StructuredAgentLaunchHandle = {
   sessionId: string
+  /** The host the chat is created on. */
+  executionHostId: ExecutionHostId
   settlement: Promise<StructuredAgentLaunchSettlement>
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
   cancel: () => void
@@ -94,9 +102,34 @@ export function beginStructuredAgentLaunchSettlement(
   options: StructuredAgentLaunchOptions,
   hooks: StructuredAgentLaunchHooks
 ): StructuredAgentLaunchHandle {
+  // A new chat with nothing to say reuses an empty published one open here (the launch joins an
+  // empty starting one); the reused chat is not this caller's to cancel.
+  const idle =
+    options.resumeFrom || options.prompt?.trim()
+      ? undefined
+      : findIdleEmptyStructuredChat(
+          worktreeId,
+          agent,
+          options.executionHostId,
+          options.targetGroupId
+        )
+  if (idle) {
+    return {
+      ...idle,
+      settlement: Promise.resolve().then((): StructuredAgentLaunchSettlement => {
+        if (hooks.signal?.aborted) {
+          return { kind: 'cancelled', sessionId: idle.sessionId }
+        }
+        hooks.onStructuredReady?.(idle.sessionId)
+        return { kind: 'structured', sessionId: idle.sessionId }
+      }),
+      cancel: () => {}
+    }
+  }
   const launch = startStructuredAgentLaunch(worktreeId, agent, options)
   return {
     sessionId: launch.sessionId,
+    executionHostId: launch.executionHostId,
     settlement: settleStartedStructuredAgentLaunch(worktreeId, launch, hooks),
     cancel: () => cancelStructuredAgentLaunch(worktreeId, launch.sessionId),
     ...(launch.promptDeliveryResult ? { promptDeliveryResult: launch.promptDeliveryResult } : {})

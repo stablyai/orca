@@ -59,28 +59,8 @@ Pick the cheapest option that fits the call site.
    accidentally treat "could not ask" as "no". This reaches past WSL into shared
    exec code and hasn't been done.
 
-Whichever you pick, say in a comment which one and why — that sentence is what
-the guard below is really asking for.
+Whichever you pick, document why the fallback is safe for callers to cache or use for discovery.
 
-## The guard
+## Reviewing failure fallbacks
 
-`src/main/wsl/wsl-probe-failure-semantics.test.ts` scans the WSL and preflight
-probe modules for `catch { return false | [] | null }` and holds the current set
-in an allowlist that only shrinks.
-
-Its limits are worth being explicit about, because they decide how much it is
-worth trusting:
-
-- **It cannot see the dangerous part.** Whether a swallowed value is later
-  cached or gates discovery is dataflow, not syntax. Every allowlisted entry is
-  currently safe; the guard does not verify that and cannot.
-- **It is scoped, not global.** The same shape appears ~850 times across `src/`
-  and is usually correct, because for most callers a failure genuinely does mean
-  absent. Enforcing it repo-wide would be noise. It only matters where the
-  answer describes a WSL distro.
-- **It catches a shape, not a mistake.** Code can conflate failure and absence
-  without ever writing `catch { return false }`.
-
-So it does not prevent the bug. What it does is stop a new swallow site
-appearing in these modules without someone stating why the value is safe to
-pin — which is the review conversation that was missing all three times.
+Review the caller as well as the catch: whether a fallback is cached or gates discovery is a dataflow question. Returning `false`, `[]`, or `null` after a failure can be safe for some operations, but a WSL probe must preserve the distinction between absence and a distro that could not be reached. Prefer behavioral tests that exercise probe failure, discovery, caching, and recovery together.

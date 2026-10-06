@@ -39,7 +39,7 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
     minWidth: 0,
     marginRight: spacing.md
   },
-  hostIdentityLine: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+  hostIdentityLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 0 },
   hostPlatformText: {
     marginLeft: 16,
     color: colors.textSecondary,

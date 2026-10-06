@@ -362,6 +362,12 @@ variable "relay_alert_notification_channels" {
   default     = []
 }
 
+variable "relay_cell_min_fix_level" {
+  type        = number
+  description = "Lowest RELAY_FIX_LEVEL a serving relay cell may run before the outdated-image alert fires. Raise it after a wave rolls every serving cell."
+  default     = 1
+}
+
 variable "relay_gce_domain" {
   type        = string
   description = "Parent DNS name for GCE relay cells; each cell is one exact host below it."

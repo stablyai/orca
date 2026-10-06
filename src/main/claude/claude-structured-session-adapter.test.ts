@@ -18,12 +18,13 @@ import {
   adapterFor,
   fakeClaude,
   identityFor,
-  invokeCanUseTool,
   PROVIDER_SESSION_ID,
   tick,
   USER_MESSAGE,
   type FakeConnection
 } from './claude-structured-session-test-support'
+import { invokeCanUseTool } from './claude-can-use-tool-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 describe('ClaudeStructuredSessionAdapter.acquire', () => {
   it('pins the account and proves init without treating the system-frame uuid as a chain leaf', async () => {
@@ -57,12 +58,13 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     })
     expect(acquisition.link).toEqual({
       linkId: `claude-7-${PROVIDER_SESSION_ID}-empty`,
-      handle: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null },
+      handle: claudeProviderHandle(PROVIDER_SESSION_ID, null),
       origin: 'created',
       mintedAtFence: 7,
       observedAt: 1_700_000_000_500
     })
-    expect(events[0]).toMatchObject({ type: 'message', message: { subtype: 'init' } })
+    // Live proof order: the SessionStart hook frame arrives before any init.
+    expect(events[0]).toMatchObject({ type: 'message', message: { subtype: 'hook_started' } })
   })
 
   it('restores persisted model and effort before publishing a reacquired session', async () => {
@@ -344,7 +346,10 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       session_id: 'foreign-provider-session'
     })
     await Promise.resolve()
-    expect(events.filter((event) => event.type === 'message')).toHaveLength(1)
+    // Startup hook proof + the first cycle's init are admitted; nothing foreign is.
+    expect(
+      events.flatMap((event) => (event.type === 'message' ? [event.message.subtype] : []))
+    ).toEqual(['hook_started', 'hook_response', 'init'])
     expect(settled).not.toHaveBeenCalled()
 
     connection.handlers.onMessage?.({
@@ -420,11 +425,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       spawnToken: 'spawn-9'
     })
 
-    expect(acquisition.link.handle).toEqual({
-      provider: 'claude',
-      sessionId: PROVIDER_SESSION_ID,
-      leafUuid: null
-    })
+    expect(acquisition.link.handle).toEqual(claudeProviderHandle(PROVIDER_SESSION_ID, null))
     expect(events[0]).toMatchObject({
       type: 'message',
       message: { subtype: 'hook_started', hook_name: 'SessionStart:startup' }
@@ -472,11 +473,9 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       spawnToken: 'spawn-9'
     })
     expect(acquisition.link.origin).toBe('resumed')
-    expect(acquisition.link.handle).toEqual({
-      provider: 'claude',
-      sessionId: PROVIDER_SESSION_ID,
-      leafUuid: 'leaf-before'
-    })
+    expect(acquisition.link.handle).toEqual(
+      claudeProviderHandle(PROVIDER_SESSION_ID, 'leaf-before')
+    )
 
     const wrongClaude = fakeClaude({ initSessionId: 'different-session' })
     await expect(endedAtStartup(wrongClaude)).resolves.toMatchObject({

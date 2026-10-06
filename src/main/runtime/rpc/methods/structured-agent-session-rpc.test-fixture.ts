@@ -19,6 +19,8 @@ import {
 import type { RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 export const SESSION = 'session-alpha'
 export const FINGERPRINT = 'f'.repeat(64)
@@ -94,15 +96,17 @@ export const STATUS_ITEMS: AgentJournalRenderItem[] = [
 /** One indexed session over a journal that reads back fixed items; the projection is real. */
 function statusFeed(): StructuredAgentSessionStatusFeed {
   return new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([
       [
         STATUS_SESSION,
         {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks and snapshot() of a journal.
           journal: {
-            isReadOnly: false,
             cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
             lastActivityAt: () => 2,
-            snapshot: () => ({ items: STATUS_ITEMS })
+            stopMarks: { latest: () => null, revision: () => 0 },
+            snapshot: () => ({ items: STATUS_ITEMS, submissions: [] })
           } as unknown as AgentSessionJournal,
           params: {
             location: {
@@ -191,6 +195,7 @@ export function hostStub(): StructuredAgentSessionHost {
       current: { model: 'gpt-live' }
     })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    sessionAgent: vi.fn(() => null),
     journalSnapshot: vi.fn((sessionId: string) => ({
       sessionId,
       cursor: { epoch: 'epoch-a', sequence: 0 },
@@ -203,9 +208,10 @@ export function hostStub(): StructuredAgentSessionHost {
     subscribeStatus: vi.fn((subscriber: StructuredAgentSessionStatusSubscriber) =>
       statusFeed().subscribe(subscriber)
     ),
-    unsubscribe: vi.fn(),
-    release: vi.fn()
+    unsubscribe: vi.fn()
   })
+  // Not a call: the logger the host hands a runtime caller that reports for it.
+  Reflect.set(hostCalls, 'deps', { logger: recordingStructuredAgentSessionLogger().logger })
   return hostCalls as unknown as StructuredAgentSessionHost
 }
 
@@ -213,6 +219,7 @@ export function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcD
   reset(runtimeCalls)
   Object.assign(runtimeCalls, {
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
+    structuredAgentSessionLaunchSeedOptions: vi.fn(() => undefined),
     resolveStructuredAgentSessionCreateIntent: vi.fn(async (params) => ({
       envelope: params.envelope,
       location: {

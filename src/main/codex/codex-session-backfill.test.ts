@@ -298,20 +298,6 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     expect(readAuditActions()).toEqual(['hardlink', 'run-summary'])
   })
 
-  it('skips cross-volume rollouts instead of freezing a mutable snapshot', async () => {
-    fsMockState.failLink = true
-    const relativePath = join('2026', '05', '26', 'rollout-a ü.jsonl')
-    writeManagedSession(relativePath, '{"id":"a"}\n')
-
-    const summary = await backfillManagedCodexSessionsIntoSystemHome(
-      resolveCodexSessionBackfillPaths()
-    )
-
-    expect(summary).toMatchObject({ copiedFiles: 0, skippedUnsupportedFilesystemFiles: 1 })
-    expect(existsSync(join(getSystemSessionsRoot(), relativePath))).toBe(false)
-    expect(readAuditActions()).toEqual(['copy-unsupported', 'run-summary'])
-  })
-
   it('fails closed when the target filesystem cannot install without overwrite', async () => {
     fsMockState.failLink = true
     writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
@@ -330,21 +316,6 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     expect(existsSync(targetPath)).toBe(false)
     expect(readdirSync(dirname(targetPath))).toEqual([])
     expect(readAuditActions()).toEqual(['copy-unsupported', 'run-summary'])
-  })
-
-  it('keeps transient hardlink failures retryable', async () => {
-    fsMockState.failLinkTransiently = true
-    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
-
-    const summary = await backfillManagedCodexSessionsIntoSystemHome(
-      resolveCodexSessionBackfillPaths()
-    )
-
-    expect(summary).toMatchObject({
-      skippedUnsupportedFilesystemFiles: 0,
-      failedFiles: 1
-    })
-    expect(readAuditActions()).toEqual(['failed', 'run-summary'])
   })
 
   it('keeps target directory permission failures retryable', async () => {

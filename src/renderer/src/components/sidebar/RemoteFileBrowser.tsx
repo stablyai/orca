@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle, Search } from 'lucide-react'
@@ -245,7 +246,7 @@ export function RemoteFileBrowser({
       {/* Filter input */}
       <div className="relative">
         <Search className="size-3.5 text-muted-foreground absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-        <input
+        <ImeInput
           ref={inputRef}
           type="text"
           autoFocus

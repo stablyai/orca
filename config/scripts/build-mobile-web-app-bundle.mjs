@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { readRouteSnapshot } from './mobile-web-app-route-snapshot.mjs'
 import { realpathSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
@@ -138,9 +139,17 @@ export const MOBILE_WEB_APP_ROOT_RESET =
  * Inputs and textareas: Chromium rings a focused one (`:focus-visible` matches every focused
  * text field); no native TextInput paints one, and the caret and the IME already mark focus.
  * Those only: a button reached by a hardware keyboard keeps the browser's ring.
+ *
+ * Text: native `Text` is unselectable unless `selectable`; react-native-web's is selectable. On
+ * iOS a hold on it raises WebKit's selection over the page's own long press; on Android the
+ * selection's `selectionchange` and `touchcancel` end a held press. `body`, not `#root`: modals
+ * portal to `document.body`. Fields opt back in, callout too, since WebKit inherits it.
  */
 export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
-  '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}</style>'
+  '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}' +
+  ':where(body){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}' +
+  ':where(input,textarea,[contenteditable]){-webkit-user-select:text;user-select:text;' +
+  '-webkit-touch-callout:default}</style>'
 
 const PAGE_ASYNC_STORAGE_MODULE = join(
   mobileDir,
@@ -354,15 +363,12 @@ export function mobileWebAppBuildOptions(routes) {
  */
 export function entryStaticClosure(metafile, entryOutputPath) {
   const reached = new Set([entryOutputPath])
-  const queue = [entryOutputPath]
-  while (queue.length > 0) {
-    const current = queue.shift()
+  for (const current of reached) {
     for (const imported of metafile.outputs[current]?.imports ?? []) {
       if (imported.kind !== 'import-statement' || reached.has(imported.path)) {
         continue
       }
       reached.add(imported.path)
-      queue.push(imported.path)
     }
   }
   return reached
@@ -466,7 +472,10 @@ const isScriptOutput = (path) => path.endsWith('.js')
  * wrap every route, and their imports are part of the page as surely as the route module's.
  */
 export async function mobileWebAppRouteClosure(routeModule) {
-  return await mobileWebAppModuleClosure(['app/_layout', 'app/h/_layout', routeModule])
+  return (
+    readRouteSnapshot(routeModule) ??
+    (await mobileWebAppModuleClosure(['app/_layout', 'app/h/_layout', routeModule]))
+  )
 }
 
 /**

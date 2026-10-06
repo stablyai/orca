@@ -54,6 +54,8 @@ export async function writeOpenCode2SqliteFixture(root: string): Promise<string>
 export function isolatedScanRoots(root: string) {
   return {
     claudeProjectsDir: join(root, 'claude-projects'),
+    codebuddyProjectsDir: join(root, 'codebuddy-projects'),
+    qoderProjectsDir: join(root, 'qoder-projects'),
     codexSessionsDir: join(root, 'codex-sessions'),
     geminiSessionsDir: join(root, 'gemini-sessions'),
     antigravityBrainDir: join(root, 'antigravity-brain'),
@@ -63,6 +65,7 @@ export function isolatedScanRoots(root: string) {
     // Why: prevent the SQLite scanner from picking up the real
     // ~/.local/share/opencode/opencode.db during tests.
     opencodeDbPaths: [] as readonly string[],
+    zcodeDbPath: join(root, 'zcode', 'db.sqlite'),
     grokSessionsDir: join(root, 'grok-sessions'),
     devinTranscriptsDir: join(root, 'devin-transcripts'),
     hermesSessionsDir: join(root, 'hermes-sessions'),
@@ -76,7 +79,8 @@ export function isolatedScanRoots(root: string) {
     droidProjectsDir: join(root, 'droid-projects'),
     clineSessionsDir: join(root, 'cline-sessions'),
     kimiSessionsDir: join(root, 'kimi-sessions'),
-    museSessionsDir: join(root, 'muse-sessions')
+    museSessionsDir: join(root, 'muse-sessions'),
+    jcodeSessionsDir: join(root, 'jcode-sessions')
   }
 }
 
@@ -263,4 +267,30 @@ export async function writeMuseScannerFixture(sessionsDir: string): Promise<stri
     }
   ])
   return sessionFile
+}
+
+export async function writeJcodeSessionFixture(
+  roots: ReturnType<typeof isolatedScanRoots>
+): Promise<void> {
+  await mkdir(roots.jcodeSessionsDir, { recursive: true })
+  await writeFile(
+    join(roots.jcodeSessionsDir, 'session_jcode-session.json'),
+    JSON.stringify({
+      id: 'session_jcode-session',
+      short_name: 'jcode-session',
+      model: 'jcode-model',
+      working_dir: '/tmp/jcode',
+      created_at: '2026-05-01T10:12:00.000Z',
+      updated_at: '2026-05-01T10:12:01.000Z',
+      messages: [
+        {
+          id: 'm1',
+          role: 'user',
+          display_role: 'system',
+          content: [{ type: 'text', text: '<system-reminder>injected</system-reminder>' }]
+        },
+        { id: 'm2', role: 'user', content: [{ type: 'text', text: 'Jcode title' }] }
+      ]
+    })
+  )
 }

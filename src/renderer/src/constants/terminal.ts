@@ -6,6 +6,7 @@ export const PASTE_TERMINAL_TEXT_EVENT = 'orca-paste-terminal-text'
 export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT = 'orca-request-active-terminal-pane-split'
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
+export const REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT = 'orca-request-active-terminal-pane-close'
 export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-terminal-worktree'
 
 // Why: mobile wake (experimental agent sleep) must fire the cold-restore
@@ -62,6 +63,11 @@ export type SplitTerminalPaneDetail = {
 export type RequestActiveTerminalPaneSplitDetail = {
   tabId?: string | null
   direction: 'horizontal' | 'vertical'
+}
+
+/** Unlike a split request, a close always names its tab: an untargeted close must not reach every mounted pane. */
+export type RequestActiveTerminalPaneCloseDetail = {
+  tabId: string
 }
 
 export type CloseTerminalPaneDetail = {

@@ -11,11 +11,14 @@ import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
 import { getFolderWorkspaceRevealGroupKeys } from '../navigation/folder-reveal'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import { getHostSectionCollapseKey } from '../../host-section-collapse'
 import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
 
 // While the agent send picker targets a workspace, force open every section that hides it.
 export function useEffectiveCollapsedGroups(args: {
+  hostScopedGroups?: boolean
   collapsedGroups: Set<string>
   agentSendTargetWorktreeId: string | null
   groupBy: WorktreeGroupBy
@@ -34,6 +37,7 @@ export function useEffectiveCollapsedGroups(args: {
 }): Set<string> {
   const {
     collapsedGroups,
+    hostScopedGroups = false,
     agentSendTargetWorktreeId,
     groupBy,
     pinnedDisplayPolicy,
@@ -61,7 +65,7 @@ export function useEffectiveCollapsedGroups(args: {
         agentSendTargetWorktreeId,
         folderWorkspaces,
         projectGroups,
-        { groupBy, workspaceStatuses, defaultHostId }
+        { groupBy, workspaceStatuses, defaultHostId, hostScopedGroups }
       )
       if (folderKeys.length === 0) {
         return collapsedGroups
@@ -77,7 +81,18 @@ export function useEffectiveCollapsedGroups(args: {
       pinnedDisplayPolicy === 'single-location' &&
       isPinnedSectionWorktree(targetWorktree, visibleWorktrees, worktreeLineageById, worktreeMap)
     ) {
-      next.delete(PINNED_GROUP_KEY)
+      next.delete(
+        hostScopedGroups
+          ? getHostSectionCollapseKey(
+              PINNED_GROUP_KEY,
+              getWorktreeExecutionHostId(
+                targetWorktree,
+                repoMap.get(targetWorktree.repoId),
+                defaultHostId
+              )
+            )
+          : PINNED_GROUP_KEY
+      )
     } else {
       for (const groupKey of getGroupKeysForWorktree(
         groupBy,
@@ -89,7 +104,18 @@ export function useEffectiveCollapsedGroups(args: {
         projectGroups,
         projectGrouping
       )) {
-        next.delete(groupKey)
+        next.delete(
+          hostScopedGroups
+            ? getHostSectionCollapseKey(
+                groupKey,
+                getWorktreeExecutionHostId(
+                  targetWorktree,
+                  repoMap.get(targetWorktree.repoId),
+                  defaultHostId
+                )
+              )
+            : groupKey
+        )
       }
     }
 
@@ -104,6 +130,7 @@ export function useEffectiveCollapsedGroups(args: {
   }, [
     agentSendTargetWorktreeId,
     collapsedGroups,
+    hostScopedGroups,
     groupBy,
     pinnedDisplayPolicy,
     visibleWorktrees,

@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { LocalFileAccess } from '../../../shared/local-file-access'
 
 export type RuntimeReadableFileContent = {
   content: string
@@ -16,6 +17,8 @@ export type RuntimeFileReadArgs = {
   connectionId?: string
   expectedExternalSshTargetId?: string
   includeLocalLogMetadata?: boolean
+  /** File access of the local fallback read; remote reads stay root-relative. */
+  access?: LocalFileAccess
 }
 
 export type RuntimeFileOperationArgs = {

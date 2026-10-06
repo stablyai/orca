@@ -5,7 +5,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { collectAgentTitleEvidence } from './agent-title-evidence'
 import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
-import type { TuiAgent } from './tui-agent'
+import type { TerminalAgent } from './terminal-agent'
 
 /**
  * Title regression gates for the identity-ladder migration.
@@ -64,12 +64,12 @@ function loadRecordedTitleCorpus(): { checkpointCount: number; titles: string[] 
 }
 
 /** What the canonical adapter answers when a title is all a pane has (the uncovered lane). */
-function canonicalTitleOnlyAgent(title: string): TuiAgent | null {
+function canonicalTitleOnlyAgent(title: string): TerminalAgent | null {
   return resolveCanonicalPaneAgentIdentity({ title }).agent
 }
 
 describe('controlled title fixtures (always run)', () => {
-  const FIXTURES: readonly { name: string; title: string; expected: TuiAgent | null }[] = [
+  const FIXTURES: readonly { name: string; title: string; expected: TerminalAgent | null }[] = [
     {
       name: 'mandatory adversarial owner suffix beats the agent names in task text',
       title: 'STA-4011 Linux Antigravity Commit Messages - grok',

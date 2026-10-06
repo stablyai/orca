@@ -118,6 +118,10 @@ vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
     parseMobileWebShellLoadState: loadState.parseMobileWebShellLoadState
   }
 })
+// The wall's release offer: the native hook imports the update checker module.
+vi.mock('../app-update/use-wall-app-update', () => ({
+  useWallAppUpdate: () => null
+}))
 vi.mock('../transport/client-context', () => ({ useHostClient: () => ({ client: null }) }))
 vi.mock('./use-page-host-snapshot', () => ({
   usePageHostSnapshot: () => ({

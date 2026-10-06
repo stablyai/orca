@@ -24,6 +24,19 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     }
   }
 
+  protected getZcodePlanCredentialError(message: string): ProviderRateLimits {
+    return {
+      provider: 'zcode',
+      session: null,
+      weekly: null,
+      monthly: null,
+      updatedAt: Date.now(),
+      error: message,
+      status: 'error',
+      usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
+    }
+  }
+
   // Why: hitting a usage endpoint before its Retry-After expires burns the budget for nothing and keeps the 429 window alive.
   // A live post flips the snapshot back to ok, but the endpoint's Retry-After is still binding.
   protected isRetryAfterActive(limits: ProviderRateLimits | null): boolean {

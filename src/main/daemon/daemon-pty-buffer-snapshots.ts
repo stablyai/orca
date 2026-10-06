@@ -184,6 +184,11 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     this.markSessionDirty(id)
   }
 
+  async resetInputModes(id: string): Promise<void> {
+    await this.client.request('resetInputModes', { sessionId: id })
+    this.markSessionDirty(id)
+  }
+
   acknowledgeDataEvent(_id: string, _charCount: number): void {
     // No flow control for daemon-backed terminals
   }

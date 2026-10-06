@@ -89,7 +89,8 @@ export const ORCHESTRATION_CHECK_METHODS = [
           typeFilter,
           signal,
           activeDispatch,
-          remoteAttachment
+          remoteAttachment,
+          recordMutationReceipt
         })
       }
       const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false

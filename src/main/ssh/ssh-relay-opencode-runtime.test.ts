@@ -25,21 +25,24 @@ vi.mock('./ssh-relay-install-transfers', () => ({
   uploadRelayDirectory: mocks.upload,
   writeRelayFile: mocks.write
 }))
-vi.mock('./orcad-bun-runtime-materializer', () => ({
-  materializeCachedOrcadBunRuntime: mocks.materialize
+vi.mock('./pinned-runtime-materializer', () => ({
+  materializeNodeRuntimeArchive: mocks.materialize,
+  materializeCachedNodeRuntime: vi.fn()
 }))
-vi.mock('./orcad-deployment-target', () => ({ resolveOrcadDeploymentTarget: mocks.target }))
+vi.mock('./orcad-deployment-target', () => ({ resolveOrcadDeploymentTargetFacts: mocks.target }))
 
 import type { SshConnection } from './ssh-connection'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import { ORCAD_BUN_RELEASE_ASSETS } from '../../shared/orcad-bun-runtime'
+import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
 import { ensureRemoteOpenCodeRuntime } from './ssh-relay-opencode-runtime'
 import { OPENCODE_RUNTIME_RESULT } from './ssh-relay-opencode-runtime-commands'
+import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 
 const host = getRemoteHostPlatform('linux-x64')
 const remoteHome = '/home/ada'
 const relayDir = `${remoteHome}/.orca-remote/relay-build`
-const binary = `${remoteHome}/.orca-remote/vault-sqlite/${ORCAD_BUN_RELEASE_ASSETS['linux-x64-glibc'].executableSha256}/bun`
+const binary = `${remoteHome}/.orca-remote/runtimes/node-${NODE_RUNTIME_ASSETS['linux-x64-glibc'].executableSha256}/bin/node`
+const archiveName = 'node-v24.21.0-linux-x64.tar.gz'
 let cacheRoot: string
 let runtime: string
 const frame = (status: string, executable?: string) =>
@@ -53,20 +56,20 @@ function hostCommandResult(command: string): string {
     }
     return `__ORCA_UPLOAD_STAGE_SLOT__${command.match(/\.sftp-namespace-[0-9a-f]{32}/)?.[0]}:slot-0`
   }
+  if (command.includes("/runtimes/.store-lock' 2>/dev/null")) {
+    return 'OK'
+  }
   if (command.includes('SELECT 1 AS ready')) {
     return frame('unsupported')
   }
-  if (command.includes('checksum mismatch')) {
-    if (mocks.checksumError) {
-      throw new Error('Uploaded SQLite runtime checksum mismatch')
-    }
-    return frame('ready', binary)
+  if (command.includes('ORCA_NODE_RUNTIME_EXTRACT_FAILED')) {
+    return mocks.checksumError ? 'ORCA_NODE_RUNTIME_HASH_MISMATCH' : 'ORCA_NODE_RUNTIME_READY'
+  }
+  if (command.includes('ORCA_NODE_RUNTIME_MISSING')) {
+    return mocks.warm ? 'ORCA_NODE_RUNTIME_READY' : 'ORCA_NODE_RUNTIME_MISSING'
   }
   if (command.includes('published')) {
     return frame('published')
-  }
-  if (command.includes('status:')) {
-    return mocks.warm ? frame('ready', binary) : frame('missing')
   }
   if (mocks.cleanupError && command.includes('claim_identity') && !command.includes('old=')) {
     throw Object.assign(new Error('Cleanup teardown is unconfirmed'), {
@@ -88,10 +91,10 @@ beforeEach(async () => {
   vi.resetAllMocks()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   cacheRoot = await mkdtemp(join(tmpdir(), 'orca-vault-runtime-'))
-  runtime = join(cacheRoot, 'repair-1-orcad-bun')
+  runtime = join(cacheRoot, archiveName)
   await writeFile(runtime, 'verified runtime')
   mocks.materialize.mockResolvedValue(runtime)
-  mocks.target.mockResolvedValue('linux-x64-glibc')
+  mocks.target.mockResolvedValue({ target: 'linux-x64-glibc', glibc: { major: 2, minor: 31 } })
   mocks.warm = false
   mocks.checksumError = false
   mocks.cleanupError = false
@@ -106,7 +109,7 @@ afterEach(async () => {
 })
 
 describe('SSH OpenCode runtime setup', () => {
-  it('publishes a capable existing Node without materializing or uploading Bun', async () => {
+  it('publishes a capable existing Node without materializing or uploading a runtime', async () => {
     mocks.exec.mockResolvedValueOnce(frame('ready', '/opt/node 24/bin/node'))
     expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
       'ready'
@@ -120,10 +123,13 @@ describe('SSH OpenCode runtime setup', () => {
     })
   })
 
-  it('uses the verified materializer cache after Node 18 fails the actual read probe', async () => {
-    mocks.upload.mockImplementation(async (_conn, localDir: string) => {
-      expect(await readdir(localDir)).toEqual(['bun'])
-      expect(await readFile(join(localDir, 'bun'), 'utf8')).toBe('verified runtime')
+  it('installs the pinned Node archive into the shared runtimes/ store after the read probe fails', async () => {
+    mocks.upload.mockImplementation(async (_conn, localDir: string, remoteDir: string) => {
+      expect(remoteDir).toMatch(
+        /\/\.orca-remote\/runtimes\/\.stage-node-[0-9a-f]{64}-[0-9a-f]{16}$/
+      )
+      expect(await readdir(localDir)).toEqual([archiveName])
+      expect(await readFile(join(localDir, archiveName), 'utf8')).toBe('verified runtime')
     })
     expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
       'ready'
@@ -134,37 +140,33 @@ describe('SSH OpenCode runtime setup', () => {
     expect(mocks.materialize).toHaveBeenCalledWith('linux-x64-glibc', cacheRoot, {
       signal: expect.any(AbortSignal)
     })
-    expect(await readdir(cacheRoot)).toEqual(['repair-1-orcad-bun'])
+    expect(await readdir(cacheRoot)).toEqual([archiveName])
     expect(JSON.parse(mocks.write.mock.calls[0][3])).toEqual({ protocol: 1, executable: binary })
+    const commands: string[] = mocks.exec.mock.calls.map(([, command]) => command)
+    expect(commands.some((command) => command.includes('vault-sqlite'))).toBe(false)
   })
 
-  it('reuses a remotely verified binary without downloading it again', async () => {
+  it('reuses a runtime the host store already verified without downloading it again', async () => {
     mocks.warm = true
     expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
       'ready'
     )
     expect(mocks.materialize).not.toHaveBeenCalled()
     expect(mocks.upload).not.toHaveBeenCalled()
+    expect(JSON.parse(mocks.write.mock.calls[0][3])).toEqual({ protocol: 1, executable: binary })
   })
 
-  it('uses one staging namespace for binary uploads and atomic reference writes', async () => {
+  it('writes the reference atomically through the reserved staging namespace', async () => {
     await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())
-    const uploadOptions = mocks.upload.mock.calls[0][4]
     const writeOptions = mocks.write.mock.calls[0][4]
-    expect(uploadOptions.sftpNamespace.homeRelativeNamespaceRoot).toMatch(
+    expect(writeOptions.sftpNamespace.homeRelativeNamespaceRoot).toMatch(
       /^\.orca-remote\/\.upload-stages\/slot-0$/
     )
-    expect(uploadOptions.sftpNamespace.shellProbePath).toBe(
-      writeOptions.sftpNamespace.shellProbePath
-    )
-    expect(writeOptions.sftpNamespace.homeRelativePath).toBe(
-      `${uploadOptions.sftpNamespace.homeRelativePath}/opencode-sqlite-runtime.json`
-    )
+    expect(writeOptions.sftpNamespace.homeRelativePath).toMatch(/\/opencode-sqlite-runtime\.json$/)
   })
 
   it('skips namespace probing on system SSH', async () => {
     await ensureRemoteOpenCodeRuntime(connection(true), host, remoteHome, options())
-    expect(mocks.upload.mock.calls[0][4].sftpNamespace).toBeUndefined()
     expect(mocks.write.mock.calls[0][4].sftpNamespace).toBeUndefined()
   })
 
@@ -193,7 +195,7 @@ describe('SSH OpenCode runtime setup', () => {
     expect(mocks.upload).toHaveBeenCalledTimes(2)
   })
 
-  it('never publishes a reference after a failed remote checksum', async () => {
+  it('never publishes a reference after a failed remote runtime checksum', async () => {
     mocks.checksumError = true
     expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
       'failed'
@@ -214,7 +216,7 @@ describe('SSH OpenCode runtime setup', () => {
       })
     ).toBe('teardown-unconfirmed')
     expect(mocks.write).not.toHaveBeenCalled()
-    expect(mocks.exec).toHaveBeenCalledTimes(4)
+    expect(mocks.exec).toHaveBeenCalledTimes(3)
   })
 
   it('bounds even an unresponsive setup operation at 180 seconds', async () => {
@@ -365,12 +367,13 @@ describe('SSH OpenCode runtime setup', () => {
     expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe(
       'teardown-unconfirmed'
     )
-    expect(mocks.exec).toHaveBeenCalledTimes(4)
+    expect(mocks.exec).toHaveBeenCalledTimes(3)
+    expect(mocks.exec.mock.calls.some(([, command]) => command.startsWith('rm -rf'))).toBe(false)
     expect(mocks.write).not.toHaveBeenCalled()
     expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe(
       'teardown-unconfirmed'
     )
-    expect(mocks.exec).toHaveBeenCalledTimes(4)
+    expect(mocks.exec).toHaveBeenCalledTimes(3)
   })
 
   it('reports an unconfirmed stage cleanup to the deployment command queue', async () => {
@@ -393,13 +396,14 @@ describe('SSH OpenCode runtime setup', () => {
     expect(mocks.upload).toHaveBeenCalledOnce()
   })
 
-  it('fails optionally without uploading when all bounded stages are occupied', async () => {
+  it('fails optionally without publishing when all bounded stages are occupied', async () => {
     mocks.reservationError = true
     expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
       'failed'
     )
-    expect(mocks.exec).toHaveBeenCalledTimes(4)
-    expect(mocks.upload).not.toHaveBeenCalled()
+    // Includes the store-lock round trips (mkdir, acquire, re-probe, release) around promotion.
+    expect(mocks.exec).toHaveBeenCalledTimes(11)
+    expect(mocks.write).not.toHaveBeenCalled()
   })
 
   it('does not mistake an unanswered Node probe for an old runtime', async () => {
@@ -408,5 +412,87 @@ describe('SSH OpenCode runtime setup', () => {
       'failed'
     )
     expect(mocks.materialize).not.toHaveBeenCalled()
+  })
+})
+
+describe('SSH OpenCode runtime setup on a Windows host', () => {
+  const windows = getRemoteHostPlatform('win32-x64')
+  const home = 'C:/Users/ada'
+  const windowsRelayDir = `${home}/.orca-remote/relay-build`
+  const sha = NODE_RUNTIME_ASSETS['win32-x64'].executableSha256
+  const storeNode = `${home}/.orca-remote/runtimes/node-${sha}/node.exe`
+
+  function answerWindows(storeReady: boolean): string[] {
+    const scripts: string[] = []
+    mocks.target.mockResolvedValue({ target: 'win32-x64', glibc: null })
+    mocks.exec.mockImplementation(async (_conn, command: string) => {
+      const script = decodeRemotePowerShellScript(command)
+      scripts.push(script)
+      if (script.includes('SELECT 1 AS ready')) {
+        return frame('unsupported')
+      }
+      if (script.includes('.store-lock') && script.includes('CreateNew')) {
+        return 'OK'
+      }
+      if (script.includes('Invoke-OrcaPromote')) {
+        return 'ORCA_NODE_RUNTIME_READY'
+      }
+      if (script.includes('ORCA_NODE_RUNTIME_MISSING')) {
+        return storeReady ? 'ORCA_NODE_RUNTIME_READY' : 'ORCA_NODE_RUNTIME_MISSING'
+      }
+      if (script.includes('staging quota is full')) {
+        return `__ORCA_UPLOAD_STAGE_SLOT__${script.match(/\.sftp-namespace-[0-9a-f]{32}/)?.[0]}:slot-0`
+      }
+      if (script.includes('COPYFILE_EXCL')) {
+        return frame('published')
+      }
+      return ''
+    })
+    return scripts
+  }
+
+  it('installs the official archive through the runtime store, not a client-extracted node.exe', async () => {
+    const scripts = answerWindows(false)
+    expect(
+      await ensureRemoteOpenCodeRuntime(connection(true), windows, home, {
+        nodePath: 'C:/Program Files/nodejs/node.exe',
+        relayDir: windowsRelayDir,
+        cacheRoot
+      })
+    ).toBe('ready')
+    expect(mocks.materialize).toHaveBeenCalledWith('win32-x64', cacheRoot, expect.any(Object))
+    expect(mocks.upload).toHaveBeenCalledOnce()
+    expect(mocks.upload.mock.calls[0][2]).toMatch(
+      /\/runtimes\/\.stage-node-[0-9a-f]{64}-[0-9a-f]{16}$/
+    )
+    expect(scripts.some((script) => script.includes('Invoke-OrcaPromote'))).toBe(true)
+    expect(JSON.parse(mocks.write.mock.calls[0][3])).toEqual({ protocol: 1, executable: storeNode })
+    const publish = scripts.find((script) => script.includes('COPYFILE_EXCL'))
+    expect(publish).toContain(`${windowsRelayDir}/.runtime-ref-node-${sha}`)
+    // Stage fencing reads file IDs through the verified node.exe, so no script compiles C#.
+    const stageScripts = scripts.filter((script) => script.includes('$getFileIdentity'))
+    expect(stageScripts.length).toBeGreaterThan(0)
+    for (const script of stageScripts) {
+      expect(script).toContain(`$orcaIdentityNode = '${storeNode}'`)
+      expect(script).not.toContain('Add-Type')
+    }
+  })
+
+  it("reuses a verified store runtime and prefers the relay's own verified node.exe", async () => {
+    const scripts = answerWindows(true)
+    const relayNode = `${home}/.orca-remote/runtimes/node-other/node.exe`
+    expect(
+      await ensureRemoteOpenCodeRuntime(connection(true), windows, home, {
+        nodePath: relayNode,
+        verifiedNodePath: relayNode,
+        relayDir: windowsRelayDir,
+        cacheRoot
+      })
+    ).toBe('ready')
+    expect(mocks.materialize).not.toHaveBeenCalled()
+    expect(mocks.upload).not.toHaveBeenCalled()
+    for (const script of scripts.filter((s) => s.includes('$getFileIdentity'))) {
+      expect(script).toContain(`$orcaIdentityNode = '${relayNode}'`)
+    }
   })
 })

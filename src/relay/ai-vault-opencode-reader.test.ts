@@ -14,6 +14,7 @@ import { writeOpenCodeSqliteDatabase } from '../main/ai-vault/session-scanner-op
 import { createRelayAiVaultFilesystemProvider } from './ai-vault-service-filesystem'
 import {
   createRelayOpenCodeReader,
+  openCodeReaderUnavailableMessage,
   type RelayOpenCodeReaderOptions
 } from './ai-vault-opencode-reader'
 
@@ -99,8 +100,9 @@ describe('relay OpenCode reader', () => {
     expect(issues[0]).toMatchObject({
       agent: 'opencode',
       kind: 'scope',
-      message: expect.stringContaining('waiting')
+      message: openCodeReaderUnavailableMessage(process.version)
     })
+    expect(issues[0]?.message).toContain('22.16 or newer')
     expect(create).not.toHaveBeenCalled()
     await writeFile(
       join(baseDir, 'opencode-sqlite-runtime.json'),
@@ -223,11 +225,11 @@ describe('relay OpenCode reader', () => {
       list: (args) =>
         args.agent === 'opencode2'
           ? listOpenCode2SqliteSessions(args)
-          : listOpenCodeSqliteSessions(args),
+          : listOpenCodeSqliteSessions({ ...args, agent: 'opencode' }),
       parse: async (args) =>
         args.agent === 'opencode2'
           ? parseOpenCode2SqliteSession(args)
-          : parseOpenCodeSqliteSession(args),
+          : parseOpenCodeSqliteSession({ ...args, agent: 'opencode' }),
       dispose() {}
     })
     const provider = createRelayAiVaultFilesystemProvider({

@@ -18,14 +18,19 @@ import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/os
 import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
 import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-recovery-triggers'
+import { useTerminalViewerColorPublication } from './use-terminal-viewer-color-publication'
 import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/browser-user-agent-migration-notice'
+import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/codex-terminal-server-isolation-notice'
+import { useCodexSharedSettingsNotice } from '../components/terminal-pane/codex-shared-settings-notice'
+import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
+import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 
 /**
  * App-level subscriptions that must outlive any individual surface. Each one is here because
  * the component that consumes its result unmounts (right sidebar, explorer, terminal) or is
  * absent entirely on the landing path.
  */
-export function useAppShellServices(options: { floatingPanelVisible: boolean }): void {
+export function useAppShellServices(): void {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const primarySelectionMiddleClickPaste = useAppStore((s) =>
@@ -39,17 +44,22 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   // Subscribe to IPC push events
   useIpcEvents()
   useRemoteRuntimeRecoveryTriggers()
+  useVisibleReviewRefreshReporting()
+  useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
+  useTerminalViewerColorPublication()
   useAutomationDispatchEvents()
   // Why: git polling lives at App level (RightSidebar unmounts when closed, stranding stale Rebasing/Merging badges); gate on workspaceSessionReady so it doesn't compete with first paint.
   useGitStatusPolling({ enabled: workspaceSessionReady })
   // Why: wire file-change watching at App level so the editor keeps hearing FS changes when Explorer unmounts (right-sidebar switches to Source Control/Checks).
   useEditorExternalWatch()
   useGlobalFileDrop()
-  useAutoAckViewedAgent(options.floatingPanelVisible)
+  useAutoAckViewedAgent()
   useAppMenuPaste()
   useAppMenuSelectionActions()
   useLargeTextControlPaste()
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
   useBrowserIdentityMigrationNotice()
+  useCodexTerminalServerIsolationNotice()
+  useCodexSharedSettingsNotice()
 }

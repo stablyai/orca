@@ -49,6 +49,12 @@ function renderPanel(search: PanelSearch) {
 }
 
 describe('AiVaultPanelSearch', () => {
+  it('explains an unsupported agent without reporting zero matches or a missing host service', () => {
+    renderPanel(panelSearch({ response: { kind: 'unavailable', reason: 'unsupported-agent' } }))
+    expect(screen.getByRole('status').textContent).toContain(
+      'does not support history search for the selected agent'
+    )
+  })
   it('names every computer the merge could not search, with its reason', () => {
     const response = searchResults()
     renderPanel(

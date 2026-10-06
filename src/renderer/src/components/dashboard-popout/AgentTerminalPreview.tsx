@@ -1,11 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
+import { PaneReparentFrameTracker } from '@/lib/pane-manager/pane-reparent-frame-tracker'
 import '@xterm/xterm/css/xterm.css'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
-import { buildPreviewTerminalOptions } from './preview-terminal-options'
+import {
+  buildPreviewTerminalOptions,
+  previewAdvertisesKittyKeyboard
+} from './preview-terminal-options'
 import {
   previewTerminalRemountKey,
   usePreviewTerminalAppearanceSync,
@@ -29,8 +33,7 @@ import type { AgentTerminalPreviewProps } from './agent-terminal-preview-props'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
-// Why: main only ever serializes PREVIEW_SCROLLBACK_ROWS of history into this
-// terminal, so the pane's user-configured scrollback would only cost memory.
+// Preview snapshots bound history; pane scrollback would only cost memory.
 const PREVIEW_SCROLLBACK_BUFFER_ROWS = 1000
 const RESYNC_RETRY_DELAY_MS = 150
 // A fallback-sourced snapshot that does not carry the granted grid is re-asked
@@ -115,11 +118,15 @@ export function AgentTerminalPreview({
       return
     }
     let disposed = false
+    const phaseFrames = new PaneReparentFrameTracker(() => disposed)
     let terminal: Terminal | null = null
     let offData: (() => void) | null = null
+    const mountTerminalInput = terminalInputRef.current
     // Why: mirrors the pane's tracker — the policy needs the flags the TUI
     // negotiated, and this preview parses the same output stream the pane does.
-    const kittyKeyboardModes = new TerminalKittyKeyboardModeTracker()
+    const kittyKeyboardModes = new TerminalKittyKeyboardModeTracker({
+      kittyKeyboard: previewAdvertisesKittyKeyboard(mountTerminalInput)
+    })
     let refreshInFlight = false
     let refreshAgain = false
     let hasAutoFocused = false
@@ -161,7 +168,7 @@ export function AgentTerminalPreview({
       typeof ResizeObserver === 'undefined'
         ? null
         : new ResizeObserver(() => {
-            scheduleFit()
+            boxFit.schedule()
             gridClaim.schedule()
           })
     if (container.parentElement) {
@@ -175,7 +182,10 @@ export function AgentTerminalPreview({
     // out when its callback fires; lifting the veil there shows the old frame.
     const goLive = (): void => {
       livePending = false
-      requestAnimationFrame(() => {
+      if (disposed) {
+        return
+      }
+      phaseFrames.request(() => {
         if (!disposed && !snapshotRetry.isUnavailable()) {
           setPhase('live')
         }
@@ -253,7 +263,7 @@ export function AgentTerminalPreview({
         terminal = new Terminal(
           buildPreviewTerminalOptions({
             settings: settingsRef.current,
-            terminalInput: terminalInputRef.current,
+            terminalInput: mountTerminalInput,
             macOptionIsMeta: macOptionAsAltRef.current === 'true',
             theme: terminalTheme,
             themeMode: terminalMode,
@@ -432,6 +442,8 @@ export function AgentTerminalPreview({
 
     return () => {
       disposed = true
+      phaseFrames.cancelPending()
+      boxFit.dispose()
       if (retryTimer) {
         window.clearTimeout(retryTimer)
       }

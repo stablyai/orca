@@ -3,6 +3,7 @@ import type { TabGroup } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-surface'
 import { buildSplitNode, collapseGroupLayout, replaceLeaf } from './tabs-layout'
+import { ownsGlobalSelection } from '../../global-selection-owner'
 
 export function createTabsGroupActions(
   set: TabsSliceSet,
@@ -133,7 +134,7 @@ export function createTabsGroupActions(
           layoutByWorktree: collapsedState.layoutByWorktree,
           activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree,
           recentQuickCommandIdByGroup: remainingRecent,
-          ...(current.activeWorktreeId === worktreeId
+          ...(ownsGlobalSelection(current, worktreeId)
             ? buildActiveSurfacePatch(
                 {
                   ...current,

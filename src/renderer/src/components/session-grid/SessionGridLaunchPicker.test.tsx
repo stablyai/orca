@@ -115,6 +115,7 @@ beforeEach(() => {
     folderWorkspaces: [],
     projectGroups: [],
     activeWorktreeId: null,
+    ptyIdsByTabId: { 'tab-new': ['pty-new'] },
     detectedAgentIds: [],
     remoteDetectedAgentIds: {},
     runtimeDetectedAgentIds: {},

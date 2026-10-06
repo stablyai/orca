@@ -93,6 +93,7 @@ vi.mock('@xterm/xterm', () => ({
     scrollToTop = vi.fn()
     scrollToBottom = vi.fn()
     selectAll = vi.fn()
+    hasSelection = vi.fn(() => this.selectionText !== '')
     getSelection = vi.fn(() => this.selectionText)
     attachCustomKeyEventHandler = vi.fn((handler: (event: KeyboardEvent) => boolean) => {
       this.customKeyHandler = handler

@@ -177,6 +177,36 @@ describe('StarNagAgentValueMomentObserver', () => {
     expect(showAgentValueMoment).not.toHaveBeenCalled()
   })
 
+  it('ignores a prompted done whose turn failed', async () => {
+    ;({ root, container } = renderObserver())
+
+    setAgentEntries({ pane: entry({ state: 'working' }) })
+    setAgentEntries({
+      pane: entry({
+        state: 'done',
+        mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1 }
+      })
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(2400)
+    })
+
+    expect(agentValueMoment).not.toHaveBeenCalled()
+  })
+
+  it('ignores a return to a done dated before the work it ended', async () => {
+    ;({ root, container } = renderObserver())
+
+    setAgentEntries({ pane: entry({ state: 'done', stateStartedAt: 1 }) })
+    setAgentEntries({ pane: entry({ state: 'working', stateStartedAt: 5 }) })
+    setAgentEntries({ pane: entry({ state: 'done', stateStartedAt: 1 }) })
+    await act(async () => {
+      vi.advanceTimersByTime(2400)
+    })
+
+    expect(agentValueMoment).not.toHaveBeenCalled()
+  })
+
   it('waits for other live agents and recent typing to quiet', async () => {
     ;({ root, container } = renderObserver())
 

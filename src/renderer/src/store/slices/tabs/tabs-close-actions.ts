@@ -8,8 +8,6 @@ import {
   sanitizeRecentTabIds
 } from '../tab-group-state'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { beginStructuredAgentSessionTabClose } from '@/runtime/structured-agent-session-tab-retirement'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
@@ -17,7 +15,11 @@ import {
 } from '@/lib/structured-agent-session-launch-registry'
 import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
+import { ownsGlobalSelection } from '../../global-selection-owner'
+import {
+  structuredAgentSessionFocusOwner,
+  structuredAgentSessionTargetForTab
+} from '@/runtime/structured-agent-session-owner'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -52,23 +54,27 @@ export function createTabsCloseActions(
         const provisional =
           shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
           hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, tab.entityId)
-        if (provisional) {
-          clearWebSessionFocusIntentIfMatches(
-            { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+        const target = structuredAgentSessionTargetForTab(state, tab)
+        if (target) {
+          if (provisional) {
+            clearWebSessionFocusIntentIfMatches(
+              structuredAgentSessionFocusOwner(target),
+              worktreeId,
+              `agent-session:${tab.entityId}`
+            )
+          }
+          beginStructuredAgentSessionTabClose({
+            target,
             worktreeId,
-            `agent-session:${tab.entityId}`
-          )
+            sessionId: tab.entityId,
+            provisional
+          })
+        } else {
+          // Closing still removes the tab; no host can be named to stop its chat on.
+          console.warn('[structured-agent-session] close found no owning host', tab.entityId)
         }
-        beginStructuredAgentSessionTabClose({
-          target: getActiveRuntimeTarget({
-            activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-          }),
-          worktreeId,
-          tabId: tab.id,
-          sessionId: tab.entityId,
-          provisional
-        })
         get().clearNativeChatLaunchDraft(structuredAgentSessionTabId(tab.entityId))
+        // The unsent draft stays: it belongs to the conversation, which can be reopened from history.
       }
       // Why: on closing the active tab, walk the MRU stack to the previously-active tab; pickNextActiveTab falls back to the neighbor.
       const nextActiveTabId =
@@ -166,7 +172,7 @@ export function createTabsCloseActions(
                 }
               }
             : {}),
-          ...(!shouldDeactivateWorktree && current.activeWorktreeId === worktreeId
+          ...(!shouldDeactivateWorktree && ownsGlobalSelection(current, worktreeId)
             ? buildActiveSurfacePatch(
                 {
                   ...current,

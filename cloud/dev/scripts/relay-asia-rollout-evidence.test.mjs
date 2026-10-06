@@ -330,7 +330,7 @@ test('rejects a C27 canary without a real control and splice', () => {
 
 for (const [label, mutation, message] of [
   ['Asia selections', (input) => input.logs.forEach((entry) => { entry.jsonPayload.selectedRegionsDelta = {} }), /no Asia selections/],
-  ['region fallbacks', (input) => { input.logs[0].jsonPayload.regionFallbacksDelta = { 'asia-east2': 1 } }, /regionFallbacks/],
+  ['Asia-targeted region fallbacks', (input) => { input.logs[0].jsonPayload.regionFallbacksDelta = { 'asia-east2': 1 } }, /C27 canary asiaRegionFallbacks must be zero/],
   ['unavailable regions', (input) => { input.logs[0].jsonPayload.unavailableRegionsDelta = { 'asia-east2': 1 } }, /unavailableRegions/],
   ['C27 SQL failures', (input) => { input.logs[1].jsonPayload.sqlFailuresDelta = 1 }, /C27 canary relaySqlFailures must be zero/],
   ['C27 pool waiting', (input) => { input.logs[1].jsonPayload.databasePoolWaiting = 1 }, /databasePoolWaitingMax/],
@@ -387,6 +387,103 @@ test('builds and verifies a C30 canary from C30 runtime metrics and placement', 
   assert.throws(() => verifyRolloutEvidence(
     evidence, workflowRun(evidence), verifyExpected('production-c27-canary', { selectorGeneration: 9 })
   ), /evidence kind is invalid/)
+})
+
+test('builds a C31 canary that only C31 placement satisfies', () => {
+  const c31 = 'production-gce-c31'
+  const evidence = buildProductionCanaryEvidence(canaryInput({}, c31))
+  assert.equal(evidence.kind, 'production-c31-canary')
+  assert.equal(verifyRolloutEvidence(
+    evidence, workflowRun(evidence),
+    verifyExpected('production-c31-canary', { cellIds: [c31], selectorGeneration: 9 })
+  ), evidence)
+  const onC30 = canaryInput({}, c31)
+  onC30.loadReport.assignedCellOrigins = ['https://c30.relay.onorca.dev']
+  assert.throws(() => buildProductionCanaryEvidence(onC30), /C31 canary load was not placed only on C31/)
+})
+
+test('builds a C34 canary that only C34 placement satisfies', () => {
+  const c34 = 'production-gce-c34'
+  const evidence = buildProductionCanaryEvidence(canaryInput({}, c34))
+  assert.equal(evidence.kind, 'production-c34-canary')
+  assert.equal(verifyRolloutEvidence(
+    evidence, workflowRun(evidence),
+    verifyExpected('production-c34-canary', { cellIds: [c34], selectorGeneration: 9 })
+  ), evidence)
+  const onC31 = canaryInput({}, c34)
+  onC31.loadReport.assignedCellOrigins = ['https://c31.relay.onorca.dev']
+  assert.throws(() => buildProductionCanaryEvidence(onC31), /C34 canary load was not placed only on C34/)
+})
+
+test('records but does not gate organic US-targeted fallbacks during a canary', () => {
+  // Mirrors C31's 2026-10-01 canary: US-targeted fallbacks, none targeting Asia.
+  const input = canaryInput({}, 'production-gce-c31')
+  input.logs.filter((entry) => entry.jsonPayload.role === 'director').forEach((entry) => {
+    entry.jsonPayload.regionFallbacksDelta = { 'us-central1': 24 }
+  })
+  const evidence = buildProductionCanaryEvidence(input)
+  assert.equal(evidence.metrics.regionFallbacks, 144)
+  assert.equal(evidence.metrics.usRegionFallbacks, 144)
+  assert.equal(evidence.metrics.asiaRegionFallbacks, 0)
+  input.logs[0].jsonPayload.regionFallbacksDelta = { 'us-central1': 24, 'asia-east2': 1 }
+  assert.throws(() => buildProductionCanaryEvidence(input), /C31 canary asiaRegionFallbacks must be zero/)
+})
+
+// A root-region cell logs region us-central1, and the directors place US hosts too.
+function usCanaryInput(cellId) {
+  const input = canaryInput({}, cellId)
+  for (const entry of input.logs) {
+    if (entry.jsonPayload.role === 'cell') entry.jsonPayload.region = 'us-central1'
+    else entry.jsonPayload.selectedRegionsDelta = { 'asia-east2': 1, 'us-central1': 3 }
+  }
+  return input
+}
+
+test('builds and verifies C32 and C33 canaries from their own us-central1 metrics', () => {
+  for (const cellId of ['production-gce-c32', 'production-gce-c33']) {
+    const label = cellId.split('-').at(-1).toUpperCase()
+    const kind = `production-${label.toLowerCase()}-canary`
+    const evidence = buildProductionCanaryEvidence(usCanaryInput(cellId))
+    assert.equal(evidence.kind, kind)
+    assert.equal(evidence.metrics.usSelections, 18)
+    assert.equal(verifyRolloutEvidence(
+      evidence, workflowRun(evidence), verifyExpected(kind, { cellIds: [cellId], selectorGeneration: 9 })
+    ), evidence)
+    // The Asia-region filter would find none of a US cell's samples.
+    assert.throws(
+      () => buildProductionCanaryEvidence(canaryInput({}, cellId)),
+      new RegExp(`${cellId} metrics`)
+    )
+    const elsewhere = usCanaryInput(cellId)
+    elsewhere.loadReport.assignedCellOrigins = ['https://c26.relay.onorca.dev']
+    assert.throws(
+      () => buildProductionCanaryEvidence(elsewhere),
+      new RegExp(`${label} canary load was not placed only on ${label}`)
+    )
+    const noUs = usCanaryInput(cellId)
+    for (const entry of noUs.logs) {
+      if (entry.jsonPayload.role === 'director') entry.jsonPayload.selectedRegionsDelta = { 'asia-east2': 1 }
+    }
+    assert.throws(() => buildProductionCanaryEvidence(noUs), /observed no US selections/)
+  }
+})
+
+test('records but does not gate either region\'s fallbacks during a US canary', () => {
+  const input = usCanaryInput('production-gce-c32')
+  for (const entry of input.logs.filter(({ jsonPayload }) => jsonPayload.role === 'director')) {
+    entry.jsonPayload.regionFallbacksDelta = { 'us-central1': 24, 'asia-east2': 1 }
+  }
+  const evidence = buildProductionCanaryEvidence(input)
+  assert.equal(evidence.metrics.usRegionFallbacks, 144)
+  assert.equal(evidence.metrics.asiaRegionFallbacks, 6)
+  // Every other gate still binds a US canary.
+  input.logs.find(({ jsonPayload }) => jsonPayload.role === 'cell').jsonPayload.sqlFailuresDelta = 1
+  assert.throws(() => buildProductionCanaryEvidence(input), /relaySqlFailures must be zero/)
+})
+
+test('keeps the Asia canary evidence field set unchanged', () => {
+  const evidence = buildProductionCanaryEvidence(canaryInput({}, 'production-gce-c31'))
+  assert.equal('usSelections' in evidence.metrics, false)
 })
 
 test('rejects a C30 canary that C30 did not serve', () => {

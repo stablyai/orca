@@ -19,7 +19,6 @@ import {
   applyCommandMarkerBoundaries,
   clearCommandMarkerCacheForTests,
   commandMarkersAsMessages,
-  isCommandMarkerId,
   readCommandMarkerCache
 } from './native-chat-command-marker'
 import { stripNoiseMessages } from './native-chat-noise'
@@ -694,11 +693,6 @@ describe('commandMarkersAsMessages', () => {
     const markers = commandMarkersAsMessages([{ id: 'c1', command: '/compact', sentAt: 1 }])
     expect(stripNoiseMessages(markers)).toEqual(markers)
   })
-
-  it('isCommandMarkerId recognizes the prefix', () => {
-    expect(isCommandMarkerId('command:c1')).toBe(true)
-    expect(isCommandMarkerId('pending:p1')).toBe(false)
-  })
 })
 
 describe('command marker cache', () => {
@@ -806,5 +800,16 @@ describe('scope-cache key counts stay bounded (memory-leak regression)', () => {
     expect(readPendingSendCache({ paneKey: `tab-${CAP + 4}:leaf`, agent: 'claude' })).toHaveLength(
       1
     )
+  })
+})
+
+describe('commandMarkersAsMessages with a host answer', () => {
+  it('shows the answer in place of the Ran line', () => {
+    const [message] = commandMarkersAsMessages([
+      { id: 'c2', command: '/context', sentAt: 9, output: 'Context: 54.6k / 200k tokens (27%)' }
+    ])
+    expect(message?.role).toBe('system')
+    // Plain text: it draws as the muted aside the Ran line would have been.
+    expect(message?.blocks).toEqual([{ type: 'text', text: 'Context: 54.6k / 200k tokens (27%)' }])
   })
 })

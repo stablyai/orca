@@ -13,7 +13,7 @@ try {
   await build({
     stdin: {
       contents: [
-        `export { runProcessSync } from ${JSON.stringify(join(root, 'src/shared/child-process/run-process.ts'))}`
+        `export { runProcessSync, spawnProcess } from ${JSON.stringify(join(root, 'src/shared/child-process/run-process.ts'))}`
       ].join('\n'),
       resolveDir: root,
       sourcefile: 'script-child-process-entry.ts'
@@ -31,3 +31,17 @@ try {
 }
 
 export const runProcessSync = implementation.runProcessSync
+
+export const spawnProcess = implementation.spawnProcess
+
+/** Why a failed child failed, for CI logs where an empty stderr alone says nothing. */
+export function describeProcessFailure(result) {
+  const detail = [
+    `code=${result.code ?? 'none'}`,
+    `signal=${result.signal ?? 'none'}`,
+    ...(result.timedOut ? ['timed out'] : []),
+    ...(result.outputTruncated ? ['output truncated'] : [])
+  ].join(' ')
+  const stream = (name, text) => (text?.trim() ? `\n${name}:\n${text.trim().slice(-4000)}` : '')
+  return `${detail}${stream('stdout', result.stdout)}${stream('stderr', result.stderr)}`
+}

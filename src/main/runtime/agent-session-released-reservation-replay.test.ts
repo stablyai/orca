@@ -12,8 +12,10 @@ import {
 } from '../../shared/agent-session-host-authority'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionLease } from '../../shared/agent-session-record'
-import { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -33,7 +35,7 @@ afterEach(async () => {
 })
 
 function open(): Promise<AgentSessionRecordStore> {
-  return AgentSessionRecordStore.open({ directory, hostId: 'local' })
+  return openTestAgentSessionRecordStore(directory)
 }
 
 function createRequest(
@@ -136,7 +138,7 @@ describe('a create retried after recovery released its reservation', () => {
       fence: 1,
       link: {
         linkId: 'link-1',
-        handle: { provider: 'codex', threadId: 'thread-1' },
+        handle: codexProviderHandle('thread-1'),
         origin: 'created',
         mintedAtFence: 1,
         observedAt: NOW

@@ -8,7 +8,11 @@
 // The fence still moves, so the next owner is a new generation: an attach or settlement still
 // holding the stopped owner's fence is refused as stale rather than acting on its successor.
 
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import {
+  MAX_AGENT_SESSION_DEATH_DETAIL_CHARS,
+  type AgentSessionRecord
+} from '../../shared/agent-session-record'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
 import { assertFence, withLease } from './agent-session-lease-transitions'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
@@ -37,7 +41,7 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
   if (!isSurfaceReleasableAgentSessionRecord(record)) {
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
   return withLease(record, {
     ...record.lease,
@@ -49,8 +53,12 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
     lastRenewedAt: args.now,
     deathEvidence: {
       kind: 'exit-observed',
-      detail: args.exitReason ?? 'the last surface holding this session released it',
-      observedAt: args.exitObservedAt ?? args.now
+      // A provider's exit reason can carry kilobytes of stderr; a longer detail fails the write.
+      detail: args.exitReason
+        ? args.exitReason.slice(0, MAX_AGENT_SESSION_DEATH_DETAIL_CHARS)
+        : 'the last surface holding this session released it',
+      observedAt: args.exitObservedAt ?? args.now,
+      ownerFence: record.lease.runtimeFence
     }
   })
 }

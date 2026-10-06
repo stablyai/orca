@@ -33,6 +33,8 @@ import type { TerminalUnavailableCause } from '../shared/terminal-unavailable-ca
 export type NodePtyBindingSurvey = {
   /** The node-pty install the relay would load from. */
   moduleDir: string
+  /** False when `moduleDir` itself is absent — the no-toolchain deploy skips node-pty entirely. */
+  installed: boolean
   /** The compiled binding the loader would open, or null when no directory holds one. */
   bindingPath: string | null
   /** Directories checked, so "nothing is installed" is a statement with evidence. */
@@ -312,8 +314,7 @@ function remedyFor(diagnosis: NodePtyUnavailableDiagnosis): string {
     case 'dependency_missing':
       return (
         `node-pty has no compiled binary on this host (${searchedPhrase(survey)}). ` +
-        `The C/C++ build tools needed to compile it are present, so reconnect to reinstall ` +
-        `the relay's native modules.`
+        `${toolchainPresenceSentence(host, toolchain)}Reconnect to reinstall the relay's native modules.`
       )
     case 'abi_mismatch':
       return (
@@ -355,7 +356,25 @@ function remedyFor(diagnosis: NodePtyUnavailableDiagnosis): string {
   }
 }
 
+// Claims "present" only off a probe that answered; the probe runs on Linux only, since
+// node-pty ships prebuilds elsewhere and a reinstall there needs no compiler.
+function toolchainPresenceSentence(
+  host: NodePtyUnavailableHost,
+  toolchain: BuildToolchainStatus | null
+): string {
+  if (toolchain) {
+    return 'The C/C++ build tools needed to compile it are present. '
+  }
+  if (host.platform === 'linux') {
+    return 'Whether the C/C++ build tools needed to compile it are installed could not be checked. '
+  }
+  return ''
+}
+
 function searchedPhrase(survey: NodePtyBindingSurvey | null): string {
+  if (survey && !survey.installed) {
+    return `node-pty is not installed at ${survey.moduleDir}`
+  }
   return survey && survey.searched.length > 0
     ? `checked ${survey.searched.join(', ')} under ${survey.moduleDir}`
     : 'nothing was found where node-pty looks'

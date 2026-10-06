@@ -4,6 +4,8 @@ import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
 import { cloneWorkspaceSessionState } from '../restoring-sessions/session-owner-fields'
+import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../restoring-sessions/workspace-session-write-rollback'
+import { clearReplacedPaneBinding } from './replaced-pane-binding'
 
 import type { PtyBindingSourceExpectation } from './store'
 
@@ -67,6 +69,59 @@ export class PtyBindingPersistenceOperations {
     this[ptyBindingPersistenceOperationsContext] = { runtime, sessions }
   }
 
+  /** Clears a stopped process's binding, keeping the pane; fenced on the id, which is dead in any incarnation. */
+  async retirePtyBinding(
+    binding: Pick<PersistPtyBindingArgs, 'worktreeId' | 'tabId' | 'leafId' | 'ptyId'>,
+    hostId?: string | null
+  ): Promise<boolean> {
+    const { runtime, sessions } = this[ptyBindingPersistenceOperationsContext]
+    const resolved = resolveHostId(hostId)
+    const publish = (session: WorkspaceSessionState): void => {
+      if (resolved === LOCAL_EXECUTION_HOST_ID) {
+        runtime.state.workspaceSession = session
+      } else {
+        runtime.state.workspaceSessionsByHostId = {
+          ...runtime.state.workspaceSessionsByHostId,
+          [resolved]: session
+        }
+      }
+      runtime.dirtyProfileStateDomains?.add(
+        resolved === LOCAL_EXECUTION_HOST_ID ? 'workspaceSession' : 'workspaceSessionsByHostId'
+      )
+    }
+    return runtime.runDurableMutation(() => {
+      const session = sessions.getWorkspaceSession(resolved)
+      const currentId =
+        session.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[binding.leafId]
+      if (!currentId) {
+        return { value: true, persist: 'if-dirty' }
+      }
+      if (currentId !== binding.ptyId) {
+        return { value: false, persist: false }
+      }
+      if (!session.tabsByWorktree[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)) {
+        return { value: false, persist: false }
+      }
+      const before = cloneWorkspaceSessionState(session)
+      const retired = clearReplacedPaneBinding(session, { ...binding, parentTabId: binding.tabId })
+      // Host retirement must not run renderer snapshot repair, which would put the old binding back.
+      publish(retired)
+      const staged = cloneWorkspaceSessionState(retired)
+      return {
+        value: true,
+        rollback: () => {
+          publish(
+            rollbackWorkspaceSessionAfterFailedAsyncWrite(
+              before,
+              staged,
+              sessions.getWorkspaceSession(resolved)
+            )
+          )
+        }
+      }
+    })
+  }
+
   async persistPtyBinding(
     input: PersistPtyBindingArgs | (() => PersistPtyBindingArgs | null),
     hostId?: string | null
@@ -92,7 +147,10 @@ export class PtyBindingPersistenceOperations {
         const paneKey = `${args.tabId}:${args.leafId}`
         const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
         const session = sessions.getWorkspaceSession(resolvedHostId)
-        if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey)) {
+        const partitions = sessions
+          .getWorkspaceSessionHostIds()
+          .map((hostId) => sessions.getWorkspaceSession(hostId))
+        if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey, partitions)) {
           outcome = 'refused'
           return { value: false, persist: false }
         }

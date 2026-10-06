@@ -52,6 +52,8 @@ export type SessionOptionDescriptor = {
   transport: NativeChatLiveOptionTransport
   settable: boolean
   disabledReason?: SessionOptionDisabledReason
+  /** The host is still listing this option's choices: the pill keeps its value but cannot open. */
+  choicesPending?: true
   /** Why: picker-only and toggle-only PTY commands cannot be represented as
    * a truthful radio/checkbox state, so the producer exposes an action row. */
   action?: { type: 'agent-picker' | 'toggle-command' }

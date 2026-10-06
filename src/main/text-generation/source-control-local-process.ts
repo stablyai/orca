@@ -1,4 +1,6 @@
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
+import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
 import { UnsafeWindowsBatchArgumentsError } from '../win32-utils'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import {
@@ -22,6 +24,8 @@ import type {
   TextGenerationOperation
 } from './source-control-text-generation-types'
 
+const SOURCE_CONTROL_KILL_SITE = 'source-control-text-generation'
+
 export async function killSourceControlAgentProcess(
   child: SpawnedSourceControlAgentProcess
 ): Promise<void> {
@@ -29,18 +33,57 @@ export async function killSourceControlAgentProcess(
   if (!pid) {
     return
   }
+  if (child.supervised) {
+    await stopSupervisedChildProcess(child, { site: SOURCE_CONTROL_KILL_SITE })
+    return
+  }
   if (process.platform === 'win32') {
     // taskkill owns the tree, but the own-Chromium gate can refuse the
     // pid-addressed walk; the handle-addressed root kill below cannot reach the
     // recycled pid it refused, and callers release the managed-home lock on this
     // promise, so it must not resolve having killed nothing.
-    await terminateWindowsProcessTree(pid, { site: 'source-control-text-generation' })
+    await terminateWindowsProcessTree(pid, { site: SOURCE_CONTROL_KILL_SITE })
   }
   try {
     child.kill('SIGKILL')
   } catch {
     // The process may exit between the PID check and kill.
   }
+}
+
+// Why: Windows caps the CreateProcess command line at 32,767 UTF-16 code units,
+// including the executable path, per-arg quoting, and separators. The budget
+// leaves headroom for cmd.exe `/d /c` shim wrappers.
+const WINDOWS_COMMAND_LINE_UNIT_BUDGET = 30_000
+
+function exceedsWindowsCommandLineBudget(command: string, args: string[]): boolean {
+  let units = command.length + args.length
+  for (const arg of args) {
+    units += arg.length + 2
+  }
+  return units > WINDOWS_COMMAND_LINE_UNIT_BUDGET
+}
+
+// Why separate from the Windows budget: Linux caps a SINGLE argv entry at
+// MAX_ARG_STRLEN (32 pages, so 128 KiB on a 4-KiB-page host) and execve fails with
+// E2BIG past it, well before the much larger total-argv limit. Agents that deliver the
+// whole prompt as one argument trip this on a big staged diff, so the cap is per-arg
+// and in bytes, not units. Headroom left for hosts whose page size differs.
+const LINUX_SINGLE_ARGUMENT_BYTE_BUDGET = 120 * 1024
+
+function exceedsLinuxArgumentBudget(args: string[]): boolean {
+  return args.some((arg) => Buffer.byteLength(arg, 'utf8') > LINUX_SINGLE_ARGUMENT_BYTE_BUDGET)
+}
+
+/** The user-facing reason this plan cannot be spawned here, or null when it can. */
+function argumentBudgetFailure(plan: CommitMessagePlan): string | null {
+  if (process.platform === 'win32' && exceedsWindowsCommandLineBudget(plan.binary, plan.args)) {
+    return `${plan.label} prompt is too large for the Windows command line. Stage fewer changes and try again.`
+  }
+  if (process.platform === 'linux' && exceedsLinuxArgumentBudget(plan.args)) {
+    return `${plan.label} prompt is too large to pass as a single command-line argument. Stage fewer changes and try again.`
+  }
+  return null
 }
 
 export function runLocalSourceControlPlan(input: {
@@ -58,9 +101,18 @@ export function runLocalSourceControlPlan(input: {
   const processClosed = new Promise<void>((resolve) => {
     markProcessClosed = resolve
   })
+  const couldNotStart = `${plan.label} could not be started. Check the agent command in Settings and try again.`
   const result = new Promise<InternalTextGenerationResult>((resolve) => {
     let child: SpawnedSourceControlAgentProcess
     try {
+      // Why before spawn: agents like jcode ride the whole prompt on argv, so a large
+      // staged diff fails at execve with an error the user cannot act on.
+      const budgetFailure = argumentBudgetFailure(plan)
+      if (budgetFailure) {
+        markProcessClosed()
+        resolve({ success: false, error: budgetFailure })
+        return
+      }
       child = input.spawnAgent({
         binary: plan.binary,
         args: plan.args,
@@ -78,10 +130,7 @@ export function runLocalSourceControlPlan(input: {
         return
       }
       console.error('[commit-message] Failed to spawn local generator:', error)
-      resolve({
-        success: false,
-        error: `${plan.label} could not be started. Check the agent command in Settings and try again.`
-      })
+      resolve({ success: false, error: couldNotStart })
       return
     }
 
@@ -180,12 +229,24 @@ export function runLocalSourceControlPlan(input: {
         })
         return
       }
+      // A supervised spawn failure reads as the same failure a direct spawn reports.
+      const spawnFailure = supervisedProviderSpawnFailure(code, stderr)
+      if (spawnFailure?.thrown) {
+        console.error('[commit-message] Failed to spawn local generator:', spawnFailure.error)
+        finalize({ success: false, error: couldNotStart })
+        return
+      }
+      if (spawnFailure) {
+        onError(spawnFailure.error)
+        return
+      }
       finalize(
         finalizeFromAgentOutput({
           code,
           stdout,
           stderr,
           label: plan.label,
+          outputFormat: plan.outputFormat,
           emptyResultName: input.emptyResultName,
           includeStdoutDetail: operation !== 'branch-name'
         })

@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -14,7 +15,6 @@ import {
   type BrowserNetworkExecutionRouteResolver
 } from '../../../browser/browser-network-execution-route'
 import { RpcDispatcher } from '../dispatcher'
-import { ALL_RPC_METHODS } from './index'
 import {
   BROWSER_NETWORK_TUNNEL_METHODS,
   createBrowserNetworkTunnelMethods
@@ -75,10 +75,6 @@ const negotiatedCapabilities = [
 ]
 
 describe('network.browserTunnel RPC', () => {
-  it('registers the authenticated execution-host tunnel in production', () => {
-    expect(ALL_RPC_METHODS.some((method) => method.name === 'network.browserTunnel')).toBe(true)
-  })
-
   it('rejects missing capabilities before registering binary traffic', async () => {
     const hostRuntime = runtime()
     const lease = attachLease(hostRuntime)

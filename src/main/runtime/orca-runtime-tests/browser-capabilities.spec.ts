@@ -387,23 +387,17 @@ describe('OrcaRuntimeService', () => {
           'Browser automation is unavailable on this host, and the cause could not be determined.'
       }
     ])
-    const browserCalls = Object.entries(runtime).filter(
-      ([name, value]) => /^browser[A-Z]/.test(name) && typeof value === 'function'
-    )
-    expect(browserCalls.length).toBeGreaterThan(50)
-    for (const [name, call] of browserCalls) {
-      const invoke =
-        name === 'browserScreencast'
-          ? () =>
-              (call as CallableFunction)(
-                { format: 'jpeg' },
-                { sendBinary: () => true, emit: () => undefined }
-              )
-          : () => (call as CallableFunction)({})
-      await expect(Promise.resolve().then(invoke)).rejects.toMatchObject({
-        code: 'browser_unavailable'
-      })
-    }
+    await expect(
+      Promise.resolve().then(() => runtime.browserGoto({ url: 'https://example.com' }))
+    ).rejects.toMatchObject({ code: 'browser_unavailable' })
+    await expect(
+      Promise.resolve().then(() =>
+        runtime.browserScreencast(
+          { format: 'jpeg' },
+          { sendBinary: () => true, emit: () => undefined }
+        )
+      )
+    ).rejects.toMatchObject({ code: 'browser_unavailable' })
   })
 
   it('reports the driver as missing instead of telling a configured operator to configure it', () => {

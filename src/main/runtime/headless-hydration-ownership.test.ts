@@ -27,6 +27,27 @@ function prepare() {
   return { runtime, snapshot, serialize }
 }
 
+it.each(['success', 'null', 'reject'] as const)(
+  'reports renderer hydration to subscribers after %s and permits retry after failure',
+  async (outcome) => {
+    const { runtime, snapshot, serialize } = prepare()
+    const hydration = runtime.maybeHydrateHeadlessFromRenderer(PTY_ID)
+    expect(hydration).not.toBeNull()
+    expect(runtime.maybeHydrateHeadlessFromRenderer(PTY_ID)).toBeNull()
+    if (outcome === 'reject') {
+      snapshot.reject(new Error('Renderer unavailable'))
+    } else {
+      snapshot.resolve(outcome === 'success' ? RETIRED_SNAPSHOT : null)
+    }
+    await expect(hydration).resolves.toBe(outcome === 'success')
+    if (outcome !== 'success') {
+      serialize.mockResolvedValue(RETIRED_SNAPSHOT)
+      await expect(runtime.maybeHydrateHeadlessFromRenderer(PTY_ID)).resolves.toBe(true)
+    }
+    expect(runtime.maybeHydrateHeadlessFromRenderer(PTY_ID)).toBeNull()
+  }
+)
+
 it('does not start renderer hydration after the model retires before its callback', async () => {
   const { runtime, snapshot, serialize } = prepare()
   runtime.onPtyData(PTY_ID, 'queued-live', 1)

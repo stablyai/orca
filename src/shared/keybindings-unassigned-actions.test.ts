@@ -278,6 +278,36 @@ describe('keybindings', () => {
     )
   })
 
+  it('keeps the child-workspaces toggle unassigned until users customize it', () => {
+    const binding = {
+      key: 'h',
+      code: 'KeyH',
+      control: true,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(getEffectiveKeybindingsForAction('sidebar.childWorkspaces.toggle', platform)).toEqual(
+        []
+      )
+    }
+    expect(keybindingMatchesAction('sidebar.childWorkspaces.toggle', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('sidebar.childWorkspaces.toggle', binding, 'linux', {
+        'sidebar.childWorkspaces.toggle': ['Mod+Alt+H']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('sidebar.childWorkspaces.toggle')
+    expect(definition?.title).toBe('Toggle Child Workspaces')
+    expect(definition?.scope).toBe('global')
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['child', 'children', 'collapse', 'expand'])
+    )
+  })
+
   it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
     const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
     const minimizeAction: KeybindingActionId = 'floatingWorkspace.minimize'

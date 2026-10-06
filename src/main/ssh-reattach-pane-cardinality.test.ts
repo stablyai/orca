@@ -183,7 +183,7 @@ describe('STA-3077: an SSH reattach binds panes without grafting them back', () 
     )
 
     const { findTerminalTabIdForLeaf } =
-      await import('./runtime/workspace-session-terminal-membership-authority')
+      await import('./persistence/terminal-topology/terminal-topology-membership')
     // The relay resolves the tab from the live layout before binding, exactly as the production
     // path does; forwarding the lease's frozen `TAB` here is what would strand the pane.
     const resolvedTabId = findTerminalTabIdForLeaf(store.getWorkspaceSession(), TEST_LEAF_1)

@@ -20,7 +20,7 @@ import {
   completedWorkerFakeCodexCommand,
   completedWorkerLaunchEnv,
   listRuntimeTerminals,
-  readCompletedWorkerDispatchCapability,
+  hasCompletedWorkerReceivedPreamble,
   readCompletedWorkerLedger,
   seedCurrentCodexTranscript
 } from './helpers/completed-worker-retirement-fixture'
@@ -208,16 +208,7 @@ for (const daemonSessionGone of [false, true]) {
       const workerTabId = worker.tabId
       const workerPaneKey = `${worker.tabId}:${worker.leafId}`
       await backgroundMountTab(first.page, targetWorktreeId, workerTabId)
-      let dispatchCapability: string | null = null
-      await expect
-        .poll(() => {
-          dispatchCapability = readCompletedWorkerDispatchCapability()
-          return dispatchCapability
-        })
-        .not.toBeNull()
-      if (!dispatchCapability) {
-        throw new Error('Background worker did not receive its dispatch capability')
-      }
+      await expect.poll(() => hasCompletedWorkerReceivedPreamble()).toBe(true)
       const transcriptPath = seedCurrentCodexTranscript(
         isolatedHome,
         PROVIDER_SESSION_ID,
@@ -267,21 +258,17 @@ for (const daemonSessionGone of [false, true]) {
           worktreeId: targetWorktreeId
         }
       )
-      const completed = await client.call<{ message: { type: string } }>(
-        'orchestration.send',
-        {
-          from: workerHandle,
-          subject: 'Completed',
-          body: 'The fixture completed and stays open for inspection.',
-          type: 'worker_done',
-          payload: JSON.stringify({
-            taskId: task.result.task.id,
-            dispatchId: started.result.dispatchId,
-            outcome: 'succeeded'
-          })
-        },
-        { orchestrationCapability: dispatchCapability }
-      )
+      const completed = await client.call<{ message: { type: string } }>('orchestration.send', {
+        from: workerHandle,
+        subject: 'Completed',
+        body: 'The fixture completed and stays open for inspection.',
+        type: 'worker_done',
+        payload: JSON.stringify({
+          taskId: task.result.task.id,
+          dispatchId: started.result.dispatchId,
+          outcome: 'succeeded'
+        })
+      })
       expect(completed.result.message.type).toBe('worker_done')
       const taskBeforeRestart = (
         await client.call('orchestration.taskList', { run: run.result.run.id })

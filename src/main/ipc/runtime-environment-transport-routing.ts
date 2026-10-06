@@ -1,5 +1,5 @@
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment, markEnvironmentUsed } from '../../shared/runtime-environment-store'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import { isOrchestrationMutation } from '../../shared/orchestration-rpc-contract'
@@ -185,7 +185,8 @@ export async function subscribeRuntimeEnvironment(
     ) => void
     onClose: () => void
   },
-  isCurrent: () => boolean = () => true
+  isCurrent: () => boolean = () => true,
+  signal?: AbortSignal
 ): Promise<RemoteRuntimeSubscription> {
   const environment = resolveEnvironment(userDataPath, selector)
   const pairing = getPreferredPairingOffer(environment)
@@ -229,7 +230,8 @@ export async function subscribeRuntimeEnvironment(
         params,
         timeoutMs: effectiveTimeoutMs,
         callbacks,
-        isCurrent
+        isCurrent,
+        signal
       })
     }
     return await subscribeRemoteRuntimeRequest(
@@ -238,7 +240,7 @@ export async function subscribeRuntimeEnvironment(
       params,
       effectiveTimeoutMs,
       callbacksWithMarkUsed,
-      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
+      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, signal }
     )
   } catch (error) {
     if (error instanceof Error) {

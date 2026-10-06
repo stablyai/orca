@@ -39,6 +39,8 @@ const EXPECTED_BUCKETS = {
   permission: 'attention',
   // The user's own Ctrl+C on a finished turn, not something asking for them.
   interrupted: 'done',
+  failed: 'done',
+  unconfirmed: 'done',
   done: 'done',
   idle: 'idle'
 } satisfies Record<SessionGridDotState, Exclude<SessionGridStateFilter, 'all'>>

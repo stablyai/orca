@@ -110,6 +110,7 @@ function manifestGranting(
     buildId: BUILD_ID,
     minCompatibleRuntimeProtocolVersion: 2,
     runtimeProtocolVersion: 5,
+    pageVersion: 1,
     entrypoint: 'index.html',
     totalBytes: TOTAL_BYTES,
     assets: ASSETS,

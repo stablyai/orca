@@ -6,6 +6,7 @@ import {
   createSetupRunnerScript,
   detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgentsMock,
+  electronMocks,
   ensurePathWithinWorkspaceMock,
   getDefaultTabsLaunch,
   getEffectiveHooks,
@@ -135,6 +136,8 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
 
+    runtime.markGraphReady(1)
+    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-active-split-setup')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-active-split-setup')
     vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: 'pnpm install' } })
@@ -418,7 +421,11 @@ describe('OrcaRuntimeService', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(write).toHaveBeenCalledWith('pty-startup-draft', `\x1b[200~${draftUrl}\x1b[201~`)
+    expect(write).toHaveBeenCalledWith(
+      'pty-startup-draft',
+      `\x1b[200~${draftUrl}\x1b[201~`,
+      'launch'
+    )
   })
 
   it('keeps the 8s main-runtime startup readiness budget for agents without an override', async () => {
@@ -554,7 +561,11 @@ describe('OrcaRuntimeService', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(write).toHaveBeenCalledWith('pty-opencode-draft-budget', `\x1b[200~${draftUrl}\x1b[201~`)
+    expect(write).toHaveBeenCalledWith(
+      'pty-opencode-draft-budget',
+      `\x1b[200~${draftUrl}\x1b[201~`,
+      'launch'
+    )
   })
 
   it('rejects explicit startup commands for disabled selected agents', async () => {

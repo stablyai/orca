@@ -93,7 +93,7 @@ describe('useTerminalCreateActions creation gates', () => {
 
   it('toasts instead of duplicating a browser tab when the provider forbids it', () => {
     mocks.browserAvailability = { state: 'hidden', reason: 'no browser here' }
-    renderActions().handleDuplicateBrowserTab('browser-1')
+    renderActions().handleDuplicateBrowserTab('browser-1', 'unified-browser-1')
     expect(mocks.toastError).toHaveBeenCalledWith('no browser here')
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
   })

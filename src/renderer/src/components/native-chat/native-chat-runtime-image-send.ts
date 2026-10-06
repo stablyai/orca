@@ -1,3 +1,4 @@
+import { sendNativeChatObservedWrites } from './native-chat-observed-send'
 import { agentImagePasteWrites, formatAgentImagePath } from '../../../../shared/agent-image-paste'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
@@ -9,18 +10,30 @@ import {
   NATIVE_CHAT_SUBMIT
 } from './native-chat-send'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
+import { formatImageDropPasteText } from '../terminal-pane/terminal-drop-image-path'
+import { isTerminalDropWindowsPathLike } from '../terminal-pane/terminal-drop-shell'
 import {
   clearConfirmDurationMs,
   clearThenWrite,
   clearUnsubmittedAgentInput,
-  sendNativeChatMessage,
-  type NativeChatSendHandle,
   type NativeChatSendOptions
-} from './native-chat-runtime-send'
+} from './native-chat-input-clear'
+import { sendNativeChatMessage, type NativeChatSendHandle } from './native-chat-runtime-send'
 
 export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 
 type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
+
+/** The path text an agent detects as an image. One with spaces or shell characters is escaped as a
+ *  terminal image drop is, which agent TUIs undo before checking the file exists. */
+export function agentImagePastePath(agent: AgentType, path: string): string {
+  const formatted = formatAgentImagePath(agent, path)
+  if (formatted !== path) {
+    return formatted
+  }
+  const targetShell = isTerminalDropWindowsPathLike(path) ? 'windows' : 'posix'
+  return formatImageDropPasteText(path, targetShell) ?? path
+}
 
 export function sendNativeChatMessageWithImageAttachments(
   agent: AgentType,
@@ -34,6 +47,21 @@ export function sendNativeChatMessageWithImageAttachments(
     return sendNativeChatMessage(settings, ptyId, text, options)
   }
   const trimmedText = text.trim()
+  if (options?.onWriteRejected) {
+    const writes = agentImagePasteWrites(
+      agent,
+      imagePaths.map((path) => buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))),
+      trimmedText.length > 0
+    ).map((data) => ({ data, delayBeforeMs: 0 }))
+    if (trimmedText) {
+      writes.push({
+        data: buildNativeChatPasteBytes(text),
+        delayBeforeMs: NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS
+      })
+    }
+    writes.push({ data: NATIVE_CHAT_SUBMIT, delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS })
+    return sendNativeChatObservedWrites(settings, ptyId, writes, options)
+  }
   const durationMs =
     (trimmedText.length > 0
       ? NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
@@ -52,24 +80,24 @@ export function sendNativeChatMessageWithImageAttachments(
         for (const payload of agentImagePasteWrites(
           agent,
           imagePaths.map((path) =>
-            buildNativeChatImagePasteBytes(formatAgentImagePath(agent, path))
+            buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
           ),
           trimmedText.length > 0
         )) {
-          sendRuntimePtyInput(settings, ptyId, payload)
+          sendRuntimePtyInput(settings, ptyId, payload, 'driving')
         }
         if (trimmedText.length > 0) {
           delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
-            sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
+            sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text), 'driving')
             delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-              sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+              sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
               markSubmitted()
             })
           })
           return
         }
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
           markSubmitted()
         })
       })

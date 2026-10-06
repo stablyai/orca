@@ -5,7 +5,6 @@ import { CloseLifecycleTab, CloseTab } from './session-tabs-schemas'
 import { assertProjectedSessionTabVisible } from './session-tab-browser-placement-projection'
 import { assertAgentSessionTabDestructiveMutationSupported } from './session-tab-agent-status-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'
-import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 
 export const SESSION_TAB_CLOSE_METHODS = [
   defineMethod({
@@ -20,8 +19,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
-          context.clientCapabilities,
-          isStructuredNativeChatEnabled(context.runtime)
+          context.clientCapabilities
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(
@@ -97,8 +95,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
-          context.clientCapabilities,
-          isStructuredNativeChatEnabled(context.runtime)
+          context.clientCapabilities
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(

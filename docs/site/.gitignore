@@ -8,4 +8,4 @@ next-env.d.ts
 # Keep local deployment credentials out of the publication boundary.
 .env
 .env.*
-.npmrc
+# Project .npmrc contains package policy; keep credentials in user-level npm config.

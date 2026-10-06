@@ -1,3 +1,4 @@
+import { markdownParserAliases } from './config/build-plugins/markdown-parser-exports'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -15,6 +16,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      ...markdownParserAliases,
       '@renderer': resolve('src/renderer/src'),
       '@': resolve('src/renderer/src')
     }

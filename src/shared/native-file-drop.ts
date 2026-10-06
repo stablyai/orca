@@ -49,14 +49,38 @@ export type NativeFileDropRejectedPayload = {
   pathCount: number
   reason: NativeFileDropRejectionReason
   target: 'rejected'
+  /** Why every file in a `temp-copy-failed` drop went uncopied, when they share one reason. */
+  commonReason?: NativeFileDropCopyFailureReason
 }
+
+// Why tokens: the renderer owns the localized copy; main never sends display text.
+export const NATIVE_FILE_DROP_COPY_FAILURE_REASONS = [
+  'missing',
+  'permission-denied',
+  'changed',
+  'out-of-space',
+  'storage-unavailable',
+  'storage-not-private',
+  'copy-failed',
+  'timed-out',
+  'busy',
+  // Too big to copy, so agents in terminals and composers can't be given it.
+  'too-large',
+  'storage-full'
+] as const
+
+export type NativeFileDropCopyFailureReason = (typeof NATIVE_FILE_DROP_COPY_FAILURE_REASONS)[number]
 
 /** What path validation alone can reject a drop for. */
 export type NativeFileDropSizeRejectionReason = 'paths-too-large' | 'too-many-paths'
 
 /** `unresolved-paths`: the OS handed us file items no path could be read from
- *  (promised/virtual files), which used to be swallowed with no feedback. */
-export type NativeFileDropRejectionReason = NativeFileDropSizeRejectionReason | 'unresolved-paths'
+ *  (promised/virtual files), which used to be swallowed with no feedback.
+ *  `temp-copy-failed`: main could not copy a macOS drag-temp file; only main sends it. */
+export type NativeFileDropRejectionReason =
+  | NativeFileDropSizeRejectionReason
+  | 'unresolved-paths'
+  | 'temp-copy-failed'
 
 export type NativeFileDropPathEntry = {
   nativeFileDropTarget?: string
@@ -80,8 +104,17 @@ function isNativeFileDropRejectedReason(
   reason: unknown
 ): reason is NativeFileDropRejectedPayload['reason'] {
   return (
-    reason === 'paths-too-large' || reason === 'too-many-paths' || reason === 'unresolved-paths'
+    reason === 'paths-too-large' ||
+    reason === 'too-many-paths' ||
+    reason === 'unresolved-paths' ||
+    reason === 'temp-copy-failed'
   )
+}
+
+function isNativeFileDropCopyFailureReason(
+  reason: unknown
+): reason is NativeFileDropCopyFailureReason {
+  return NATIVE_FILE_DROP_COPY_FAILURE_REASONS.some((known) => known === reason)
 }
 
 function isNativeFileDropTarget(target: unknown): target is NativeFileDropPayload['target'] {
@@ -272,7 +305,9 @@ export function isNativeFileDropPayload(value: unknown): value is NativeFileDrop
     return (
       isNonNegativeFiniteNumber(payload.byteLength) &&
       isNonNegativeFiniteNumber(payload.pathCount) &&
-      isNativeFileDropRejectedReason(payload.reason)
+      isNativeFileDropRejectedReason(payload.reason) &&
+      (payload.commonReason === undefined ||
+        isNativeFileDropCopyFailureReason(payload.commonReason))
     )
   }
 

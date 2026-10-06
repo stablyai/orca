@@ -281,7 +281,7 @@ describe('background-task row reasons', () => {
     return screen.getAllByRole('listitem')
   }
 
-  // `unverifiable` is the SSH verdict for "no contact"; a row that hides it reads
+  // `unverifiable` is the SSH verdict for lost contact; a row that hides it reads
   // like a working child. `blocked` is the same class of loss.
   it('names the reason on every attention state, not only on waiting', () => {
     const rows = expandedRows([
@@ -291,7 +291,7 @@ describe('background-task row reasons', () => {
       { id: 'a4', kind: 'agent', description: 'busy child', state: 'working' }
     ])
     expect(rows).toHaveLength(4)
-    expect(rows[0].textContent).toContain('ssh child · no contact')
+    expect(rows[0].textContent).toContain('ssh child · status unavailable')
     expect(rows[1].textContent).toContain('flaky child · failed')
     expect(rows[2].textContent).toContain('approval child · needs approval')
     // A running row has nothing to explain.
@@ -333,5 +333,49 @@ it('stops elapsed renders in a hidden pane and catches up on reveal', () => {
   act(() => vi.advanceTimersByTime(1_000))
   expect(committed).toHaveBeenCalled()
   unmount()
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it('lets the 1 Hz tick sleep while every row has settled, with each run frozen', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(1_000_000)
+  const committed = vi.fn()
+  const finished = (id: string, firstObservedAt: number, settledAt: number) => ({
+    id,
+    providerId: `task-${id}`,
+    kind: 'agent' as const,
+    description: `child ${id}`,
+    state: 'done' as const,
+    membership: 'settled' as const,
+    outcome: 'succeeded' as const,
+    firstObservedAt,
+    observedAt: settledAt,
+    settledAt,
+    stoppable: false,
+    invocation: { invocationId: `spawn-${id}`, generation: 1 }
+  })
+  render(
+    <Profiler id="strip" onRender={committed}>
+      <NativeChatBackgroundTasksStatus
+        expanded
+        onExpandedChange={() => {}}
+        isVisible
+        tasks={[]}
+        settledTasks={[]}
+        childViews={[finished('a', 400_000, 520_000), finished('b', 700_000, 760_000)]}
+        indicatorActive
+        supportsTaskStop
+        supportsStopAll
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        onStop={() => {}}
+      />
+    </Profiler>
+  )
+  const rows = screen.getAllByRole('listitem').map((row) => row.textContent)
+  expect(rows).toEqual(['child a · Agent2m 0s', 'child b · Agent1m 0s'])
+  committed.mockClear()
+  act(() => vi.advanceTimersByTime(5_000))
+  expect(committed).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)
 })

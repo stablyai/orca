@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithTerminalDrivers } from './orca-runtime-terminal-drivers'
+import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostScope } from '../../shared/execution-host'
 import { RuntimePreservedBranchCleanup } from './runtime-preserved-branch-cleanup'
 import type { IPtyProvider } from '../providers/types'
 import type {
@@ -9,6 +10,7 @@ import type {
   RuntimeTerminalAgentStatusEvent
 } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
+import type { ClaudeTerminalEvidence } from '../../shared/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
@@ -61,6 +63,10 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
 
   protected readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
 
+  protected readonly onClaudeTerminalEvidence:
+    | ((paneKey: string, evidence: ClaudeTerminalEvidence) => void)
+    | null
+
   protected terminalSideEffectLocalConsumerAvailable = false
 
   protected terminalSideEffectConsumerAvailable = false
@@ -90,8 +96,16 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
 
   protected readonly retireAgentHookCompatibilityAuthorityFn: ((paneKey: string) => void) | null
 
+  protected readonly checkHookAgentPresenceFn:
+    | ((paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>)
+    | null
+
   protected readonly reconcileAgentStatusForEndedProcessFn:
     | ((paneKeys: Iterable<string>) => void)
+    | null
+
+  protected readonly dropAgentStatusForRemovedWorktreeFn:
+    | ((worktreeId: string, host?: ExecutionHostScope) => void)
     | null
 
   protected readonly canRecoverPersistentLocalPtysFn: () => boolean
@@ -107,17 +121,11 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     | null
 
   protected readonly prepareCodexStructuredLaunchFn:
-    | ((input: {
-        workspacePath: string
-        launchEnv: NodeJS.ProcessEnv
-      }) => string | null | Promise<string | null>)
+    | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
     | null
 
   protected readonly resolveCodexStructuredLaunchHomeFn:
-    | ((input: {
-        workspacePath: string
-        launchEnv: NodeJS.ProcessEnv
-      }) => string | null | Promise<string | null>)
+    | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
     | null
 
   protected readonly agentSessionClaimSigner: AgentSessionClaimSigner
@@ -150,7 +158,7 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     )
 
   protected readonly legacyWorkerRecovery = new RuntimeLegacyWorkerTerminalRecoveryController({
-    preparePlan: () => this.legacyWorkerRecoveryPersistence.prepare(),
+    preparePlan: (dispatchIds) => this.legacyWorkerRecoveryPersistence.prepare(dispatchIds),
     resolveWorkspace: async (candidate) => {
       const scope = await this.resolveTerminalWorkspaceLaunchScope(`id:${candidate.worktreeId}`)
       const resolved = scope.folderWorkspace
@@ -163,7 +171,9 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
         worktrees,
         null,
         undefined,
-        connectionId
+        connectionId,
+        false,
+        { includeForegroundProcessEvidence: false, refreshForegroundAgents: false }
       ),
     runMutation: (worktreeId, operation) => this.runWorktreeTerminalMutation(worktreeId, operation),
     getActivation: (worktreeId) => this.getLegacyWorkerRecoveryActivation(worktreeId),
@@ -182,6 +192,9 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     notifyResolution: (candidate, resolution) =>
       this.notifier?.resolveLegacyWorkerTerminalRecovery?.(candidate.paneKey, resolution),
     canRecoverPersistentLocalPtys: () => this.canRecoverPersistentLocalPtysFn(),
+    isTerminalProvenAbsent: (candidate) => this.isLeafPtyProvenAbsent(candidate.ptyId),
+    hasRequestedReleases: () =>
+      this.getOrchestrationDb().listWorkerTerminalReleaseBacklog(1).length > 0,
     reconcileRequestedReleases: () =>
       reconcileRequestedWorkerTerminalReleases(this as RuntimeCommandSurfaceHost<this>),
     reconcile: (options) => this.reconcileLegacyWorkerTerminals(options),
@@ -249,6 +262,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       if (this.store) {
         this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
       }
+      // Why every host after the local-only hub: this store mints folder ids, so none is shared.
+      this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)
     }
   })
 

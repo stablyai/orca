@@ -2,7 +2,6 @@ import { defineMethod, defineStreamingMethod } from '../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
 import { remoteFileContentBudget } from './files-remote-content-budget'
-import { QUICK_OPEN_SEARCH_VERSION } from '../../../../shared/quick-open-path-search'
 import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../shared/quick-open-transport-budget'
 import { FileOpen, WorktreeSelector } from './files-target-schemas'
 import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
@@ -11,6 +10,7 @@ import {
   DocPreviewFileRead,
   FileListAll,
   FileOpenDiff,
+  FileOpenTab,
   FilePathSearch,
   FileReadChunk,
   FileSearch,
@@ -38,16 +38,18 @@ export const FILE_METHODS = [
       if (params.mode !== 'quick-open') {
         return runtime.searchMobileFilePaths(params.worktree, params.query, params.limit)
       }
-      const result = {
-        ...(await runtime.searchQuickOpenFilePaths(
-          params.worktree,
-          params.query,
-          params.limit,
-          params.excludePaths,
-          signal
-        )),
-        quickOpenSearchVersion: QUICK_OPEN_SEARCH_VERSION
-      }
+      const result = await runtime.searchQuickOpenFilePaths(
+        params.worktree,
+        params.query,
+        params.limit,
+        params.excludePaths,
+        signal,
+        {
+          includeIgnored: params.includeIgnored,
+          followSymlinks: params.followSymlinks,
+          ...(params.allowLegacyIncludeIgnored ? { allowLegacyIncludeIgnored: true } : {})
+        }
+      )
       const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
       return maxContentBytes === undefined
         ? result
@@ -56,15 +58,20 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.open',
-    params: FileOpen,
+    params: FileOpenTab,
     handler: async (params, { runtime }) =>
-      runtime.openMobileFile(params.worktree, params.relativePath)
+      runtime.openMobileFile(params.worktree, params.relativePath, params.navigation)
   }),
   defineMethod({
     name: 'files.openDiff',
     params: FileOpenDiff,
     handler: async (params, { runtime }) =>
-      runtime.openMobileDiff(params.worktree, params.relativePath, params.staged === true)
+      runtime.openMobileDiff(
+        params.worktree,
+        params.relativePath,
+        params.staged === true,
+        params.navigation
+      )
   }),
   defineMethod({
     name: 'files.read',
@@ -125,7 +132,11 @@ export const FILE_METHODS = [
     name: 'files.readDir',
     params: FileTreePath,
     handler: async (params, { runtime }) =>
-      runtime.readFileExplorerDir(params.worktree, params.relativePath)
+      params.followSymlinks === undefined
+        ? runtime.readFileExplorerDir(params.worktree, params.relativePath)
+        : runtime.readFileExplorerDir(params.worktree, params.relativePath, {
+            followSymlinks: params.followSymlinks
+          })
   }),
   defineMethod({
     name: 'files.browseServerDir',
@@ -136,16 +147,20 @@ export const FILE_METHODS = [
   defineMethod({
     name: 'files.search',
     params: FileSearch,
-    handler: async (params, { runtime }) =>
-      runtime.searchRuntimeFiles(params.worktree, {
-        query: params.query,
-        caseSensitive: params.caseSensitive,
-        wholeWord: params.wholeWord,
-        useRegex: params.useRegex,
-        includePattern: params.includePattern,
-        excludePattern: params.excludePattern,
-        maxResults: params.maxResults
-      })
+    handler: async (params, { runtime, signal }) =>
+      runtime.searchRuntimeFiles(
+        params.worktree,
+        {
+          query: params.query,
+          caseSensitive: params.caseSensitive,
+          wholeWord: params.wholeWord,
+          useRegex: params.useRegex,
+          includePattern: params.includePattern,
+          excludePattern: params.excludePattern,
+          maxResults: params.maxResults
+        },
+        { signal }
+      )
   }),
   defineMethod({
     name: 'files.listAll',
@@ -153,7 +168,10 @@ export const FILE_METHODS = [
     handler: async (params, { runtime, clientKind, requestId, signal }) => {
       const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
       return runtime.listRuntimeFiles(params.worktree, {
+        ...(params.candidatePaths === undefined ? {} : { candidatePaths: params.candidatePaths }),
         excludePaths: params.excludePaths,
+        ...(params.includeIgnored === undefined ? {} : { includeIgnored: params.includeIgnored }),
+        ...(params.followSymlinks === undefined ? {} : { followSymlinks: params.followSymlinks }),
         ...(params.maxResults === undefined ? {} : { maxResults: params.maxResults }),
         ...(signal === undefined ? {} : { signal }),
         ...(maxContentBytes === undefined ? {} : { maxContentBytes })

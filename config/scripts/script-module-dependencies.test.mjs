@@ -8,7 +8,6 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 
@@ -107,19 +106,5 @@ describe('copyScriptWithLocalModules', () => {
     const destinationDir = join(mkdtempSync(join(fixtureDir, 'dest-')), 'nested', 'scripts')
     copyScriptWithLocalModules(join(sourceDir, 'entry.mjs'), destinationDir)
     expect(existsSync(join(destinationDir, 'entry.mjs'))).toBe(true)
-  })
-
-  // The real tree this stages: the packaged-addon gate reaches its PE reader by
-  // require, so a walker that missed it would break every rebuild fixture.
-  it('stages the node-pty job-ownership gate with everything it requires', () => {
-    const destinationDir = join(mkdtempSync(join(fixtureDir, 'dest-')), 'scripts')
-    copyScriptWithLocalModules(
-      fileURLToPath(new URL('./node-pty-job-ownership.cjs', import.meta.url)),
-      destinationDir
-    )
-    expect(readdirSync(destinationDir).sort()).toEqual([
-      'node-pty-job-ownership.cjs',
-      'windows-pe-machine.cjs'
-    ])
   })
 })

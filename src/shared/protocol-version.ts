@@ -1,3 +1,34 @@
+import { ORCHESTRATION_RUNTIME_CAPABILITIES } from './orchestration-runtime-capabilities'
+export {
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
+  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
+  ORCHESTRATION_CONTRACT_VERSION,
+  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY
+} from './orchestration-runtime-capabilities'
+import { AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES } from './agent-session-resume-runtime-capabilities'
+import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from './qoder-terminal-create-capability'
+export {
+  AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QODER_CN_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QWEN_CODE_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY
+} from './agent-session-resume-runtime-capabilities'
+import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
+import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './agent-session-stop-capabilities'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 import {
   SESSION_GRID_PRESET_3X1_RUNTIME_CAPABILITY,
@@ -17,6 +48,10 @@ import {
   SKILL_UPLOAD_CAPABILITY
 } from './skill-install-capability'
 export { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
+import {
+  AGENT_LAUNCH_RUNTIME_CAPABILITIES,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from './agent-launch-runtime-capability'
 
 // Why: declares the Orca runtime RPC compatibility contract. Desktop,
 // headless server, CLI, and mobile builds may drift in app version, but
@@ -48,26 +83,10 @@ export const WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY =
   'worktree.linked-work-item-context.v1' as const
 export const WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY =
   'worktree.github-pr-suppression.v1' as const
+// Legacy clients cannot safely derive a branch name from a qualified ref selector.
+export const REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY =
+  'repo.search-qualified-refs.v1' as const
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
-export const ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY = 'orchestration.federation.v1' as const
-export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY =
-  'orchestration.federation-control-mail.v1' as const
-export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY =
-  'orchestration.federation-lifecycle-settlement.v1' as const
-export const ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY =
-  'orchestration.worker-stop-verdict.v1' as const
-export const ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY =
-  'orchestration.worker-launch-preferences.v1' as const
-export const ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY =
-  'orchestration.federation-structured-read.v1' as const
-export const ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY =
-  'orchestration.federation-fleet-snapshot.v1' as const
-export const ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY =
-  'orchestration.federation-release-archive.v1' as const
-export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION = 2 as const
-export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION = 3 as const
-export const ORCHESTRATION_CONTRACT_VERSION = 1 as const
-export const ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY = 'orchestration.contract.v1' as const
 export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
 export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
@@ -134,6 +153,8 @@ export const WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY =
   'worktree.archive-failure-blocking.v1' as const
 export const CODEX_RESET_CREDIT_RUNTIME_CAPABILITY = 'accounts.codex-reset-credit.v1' as const
 export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentials.v1' as const
+export const ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY = 'accounts.antigravity-native.v1' as const
+export const DATA_ACCOUNT_RUNTIME_CAPABILITY = 'accounts.managed-data-profiles.v1' as const
 // Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
 export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'terminal.create-idempotency.v2' as const
@@ -157,6 +178,7 @@ export const SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
+export * from './agent-session-stop-capabilities'
 export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
 // Older launch schemas reject unknown fields; advertise before clients send keyboard support.
@@ -167,14 +189,62 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 // receive their journal or drive their lifecycle. Mobile may receive a metadata-only placeholder;
 // the host still refuses agentSession.* methods and destructive tab mutations without capability.
 export const STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY = 'agent-session.structured.v1' as const
+// Why: hosts before this gated `agentSession.*` on their own chat setting while still advertising
+// agent-session.structured.v1, so that capability alone cannot tell a client its chat will be
+// admitted. A host advertising this admits by client capability alone; a client advertising it
+// picks each launch's mode itself. A client without it asks `agentSession.createSupport` to pick
+// for it (released phones), so the host keeps answering that with its own setting.
+export const STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY =
+  'agent-session.structured.client-launch-mode.v1' as const
 // Why: older structured clients render durable pending replies as uncertain delivery. Capable
 // clients skip the host's bounded best-effort settlement observation.
 export const AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY =
   'agent-session.pending-send-result.v1' as const
+// Why: a send is now answered once the host accepts it, before any agent has it. A client without
+// this cannot show a message rejected after that answer, so the host holds its reply until the
+// message is handed over or rejected. Transitional: drop the hold once no supported desktop or
+// mobile client lacks the capability; mobile must first show a rejected message in place.
+export const AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY =
+  'agent-session.accepted-send.v1' as const
+// Why: a host advertising this answers a resent send id from its record before anything else may
+// refuse it, so a refusal `agentSession.send` RETURNS is proof; a thrown error never is, a thrown
+// refusal included (host not installed, journal database won't open, host disabled). Reading a
+// returned `ok: false`: `agent_session_operation_unknown` with `outcomeUnknown` or `resultLost` —
+// the host cannot tell yet, resend the same id; with `rewindUnconfirmed` — settled, nothing was
+// written. `agent_session_operation_expired` — only the transcript can tell. An
+// `agent_session_operation_conflict` or `messageIdReused` — the id holds a different payload,
+// which proves nothing about this message; nor does `sessionNotAttached` (the chat's record is
+// gone or unreadable on this host). Any other — the chat holds no message under that id and none
+// is in flight, but a resend of that id may still run as a new send, so a client that hands the
+// text back must not resend the old id. An older host may refuse an id it recorded: none of this
+// holds there.
+export const AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY =
+  'agent-session.send-answers-proof.v1' as const
+// Why: `agentSession.send`'s params are strict, so an older host rejects `delivery`; and only a
+// capable client can render the `queued` result arm. It gates `delivery: 'queue-if-active'` and
+// the client's queueing setting and chord, never the published draft list or its card actions: a
+// host without it still publishes a message it kept unsent across a restart or a close, and both
+// clients show that card and call its actions. DARK ON PURPOSE — not in RUNTIME_CAPABILITIES:
+// advertising still requires the integrated Codex steer matrix (#21062) in the shipped host.
+// v1 includes `submission.queuedMessageId` on every draft hand-off: a client reads that link and
+// never compares a draft id with a submission id. It also publishes the queue's pause once, as
+// `queuePause` beside the list, lifted by `agentSession.queuedMessagesResume` or the user's next
+// turn; a card carries a hold of its own when its conversion failed (`send_failed`) or the host
+// kept it unsent (`kept`). The host mechanism lands first; the constant gates the rollout.
+export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
+  'agent-session.queued-messages.v1' as const
 // Why: paired clients advertise Claude-structured support so the host can gate its agent-specific
 // journal and lifecycle surfaces independently from Codex support.
 export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
   'agent-session.structured.claude.v1' as const
+// Why: a host's structured agents are the ones it registered, not a list every build ships. A host
+// advertising this accepts any agent it lists through `agentSession.agents` (with each agent's
+// capability record) in `agentSession.*` params, and refuses one it did not register; a client
+// offers an agent beyond Claude and Codex only to such a host. A client advertising it renders an
+// `agent-session` tab of any agent its host lists; the host withholds every other agent's tabs from
+// a client that does not (an older client would list them with an empty pane).
+export const STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY =
+  'agent-session.structured.registered-agents.v1' as const
 // Why: paired structured clients explicitly hold every visible session surface, allowing the host
 // to stop provider children after the last surface closes without tying lifetime to a transport.
 export const STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY =
@@ -205,6 +275,8 @@ export const AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY =
   'agent-session.conversation-outline.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
 export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
+// Why: the rewind UI relies on the next send settling an in-doubt rewind, even with the agent up.
+export const AGENT_SESSION_REWIND_RECOVERY_CAPABILITY = 'agent-session.rewind-recovery.v1' as const
 // Readers must understand a monitoring roster with no available stop control.
 // Why: a `turn` journal item replaced the status row that used to carry a turn's lifecycle. A
 // client that predates it would render the unknown kind as text, so the host publishes the legacy
@@ -213,10 +285,6 @@ export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1'
 export const AGENT_SESSION_TURN_ITEM_CAPABILITY = 'agent-session.turn-item.v1' as const
 export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
   'agent-session.background-task-stop.v1' as const
-// Why: agentSession.cancel has a strict schema, so clients must not send prompt identity to an
-// older host that would reject the whole cancellation instead of falling back to turn stop.
-export const AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY =
-  'agent-session.prompt-cancel.v1' as const
 // Why: agentSession.respondToQuestion has a strict schema, so clients must not send structured
 // `answers` to an older host; they fall back to the answer packed into `optionId`.
 export const AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY =
@@ -228,15 +296,6 @@ export const AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY =
 // stop capability above, which a client can advertise while predating this.
 export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
   'agent-session.background-task-row-stop.v1' as const
-// Why: adding kimi to RESUMABLE_TUI_AGENTS grows terminal.ensureAgentSession's enum, and an
-// older host answers the unknown member with invalid_argument — a code the launch fallback does
-// not retry on — so clients must probe before taking the host-authority path.
-export const AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY = 'agent-session.kimi-resume.v1' as const
-export const AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY =
-  'agent-session.opencode2-resume.v1' as const
-export const AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY = 'agent-session.muse-resume.v1' as const
-export const AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY =
-  'agent-session.zcode-resume.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
@@ -252,6 +311,11 @@ export const WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-defaults.v1' as const
 export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-source-defaults.v1' as const
+// Why: Git's checkout delete outlives worktree.rm's older client timeouts. A client with this waits
+// for the reply and shows `removing` rows as Deleting; one without it is answered on acceptance and
+// would re-show that row as a normal workspace, so the host leaves such rows out of its listings.
+export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
+  'worktree.background-removal.v1' as const
 // Why: older hosts drop automation.list's selector and answer with the whole authority, so a scoped client must not read that as one host's rows.
 export const AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY =
   'automation.list-host-scope.v1' as const
@@ -266,30 +330,6 @@ export const AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
 
-/**
- * `agent.launch` exists: one host-side method that decides structured-vs-terminal and creates the
- * surface, instead of each client routing for itself.
- *
- * Negotiated rather than assumed because a client that cannot see it must keep using
- * `worktree.create` + `startupAgent`, which stays supported verbatim. The reverse skew is the
- * dangerous one: `worktree.create` returns `agentTerminalHandle` only when a startup agent was
- * requested, so a host that quietly routed that call to a structured session would hand an old
- * client a response with no handle and no error.
- *
- * Advertising it is a statement that the client understands EITHER outcome, since the host is what
- * picks: a structured session it can open, or a terminal agent. A client that renders only one of
- * the two keeps using the surface-specific methods.
- */
-// v2 makes prompt delivery an outcome union and top-level warnings the only supported shape.
-export const AGENT_LAUNCH_RUNTIME_CAPABILITY = 'agent.launch.v2' as const
-
-// Optional identity support on agent.launch; mobile replay across replacement hosts requires the new method.
-export const AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY = 'agent.launch.replay.v1' as const
-
-// agent.launchReplay requires the ledger; older replacement hosts must reject the method.
-export const AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY =
-  'agent.launch.replay-required.v1' as const
-
 // Generic native clients include the CLI and must not claim Electron-only page
 // placement support.
 export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
@@ -298,20 +338,10 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY
-] as const
-
-// Electron clients can decode client-hosted page placement; becoming a page
-// host still requires the separate authenticated browser-client lease.
-export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
-  ...NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
-  // Why: only the renderer runs the retirement-proof ledger; CLI and mobile must keep full lists.
-  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
 ] as const
 
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
@@ -323,21 +353,15 @@ export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
   'agentSession.create.tab-id.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
+  ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'files.pathsExist',
   'runtime.status.compat.v1',
   'runtime.environments.v1',
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ...ORCHESTRATION_RUNTIME_CAPABILITIES,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -355,6 +379,7 @@ export const RUNTIME_CAPABILITIES = [
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   JIRA_USER_FIELDS_RUNTIME_CAPABILITY,
@@ -377,29 +402,35 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  // The host side: it accepts a send before any agent has it, and a Stop with no writer before a
+  // turn starts, so a client may gate on either.
+  AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
-  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
-  AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
-  AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
-  AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
-  AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
+  ...AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
+  DATA_ACCOUNT_RUNTIME_CAPABILITY,
   CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,
   SKILL_INSTALL_CAPABILITY,
   SKILL_BUNDLE_INSTALL_CAPABILITY,
@@ -418,9 +449,7 @@ export const RUNTIME_CAPABILITIES = [
   SESSION_GRID_VISIBILITY_RUNTIME_CAPABILITY,
   SESSION_GRID_PRESET_3X1_RUNTIME_CAPABILITY,
   NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
+  ...AGENT_LAUNCH_RUNTIME_CAPABILITIES
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

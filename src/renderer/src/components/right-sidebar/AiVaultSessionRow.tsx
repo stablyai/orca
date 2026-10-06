@@ -1,3 +1,4 @@
+import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
 import type React from 'react'
@@ -44,7 +45,7 @@ export function VaultSessionRow({
   onResume,
   onContinueInNewSession,
   onResumeInNewChat,
-  resumeLabel,
+  resumeLabel: defaultResumeLabel,
   resumeActions,
   onResumeInWorktree,
   onResumeInNewTab,
@@ -88,6 +89,9 @@ export function VaultSessionRow({
   onRequestDelete?: (session: AiVaultSession) => void
   searchHit?: AiVaultSearchHit
 }) {
+  const resumeLabel = isAntigravityReferenceSession(session)
+    ? translate('aiVault.continueInCli', 'Continue in CLI')
+    : defaultResumeLabel
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)

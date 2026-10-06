@@ -1,6 +1,4 @@
-import { recordClosedTerminalTabTombstone } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { sweepRetiredTerminalTabState } from '../slices/retired-terminal-tab-state-sweep'
 import {
   getRecentlyClosedTabPosition,
@@ -15,11 +13,13 @@ import {
 } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
+import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { pruneSessionGridTabOrder } from '../slices/session-grid-tab-order'
 import { pruneSessionGridHiddenTabIds } from '../slices/session-grid-hidden-tabs'
 import { removePaneKeysByTabPrefix } from '../slices/agent-status-pane-keyed-records'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
+import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/native-chat-composer-draft-store'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -28,7 +28,9 @@ export function createTerminalTabCloseActions(
   return {
     closeTab: (tabId, opts) => {
       const closeReason = opts?.reason ?? 'user'
-      const retiresSession = closeReason === 'user' || closeReason === 'cleanup'
+      // Why narrowed separately: main alone records a close for a process exit.
+      const intentReason = closeReason === 'pty-exit' ? null : closeReason
+      const retiresSession = intentReason !== null
       const retirementPlan =
         opts?.precomputedRetirementPlan?.tabId === tabId
           ? opts.precomputedRetirementPlan
@@ -70,22 +72,19 @@ export function createTerminalTabCloseActions(
             next[wId] = after
           }
         }
-        // Why `user` and not retiresSession: a tombstone outlives the host's own record, so the only
-        // thing it may ever say is "the user closed this". A pty-exit close is the process ending,
-        // and a `cleanup` close retires a tab the app itself created — neither is that claim.
-        // Why a non-local worktree only: the tombstone is read solely by the direct-SSH pull merge,
-        // and a definitively local tab would just consume the map's cap. An unresolved repo
-        // (undefined, not null) still records — losing the tombstone reinstates the resurrection.
+        // Why mirrored here and never persisted: main records the close through the intent below,
+        // and the direct-SSH pull merge reads this synchronously, so a pull landing before main
+        // answered would otherwise re-add the tab. Goes away when that merge moves to main.
         const nextClosedTombstones =
-          closeReason === 'user' &&
-          closedWorktreeId &&
-          getConnectionIdFromState(s, closedWorktreeId) !== null
-            ? recordClosedTerminalTabTombstone(
-                s.closedTerminalTabTombstonesByTabId,
-                tabId,
-                closedWorktreeId,
-                Date.now()
-              )
+          intentReason && closedWorktreeId && opts?.remoteCloseOwnedByHost !== true
+            ? {
+                ...s.closedTerminalTabTombstonesByTabId,
+                [tabId]: {
+                  closedAt: Date.now(),
+                  worktreeId: closedWorktreeId,
+                  reason: intentReason
+                }
+              }
             : s.closedTerminalTabTombstonesByTabId
         // Why: only explicit user closes feed the Cmd+Shift+T reopen stack; cleanup/PTY-exit closes must not pollute undo history.
         const closedPosition =
@@ -262,6 +261,14 @@ export function createTerminalTabCloseActions(
             : {})
         }
       })
+      if (intentReason && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {
+        commitTerminalSurfaceClose(closingWorktreeId, { kind: 'tab', tabId }, intentReason)
+      }
+      // Why only a user close: it is the explicit abandon. Other closes keep the drafts until their
+      // workspace is removed in Orca; drafts have no budget that retires them.
+      if (closeReason === 'user') {
+        deleteNativeChatComposerDraftsForTab(tabId)
+      }
       // Why shared with the paired snapshot apply: every path that removes a tab owes it the same sweep, and a second copy of the list is how one path silently misses a new entry.
       sweepRetiredTerminalTabState(get(), tabId, closingWorktreeId)
       for (const tabs of Object.values(get().unifiedTabsByWorktree)) {

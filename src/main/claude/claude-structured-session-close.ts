@@ -7,24 +7,27 @@ import type {
 } from './claude-structured-session-state'
 import { cancelClaudeAcquisitionAttempt } from './claude-structured-session-state'
 import {
+  AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError,
   AgentSessionPreSpawnError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
-import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
+import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
+import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 /** The root's own exit was seen first-hand. The lease follows the root, so a descendant
- *  left unverified or seen alive does not hold it. */
+ *  left unverified or seen alive does not hold it. A failed spawn had no process to exit. */
 export function claudeRootExitObserved(
   connection: ClaudeStreamJsonConnection | null | undefined
 ): boolean {
-  return connection?.exitVerdict.root === 'exited'
+  const verdict = connection?.exitVerdict
+  return verdict?.root === 'exited' && verdict.processless !== true
 }
 
 export function claudeAcquisitionCleanupError(
@@ -32,7 +35,7 @@ export function claudeAcquisitionCleanupError(
   cause: unknown
 ): Error {
   const verdict = connection?.exitVerdict
-  if (verdict?.root === 'processless') {
+  if (verdict?.processless === true) {
     return new AgentSessionPreSpawnError(cause)
   }
   return claudeRootExitObserved(connection)
@@ -55,7 +58,7 @@ export async function resolveClaudeAcquisitionError(input: {
       prompt.settle(null)
     }
     const closed = (await input.attempt.connection?.close()) ?? true
-    if (input.attempt.connection?.exitVerdict.root === 'processless') {
+    if (input.attempt.connection?.exitVerdict.processless === true) {
       acquisitionError = new AgentSessionPreSpawnError(input.error)
     } else if (!closed) {
       acquisitionError = claudeAcquisitionCleanupError(input.attempt.connection, input.error)
@@ -68,6 +71,7 @@ export function settleClaudeExitedSession(session: ClaudeSession): void {
   // The child is gone, so no replay can start these turns. Nothing else ends a
   // waiter's life now that no deadline does.
   retireClaudeDispatchWaiters(session)
+  settleClaudeTurnEndWaiters(session)
   for (const prompt of session.prompts.clear()) {
     prompt.settle(null)
   }
@@ -84,10 +88,7 @@ type CloseClaudePublishedSessionInput = {
     fence: number
   }) => Promise<void>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
-  onBackgroundTasksChanged?: (
-    sessionId: string,
-    state: AgentSessionBackgroundTaskState | null
-  ) => void
+  logger?: StructuredAgentSessionLogger
 }
 
 async function finalizeClaudePublishedSession(
@@ -95,6 +96,7 @@ async function finalizeClaudePublishedSession(
   session: ClaudeSession
 ): Promise<boolean> {
   retireClaudeDispatchWaiters(session)
+  settleClaudeTurnEndWaiters(session)
   // Settle every in-flight permission callback so closing leaves no dangling promise; `null`
   // writes no response, and the SDK ignores any post-cleanup answer regardless.
   for (const prompt of session.prompts.clear()) {
@@ -116,27 +118,19 @@ async function finalizeClaudePublishedSession(
     }
     rootExitVerdict = cleanupError
   }
-  session.childWork.clear()
-  if (session.backgroundTasks.clear()) {
-    input.onBackgroundTasksChanged?.(input.sessionId, null)
+  // Queues the session's ending for the host's child records; the adapter delivers it after close.
+  // A proven close stopped what still ran: on POSIX the whole tree was seen gone; on Windows Claude
+  // left after its stdin ended, or taskkill reported its tree terminated. Any other end, like an
+  // exit of the session's own, leaves how it ended unknown.
+  if (connectionClosed === true) {
+    session.childWork.stopLive()
   }
-  const leafUuid = await settledClaudeTurnEndLeaf(session)
-  const persistence =
-    session.closePersistence ??
-    (session.closePersistence = (async () => {
-      await input.persistHandle?.({
-        sessionId: input.sessionId,
-        providerSessionId: session.providerSessionId,
-        leafUuid,
-        fence: session.fence
-      })
-    })())
-  const ended = {
-    type: 'ended',
-    sessionId: input.sessionId,
-    reason: 'claude session closed',
-    observedAt: Date.now()
-  } as const
+  session.childWork.clear()
+  session.backgroundTasks.clear()
+  // The exit is proven, so the session ends now. Saving its resume point is bookkeeping that
+  // follows, reported on failure; it never holds the close or reads as an unproven exit.
+  session.closeFinalized = true
+  input.sessions.delete(input.sessionId)
   let callbackError: unknown
   let callbackThrew = false
   const deliver = (event: ClaudeStructuredSessionEvent): void => {
@@ -147,31 +141,18 @@ async function finalizeClaudePublishedSession(
       callbackError ??= error
     }
   }
-  let persistenceError: unknown
-  try {
-    await persistence
-    session.closeFinalized = true
-    input.sessions.delete(input.sessionId)
-    deliver({
-      type: 'handle',
-      sessionId: input.sessionId,
-      providerSessionId: session.providerSessionId,
-      leafUuid,
-      fence: session.fence
-    })
-  } catch (error) {
-    // Keep the closed session indexed so a retry can persist the same cursor.
-    // Removing it first would turn a durable-write failure into a no-op retry.
-    if (session.closePersistence === persistence) {
-      session.closePersistence = undefined
-    }
-    persistenceError = error
-  }
-  // The connection already proved the child dead, so the session has ended
-  // whatever the durable write did: withholding it would strand the renderer on
-  // a session nothing re-drives. Emitted once, so a retry only re-persists.
   if (!session.closeEnded) {
     session.closeEnded = true
+    const ended = {
+      type: 'ended',
+      sessionId: input.sessionId,
+      reason: 'claude session closed',
+      // The host ends the child's record on it, whoever was still waiting on the close.
+      cause: 'requested-close',
+      fence: session.fence,
+      acquisitionGeneration: session.acquisitionGeneration,
+      observedAt: Date.now()
+    } as const
     try {
       try {
         session.translator?.handle(ended)
@@ -184,16 +165,39 @@ async function finalizeClaudePublishedSession(
       session.translator?.dispose()
     }
   }
-  if (persistenceError) {
-    throw persistenceError
-  }
-  if (callbackThrew) {
-    throw callbackError
-  }
+  session.closePersistence ??= persistClosedClaudeSession(input, session)
   if (rootExitVerdict) {
     throw rootExitVerdict
   }
+  if (callbackThrew) {
+    // The exit is proven; only what followed it failed, which the caller reports.
+    throw new AgentSessionAcquisitionExitProvenError(callbackError)
+  }
   return true
+}
+
+/** The resume point a closed session leaves for the next start, after the close already ended. */
+async function persistClosedClaudeSession(
+  input: CloseClaudePublishedSessionInput,
+  session: ClaudeSession
+): Promise<void> {
+  try {
+    const leafUuid = await settledClaudeTurnEndLeaf(session)
+    const handle = {
+      sessionId: input.sessionId,
+      providerSessionId: session.providerSessionId,
+      leafUuid,
+      fence: session.fence
+    }
+    await input.persistHandle?.(handle)
+    input.onEvent?.({ type: 'handle', ...handle })
+  } catch (error) {
+    input.logger?.warn("saving a closed Claude session's resume point failed", {
+      scope: 'claude-close-resume-point',
+      sessionId: input.sessionId,
+      error
+    })
+  }
 }
 
 export async function closeClaudePublishedSession(
@@ -231,13 +235,35 @@ export function closeClaudePublishedSessionForDeps(
       fence: number
     }) => Promise<void>
     onEvent?: (event: ClaudeStructuredSessionEvent) => void
-    onBackgroundTasksChanged?: (
-      sessionId: string,
-      state: AgentSessionBackgroundTaskState | null
-    ) => void
+    logger?: StructuredAgentSessionLogger
   }
 ): Promise<boolean> {
   return closeClaudePublishedSession({ sessions, sessionId, ...deps })
+}
+
+/** The root exited after a close came back unproven: joins a close still running, or finishes that
+ *  one for this exact child, through `afterClose`, which publishes the session's child work like
+ *  any close. What failed after the exit is reported. */
+export function finishClaudeCloseAfterExit(input: {
+  sessions: Map<string, ClaudeSession>
+  sessionId: string
+  connection: ClaudeStreamJsonConnection | null
+  deps: Parameters<typeof closeClaudePublishedSessionForDeps>[2]
+  afterClose: (close: () => Promise<boolean>) => Promise<boolean>
+}): void {
+  const { sessions, sessionId, deps } = input
+  if (sessions.get(sessionId)?.connection !== input.connection) {
+    return
+  }
+  void input
+    .afterClose(() => closeClaudePublishedSessionForDeps(sessions, sessionId, deps))
+    .catch((error: unknown) =>
+      deps.logger?.warn('finishing a Claude close after its process exited reported', {
+        scope: 'claude-close-after-exit',
+        sessionId,
+        error
+      })
+    )
 }
 
 export async function closeClaudeSession(input: {
@@ -251,10 +277,7 @@ export async function closeClaudeSession(input: {
     fence: number
   }) => Promise<void>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
-  onBackgroundTasksChanged?: (
-    sessionId: string,
-    state: AgentSessionBackgroundTaskState | null
-  ) => void
+  logger?: StructuredAgentSessionLogger
 }): Promise<boolean> {
   const attempt = input.acquisitions.get(input.sessionId)
   if (!(await cancelClaudeAcquisitionAttempt(attempt))) {

@@ -12,12 +12,12 @@ import { localProvider } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
+import { installPtyCodexSharedServerIpcHandler } from './ipc/codex-shared-server'
 import {
   installPtyKillIpcHandler,
   stopReplacedPanePty,
   type PtyKillIpcDeps
 } from './ipc/renderer-kill'
-import { markReplacedPtyStop } from './delivery/exit'
 import { installPtyWriteIpcHandlers } from './ipc/write'
 import { installPtySpawnIpcHandler } from './ipc/spawn'
 import { installPtyRuntimeController } from './runtime/controller'
@@ -119,6 +119,9 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:inspectProcess')
   ipcMain.removeHandler('pty:confirmForegroundProcess')
+  ipcMain.removeHandler('pty:isCodexOnSharedServer')
+  ipcMain.removeHandler('pty:disableCodexSharedServerAutoStart')
+  ipcMain.removeHandler('pty:stopCodexSharedServer')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
   ipcMain.removeHandler('pty:getAuthoritativeBufferSnapshotCapabilities')
@@ -237,7 +240,6 @@ export function registerPtyHandlers(
     options,
     trustedTerminalHandleEnv: session.trustedTerminalHandleEnv,
     retiredRejectedPtyIds: session.retiredRejectedPtyIds,
-    reversibleStopOwnersByPtyId: session.reversibleStopOwnersByPtyId,
     mainWindow,
     transitionSpawnHiddenRendererPtyDeliveryState:
       session.transitionSpawnHiddenRendererPtyDeliveryState,
@@ -275,11 +277,11 @@ export function registerPtyHandlers(
     trustedTerminalHandleEnv: session.trustedTerminalHandleEnv,
     sendPtySpawnedToRenderer: session.sendPtySpawnedToRenderer,
     syncPtyBackgroundedDelivery: session.syncPtyBackgroundedDelivery,
-    stopReplacedPty: (id) =>
-      stopReplacedPanePty(killDeps, id, (ptyId) => markReplacedPtyStop(session, ptyId))
+    stopReplacedPty: (id) => stopReplacedPanePty(killDeps, id)
   })
   installPtyWriteIpcHandlers({ mainWindow, runtime })
   installPtyResizeVisibilityIpc(session)
   installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
+  installPtyCodexSharedServerIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyKillIpcHandler(killDeps)
 }

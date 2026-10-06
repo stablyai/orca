@@ -1,3 +1,4 @@
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipcState = vi.hoisted(() => ({
@@ -19,14 +20,22 @@ const clearMiniMaxSessionCookieJarMock = vi.hoisted(() => vi.fn(() => Promise.re
 const saveMiniMaxApiKeyMock = vi.hoisted(() => vi.fn())
 const clearMiniMaxApiKeyMock = vi.hoisted(() => vi.fn())
 const hasMiniMaxApiKeyMock = vi.hoisted(() => vi.fn(() => false))
+const getCookieProtectionMock = vi.hoisted(() =>
+  vi.fn((): SecretAtRestProtection | null => 'sealed')
+)
+const getApiKeyProtectionMock = vi.hoisted(() =>
+  vi.fn((): SecretAtRestProtection | null => 'sealed')
+)
 
 vi.mock('../minimax/minimax-cookie-store', () => ({
+  getMiniMaxSessionCookieProtection: getCookieProtectionMock,
   saveMiniMaxSessionCookie: saveMiniMaxSessionCookieMock,
   clearMiniMaxSessionCookie: clearMiniMaxSessionCookieMock,
   hasMiniMaxSessionCookie: hasMiniMaxSessionCookieMock
 }))
 
 vi.mock('../minimax/minimax-api-key-store', () => ({
+  getMiniMaxApiKeyProtection: getApiKeyProtectionMock,
   saveMiniMaxApiKey: saveMiniMaxApiKeyMock,
   clearMiniMaxApiKey: clearMiniMaxApiKeyMock,
   hasMiniMaxApiKey: hasMiniMaxApiKeyMock
@@ -101,7 +110,10 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     expect(status).toEqual({
       configured: true,
       cookieConfigured: true,
-      apiKeyConfigured: false
+      apiKeyConfigured: false,
+      cookieProtection: 'sealed',
+      // Null, not 'sealed': nothing is stored, so there is nothing to make a claim about.
+      apiKeyProtection: null
     })
   })
 
@@ -116,7 +128,9 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     expect(status).toEqual({
       configured: true,
       cookieConfigured: false,
-      apiKeyConfigured: true
+      apiKeyConfigured: true,
+      cookieProtection: null,
+      apiKeyProtection: 'sealed'
     })
   })
 
@@ -262,5 +276,13 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     expect(status.configured).toBe(true)
     expect(status.cookieConfigured).toBe(true)
     expect(status.apiKeyConfigured).toBe(true)
+  })
+
+  it('reports a plaintext key through the status so Settings can warn about it', async () => {
+    hasMiniMaxApiKeyMock.mockReturnValue(true)
+    getApiKeyProtectionMock.mockReturnValue('plaintext')
+    registerMiniMaxCredentialsHandlers(null)
+    const status = await invoke('minimaxCredentials:getStatus')
+    expect(status).toMatchObject({ apiKeyConfigured: true, apiKeyProtection: 'plaintext' })
   })
 })

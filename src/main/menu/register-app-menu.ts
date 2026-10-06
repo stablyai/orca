@@ -8,6 +8,7 @@ import {
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
+import { createAppWindowMenu } from './app-menu-window'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -318,10 +319,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ]
   }
 
-  const windowMenu: Electron.MenuItemConstructorOptions = {
-    label: translateMain('menu.window', 'Window'),
-    submenu: [{ role: 'minimize' }, { role: 'zoom' }]
-  }
+  const windowMenu = createAppWindowMenu(translateMain('menu.window', 'Window'), isMac)
 
   const helpMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.help', 'Help'),

@@ -28,6 +28,7 @@ out/
 /build/
 release/
 native/**/.build/
+native/windows-cli-launcher/target/
 # node-gyp output for the vendored Windows registry addon; generated per host and ABI.
 native/windows-registry/build/
 native/windows-registry/bin/
@@ -122,9 +123,12 @@ docs/**
 !docs/reference/agent-session-search-contract.md
 !docs/reference/agent-status-store.md
 !docs/reference/antigravity-readiness-evidence.md
+!docs/reference/antivirus-prerelease-clearance.md
+!docs/reference/cline-and-prime-agent-readiness-evidence.md
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md
 !docs/reference/ime-regression-checklist.md
+!docs/reference/jcode-hook-events.md
 !docs/reference/linux-glibc-compatibility.md
 !docs/reference/macos-press-and-hold.md
 !docs/reference/orcad-operations.md

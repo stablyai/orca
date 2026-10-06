@@ -122,6 +122,58 @@ provider, it puts `unsupported` on the wire and makes that host refuse its own. 
 reply-schema fallback must never shape a param. Gate on the token instead, where the
 client decides what it is willing to do with an arm it does not know.
 
+## Worktree activation belongs to a viewer
+
+Worktree creation and activation default to the host desktop for host/CLI requests,
+and to the caller for paired desktop/web requests. Mobile creation still activates
+the host renderer to provision setup and default tabs. A headless host does not
+borrow a paired client's view. Catalog and session updates continue to reach every
+subscriber independently of navigation.
+Headless host/CLI creates provision their shells, setup, and default tabs on the
+execution host in the background, without depending on an observer to open them.
+The same fallback applies when an attached host renderer is unavailable or
+reloading, including explicit `all` requests that target the host; availability is
+checked after creation, rather than before its awaits.
+
+`activateWorktree` client events carry an optional `navigation` field. Only explicit
+`clients` or `all` requests publish these events; updated clients ignore events
+without that address, including implicit broadcasts from older hosts. This is an
+optional JSON field (Rule 1): older clients ignore it and still understand explicit
+activation. The new host's default publication changes deliberately remove implicit
+navigation for older clients too, rather than retaining the unwanted behavior.
+An older host cannot express explicit follow intent to an updated client, so that
+client must open the workspace itself.
+Accepted navigation is also fenced through repository/worktree discovery; bridge
+cleanup, reconnection, or re-pairing revokes any activation still awaiting a fetch.
+
+Older CLIs hardcode `navigation: 'all'` for `--activate` and `--run-hooks`. The host
+recognizes their `cliProvenanceRequest` and normalizes that automatic target to
+`host`. An API caller without the CLI marker can still explicitly request `clients`
+or `all`. Neither creation nor activation navigates remote clients by default.
+
+Coverage: `multi-client-navigation-isolation.integration.test.ts` exercises real
+paired WebSocket clients and host/headless creation, the renderer bridge tests
+exercise older unaddressed publications, and
+`paired-worktree-activation-isolation.spec.ts` checks a paired desktop remaining in
+a local workspace while its remote catalog updates.
+
+## Session search agent negotiation
+
+`aiVault.searchStatus` optionally advertises `supportedAgents`; current search clients
+send their own `supportedAgents` with `aiVault.searchSessions`. These are string lists,
+so a future provider name does not make a peer reject the capability reply. The client
+narrows explicit agent filters to the host's list before calling its request parser.
+The host narrows retrieval to the client's list before publishing a page.
+
+A peer without this field uses the frozen v1.4.211 search vocabulary. The existing
+`supportsQoderHistory` flag proves CodeBuddy, ZCode, and Qoder support;
+`supportsJcodeHistory` independently proves Jcode support. An explicit list takes
+precedence over both flags. If only the status method is missing, the client still
+searches the conservative legacy subset; other status errors propagate. Empty host
+intersections keep the requested filters and use the existing no-match scope, so
+consent, readiness, and unknown-scope results retain their normal precedence.
+Local IPC advertises this build's full list, and every remote leg negotiates separately.
+
 ## Enforcement
 
 `tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts` runs the real

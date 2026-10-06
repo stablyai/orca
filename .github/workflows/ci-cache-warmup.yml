@@ -1,28 +1,54 @@
 name: Warm shared CI caches
 
 on:
+  # Cache-input pushes seed immediately; this schedule repairs eviction and image changes.
   schedule:
-    - cron: '41 * * * *'
+    - cron: '41 */6 * * *'
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
       - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/restore-pnpm-verification/**'
+      - '.github/actions/prepare-native-runtime/**'
       - '.github/actions/prepare-git-compatibility/**'
+      - '.github/actions/prepare-headless-compiler/**'
+      - 'config/scripts/headless-detector-compiler-cache*'
+      - '.github/actions/prepare-linux-package-fixture/**'
+      - 'config/docker/headless-serve-shutdown/**'
+      - 'config/docker/cli-launch-contract/**'
+      - 'config/docker/daemon-shutdown-descendants/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - '.pnpmfile.cjs'
       - 'config/tsconfig*.json'
       - 'config/scripts/ensure-native-runtime.mjs'
       - 'config/scripts/rebuild-native-deps.mjs'
-      - 'config/patches/node-pty@1.1.0.patch'
-      - 'config/patches/@vscode__windows-process-tree@0.8.0.patch'
+      - 'config/scripts/node-pty-job-ownership.cjs'
+      - 'config/scripts/windows-pe-machine.cjs'
+      - 'config/scripts/windows-process-tree-gyp-rebuild.mjs'
+      - 'config/scripts/windows-process-tree-creation-time.cjs'
+      - 'config/scripts/install-electron-package-binary.mjs'
+      - 'config/scripts/electron-platform-path.mjs'
+      - 'config/scripts/zip-extractor-command.mjs'
+      - 'src/shared/zip-extractor-command.ts'
+      - 'config/scripts/shared-electron-dist-cache.mjs'
+      - 'config/scripts/space-sharing-copy.mjs'
+      - 'config/patches/**'
       - 'native/windows-registry/**'
   pull_request:
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
       - '.github/actions/prepare-git-compatibility/**'
+      - '.github/actions/prepare-headless-compiler/**'
+      - 'config/scripts/headless-detector-compiler-cache*'
+      - '.github/actions/prepare-linux-package-fixture/**'
+      - 'config/docker/headless-serve-shutdown/**'
+      - 'config/docker/cli-launch-contract/**'
+      - 'config/docker/daemon-shutdown-descendants/**'
       - 'config/scripts/ci-cache-warmup-workflow.test.mjs'
 
 permissions:
@@ -30,7 +56,8 @@ permissions:
 
 concurrency:
   group: ci-cache-warmup-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Scheduled retries must let an active warmer finish publishing its caches.
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 jobs:
   warm:
@@ -48,6 +75,15 @@ jobs:
         with:
           native-runtime: node
           node-version: '24'
+          cache-electron-package: 'true'
+          cache-pnpm-store-lookup-only: 'true'
+
+      - uses: ./.github/actions/prepare-headless-compiler
+        with:
+          seed: 'true'
+
+      - name: Populate shared Electron archive
+        run: node config/scripts/install-electron-package-binary.mjs
 
       - uses: ./.github/actions/prepare-git-compatibility
 
@@ -63,3 +99,65 @@ jobs:
       - name: Refresh TypeScript state for this commit
         if: steps.typecheck-cache.outputs.cache-hit != 'true'
         run: pnpm run typecheck
+
+  warm-linux-arm:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+          cache-electron-package: 'true'
+          cache-pnpm-store-lookup-only: 'true'
+      - name: Populate shared Electron archive
+        run: node config/scripts/install-electron-package-binary.mjs
+      - name: Verify native cache is usable
+        run: node config/scripts/ensure-native-runtime.mjs --check-only
+
+  warm-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          cache-pnpm-store-lookup-only: 'true'
+      - name: Verify native cache is usable
+        run: node config/scripts/ensure-native-runtime.mjs --check-only
+
+  warm-linux-package-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        with:
+          fixture: daemon-shutdown-descendants
+          save-cache: ${{ github.event_name != 'pull_request' }}
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        with:
+          fixture: headless-serve-shutdown
+          save-cache: ${{ github.event_name != 'pull_request' }}
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        with:
+          fixture: cli-launch-contract
+          save-cache: ${{ github.event_name != 'pull_request' }}

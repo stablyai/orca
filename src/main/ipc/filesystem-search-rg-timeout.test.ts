@@ -24,6 +24,7 @@ const {
 const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
 vi.mock('electron', () => ({
+  app: { getPath: () => '/orca-test-user-data' },
   ipcMain: {
     handle: handleMock
   },
@@ -43,7 +44,6 @@ vi.mock('../wsl', () => ({
 }))
 
 vi.mock('./filesystem-auth', () => ({
-  authorizeExternalPath: vi.fn(async (value: string) => value),
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 
@@ -199,7 +199,7 @@ describe('filesystem rg search timeout', () => {
     }
   )
 
-  it('keeps post-spawn errors on the existing empty-result path', async () => {
+  it('rejects post-spawn errors instead of returning an empty result', async () => {
     const child = createMockProcess()
     Object.defineProperty(child, 'pid', { value: 1 })
     wslAwareSpawnMock.mockReturnValue(child)
@@ -212,7 +212,7 @@ describe('filesystem rg search timeout', () => {
     await flushMicrotasks()
     child.emit('error', new Error('post-spawn failure'))
 
-    await expect(promise).resolves.toMatchObject({ files: [] })
+    await expect(promise).rejects.toThrow('post-spawn failure')
   })
 
   // Why close(97): the WSL wrapper's "cd failed" code. It is above rg's own 0/1/2, so a handler
@@ -296,6 +296,34 @@ describe('filesystem rg search timeout', () => {
     await expect(promise).resolves.toMatchObject({ files: [] })
     expect(bundledRipgrepCommandMock).toHaveBeenCalledWith({ wsl: true })
     expect(wslAwareSpawnMock.mock.calls[0]?.[0]).toBe('/bundled/linux/rg')
+  })
+
+  it('marks WSL filenames that UNC cannot represent as incomplete', async () => {
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all store access is mocked for this handler.
+    registerFilesystemHandlers({} as never)
+    const promise = handlers.get('fs:search')!(
+      { sender: { id: 7 } },
+      { rootPath: 'C:\\repo', query: 'hello' }
+    )
+    await flushMicrotasks()
+    child.stdout?.emit(
+      'data',
+      `${JSON.stringify({
+        type: 'match',
+        data: {
+          path: { text: './a\\b.txt' },
+          lines: { text: 'hello\n' },
+          line_number: 1,
+          submatches: [{ start: 0, end: 5 }]
+        }
+      })}\n`
+    )
+    child.emit('close', 0, null)
+    await expect(promise).resolves.toMatchObject({ files: [], truncated: true })
+    expect(toWindowsWslPathMock).not.toHaveBeenCalled()
   })
 
   it('translates WSL rg output for Windows-path project search results', async () => {

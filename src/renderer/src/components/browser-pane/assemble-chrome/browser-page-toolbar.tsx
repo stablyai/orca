@@ -1,6 +1,7 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { translate } from '@/i18n/i18n'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
 import BrowserAddressBar from './BrowserAddressBar'
@@ -103,6 +104,7 @@ export function BrowserPageToolbar({
   currentBrowserUrl: string
   externalUrl: string | null
 }): React.JSX.Element {
+  const annotateElementShortcut = useShortcutLabel('browser.annotateElement')
   const browserTourStep = useAppStore((state) =>
     state.activeContextualTourId === 'browser' ? state.activeContextualTourStepIndex : null
   )
@@ -181,6 +183,7 @@ export function BrowserPageToolbar({
         onStartIntent: startGrabIntent,
         disabled: isBlankTab || markupIsActive,
         grabShortcutLabel: grabElementShortcut,
+        annotateShortcutLabel: annotateElementShortcut,
         annotationCount: browserAnnotationsLength
       }}
       markup={{

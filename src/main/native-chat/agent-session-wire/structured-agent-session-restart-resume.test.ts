@@ -15,8 +15,10 @@ import {
 } from './structured-agent-session-restart-resume-runner'
 import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-working-at-teardown'
 import {
+  childRecord,
   CLAUDE_ROOT,
   claudeRecord,
+  EPOCH,
   HANDLE_ROOT,
   journal,
   TEARDOWN_CURRENT,
@@ -48,10 +50,10 @@ describe('deriving what was working at teardown', () => {
   it('marks a session this host was running a turn for', () => {
     const markers = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -64,6 +66,7 @@ describe('deriving what was working at teardown', () => {
         recordedAt: NOW,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
+        journalCursor: { epoch: EPOCH, sequence: 1 },
         providerHandleRoot: HANDLE_ROOT,
         latestUserItemId: null,
         activity: { state: 'working', prompts: [], tasks: [] }
@@ -74,10 +77,10 @@ describe('deriving what was working at teardown', () => {
   it('carries the update trigger so the surface can say the restart was not the user choice', () => {
     const [recorded] = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'update',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -89,9 +92,9 @@ describe('deriving what was working at teardown', () => {
   it('marks nothing for an idle session', () => {
     expect(
       markersAtTeardown({
-        sessions: new Map([[SESSION, { journal: journal([]), hasProviderChild: true }]]),
+        sessions: new Map([[SESSION, { journal: journal([]), child: { fence: 1 } }]]),
         getRecord: () => record(),
-        backgroundTasks: () => undefined,
+        childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -103,10 +106,10 @@ describe('deriving what was working at teardown', () => {
     expect(
       markersAtTeardown({
         sessions: new Map([
-          [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+          [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
         ]),
         getRecord: () => record(),
-        backgroundTasks: () => undefined,
+        childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -115,15 +118,15 @@ describe('deriving what was working at teardown', () => {
   })
 
   // The user's stated fear. A journal restored for READING carries whatever `running` row an older
-  // crash left behind, and it is the live `hasProviderChild` — not that row — that decides.
+  // crash left behind, and it is the live `child` — not that row — that decides.
   it('marks nothing for a stale running row this host was not executing', () => {
     expect(
       markersAtTeardown({
         sessions: new Map([
-          [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: false }]
+          [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: null }]
         ]),
         getRecord: () => record(),
-        backgroundTasks: () => undefined,
+        childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -141,12 +144,12 @@ describe('deriving what was working at teardown', () => {
           SESSION,
           {
             journal: journal([turnItem('turn-1', 'running'), pendingApproval()]),
-            hasProviderChild: true
+            child: { fence: 1 }
           }
         ]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -165,12 +168,10 @@ describe('deriving what was working at teardown', () => {
   it('marks a settled lead whose subagent was still running, anchored on its last turn', () => {
     const markers = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => [
-        { id: 'task-a', kind: 'agent', description: 'Review loop 4', state: 'working' }
-      ],
+      childWork: () => [childRecord({ id: 'task-a', kind: 'agent', description: 'Review loop 4' })],
       trigger: 'update',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -188,17 +189,18 @@ describe('deriving what was working at teardown', () => {
   it('records only the live rows of the roster, bounded', () => {
     const [recorded] = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => [
-        { id: 'gone', kind: 'agent', description: 'Finished agent', state: 'done' },
-        ...Array.from({ length: 20 }, (_, index) => ({
-          id: `live-${index}`,
-          kind: 'command' as const,
-          description: `Shell ${index}${'x'.repeat(300)}`,
-          state: 'working' as const
-        }))
+      childWork: () => [
+        childRecord({ id: 'gone', kind: 'agent', description: 'Finished agent', state: 'done' }),
+        ...Array.from({ length: 20 }, (_, index) =>
+          childRecord({
+            id: `live-${index}`,
+            kind: 'command',
+            description: `Shell ${index}${'x'.repeat(300)}`
+          })
+        )
       ],
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
@@ -213,10 +215,12 @@ describe('deriving what was working at teardown', () => {
   it('marks a settled lead whose only live work is a monitor', () => {
     const markers = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => [{ id: 'task-m', kind: 'monitor', name: 'ci-watch' }],
+      childWork: () => [
+        childRecord({ id: 'task-m', kind: 'monitor', name: 'ci-watch', state: 'monitoring' })
+      ],
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -230,12 +234,12 @@ describe('deriving what was working at teardown', () => {
     expect(
       markersAtTeardown({
         sessions: new Map([
-          [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+          [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
         ]),
         getRecord: () => record(),
-        backgroundTasks: () => [
-          { id: 'task-a', kind: 'agent', state: 'done' },
-          { id: 'task-b', kind: 'command', state: 'idle' }
+        childWork: () => [
+          childRecord({ id: 'task-a', kind: 'agent', state: 'done' }),
+          childRecord({ id: 'task-b', kind: 'command', state: 'idle' })
         ],
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
@@ -248,10 +252,10 @@ describe('deriving what was working at teardown', () => {
   it('records the identity root so an advancing Claude leaf cannot invalidate the marker', () => {
     const [recorded] = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
       ]),
       getRecord: () => claudeRecord(null),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -264,10 +268,10 @@ describe('deriving what was working at teardown', () => {
     expect(
       markersAtTeardown({
         sessions: new Map([
-          [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
+          [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
         ]),
         getRecord: () => record({ chain: [] }),
-        backgroundTasks: () => undefined,
+        childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -284,13 +288,13 @@ describe('deriving what was working at teardown', () => {
         [
           SESSION,
           {
-            journal: journal([], false, [submission('msg-1', 'pending')]),
-            hasProviderChild: true
+            journal: journal([], [submission('msg-1', 'pending')]),
+            child: { fence: 1 }
           }
         ]
       ]),
       getRecord: () => claudeRecord(null),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -307,21 +311,80 @@ describe('deriving what was working at teardown', () => {
         [
           SESSION,
           {
-            journal: journal([turnItem('turn-0', 'completed')], false, [
-              submission('msg-1', 'pending')
-            ]),
-            hasProviderChild: true
+            journal: journal([turnItem('turn-0', 'completed')], [submission('msg-1', 'pending')]),
+            child: { fence: 1 }
           }
         ]
       ]),
       getRecord: () => claudeRecord(null),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
     })
 
     expect(recorded?.work).toEqual({ kind: 'submission', id: 'msg-1' })
+  })
+
+  // Accepted while the agent was starting and never handed over: the chat shows working, but no
+  // agent had the message, and quit rejects it as never sent.
+  it('marks nothing for a session whose only work is a message still queued', () => {
+    const queued = { ...submission('msg-1', 'pending'), handoverRecorded: true as const }
+    expect(
+      markersAtTeardown({
+        sessions: new Map([
+          [
+            SESSION,
+            {
+              journal: journal([turnItem('turn-0', 'completed')], [queued]),
+              child: { fence: 1 }
+            }
+          ]
+        ]),
+        getRecord: () => claudeRecord(null),
+        childWork: () => undefined,
+        trigger: 'quit',
+        teardownId: TEARDOWN_CURRENT,
+        now: NOW
+      })
+    ).toEqual([])
+  })
+
+  it('marks a handed-over message over a newer queued one, and a turn a queued one waits behind', () => {
+    const handedOver = {
+      ...submission('msg-1', 'pending'),
+      handoverRecorded: true as const,
+      handedOverAt: NOW
+    }
+    const queued = { ...submission('msg-2', 'pending'), handoverRecorded: true as const }
+    const markers = markersAtTeardown({
+      sessions: new Map([
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-0', 'completed')], [handedOver, queued]),
+            child: { fence: 1 }
+          }
+        ],
+        [
+          'session-running',
+          {
+            journal: journal([turnItem('turn-1', 'running')], [queued]),
+            child: { fence: 1 }
+          }
+        ]
+      ]),
+      getRecord: () => claudeRecord(null),
+      childWork: () => undefined,
+      trigger: 'quit',
+      teardownId: TEARDOWN_CURRENT,
+      now: NOW
+    })
+
+    expect(markers.map((entry) => entry.work)).toEqual([
+      { kind: 'submission', id: 'msg-1' },
+      { kind: 'turn', id: 'turn-1' }
+    ])
   })
 
   // Once a turn exists it is the better identity: it is what eviction rewrites, so it is what the
@@ -332,15 +395,13 @@ describe('deriving what was working at teardown', () => {
         [
           SESSION,
           {
-            journal: journal([turnItem('turn-1', 'running')], false, [
-              submission('msg-1', 'accepted')
-            ]),
-            hasProviderChild: true
+            journal: journal([turnItem('turn-1', 'running')], [submission('msg-1', 'accepted')]),
+            child: { fence: 1 }
           }
         ]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -390,7 +451,8 @@ describe('the resumable set', () => {
       getRecord: () => claudeRecord('5aed93d6-advanced-leaf'),
       supportsRecord: () => true,
       latestPrompt: () => '',
-      latestUserItemId: () => null
+      movedOn: () => false,
+      savedByNewerOrca: () => false
     })
 
     expect(candidates).toHaveLength(1)
@@ -405,29 +467,39 @@ describe('the resumable set', () => {
       getRecord: () => claudeRecord(null, 'prov-session-2'),
       supportsRecord: () => true,
       latestPrompt: () => '',
-      latestUserItemId: () => null
+      movedOn: () => false,
+      savedByNewerOrca: () => false
     })
 
     expect(set.candidates).toEqual([])
     expect(set.superseded).toEqual([forked])
   })
 
-  // An offer has no expiry: it ends only by the user's own actions, however old it is.
+  // Nothing here can continue a chat a newer Orca saved: it is not offered, and its offer is kept
+  // for the Orca that can act on it.
+  it("neither offers nor spends a newer Orca's chat, and offers it once this build can open it", () => {
+    const offer = marker()
+    expect(resumableSet({ markers: [offer], savedByNewerOrca: [SESSION] })).toEqual({
+      candidates: [],
+      superseded: []
+    })
+    expect(resumableSet({ markers: [offer] }).candidates).toHaveLength(1)
+  })
+
+  // Being a newer Orca's chat does not keep a forked chat's offer alive: the fork still ends it.
+  it('still withdraws a forked chat a newer Orca saved', () => {
+    const forked = marker({ providerHandleRoot: 'codex:"other-thread"' })
+    expect(resumableSet({ markers: [forked], savedByNewerOrca: [SESSION] }).superseded).toEqual([
+      forked
+    ])
+  })
+
+  // An offer has no expiry, however old it is.
   it('still offers a months-old marker', () => {
     const monthsAgo = NOW - 90 * 24 * 60 * 60 * 1000
     expect(resumableSet({ markers: [marker({ recordedAt: monthsAgo })] }).candidates).toHaveLength(
       1
     )
-  })
-
-  // The user moving on is what withdraws an offer — and it is reported for DELETION, not merely
-  // filtered, so the record does not have to be re-filtered on every read forever.
-  it('withdraws and reports for deletion once the user has sent a newer message', () => {
-    const withdrawn = marker()
-    const set = resumableSet({ markers: [withdrawn], latestUserItemId: 'user-newer' })
-
-    expect(set.candidates).toEqual([])
-    expect(set.superseded).toEqual([withdrawn])
   })
 
   // Structural refusals are NOT endings: a record this host cannot see right now must not delete

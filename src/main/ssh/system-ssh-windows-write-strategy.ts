@@ -3,6 +3,7 @@ import { getSystemSshBuildArgsFromOperationOptions } from './system-ssh-args'
 import { spawnSystemSshCommand } from './system-ssh-command'
 import {
   awaitWithSystemSshAbort,
+  SystemSshCommandExitError,
   throwIfAborted,
   waitForChannelClose
 } from './system-ssh-operation-lifecycle'
@@ -267,11 +268,42 @@ export function explainWindowsPowerShellStdinFailure(error: unknown): unknown {
 }
 
 function isPwshUnavailableError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  // cmd.exe's "not recognized" and sshd's exit 9009 both mean "no pwsh here". A timeout does not:
-  // that is the stdin defect, and PowerShell 7 does not have it, so it must not be cached as absent.
-  return /is not recognized as an internal or external command|9009|CommandNotFoundException/i.test(
-    message
+  if (!(error instanceof SystemSshCommandExitError)) {
+    return false
+  }
+  // A complete missing-pwsh diagnostic establishes absence; paths and mixed errors do not.
+  const stderr = error.stderr.trim()
+  return (
+    error.exitCode === 9009 ||
+    /^'pwsh\.exe' is not recognized as an internal or external command(?:,\r?\noperable program or batch file\.)?$/i.test(
+      stderr
+    ) ||
+    /^CommandNotFoundException:[ \t]*pwsh\.exe$/i.test(stderr) ||
+    isPowerShellMissingPwshDiagnostic(stderr)
+  )
+}
+
+function isPowerShellMissingPwshDiagnostic(stderr: string): boolean {
+  // NormalView wraps physical lines; its localized prose and category template are not identifiers.
+  const record = stderr.replace(/\r?\n/g, '')
+  const sections =
+    /^pwsh\.exe[ \t]*:[ \t]*([^+]+)\+[ \t]*pwsh\.exe([ \t]+-[^~]*?)\+[ \t]*~{8}[ \t]*\+[ \t]*CategoryInfo[ \t]*:[ \t]*([^+]+)\+[ \t]*FullyQualifiedErrorId[ \t]*:[ \t]*CommandNotFoundException[ \t]*$/.exec(
+      record
+    )
+  if (!sections) {
+    return false
+  }
+  const prelude = sections[1] ?? ''
+  const source = sections[2] ?? ''
+  const category = sections[3] ?? ''
+  return (
+    !/\b[\w.-]+\.exe[ \t]*:/.test(prelude) &&
+    /^[ \t]+-NoProfile[ \t]+-NonInteractive[ \t]+-(?:Command[ \t]+exit|EncodedCommand[ \t]+[A-Za-z0-9+/=]+(?:[ \t]*\.{3})?)[ \t]*$/.test(
+      source
+    ) &&
+    category.match(/(?<![\w./\\-])pwsh\.exe(?![\w./\\-])/g)?.length === 1 &&
+    category.match(/\bString\b/g)?.length === 1 &&
+    category.match(/\bCommandNotFoundException\b/g)?.length === 1
   )
 }
 

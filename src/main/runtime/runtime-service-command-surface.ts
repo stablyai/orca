@@ -26,6 +26,7 @@ export type RuntimeServiceCommandSurface = {
   cleanupSubscriptionsForConnection: RuntimeSubscriptionRegistry['cleanupForConnection']
   cleanupSubscriptionIfOwnedByConnection: RuntimeSubscriptionRegistry['cleanupIfOwnedByConnection']
   getSubscriptionRegistrationVersion: RuntimeSubscriptionRegistry['getRegistrationVersion']
+  releaseSubscriptionByRequest: RuntimeSubscriptionRegistry['releaseByRequest']
   onNotificationDispatched: RuntimeMobileNotificationController['onDispatched']
   getMobileNotificationListenerCount: RuntimeMobileNotificationController['getListenerCount']
   dispatchMobileNotification: RuntimeMobileNotificationController['dispatch']
@@ -40,6 +41,7 @@ export type RuntimeServiceCommandSurface = {
   registerMobilePushDevice: RuntimeMobileNotificationController['registerPushDevice']
   unregisterMobilePushDevice: RuntimeMobileNotificationController['unregisterPushDevice']
   setAccountServices: RuntimeAccountController['setServices']
+  getDataAccountsSnapshot: RuntimeAccountController['dataAccountsSnapshot']
   setCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['setCommitMessageAgentEnvironment']
   getCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['getCommitMessageAgentEnvironment']
   getAccountsSnapshot: RuntimeAccountController['getSnapshot']
@@ -53,6 +55,9 @@ export type RuntimeServiceCommandSurface = {
   addClaudeAccountFromConfigDir: RuntimeAccountController['addClaudeFromConfigDir']
   removeCodexAccount: RuntimeAccountController['removeCodex']
   addCodexAccountFromHome: RuntimeAccountController['addCodexFromHome']
+  addDataAccountFromHome: RuntimeAccountController['addDataFromHome']
+  selectDataAccount: RuntimeAccountController['selectData']
+  removeDataAccount: RuntimeAccountController['removeData']
   onAccountsChanged: RuntimeAccountController['onChanged']
   listMobileSpeechModels: RuntimeMobileSpeechCatalog['list']
   downloadMobileSpeechModel: RuntimeMobileSpeechCatalog['download']
@@ -116,6 +121,7 @@ export function installRuntimeServiceCommandSurface(
     cleanupSubscriptionIfOwnedByConnection:
       subscriptions.cleanupIfOwnedByConnection.bind(subscriptions),
     getSubscriptionRegistrationVersion: subscriptions.getRegistrationVersion.bind(subscriptions),
+    releaseSubscriptionByRequest: subscriptions.releaseByRequest.bind(subscriptions),
     onNotificationDispatched: notifications.onDispatched.bind(notifications),
     getMobileNotificationListenerCount: notifications.getListenerCount.bind(notifications),
     dispatchMobileNotification: notifications.dispatch.bind(notifications),
@@ -130,6 +136,7 @@ export function installRuntimeServiceCommandSurface(
     registerMobilePushDevice: notifications.registerPushDevice.bind(notifications),
     unregisterMobilePushDevice: notifications.unregisterPushDevice.bind(notifications),
     setAccountServices: accounts.setServices.bind(accounts),
+    getDataAccountsSnapshot: accounts.dataAccountsSnapshot.bind(accounts),
     setCommitMessageAgentEnvironmentResolvers:
       accounts.setCommitMessageAgentEnvironment.bind(accounts),
     getCommitMessageAgentEnvironmentResolvers:
@@ -145,6 +152,9 @@ export function installRuntimeServiceCommandSurface(
     addClaudeAccountFromConfigDir: accounts.addClaudeFromConfigDir.bind(accounts),
     removeCodexAccount: accounts.removeCodex.bind(accounts),
     addCodexAccountFromHome: accounts.addCodexFromHome.bind(accounts),
+    addDataAccountFromHome: accounts.addDataFromHome.bind(accounts),
+    selectDataAccount: accounts.selectData.bind(accounts),
+    removeDataAccount: accounts.removeData.bind(accounts),
     onAccountsChanged: accounts.onChanged.bind(accounts),
     listMobileSpeechModels: speech.list.bind(speech),
     downloadMobileSpeechModel: speech.download.bind(speech),

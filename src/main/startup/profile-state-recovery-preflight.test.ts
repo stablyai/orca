@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  PROFILE_STATE_DESKTOP_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_RESULT_PREFIX
 } from '../../shared/profile-state-recovery-command'
@@ -31,17 +32,26 @@ import {
 } from '../persistence/profile-state/profile-state-documents'
 import { writeProfileStateDatabaseSnapshotAsync } from '../persistence/profile-state/profile-state-database-snapshot'
 import * as marker from './http1-compatibility-marker'
-import { runProfileStateRecoveryPreflight } from './profile-state-recovery-preflight'
+import {
+  profileStateDesktopRecoveryArgs,
+  runProfileStateRecoveryPreflight
+} from './profile-state-recovery-preflight'
 
 const mocks = vi.hoisted(() => ({
   setPath: vi.fn(),
   requestSingleInstanceLock: vi.fn(),
   on: vi.fn(),
   exit: vi.fn(),
+  relaunch: vi.fn(),
+  whenReady: vi.fn(),
+  showMessageBox: vi.fn(),
   background: vi.fn(),
   output: vi.fn()
 }))
-vi.mock('electron', () => ({ app: mocks }))
+vi.mock('electron', () => ({
+  app: mocks,
+  dialog: { showMessageBox: mocks.showMessageBox }
+}))
 vi.mock('../window/foreground-activation-policy', () => ({
   applyBackgroundActivationPolicy: mocks.background
 }))
@@ -63,6 +73,8 @@ const roots: string[] = []
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requestSingleInstanceLock.mockReturnValue(true)
+  mocks.whenReady.mockResolvedValue(undefined)
+  mocks.showMessageBox.mockResolvedValue({ response: 0 })
   vi.stubEnv('ORCA_USER_DATA_PATH', '/stale/inherited/root')
   vi.stubEnv('ORCA_BYPASS_SINGLE_INSTANCE_LOCK', '1')
   vi.stubEnv('ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK', '0')
@@ -276,5 +288,55 @@ describe('Electron recovery preflight', () => {
     expect(mocks.setPath).not.toHaveBeenCalled()
     expect(mocks.requestSingleInstanceLock).not.toHaveBeenCalled()
     expect(mocks.exit).toHaveBeenCalledWith(1)
+  })
+
+  describe('desktop choice relaunch', () => {
+    function desktopArgv(item: ReturnType<typeof fixture>) {
+      writeFileSync(item.dataFile, JSON.stringify(item.restored))
+      return [
+        'Orca',
+        ...profileStateDesktopRecoveryArgs(['Orca', '--inspect', 'orca://share/1'], {
+          userDataPath: item.root,
+          selector: { kind: 'current-json' }
+        })
+      ]
+    }
+
+    it('applies the choice without writing a CLI response, then relaunches ordinary startup', () => {
+      const item = fixture()
+      expect(runProfileStateRecoveryPreflight(desktopArgv(item))).toBe(true)
+      expect(JSON.parse(readFileSync(item.dataFile, 'utf8'))).toEqual(item.restored)
+      expect(existsSync(item.databaseFile)).toBe(false)
+      expect(mocks.output).not.toHaveBeenCalled()
+      expect(mocks.background).not.toHaveBeenCalled()
+      expect(mocks.relaunch).toHaveBeenCalledWith({ args: ['--inspect', 'orca://share/1'] })
+      expect(mocks.exit).toHaveBeenCalledWith(0)
+      acquireProfileStateRuntimeAdmission(item.root).release()
+    })
+
+    it('reports a failed choice instead of relaunching', async () => {
+      const item = fixture()
+      mocks.requestSingleInstanceLock.mockReturnValue(false)
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      expect(runProfileStateRecoveryPreflight(desktopArgv(item))).toBe(true)
+      await vi.waitFor(() => expect(mocks.exit).toHaveBeenCalledWith(1))
+      expect(mocks.relaunch).not.toHaveBeenCalled()
+      expect(mocks.showMessageBox).toHaveBeenCalledWith(
+        expect.objectContaining({ detail: expect.stringContaining('Stop Orca') })
+      )
+      expect(readFileSync(item.databaseFile, 'utf8')).toBe('broken database')
+    })
+
+    it.each([
+      ['Orca', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}'],
+      ['Orca', '--serve', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}'],
+      ['Orca', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}', PROFILE_STATE_RECOVERY_FLAG, '{}']
+    ])('fails closed for malformed desktop launch %j', async (...argv) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      expect(runProfileStateRecoveryPreflight(argv)).toBe(true)
+      await vi.waitFor(() => expect(mocks.exit).toHaveBeenCalledWith(1))
+      expect(mocks.setPath).not.toHaveBeenCalled()
+      expect(mocks.relaunch).not.toHaveBeenCalled()
+    })
   })
 })

@@ -46,5 +46,8 @@ export function getWorktreeCreationIndeterminate(request: WorktreeCreationReques
 export function getInitialWorktreeCreationPhase(
   request: WorktreeCreationRequest
 ): WorktreeCreationPhase {
+  if (request.hookPreparation) {
+    return 'preparing'
+  }
   return request.ephemeralVmRecipe && !request.ephemeralVmRuntimeId ? 'provisioning-vm' : 'fetching'
 }

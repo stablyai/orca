@@ -2,7 +2,7 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
 import { ShellIcon } from './shell-icons'
 import {
@@ -12,7 +12,7 @@ import {
 import { translate } from '@/i18n/i18n'
 
 type TerminalTabLeadingIconProps = {
-  agent: TuiAgent | null
+  agent: TerminalAgent | null
   activityStatus: TerminalTabActivityStatus
   shell: TerminalTab['shellOverride']
   showUnreadActivity: boolean
@@ -20,7 +20,7 @@ type TerminalTabLeadingIconProps = {
 }
 
 type TerminalTabAgentIdentityIconProps = {
-  agent: TuiAgent
+  agent: TerminalAgent
   isActive: boolean
   className?: string
 }
@@ -76,7 +76,8 @@ export function TerminalTabLeadingIcon({
         data-agent-activity-status={activityStatus}
         className="mr-1 inline-flex shrink-0 items-center gap-1"
       >
-        <AgentStateDot state={dotState} size="md" />
+        {/* Why: the state glyph is self-describing and the tab title already has a tooltip; hover here stays quiet. */}
+        <AgentStateDot state={dotState} size="md" title={null} />
         {/* Why: status and identity answer different questions. Keep the agent
             logo beside the state glyph so parallel tabs remain scannable. */}
         {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}

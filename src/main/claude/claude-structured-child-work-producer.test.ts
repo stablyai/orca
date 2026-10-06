@@ -16,7 +16,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => 
 afterEach(() => vi.restoreAllMocks())
 
 describe('Claude structured child-work producer', () => {
-  it('delivers evidence only after the journal wrote the frame and the legacy row republished', async () => {
+  it('delivers evidence only after the journal wrote and published the frame', async () => {
     const { send, records } = await producer()
     send(toolUse('toolu_bg', 'Agent', { description: 'Audit the build' }))
     const deliveries = send(
@@ -32,7 +32,9 @@ describe('Claude structured child-work producer', () => {
     const kinds = deliveries.map((delivery) => delivery.kind)
     // The frame's own rows, then the parent's republished row, and only then its children.
     expect(kinds.filter((kind) => kind === 'journal').length).toBeGreaterThan(0)
-    expect(kinds.slice(kinds.indexOf('legacy'))).toEqual(['legacy', 'evidence'])
+    expect(kinds.lastIndexOf('publish')).toBeGreaterThan(kinds.lastIndexOf('journal'))
+    expect(kinds.at(-1)).toBe('evidence')
+    expect(kinds.filter((kind) => kind === 'evidence')).toHaveLength(1)
     expect(records()).toEqual([
       expect.objectContaining({ description: 'Audit the build', membership: 'live' })
     ])
@@ -193,7 +195,7 @@ describe('Claude structured child-work producer', () => {
       step.check?.()
     }
     await adapter.closeSession('session-1')
-    // The session is gone: what still ran settles unreported, and every record stays.
+    // Orca ended the session: what still ran is stopped with it, and every record stays.
     const summary = records().map((record) => ({
       description: record.description,
       membership: record.membership,
@@ -208,7 +210,7 @@ describe('Claude structured child-work producer', () => {
         generation: 1
       },
       { description: 'npm test', membership: 'settled', outcome: 'cancelled', generation: 1 },
-      { description: 'Audit the build', membership: 'settled', outcome: 'unknown', generation: 2 }
+      { description: 'Audit the build', membership: 'settled', outcome: 'cancelled', generation: 2 }
     ])
     expect(adapter.backgroundTaskState('session-1')).toBeUndefined()
   })

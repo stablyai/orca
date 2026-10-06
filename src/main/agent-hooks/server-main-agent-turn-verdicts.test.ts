@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, postHookEvent, PANE } from './server.test-fixtures'
 
@@ -44,20 +47,6 @@ describe('main agent turn verdicts and clocks', () => {
     expect(response.status).toBe(204)
   }
 
-  function inferCtrlC(agentType: 'codex'): void {
-    const baseline = server.getStatusSnapshot()[0]
-    expect(
-      server.inferInterrupt({
-        paneKey: PANE,
-        baselineUpdatedAt: baseline.receivedAt,
-        baselineStateStartedAt: baseline.stateStartedAt,
-        baselinePrompt: baseline.prompt,
-        baselineAgentType: agentType,
-        intent: 'ctrl-c'
-      })
-    ).toBe(true)
-  }
-
   it('starts a new Claude session with its own main agent clock', async () => {
     await post('/hook/claude', { hook_event_name: 'UserPromptSubmit', prompt: 'first' })
     await post('/hook/claude', { hook_event_name: 'Stop' })
@@ -97,10 +86,31 @@ describe('main agent turn verdicts and clocks', () => {
     }
   )
 
-  it('keeps an inferred Codex cancellation across a late root Stop', async () => {
-    await post('/hook/codex', { hook_event_name: 'UserPromptSubmit', prompt: 'long task' })
-    vi.setSystemTime(1_001_000)
-    inferCtrlC('codex')
+  it('keeps a recorded Codex cancellation across a late root Stop', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'codex-turn-verdict-'))
+    const transcriptPath = join(directory, 'rollout.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        '{"type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}\n'
+      )
+      await post('/hook/codex', {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'long task',
+        transcript_path: transcriptPath
+      })
+      vi.setSystemTime(1_001_000)
+      appendFileSync(
+        transcriptPath,
+        '{"type":"event_msg","payload":{"type":"turn_aborted","turn_id":"turn-1","reason":"interrupted"}}\n'
+      )
+      await vi.waitFor(
+        () => expect(server.getStatusSnapshot()[0]?.mainAgent?.outcome).toBe('cancellation'),
+        { timeout: 2_000 }
+      )
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
     const cancelled = server.getStatusSnapshot()[0]?.mainAgent
     expect(cancelled).toMatchObject({ state: 'done', outcome: 'cancellation' })
 
@@ -115,7 +125,7 @@ describe('main agent turn verdicts and clocks', () => {
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working', mainAgent: cancelled })
   })
 
-  it('keeps an inferred Codex cancellation across a late relayed root Stop', () => {
+  it('keeps a host-confirmed Codex cancellation across a late relayed root Stop', () => {
     const relayed = (
       hookEventName: string,
       payload: Record<string, unknown>,
@@ -134,7 +144,21 @@ describe('main agent turn verdicts and clocks', () => {
       )
     relayed('UserPromptSubmit', { state: 'working' }, { hasExplicitPrompt: true })
     vi.setSystemTime(1_001_000)
-    inferCtrlC('codex')
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: {
+          prompt: 'long task',
+          agentType: 'codex',
+          state: 'done',
+          interrupted: true,
+          mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 1_001_000 }
+        }
+      },
+      'conn-1'
+    )
     const cancelled = server.getStatusSnapshot()[0]?.mainAgent
     expect(cancelled).toMatchObject({ state: 'done', outcome: 'cancellation' })
 

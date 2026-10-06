@@ -78,6 +78,7 @@ function createHarness(
     deferSpawn?: boolean
     includePairedSnapshot?: boolean
     rendererMounted?: boolean
+    rendererPtyId?: string | null
     graphOnlySource?: boolean
     sourceIncarnationId?: string
     stopAndWaitResult?: boolean
@@ -169,7 +170,7 @@ function createHarness(
               worktreeId: WORKTREE_ID,
               leafId: SOURCE_LEAF_ID,
               paneRuntimeId: 1,
-              ptyId: SOURCE_PTY_ID
+              ptyId: options.rendererPtyId === undefined ? SOURCE_PTY_ID : options.rendererPtyId
             }
           ]
         : [],
@@ -281,6 +282,19 @@ describe('remote runtime terminal split authority', () => {
       tabId: TAB_ID,
       handle: expect.stringMatching(/^term_/)
     })
+  })
+
+  it('reveals a persisted split while its mounted source is still publishing its PTY binding', async () => {
+    const harness = createHarness(true, { rendererMounted: true, rendererPtyId: null })
+    await harness.runtime.splitTerminal(harness.handle, { direction: 'vertical' })
+    expect(harness.revealTerminalSession).toHaveBeenCalledOnce()
+    expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root?.type).toBe('split')
+  })
+
+  it('does not reveal a persisted split into a renderer bound to a different PTY', async () => {
+    const harness = createHarness(true, { rendererMounted: true, rendererPtyId: 'replacement' })
+    await harness.runtime.splitTerminal(harness.handle, { direction: 'vertical' })
+    expect(harness.revealTerminalSession).not.toHaveBeenCalled()
   })
 
   it('splits a persisted tab without consulting an unmounted host renderer', async () => {

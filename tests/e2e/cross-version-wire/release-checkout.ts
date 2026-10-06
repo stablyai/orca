@@ -1,21 +1,24 @@
 import { execFileSync } from 'node:child_process'
 import { constants } from 'node:fs'
-import { access, mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { lock } from 'proper-lockfile'
 import {
   extractReleaseCheckoutTree,
   scavengeReleaseCheckoutStaging
 } from './release-checkout-tree.ts'
+import { selectLatestStableReleaseTag } from '../../../config/scripts/stable-release-tags.mjs'
+
+export { selectLatestStableReleaseTag }
 
 export const REPO_ROOT = resolve(import.meta.dirname, '..', '..', '..')
 const DEFAULT_CACHE_ROOT = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-checkouts')
 
+// Released sources still import @streamparser/json; retain its pinned test-only dependency.
 // Bump when extraction or the alias rewrite changes so cached trees are rebuilt.
-const CHECKOUT_FORMAT = 3
+const CHECKOUT_FORMAT = 5
 
 const BASELINE_REF_ENV = 'ORCA_CROSS_VERSION_BASELINE_REF'
-const STABLE_DESKTOP_RELEASE_TAG = /^v\d+\.\d+\.\d+$/
 
 export type ReleaseCheckout = {
   /** The ref as requested, e.g. `v1.4.169`. */
@@ -86,24 +89,6 @@ function git(args: string[]): string {
   }).trim()
 }
 
-function compareReleaseTags(a: string, b: string): number {
-  const parts = (tag: string): number[] =>
-    tag
-      .replace(/^v/, '')
-      .split('.')
-      .map((part) => Number.parseInt(part, 10))
-      .map((value) => (Number.isFinite(value) ? value : 0))
-  const left = parts(a)
-  const right = parts(b)
-  for (let index = 0; index < Math.max(left.length, right.length); index++) {
-    const diff = (left[index] ?? 0) - (right[index] ?? 0)
-    if (diff !== 0) {
-      return diff
-    }
-  }
-  return 0
-}
-
 /**
  * The version point the harness pairs current code against. An explicit
  * {@link BASELINE_REF_ENV} wins; otherwise the newest stable desktop release tag.
@@ -134,15 +119,6 @@ export function resolveBaselineReleaseRef(): string {
     )
   }
   return latest
-}
-
-export function selectLatestStableReleaseTag(tags: string[]): string | null {
-  return (
-    tags
-      .filter((tag) => STABLE_DESKTOP_RELEASE_TAG.test(tag))
-      .sort(compareReleaseTags)
-      .at(-1) ?? null
-  )
 }
 
 function resolveCommit(ref: string): string {
@@ -182,10 +158,10 @@ async function assertCheckoutWireSurface(root: string, ref: string): Promise<voi
   }
 }
 
-function checkoutModulePath(checkout: ReleaseCheckout, rootRelativePath: string): string {
+function checkoutModulePath(root: string, rootRelativePath: string): string {
   const fromRoot = rootRelativePath.replace(/^[/\\]+/, '')
-  const absolute = resolve(checkout.root, fromRoot)
-  const fromCheckout = relative(checkout.root, absolute)
+  const absolute = resolve(root, fromRoot)
+  const fromCheckout = relative(root, absolute)
   if (
     !fromRoot ||
     fromCheckout === '..' ||
@@ -213,7 +189,28 @@ export function importReleaseCheckoutModule(
   importModule: (specifier: string) => Promise<Record<string, unknown>> = (specifier) =>
     import(/* @vite-ignore */ specifier) as Promise<Record<string, unknown>>
 ): Promise<Record<string, unknown>> {
-  return importModule(checkoutModulePath(checkout, rootRelativePath))
+  return importModule(checkoutModulePath(checkout.root, rootRelativePath))
+}
+
+/**
+ * Import a copy of a self-contained working-tree module placed under the cache root.
+ *
+ * Why: vite transforms a file against its nearest tsconfig, and `mobile/tsconfig.json` extends
+ * Expo's, which the root-only CI lane does not install. The copy gets the root tsconfig, as the
+ * release checkout's copy does. A relative runtime import would not resolve from the copy.
+ */
+export async function importWorkingTreeModuleCopy(
+  rootRelativePath: string,
+  cacheRoot: string = DEFAULT_CACHE_ROOT
+): Promise<Record<string, unknown>> {
+  const copy = checkoutModulePath(join(cacheRoot, 'working-tree'), rootRelativePath)
+  const staged = `${copy}.${process.pid}.tmp`
+  await mkdir(dirname(copy), { recursive: true })
+  await copyFile(checkoutModulePath(REPO_ROOT, rootRelativePath), staged)
+  // Rename so a concurrent run never imports a half-written copy.
+  await rename(staged, copy)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a module namespace is a plain record of its exports; callers narrow each export they read.
+  return import(/* @vite-ignore */ copy) as Promise<Record<string, unknown>>
 }
 
 /**

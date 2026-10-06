@@ -4,15 +4,18 @@ import type {
 } from '../../../shared/agent-session-wire'
 import {
   requeueStructuredAgentSessionSendRefusal,
+  stageStructuredAgentSessionOutboxEntryForSend,
   structuredAgentSessionSendRequest,
   type StructuredAgentSessionOutboxEntry
 } from '../../../shared/structured-agent-session-outbox'
+import { agentSessionRefusalFailure } from '../../../shared/agent-session-write-failure'
 import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
 import {
   mutateStructuredAgentSessionLaunchPrompt,
   type StructuredAgentSessionLaunchPromptMutation
 } from '@/components/native-chat/structured-agent-session-outbox-storage'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type StructuredPromptDeliveryResult = {
@@ -82,42 +85,51 @@ export function shareStructuredAgentLaunchPromptDispatch(
 
 function mutateEntry(
   entry: StructuredAgentSessionOutboxEntry,
-  update: StructuredAgentSessionLaunchPromptMutation
+  update: StructuredAgentSessionLaunchPromptMutation,
+  options: { onlyIfSaved?: boolean } = {}
 ): boolean {
-  return mutateStructuredAgentSessionLaunchPrompt(entry.sessionId, entry.clientMessageId, update)
+  return mutateStructuredAgentSessionLaunchPrompt(
+    entry.sessionId,
+    entry.clientMessageId,
+    update,
+    options
+  )
 }
 
 async function dispatchStructuredLaunchPrompt(
   entry: StructuredAgentSessionOutboxEntry,
-  receipt: LaunchReceipt
+  receipt: LaunchReceipt,
+  target: RuntimeClientTarget
 ): Promise<boolean> {
+  // Why: an unsaved stage must leave the entry queued; a held 'dispatching' copy is never drained.
   if (
-    !mutateEntry(entry, (current) => ({
-      ...current,
-      state: 'dispatching',
-      lastAttemptAt: Date.now()
-    }))
+    !mutateEntry(
+      entry,
+      (current) => stageStructuredAgentSessionOutboxEntryForSend(current, Date.now()),
+      { onlyIfSaved: true }
+    )
   ) {
     return false
   }
   try {
     const result = await callStructuredAgentSession<
       AgentSessionMutationResult<AgentSessionSendResult>
-    >(
-      { kind: 'local' },
-      'agentSession.send',
-      structuredAgentSessionSendRequest(entry, receipt.fence)
-    )
+    >(target, 'agentSession.send', structuredAgentSessionSendRequest(entry, receipt.fence))
     if (!result.ok) {
       mutateEntry(entry, (current) =>
         requeueStructuredAgentSessionSendRefusal(
           current,
-          result.refusal.code,
+          agentSessionRefusalFailure(result.refusal),
           () => createStructuredAgentSessionOperationId(createBrowserUuid),
           entry.lastAttemptAt !== null
         )
       )
       return false
+    }
+    if ('queued' in result.value) {
+      // The host holds the draft; the outbox entry is spent.
+      mutateEntry(entry, () => null)
+      return true
     }
     const dispatchState = result.value.submission.dispatchState
     mutateEntry(entry, (current) =>
@@ -142,6 +154,7 @@ async function dispatchStructuredLaunchPrompt(
 
 export function settleStructuredAgentLaunchPrompt(args: {
   launchResult: Promise<LaunchReceipt>
+  target: RuntimeClientTarget
   options: StructuredLaunchPromptOptions
   stagedEntry: StructuredAgentSessionOutboxEntry | null
 }): Promise<StructuredPromptDeliveryResult> | undefined {
@@ -159,7 +172,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
       entry.sessionId,
       entry.clientMessageId,
       receipt.fence,
-      () => dispatchStructuredLaunchPrompt(entry, receipt)
+      () => dispatchStructuredLaunchPrompt(entry, receipt, args.target)
     )
     const delivered = await dispatch.promise
     if (delivered) {

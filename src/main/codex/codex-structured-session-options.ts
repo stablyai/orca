@@ -1,6 +1,6 @@
 import type { AgentSessionOptionsResult } from '../../shared/agent-session-wire'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
-import type { CodexSession, CodexSessionCatalogAccess } from './codex-structured-session-state'
+import type { CodexSession } from './codex-structured-session-state'
 import { isCodexTurnOptionKey } from './codex-structured-turn-start'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
@@ -12,7 +12,8 @@ import {
   type CodexModelCatalogListing,
   type CodexSessionOptionCatalog
 } from './codex-structured-model-catalog'
-import type { AgentModelCatalogEntry } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { codexAcquireCatalogListing, listingFromEntry } from './codex-structured-catalog-entry'
+export { codexAcquireCatalogListing } from './codex-structured-catalog-entry'
 
 export function restoredCodexSessionOptions(
   options: Readonly<Record<string, string>> | undefined
@@ -37,13 +38,6 @@ export type { CodexSessionOptionCatalog } from './codex-structured-model-catalog
 
 export { readCodexStructuredSessionOptionCatalog } from './codex-structured-model-catalog'
 
-function listingFromEntry(entry: AgentModelCatalogEntry): CodexModelCatalogListing {
-  return {
-    models: entry.models.map((model) => ({ ...model })),
-    fastModeTierByModel: new Map(Object.entries(entry.fastModeTierByModel))
-  }
-}
-
 async function fetchCodexListingThroughStore(
   session: CodexSession,
   timeoutMs: number | undefined
@@ -52,7 +46,7 @@ async function fetchCodexListingThroughStore(
   if (!access) {
     return fetchCodexModelCatalogListing({ connection: session.connection, timeoutMs })
   }
-  const entry = await access.store.refresh(access.fingerprint, 'codex', async () => {
+  const entry = await access.store.refresh(access.fingerprint, 'codex', access, async () => {
     const listing = await fetchCodexModelCatalogListing({
       connection: session.connection,
       timeoutMs
@@ -90,63 +84,6 @@ export async function codexSessionCatalogListingForPicker(
   return fetchCodexListingThroughStore(session, timeoutMs)
 }
 
-/**
- * The listing an option write validates against. A stored entry that already
- * names the required model answers outright; one old enough to have missed a
- * newly granted model waits for one bounded refresh before a refusal — and a
- * refresh that fails falls back to the stored entry rather than refusing to
- * answer at all.
- */
-async function codexSessionCatalogListingForValidation(
-  session: CodexSession,
-  timeoutMs: number | undefined,
-  requiredModel: string | null
-): Promise<CodexModelCatalogListing> {
-  const access = session.catalogAccess
-  const entry = access?.store.get(access.fingerprint)
-  if (!access || !entry) {
-    return fetchCodexListingThroughStore(session, timeoutMs)
-  }
-  const hasRequired =
-    requiredModel === null || entry.models.some((model) => model.id === requiredModel)
-  const youngEnough =
-    access.store.withinValidationMinAge(entry) || access.store.hasActiveFailure(access.fingerprint)
-  if (hasRequired || youngEnough) {
-    return listingFromEntry(entry)
-  }
-  try {
-    return await fetchCodexListingThroughStore(session, timeoutMs)
-  } catch {
-    return listingFromEntry(entry)
-  }
-}
-
-/** Get-or-fetch for acquire time, before the session object exists. Null on a
- *  failed fetch — fast-mode restore degrades exactly as a failed listing did. */
-export async function codexAcquireCatalogListing(
-  connection: Pick<CodexAppServerConnection, 'request'>,
-  catalogAccess: CodexSessionCatalogAccess | undefined,
-  timeoutMs: number | undefined
-): Promise<CodexModelCatalogListing | null> {
-  const entry = catalogAccess?.store.get(catalogAccess.fingerprint)
-  if (entry) {
-    return listingFromEntry(entry)
-  }
-  try {
-    const listing = await fetchCodexModelCatalogListing({ connection, timeoutMs })
-    if (catalogAccess && listing.models.length > 0) {
-      catalogAccess.store.recordSuccess(catalogAccess.fingerprint, 'codex', {
-        models: listing.models,
-        fastModeTierByModel: listing.fastModeTierByModel,
-        origin: 'live-session'
-      })
-    }
-    return listing
-  } catch {
-    return null
-  }
-}
-
 export async function readCodexStructuredSessionOptions(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
   current: { model?: string; effort?: string; fastMode?: boolean }
@@ -180,11 +117,10 @@ function composeLiveCodexCatalog(
   })
 }
 
-export async function readLiveCodexSessionOptions(
+function applyLiveCodexCatalog(
   session: CodexSession,
-  timeoutMs: number | undefined
-): Promise<AgentSessionOptionsResult> {
-  const listing = await codexSessionCatalogListingForPicker(session, timeoutMs)
+  listing: CodexModelCatalogListing
+): AgentSessionOptionsResult {
   const catalog = composeLiveCodexCatalog(session, listing)
   reconcileCodexFastModeOption(session, {
     fastModeTierByModel: catalog.fastModeTierByModel,
@@ -200,25 +136,63 @@ export async function readLiveCodexSessionOptions(
     : { ...catalog.result, current: { ...catalog.result.current, fastMode } }
 }
 
+export async function readLiveCodexSessionOptions(
+  session: CodexSession,
+  timeoutMs: number | undefined
+): Promise<AgentSessionOptionsResult> {
+  const listing = await codexSessionCatalogListingForPicker(session, timeoutMs)
+  return applyLiveCodexCatalog(session, listing)
+}
+
+/** Fetch outside the session lane; apply against current options inside it. */
+export async function prepareLiveCodexSessionOptions(
+  session: CodexSession,
+  timeoutMs: number | undefined
+): Promise<() => AgentSessionOptionsResult> {
+  const listing = await codexSessionCatalogListingForPicker(session, timeoutMs)
+  return () => applyLiveCodexCatalog(session, listing)
+}
+
 export async function applyCodexStructuredSessionOption(
   session: CodexSession,
   key: string,
-  value: string,
-  timeoutMs: number | undefined
+  value: string
 ): Promise<Readonly<Record<string, string>>> {
   try {
-    return await applyValidatedCodexStructuredSessionOption(session, key, value, timeoutMs)
+    return applyValidatedCodexStructuredSessionOption(session, key, value)
   } catch (error) {
     throw new AgentSessionOptionRejectedError(error)
   }
 }
 
-async function applyValidatedCodexStructuredSessionOption(
+/**
+ * With no listing known, a pick is kept as the next turn's intent rather than refused: catalog
+ * bookkeeping must not gate it. Codex judges the model on `turn/start`, and Fast without a
+ * known exact tier sends Standard there.
+ */
+function applyUnlistedCodexSessionOption(
+  session: CodexSession,
+  key: 'model' | 'effort' | 'fastMode',
+  value: string
+): Readonly<Record<string, string>> {
+  if (key === 'fastMode') {
+    session.options.delete('serviceTier')
+  } else if (
+    key === 'model' &&
+    value !== (session.options.get('model') ?? session.reportedOptions.model)
+  ) {
+    // An effort saved under another model is unverified for this one; its default applies.
+    session.options.delete('effort')
+  }
+  session.options.set(key, value)
+  return Object.fromEntries(session.options)
+}
+
+function applyValidatedCodexStructuredSessionOption(
   session: CodexSession,
   key: string,
-  value: string,
-  timeoutMs: number | undefined
-): Promise<Readonly<Record<string, string>>> {
+  value: string
+): Readonly<Record<string, string>> {
   // `serviceTier` still restores, so a session persisted before Fast existed migrates,
   // but the turn now derives the tier from `fastMode`. Accepting a direct write would
   // report success for a value the next turn discards.
@@ -229,13 +203,22 @@ async function applyValidatedCodexStructuredSessionOption(
     session.options.set(key, value)
     return Object.fromEntries(session.options)
   }
+  const requestedFastMode =
+    key === 'fastMode' ? decodeStructuredAgentSessionOptionValue('fastMode', value) : undefined
+  if (key === 'fastMode' && typeof requestedFastMode !== 'boolean') {
+    throw new Error('codex fast mode must be encoded as true or false')
+  }
+  if (requestedFastMode === false) {
+    session.options.delete('serviceTier')
+    session.options.set('fastMode', 'false')
+    return Object.fromEntries(session.options)
+  }
+  const listing = codexAcquireCatalogListing(session.catalogAccess)
+  if (!listing) {
+    return applyUnlistedCodexSessionOption(session, key, value)
+  }
   const priorModel = session.options.get('model') ?? session.reportedOptions.model
   const priorEffort = session.options.get('effort') ?? session.reportedOptions.effort
-  const listing = await codexSessionCatalogListingForValidation(
-    session,
-    timeoutMs,
-    key === 'model' ? value : (priorModel ?? null)
-  )
   const catalog = composeCodexSessionOptionCatalog(listing, {
     current: {
       ...(priorModel ? { model: priorModel } : {}),
@@ -256,12 +239,8 @@ async function applyValidatedCodexStructuredSessionOption(
   const modelId = key === 'model' ? value : catalog.result.current.model
   const model = catalog.result.models.find((entry) => entry.id === modelId)
   if (key === 'fastMode') {
-    const requested = decodeStructuredAgentSessionOptionValue('fastMode', value)
-    if (typeof requested !== 'boolean') {
-      throw new Error('codex fast mode must be encoded as true or false')
-    }
     if (
-      requested &&
+      requestedFastMode &&
       (model?.supportsFastMode !== true || !catalog.fastModeTierByModel.has(modelId))
     ) {
       throw new Error(`codex app-server model ${modelId} does not support Fast mode`)

@@ -64,7 +64,7 @@ function doneEntryStampedAhead(paneKey: string): AgentStatusEntry {
 
 /** The app-shell pairing: the grid page plus the scan loop that owns the ack. */
 function GridWithAutoAck(): React.JSX.Element {
-  useAutoAckViewedAgent(false)
+  useAutoAckViewedAgent()
   return <SessionsGridPage />
 }
 

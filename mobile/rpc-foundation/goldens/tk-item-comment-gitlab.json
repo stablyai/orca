@@ -1,24 +1,15 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.item-comment-gitlab",
   "family": "tasks.item-comment-gitlab",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
-  "scenarioSha256": "d993b9f74cf8c5d7af8d31a73cf19d97141c54f6fcf009e98ca5b9106f3ba35b",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "14949c71727e": {
       "name": "mutatingStatus",
       "ordinal": 7,
       "value": false
     },
-    "48a9b4deaa5b": {
+    "17b97af91ff8": {
       "draft": "",
       "error": "",
       "item": {
@@ -27,7 +18,10 @@
           "id": "gitlab:issue:4",
           "labels": ["bug"],
           "number": 4,
-          "projectRef": "group/project",
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
           "repoId": "repo-1",
           "state": "opened",
           "type": "issue"
@@ -87,7 +81,20 @@
         "provider": "gitlab"
       }
     },
-    "6d3492ac42bc": {
+    "8ab635fff625": {
+      "name": "gitlab.addIssueComment#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":4,\"body\":\"a comment\",\"projectRef\":{\"host\":\"gitlab.com\",\"path\":\"group/project\"}}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ebbbaa5649f1": {
       "name": "gitlab.addIssueComment#1",
       "ordinal": 3,
       "args": [
@@ -100,7 +107,10 @@
           "value": {
             "body": "a comment",
             "number": 4,
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           }
         },
@@ -130,19 +140,6 @@
         }
       }
     },
-    "bc28ca26b0ad": {
-      "name": "gitlab.addIssueComment#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":4,\"body\":\"a comment\",\"projectRef\":\"group/project\"}}"
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
     "ed3a7d6bc894": {
       "name": "error",
       "ordinal": 2,
@@ -160,13 +157,13 @@
       {
         "id": "comment-settled",
         "observation": {
-          "sender": ["6d3492ac42bc"],
-          "payloads": ["bc28ca26b0ad"],
+          "sender": ["ebbbaa5649f1"],
+          "payloads": ["8ab635fff625"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
           },
-          "state": "48a9b4deaa5b",
+          "state": "17b97af91ff8",
           "effects": [
             "fd2fad47bec2",
             "ed3a7d6bc894",

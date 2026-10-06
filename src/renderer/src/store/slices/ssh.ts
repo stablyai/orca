@@ -22,6 +22,9 @@ export type RemoteWorkspaceSyncStatus = {
   hostObservationToken?: string
   lastSyncedAt?: number
   message?: string
+  /** Set only by an applied pull that ends in `conflict`: the host paths whose tabs this client
+   *  could not place. Every other worktree on the target holds the host's rows from that snapshot. */
+  unplacedTabWorktreePaths?: readonly string[]
 }
 
 export type SshCredentialRequest = {
@@ -29,6 +32,9 @@ export type SshCredentialRequest = {
   targetId: string
   kind: 'passphrase' | 'password' | 'keyboard-interactive'
   detail: string
+  /** RFC 4256 echo flag for keyboard-interactive prompts: when true the
+   * server allows the typed response to be shown. */
+  echo?: boolean
 }
 
 export type SshSlice = {

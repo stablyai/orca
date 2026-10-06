@@ -1,4 +1,5 @@
-import { useCallback, useImperativeHandle, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
+import { onActiveTerminalPaneCloseRequest } from './request-active-terminal-pane-close'
 import { useAppStore } from '../../store'
 import { retireUnboundRuntimeTerminalPane } from './retire-unbound-runtime-terminal-pane'
 import type { PaneExternalDropTarget } from '@/lib/pane-manager/pane-manager'
@@ -16,6 +17,7 @@ import { clearPaneTerminalError } from './terminal-error-accumulation'
 import type { TerminalPaneBindingController } from './use-terminal-pane-layout-bindings'
 import { retireUnboundIpcTerminalPane } from './retire-unbound-ipc-terminal-pane'
 import { capturePendingTerminalPaneClose } from './terminal-pane-close-admission'
+import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
 
 export function useTerminalPaneCloseActions(controller: TerminalPaneBindingController) {
   const confirmedCloseRef = useRef<(() => void) | null>(null)
@@ -27,7 +29,6 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     paneTransportsRef,
     pendingCloseConfirmation,
     persistLayoutSnapshot,
-    ref,
     setPendingCloseConfirmation,
     setTerminalErrorsByPaneId,
     syncPanePtyLayoutBinding,
@@ -50,6 +51,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         clearSessionRestoredBannerForPane(paneId)
         const leafId = manager.getLeafId(paneId)
         if (leafId) {
+          commitTerminalSurfaceClose(worktreeId, { kind: 'pane', tabId, leafId })
           retireUnboundIpcTerminalPane({
             getState: useAppStore.getState,
             tabId,
@@ -82,7 +84,8 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       onCloseTab,
       syncPanePtyLayoutBinding,
       syncPanePtyLayoutBindingForLeaf,
-      tabId
+      tabId,
+      worktreeId
     ]
   )
   const getCloseDialogCopyKind = useCallback(
@@ -161,19 +164,17 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     [executeClosePane, getCloseDialogCopyKind]
   )
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      closeActivePane: (): void => {
-        const manager = managerRef.current
-        const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
-        if (pane) {
-          handleRequestClosePane(pane.id)
-        }
-      }
-    }),
+  const closeActivePane = useCallback((): void => {
+    const manager = managerRef.current
+    const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+    if (pane) {
+      handleRequestClosePane(pane.id)
+    }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [handleRequestClosePane]
+  }, [handleRequestClosePane])
+  useEffect(
+    () => onActiveTerminalPaneCloseRequest(tabId, closeActivePane),
+    [closeActivePane, tabId]
   )
   const handleSearchSelectedText = useCallback((selectedText: string): void => {
     useAppStore.getState().showRightSidebarSearch({ query: selectedText })

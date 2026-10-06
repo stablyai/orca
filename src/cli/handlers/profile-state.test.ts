@@ -178,11 +178,50 @@ describe('profile-state CLI recovery', () => {
     expect(output).not.toContain('revision:')
   })
 
+  it('keeps current SQLite through CLI and rewrites the diverged JSON', async () => {
+    const profile = createProfile()
+    getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
+    rmSync(profile.databaseFile)
+    rmSync(`${profile.databaseFile}-wal`)
+    rmSync(profile.exportPath)
+    const source = openProfileStateDatabase(profile.databaseFile, 'profile-cli-recovery')
+    try {
+      importProfileStateJson(source.db, JSON.stringify({ settings: { theme: 'sqlite' } }))
+    } finally {
+      source.db.close()
+    }
+    writeFileSync(profile.dataFile, JSON.stringify({ settings: { theme: 'older-build' } }))
+    await main(['profile', 'state', 'rollback', '--current-sqlite'], profile.userDataPath)
+    expect(JSON.parse(readFileSync(profile.dataFile, 'utf8'))).toEqual({
+      settings: { theme: 'sqlite' }
+    })
+    expect(String(vi.mocked(console.log).mock.calls.at(-1)?.[0])).toContain(
+      'source: current SQLite'
+    )
+  })
+
+  it('refuses to keep an unreadable SQLite and leaves JSON untouched', async () => {
+    const profile = createProfile()
+    getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
+    const json = readFileSync(profile.dataFile)
+    await main(['profile', 'state', 'rollback', '--current-sqlite', '--json'], profile.userDataPath)
+    expect(process.exitCode).toBe(1)
+    expect(readFileSync(profile.dataFile)).toEqual(json)
+    expect(readFileSync(profile.databaseFile, 'utf8')).toBe('damaged sqlite primary')
+  })
+
   it.each([
     ['--current-json', '--revision', '1'],
     ['--current-json', '--backup', '1'],
-    ['--current-json=false']
-  ])('rejects ambiguous current JSON arguments: %s', async (...flags) => {
+    ['--current-json', '--current-sqlite'],
+    ['--current-json=false'],
+    ['--current-sqlite=false'],
+    ['--latest-json', '--revision', '1'],
+    ['--latest-json', '--backup', '1'],
+    ['--latest-json', '--current-json'],
+    ['--latest-json', '--current-sqlite'],
+    ['--latest-json=false']
+  ])('rejects ambiguous recovery arguments: %s', async (...flags) => {
     getCliStatusMock.mockClear()
     const profile = createProfile()
     getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
@@ -338,7 +377,7 @@ describe('profile-state CLI recovery', () => {
     )
   })
 
-  it.each([['--revision', '1'], ['--current-json']])(
+  it.each([['--revision', '1'], ['--current-json'], ['--latest-json']])(
     'refuses rollback while runtime is reachable: %s',
     async (...flags) => {
       const profile = createProfile()

@@ -1,3 +1,4 @@
+import { findOptionOccurrence } from './command-option-occurrence'
 import { planAgentBinary } from './agent-command-plan'
 export { planAgentBinary } from './agent-command-plan'
 import type { CommandTemplateBackslash } from './commit-message-prompt'
@@ -8,6 +9,7 @@ import {
 } from './commit-message-agent-spec'
 import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-message-prompt'
 import type { TuiAgent } from './tui-agent'
+import { mergeOpenCodeGenerationArgs } from './opencode-generation-command'
 
 // Why: planning is a pure transformation from "user request + prompt text"
 // into "spawn-ready binary + argv". Keeping it in shared lets both the local
@@ -37,6 +39,7 @@ export type CommitMessagePlan = {
   label: string
   /** Leading command assignments, applied on the execution host. */
   env?: Record<string, string>
+  outputFormat?: 'opencode-json'
 }
 
 export type CommitMessagePlanResult =
@@ -59,39 +62,6 @@ function planAdditionalAgentArgs(
 }
 
 const DEFAULT_SINGLETON_OPTIONS: readonly (readonly string[])[] = [['--model']]
-
-function matchesOption(token: string, aliases: readonly string[]): boolean {
-  return aliases.some(
-    (alias) =>
-      token === alias ||
-      token.startsWith(`${alias}=`) ||
-      (alias.startsWith('-') &&
-        !alias.startsWith('--') &&
-        token.startsWith(alias) &&
-        token.length > alias.length)
-  )
-}
-
-function findOptionOccurrence(
-  tokens: string[],
-  aliases: readonly string[],
-  stopAtTerminator: boolean
-): { index: number; consumed: number } | null {
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (stopAtTerminator && token === '--') {
-      break
-    }
-    if (!matchesOption(token, aliases)) {
-      continue
-    }
-    const nextToken = tokens[index + 1]
-    const consumesNext =
-      aliases.includes(token) && nextToken !== undefined && !nextToken.startsWith('-')
-    return { index, consumed: consumesNext ? 2 : 1 }
-  }
-  return null
-}
 
 function applyRecipeOptionOverride(args: {
   generatedArgs: string[]
@@ -307,13 +277,24 @@ export function planCommitMessageGeneration(
     promptDelivery: spec.promptDelivery,
     prompt: argvPrompt
   })
+  const generationArgs = mergeOpenCodeGenerationArgs(
+    input.agentId,
+    command.binary,
+    merged.prefixArgs,
+    args
+  )
+  const formatOption =
+    input.agentId === 'opencode' || input.agentId === 'opencode2'
+      ? findOptionOccurrence(generationArgs, ['--format'], true)
+      : null
   return {
     ok: true,
     plan: {
       binary: command.binary,
-      args: [...merged.prefixArgs, ...args],
+      args: generationArgs,
       stdinPayload: spec.promptDelivery === 'stdin' ? prompt : null,
       label: spec.label,
+      ...(formatOption?.value === 'json' ? { outputFormat: 'opencode-json' as const } : {}),
       ...(command.env ? { env: command.env } : {})
     }
   }

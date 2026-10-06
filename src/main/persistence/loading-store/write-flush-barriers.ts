@@ -7,6 +7,7 @@ import type { StoreRuntimeState } from './store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
 import { drainProfileStateOperations, runProfileStateFlush } from './profile-state-flush-lifetime'
+import type { PendingProfileStateFlushOptions } from './profile-state-flush-lifetime'
 
 type WriteFlushBarrierOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -72,15 +73,15 @@ export class WriteFlushBarrierOperations {
     writeGithubCacheSnapshotSync(this)
   }
 
-  flushAsync(options: { exportJsonCompatibility?: boolean } = {}): Promise<void> {
+  flushAsync(): Promise<void> {
     const context = this[writeFlushBarrierOperationsContext]
-    context.bestEffortFinalFlush ??= this.flushFinalOrThrowAsync(options).catch((error) =>
+    context.bestEffortFinalFlush ??= this.flushFinalOrThrowAsync().catch((error) =>
       console.error('[persistence] Failed to flush final state:', error)
     )
     return context.bestEffortFinalFlush
   }
 
-  flushFinalOrThrowAsync(options: { exportJsonCompatibility?: boolean } = {}): Promise<void> {
+  flushFinalOrThrowAsync(): Promise<void> {
     const { runtime } = this[writeFlushBarrierOperationsContext]
     if (runtime.quitFlushPromise) {
       return runtime.quitFlushPromise
@@ -103,9 +104,6 @@ export class WriteFlushBarrierOperations {
           runtime.profileStateAuthority?.drainBackups?.(true)
         ])
         await flushCurrentStateAsync(this, { final: true })
-        if (options.exportJsonCompatibility) {
-          await runtime.profileStateAuthority?.writeJsonCompatibilityExportAsync?.(runtime.dataFile)
-        }
       })
       .finally(async () => {
         if (runtime.profileStateAuthority?.asynchronous) {
@@ -125,9 +123,7 @@ export class WriteFlushBarrierOperations {
     return flushCurrentStateAsync(this, { drainToStableGeneration: false }).catch(() => {})
   }
 
-  flushPendingOrThrowAsync(
-    options: { signal?: AbortSignal; drainToStableGeneration?: boolean } = {}
-  ): Promise<void> {
+  flushPendingOrThrowAsync(options: PendingProfileStateFlushOptions = {}): Promise<void> {
     const { runtime } = this[writeFlushBarrierOperationsContext]
     if (runtime.writesFrozen || runtime.profileMaintenancePending || runtime.quitFlushStarted) {
       return Promise.reject(new Error('Cannot flush while persistence is finalized'))
@@ -135,6 +131,7 @@ export class WriteFlushBarrierOperations {
     return flushCurrentStateAsync(this, {
       signal: options.signal,
       drainToStableGeneration: options.drainToStableGeneration,
+      fullCheckpoint: options.fullCheckpoint,
       requireInitialGenerationDurable: true
     })
   }

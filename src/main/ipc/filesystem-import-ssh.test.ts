@@ -27,7 +27,10 @@ const {
   getConnMgrMock: vi.fn()
 }))
 
-vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+vi.mock('electron', () => ({
+  app: { getPath: () => '/orca-test-user-data' },
+  ipcMain: { handle: handleMock }
+}))
 vi.mock('fs/promises', () => ({
   lstat: lstatMock,
   mkdir: mkdirMock,

@@ -83,6 +83,7 @@ vi.mock('@xterm/xterm', () => ({
     scrollToBottom = vi.fn()
     selectAll = vi.fn()
     getSelection = vi.fn(() => this.selectionText)
+    hasSelection = vi.fn(() => this.selectionText !== '')
     attachCustomKeyEventHandler = vi.fn((handler: (event: KeyboardEvent) => boolean) => {
       this.customKeyHandler = handler
     })
@@ -223,7 +224,8 @@ describe('AgentTerminalPreview', () => {
     expect(input).toHaveBeenCalledTimes(1)
     expect(input).toHaveBeenCalledWith('pty-1', 'k')
 
-    act(() => terminal.writeCallbacks.shift()?.())
+    // Why drain all: the connection's kitty restore write queues ahead of the live chunk.
+    act(() => terminal.writeCallbacks.splice(0).forEach((callback) => callback()))
     expect(ack).toHaveBeenCalledWith('pty-1', 4, expect.any(String))
   })
 
@@ -281,6 +283,11 @@ describe('AgentTerminalPreview', () => {
     render(<AgentTerminalPreview ptyId="pty-1" />)
     await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
     await waitFor(() => expect(imeHarness.forwarders[0]!.getKittyKeyboardFlags()).toBe(8))
+    // The popout xterm gets the same flags, so its encoder agrees with the mirror.
+    expect(terminalHarness.instances[0]!.write).toHaveBeenCalledWith(
+      '\x1b[<99u\x1b[=8u',
+      expect.any(Function)
+    )
 
     // Live output keeps advancing the same mirror the forwarder reads.
     act(() => {
@@ -368,6 +375,37 @@ describe('AgentTerminalPreview', () => {
     )
     expect(handled).toBe(true)
     expect(writeTerminalClipboardText).not.toHaveBeenCalled()
+  })
+
+  it('hands unselected Cmd+C to a kitty app and copies a selection instead', async () => {
+    platformState.value = 'darwin'
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+    const cmdC = (type: string): KeyboardEvent =>
+      new KeyboardEvent(type, { key: 'c', code: 'KeyC', metaKey: true, cancelable: true })
+
+    // A plain shell's unselected Cmd+C sends nothing.
+    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(false)
+    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(false)
+
+    act(() => {
+      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[>1u', bytes: 5 })
+    })
+    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(true)
+    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(true)
+
+    // A highlight of blank cells copies no text but is still Orca's selection, as in the pane.
+    Object.assign(terminal, { hasSelection: () => true })
+    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(false)
+    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(false)
+    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
+
+    terminal.selectionText = 'selected text'
+    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(false)
+    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(false)
+    expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
   })
 
   it('selects all terminal text on Cmd+A and blocks xterm handling', async () => {

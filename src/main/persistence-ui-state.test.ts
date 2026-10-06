@@ -92,6 +92,19 @@ describe('Store', () => {
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
+  it.each([false, true])(
+    'restores sidebarOpen=%s from disk without changing the right sidebar',
+    async (sidebarOpen) => {
+      const store = await createStore()
+      store.updateUI({ sidebarOpen, rightSidebarOpen: false })
+      store.flush()
+
+      const reloaded = await createStore()
+      expect(reloaded.getUI().sidebarOpen).toBe(sidebarOpen)
+      expect(reloaded.getUI().rightSidebarOpen).toBe(false)
+    }
+  )
+
   it('round-trips and normalizes the host-qualified manual repo order', async () => {
     const store = await createStore()
     store.updateUI({
@@ -134,6 +147,25 @@ describe('Store', () => {
     ])
     expect(store.getUI().workspaceHostOrder).toEqual(['ssh:box', 'local'])
     expect(store.getUI().sidebarWidth).toBe(400)
+  })
+
+  it('updateUI persists sanitized per-worktree explorer roots', async () => {
+    const store = await createStore()
+    store.updateUI({
+      explorerDisplayRootByWorktree: {
+        'repo-1::/repo': '/',
+        'repo-2::/repo': 'packages/app',
+        // @ts-expect-error Deliberately malformed input exercises runtime sanitization.
+        'repo-3::/repo': false,
+        // @ts-expect-error Deliberately malformed prototype key exercises runtime sanitization.
+        constructor: false
+      }
+    })
+
+    expect(store.getUI().explorerDisplayRootByWorktree).toEqual({
+      'repo-1::/repo': '/',
+      'repo-2::/repo': 'packages/app'
+    })
   })
 
   it('updateUI persists sanitized per-worktree dotfile visibility', async () => {

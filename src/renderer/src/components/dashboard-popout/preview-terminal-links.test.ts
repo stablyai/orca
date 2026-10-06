@@ -204,7 +204,6 @@ describe('preview link ownership and browser routing', () => {
       filePath: '/repo/subdir/docs/guide.md',
       connectionId: 'host-b'
     })
-    expect(doubles.authorizeExternalPathMock).not.toHaveBeenCalled()
     preview.dispose()
   })
   it.each(['ssh:host-b', 'runtime:host-b'] as const)(

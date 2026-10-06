@@ -11,7 +11,11 @@ export function shouldPollHookTranscript(
   event: AgentHookEventPayload
 ): boolean {
   if (source === 'codex') {
-    return hasCodexTranscriptSubagents(state, event.paneKey)
+    return (
+      hasCodexTranscriptSubagents(state, event.paneKey) ||
+      (state.codexLeadStateByPaneKey.get(event.paneKey)?.state !== 'done' &&
+        Boolean(state.codexSubagentTranscriptByPaneKey.get(event.paneKey)?.parent.filePath))
+    )
   }
   if (source === 'muse') {
     // Why: Muse's question tool fires no hook, so only its session log shows the wait and its answer.
@@ -20,12 +24,26 @@ export function shouldPollHookTranscript(
   return false
 }
 
+/** Child rollout discovery keeps its existing cadence; only a root-only pane can use one file watch. */
+export function hookTranscriptWatchPath(
+  state: HookListenerState,
+  source: AgentHookSource,
+  paneKey: string
+): string | undefined {
+  return source === 'codex' && !hasCodexTranscriptSubagents(state, paneKey)
+    ? state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath
+    : undefined
+}
+
 /** Returns the poll result to publish, or undefined when it carries nothing new. */
 export function transcriptPollUpdate<T extends AgentHookEventPayload>(
   source: AgentHookSource,
   original: T,
   polled: T
 ): T | undefined {
+  if (original === polled) {
+    return undefined
+  }
   if (source === 'muse') {
     const changed =
       polled.payload.state !== original.payload.state ||
@@ -37,5 +55,10 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
   }
   const subagentsChanged =
     JSON.stringify(polled.payload.subagents) !== JSON.stringify(original.payload.subagents)
-  return subagentsChanged ? polled : undefined
+  const leadChanged =
+    polled.payload.mainAgent?.state !== original.payload.mainAgent?.state ||
+    polled.payload.mainAgent?.outcome !== original.payload.mainAgent?.outcome
+  return subagentsChanged || leadChanged
+    ? { ...polled, hasExplicitPrompt: undefined, hookEventName: undefined }
+    : undefined
 }

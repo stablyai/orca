@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -206,11 +207,15 @@ describe('terminal multiplex RPC', () => {
         )
       )
       await vi.waitFor(() =>
-        expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-          text: 'ls\r',
-          enter: false,
-          interrupt: false
-        })
+        expect(runtime.sendTerminal).toHaveBeenCalledWith(
+          'terminal-1',
+          {
+            text: 'ls\r',
+            enter: false,
+            interrupt: false
+          },
+          { inputKind: 'driving' }
+        )
       )
       const sentAfterSuccessfulClaim = vi.mocked(runtime.sendTerminal).mock.calls.length
       vi.mocked(runtime.updateRemoteDesktopViewer).mockResolvedValueOnce(false)
@@ -248,11 +253,15 @@ describe('terminal multiplex RPC', () => {
         )
       }
       await vi.waitFor(() =>
-        expect(runtime.sendTerminal).toHaveBeenLastCalledWith('terminal-1', {
-          text: 'retry',
-          enter: false,
-          interrupt: false
-        })
+        expect(runtime.sendTerminal).toHaveBeenLastCalledWith(
+          'terminal-1',
+          {
+            text: 'retry',
+            enter: false,
+            interrupt: false
+          },
+          { inputKind: 'driving' }
+        )
       )
 
       dataListenerRef.current?.('a')

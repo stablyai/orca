@@ -7,13 +7,22 @@
  * can't re-diverge (notably the relay's old execFile maxBuffer that dropped matches).
  * Design doc: docs/design/share-text-search.md.
  */
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { parseRipgrepMatchJson, type RipgrepMatchMessage } from './ripgrep-dense-match-json'
 import { normalizeSearchResult } from './search-match-count'
 import { escapeRegex } from './string-utils'
 import type { SearchFileResult, SearchOptions, SearchResult } from './code-search-types'
 import { pushSearchMatch } from './text-search-match-accumulator'
 import { splitSearchGlobPatterns, toGitGlobPathspecs } from './text-search-glob-patterns'
-import { joinSearchRoot, normalizeRelativePath, relativeToSearchRoot } from './text-search-paths'
+import {
+  joinSearchRoot,
+  normalizeRelativePath,
+  relativeToSearchRoot,
+  resolveSearchResultPath
+} from './text-search-paths'
+import { ripgrepMatchRanges } from './ripgrep-match-offsets'
+import { decodeRipgrepLine } from './ripgrep-line-decoding'
+
+export { MAX_LINE_CONTENT_LENGTH } from './text-search-match-accumulator'
 
 export type SearchAccumulator = {
   fileMap: Map<string, SearchFileResult>
@@ -27,7 +36,6 @@ export function createAccumulator(): SearchAccumulator {
 
 // ─── Constants shared by both callers ────────────────────────────────
 
-export const MAX_MATCHES_PER_FILE = 100
 export const DEFAULT_SEARCH_MAX_RESULTS = 2000
 export const SEARCH_TIMEOUT_MS = 15_000
 export const SEARCH_JSON_STRUCTURE_LIMITS = {
@@ -37,9 +45,6 @@ export const SEARCH_JSON_STRUCTURE_LIMITS = {
 
 // Why: keep search cheaper than opening a file; the editor read path has a larger cap (Monaco large-file handling).
 const SEARCH_MAX_FILE_SIZE = 5 * 1024 * 1024
-
-// Why: mega-byte lines (minified/generated files) × 2000-match caps blow past the 16MB SSH relay MAX_MESSAGE_SIZE; clamp each match's context.
-export const MAX_LINE_CONTENT_LENGTH = 500
 
 // ─── rg ─────────────────────────────────────────────────────────────
 
@@ -51,17 +56,15 @@ export type SearchOptionsLike = Pick<
 /**
  * Build the complete rg argv (flags + `--` + query + target) for both callers to spawn as-is.
  *
- * Constraint: pass `rootPath` unchanged as `target` — do NOT WSL-translate it; only the rg
- * invocation is routed through `wslAwareSpawn`, and output paths are translated back in `ingestRgJsonLine`.
+ * Use target `.` with cwd set to the search root so anchored globs match root-relative paths.
  */
 export function buildRgArgs(query: string, target: string, opts: SearchOptionsLike): string[] {
   const args: string[] = [
+    '--no-config',
     '--json',
     '--hidden',
     '--glob',
     '!.git',
-    '--max-count',
-    String(MAX_MATCHES_PER_FILE),
     '--max-filesize',
     `${Math.floor(SEARCH_MAX_FILE_SIZE / 1024 / 1024)}M`
   ]
@@ -75,12 +78,12 @@ export function buildRgArgs(query: string, target: string, opts: SearchOptionsLi
     args.push('--fixed-strings')
   }
   if (opts.includePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.includePattern)) {
+    for (const pat of splitSearchGlobPatterns(opts.includePattern, 'rg')) {
       args.push('--glob', pat)
     }
   }
   if (opts.excludePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.excludePattern)) {
+    for (const pat of splitSearchGlobPatterns(opts.excludePattern, 'rg')) {
       args.push('--glob', `!${pat}`)
     }
   }
@@ -101,7 +104,7 @@ export function ingestRgJsonLine(
   rootPath: string,
   acc: SearchAccumulator,
   maxResults: number,
-  transformAbsPath?: (p: string) => string
+  transformAbsPath?: (p: string) => string | null
 ): 'continue' | 'stop' {
   if (acc.totalMatches >= maxResults) {
     return 'stop'
@@ -109,19 +112,11 @@ export function ingestRgJsonLine(
   if (!line) {
     return 'continue'
   }
-  let msg: {
-    type?: string
-    data?: {
-      path?: { text?: string }
-      submatches?: { start: number; end: number }[]
-      line_number?: number
-      lines?: { text?: string }
-    }
-  }
+  let msg: RipgrepMatchMessage
   try {
-    assertJsonTextStructureWithinLimits(line, SEARCH_JSON_STRUCTURE_LIMITS)
-    msg = JSON.parse(line)
+    msg = parseRipgrepMatchJson(line, maxResults - acc.totalMatches, SEARCH_JSON_STRUCTURE_LIMITS)
   } catch {
+    acc.truncated = true
     return 'continue'
   }
   if (msg.type !== 'match' || !msg.data) {
@@ -130,19 +125,22 @@ export function ingestRgJsonLine(
   const data = msg.data
   const rawPath = data.path?.text
   if (typeof rawPath !== 'string') {
+    // File APIs accept strings, so byte-only filenames cannot be opened losslessly.
+    acc.truncated = true
     return 'continue'
   }
-  const absPath = transformAbsPath ? transformAbsPath(rawPath) : rawPath
-  const relPath = normalizeRelativePath(relativeToSearchRoot(rootPath, absPath))
-  const lineContent = (data.lines?.text ?? '').replace(/\n$/, '')
-  const lineNumber = data.line_number ?? 0
-  let submatches = data.submatches ?? []
-  if (submatches.length === 0) {
-    // Why: some rg matches report a line but no submatch ranges; surface a navigable line-level result instead of a count-0 row.
-    submatches = [{ start: 0, end: lineContent.length > 0 ? 1 : 0 }]
+  const mappedPath = transformAbsPath ? transformAbsPath(rawPath) : rawPath
+  if (mappedPath === null) {
+    acc.truncated = true
+    return 'continue'
   }
-
-  for (const sub of submatches) {
+  const absPath = resolveSearchResultPath(rootPath, mappedPath)
+  const relPath = normalizeRelativePath(relativeToSearchRoot(rootPath, absPath), rootPath)
+  const { text: lineContent, readOffset } = decodeRipgrepLine(data.lines)
+  const lineNumber = data.line_number ?? 0
+  for (const sub of ripgrepMatchRanges(lineContent, data.submatches ?? [], readOffset, () => {
+    acc.truncated = true
+  })) {
     let fileResult = acc.fileMap.get(absPath)
     if (!fileResult) {
       fileResult = { filePath: absPath, relativePath: relPath, matches: [], matchCount: 0 }
@@ -172,6 +170,8 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
   const gitArgs: string[] = [
     '-c',
     'submodule.recurse=false',
+    '-c',
+    'grep.column=false',
     'grep',
     '-n',
     '-I',
@@ -197,7 +197,7 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
   let hasPathspecs = false
   let hasIncludePathspecs = false
   if (opts.includePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.includePattern)) {
+    for (const pat of splitSearchGlobPatterns(opts.includePattern, 'git')) {
       const pathspecs = toGitGlobPathspecs(pat)
       gitArgs.push(...pathspecs)
       hasPathspecs ||= pathspecs.length > 0
@@ -205,7 +205,7 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
     }
   }
   if (opts.excludePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.excludePattern)) {
+    for (const pat of splitSearchGlobPatterns(opts.excludePattern, 'git')) {
       const pathspecs = toGitGlobPathspecs(pat, true)
       gitArgs.push(...pathspecs)
       hasPathspecs ||= pathspecs.length > 0
@@ -261,7 +261,7 @@ export function ingestGitGrepLine(
   if (nullIdx === -1) {
     return 'continue'
   }
-  const relPath = normalizeRelativePath(line.substring(0, nullIdx))
+  const relPath = normalizeRelativePath(line.substring(0, nullIdx), rootPath)
   const rest = line.substring(nullIdx + 1)
   const secondNullIdx = rest.indexOf('\0')
   let lineNumberText: string

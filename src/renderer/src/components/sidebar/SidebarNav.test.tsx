@@ -88,11 +88,9 @@ vi.mock('@/components/ui/context-menu', () => ({
 }))
 
 import SidebarNav, {
-  getSetupGuideSidebarEntryReady,
   shouldShowAutomationsButton,
   shouldShowArtifactsButton,
-  shouldShowMobileButton,
-  shouldShowSetupGuideEntry
+  shouldShowMobileButton
 } from './SidebarNav'
 
 function gitRepo(): Repo {
@@ -370,10 +368,6 @@ describe('SidebarNav', () => {
     expect(shouldShowAutomationsButton({})).toBe(true)
   })
 
-  it('hides the Automations entry when the sidebar setting is off', () => {
-    expect(shouldShowAutomationsButton({ showAutomationsButton: false })).toBe(false)
-  })
-
   it('omits the Automations row when the sidebar setting is off', async () => {
     setSidebarState({
       settings: {
@@ -497,26 +491,5 @@ describe('SidebarNav', () => {
     await clickButton(getHideButton(tasksMenu as HTMLElement))
 
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showTasksButton: false })
-  })
-
-  it('shows the setup guide entry only after readiness, before completion, and before explicit hide', () => {
-    expect(
-      shouldShowSetupGuideEntry({ ready: false, setupComplete: false, dismissed: false })
-    ).toBe(false)
-    expect(shouldShowSetupGuideEntry({ ready: true, setupComplete: false, dismissed: false })).toBe(
-      true
-    )
-    expect(shouldShowSetupGuideEntry({ ready: true, setupComplete: true, dismissed: false })).toBe(
-      false
-    )
-    expect(shouldShowSetupGuideEntry({ ready: true, setupComplete: false, dismissed: true })).toBe(
-      false
-    )
-  })
-
-  it('requires both persisted UI and setup progress readiness before showing setup guide entry', () => {
-    expect(getSetupGuideSidebarEntryReady(false, true)).toBe(false)
-    expect(getSetupGuideSidebarEntryReady(true, false)).toBe(false)
-    expect(getSetupGuideSidebarEntryReady(true, true)).toBe(true)
   })
 })

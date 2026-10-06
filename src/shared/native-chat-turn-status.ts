@@ -1,12 +1,23 @@
-// Turn-status derivation and copy for the native-chat "Thinking / Working for N /
-// Worked for N" row, shared by the desktop renderer (as its i18n fallback strings)
-// and the mobile app (used directly — mobile ships English only) so the two
-// surfaces never drift. Everything here is pure; each platform owns its own clock.
+// Turn-status derivation and copy for the native-chat turn rows — the "Working for N /
+// Worked for N" bar under the user's message and the live line at the turn's tail —
+// shared by the desktop renderer (as its i18n fallback strings) and the mobile app
+// (used directly — mobile ships English only) so the two surfaces never drift.
+// Everything here is pure; each platform owns its own clock.
+
+import type { AgentTurnOutcome } from './agent-turn-outcome'
 
 export const NATIVE_CHAT_TURN_STATUS_COPY = {
   thinking: 'Thinking',
+  working: 'Working…',
+  stopping: 'Stopping…',
+  /** The composer's placeholder while the chat reads Stopping, where the host queues sends. */
+  queueAfterStop: 'Queue a message to run after the stop',
+  /** The same where it does not: the host holds the send until the stop lands. */
+  sendAfterStop: 'Send a message to run after the stop',
   workingFor: 'Working for {{value0}}',
   workedFor: 'Worked for {{value0}}',
+  interruptedAfter: 'Interrupted after {{value0}}',
+  failedAfter: 'Failed after {{value0}}',
   toggleDetails: 'Toggle turn details',
   responding: 'Agent is responding'
 } as const
@@ -26,81 +37,104 @@ export function formatNativeChatDuration(seconds: number): string {
   return `${hours}h ${minutes % 60}m ${remainingSeconds}s`
 }
 
-/** Which of the three copy keys a turn-status row renders, and its duration
- *  argument. Desktop maps this onto `translate`; mobile formats it directly. */
+/** The turn bar's copy key and duration: the running clock, then the settled one.
+ *  Desktop maps this onto `translate`; mobile formats it directly. */
 export function describeNativeChatTurnStatus({
-  thinking,
   workedSeconds,
-  elapsedSeconds
+  elapsedSeconds,
+  verdict
 }: {
-  thinking: boolean
   workedSeconds?: number | null
   elapsedSeconds: number
-}): { key: 'thinking' | 'workingFor' | 'workedFor'; duration: string | null } {
-  if (workedSeconds != null) {
-    return { key: 'workedFor', duration: formatNativeChatDuration(workedSeconds) }
-  }
-  if (thinking) {
-    return { key: 'thinking', duration: null }
-  }
-  return { key: 'workingFor', duration: formatNativeChatDuration(elapsedSeconds) }
+  /** How the settled turn ended: a user's Stop or a newer request's replacement reads interrupted,
+   *  and a failure reads failed. A turn cut short when the agent stopped without anyone asking (a
+   *  crash, a quit, an eviction) reads like a finished one: the chat's notice row says it stopped. */
+  verdict?: AgentTurnOutcome
+}): {
+  key: 'workingFor' | 'workedFor' | 'interruptedAfter' | 'failedAfter'
+  duration: string
+} {
+  return workedSeconds != null
+    ? { key: settledTurnStatusKey(verdict), duration: formatNativeChatDuration(workedSeconds) }
+    : { key: 'workingFor', duration: formatNativeChatDuration(elapsedSeconds) }
 }
 
-/** The two readings that label a live turn's one indicator row, carried together
- *  so a surface cannot pick up one without the other. */
+function settledTurnStatusKey(
+  verdict: AgentTurnOutcome | undefined
+): 'workedFor' | 'interruptedAfter' | 'failedAfter' {
+  switch (verdict) {
+    case 'cancellation':
+    case 'superseded':
+      return 'interruptedAfter'
+    case 'failure':
+      return 'failedAfter'
+    case 'success':
+    case 'interruption':
+    case 'unconfirmed':
+    case undefined:
+      return 'workedFor'
+  }
+}
+
+/** The two readings that label a live turn's tail line, carried together so a
+ *  surface cannot pick up one without the other. */
 export type NativeChatLiveTurnIndicator = {
   thinking: boolean
   activityText: string | null
+  /** A person's Stop is ending the turn. */
+  stopping?: boolean
+  /** This client's own Stop request is in flight: only then does its Stop control hold. */
+  stopRequestInFlight?: boolean
+  /** While stopping: a message sent now is queued as a card where the host queues sends, else sent
+   *  for the host to hold until the stop lands. */
+  afterStop?: 'queue' | 'send'
 }
 
 export type NativeChatActiveTurnLabel =
   | { source: 'activity'; text: string }
-  | { source: 'status'; key: 'thinking' | 'workingFor'; duration: string | null }
+  | { source: 'status'; key: 'thinking' | 'working' | 'stopping' }
 
-/** The live turn's single indicator label. Provider activity wins because it is the
- *  only text that says what the turn is actually doing; reasoning is next; the
- *  running clock is the floor. Shared so desktop and mobile cannot disagree. */
+/** The live tail line's label. The person's own Stop wins: whatever the turn was doing, it is
+ *  now ending. Provider activity is next because it is the only text that says what the turn is
+ *  actually doing; reasoning is next. It never carries the clock — the turn bar owns that.
+ *  Shared so desktop and mobile cannot disagree. */
 export function describeNativeChatActiveTurnLabel({
   activityText,
   thinking,
-  elapsedSeconds
+  stopping = false
 }: {
   activityText?: string | null
   thinking: boolean
-  elapsedSeconds: number
+  stopping?: boolean
 }): NativeChatActiveTurnLabel {
+  if (stopping) {
+    return { source: 'status', key: 'stopping' }
+  }
   const text = activityText?.trim()
   if (text) {
     return { source: 'activity', text }
   }
-  return thinking
-    ? { source: 'status', key: 'thinking', duration: null }
-    : { source: 'status', key: 'workingFor', duration: formatNativeChatDuration(elapsedSeconds) }
+  return { source: 'status', key: thinking ? 'thinking' : 'working' }
 }
 
-/** The live turn's label in English. For platforms without i18n (mobile). */
+/** The live tail line's label in English. For platforms without i18n (mobile). */
 export function formatNativeChatActiveTurnLabel(input: {
   activityText?: string | null
   thinking: boolean
-  elapsedSeconds: number
+  stopping?: boolean
 }): string {
   const label = describeNativeChatActiveTurnLabel(input)
-  if (label.source === 'activity') {
-    return label.text
-  }
-  const copy = NATIVE_CHAT_TURN_STATUS_COPY[label.key]
-  return label.duration == null ? copy : copy.replaceAll('{{value0}}', label.duration)
+  return label.source === 'activity' ? label.text : NATIVE_CHAT_TURN_STATUS_COPY[label.key]
 }
 
-/** Resolve the turn-status label in English. For platforms without i18n (mobile). */
+/** Resolve the turn bar's label in English. For platforms without i18n (mobile). */
 export function formatNativeChatTurnStatusLabel(input: {
-  thinking: boolean
   workedSeconds?: number | null
   elapsedSeconds: number
+  verdict?: AgentTurnOutcome
 }): string {
   const { key, duration } = describeNativeChatTurnStatus(input)
-  const copy = NATIVE_CHAT_TURN_STATUS_COPY[key]
-  return duration == null ? copy : copy.replaceAll('{{value0}}', duration)
+  return NATIVE_CHAT_TURN_STATUS_COPY[key].replaceAll('{{value0}}', duration)
 }
 
 export type NativeChatTurnTiming = {
@@ -112,9 +146,14 @@ export type NativeChatTurnStatus = {
   startedAt: number | null
   thinking: boolean
   workedSeconds: number | null
+  /** How a settled turn ended, when the host recorded it. */
+  verdict?: AgentTurnOutcome
 }
 
 export type NativeChatTurnTimingByTurn = Readonly<Record<string, NativeChatTurnTiming>>
+
+/** The live turn's key when the transcript has no user message to hang it on. */
+export const NATIVE_CHAT_UNANCHORED_TURN_KEY = '__unanchored__'
 
 /** The turn-timing state machine, lifted out of the React hook so desktop and
  *  mobile stamp start/stop identically. Returns the same reference when nothing
@@ -195,7 +234,11 @@ export function reduceNativeChatTurnTiming(
 
 /** A turn duration the execution host recorded, which outranks anything this
  *  platform observed locally. */
-export type NativeChatSettledTurn = { startedAt: number; workedSeconds: number }
+export type NativeChatSettledTurn = {
+  startedAt: number
+  workedSeconds: number
+  verdict?: AgentTurnOutcome
+}
 
 /** Per turn: the host's duration, or null when the host recorded the turn but
  *  has no duration to show (still running, or its end was never observed).
@@ -238,17 +281,24 @@ export function selectNativeChatTurnStatuses(
     completedByTurn[turnKey] = {
       startedAt: settled.startedAt,
       thinking: false,
-      workedSeconds: settled.workedSeconds
+      workedSeconds: settled.workedSeconds,
+      ...(settled.verdict ? { verdict: settled.verdict } : {})
     }
   }
+  const activeTiming = timingByTurn[activeTurnKey]
   return {
     active: isWorking
       ? {
-          startedAt: timingByTurn[activeTurnKey]?.startedAt ?? workingStartedAt ?? null,
+          startedAt: activeTiming?.startedAt ?? workingStartedAt ?? null,
           thinking,
           workedSeconds: null
         }
-      : (completedByTurn[activeTurnKey] ?? null),
+      : (completedByTurn[activeTurnKey] ??
+        // Ended, but the local duration is stamped a pass later: stay live until then so
+        // the bar settles in place instead of blinking out. The host's null still hides it.
+        (activeTiming?.workedSeconds === null && !settledByTurn?.has(activeTurnKey)
+          ? { startedAt: activeTiming.startedAt, thinking: false, workedSeconds: null }
+          : null)),
     completedByTurn
   }
 }

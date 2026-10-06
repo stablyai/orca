@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  planAgentSessionLaunch: vi.fn(),
+  resolveAgentSessionLaunchRoute: vi.fn(),
   getState: vi.fn(() => ({}))
 }))
 
 vi.mock('@/lib/agent-session-launch-plan', () => ({
-  planAgentSessionLaunch: mocks.planAgentSessionLaunch
+  resolveAgentSessionLaunchRoute: mocks.resolveAgentSessionLaunchRoute
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
 
@@ -15,7 +15,7 @@ import { sourceControlLaunchAppliesAgentArgs } from './source-control-launch-age
 describe('sourceControlLaunchAppliesAgentArgs', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.planAgentSessionLaunch.mockReturnValue({ route: 'terminal-tui' })
+    mocks.resolveAgentSessionLaunchRoute.mockReturnValue('terminal-tui')
   })
 
   it('applies arguments when the user launches into a terminal by default', () => {
@@ -28,7 +28,7 @@ describe('sourceControlLaunchAppliesAgentArgs', () => {
   })
 
   it('drops arguments only when this launch would really be a structured session', () => {
-    mocks.planAgentSessionLaunch.mockReturnValue({ route: 'structured-native-chat' })
+    mocks.resolveAgentSessionLaunchRoute.mockReturnValue('structured-native-chat')
     expect(
       sourceControlLaunchAppliesAgentArgs({
         agent: 'codex',
@@ -39,7 +39,7 @@ describe('sourceControlLaunchAppliesAgentArgs', () => {
 
   it('keeps arguments for a chat-by-default user whose launch falls back to a terminal', () => {
     // A remote host, an agent without a structured session, or a floating workspace all land here.
-    mocks.planAgentSessionLaunch.mockReturnValue({ route: 'legacy-native-chat' })
+    mocks.resolveAgentSessionLaunchRoute.mockReturnValue('legacy-native-chat')
     expect(
       sourceControlLaunchAppliesAgentArgs({
         agent: 'codex',
@@ -55,7 +55,7 @@ describe('sourceControlLaunchAppliesAgentArgs', () => {
         worktreeId: 'wt-1'
       })
     ).toBe(true)
-    expect(mocks.planAgentSessionLaunch).not.toHaveBeenCalled()
+    expect(mocks.resolveAgentSessionLaunchRoute).not.toHaveBeenCalled()
   })
 
   it('names the repo and its host when the workspace does not exist yet', () => {
@@ -64,7 +64,7 @@ describe('sourceControlLaunchAppliesAgentArgs', () => {
       repoId: 'repo-1',
       executionHostId: 'ssh:build-box'
     })
-    expect(mocks.planAgentSessionLaunch).toHaveBeenCalledWith(
+    expect(mocks.resolveAgentSessionLaunchRoute).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         workspace: {

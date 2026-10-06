@@ -66,6 +66,13 @@ describe.runIf(process.platform === 'win32')(
       `[Console]::Out.WriteLine('${policyReceipt}');`
     ].join(' ')
 
+    // A watchdog against a wedged probe, not a latency budget: Windows PowerShell 5.1
+    // cold start under the packaged-CI process load has reached the former 20s cap. Matches
+    // the synchronous-probe ceiling in tests/tools/win-update-e2e/powershell-runner.mjs.
+    const PROBE_TIMEOUT_MS = 60_000
+    // Vitest's 30s default would otherwise cap the blocking spawn ahead of PROBE_TIMEOUT_MS.
+    const PROBE_TEST_TIMEOUT_MS = PROBE_TIMEOUT_MS + 15_000
+
     function runProbe(arch, prefix = '') {
       const { args, command } = readPowerShellProbe()
       if (!process.env.SystemRoot) {
@@ -83,27 +90,35 @@ describe.runIf(process.platform === 'win32')(
           ORCA_BACKGROUND_LAUNCH: '1',
           PSExecutionPolicyPreference: 'Restricted'
         },
-        timeoutMs: 20_000
+        timeoutMs: PROBE_TIMEOUT_MS
       })
     }
 
-    it.each(['SysWOW64', 'System32'])('%s permits the real inline process query', (arch) => {
-      const result = runProbe(arch)
-      expect(result.code, JSON.stringify(result)).toBe(0)
-      expect(result.timedOut).toBe(false)
-      expect(result.stdout).toContain(policyReceipt)
-    })
+    it.each(['SysWOW64', 'System32'])(
+      '%s permits the real inline process query',
+      { timeout: PROBE_TEST_TIMEOUT_MS },
+      (arch) => {
+        const result = runProbe(arch)
+        expect(result.code, JSON.stringify(result)).toBe(0)
+        expect(result.timedOut).toBe(false)
+        expect(result.stdout).toContain(policyReceipt)
+      }
+    )
 
-    it.each(['SysWOW64', 'System32'])('%s rejects a failed process query', (arch) => {
-      const result = runProbe(
-        arch,
-        'function Get-CimInstance { [CmdletBinding()] param([string]$ClassName); ' +
-          `[Console]::Out.WriteLine('${queryFailureReceipt}'); Write-Error 'CIM unavailable' }; `
-      )
-      expect(result.code, JSON.stringify(result)).toBe(1)
-      expect(result.timedOut).toBe(false)
-      expect(result.stdout).toContain(policyReceipt)
-      expect(result.stdout).toContain(queryFailureReceipt)
-    })
+    it.each(['SysWOW64', 'System32'])(
+      '%s rejects a failed process query',
+      { timeout: PROBE_TEST_TIMEOUT_MS },
+      (arch) => {
+        const result = runProbe(
+          arch,
+          'function Get-CimInstance { [CmdletBinding()] param([string]$ClassName); ' +
+            `[Console]::Out.WriteLine('${queryFailureReceipt}'); Write-Error 'CIM unavailable' }; `
+        )
+        expect(result.code, JSON.stringify(result)).toBe(1)
+        expect(result.timedOut).toBe(false)
+        expect(result.stdout).toContain(policyReceipt)
+        expect(result.stdout).toContain(queryFailureReceipt)
+      }
+    )
   }
 )

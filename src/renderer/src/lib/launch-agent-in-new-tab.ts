@@ -23,7 +23,7 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
-import { launchAgentInStructuredNewTab } from '@/lib/launch-agent-in-new-tab-structured'
+import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import type {
@@ -68,9 +68,9 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     launchPlatform,
     onPromptDelivered,
     onPromptDeliveryUnconfirmed,
-    activate = true,
-    agentSessionLaunchPlan,
-    beforeSurfaceOpen
+    pendingActivationSpawn,
+    beforeSurfaceOpen,
+    activate = true
   } = args
   const store = useAppStore.getState()
   const selectedHost = parseExecutionHostId(executionHostId)
@@ -129,6 +129,40 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     return null
   }
 
+  // Why first: a structured chat is created on whichever runtime owns the workspace, a paired
+  // server included, so only a non-structured route falls through to the host-published terminal.
+  const plan =
+    args.requestId === undefined
+      ? args.agentSessionLaunchPlan
+      : planAgentSessionLaunch(store, {
+          requestId: args.requestId,
+          agent,
+          workspace: { kind: workspaceKind, worktreeId, executionHostId },
+          prompt: trimmedPrompt,
+          promptDelivery: viewModePromptDelivery,
+          tuiCustomization: { cwd: initialCwd },
+          initialSessionOptions: startupPlan.sessionOptions,
+          onPromptDelivered
+        })
+  if (plan?.route === 'structured-native-chat') {
+    const structured = launchStructuredAgentFromNewTab({
+      plan,
+      worktreeId,
+      activate,
+      ...(groupId ? { groupId } : {}),
+      ...(beforeSurfaceOpen ? { beforeSurfaceOpen } : {}),
+      // A paired server's "no" opens this same launch as a terminal, with the caller's arguments.
+      openTerminal: (terminalPlan) =>
+        launchAgentInNewTabInternal({
+          ...args,
+          beforeSurfaceOpen: undefined,
+          requestId: undefined,
+          agentSessionLaunchPlan: terminalPlan
+        })
+    })
+    return structured && { ...structured, startupPlan }
+  }
+
   const runtimeEnvironmentId = executionHostId
     ? (resolveWorktreeOperationRouteForHost(store, worktreeId, executionHostId)
         ?.runtimeEnvironmentId ?? null)
@@ -165,47 +199,6 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     }
   }
 
-  const plan =
-    agentSessionLaunchPlan ??
-    planAgentSessionLaunch(store, {
-      agent,
-      workspace: { kind: workspaceKind, worktreeId, executionHostId },
-      prompt: trimmedPrompt,
-      promptDelivery: viewModePromptDelivery,
-      tuiCustomization: { cwd: initialCwd },
-      initialSessionOptions: startupPlan.sessionOptions,
-      onPromptDelivered
-    })
-  if (plan?.route === 'structured-native-chat') {
-    const structured = launchAgentInStructuredNewTab({
-      plan,
-      activate,
-      ...(beforeSurfaceOpen
-        ? {
-            beforeOpen: (sessionId: string) =>
-              beforeSurfaceOpen({ kind: 'local-agent-session', sessionId })
-          }
-        : {}),
-      ...(groupId ? { targetGroupId: groupId } : {})
-    })
-    if (!structured) {
-      return null
-    }
-    return {
-      surface: {
-        kind: 'local-agent-session',
-        tabId: structured.tabId,
-        sessionId: structured.sessionId
-      },
-      startupPlan,
-      pasteDraftAfterLaunch: false,
-      structuredSettlement: structured.structuredSettlement,
-      ...(structured.promptDeliveryResult
-        ? { promptDeliveryResult: structured.promptDeliveryResult }
-        : {})
-    }
-  }
-
   if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {
     return null
   }
@@ -213,11 +206,10 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   // Why: followup path pastes an unsubmitted draft, so gate the initial chat view like a draft launch, not auto-submit.
   const tab = store.createTab(worktreeId, groupId, undefined, {
     ...(executionHostId ? { executionHostId } : {}),
-    // Only when it differs from createTab's own default, so the ordinary launch keeps the
-    // exact call shape the tab bar has always made.
-    ...(activate ? {} : { activate: false }),
     launchAgent: agent,
     quickCommandLabel,
+    ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
+    ...(activate === false ? { activate: false } : {}),
     ...initialViewModeProps
   })
   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)

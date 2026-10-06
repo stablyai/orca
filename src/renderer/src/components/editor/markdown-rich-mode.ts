@@ -2,7 +2,7 @@ import { defaultSchema } from 'rehype-sanitize'
 import { normalizeDetailsOpeningTag } from './details-markdown-html'
 import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
 import { extractFrontMatter } from './markdown-frontmatter'
-import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
+import { canRenderMarkdownAtSize } from './markdown-rich-size-limit'
 import { translate } from '@/i18n/i18n'
 
 export type MarkdownRichModeUnsupportedReason =
@@ -141,7 +141,7 @@ export function getMarkdownRichModeEligibilityDecision({
   sizeOverridden: boolean
 }): MarkdownRichModeEligibilityDecision {
   return {
-    exceedsSizeLimit: !sizeOverridden && exceedsMarkdownRichModeSizeLimit(content),
+    exceedsSizeLimit: !canRenderMarkdownAtSize(content, sizeOverridden),
     unsupportedReason: getMarkdownRichModeUnsupportedReason(content)
   }
 }

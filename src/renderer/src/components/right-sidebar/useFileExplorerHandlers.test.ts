@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { error: toastError } }))
 import { useAppStore } from '@/store'
 import type { TreeNode } from './file-explorer-types'
 import { activateFileExplorerNode } from './useFileExplorerHandlers'
@@ -37,7 +40,6 @@ describe('activateFileExplorerNode', () => {
       canToggleDirectories: false,
       loadDir: vi.fn(),
       statPath: vi.fn(),
-      authorizeExternalPath: vi.fn(),
       markPathAsDirectory: vi.fn(),
       setSelectedPath
     })
@@ -59,7 +61,6 @@ describe('activateFileExplorerNode', () => {
       toggleDir,
       loadDir,
       statPath: vi.fn().mockResolvedValue({ isDirectory: true }),
-      authorizeExternalPath: vi.fn(),
       markPathAsDirectory,
       setSelectedPath: vi.fn()
     })
@@ -74,44 +75,56 @@ describe('activateFileExplorerNode', () => {
     expect(openFile).not.toHaveBeenCalled()
   })
 
-  it('falls back to opening a symlink as a file when directory loading fails', async () => {
+  it('does not follow a folder link that leads out of the project', async () => {
+    const loadDir = vi.fn()
     const openFile = vi.fn()
-    useAppStore.setState({
-      worktreesByRepo: {
-        'repo-1': [
-          {
-            id: 'wt-1',
-            repoId: 'repo-1',
-            path: '/repo',
-            hostId: 'runtime:runtime-env-1'
-          } as never
-        ]
-      }
-    })
 
     await activateFileExplorerNode({
-      node: symlinkNode,
+      node: { ...symlinkNode, operationOwner: { kind: 'local' } },
       activeWorktreeId: 'wt-1',
-      runtimeEnvironmentId: 'runtime-env-1',
       openFile,
       toggleDir: vi.fn(),
-      loadDir: vi.fn(),
-      statPath: vi.fn().mockResolvedValue({ isDirectory: false }),
-      authorizeExternalPath: vi.fn(),
+      loadDir,
+      statPath: vi.fn().mockResolvedValue({ isDirectory: true, escapesWorktree: true }),
       markPathAsDirectory: vi.fn(),
       setSelectedPath: vi.fn()
     })
 
+    expect(loadDir).not.toHaveBeenCalled()
+    expect(openFile).not.toHaveBeenCalled()
+    expect(toastError).toHaveBeenCalledWith(
+      "This folder links outside the project, so it can't be opened here."
+    )
+  })
+
+  it('opens a file link that leads out of the project by its absolute path', async () => {
+    const openFile = vi.fn()
+    useAppStore.setState({
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' } as never]
+      }
+    })
+
+    await activateFileExplorerNode({
+      node: { ...symlinkNode, operationOwner: { kind: 'local' } },
+      activeWorktreeId: 'wt-1',
+      runtimeEnvironmentId: null,
+      openFile,
+      toggleDir: vi.fn(),
+      loadDir: vi.fn(),
+      statPath: vi.fn().mockResolvedValue({ isDirectory: false, escapesWorktree: true }),
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath: vi.fn()
+    })
+
+    // The absolute relativePath marks the tab as user-named, which survives a restart.
     expect(openFile).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         filePath: '/repo/linked-docs',
-        relativePath: 'linked-docs',
-        worktreeId: 'wt-1',
-        runtimeEnvironmentId: 'runtime-env-1',
-        language: expect.any(String),
-        mode: 'edit'
-      },
-      { preview: true, focusEditor: true, suppressActiveRuntimeFallback: false }
+        relativePath: '/repo/linked-docs',
+        worktreeId: 'wt-1'
+      }),
+      expect.anything()
     )
   })
 
@@ -138,7 +151,6 @@ describe('activateFileExplorerNode', () => {
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
       statPath: vi.fn().mockRejectedValue(new Error('stat failed')),
-      authorizeExternalPath: vi.fn(),
       markPathAsDirectory: vi.fn(),
       setSelectedPath: vi.fn()
     })
@@ -154,98 +166,6 @@ describe('activateFileExplorerNode', () => {
       },
       { preview: true, focusEditor: true, suppressActiveRuntimeFallback: false }
     )
-  })
-
-  it('grants the symlink target local path access before resolving it', async () => {
-    const order: string[] = []
-    const authorizeExternalPath = vi.fn(async () => {
-      order.push('authorize')
-    })
-    const statPath = vi.fn(async () => {
-      order.push('stat')
-      return { isDirectory: false }
-    })
-    const openFile = vi.fn()
-    useAppStore.setState({
-      worktreesByRepo: {
-        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' } as never]
-      }
-    })
-
-    await activateFileExplorerNode({
-      node: { ...symlinkNode, operationOwner: { kind: 'local' } },
-      activeWorktreeId: 'wt-1',
-      runtimeEnvironmentId: null,
-      openFile,
-      toggleDir: vi.fn(),
-      loadDir: vi.fn(),
-      statPath,
-      authorizeExternalPath,
-      markPathAsDirectory: vi.fn(),
-      setSelectedPath: vi.fn()
-    })
-
-    // Why: the grant has to land before the stat, or the allow-list denies the
-    // target and the row can never open.
-    expect(order).toEqual(['authorize', 'stat'])
-    expect(authorizeExternalPath).toHaveBeenCalledWith({ targetPath: '/repo/linked-docs' })
-    expect(openFile).toHaveBeenCalledTimes(1)
-  })
-
-  it('still opens the symlink when the path grant itself fails', async () => {
-    const openFile = vi.fn()
-    useAppStore.setState({
-      worktreesByRepo: {
-        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' } as never]
-      }
-    })
-
-    await activateFileExplorerNode({
-      node: { ...symlinkNode, operationOwner: { kind: 'local' } },
-      activeWorktreeId: 'wt-1',
-      runtimeEnvironmentId: null,
-      openFile,
-      toggleDir: vi.fn(),
-      loadDir: vi.fn(),
-      statPath: vi.fn().mockResolvedValue({ isDirectory: false }),
-      authorizeExternalPath: vi.fn().mockRejectedValue(new Error('ipc unavailable')),
-      markPathAsDirectory: vi.fn(),
-      setSelectedPath: vi.fn()
-    })
-
-    // Why: a rejected grant must degrade to the editor's real error, not a dead click.
-    expect(openFile).toHaveBeenCalledTimes(1)
-  })
-
-  it('leaves symlink authorization to the host for a remote-owned workspace', async () => {
-    const authorizeExternalPath = vi.fn()
-    useAppStore.setState({
-      worktreesByRepo: {
-        'repo-1': [
-          {
-            id: 'wt-1',
-            repoId: 'repo-1',
-            path: '/repo',
-            hostId: 'runtime:runtime-env-1'
-          } as never
-        ]
-      }
-    })
-
-    await activateFileExplorerNode({
-      node: symlinkNode,
-      activeWorktreeId: 'wt-1',
-      runtimeEnvironmentId: 'runtime-env-1',
-      openFile: vi.fn(),
-      toggleDir: vi.fn(),
-      loadDir: vi.fn(),
-      statPath: vi.fn().mockResolvedValue({ isDirectory: false }),
-      authorizeExternalPath,
-      markPathAsDirectory: vi.fn(),
-      setSelectedPath: vi.fn()
-    })
-
-    expect(authorizeExternalPath).not.toHaveBeenCalled()
   })
 
   it('opens local files without runtime fallback when no runtime owner is set', async () => {
@@ -272,7 +192,6 @@ describe('activateFileExplorerNode', () => {
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
       statPath: vi.fn(),
-      authorizeExternalPath: vi.fn(),
       markPathAsDirectory: vi.fn(),
       setSelectedPath: vi.fn()
     })

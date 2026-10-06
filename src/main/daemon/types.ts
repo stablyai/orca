@@ -22,6 +22,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
+import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
 export type { TerminalModes } from './terminal-modes'
 import type { TerminalSnapshot } from './terminal-snapshot'
 export type { TerminalSnapshot } from './terminal-snapshot'
@@ -97,12 +98,6 @@ export type CreateOrAttachRequest = {
       surface: AgentSessionSurfaceBinding
     }
   }
-}
-
-export type CloseStartupQueryAuthorityRequest = {
-  id: string
-  type: 'closeStartupQueryAuthority'
-  payload: { sessionId: string }
 }
 
 export type CancelCreateOrAttachRequest = {
@@ -206,9 +201,10 @@ export type GetCwdRequest = {
   }
 }
 
-export type ClearScrollbackRequest = {
+// Why resetInputModes is a type, not a clear flag: an older daemon rejects it instead of clearing.
+export type TerminalBufferActionRequest = {
   id: string
-  type: 'clearScrollback'
+  type: 'clearScrollback' | 'resetInputModes'
   payload: {
     sessionId: string
   }
@@ -321,7 +317,7 @@ export type DaemonRequest =
   | InspectProcessRequest
   | ConfirmForegroundProcessRequest
   | ConfirmShellForegroundRequest
-  | ClearScrollbackRequest
+  | TerminalBufferActionRequest
   | ShutdownRequest
   | PingRequest
   | SystemResolverHealthRequest
@@ -329,7 +325,8 @@ export type DaemonRequest =
   | GetSnapshotRequest
   | GetSizeRequest
   | TakePendingOutputRequest
-  | CloseStartupQueryAuthorityRequest
+  | PtyOwnerQueryProtocol.CloseStartupQueryAuthorityRequest
+  | PtyOwnerQueryProtocol.SetColorQueryReplyColorsRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
 

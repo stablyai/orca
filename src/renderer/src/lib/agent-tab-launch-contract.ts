@@ -1,3 +1,4 @@
+import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -5,7 +6,11 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 
-export type LaunchAgentInNewTabArgs = {
+type LaunchAgentInNewTabRequest =
+  | { requestId: AgentLaunchRequestId; agentSessionLaunchPlan?: undefined }
+  | { agentSessionLaunchPlan: AgentSessionLaunchPlan; requestId?: undefined }
+
+export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   agent: TuiAgent
   worktreeId: string
   /** The host the caller picked from a surface listing one row per host. `worktreeId` names
@@ -38,8 +43,8 @@ export type LaunchAgentInNewTabArgs = {
    *  The session grid passes false: otherwise the new tab becomes its workspace's selected
    *  tab and the terminal view replaces the editor or browser that workspace was showing. */
   activate?: boolean
-  /** Keeps a preflighted route authoritative across workspace creation. */
-  agentSessionLaunchPlan?: AgentSessionLaunchPlan
+  /** Prevents a workspace-opening spawn from reshuffling Recent. */
+  pendingActivationSpawn?: boolean
   /** Lets a workspace reveal itself before the selected surface opens. */
   beforeSurfaceOpen?: (
     surface:

@@ -87,7 +87,7 @@ describe('Claude child work from captured frame orders', () => {
     })
   })
 
-  it('settles what still runs when the session ends, and keeps every record', async () => {
+  it('stops what still runs when Orca ends the session, and keeps every record', async () => {
     const run = await producer(hostWithParent())
     const [running] = until(MOVED_TO_BACKGROUND, 51_275)
     run.replay(running)
@@ -99,8 +99,37 @@ describe('Claude child work from captured frame orders', () => {
         outcome
       }))
     ).toEqual([
-      { description: 'Run 45s sleep command', membership: 'settled', outcome: 'unknown' },
-      { description: 'Sleep 45 seconds then print 1', membership: 'settled', outcome: 'unknown' }
+      { description: 'Run 45s sleep command', membership: 'settled', outcome: 'cancelled' },
+      { description: 'Sleep 45 seconds then print 1', membership: 'settled', outcome: 'cancelled' }
+    ])
+  })
+
+  it('leaves how they ended unknown when the close sees a descendant survive', async () => {
+    const run = await producer(hostWithParent())
+    const [running] = until(MOVED_TO_BACKGROUND, 51_275)
+    run.replay(running)
+    // The root exited, but Orca's own tree check saw a process of the session's still running.
+    const connection = run.claude.connections[0]!
+    connection.exitVerdict = { root: 'exited', tree: 'live' }
+    connection.close = async () => false
+    await expect(run.adapter.closeSession('session-1')).rejects.toMatchObject({
+      name: 'AgentSessionAcquisitionRootExitObservedError'
+    })
+    expect(run.records().map(({ membership, outcome }) => ({ membership, outcome }))).toEqual([
+      { membership: 'settled', outcome: 'unknown' },
+      { membership: 'settled', outcome: 'unknown' }
+    ])
+  })
+
+  it('leaves how they ended unknown when the session dies on its own', async () => {
+    const run = await producer(hostWithParent())
+    const [running] = until(MOVED_TO_BACKGROUND, 51_275)
+    run.replay(running)
+    run.claude.connections[0]!.handlers.onExit?.(new Error('claude exited'))
+    await run.adapter.drainObservedExits()
+    expect(run.records().map(({ membership, outcome }) => ({ membership, outcome }))).toEqual([
+      { membership: 'settled', outcome: 'unknown' },
+      { membership: 'settled', outcome: 'unknown' }
     ])
   })
 

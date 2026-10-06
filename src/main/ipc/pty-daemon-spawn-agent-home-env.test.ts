@@ -173,13 +173,13 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.envToDelete ?? []).not.toContain('ORCA_CODEX_HOME')
         expect(spawnOptions.envToDelete).toContain('REMOVE_ME')
       })
-      it('prepares Codex project trust before a daemon-backed interactive launch', async () => {
+      it('prepares Codex launch state before a daemon-backed interactive launch', async () => {
         const workspacePath = '/repo/worktrees/new-feature'
         const resolveHome = vi.fn(
           (
             _target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
             _launchEnv?: NodeJS.ProcessEnv,
-            _launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+            _launchContext?: { unavailableManagedHomePath?: string }
           ) => null
         )
 
@@ -191,7 +191,6 @@ describe('registerPtyHandlers', () => {
         })
 
         expect(resolveHome.mock.calls[0]?.[0]).toEqual({ runtime: 'host' })
-        expect(resolveHome.mock.calls[0]?.[2]).toEqual({ workspacePath, launchAgent: 'codex' })
       })
       it('injects explicit proxy settings on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, () => ({
@@ -411,6 +410,17 @@ describe('registerPtyHandlers', () => {
             'CLAUDE_CODE_SESSION_ID',
             'CLAUDE_CODE_BRIDGE_SESSION_ID'
           ])
+        )
+      })
+      it('strips an inherited agent session id', async () => {
+        // Why: a daemon forked by an Orca launched inside a structured session inherits its id,
+        // and every daemon pane would present that session as its orchestration caller.
+        const inherited = await daemonSpawnAndGetOptions(undefined, undefined, undefined, {
+          ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
+          ORCA_STRUCTURED_SESSION: '1'
+        })
+        expect(inherited.envToDelete).toEqual(
+          expect.arrayContaining(['ORCA_AGENT_SESSION_ID', 'ORCA_STRUCTURED_SESSION'])
         )
       })
       it('preserves an explicitly requested Claude child-session stamp', async () => {

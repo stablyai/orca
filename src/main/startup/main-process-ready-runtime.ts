@@ -13,12 +13,13 @@ import { startPreGoneCrashSampling } from '../crash-reporting/process-gone-diagn
 import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallback-decision'
-import { ensureRealHomeCodexHookState } from '../codex/codex-real-home-hook-install'
+import { startCodexHooks } from '../codex/codex-hook-reconcile'
+import { hydrateAgentCliShellPath } from '../agent-hooks/local-agent-cli-presence'
 import {
   installManagedAgentHooks,
+  isAgentStatusHooksEnabledForAgent,
   resolveStartupManagedHookAction,
-  shouldContinueManagedHookStartup,
-  shouldInstallStartupManagedAgentHook
+  shouldContinueManagedHookStartup
 } from '../agent-hooks/managed-agent-hook-controls'
 import { shouldInstallManagedHooks } from './configure-process'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
@@ -32,8 +33,10 @@ import {
 import { initializeMainProcessAutomations } from './main-process-automations'
 import { initializeMainProcessPlugins } from './main-process-plugins'
 import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../worktree-trash'
+import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-load'
 import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'
+import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 
 // Headless serve never opens a window, so the sweep still has to run off a timer there.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -43,6 +46,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   if (!store) {
     throw new Error('Store must be initialized before ready services')
   }
+  // Why before any listing: a delete a quit or crash interrupted must show as Deleting from first paint.
+  await loadWorktreeRemovalRecordsForStore(store)
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
@@ -77,58 +82,52 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Why: externally started serve-sim processes must stay independent — only Orca-managed/attached helpers belong to a workspace.
   state.emulatorBridge = new EmulatorBridge()
   runtime.setEmulatorBridge(state.emulatorBridge)
-  // Why: worktree deletion renames the checkout aside and deletes it in the background, so a quit or
-  // crash mid-delete can leave the moved directory on disk. Why deferred: the sweep's recursive
-  // readdir/rm runs on the same libuv threadpool the window's first paint and worktree-catalog
-  // hydration are reading disk on, and nothing on the startup path consumes its result.
+  // Why: older releases renamed removed checkouts into a trash root and deleted them in the background,
+  // so a quit mid-delete left directories on disk; drain them. Removals this version recorded are
+  // finished by the same delete. Why deferred: both touch disk on the same libuv threadpool the
+  // window's first paint and worktree-catalog hydration read on, and startup consumes neither.
   runAfterFirstWindowShown(() => {
     void sweepStaleWorktreeTrash(
       collectWorktreeTrashSweepRoots(store.getRepos(), store.getSettings())
     ).catch((error) => {
       console.warn('[worktrees] Failed to sweep leftover worktree directories:', error)
     })
+    runtime.finishInterruptedWorktreeRemovals()
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  // Why deferred: nothing on the startup path needs it, and it only rewrites plugin files that changed.
+  runAfterFirstWindowShown(() => {
+    refreshInstalledOpenCodeStatusPlugins(store.getSettings())
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  // Why (#16441): the real-home grant runs a codex app-server session. It stays
-  // ordered before managed-hook reconciliation — an incapable host must re-arm
-  // and complete the legacy real-home sweep first — but awaiting it inline
-  // stalled app init behind that session, so chain instead of blocking.
+  // Why here, after PATH hydration: the first Codex launch usually finds Codex's hook hash ready,
+  // and launches find the reconcile in flight before CLI detection ends.
+  startCodexHooks({
+    pathReady: app.isPackaged ? hydrateAgentCliShellPath() : Promise.resolve(),
+    isEnabled: () => isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex'),
+    resolveLaunchHome: () => {
+      if (!state.codexRuntimeHome) {
+        throw new Error('Codex runtime home service is not initialized')
+      }
+      return state.codexRuntimeHome.resolveHostCodexHomePathForLaunchReadOnly()
+    }
+  })
   const startupManagedHookSettings = store.getSettings()
   const shouldReconcileStartupManagedHooks =
     shouldInstallManagedHooks(is.dev) &&
     resolveStartupManagedHookAction(startupManagedHookSettings) === 'install'
-  const realHomeCodexHookState =
-    shouldReconcileStartupManagedHooks &&
-    shouldInstallStartupManagedAgentHook(startupManagedHookSettings, 'codex') &&
-    state.codexRuntimeHome?.isHostSystemDefaultRealHomeSelected()
-      ? ensureRealHomeCodexHookState({
-          hooksEnabled: true,
-          userDataPath: app.getPath('userData')
-        }).catch((error: unknown) => {
-          console.warn('[codex-real-home-hooks] startup ensure failed:', error)
-        })
-      : Promise.resolve()
   // Why skip rather than remove when the off switch is set: the hook files are user-global but this
   // decision reads only THIS profile's settings, so removing here deletes the hooks every other Orca
   // instance depends on (STA-5679). Skipping already keeps removed hooks from reappearing on launch.
   if (shouldReconcileStartupManagedHooks) {
     const managedHookStore = store
-    void realHomeCodexHookState
-      .then(() =>
-        installManagedAgentHooks(managedHookStore.getSettings(), {
-          shouldHydrateShellPath: app.isPackaged,
-          onInstallError: recordManagedHookInstallFailure,
-          shouldContinue: (agent) =>
-            shouldContinueManagedHookStartup(
-              state.isQuitting,
-              managedHookStore.getSettings(),
-              agent
-            )
-        })
-      )
-      .catch((error: unknown) =>
-        console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
-      )
+    void installManagedAgentHooks(managedHookStore.getSettings(), {
+      shouldHydrateShellPath: app.isPackaged,
+      onInstallError: recordManagedHookInstallFailure,
+      shouldContinue: (agent) =>
+        shouldContinueManagedHookStartup(state.isQuitting, managedHookStore.getSettings(), agent)
+    }).catch((error: unknown) =>
+      console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
+    )
   }
   // Why: process-gone metrics only see survivors, and the gone-time host memory
   // read lands after the corpse released its pages; both need a live pre-gone

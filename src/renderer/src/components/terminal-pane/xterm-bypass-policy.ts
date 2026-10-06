@@ -283,6 +283,23 @@ function matchesClipboardBinding(
 }
 
 /**
+ * On macOS an unselected Cmd+C belongs to an app that negotiated Kitty keyboard
+ * reporting: apps like Codex capture the mouse, so their highlight is never an
+ * xterm selection. Without negotiation, unselected Cmd+C still sends nothing.
+ */
+export function isAppOwnedCopyChord(
+  event: XtermBypassEvent,
+  options: Pick<XtermBypassOptions, 'isMac' | 'hasSelection' | 'kittyKeyboardFlags'>
+): boolean {
+  return (
+    options.isMac &&
+    !options.hasSelection &&
+    (options.kittyKeyboardFlags ?? 0) !== 0 &&
+    matchesClipboardBinding('Mod+C', event, 'darwin')
+  )
+}
+
+/**
  * Decide whether plain Ctrl+C should bypass xterm's kitty CSI-u encoder and
  * be sent as ETX through Terminal.input() instead.
  */
@@ -354,6 +371,10 @@ export function shouldBypassXtermKeyboardEvent(
     // `code` (KeyA -> Latin "a"). Bypass keydown so Chromium emits layout text
     // via keypress, and bypass keyup so xterm doesn't leak the release CSI-u.
     return true
+  }
+
+  if (isAppOwnedCopyChord(event, options)) {
+    return false
   }
 
   if (isMac) {

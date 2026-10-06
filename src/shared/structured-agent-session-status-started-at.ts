@@ -10,6 +10,7 @@ import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-ses
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
+import type { StructuredAgentSessionLatestRequest } from './structured-agent-session-latest-request'
 import type { AgentSessionStatusSummary } from './agent-session-wire'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { AgentStatusState } from './agent-status-types'
@@ -20,20 +21,18 @@ export function structuredAgentSessionStatusStartedAt(
   status: StructuredAgentSessionProjectedStatus,
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[],
-  currentFence?: number | null
+  currentFence: number | null | undefined,
+  latestRequest: Pick<StructuredAgentSessionLatestRequest, 'settledAt'> | null
 ): number | undefined {
   if (status === 'attention') {
     return oldestPendingPromptAt(items)
   }
+  if (status === 'idle') {
+    // The session went idle when the request it reports settled, not when its newest turn did.
+    return latestRequest?.settledAt
+  }
   const turnItem = newestTurnItem(items)
   const turn = readAgentJournalTurn(turnItem?.body)
-  if (status === 'idle') {
-    if (!turnItem || !turn || turn.state === 'running') {
-      return undefined
-    }
-    // A turn recovery settled ended when that settle was written: when the user learns it stopped.
-    return turnItem.recoveredAt ?? turn.completedAt
-  }
   if (turnItem && turn?.state === 'running') {
     // A mid-turn send joins the running turn; it does not restart the stretch.
     return turn.requestedAt ?? turn.startedAt ?? turnItem.observedAt

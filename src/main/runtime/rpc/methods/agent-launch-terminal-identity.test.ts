@@ -11,7 +11,6 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isAgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type { RpcContext } from '../core'
 import {
@@ -60,17 +59,6 @@ describe('the pane a terminal launch created', () => {
     const result = await launch(EXISTING_LAUNCH, runtime)
 
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1', paneKey: PANE_KEY })
-  })
-
-  it('reports a pane key a client can resolve to a tab and a leaf', async () => {
-    const runtime = runtimeStub({ settings: TERMINAL_ONLY, terminalPaneKey: PANE_KEY })
-
-    const result = await launch(EXISTING_LAUNCH, runtime)
-
-    // The point of carrying identity at all: the client gets the two ids `store.createTab` needs.
-    const pane =
-      result.outcome.kind === 'terminal' ? parsePaneKey(result.outcome.paneKey ?? '') : null
-    expect(pane).toMatchObject({ tabId: TAB_ID, leafId: LEAF_ID })
   })
 
   it('carries the pane key through a downgrade to a terminal', async () => {

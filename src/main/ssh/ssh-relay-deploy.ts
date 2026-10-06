@@ -2,6 +2,27 @@
 import { existsSync } from 'node:fs'
 import { app } from 'electron'
 import { relayBundleCandidates } from './relay-bundle-paths'
+import { PinnedRelayFallbackError, resolveSshRemoteRuntime } from './ssh-relay-pinned-node'
+import {
+  ensurePinnedRelayRuntime,
+  prebuiltRelayNodePath,
+  verifyPinnedRelayInstall
+} from './ssh-relay-pinned-node-install'
+import type { PrebuiltRelayPlan } from './ssh-relay-host-node-addons'
+import {
+  nextRelayRuntimeStep,
+  relayRuntimeLadder,
+  relayRuntimeStorePins,
+  type RelayRuntimeStep
+} from './ssh-relay-runtime-ladder'
+import {
+  RelayRuntimeLadderRun,
+  remoteRuntimeUnavailableError,
+  sshTargetRelayRuntimeDecisionStore
+} from './ssh-relay-runtime-resolution'
+import { planRelayRuntimeStep } from './ssh-relay-runtime-step-plan'
+import { getSshTargetRegistryStore } from './ssh-target-registry'
+import { gcRemoteNodeRuntimeStore } from './remote-node-runtime-store-gc'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR, type RelayPlatform } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
@@ -85,7 +106,8 @@ import {
   recoverOneStaleRelayUploadStageCommand,
   relayUploadStagePromotionConfirmed,
   RELAY_UPLOAD_STAGE_POOL_NAME,
-  reserveRelayUploadStageCommand
+  reserveRelayUploadStageCommand,
+  type WindowsUploadStageIdentity
 } from './ssh-relay-upload-stage-commands'
 import {
   isWindowsRemoteHost,
@@ -96,6 +118,12 @@ import {
 } from './ssh-remote-platform'
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
+import {
+  classifyWindowsRelayLaunchError,
+  WINDOWS_RELAY_LAUNCH_LOG_PREFIX,
+  windowsRelayLaunchCommand
+} from './ssh-relay-windows-launch-command'
+import { parseRelayWindowsLaunchReport } from '../../shared/relay-windows-breakaway-launch'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
 import { resolveRelayEndpointBeforeRelaunch } from './ssh-relay-endpoint-takeover'
 import {
@@ -328,8 +356,17 @@ async function resolveRelayBootstrapState(
     signal?.throwIfAborted()
     return { ...installState, nodePath }
   } catch (err) {
-    abortController.abort()
+    // Let an admitted probe finish before retrying a refused parallel session.
+    if (!isSshSessionLimitError(err)) {
+      abortController.abort()
+    }
     const settled = await Promise.allSettled([installStatePromise, nodePathPromise])
+    const unconfirmed = settled.find(
+      (result) => result.status === 'rejected' && isUnconfirmedSshCommandTermination(result.reason)
+    )
+    if (unconfirmed?.status === 'rejected') {
+      throw unconfirmed.reason
+    }
     signal?.throwIfAborted()
     if (!isSshSessionLimitError(err)) {
       throw err
@@ -352,6 +389,25 @@ async function resolveRelayBootstrapState(
   }
 }
 
+/** A prebuilt plan already knows its Node, so only home and install state are probed. */
+async function resolvePrebuiltRelayBootstrapState(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  fullVersion: string,
+  plan: PrebuiltRelayPlan,
+  signal?: AbortSignal
+): Promise<RelayBootstrapState> {
+  const installState = await resolveRemoteInstallState(conn, hostPlatform, fullVersion, { signal })
+  return {
+    ...installState,
+    nodePath: prebuiltRelayNodePath({
+      host: hostPlatform,
+      remoteRelayDir: installState.remoteRelayDir,
+      plan
+    })
+  }
+}
+
 function isAbortError(err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError'
 }
@@ -367,17 +423,44 @@ async function deployAndLaunchRelayInner(
   relayInstanceId?: string,
   deploySignal?: AbortSignal
 ): Promise<RelayDeployResult> {
+  const target = typeof conn.getTarget === 'function' ? conn.getTarget() : undefined
+  const ladder = relayRuntimeLadder(resolveSshRemoteRuntime(target))
+  const registry = getSshTargetRegistryStore()
+  const run = new RelayRuntimeLadderRun(
+    target?.id ?? relayInstanceId ?? '',
+    target && registry ? sshTargetRelayRuntimeDecisionStore(registry) : null
+  )
+  let step = ladder[0] ?? 'legacy'
   while (true) {
     deploySignal?.throwIfAborted()
     try {
-      return await deployAndLaunchRelayAttempt(
+      if (step === 'D') {
+        run.settle('D')
+        throw remoteRuntimeUnavailableError(run)
+      }
+      const result = await deployAndLaunchRelayAttempt(
         conn,
         onProgress,
         graceTimeSeconds,
         relayInstanceId,
-        deploySignal
+        deploySignal,
+        { step, run }
       )
+      // Why only a laddered pass: a plain host-npm connect has no rung decision to record.
+      if (ladder.length > 1) {
+        run.settle(step)
+      }
+      return result
     } catch (err) {
+      if (err instanceof PinnedRelayFallbackError && step !== 'legacy' && step !== 'D') {
+        console.warn(
+          `[ssh-relay] Relay runtime rung ${step} unavailable (${err.reason}): ${err.detail}`
+        )
+        run.refused(step, err.reason, err.remembered)
+        step = nextRelayRuntimeStep(ladder, step, err.reason, err.remembered)
+        run.enter(step)
+        continue
+      }
       if (!(err instanceof RelayDirectoryGcConflictError)) {
         throw err
       }
@@ -387,16 +470,24 @@ async function deployAndLaunchRelayInner(
   }
 }
 
+type RelayRuntimeRequest = { step: RelayRuntimeStep; run: RelayRuntimeLadderRun }
+
 async function deployAndLaunchRelayAttempt(
   conn: SshConnection,
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
   relayInstanceId?: string,
-  deploySignal?: AbortSignal
+  deploySignal?: AbortSignal,
+  runtimeRequest: RelayRuntimeRequest = {
+    step: 'legacy',
+    run: new RelayRuntimeLadderRun(relayInstanceId ?? '', null)
+  }
 ): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
   console.log('[ssh-relay] Detecting remote platform...')
-  const hostPlatform = await detectRemoteHostPlatform(conn, { signal: deploySignal })
+  // Why reuse: each ladder step would otherwise re-probe a platform that cannot have changed.
+  const hostPlatform =
+    runtimeRequest.run.host ?? (await detectRemoteHostPlatform(conn, { signal: deploySignal }))
   if (!hostPlatform) {
     throw new Error(
       'Unsupported remote platform. Orca relay supports: linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64, win32-arm64.'
@@ -413,14 +504,91 @@ async function deployAndLaunchRelayAttempt(
     )
   }
   // Why: content-hashed version doubles as remote dir name and wire-handshake version; throws on missing rather than falling back (see docs/ssh-relay-versioned-install-dirs.md).
-  const fullVersion = readLocalFullVersion(localRelayDir)
+  const baseVersion = readLocalFullVersion(localRelayDir)
+  const prebuilt = await planRelayRuntimeStep({
+    conn,
+    host: hostPlatform,
+    baseVersion,
+    step: runtimeRequest.step,
+    run: runtimeRequest.run,
+    signal: deploySignal
+  })
+  try {
+    return await deployAndLaunchRelayOnRuntime({
+      conn,
+      onProgress,
+      graceTimeSeconds,
+      relayInstanceId,
+      deploySignal,
+      hostPlatform,
+      platform,
+      localRelayDir,
+      fullVersion: prebuilt?.fullVersion ?? baseVersion,
+      prebuilt,
+      run: runtimeRequest.run
+    })
+  } finally {
+    await prebuilt?.addons.dispose().catch(() => {})
+  }
+}
 
+async function deployAndLaunchRelayOnRuntime({
+  conn,
+  onProgress,
+  graceTimeSeconds,
+  relayInstanceId,
+  deploySignal,
+  hostPlatform,
+  platform,
+  localRelayDir,
+  fullVersion,
+  prebuilt,
+  run
+}: {
+  conn: SshConnection
+  onProgress?: (status: string) => void
+  graceTimeSeconds?: number
+  relayInstanceId?: string
+  deploySignal?: AbortSignal
+  hostPlatform: RemoteHostPlatform
+  platform: RelayPlatform
+  localRelayDir: string
+  /** Already folded with the runtime digest when `prebuilt` is set (design D8.1). */
+  fullVersion: string
+  prebuilt?: PrebuiltRelayPlan
+  run: RelayRuntimeLadderRun
+}): Promise<RelayDeployResult> {
   onProgress?.('Checking existing relay...')
   // Why: install-check and node resolution are independent; run concurrently to save a round trip, with sequential fallback for restrictive SSH servers.
-  const { remoteHome, remoteRelayDir, alreadyInstalled, nodePath } =
-    await resolveRelayBootstrapState(conn, hostPlatform, fullVersion, deploySignal)
+  const { remoteHome, remoteRelayDir, alreadyInstalled, nodePath } = prebuilt
+    ? await resolvePrebuiltRelayBootstrapState(
+        conn,
+        hostPlatform,
+        fullVersion,
+        prebuilt,
+        deploySignal
+      )
+    : await resolveRelayBootstrapState(conn, hostPlatform, fullVersion, deploySignal)
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
+  const pinnedContext = prebuilt
+    ? {
+        conn,
+        host: hostPlatform,
+        remoteRelayDir,
+        plan: prebuilt,
+        targetId: run.targetId,
+        signal: deploySignal,
+        run
+      }
+    : undefined
+  let uploadStageIdentity: WindowsUploadStageIdentity | undefined
+  if (pinnedContext?.plan.kind === 'pinned-node') {
+    onProgress?.('Checking Orca Node runtime...')
+    await ensurePinnedRelayRuntime({ ...pinnedContext, plan: pinnedContext.plan }, alreadyInstalled)
+    // Why: once node.exe is verified, stage fencing reads file IDs through it, not Add-Type (D5).
+    uploadStageIdentity = { node: prebuiltRelayNodePath(pinnedContext) }
+  }
 
   // Why: derive the home-relative suffix once — recomputing it by stripping the shell home breaks on a split namespace.
   const homeRelativeRelayDir = relayHomeRelativeDir(fullVersion)
@@ -436,15 +604,23 @@ async function deployAndLaunchRelayAttempt(
   let launchGcClaimToken: string | undefined
   let launchNamespace: RelayInstallNamespace | undefined
   if (alreadyInstalled) {
-    const launchFence = await repairInstalledNativeDeps(
-      conn,
-      remoteRelayDir,
-      platform,
-      hostPlatform,
-      nodePath,
-      homeRelativeRelayDir,
-      deploySignal
-    )
+    const launchFence = prebuilt
+      ? await fenceInstalledPinnedRelay(
+          conn,
+          remoteRelayDir,
+          hostPlatform,
+          homeRelativeRelayDir,
+          deploySignal
+        )
+      : await repairInstalledNativeDeps(
+          conn,
+          remoteRelayDir,
+          platform,
+          hostPlatform,
+          nodePath,
+          homeRelativeRelayDir,
+          deploySignal
+        )
     ownsInstallLock = launchFence.ownsInstallLock
     launchGcClaimToken = launchFence.gcClaimToken
     launchNamespace = launchFence.sftpNamespace
@@ -453,14 +629,24 @@ async function deployAndLaunchRelayAttempt(
     await execHostCommand(
       conn,
       hostPlatform,
-      recoverOneStaleRelayUploadStageCommand(hostPlatform, uploadStagePoolDir),
+      recoverOneStaleRelayUploadStageCommand(
+        hostPlatform,
+        uploadStagePoolDir,
+        undefined,
+        uploadStageIdentity
+      ),
       { signal: deploySignal }
     )
     const uploadStageOwner = createRelayInstallMarkerFileName()
     const reservation = await execHostCommand(
       conn,
       hostPlatform,
-      reserveRelayUploadStageCommand(hostPlatform, uploadStagePoolDir, uploadStageOwner),
+      reserveRelayUploadStageCommand(
+        hostPlatform,
+        uploadStagePoolDir,
+        uploadStageOwner,
+        uploadStageIdentity
+      ),
       { signal: deploySignal }
     )
     const uploadStage = parseReservedRelayUploadStage(
@@ -483,32 +669,19 @@ async function deployAndLaunchRelayAttempt(
     onProgress?.('Uploading relay...')
     console.log('[ssh-relay] Uploading relay...')
     try {
-      try {
-        await uploadRelay(
-          conn,
-          platform,
-          uploadStagePayloadDir,
-          fullVersion,
-          hostPlatform,
-          deploySignal,
-          { rootDir: uploadStage.slotDir, namespace: uploadStageSftpNamespace }
-        )
-      } catch (err) {
-        if (isUnconfirmedSshCommandTermination(err)) {
-          uploadStageCleanupAllowed = false
-        }
-        throw err
-      }
+      await uploadRelay(
+        conn,
+        platform,
+        uploadStagePayloadDir,
+        fullVersion,
+        hostPlatform,
+        deploySignal,
+        { rootDir: uploadStage.slotDir, namespace: uploadStageSftpNamespace },
+        prebuilt?.addons.dir
+      )
 
-      try {
-        await acquireInstallLock(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
-        ownsInstallLock = true
-      } catch (err) {
-        if (isUnconfirmedSshCommandTermination(err)) {
-          ownsInstallLock = true
-        }
-        throw err
-      }
+      await acquireInstallLock(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
+      ownsInstallLock = true
       try {
         // Re-probe after acquiring the lock — a sibling installer may have finished while we waited.
         if (
@@ -523,43 +696,42 @@ async function deployAndLaunchRelayAttempt(
             homeRelativeRelayDir,
             deploySignal
           )
-          try {
-            const promotion = await execHostCommand(
-              conn,
+          const promotion = await execHostCommand(
+            conn,
+            hostPlatform,
+            promoteOwnedRelayUploadStageCommand(
               hostPlatform,
-              promoteOwnedRelayUploadStageCommand(
-                hostPlatform,
-                uploadStage,
-                uploadStageOwner,
-                remoteRelayDir
-              ),
-              { signal: deploySignal }
-            )
-            if (!relayUploadStagePromotionConfirmed(uploadStageOwner, promotion)) {
-              throw new Error('Relay upload stage ownership was lost before promotion')
-            }
-          } catch (err) {
-            if (isUnconfirmedSshCommandTermination(err)) {
-              uploadStageCleanupAllowed = false
-            }
-            throw err
+              uploadStage,
+              uploadStageOwner,
+              remoteRelayDir,
+              uploadStageIdentity
+            ),
+            { signal: deploySignal }
+          )
+          if (!relayUploadStagePromotionConfirmed(uploadStageOwner, promotion)) {
+            throw new Error('Relay upload stage ownership was lost before promotion')
           }
           console.log('[ssh-relay] Upload complete')
 
-          onProgress?.('Installing native dependencies...')
-          console.log('[ssh-relay] Installing native dependencies...')
-          await installNativeDeps(
-            conn,
-            remoteRelayDir,
-            platform,
-            hostPlatform,
-            nodePath,
-            deploySignal,
-            [],
-            launchNamespace,
-            remoteHome
-          )
-          console.log('[ssh-relay] Native deps installed')
+          if (pinnedContext) {
+            onProgress?.('Verifying relay runtime...')
+            await verifyPinnedRelayInstall(pinnedContext)
+          } else {
+            onProgress?.('Installing native dependencies...')
+            console.log('[ssh-relay] Installing native dependencies...')
+            await installNativeDeps(
+              conn,
+              remoteRelayDir,
+              platform,
+              hostPlatform,
+              nodePath,
+              deploySignal,
+              [],
+              launchNamespace,
+              remoteHome
+            )
+            console.log('[ssh-relay] Native deps installed')
+          }
 
           // Why: mark complete but retain the lock until launch makes daemon liveness observable to cross-version GC.
           await finalizeInstall(conn, remoteRelayDir, hostPlatform, {
@@ -574,13 +746,25 @@ async function deployAndLaunchRelayAttempt(
         }
         throw err
       }
+    } catch (error) {
+      uploadStageCleanupAllowed = !isUnconfirmedSshCommandTermination(error)
+      throw error
     } finally {
       if (uploadStageCleanupAllowed) {
         await execHostCommand(
           conn,
           hostPlatform,
-          cleanupOwnedRelayUploadStageCommand(hostPlatform, uploadStage, uploadStageOwner)
-        ).catch(() => {})
+          cleanupOwnedRelayUploadStageCommand(
+            hostPlatform,
+            uploadStage,
+            uploadStageOwner,
+            uploadStageIdentity
+          )
+        ).catch((error) => {
+          if (isUnconfirmedSshCommandTermination(error)) {
+            throw error
+          }
+        })
       }
     }
   }
@@ -594,62 +778,78 @@ async function deployAndLaunchRelayAttempt(
       remoteRelayDir,
       ripgrepLayout.entryName
     ))
-  let launched: Awaited<ReturnType<typeof launchRelay>>
-  let launchLivenessObserved = false
+  deploySignal?.throwIfAborted()
+  onProgress?.('Starting relay...')
+  console.log('[ssh-relay] Launching relay...')
+  // A failed launch retains its fences until stale recovery can establish liveness.
+  const launched = await launchRelay(
+    conn,
+    remoteRelayDir,
+    hostPlatform,
+    nodePath,
+    graceTimeSeconds,
+    relayInstanceId,
+    deploySignal,
+    ripgrepReferenced ? ripgrepLayout.binaryPath : undefined
+  )
+  let launchCleanupSettled = true
   try {
-    deploySignal?.throwIfAborted()
-    onProgress?.('Starting relay...')
-    console.log('[ssh-relay] Launching relay...')
-    launched = await launchRelay(
-      conn,
-      remoteRelayDir,
-      hostPlatform,
-      nodePath,
-      graceTimeSeconds,
-      relayInstanceId,
-      deploySignal,
-      ripgrepReferenced ? ripgrepLayout.binaryPath : undefined
-    )
-    launchLivenessObserved = true
-  } finally {
-    // Why: older clients understand only the install lock; if launch never goes live, keep it so their GC can't race a caller waiting behind this owner.
-    if (ownsInstallLock && launchLivenessObserved) {
+    if (ownsInstallLock) {
       await abandonInstall(conn, remoteRelayDir, hostPlatform)
     }
-    // The detached start may outlive a timed-out SSH command; keep the fence on failed launch until stale recovery proves the handoff ended.
-    if (launchGcClaimToken && launchLivenessObserved) {
+    if (launchGcClaimToken) {
       await releaseRelayGcClaimWithRetry(conn, remoteRelayDir, launchGcClaimToken, hostPlatform)
     }
+  } catch (error) {
+    // Keep the connected transport, but stop optional commands after uncertain fence release.
+    launchCleanupSettled = !isUnconfirmedSshCommandTermination(error)
+    console.warn('[ssh-relay] Launch fence release failed:', error)
   }
   console.log('[ssh-relay] Relay started successfully')
 
   // Keep background commands serial for SSH transports that allow only one exec at a time.
   const ripgrepEntry = ripgrepLayout?.entryName
   const ripgrepInstall = (
-    ripgrepReferenced
+    ripgrepReferenced && launchCleanupSettled
       ? ensureRemoteBundledRipgrep(conn, hostPlatform, remoteHome, { signal: deploySignal })
       : Promise.resolve()
-  ).catch(() => {})
-  const runtimeInstall = (conn.canRunConcurrentExecCommands() ? Promise.resolve() : ripgrepInstall)
-    .then(() =>
-      ensureRemoteOpenCodeRuntime(conn, hostPlatform, remoteHome, {
-        nodePath: launched.nodePath,
-        relayDir: remoteRelayDir,
-        signal: deploySignal
-      })
+  ).then(
+    () => launchCleanupSettled,
+    (error) => !isUnconfirmedSshCommandTermination(error)
+  )
+  const runtimeInstall = (
+    conn.canRunConcurrentExecCommands() ? Promise.resolve(launchCleanupSettled) : ripgrepInstall
+  )
+    .then((ripgrepSettled) =>
+      ripgrepSettled
+        ? ensureRemoteOpenCodeRuntime(conn, hostPlatform, remoteHome, {
+            nodePath: launched.nodePath,
+            verifiedNodePath: uploadStageIdentity?.node,
+            relayDir: remoteRelayDir,
+            signal: deploySignal
+          })
+        : ('teardown-unconfirmed' as const)
     )
     .catch(() => 'teardown-unconfirmed' as const)
-  const cleanupReady = conn.canRunConcurrentExecCommands() ? Promise.resolve() : runtimeInstall
 
-  const backgroundCleanup = cleanupReady.then((runtimeOutcome) => {
-    if (runtimeOutcome === 'teardown-unconfirmed') {
+  const cleanupReady = Promise.all([ripgrepInstall, runtimeInstall]).then(
+    ([ripgrepSettled, runtimeOutcome]) =>
+      ripgrepSettled && runtimeOutcome !== 'teardown-unconfirmed'
+  )
+  const backgroundCleanup = cleanupReady.then((ready) => {
+    if (!ready) {
       return false
     }
     return (
       execHostCommand(
         conn,
         hostPlatform,
-        recoverOneStaleRelayUploadStageCommand(hostPlatform, uploadStagePoolDir)
+        recoverOneStaleRelayUploadStageCommand(
+          hostPlatform,
+          uploadStagePoolDir,
+          undefined,
+          uploadStageIdentity
+        )
       )
         .catch((error) => {
           if (isUnconfirmedSshCommandTermination(error)) {
@@ -688,6 +888,7 @@ async function deployAndLaunchRelayAttempt(
           gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
             windowsNodePath: launched.nodePath,
             windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)],
+            nodePath: launched.nodePath,
             // Why pin rather than rely on the symlink alone: a deploy that fell back to a
             // per-directory install has no reference to show, and its key must still survive.
             nativeDepsCacheKeys: [
@@ -704,6 +905,15 @@ async function deployAndLaunchRelayAttempt(
         // in the same connect rather than the next one.
         .then(() =>
           gcRemoteRipgrepCache(conn, hostPlatform, remoteHome, { pinnedEntry: ripgrepEntry })
+        )
+        // Same ordering reason as ripgrep: the version pass drops the refs that held old runtimes.
+        .then(() =>
+          // Why every compat pin too: a rung A connect must not collect the rung B runtime.
+          prebuilt?.kind === 'pinned-node'
+            ? gcRemoteNodeRuntimeStore(conn, hostPlatform, remoteHome, {
+                currentPins: relayRuntimeStorePins(prebuilt.target)
+              })
+            : undefined
         )
         .then(() => true)
         .catch(
@@ -730,6 +940,7 @@ async function deployAndLaunchRelayAttempt(
       (signal) =>
         ensureRemoteOpenCodeRuntime(conn, hostPlatform, remoteHome, {
           nodePath: launched.nodePath,
+          verifiedNodePath: uploadStageIdentity?.node,
           relayDir: remoteRelayDir,
           signal
         })
@@ -744,7 +955,9 @@ async function uploadRelay(
   fullVersion: string,
   hostPlatform: RemoteHostPlatform,
   signal?: AbortSignal,
-  stage?: { rootDir: string; namespace?: RelayUploadStageNamespace }
+  stage?: { rootDir: string; namespace?: RelayUploadStageNamespace },
+  /** Pinned-Node addons laid out relative to the relay dir. */
+  localAddonsDir?: string
 ): Promise<void> {
   const localRelayDir = getLocalRelayPath(platform)
   if (!localRelayDir || !existsSync(localRelayDir)) {
@@ -763,12 +976,14 @@ async function uploadRelay(
     )
   }
 
-  await uploadRelayDirectory(conn, localRelayDir, remoteDir, hostPlatform, {
-    signal,
-    sftpNamespace: stage?.namespace
-      ? relayUploadStageSftpNamespaceMapping(stage.namespace, hostPlatform, stage.rootDir)
-      : undefined
-  })
+  for (const localDir of localAddonsDir ? [localRelayDir, localAddonsDir] : [localRelayDir]) {
+    await uploadRelayDirectory(conn, localDir, remoteDir, hostPlatform, {
+      signal,
+      sftpNamespace: stage?.namespace
+        ? relayUploadStageSftpNamespaceMapping(stage.namespace, hostPlatform, stage.rootDir)
+        : undefined
+    })
+  }
 
   if (!isWindowsRemoteHost(hostPlatform)) {
     await execHostCommand(
@@ -986,11 +1201,7 @@ async function repairInstalledNativeDeps(
   nodePath: string,
   homeRelativeRelayDir: string,
   signal?: AbortSignal
-): Promise<{
-  ownsInstallLock: boolean
-  gcClaimToken?: string
-  sftpNamespace?: RelayInstallNamespace
-}> {
+): Promise<RelayLaunchFence> {
   const initialProbe = await probeRequiredNativeDeps(
     conn,
     remoteDir,
@@ -998,55 +1209,22 @@ async function repairInstalledNativeDeps(
     nodePath,
     signal
   )
-  const lockResult = await tryAcquireRelayRepairLock(conn, remoteDir, hostPlatform, { signal })
-  if (lockResult === 'gc') {
-    throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
-  }
-  if (lockResult === 'acquired') {
-    let stillInstalled: boolean
-    try {
-      stillInstalled = await isRelayAlreadyInstalled(conn, remoteDir, hostPlatform, {
-        rethrowSessionLimitErrors: true,
-        signal
-      })
-    } catch (err) {
-      await abandonInstall(conn, remoteDir, hostPlatform)
-      throw err
-    }
-    if (!stillInstalled) {
-      // Why: GC may finish its rename before our lock recreates the path; never trust probes made before this locked recheck.
-      await abandonInstall(conn, remoteDir, hostPlatform)
-      throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
-    }
-  }
-  const gcClaimToken =
-    lockResult === 'busy' || lockResult === 'error'
-      ? await acquireRelayLaunchGcFence(conn, remoteDir, hostPlatform, signal)
-      : undefined
+  const { lockResult, gcClaimToken } = await acquireInstalledRelayFence(
+    conn,
+    remoteDir,
+    hostPlatform,
+    signal
+  )
   // Why: only a probe that answered may trigger repair; an unverifiable one launches as-is and the next reconnect re-probes.
   if (initialProbe.status !== 'blocked') {
-    // Why: even a healthy reconnect stays fenced until launch liveness is observable, or cross-version GC can rename after this probe.
-    if (lockResult !== 'acquired') {
-      return { ownsInstallLock: false, gcClaimToken }
-    }
-    try {
-      return {
-        ownsInstallLock: true,
-        sftpNamespace: await createRelayLaunchNamespace(
-          conn,
-          hostPlatform,
-          remoteDir,
-          homeRelativeRelayDir,
-          signal
-        )
-      }
-    } catch (err) {
-      signal?.throwIfAborted()
-      console.warn(
-        `[ssh-relay] Launch namespace marker is unconfirmed at ${remoteDir}; deferring lock ownership to stale recovery`
-      )
-      return { ownsInstallLock: !isUnconfirmedSshCommandTermination(err) }
-    }
+    return launchFenceWithoutRepair(
+      conn,
+      hostPlatform,
+      remoteDir,
+      homeRelativeRelayDir,
+      { lockResult, gcClaimToken },
+      signal
+    )
   }
 
   // Why: an already-installed relay can launch degraded, so native-deps repair is best-effort — lock contention and failures must not abort the connection.
@@ -1096,6 +1274,105 @@ async function repairInstalledNativeDeps(
     )
     return { ownsInstallLock: !terminationUnconfirmed }
   }
+}
+
+type RelayLaunchFence = {
+  ownsInstallLock: boolean
+  gcClaimToken?: string
+  sftpNamespace?: RelayInstallNamespace
+}
+
+type InstalledRelayFence = {
+  lockResult: 'acquired' | 'busy' | 'error'
+  gcClaimToken?: string
+}
+
+/** Hold an installed relay dir against cross-version GC until launch makes liveness observable. */
+async function acquireInstalledRelayFence(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  signal?: AbortSignal
+): Promise<InstalledRelayFence> {
+  const lockResult = await tryAcquireRelayRepairLock(conn, remoteDir, hostPlatform, { signal })
+  if (lockResult === 'gc') {
+    throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
+  }
+  if (lockResult === 'acquired') {
+    let stillInstalled: boolean
+    try {
+      stillInstalled = await isRelayAlreadyInstalled(conn, remoteDir, hostPlatform, {
+        rethrowSessionLimitErrors: true,
+        signal
+      })
+    } catch (err) {
+      if (!isUnconfirmedSshCommandTermination(err)) {
+        await abandonInstall(conn, remoteDir, hostPlatform)
+      }
+      throw err
+    }
+    if (!stillInstalled) {
+      // Why: GC may finish its rename before our lock recreates the path; never trust probes made before this locked recheck.
+      await abandonInstall(conn, remoteDir, hostPlatform)
+      throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
+    }
+  }
+  const gcClaimToken =
+    lockResult === 'busy' || lockResult === 'error'
+      ? await acquireRelayLaunchGcFence(conn, remoteDir, hostPlatform, signal)
+      : undefined
+  return { lockResult, gcClaimToken }
+}
+
+async function launchFenceWithoutRepair(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  remoteDir: string,
+  homeRelativeRelayDir: string,
+  { lockResult, gcClaimToken }: InstalledRelayFence,
+  signal?: AbortSignal
+): Promise<RelayLaunchFence> {
+  // Why: even a healthy reconnect stays fenced until launch liveness is observable, or cross-version GC can rename after this probe.
+  if (lockResult !== 'acquired') {
+    return { ownsInstallLock: false, gcClaimToken }
+  }
+  try {
+    return {
+      ownsInstallLock: true,
+      sftpNamespace: await createRelayLaunchNamespace(
+        conn,
+        hostPlatform,
+        remoteDir,
+        homeRelativeRelayDir,
+        signal
+      )
+    }
+  } catch (err) {
+    signal?.throwIfAborted()
+    console.warn(
+      `[ssh-relay] Launch namespace marker is unconfirmed at ${remoteDir}; deferring lock ownership to stale recovery`
+    )
+    return { ownsInstallLock: !isUnconfirmedSshCommandTermination(err) }
+  }
+}
+
+/** A pinned-Node relay dir has no host-installed native deps to repair; only the launch fence applies. */
+async function fenceInstalledPinnedRelay(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  homeRelativeRelayDir: string,
+  signal?: AbortSignal
+): Promise<RelayLaunchFence> {
+  const fence = await acquireInstalledRelayFence(conn, remoteDir, hostPlatform, signal)
+  return launchFenceWithoutRepair(
+    conn,
+    hostPlatform,
+    remoteDir,
+    homeRelativeRelayDir,
+    fence,
+    signal
+  )
 }
 
 /**
@@ -1157,7 +1434,9 @@ async function acquireRelayLaunchGcFence(
     // Why: a caller without the install lock still needs its own durable fence; never borrow another connection's lock through launch.
     return token
   } catch (err) {
-    await releaseRelayGcClaimWithRetry(conn, remoteDir, token, hostPlatform)
+    if (!isUnconfirmedSshCommandTermination(err)) {
+      await releaseRelayGcClaimWithRetry(conn, remoteDir, token, hostPlatform)
+    }
     throw err
   }
 }
@@ -2126,23 +2405,26 @@ async function launchWindowsRelay(
   const logFile = joinRemotePath(hostPlatform, launchOpts.remoteDir, 'relay.log')
   const errFile = joinRemotePath(hostPlatform, launchOpts.remoteDir, 'relay.err.log')
   // Why no credential write: see launchRelay — the daemon publishes after it owns the pipe.
-  await execHostCommand(
+  const launchOutput = await execHostCommand(
     conn,
     hostPlatform,
-    windowsRelayLaunchCommand(
-      hostPlatform,
-      launchOpts.nodePath,
-      launchOpts.remoteDir,
-      launchOpts.sockPath,
-      launchOpts.endpointDir,
-      launchOpts.graceTime,
+    windowsRelayLaunchCommand(hostPlatform, {
+      nodePath: launchOpts.nodePath,
+      remoteDir: launchOpts.remoteDir,
+      sockPath: launchOpts.sockPath,
+      endpointDir: launchOpts.endpointDir,
+      graceTime: launchOpts.graceTime,
       logFile,
       errFile,
-      launchOpts.credentialFile,
-      launchOpts.ripgrepPath
-    ),
+      credentialFile: launchOpts.credentialFile,
+      ripgrepPath: launchOpts.ripgrepPath
+    }),
     { signal }
-  )
+  ).catch((error: unknown) => {
+    throw classifyWindowsRelayLaunchError(error)
+  })
+  const launchReport = parseRelayWindowsLaunchReport(launchOutput)
+  console.log(`${WINDOWS_RELAY_LAUNCH_LOG_PREFIX}${JSON.stringify(launchReport)}`)
 
   const POLL_INTERVAL_MS = 200
   const POLL_TIMEOUT_MS = 10_000
@@ -2219,52 +2501,6 @@ function windowsRelayConnectCommand(
     nodePath,
     remoteDir,
     `& ${powerShellLiteral(nodePath)} relay.js --connect --sock-path ${powerShellLiteral(sockPath)} --credential-file ${powerShellLiteral(credentialFile)}`
-  )
-}
-
-function windowsRelayLaunchCommand(
-  hostPlatform: RemoteHostPlatform,
-  nodePath: string,
-  remoteDir: string,
-  sockPath: string,
-  endpointDir: string,
-  graceTime: number,
-  logFile: string,
-  errFile: string,
-  credentialFile: string,
-  ripgrepPath?: string
-): string {
-  const relayScript = joinRemotePath(hostPlatform, remoteDir, 'relay.js')
-  // Why: Windows sshd kills the exec channel's process tree on close; WMI re-parents the detached relay to survive.
-  const quoted = (value: string): string => `"${value.replace(/"/g, '\\"')}"`
-  const relayCommandLine = [
-    quoted(nodePath),
-    quoted(relayScript),
-    '--detached',
-    '--grace-time',
-    String(graceTime),
-    '--sock-path',
-    quoted(sockPath),
-    '--credential-file',
-    quoted(credentialFile),
-    '--endpoint-dir',
-    quoted(endpointDir),
-    // Why: --log-file owns rotation; shell redirects still capture pre-JS boot/crash output.
-    '--log-file',
-    quoted(logFile),
-    ...(ripgrepPath ? ['--ripgrep-path', quoted(ripgrepPath)] : []),
-    `1>${quoted(logFile)}`,
-    `2>${quoted(errFile)}`
-  ].join(' ')
-  const wmiCommandLine = `cmd.exe /d /s /c "${relayCommandLine}"`
-  return commandWithNodePath(
-    hostPlatform,
-    nodePath,
-    remoteDir,
-    [
-      `$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${powerShellLiteral(wmiCommandLine)}; CurrentDirectory = ${powerShellLiteral(remoteDir)} }`,
-      `if ($result.ReturnValue -ne 0) { throw "Win32_Process.Create failed with $($result.ReturnValue)" }`
-    ].join('; ')
   )
 }
 

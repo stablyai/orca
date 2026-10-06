@@ -231,34 +231,60 @@ it('repairs only the matching owner when repo IDs and paths collide across hosts
   expect(projectHostSetupProjectionFromRepos([local, ssh]).projects).toHaveLength(1)
 })
 
-it.each(['ssh:build', 'runtime:peer'] as const)(
-  'keeps local metadata writes scoped when a same-id %s row comes first',
-  async (hostId) => {
-    const foreignIdentity = identity('https://github.com/foreign/app.git')
-    const foreignIcon = githubAvatarIcon({ owner: 'foreign', repo: 'app' })
-    const foreign = repo({
-      executionHostId: hostId,
-      gitRemoteIdentity: foreignIdentity,
-      repoIcon: foreignIcon
-    })
-    const local = repo({ gitRemoteIdentity: identity('https://github.com/old-local/app.git') })
-    const store = storeFor([foreign, local])
-    vi.mocked(probeGitRemoteIdentity).mockImplementation(async (_path, probeHostId) => ({
-      status: 'resolved',
-      identity: probeHostId === 'local' ? identity() : foreignIdentity
-    }))
-    await refresh(store)
-    expect(foreign.gitRemoteIdentity).toBe(foreignIdentity)
-    expect(foreign.repoIcon).toBe(foreignIcon)
-    expect(local.gitRemoteIdentity).toEqual(identity())
-    expect(local.repoIcon).toEqual(githubAvatarIcon({ owner: 'org-b', repo: 'app' }))
-    expect(store.updateRepo).toHaveBeenCalledExactlyOnceWith(
-      'app',
-      { gitRemoteIdentity: identity(), repoIcon: local.repoIcon },
-      'local'
-    )
+it('keeps local metadata writes scoped when a same-id ssh:build row comes first', async () => {
+  const foreignIdentity = identity('https://github.com/foreign/app.git')
+  const foreignIcon = githubAvatarIcon({ owner: 'foreign', repo: 'app' })
+  const foreign = repo({
+    executionHostId: 'ssh:build',
+    gitRemoteIdentity: foreignIdentity,
+    repoIcon: foreignIcon
+  })
+  const local = repo({ gitRemoteIdentity: identity('https://github.com/old-local/app.git') })
+  const store = storeFor([foreign, local])
+  vi.mocked(probeGitRemoteIdentity).mockImplementation(async (_path, probeHostId) => ({
+    status: 'resolved',
+    identity: probeHostId === 'local' ? identity() : foreignIdentity
+  }))
+  await refresh(store)
+  expect(foreign.gitRemoteIdentity).toBe(foreignIdentity)
+  expect(foreign.repoIcon).toBe(foreignIcon)
+  expect(local.gitRemoteIdentity).toEqual(identity())
+  expect(local.repoIcon).toEqual(githubAvatarIcon({ owner: 'org-b', repo: 'app' }))
+  expect(store.updateRepo).toHaveBeenCalledExactlyOnceWith(
+    'app',
+    { gitRemoteIdentity: identity(), repoIcon: local.repoIcon },
+    'local'
+  )
+})
+
+// Why this row is repaired where the `ssh:build` one above is not: a `runtime:` stamp reaches this
+// store only from a client addressing *this* host, so the files are here and `local` is the only
+// host that can answer for them (`getStoredRepoExecutionHostId`). Both rows are written, each
+// addressed by its own stamp, because that is what the store matches a write against.
+it('repairs a same-id runtime-addressed row under its own stamp', async () => {
+  const runtimeRow = repo({
+    executionHostId: 'runtime:env-a',
+    gitRemoteIdentity: identity('https://github.com/old-runtime/app.git'),
+    repoIcon: githubAvatarIcon({ owner: 'old-runtime', repo: 'app' })
+  })
+  const local = repo({ gitRemoteIdentity: identity('https://github.com/old-local/app.git') })
+  const store = storeFor([runtimeRow, local])
+  vi.mocked(probeGitRemoteIdentity).mockResolvedValue({ status: 'resolved', identity: identity() })
+  await refresh(store)
+  expect(probeGitRemoteIdentity).toHaveBeenCalledWith(
+    '/workspace/app',
+    'local',
+    expect.objectContaining({ signal: expect.any(AbortSignal) })
+  )
+  const repaired = {
+    gitRemoteIdentity: identity(),
+    repoIcon: githubAvatarIcon({ owner: 'org-b', repo: 'app' })
   }
-)
+  expect(runtimeRow).toMatchObject(repaired)
+  expect(local).toMatchObject(repaired)
+  expect(store.updateRepo).toHaveBeenCalledWith('app', repaired, 'runtime:env-a')
+  expect(store.updateRepo).toHaveBeenCalledWith('app', repaired, 'local')
+})
 
 it('does not write after a pending local probe becomes peer-owned', async () => {
   let answer: ((value: GitRemoteIdentityProbe) => void) | undefined

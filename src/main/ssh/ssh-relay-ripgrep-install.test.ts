@@ -30,7 +30,7 @@ vi.mock('../ripgrep/bundled-ripgrep-path', () => ({
 }))
 
 import type { SshConnection } from './ssh-connection'
-import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { getRemoteHostPlatform, joinRemotePath } from './ssh-remote-platform'
 import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 import { ensureRemoteBundledRipgrep, remoteRipgrepLayout } from './ssh-relay-ripgrep-install'
 
@@ -174,6 +174,85 @@ describe('ensureRemoteBundledRipgrep', () => {
     )
 
     expect(execScripts()[1]).toMatch(/^rm -rf '\/home\/me\/\.orca-remote\/ripgrep\/\.upload-/)
+  })
+
+  describe.each([
+    { platform: 'Linux', host: LINUX, home: '/home/me' },
+    { platform: 'Windows', host: WINDOWS, home: 'C:/Users/me user' }
+  ])('interrupted install on $platform', ({ host, home }) => {
+    it.each([
+      ['reference', 1, 0],
+      ['probe', 1, 0],
+      ['upload', 1, 1],
+      ['promotion', 2, 1],
+      ['cleanup', 2, 1]
+    ] as const)(
+      'preserves unconfirmed %s termination and starts no further operation',
+      async (phase, commands, uploads) => {
+        const error = Object.assign(new Error('Remote termination is unconfirmed'), {
+          sshChannelCloseConfirmed: false
+        })
+        if (phase === 'reference' || phase === 'probe') {
+          execCommandMock.mockRejectedValueOnce(error)
+        } else {
+          execCommandMock.mockResolvedValueOnce('ORCA-RG-STAGED\n')
+          if (phase === 'upload') {
+            uploadRelayDirectoryMock.mockRejectedValueOnce(error)
+          } else {
+            execCommandMock.mockRejectedValueOnce(error)
+            if (phase === 'cleanup') {
+              uploadRelayDirectoryMock.mockRejectedValueOnce(new Error('Upload failed'))
+            }
+          }
+        }
+
+        await expect(
+          ensureRemoteBundledRipgrep(connection(), host, home, {
+            relayDir:
+              phase === 'reference'
+                ? joinRemotePath(host, home, '.orca-remote', 'relay-1.2.3')
+                : undefined
+          })
+        ).rejects.toBe(error)
+
+        expect(execCommandMock).toHaveBeenCalledTimes(commands)
+        expect(uploadRelayDirectoryMock).toHaveBeenCalledTimes(uploads)
+      }
+    )
+
+    it.each(['upload', 'promotion'] as const)(
+      'removes the stage after confirmed %s termination and remains nonfatal',
+      async (phase) => {
+        const error = Object.assign(new Error('Remote operation stopped'), {
+          sshChannelCloseConfirmed: true
+        })
+        execCommandMock.mockResolvedValueOnce('ORCA-RG-STAGED\n')
+        if (phase === 'upload') {
+          uploadRelayDirectoryMock.mockRejectedValueOnce(error)
+        } else {
+          execCommandMock.mockRejectedValueOnce(error)
+        }
+        execCommandMock.mockResolvedValueOnce('')
+
+        await expect(ensureRemoteBundledRipgrep(connection(), host, home)).resolves.toBe('failed')
+
+        expect(execCommandMock).toHaveBeenCalledTimes(phase === 'upload' ? 2 : 3)
+        expect(execScripts().at(-1)).toContain(
+          host === WINDOWS ? 'Remove-Item -LiteralPath' : 'rm -rf'
+        )
+      }
+    )
+
+    it('keeps an ordinary stage cleanup failure nonfatal', async () => {
+      execCommandMock
+        .mockResolvedValueOnce('ORCA-RG-STAGED\n')
+        .mockRejectedValueOnce(new Error('Cleanup failed'))
+      uploadRelayDirectoryMock.mockRejectedValueOnce(new Error('Upload failed'))
+
+      await expect(ensureRemoteBundledRipgrep(connection(), host, home)).resolves.toBe('failed')
+
+      expect(execCommandMock).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('reports a failed size verification', async () => {

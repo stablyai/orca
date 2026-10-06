@@ -233,7 +233,7 @@ export class DaemonServer {
   }
 
   private isIdle(): boolean {
-    if (this.admission.inFlight > 0 || this.host.listSessions().length > 0) {
+    if (this.admission.inFlight > 0 || this.host.hasLiveSessions()) {
       return false
     }
     if (this.endpoint.lost) {

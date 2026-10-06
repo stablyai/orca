@@ -21,4 +21,7 @@ export type WslRelayDistroState = {
   restartTimer?: ReturnType<typeof setTimeout>
   reinstallTimer?: ReturnType<typeof setTimeout>
   lastInstallAt?: number
+  lastOpenCodeSettings?: string
+  lastAttemptOpenCodeSettings?: string
+  lastInstallMux?: SshChannelMultiplexer
 }

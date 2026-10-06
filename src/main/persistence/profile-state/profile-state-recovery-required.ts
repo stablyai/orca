@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { hasStateBackup } from './legacy-json/profile-state-legacy-backup-path'
 import { profileStateJsonExportPaths } from './legacy-json/profile-state-export-path'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
+import { hasProfileStateAuthorityMarker } from './profile-state-authority-marker'
 
 type ProfileStateRecoveryLocation = {
   dataFile: string
@@ -12,7 +13,11 @@ type ProfileStateRecoveryLocation = {
 export class ProfileStateAuthorityBootstrapError extends Error {
   readonly code = 'ambiguous-profile-state' as const
 
-  constructor(message: string) {
+  /** `diverged-json`: both copies are readable, so the user can pick one at startup. */
+  constructor(
+    message: string,
+    readonly divergence?: 'diverged-json'
+  ) {
     super(message)
     this.name = 'ProfileStateAuthorityBootstrapError'
   }
@@ -59,23 +64,24 @@ export class ProfileStateRecoveryRequiredError extends Error {
   }
 }
 
-/** A retained migration export proves that absent SQLite is not a fresh profile. */
+/** Retained authority evidence rules out treating missing SQLite as a fresh profile. */
 export function assertNoRetainedProfileStateExports(options: ProfileStateRecoveryLocation): void {
-  let hasRetainedExport: boolean
+  let hasRetainedEvidence: boolean
   try {
-    hasRetainedExport =
+    hasRetainedEvidence =
+      hasProfileStateAuthorityMarker(options.databaseFile) ||
       profileStateJsonExportPaths(options.dataFile).length > 0 ||
       profileStateDatabaseBackups(options.databaseFile).length > 0
   } catch {
     throw new ProfileStateRecoveryRequiredError(
       options,
-      new Error('Could not enumerate retained profile state exports')
+      new Error('Could not inspect retained profile state authority evidence')
     )
   }
-  if (hasRetainedExport) {
+  if (hasRetainedEvidence) {
     throw new ProfileStateRecoveryRequiredError(
       options,
-      new Error('SQLite profile state is missing while retained migration exports exist')
+      new Error('SQLite profile state is missing while retained authority evidence exists')
     )
   }
 }

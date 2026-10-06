@@ -7,12 +7,12 @@
 // restored thread), and every reading of those rewrites as "the work is done" dropped chats that
 // were owed a resume.
 //
-// An offer ends only by the user's own actions. The ones this predicate can see — a newer message
-// of theirs in that chat, or the conversation forked — are reported back as `superseded` so the
-// caller DELETES the record rather than filtering it forever. What remains are structural checks
-// that are not about work at all: the record still exists and this build supports it, and the
-// lease is free.
+// An offer ends when the chat moves on after the restart — another message accepted, or its agent
+// started — or when the conversation forked. Both are reported back as `superseded` so the caller
+// DELETES the record rather than filtering it forever. What remains are structural checks that are not about work at all: the record still
+// exists and this build supports it, and the lease is free.
 
+import type { AgentSessionAnyRefusalDetails } from '../../../shared/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   agentSessionProviderHandleChainHead,
@@ -57,16 +57,30 @@ export type StructuredAgentSessionResumeFailure = StructuredAgentSessionResumeCa
   outcome: AgentSessionResumeFailureOutcome
   /** The host's or provider's refusal code, verbatim, so it can be quoted in a report. */
   reason: string
+  /** The refusal's details beside its code in `reason`; absent on older records and non-refusals. */
+  details?: AgentSessionAnyRefusalDetails
   /** Whether naming it in an action would run it again: whether it is still an offer. A
    *  continuation the chat already holds, or the user having moved on, makes a retry a no-op no
    *  matter what the reason says. */
   retryable: boolean
 }
 
+/** The agents whose offers a caller may see and act on; absent, every agent this host runs. A
+ *  client too old to show an agent's chat never lists, resumes, or dismisses that agent's offers. */
+export type StructuredAgentSessionRestartAudience = (agent: string) => boolean
+
+/** The rows `audience` may see; all of them without one. */
+export function restartRowsFor<T extends { agent: string }>(
+  rows: T[],
+  audience: StructuredAgentSessionRestartAudience | undefined
+): T[] {
+  return audience ? rows.filter((row) => audience(row.agent)) : rows
+}
+
 export type StructuredAgentSessionResumableSet = {
   candidates: StructuredAgentSessionResumeCandidate[]
-  /** Markers the chat has provably moved past — a newer user message, or a forked conversation.
-   *  Every ending deletes: the caller retires these rather than re-filtering them forever. */
+  /** Markers the chat has provably moved past, or whose conversation forked. Every ending deletes:
+   *  the caller retires these rather than re-filtering them forever. */
   superseded: AgentSessionResumeMarker[]
 }
 
@@ -75,8 +89,10 @@ export type StructuredAgentSessionResumeSetInput = {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   supportsRecord: (record: AgentSessionRecord) => boolean
   latestPrompt: (sessionId: string) => string
-  /** Undefined when the chat's journal is not readable here, which decides nothing. */
-  latestUserItemId: (sessionId: string) => string | null | undefined
+  /** Whether the chat moved on since the offer was taken; false when its journal is not open here. */
+  movedOn: (marker: AgentSessionResumeMarker) => boolean
+  /** Whether the chat was saved by a newer Orca: its whole database, or its journal's open. */
+  savedByNewerOrca: (sessionId: string) => boolean
   /**
    * Whether the lease must be free.
    *
@@ -103,7 +119,7 @@ export function structuredAgentSessionResumableSet(
       continue
     }
     // A conversation that FORKED since teardown is not the one we marked, and can never be again:
-    // deleted like a newer message, so it cannot sit unseen forever. Compared by identity root,
+    // deleted, so it cannot sit unseen forever. Compared by identity root,
     // because a resume legitimately advances Claude's leaf and that is not a fork.
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     if (!head) {
@@ -113,11 +129,13 @@ export function structuredAgentSessionResumableSet(
       superseded.push(marker)
       continue
     }
-    // The user moving on is the one thing that withdraws the offer. Anything the provider does on
-    // its own after reattaching — a turn it opens, a prompt, restated rows — is not.
-    const latestUserItemId = input.latestUserItemId(marker.sessionId)
-    if (latestUserItemId !== undefined && latestUserItemId !== marker.latestUserItemId) {
+    if (input.movedOn(marker)) {
       superseded.push(marker)
+      continue
+    }
+    // Nothing here can continue a chat a newer Orca saved, so it is not offered. Its offer is kept,
+    // not spent: the offers file is shared by every Orca on the host, and the newer one can act on it.
+    if (input.savedByNewerOrca(marker.sessionId)) {
       continue
     }
     const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)

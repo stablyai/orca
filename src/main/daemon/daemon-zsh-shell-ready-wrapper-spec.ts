@@ -14,8 +14,7 @@ export function getDaemonZshWrapperSpec(): ZshStartupHookSpec {
       managedWslCli: false,
       agentTeamsPath: true,
       remoteCliBinDir: false,
-      codexHome: true,
-      codexLaunchPreflight: true
+      codexHome: true
     }
   }
 }

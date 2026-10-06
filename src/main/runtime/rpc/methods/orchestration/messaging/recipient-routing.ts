@@ -2,9 +2,15 @@ import type { LegacyAdoptedMailboxOwner, OrchestrationDb } from '../../../../orc
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { DispatchContextRow, DispatchStatus } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { readStructuredAgentSessionRecord } from '../../../../structured-worker-authority'
-import { structuredWorkerHostScope } from '../../../../structured-worker-identity'
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
+import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
+import { CURRENT_CONTRACT_VERSION } from '../../../../orchestration/db/contract-constants'
+import { readAgentSessionRecordStore } from '../../../../orchestration/structured-session-lineage'
+import {
+  readSessionRecipient,
+  refuseUndeliverableSessionRecipient,
+  type SessionRecipientRefusal
+} from './session-recipient'
 
 const ACTIVE_DISPATCH_STATUSES: readonly DispatchStatus[] = ['pending', 'dispatched']
 
@@ -15,20 +21,123 @@ const ACTIVE_DISPATCH_STATUSES: readonly DispatchStatus[] = ['pending', 'dispatc
  * mailbox, so accepting the message reports success for a delivery that cannot
  * happen. Federated targets keep their own liveness check.
  */
-export function assertDispatchMailboxDeliverable(db: OrchestrationDb, dispatchId: string): void {
+export function assertDispatchMailboxDeliverable(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  dispatchId: string
+): void {
   const dispatch = db.getDispatchContextById(dispatchId)
   if (!dispatch || ACTIVE_DISPATCH_STATUSES.includes(dispatch.status)) {
     return
   }
+  const recipientRun = currentDispatchAssigneeRun(runtime, db, dispatch)?.id ?? dispatch.run_id
   throw new OrchestrationError(
     'dispatch_inactive',
-    `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${dispatch.run_id} instead, or start a new Dispatch for follow-up work.`
+    `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${recipientRun} instead, or start a new Dispatch for follow-up work.`
   )
+}
+
+// A saved pane alone cannot identify its occupant after reuse.
+export function currentDispatchAssigneeRun(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow
+) {
+  if (
+    dispatch.contract_version !== CURRENT_CONTRACT_VERSION ||
+    db.getFederatedDispatch(dispatch.id)
+  ) {
+    return undefined
+  }
+  if (dispatch.assignee_orca_session_id !== null) {
+    return db.getCurrentRunForCoordinator({
+      terminalHandle: dispatch.assignee_handle,
+      paneKey: null,
+      orcaSessionId: dispatch.assignee_orca_session_id
+    })
+  }
+  if (dispatch.assignee_handle === null) {
+    return undefined
+  }
+  const paneKey = runtime.getLiveTerminalPaneKey(dispatch.assignee_handle)
+  if (
+    !paneKey ||
+    (dispatch.assignee_pane_key && !isEquivalentPaneKey(dispatch.assignee_pane_key, paneKey)) ||
+    (dispatch.process_incarnation !== null &&
+      runtime.getTerminalProcessIncarnation(dispatch.assignee_handle) !==
+        dispatch.process_incarnation)
+  ) {
+    return undefined
+  }
+  return db.getCurrentRunForPane(paneKey)
+}
+
+// Nested coordinators receive new mail where their current Run check waits.
+export function resolveRunBoundDispatchRecipient(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  dispatchId: string,
+  explicitRunId?: string
+): { to: string; runId: string; warning: SendRecipientWarning } | undefined {
+  const dispatch = db.getDispatchContextById(dispatchId)
+  if (!dispatch || !ACTIVE_DISPATCH_STATUSES.includes(dispatch.status)) {
+    return undefined
+  }
+  const boundRun = currentDispatchAssigneeRun(runtime, db, dispatch)
+  if (!boundRun || boundRun.id === dispatch.run_id) {
+    return undefined
+  }
+  const recipient = `dispatch:${dispatchId}`
+  const mismatch = runMismatch(recipient, boundRun.id, explicitRunId)
+  if (mismatch && !mismatch.ok) {
+    throw new OrchestrationError(mismatch.code, mismatch.message)
+  }
+  return {
+    to: `run:${boundRun.id}`,
+    runId: boundRun.id,
+    warning: {
+      code: 'recipient_run_bound_redirect',
+      recipient,
+      message: `${recipient} is assigned to a terminal that now coordinates Run ${boundRun.id}; queued for run:${boundRun.id}, the mailbox that terminal reads.`
+    }
+  }
+}
+
+// Replies share send routing; unresolved historical senders keep their original address.
+export function resolveReplyRecipient(params: {
+  runtime: OrcaRuntimeService
+  db: OrchestrationDb
+  originalFrom: string
+  originalRunId: string | undefined
+}): { to: string; runId: string | undefined } {
+  const { runtime, db, originalFrom, originalRunId } = params
+  const unchanged = { to: originalFrom, runId: originalRunId }
+  if (originalFrom.startsWith('run:')) {
+    return { to: originalFrom, runId: originalFrom.slice('run:'.length) }
+  }
+  if (originalFrom.startsWith('dispatch:')) {
+    const dispatchId = originalFrom.slice('dispatch:'.length)
+    // Federation owns its own recipient and liveness checks.
+    if (db.getFederatedDispatch(dispatchId)) {
+      return unchanged
+    }
+    assertDispatchMailboxDeliverable(runtime, db, dispatchId)
+    const runBound = resolveRunBoundDispatchRecipient(runtime, db, dispatchId)
+    return runBound ?? unchanged
+  }
+  const recipient = resolveBareOrchestrationRecipient({
+    runtime,
+    db,
+    handle: originalFrom,
+    senderRunId: originalRunId
+  })
+  return recipient.ok ? { to: recipient.to, runId: recipient.runId ?? originalRunId } : unchanged
 }
 
 export type SendRecipientWarning = {
   code:
     | 'legacy_terminal_recipient'
+    | 'recipient_run_bound_redirect'
     | 'recipient_unreachable'
     | 'recipient_ambiguous'
     | 'recipient_run_mismatch'
@@ -45,7 +154,11 @@ export type BareRecipientResolution =
     }
   | {
       ok: false
-      code: 'terminal_not_found' | 'recipient_ambiguous' | 'recipient_run_mismatch'
+      code:
+        | 'terminal_not_found'
+        | 'recipient_ambiguous'
+        | 'recipient_run_mismatch'
+        | SessionRecipientRefusal['code']
       message: string
       warning: SendRecipientWarning
     }
@@ -59,7 +172,12 @@ export function resolveBareOrchestrationRecipient(params: {
   legacyAdoptedMailboxOwner?: LegacyAdoptedMailboxOwner | null
 }): BareRecipientResolution {
   const { runtime, db } = params
-  const party = resolveOrchestrationParty(params.handle, db)
+  const sessionStore = readAgentSessionRecordStore()
+  const session = readSessionRecipient(params.handle, sessionStore)
+  if (session && 'code' in session) {
+    return refused(params.handle, session)
+  }
+  const party = resolveOrchestrationParty(session?.address ?? params.handle, db)
   const handle = party.address
   const paneKey =
     party.terminalHandle === null
@@ -103,6 +221,13 @@ export function resolveBareOrchestrationRecipient(params: {
     return mismatch ?? { ok: true, to: `run:${selectedRunId}`, runId: selectedRunId }
   }
 
+  if (session) {
+    const refusal = refuseUndeliverableSessionRecipient(session, sessionStore, db)
+    return refusal
+      ? refused(params.handle, refusal)
+      : { ok: true, to: handle, runId: params.senderRunId }
+  }
+
   if (paneKey) {
     return {
       ok: true,
@@ -116,24 +241,21 @@ export function resolveBareOrchestrationRecipient(params: {
     }
   }
 
-  const chatSessionId = party.terminalHandle === null ? party.orcaSessionId : null
-  if (chatSessionId !== null) {
-    const record = readStructuredAgentSessionRecord(chatSessionId)
-    // Unlike a terminal handle, a session address outlives its process, so its direct mail is durable.
-    if (record && structuredWorkerHostScope(record.location)) {
-      return { ok: true, to: handle, runId: params.senderRunId }
-    }
-  }
-
-  const message =
-    chatSessionId !== null
-      ? `Agent session ${chatSessionId} does not run on this host and has no durable Run/Dispatch mailbox.`
-      : `Terminal ${handle} has no live pane or durable Run/Dispatch mailbox.`
+  const message = `Terminal ${handle} has no live pane or durable Run/Dispatch mailbox.`
   return {
     ok: false,
     code: 'terminal_not_found',
     message,
     warning: { code: 'recipient_unreachable', recipient: handle, message }
+  }
+}
+
+function refused(recipient: string, refusal: SessionRecipientRefusal): BareRecipientResolution {
+  return {
+    ok: false,
+    code: refusal.code,
+    message: refusal.message,
+    warning: { code: 'recipient_unreachable', recipient, message: refusal.message }
   }
 }
 

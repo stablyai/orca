@@ -1,3 +1,5 @@
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
   agentSessionPromptQuestions,
@@ -12,12 +14,16 @@ import type {
   AgentJournalQuestionItem,
   AgentJournalResolution
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionPromptResult } from '../../../shared/agent-session-wire'
+import {
+  refuse,
+  type AgentSessionPromptResult,
+  type AgentSessionRefusalReason
+} from '../../../shared/agent-session-wire'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
 } from './structured-agent-session-adapter'
-import { validatePendingPrompt } from './structured-agent-session-prompt-state'
+import { settledPrompt, validatePendingPrompt } from './structured-agent-session-prompt-state'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
 export type AgentSessionPromptRequest = {
@@ -29,8 +35,11 @@ export type AgentSessionPromptRequest = {
   answers?: AgentSessionQuestionAnswer[]
 }
 
-function invalid(message: string): TurnOutcome<never> {
-  return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
+function invalid(
+  reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
+  message: string
+): TurnOutcome<never> {
+  return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
 /** The one place a client's choice is read; an answer an older client packed into `optionId` is unpacked here, once. */
@@ -61,18 +70,37 @@ function readPromptChoice(
     : { response: { kind: 'answers', answers }, selectedOptionId }
 }
 
+/** The item is already resolved with the choice this request makes: the answer holds, so say so. */
+function resolvedWithSameChoice(
+  ctx: AgentSessionTurnContext,
+  input: AgentSessionPromptRequest
+): AgentSessionPromptResult | null {
+  const settled = settledPrompt(ctx, input.itemId)
+  if (settled?.prompt.kind !== input.kind || settled.prompt.resolution.state !== 'resolved') {
+    return null
+  }
+  const { item, prompt } = settled
+  const choice = readPromptChoice(prompt, input)
+  return choice?.selectedOptionId === prompt.resolution.selectedOptionId
+    ? { itemId: item.itemId, revision: item.revision, resolution: prompt.resolution }
+    : null
+}
+
 export async function performPrompt(
   ctx: AgentSessionTurnContext,
   input: AgentSessionPromptRequest
 ): Promise<TurnOutcome<AgentSessionPromptResult>> {
   const validated = validatePendingPrompt(ctx, input)
   if (!validated.ok) {
-    return validated
+    // A re-click after a lost reply is a new operation; the prompt's state answers it.
+    const held = resolvedWithSameChoice(ctx, input)
+    return held ? { ok: true, value: held } : validated
   }
   const { prompt } = validated
   const choice = readPromptChoice(prompt, input)
   if (!choice) {
     return invalid(
+      'optionRejected',
       input.optionId !== undefined
         ? `Option ${input.optionId} is not offered by item ${input.itemId}.`
         : `The answers do not match the questions on item ${input.itemId}.`
@@ -81,7 +109,7 @@ export async function performPrompt(
   const { response } = choice
   const identity = parseAgentJournalItemKey(input.itemId)
   if (!identity) {
-    return invalid(`Item id ${input.itemId} is not a well-formed item key.`)
+    return invalid('requestMalformed', `Item id ${input.itemId} is not a well-formed item key.`)
   }
 
   const resolution: AgentJournalResolution = {
@@ -103,32 +131,31 @@ export async function performPrompt(
         committed.item = await ctx.journal.appendItem(
           identity,
           { ...prompt, resolution },
-          {
-            fence: ctx.fence
-          }
+          // A revision: the prompt keeps the turn it was raised in.
+          { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
         )
       }
     })
   } catch (error) {
-    if (
-      !committed.item &&
-      (error instanceof AgentSessionPromptUnavailableError ||
-        error instanceof AgentSessionPromptAnswerRejectedError)
-    ) {
-      return invalid(error.message)
+    if (!committed.item && error instanceof AgentSessionPromptUnavailableError) {
+      return invalid('promptGone', error.message)
+    }
+    if (!committed.item && error instanceof AgentSessionPromptAnswerRejectedError) {
+      return invalid('optionRejected', error.message)
     }
     if (!committed.item) {
       throw error
     }
+    // The adapter's error is Orca's; the row says only what the user needs to know.
     await ctx.journal.appendItem(
       { provider: 'orca', clientMessageId: `${input.itemId}#delivery` },
       {
         kind: 'status',
-        text: `Your answer was recorded but the agent did not confirm it: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        ...agentSessionFailureWords(agentSessionFailureFact('answerUnconfirmed'), {
+          surface: 'row'
+        })
       },
-      { fence: ctx.fence }
+      { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
     )
   }
   const appended = committed.item

@@ -46,7 +46,7 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     setQuickCommandEditorHostId,
     setQuickCommandEditorOpen,
     setSessionRestoredBannerPaneIds,
-    setSessionStateSaveFailureOpen,
+    setSessionStateSaveFailureMessage,
     setShouldMeasureHiddenStartup,
     setTerminalError,
     setTerminalErrorsByPaneId,
@@ -114,7 +114,7 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
   )
 
   const openDiskSpaceAnalyzer = useCallback(() => {
-    setSessionStateSaveFailureOpen(false)
+    setSessionStateSaveFailureMessage(null)
     openSpacePage()
     void refreshWorkspaceSpace().catch((error: unknown) => {
       console.warn('Failed to refresh Space Analyzer after terminal session save failure:', error)

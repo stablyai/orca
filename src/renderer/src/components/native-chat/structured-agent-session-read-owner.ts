@@ -222,8 +222,8 @@ function createReadOwner(
       apply({ type: 'loading' })
     }
     const transport = startStructuredAgentSessionReadTransport({
-      applyEvent: (event) => apply({ type: 'event', event }),
-      applyError: (message) => apply({ type: 'error', message }),
+      applyEvent: (event, options) => apply({ type: 'event', event, ...options }),
+      applyError: (message, refusal) => apply({ type: 'error', message, refusal }),
       getCursor: () => snapshot.state.cursor,
       onHistoryReadInvalidated: invalidateOlderPages,
       hydrate: snapshot.state.epoch === null ? hydrate : undefined,

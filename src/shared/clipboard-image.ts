@@ -62,3 +62,9 @@ export function clipboardImageThumbnailSize({
     width: Math.max(1, Math.round(width * scale))
   }
 }
+
+/** Clipboard format lists (Electron `availableFormats`, browser `ClipboardItem.types`)
+ *  name image data by MIME type, so presence needs no decode. */
+export function clipboardFormatsIncludeImage(formats: readonly string[]): boolean {
+  return formats.some((format) => format.startsWith('image/'))
+}

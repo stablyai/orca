@@ -357,11 +357,11 @@ describe('OrcaRuntimeService', () => {
 
   it('calls foreground confirmation with its controller receiver', async () => {
     const getForegroundProcess = vi.fn(async () => 'powershell.exe')
-    const confirmForegroundProcess = vi.fn(
-      async function (this: { getForegroundProcess: typeof getForegroundProcess }) {
-        return this.getForegroundProcess === getForegroundProcess ? 'codex' : null
-      }
-    )
+    const confirmForegroundProcess = vi.fn(async function (this: {
+      getForegroundProcess: typeof getForegroundProcess
+    }) {
+      return this.getForegroundProcess === getForegroundProcess ? 'codex' : null
+    })
     const { runtime, handle } = await createExplicitAgentStatusHarness({
       getForegroundProcess,
       confirmForegroundProcess

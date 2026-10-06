@@ -7,11 +7,11 @@
  * Mobile, the CLI and orchestration got an agent and no prompt. The host owns the PTY, so it can
  * write into one whether or not any window is open on it.
  *
- * This is the half argv cannot serve. An agent whose CLI takes the prompt as an argument gets it on
- * the launch command instead (`agentPromptRidesLaunchCommand`), where it is in the process's argv
- * at exec time and no readiness race exists. What reaches here is a `stdin-after-start` agent,
- * whose CLI accepts no such argument, and a reused terminal, whose process was already running
- * before this launch existed.
+ * This is the half the launch command cannot serve. An argv agent's prompt rides that command when
+ * its typed line can carry it (`startup-line-prompt-carry`), and then no readiness race exists. What
+ * reaches here is a `stdin-after-start` agent, whose CLI accepts no such argument; a prompt too long
+ * or multi-line for the typed line; and a reused terminal, whose process was already running before
+ * this launch existed. Readiness is `waitForLaunchedAgentComposer`, the one the worker start uses.
  *
  * Nothing here writes to a PTY itself. `sendTerminalAgentPrompt` is the runtime's one agent-prompt
  * writer: it frames the text as a bracketed paste so multi-line and special-character content is
@@ -22,13 +22,64 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
 import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
+import {
+  waitForLaunchedAgentComposer,
+  type LaunchedAgentReadinessRuntime
+} from '../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import {
+  createLaunchedAgentWriteGuard,
+  type LaunchedAgentWriteGuardRuntime
+} from '../../launched-agent-write-guard'
 
 /** The same budget orchestration gives a worker to reach its composer before dispatching to it. */
 const AGENT_READY_TIMEOUT_MS = 60_000
+/** How often a launch re-checks a blocking prompt the user may still dismiss. */
+const BLOCKED_RECHECK_MS = 1_000
 
-type TerminalPromptRuntime = Pick<OrcaRuntimeService, 'waitForTerminal' | 'sendTerminalAgentPrompt'>
+type TerminalPromptRuntime = LaunchedAgentReadinessRuntime &
+  LaunchedAgentWriteGuardRuntime &
+  Pick<OrcaRuntimeService, 'sendTerminalAgentPrompt'>
+
+type ReadinessClock = { now: () => number; sleep: (ms: number) => Promise<void> }
+
+const REAL_CLOCK: ReadinessClock = {
+  now: () => Date.now(),
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * The launched agent's readiness, waiting out a blocking prompt until the budget ends.
+ *
+ * A trust or update dialog is the user's to answer, and they often do within seconds; giving up on
+ * the first sight of it dropped a prompt the pane was about to accept. A dialog still up when the
+ * budget ends is reported as it is, and nothing is written into it.
+ */
+async function waitThroughBlockingPrompts(
+  runtime: TerminalPromptRuntime,
+  handle: string,
+  agent: TuiAgent,
+  freshLaunch: boolean,
+  clock: ReadinessClock
+): Promise<RuntimeTerminalWait | undefined> {
+  const deadline = clock.now() + AGENT_READY_TIMEOUT_MS
+  for (;;) {
+    // At least 1 ms: the terminal wait reads 0 as "use the 5-minute default", and a late sleep can
+    // land past the deadline.
+    const timeoutMs = Math.max(1, deadline - clock.now())
+    const wait = freshLaunch
+      ? await waitForLaunchedAgentComposer(runtime, handle, agent, timeoutMs)
+      : // A reused pane was not freshly launched: its composer marker may be long gone.
+        await runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs })
+    if (!wait?.blockedReason || wait.satisfied || deadline - clock.now() <= BLOCKED_RECHECK_MS) {
+      return wait
+    }
+    await clock.sleep(BLOCKED_RECHECK_MS)
+  }
+}
 
 /**
  * Whether the text reached the pane.
@@ -47,18 +98,28 @@ type TerminalPromptRuntime = Pick<OrcaRuntimeService, 'waitForTerminal' | 'sendT
 export async function deliverTerminalAgentLaunchPrompt(args: {
   runtime: TerminalPromptRuntime
   handle: string
+  agent: TuiAgent
+  /** False for a reused terminal, whose agent was already running before this launch. */
+  freshLaunch: boolean
   text: string
+  clock?: ReadinessClock
 }): Promise<boolean> {
   if (args.text.trim().length === 0) {
     return false
   }
+  // Before the paste and again before Enter, for a reused pane too: a ready signal can come from a
+  // shell whose agent exited, so only a read that finds the agent in front lets the text through.
+  const guard = createLaunchedAgentWriteGuard(args.runtime, args.agent)
   try {
-    const wait = await args.runtime.waitForTerminal(args.handle, {
-      condition: 'tui-idle',
-      timeoutMs: AGENT_READY_TIMEOUT_MS
-    })
-    // An unsatisfied wait is a composer that never opened — a trust prompt, an update prompt, a
-    // dead process. Pasting anyway would answer whatever question is on screen with the prompt.
+    const wait = await waitThroughBlockingPrompts(
+      args.runtime,
+      args.handle,
+      args.agent,
+      args.freshLaunch,
+      args.clock ?? REAL_CLOCK
+    )
+    // An unsatisfied wait is a composer that never opened — a dialog left up, a dead process, an
+    // agent that showed no readiness. Pasting anyway would answer whatever is on screen with it.
     if (wait && !wait.satisfied) {
       console.warn(
         `[agent-launch] the terminal agent did not become ready (${wait.status}); its launch prompt was not delivered`
@@ -66,6 +127,10 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       return false
     }
     const sent = await args.runtime.sendTerminalAgentPrompt(args.handle, args.text, {
+      inputKind: 'launch',
+      // A fresh launch's composer was just seen ready; a reused pane's state is only inferred.
+      composerReady: args.freshLaunch,
+      beforeWrite: guard.beforeWrite,
       // Paired: together these take the queued path, which settles an unobserved turn start into
       // an `input_accepted` receipt rather than raising it. Without the id the write is verified
       // strictly and a slow first turn throws.
@@ -85,5 +150,7 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       error
     )
     return false
+  } finally {
+    guard.dispose()
   }
 }

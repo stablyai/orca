@@ -10,12 +10,16 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RenderRow } from '../listing/render-row'
-import { getWorktreeLineageGroupKey } from '../grouping/group-keys'
+import { getHostSectionCollapseKey } from '../../host-section-collapse'
+import { getWorktreeLineageGroupKey, PINNED_GROUP_KEY } from '../grouping/group-keys'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
 import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
 import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
-import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
+import {
+  getHostScopedWorktreeLineageInputs,
+  getWorktreeLineageAncestors
+} from '../../worktree-lineage-projection'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
 import { getPinnedWorktreeRevealCollapsedGroupKeys } from './reveal-ancestors'
 
@@ -57,6 +61,9 @@ export function expandGroupsForWorktreeReveal(
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): void {
+  const hostScopedGroups = args.renderRows.some(
+    (row) => row.type === 'host-header' || (row.type === 'header' && row.collapseKey !== undefined)
+  )
   const folderGroupKeys = getFolderWorkspaceRevealGroupKeys(
     worktreeId,
     args.folderWorkspaces,
@@ -64,7 +71,8 @@ export function expandGroupsForWorktreeReveal(
     {
       groupBy: args.groupBy,
       workspaceStatuses: args.workspaceStatuses,
-      defaultHostId: args.defaultHostId
+      defaultHostId: args.defaultHostId,
+      hostScopedGroups
     }
   )
   if (folderGroupKeys.length > 0) {
@@ -84,29 +92,21 @@ export function expandGroupsForWorktreeReveal(
     return
   }
   const targetRepo = args.repoMap.get(targetWorktree.repoId)
-  const hostGroupKey = `host:${getWorktreeExecutionHostId(targetWorktree, targetRepo, args.defaultHostId)}`
+  const targetHostId = getWorktreeExecutionHostId(targetWorktree, targetRepo, args.defaultHostId)
+  const hostGroupKey = `host:${targetHostId}`
   if (args.collapsedGroups.has(hostGroupKey)) {
     args.toggleGroup(hostGroupKey)
   }
 
-  const hostWorktreeMap = new Map<string, Worktree>()
-  const hostLineageById: Record<string, WorktreeLineage> = {}
-  for (const worktree of args.worktrees) {
-    if (executionHostId && worktree.hostId && worktree.hostId !== executionHostId) {
-      continue
-    }
-    hostWorktreeMap.set(worktree.id, worktree)
-    const projected = args.worktreeLineageById[worktree.id]
-    const inline = (worktree as Worktree & { lineage?: WorktreeLineage | null }).lineage
-    const lineage = projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
-    if (lineage) {
-      hostLineageById[worktree.id] = lineage
-    }
-  }
+  const hostLineage = getHostScopedWorktreeLineageInputs(
+    args.worktrees,
+    args.worktreeLineageById,
+    executionHostId
+  )
   for (const parent of getWorktreeLineageAncestors(
     targetWorktree,
-    hostLineageById,
-    hostWorktreeMap
+    hostLineage.lineageById,
+    hostLineage.worktreeMap
   )) {
     const lineageGroupKey = getWorktreeLineageGroupKey(parent)
     if (args.collapsedGroups.has(lineageGroupKey)) {
@@ -124,6 +124,9 @@ export function expandGroupsForWorktreeReveal(
     )
       ? getPinnedWorktreeRevealCollapsedGroupKeys({
           worktree: targetWorktree,
+          groupKey: hostScopedGroups
+            ? getHostSectionCollapseKey(PINNED_GROUP_KEY, targetHostId)
+            : undefined,
           collapsedGroups: args.collapsedGroups,
           inPinnedSection: true
         })
@@ -136,7 +139,7 @@ export function expandGroupsForWorktreeReveal(
           args.settings,
           args.projectGroups,
           args.projectGrouping
-        )
+        ).map((key) => (hostScopedGroups ? getHostSectionCollapseKey(key, targetHostId) : key))
   for (const groupKey of groupKeys) {
     if (args.collapsedGroups.has(groupKey)) {
       args.toggleGroup(groupKey)

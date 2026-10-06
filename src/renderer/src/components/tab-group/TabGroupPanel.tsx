@@ -1,4 +1,4 @@
-import { Suspense, useMemo } from 'react'
+import { Suspense, useCallback, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { Ellipsis, X } from 'lucide-react'
@@ -18,6 +18,7 @@ import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
+import { registerTabGroupBody } from './tab-group-body-geometry'
 import { translate } from '@/i18n/i18n'
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
@@ -28,12 +29,18 @@ const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
+/** Who renders this group's tab strip: the panel itself ('attached', the main surface), or the
+ *  host shell ('external', the floating panel's titlebar strip). */
+export type TabGroupPanelTabStrip = 'attached' | 'external'
+
 export default function TabGroupPanel({
   groupId,
   worktreeId,
   isVisible,
   isFocused,
   hasSplitGroups,
+  tabStrip = 'attached',
+  markdownAnnotationsEnabled = true,
   touchesRightEdge,
   touchesLeftEdge,
   touchesBottomEdge = false,
@@ -50,6 +57,9 @@ export default function TabGroupPanel({
   isVisible: boolean
   isFocused: boolean
   hasSplitGroups: boolean
+  tabStrip?: TabGroupPanelTabStrip
+  /** Off for scratch workspaces (the floating panel) whose markdown is not a review surface. */
+  markdownAnnotationsEnabled?: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
   touchesBottomEdge?: boolean
@@ -93,6 +103,20 @@ export default function TabGroupPanel({
     },
     disabled: !isTabDragActive
   })
+  const setBodyRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      setBodyDropRef(node)
+      if (!node) {
+        return undefined
+      }
+      const unregisterBody = registerTabGroupBody(groupId, node)
+      return () => {
+        unregisterBody()
+        setBodyDropRef(null)
+      }
+    },
+    [groupId, setBodyDropRef]
+  )
   // Why: per-group anchor-name lets the worktree-level overlay position panes via CSS anchor positioning, so moving a tab between groups re-targets the anchor instead of remounting xterm (loses alt-screen TUI state) or reloading `<webview>`.
   const bodyAnchorName = tabGroupBodyAnchorName(groupId)
   // Why: memoize so a fresh style object each render doesn't break downstream memoization keyed on referential equality.
@@ -245,96 +269,100 @@ export default function TabGroupPanel({
     >
       {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
       {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
-      <div
-        className="h-[32px] shrink-0 border-b border-border bg-card"
-        data-tab-group-strip-id={groupId}
-        data-terminal-focus-release-surface="true"
-        data-worktree-id={worktreeId}
-      >
-        <div className="flex h-full items-stretch pr-1.5">
-          {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
-          {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+      {/* Why absent (not hidden) for an 'external' host: the floating panel's titlebar owns the one
+          strip, and a mounted second strip would register duplicate sortables in the drag scope. */}
+      {tabStrip !== 'attached' ? null : (
+        <div
+          className="h-[32px] shrink-0 border-b border-border bg-card"
+          data-tab-group-strip-id={groupId}
+          data-terminal-focus-release-surface="true"
+          data-worktree-id={worktreeId}
+        >
+          <div className="flex h-full items-stretch pr-1.5">
+            {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
+            {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+              <div
+                className="shrink-0"
+                style={
+                  {
+                    width: 'var(--collapsed-sidebar-header-width)',
+                    WebkitAppRegion: 'no-drag'
+                  } as React.CSSProperties
+                }
+              />
+            ) : null}
+            <div className="min-w-0 flex-1 h-full">{tabBar}</div>
             <div
-              className="shrink-0"
-              style={
-                {
-                  width: 'var(--collapsed-sidebar-header-width)',
-                  WebkitAppRegion: 'no-drag'
-                } as React.CSSProperties
-              }
-            />
-          ) : null}
-          <div className="min-w-0 flex-1 h-full">{tabBar}</div>
-          <div
-            className="ml-1.5 flex shrink-0 items-center gap-0.5"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            <div className={focusedActionChromeClassName}>
-              {isFocused ? (
-                <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
-              ) : null}
-              {isFocused && hasSplitGroups ? (
-                <Tooltip>
-                  <DropdownMenu modal={false}>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label={translate(
-                            'auto.components.tab.group.TabGroupPanel.9acaf92093',
-                            'Pane Actions'
-                          )}
-                          onClick={(event) => {
-                            event.stopPropagation()
+              className="ml-1.5 flex shrink-0 items-center gap-0.5"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            >
+              <div className={focusedActionChromeClassName}>
+                {isFocused ? (
+                  <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
+                ) : null}
+                {isFocused && hasSplitGroups ? (
+                  <Tooltip>
+                    <DropdownMenu modal={false}>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label={translate(
+                              'auto.components.tab.group.TabGroupPanel.9acaf92093',
+                              'Pane Actions'
+                            )}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                            }}
+                            className={menuButtonClassName}
+                          >
+                            <Ellipsis className="size-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => {
+                            commands.closeGroup()
                           }}
-                          className={menuButtonClassName}
                         >
-                          <Ellipsis className="size-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={() => {
-                          commands.closeGroup()
-                        }}
-                      >
-                        <X className="size-4" />
-                        {translate(
-                          'auto.components.tab.group.TabGroupPanel.closePaneColumn',
-                          'Close split pane'
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {translate(
-                      'auto.components.tab.group.TabGroupPanel.9acaf92093',
-                      'Pane Actions'
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
+                          <X className="size-4" />
+                          {translate(
+                            'auto.components.tab.group.TabGroupPanel.closePaneColumn',
+                            'Close split pane'
+                          )}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      {translate(
+                        'auto.components.tab.group.TabGroupPanel.9acaf92093',
+                        'Pane Actions'
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+              </div>
             </div>
+            {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
+            {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
+              <div
+                className="shrink-0"
+                style={
+                  {
+                    width: 'calc(40px + var(--window-controls-width, 0px))',
+                    WebkitAppRegion: 'no-drag'
+                  } as React.CSSProperties
+                }
+              />
+            ) : null}
           </div>
-          {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
-          {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
-            <div
-              className="shrink-0"
-              style={
-                {
-                  width: 'calc(40px + var(--window-controls-width, 0px))',
-                  WebkitAppRegion: 'no-drag'
-                } as React.CSSProperties
-              }
-            />
-          ) : null}
         </div>
-      </div>
+      )}
 
       <div
-        ref={setBodyDropRef}
+        ref={setBodyRef}
         data-tab-group-body-id={groupId}
         data-worktree-id={worktreeId}
         className="relative flex-1 min-h-0 overflow-hidden"
@@ -369,6 +397,7 @@ export default function TabGroupPanel({
                   activeViewStateId={activeTab.id}
                   isVisible={isVisible}
                   isCmdSaveOwner={isFocused}
+                  markdownAnnotationsEnabled={markdownAnnotationsEnabled}
                 />
               </Suspense>
             </div>

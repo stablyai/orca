@@ -10,6 +10,7 @@ import type {
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -37,6 +38,9 @@ export type PtyBufferSnapshot = {
   alternateScreen?: boolean
   /** Authoritative normal buffer paired with an alternate-screen frame. */
   scrollbackAnsi?: string
+  /** `data` starts on the normal buffer and enters alt itself (remote images fold
+   *  their normal buffer in rather than splitting it into `scrollbackAnsi`). */
+  carriesNormalBuffer?: boolean
   /** Trailing incomplete escape sequence main's emulator ingested (a PTY read
    *  ended mid-escape). Must be written LAST — after post-replay resets, right
    *  before post-snapshot live chunks — so the continuation completes it
@@ -64,6 +68,9 @@ export type PtyReplayDataMeta = {
    *  it; the drain replays there and fits back to the pane afterwards. */
   snapshotCols?: number
   snapshotRows?: number
+  /** An image that starts on the normal buffer and enters alt itself; absent for
+   *  raw byte replays such as an SSH relay's ring buffer. */
+  carriesNormalBuffer?: boolean
 }
 
 export type LocalPtySessionMetadata = {
@@ -182,7 +189,7 @@ export type PtyTransport = {
     callbacks: PtyCallbacks
   }) => void
   disconnect: () => void
-  sendInput: (data: string) => boolean
+  sendInput: (data: string, inputKind: TerminalInputKind) => boolean
   // Why: latency-critical terminal query replies (CPR/DSR/DA/OSC color/pixel
   // size) must skip input coalescing — a querying program reads them in raw
   // mode with a short timeout, so a debounced reply lands on the shell prompt
@@ -190,7 +197,7 @@ export type PtyTransport = {
   // this is `sendInput` for them; the remote transport flushes pending input
   // (preserving order) and sends the reply immediately.
   sendInputImmediate: (data: string) => boolean
-  sendInputAccepted?: (data: string) => Promise<boolean>
+  sendInputAccepted?: (data: string, inputKind: TerminalInputKind) => Promise<boolean>
   /** Settles retained pre-connect input when a deferred spawn is abandoned before connect. */
   abandonPreconnectInput?: () => void
   claimViewport?: (cols: number, rows: number) => boolean
@@ -211,6 +218,8 @@ export type PtyTransport = {
   getRecoveryState?: () => PtyTransportRecoveryState
   /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
   retryRecovery?: () => boolean
+  /** Lets a wrapper retain input when recovery re-enters connect internally. */
+  setConnectForRecovery?: (connect: PtyTransport['connect']) => void
   /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
   notifyErrorSurfaceDismissed?: () => void
   getPtyId: () => string | null

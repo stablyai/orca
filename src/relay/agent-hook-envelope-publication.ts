@@ -2,6 +2,7 @@ import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_SHED_FIELDS_KEY,
   createShedSubagentsField,
+  type AgentHookUnavailableEnvelope,
   type AgentHookRelayEnvelope
 } from '../shared/agent-hook-relay'
 import type { RelayDispatcher } from './dispatcher'
@@ -156,10 +157,25 @@ function logUnsendableEnvelope(
  *  background; one that no shedding can fit is dropped. */
 export function publishAgentHookEnvelope(
   dispatcher: RelayDispatcher,
-  envelope: AgentHookRelayEnvelope
+  envelope: AgentHookRelayEnvelope | AgentHookUnavailableEnvelope
 ): void {
   const clientIds = dispatcher.activeClientIds()
   if (clientIds.length === 0) {
+    return
+  }
+  if (envelope.payload === null) {
+    const params = { ...envelope }
+    if (!fitsProducerFrame(dispatcher, params)) {
+      clearPendingEnvelope(dispatcher, envelope.paneKey)
+      logUnsendableEnvelope(dispatcher, params, clientIds)
+      return
+    }
+    const rejected = publishToClients(dispatcher, params, clientIds)
+    if (rejected.length === 0) {
+      clearPendingEnvelope(dispatcher, envelope.paneKey)
+    } else {
+      setPendingEnvelope(dispatcher, envelope.paneKey, params, rejected)
+    }
     return
   }
   // Why: a fan-out must choose one payload before it writes anything, or the first client keeps a

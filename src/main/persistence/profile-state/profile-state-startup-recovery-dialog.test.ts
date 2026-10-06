@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { presentProfileStateStartupRecoveryDialog } from './profile-state-startup-recovery-dialog'
+import {
+  chooseProfileStateCopy,
+  presentProfileStateStartupRecoveryDialog
+} from './profile-state-startup-recovery-dialog'
 
 describe('profile state startup recovery dialog', () => {
   it('offers a copyable offline export command and does not mutate state', async () => {
@@ -60,5 +63,37 @@ describe('profile state startup recovery dialog', () => {
       })
     )
     expect(copyToClipboard).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [0, 'current-sqlite'],
+    [1, 'current-json'],
+    [2, undefined]
+  ] as const)('maps choice button %i to %s', async (response, expected) => {
+    const showMessageBox = vi.fn().mockResolvedValue({ response })
+    await expect(
+      chooseProfileStateCopy({
+        sqliteSavedAt: new Date(1),
+        jsonSavedAt: new Date(2),
+        formatTime: (time) => `t${time.getTime()}`,
+        showMessageBox
+      })
+    ).resolves.toBe(expected)
+    expect(showMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        buttons: ['Use SQLite (Recommended)', 'Use JSON', 'Quit'],
+        defaultId: 0,
+        cancelId: 2
+      })
+    )
+    const { detail } = showMessageBox.mock.calls[0][0]
+    expect(detail).toContain('Last saved t1.')
+    expect(detail).toContain('Last saved t2.')
+  })
+
+  it('omits save times it could not read', async () => {
+    const showMessageBox = vi.fn().mockResolvedValue({ response: 2 })
+    await chooseProfileStateCopy({ showMessageBox })
+    expect(showMessageBox.mock.calls[0][0].detail).not.toContain('Last saved')
   })
 })

@@ -15,6 +15,7 @@ import { agentSessionLeaseAdmitsWriter } from './agent-session-lease-adjudicatio
 import type { AgentSessionLease } from './agent-session-record'
 import { terminalOwnerRefusalMessage } from './agent-session-legacy-handoff-lease'
 import type { AgentSessionMutationEnvelope, AgentSessionWireRefusal } from './agent-session-wire'
+import { refuse } from './agent-session-wire-refusals'
 
 /**
  * Stable digest over the fields that define what this call DOES. Keys are
@@ -64,11 +65,11 @@ export function agentSessionFingerprintConflict(
 ): AgentSessionWireRefusal | null {
   return envelope.payloadFingerprint === hostFingerprint
     ? null
-    : {
-        code: 'agent_session_operation_conflict',
-        message:
-          'The payload does not match the fingerprint the client declared for this operation.'
-      }
+    : refuse(
+        'agent_session_operation_conflict',
+        { reason: 'fingerprintMismatch' },
+        'The payload does not match the fingerprint the client declared for this operation.'
+      )
 }
 
 export type AgentSessionMutationAdmission =
@@ -92,6 +93,9 @@ export function admitAgentSessionMutation(input: {
   /** Decision from the durable ledger, evaluated under `hostFingerprint`. */
   ledger: AgentSessionOperationDecision
   lease: AgentSessionLease
+  /** A write to the conversation, not to the provider child: a send is accepted and a Stop
+   *  withdraws queued messages whoever owns the child, so the lease does not admit them. */
+  conversationWrite?: true
 }): AgentSessionMutationAdmission {
   const { envelope, lease, ledger } = input
   const mismatch = agentSessionFingerprintConflict(envelope, input.hostFingerprint)
@@ -99,22 +103,31 @@ export function admitAgentSessionMutation(input: {
     return { decision: 'refused', refusal: mismatch }
   }
   if (ledger.decision === 'refused') {
-    return {
-      decision: 'refused',
-      refusal: {
-        code: ledger.code,
-        message: `Operation ${envelope.clientOperationId} was refused: ${ledger.code}.`
-      }
-    }
+    return { decision: 'refused', refusal: agentSessionLedgerRefusal(envelope, ledger) }
   }
   if (ledger.decision === 'replay') {
     return { decision: 'replay', row: ledger.row }
+  }
+  if (input.conversationWrite) {
+    return { decision: 'admit', row: ledger.row }
   }
   const leaseRefusal = refuseUnlessWriterAdmitted(lease)
   if (leaseRefusal) {
     return { decision: 'refused', refusal: leaseRefusal }
   }
   return { decision: 'admit', row: ledger.row }
+}
+
+/** What the ledger's own refusal of an operation id answers. */
+export function agentSessionLedgerRefusal(
+  envelope: Pick<AgentSessionMutationEnvelope, 'clientOperationId'>,
+  ledger: Extract<AgentSessionOperationDecision, { decision: 'refused' }>
+): AgentSessionWireRefusal {
+  return refuse(
+    ledger.code,
+    ledger.details,
+    `Operation ${envelope.clientOperationId} was refused: ${ledger.code}.`
+  )
 }
 
 /** Why the single admission oracle said no, mapped to what the client can do
@@ -124,24 +137,31 @@ function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireR
     return null
   }
   if (lease.unreconciled) {
-    return {
-      code: 'execution_owner_reconciling',
-      message: 'This host has not yet adjudicated the session lease.'
-    }
+    return refuse(
+      'execution_owner_reconciling',
+      { reason: 'hostReconciling' },
+      'This host has not yet adjudicated the session lease.'
+    )
   }
   if (lease.handoffStage !== null) {
-    return {
-      code: 'agent_session_conflict',
-      message:
-        lease.claimStatus === 'conflicted'
-          ? terminalOwnerRefusalMessage(lease)
-          : lease.handoffStage === 'new-owner-proving'
-            ? 'The chat is still starting.'
-            : "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
+    if (lease.claimStatus === 'conflicted') {
+      return refuse(
+        'agent_session_conflict',
+        { reason: 'claimConflicted' },
+        terminalOwnerRefusalMessage(lease)
+      )
     }
+    return lease.handoffStage === 'new-owner-proving'
+      ? refuse('agent_session_conflict', { reason: 'chatStarting' }, 'The chat is still starting.')
+      : refuse(
+          'agent_session_conflict',
+          { reason: 'ownerUnproven' },
+          "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
+        )
   }
-  return {
-    code: 'agent_session_ownership_unknown',
-    message: 'The session has no live owner to accept writes.'
-  }
+  return refuse(
+    'agent_session_ownership_unknown',
+    { reason: 'noLiveOwner' },
+    'The session has no live owner to accept writes.'
+  )
 }

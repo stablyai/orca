@@ -1,4 +1,6 @@
-import type { ParsedAgentStatusPayload } from '../agent-status-types'
+import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
+import { normalizeQoderEvent } from './providers/qoder-events'
+import type { AgentMainAgentStatus, ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
 import { readLastCommandCodeUserPromptEntryFromTranscript } from './command-code-transcript'
 import { readGrokHomeEnvelope } from './grok-result-discovery'
@@ -7,6 +9,7 @@ import type { HookListenerState } from './listener-state'
 import type { ExtractedPromptText } from './prompt-fields'
 import { isNewTurnEvent } from './provider-event-routing'
 import { readLastUserPromptFromTranscript } from './transcript-lines'
+import { readJcodeTurnPrompt } from './providers/jcode-turn-prompt'
 import { normalizeAntigravityEvent } from './providers/antigravity-events'
 import { normalizeAmpEvent } from './providers/amp-events'
 import { normalizeClaudeEvent } from './providers/claude-events'
@@ -23,7 +26,9 @@ import { normalizeHermesEvent } from './providers/hermes-events'
 import { normalizeDevinEvent } from './providers/devin-events'
 import { normalizeKimiEvent } from './providers/kimi-events'
 import { normalizeMuseEvent } from './providers/muse-events'
+import { normalizeDshEvent } from './providers/dsh-events'
 import { normalizeZCodeEvent } from './providers/zcode-events'
+import { normalizeJcodeEvent } from './providers/jcode-events'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -42,6 +47,7 @@ export function normalizeProviderEvent(input: {
   hookPayload: Record<string, unknown>
   envelope: Record<string, unknown>
   extractedPrompt: ExtractedPromptText
+  previousOpenCodeMainAgent?: AgentMainAgentStatus
 }): ProviderDispatchResult {
   const { state, source, eventName, promptText, paneKey, hookPayload, envelope, extractedPrompt } =
     input
@@ -51,6 +57,16 @@ export function normalizeProviderEvent(input: {
   let payload: ParsedAgentStatusPayload | null
 
   switch (source) {
+    case 'codebuddy':
+      payload = normalizeCompatibleLifecycleEvent(
+        source,
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload
+      )
+      break
     case 'claude':
       payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayload)
       break
@@ -88,7 +104,8 @@ export function normalizeProviderEvent(input: {
         eventName,
         promptText,
         paneKey,
-        hookPayload
+        hookPayload,
+        input.previousOpenCodeMainAgent
       )
       break
     }
@@ -148,15 +165,48 @@ export function normalizeProviderEvent(input: {
     case 'devin':
       payload = normalizeDevinEvent(state, eventName, promptText, paneKey, hookPayload)
       break
+    case 'qoder-cn':
+      payload = normalizeCompatibleLifecycleEvent(
+        source,
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload
+      )
+      break
+    case 'qwen-code': {
+      const normalized = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayload)
+      payload = normalized ? { ...normalized, agentType: 'qwen-code' } : null
+      break
+    }
+    case 'qoder':
+      payload = normalizeQoderEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'muse':
       payload = normalizeMuseEvent(state, eventName, promptText, paneKey, hookPayload)
       break
+    case 'dsh':
+      payload = normalizeDshEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
     case 'zcode':
       payload = normalizeZCodeEvent(state, eventName, promptText, paneKey, hookPayload)
       break
+    case 'jcode': {
+      const transcriptPrompt = readJcodeTurnPrompt(state, eventName, paneKey, hookPayload)
+      // Why: the reader returns null (not undefined) when no journal prompt is
+      // recoverable; only a real transcript hit counts as prompt evidence.
+      hasTranscriptPromptEvidence = transcriptPrompt !== null
+      promptInteractionKey = transcriptPrompt?.interactionKey
+      resolvedPromptText = transcriptPrompt?.text ?? ''
+      if (promptText && extractedPrompt.source !== 'message') {
+        resolvedPromptText = promptText
+      }
+      payload = normalizeJcodeEvent(state, eventName, resolvedPromptText, paneKey, hookPayload)
+    }
   }
 
   return { payload, resolvedPromptText, promptInteractionKey, hasTranscriptPromptEvidence }

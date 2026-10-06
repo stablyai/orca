@@ -1,9 +1,10 @@
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionPreSpawnError,
-  stopAgentSessionProviderRoot,
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/structured-agent-session-provider-exit-proof'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 import {
@@ -72,11 +73,10 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     const launchIdentity = resumeSession
       ? {
           ...input.identity,
-          providerHandle: {
-            kind: 'claude' as const,
-            sessionId: resumeSession.providerSessionId,
-            leafUuid: resumeSession.turnEndLeafUuid
-          }
+          providerHandle: claudeProviderHandle(
+            resumeSession.providerSessionId,
+            resumeSession.turnEndLeafUuid
+          )
         }
       : input.identity
     const launch = await deps

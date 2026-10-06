@@ -74,24 +74,10 @@ function runCommand(host: RemoteHostPlatform, command: string, prefix = '') {
   return spawnSync('/bin/sh', ['-c', `${prefix}\n${command}`], { encoding: 'utf8' })
 }
 
-function createStage(
-  host: RemoteHostPlatform,
-  pool: string,
-  index: number,
-  stageOwner = owner,
-  stale = false,
-  state: 'slot' | 'claim' | 'delete' = 'slot'
-): string {
-  const reservedOwner = /^\.sftp-namespace-[0-9a-f]{32}$/u.test(stageOwner) ? stageOwner : owner
-  const reservation = runCommand(host, reserveRelayUploadStageCommand(host, pool, reservedOwner))
+function createStage(host: RemoteHostPlatform, pool: string, index: number): string {
+  const reservation = runCommand(host, reserveRelayUploadStageCommand(host, pool, owner))
   expect(reservation.status, reservation.stderr).toBe(0)
-  return populateReservedStage(
-    pool,
-    index,
-    stageOwner === reservedOwner ? undefined : stageOwner,
-    stale,
-    state
-  )
+  return populateReservedStage(pool, index)
 }
 
 function populateReservedStage(
@@ -119,7 +105,7 @@ function populateReservedStage(
   return stage
 }
 
-function createQuotaStages(host: RemoteHostPlatform, pool: string, count: number): void {
+function createStages(host: RemoteHostPlatform, pool: string, count: number): void {
   if (host.commandDialect !== 'powershell' || count < 2) {
     for (let index = 0; index < count; index += 1) {
       createStage(host, pool, index)
@@ -175,7 +161,7 @@ describe.each([
   (_label, host) => {
     it.each([0, 1, 7, 8, 9])('bounds reservation with %i occupied entries', (count) => {
       const pool = createPool()
-      createQuotaStages(host, pool, Math.min(count, RELAY_UPLOAD_STAGE_SLOT_COUNT))
+      createStages(host, pool, Math.min(count, RELAY_UPLOAD_STAGE_SLOT_COUNT))
       if (count > RELAY_UPLOAD_STAGE_SLOT_COUNT) {
         mkdirSync(join(pool, 'foreign-extra'))
       }
@@ -251,9 +237,9 @@ describe.each([
 
     it('reclaims one stale owned stage but preserves fresh and foreign stages', () => {
       const pool = createPool()
-      createStage(host, pool, 0, owner, false)
-      createStage(host, pool, 1, '.foreign-owner', true)
-      createStage(host, pool, 2, owner, true)
+      createStages(host, pool, 3)
+      populateReservedStage(pool, 1, '.foreign-owner', true)
+      populateReservedStage(pool, 2, undefined, true)
 
       const result = runCommand(host, recoverOneStaleRelayUploadStageCommand(host, pool, 60))
 
@@ -265,8 +251,9 @@ describe.each([
 
     it('drains fixed stale claim and delete states across repeated deployments', () => {
       const pool = createPool()
-      createStage(host, pool, 0, owner, true, 'claim')
-      createStage(host, pool, 1, owner, true, 'delete')
+      createStages(host, pool, 2)
+      populateReservedStage(pool, 0, undefined, true, 'claim')
+      populateReservedStage(pool, 1, undefined, true, 'delete')
 
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const result = runCommand(host, recoverOneStaleRelayUploadStageCommand(host, pool, 60))

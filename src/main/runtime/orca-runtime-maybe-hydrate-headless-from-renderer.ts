@@ -1,5 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { splitFreebuffScreenUpdates } from '../../shared/freebuff-screen-status'
 import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './orca-runtime-serialize-main-terminal-buffer'
+import { observeFreebuffTerminalStatus } from './freebuff-terminal-status'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from '../../shared/agent-detection'
 import type { RuntimeHeadlessTerminal } from './runtime-terminal-state-records'
@@ -14,13 +16,13 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
   // is populated synchronously so concurrent live writes from
   // trackHeadlessTerminalData chain after the seed via the same writeChain.
   // See docs/mobile-prefer-renderer-scrollback.md.
-  protected maybeHydrateHeadlessFromRenderer(
+  maybeHydrateHeadlessFromRenderer(
     ptyId: string,
     beforeChunkSequence = this.getPtyOutputSequence(ptyId)
-  ): void {
+  ): Promise<boolean> | null {
     const hydration = this.headlessHydrationState.get(ptyId)
     if (hydration === 'pending' || hydration === 'done') {
-      return
+      return null
     }
     const providerSnapshotPreferred = this.providerSnapshotPreferredPtys.has(ptyId)
     // Why the awaiting check: a viewer's frame-only emulator is not a seed —
@@ -32,16 +34,16 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     ) {
       // Daemon-snapshot seed already populated the emulator — skip hydration.
       this.headlessHydrationState.set(ptyId, 'done')
-      return
+      return null
     }
     const controller = this.ptyController
     if (!controller?.serializeBuffer || !controller.hasRendererSerializer) {
-      return
+      return null
     }
     if (!controller.hasRendererSerializer(ptyId)) {
       // Renderer hasn't registered yet (or never will). Live writes lazy-
       // create the state via trackHeadlessTerminalData on this same tick.
-      return
+      return null
     }
 
     const state = this.getOrCreateHeadlessTerminal(ptyId)
@@ -55,6 +57,7 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     )
     this.headlessHydrationState.set(ptyId, 'pending')
     // Keep one chain owner so live writes queued during capture use the committed emulator.
+    let seeded = false
     state.writeChain = state.writeChain.then(async () => {
       let candidate: RuntimeHeadlessTerminal | undefined
       let committed = false
@@ -106,6 +109,7 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
           this.applySeededAgentStatus(ptyId, seedTitle)
         }
         this.providerSnapshotPreferredPtys.delete(ptyId)
+        seeded = true
       } catch {
         // Keep the incumbent model and retry on the next live chunk.
       } finally {
@@ -119,6 +123,7 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
         }
       }
     })
+    return state.writeChain.then(() => seeded)
   }
 
   // Why: seed-derived agent status reflects historical state. Orchestration
@@ -138,6 +143,8 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     // once a live title was observed, so live state always wins.
     this.getOrCreatePtyTitleTrackerEntry(ptyId).tracker.seedInitialTitle(title)
     const status = detectAgentStatusFromTitle(title)
+    // Why evidence, not display: display readers project a stale-working clear over the record,
+    // so re-seeding the native working title cannot bring a cleared spinner back.
     // Why: live observations store normalized titles, so seeds must match —
     // otherwise the first live frame after hydration compares unequal and
     // touches session tabs once for no visible change.
@@ -193,7 +200,33 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
         return
       }
       state.ownership.scan(uncovered.data)
-      await state.emulator.write(uncovered.data, { forwardQueryReplies })
+      for (const chunk of splitFreebuffScreenUpdates(
+        uncovered.data,
+        state.emulator.partialEscapeTailAnsi
+      )) {
+        await state.emulator.write(chunk, { forwardQueryReplies })
+        const pty = this.ptysById.get(ptyId)
+        if (pty && !pty.connectionId && this.headlessTerminals.get(ptyId) === state) {
+          const payload = observeFreebuffTerminalStatus(
+            state.emulator,
+            chunk,
+            this.terminalSpawnCommandsByPtyId.get(ptyId),
+            pty.launchAgent
+          )
+          if (payload) {
+            pty.lastExplicitAgentStatus = {
+              state: payload.state,
+              updatedAt: Date.now(),
+              sessionBoundary: payload.sessionBoundary
+            }
+            this.emitTerminalAgentStatusEvents(ptyId, {
+              cleanData: '',
+              payloads: [payload],
+              lastPayloadCleanOffset: null
+            })
+          }
+        }
+      }
       state.outputSequence = outputSequence
     })
     // Legacy callers remain best-effort; bounded SSH admission observes the raw receipt.

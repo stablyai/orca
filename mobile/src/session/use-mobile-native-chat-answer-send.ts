@@ -30,7 +30,7 @@ import {
 export type MobileNativeChatAnswerSend = {
   /** Answer the current question(s) from the card's per-question selections. */
   answerAsk: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
-  /** Drop any in-flight per-keystroke writes (call on Stop). */
+  /** Cancel unsent groups; an already-issued write may still settle. */
   cancelPending: () => void
 }
 
@@ -49,8 +49,8 @@ function sanitizeAskFreeText(text: string): string {
  * `terminal.send` passthrough (raw text, no enter) — same contract the
  * permission card already uses, so old runtimes replay them verbatim (no new
  * RPC; keystrokes are built client-side). The scheduled wait chain is cancelled
- * on a new answer, on `cancelPending` (Stop), and on unmount / session swap — so
- * a detached chain can never write PTY bytes to a stale pane.
+ * on a new answer, on `cancelPending` (Stop), and on unmount / session swap.
+ * Cancellation prevents later groups; already-issued writes retain their verdict.
  */
 export function useMobileNativeChatAnswerSend(args: {
   client: RpcClient | null
@@ -175,6 +175,7 @@ export function useMobileNativeChatAnswerSend(args: {
             terminal: handle,
             text: body,
             enter,
+            requireWriteSettlement: true,
             deadline,
             ...(deviceTokenRef.current
               ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }

@@ -1,11 +1,7 @@
 import type { Terminal } from '@xterm/xterm'
+import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
 
 const FIT_REQUEST_DEBOUNCE_MS = 200
-// Mirror the runtime's clampTerminalViewport so a request always matches what lands.
-const FIT_MIN_COLS = 20
-const FIT_MAX_COLS = 240
-const FIT_MIN_ROWS = 8
-const FIT_MAX_ROWS = 120
 
 export type PreviewGridSize = { cols: number; rows: number }
 
@@ -19,10 +15,6 @@ export type PreviewGridSize = { cols: number; rows: number }
 type ClaimStatus = 'open' | 'settled' | 'unreachable'
 
 type ClaimEpoch = { target: string; status: ClaimStatus }
-
-function clampGridAxis(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
 
 /**
  * Negotiates the PTY grid for a preview surface: measures the live terminal's
@@ -82,10 +74,10 @@ export function createPreviewGridClaim(args: {
     ) {
       return null
     }
-    return {
-      cols: clampGridAxis(Math.floor(box.clientWidth / cellWidth), FIT_MIN_COLS, FIT_MAX_COLS),
-      rows: clampGridAxis(Math.floor(box.clientHeight / cellHeight), FIT_MIN_ROWS, FIT_MAX_ROWS)
-    }
+    return clampTerminalViewport(
+      Math.floor(box.clientWidth / cellWidth),
+      Math.floor(box.clientHeight / cellHeight)
+    )
   }
 
   const request = async (): Promise<void> => {

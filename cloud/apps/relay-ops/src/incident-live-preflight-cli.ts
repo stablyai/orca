@@ -12,23 +12,23 @@ import {
   type AdmissionSelector
 } from './incident-selector.js'
 import {
+  describeIncidentFailure,
   evaluateIncidentSample,
   FRESHNESS_FAILURE_CODES,
   INCIDENT_MONITOR_THRESHOLDS,
   preDrainDryRunPassed,
   toleratedStreakKey,
-  type IncidentFailure,
   type IncidentSample
 } from './incident-monitor.js'
 import { createIncidentSampleCollector } from './incident-monitor-sources.js'
 
 const FRESHNESS_RETRY_ATTEMPTS = 5
 const FRESHNESS_RETRY_INTERVAL_MS = 15_000
-// 10 min, not 5: the same-cap job reaches this check ~5 min after the monitor
-// completes (runner queue ~2 min, gate job ~80 s, checkout ~60 s); on 2026-09-17
-// a green gate died at 302 s. The live samples below hold every wave to now.
+// 10 min, not 5: a wave job reaches this check ~5 min after the monitor completes
+// (runner queue ~2 min, gate job ~80 s, checkout ~60 s); on 2026-09-17 a green
+// gate died at 302 s. The live samples below hold every wave to now.
 const MONITOR_EVIDENCE_MAX_AGE_MS = 10 * 60_000
-// Matches the same-cap cell job timeout-minutes; bounds each predecessor wave.
+// Matches the wave job timeout-minutes; bounds each predecessor wave.
 const WAVE_PREDECESSOR_TIMEOUT_MS = 75 * 60_000
 // Widest any wave chain declares (same-cap's cell_1..cell_10); each job workflow
 // pins its own narrower range.
@@ -85,17 +85,6 @@ const PreflightStateSchema = z.object({
   }
 })
 
-// Keep the source/code prefix other tooling matches on, then name the signal and
-// its numbers so a frozen wave is attributable without re-reading the sample.
-function describeFailure(failure: IncidentFailure): string {
-  const detail = [
-    failure.signal,
-    failure.observed === undefined ? null : `observed=${failure.observed}`,
-    failure.threshold === undefined ? null : `threshold=${failure.threshold}`
-  ].filter((part): part is string => part !== null && part !== undefined)
-  return [`${failure.source}/${failure.code}`, ...detail].join(' ')
-}
-
 const PREFLIGHT_USAGE =
   'usage: --state-file <verified-monitor-state> [--wave-index <0-3>]' +
   ' [--selector-wave-delta <0|2>] [--retry-freshness]' +
@@ -147,7 +136,7 @@ type PreflightPlan = {
   recoverySourceCellId: string | null
   capacityCellId: string | null
   // The instant the live samples age from. Monitor evidence ages from the moment
-  // the 15-minute window closed; an override has no evidence to age, so its
+  // the 15-minute window closed; a dispatch plan has no evidence to age, so its
   // retry budget starts when this process does.
   evidenceAnchorMs: number
 }
@@ -170,7 +159,7 @@ async function monitorEvidencePreflightPlan(
   const windowStartedAt = Date.parse(state.windowStartedAt)
   const lastSampleAt = Date.parse(state.lastSampleAt)
   const evidenceAgeMs = nowMs - completedAt
-  // Later same-cap waves start after sequential predecessor cell rolls, so the
+  // Later waves start after sequential predecessor cell rolls, so the
   // freshness bound grows by one cell-job timeout per predecessor; the live
   // samples collected below still hold every wave to current health.
   const maxEvidenceAgeMs =
@@ -198,11 +187,46 @@ async function monitorEvidencePreflightPlan(
   }
 }
 
-// Break-glass: the caller authorized skipping the aggregate 15-minute monitor
-// gate, so the expected selector comes straight from the dispatch inputs instead
-// of sealed evidence. Nothing about this weakens the live sample below, and the
-// policy is pinned to strict -- the only one the same-cap rollout ever verifies.
-async function overridePreflightPlan(
+// The expected selector exactly as a same-cap dispatch states it, canonicalised as the monitor CLI
+// does when it seals evidence. The live selector read from the director is normalised too and the
+// comparison is an ordered stringify, so unsorted operator input would read as selector drift on a
+// healthy fleet; normalising is also what enforces every configured cell exactly once.
+export async function readDispatchSelector(
+  generation: string,
+  membershipFile: string
+): Promise<AdmissionSelector> {
+  const membership = normalizeSelectorMembership(
+    SelectorMembershipSchema.parse(
+      JSON.parse(await readFile(resolve(membershipFile), 'utf8'))
+    ),
+    new Set(relayOpsEnvironment('production').cells.map((cell) => cell.cellId))
+  )
+  return AdmissionSelectorSchema.parse({ generation: Number(generation), membership })
+}
+
+// Each predecessor same-cap apply wave reversibly isolates and restores its cell with membership
+// unchanged (rollback is single-cell, so it never reaches a later wave), so the live selector
+// comparison must expect the wave-adjusted generation. A general cell advances it by 2; a
+// migration-only cell is already isolated and stays that way, so its wave advances it by 0. A wave
+// is never mixed, so one delta covers every predecessor.
+export function waveAdjustedSelector(
+  selector: AdmissionSelector,
+  waveIndex: string,
+  selectorWaveDelta: string
+): AdmissionSelector {
+  if (!WAVE_INDEX_PATTERN.test(waveIndex) || !SELECTOR_WAVE_DELTA_PATTERN.test(selectorWaveDelta)) {
+    throw new Error('relay wave index or selector wave delta is invalid')
+  }
+  return {
+    ...selector,
+    generation: selector.generation + Number(selectorWaveDelta) * Number(waveIndex)
+  }
+}
+
+// No monitor evidence: the expected selector comes straight from the dispatch inputs, which the
+// rehome inspect after this verifies against the live director. The policy is pinned to strict --
+// the only one the same-cap rollout ever verifies -- and every threshold is unchanged.
+async function dispatchPreflightPlan(
   options: Map<string, string>,
   nowMs: number
 ): Promise<PreflightPlan> {
@@ -211,23 +235,9 @@ async function overridePreflightPlan(
   if (!generation || !membershipFile || options.has('--state-file')) {
     throw new Error(PREFLIGHT_USAGE)
   }
-  // Canonicalise exactly as the monitor CLI does when it seals evidence. The live
-  // selector read from the director is normalised too and the comparison is an
-  // ordered stringify, so unsorted operator input would read as selector drift on
-  // a healthy fleet; normalising is also what enforces every configured cell
-  // exactly once.
-  const membership = normalizeSelectorMembership(
-    SelectorMembershipSchema.parse(
-      JSON.parse(await readFile(resolve(membershipFile), 'utf8'))
-    ),
-    new Set(relayOpsEnvironment('production').cells.map((cell) => cell.cellId))
-  )
   return {
     environment: 'production',
-    expectedSelector: AdmissionSelectorSchema.parse({
-      generation: Number(generation),
-      membership
-    }),
+    expectedSelector: await readDispatchSelector(generation, membershipFile),
     migrationPolicy: 'strict',
     recoverySourceCellId: null,
     capacityCellId: null,
@@ -252,7 +262,7 @@ export async function runIncidentLivePreflight(
   if (!SELECTOR_WAVE_DELTA_PATTERN.test(selectorWaveDelta)) throw new Error(PREFLIGHT_USAGE)
   const now = dependencies.now ?? Date.now
   const plan = parsed.flags.has('--no-monitor-state')
-    ? await overridePreflightPlan(parsed.options, now())
+    ? await dispatchPreflightPlan(parsed.options, now())
     : await monitorEvidencePreflightPlan(parsed.options, now(), waveIndex)
   const maxEvidenceAgeMs =
     MONITOR_EVIDENCE_MAX_AGE_MS + Number(waveIndex) * WAVE_PREDECESSOR_TIMEOUT_MS
@@ -260,18 +270,9 @@ export async function runIncidentLivePreflight(
     dependencies.gcloud ?? createGcloudClient(),
     dependencies.environment
   )
-  // Each predecessor same-cap apply wave reversibly isolates and restores its
-  // cell with membership unchanged (rollback is single-cell, so it never reaches
-  // a later wave), so the live selector comparison must expect the wave-adjusted
-  // generation. A general cell advances it by 2; a migration-only cell is already
-  // isolated and stays that way, so its wave advances it by 0. A wave is never
-  // mixed, so one delta covers every predecessor.
   const collectOptions = {
     environment: plan.environment,
-    expectedSelector: {
-      ...plan.expectedSelector,
-      generation: plan.expectedSelector.generation + Number(selectorWaveDelta) * Number(waveIndex)
-    },
+    expectedSelector: waveAdjustedSelector(plan.expectedSelector, waveIndex, selectorWaveDelta),
     ...(dependencies.now ? { now: dependencies.now } : {})
   }
   const injected = dependencies.collect
@@ -338,7 +339,7 @@ export async function runIncidentLivePreflight(
     if (!retryable || attempt === attempts || budgetExhausted()) {
       throw new Error(
         `relay live preflight failed: ${evaluation.failures
-          .map(describeFailure)
+          .map(describeIncidentFailure)
         .join(',')}`
       )
     }

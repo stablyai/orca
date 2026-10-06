@@ -4,6 +4,8 @@
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import { RemoteRuntimeUnavailableError } from './ssh-relay-runtime-resolution'
+import { SshPlainSshModeSession } from './ssh-plain-ssh-session'
 import type { RemoteOpenCodeRuntimePreparation } from './ssh-relay-opencode-runtime-retry'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { writeStringsViaSftp } from './sftp-upload'
@@ -23,6 +25,8 @@ import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { isMethodNotFoundError } from './ssh-filesystem-stream-reader'
 import { SshGitProvider } from '../providers/ssh-git-provider'
+import { selectOpenCodePluginSources } from '../agent-hooks/opencode-plugin-settings'
+import { bindRemoteClaudeInterruptReconciliation } from './ssh-agent-hook-interrupt-reconciliation'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import {
@@ -91,7 +95,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   findTerminalTabIdForLeaf,
   hasHostAuthoritativeTerminalMembership
-} from '../runtime/workspace-session-terminal-membership-authority'
+} from '../persistence/terminal-topology/terminal-topology-membership'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
 import {
@@ -118,6 +122,7 @@ import {
 } from '../../shared/ssh-ai-vault-relay'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { hasClosedTerminalTabRecord } from '../../shared/closed-terminal-tab-tombstones'
 import {
   openSshPtyConsumerSession,
   type OpenSshPtyConsumerSessionOptions,
@@ -158,6 +163,8 @@ const SSH_REJECTED_PTY_RECOVERY_MAX_ATTEMPTS = 2
 // store read, an attach round trip and a store write.
 const SSH_REJECTED_PTY_RECOVERY_MAX_GENERATION_ATTEMPTS = 12
 const SSH_REJECTED_PTY_RECOVERY_RETRY_DELAY_MS = 150
+const SSH_PLUGIN_INSTALL_RETRY_DELAY_MS = 5_000
+const SSH_PLUGIN_INSTALL_MAX_RETRIES = 3
 const SSH_SOURCE_RECOVERY_CANCELLATION_FAILED = 'ssh_source_recovery_cancellation_failed'
 
 // Why: superseded attempts stop quietly; a dead mux still owned by this attempt must enter recovery.
@@ -317,7 +324,11 @@ export class SshRelaySession {
   private abortController: AbortController | null = null
   private muxDisposeCleanup: (() => void) | null = null
   // Why: hold the notification-handler disposer so teardownProviders can release it on reconnect/shutdown (symmetric with muxDisposeCleanup).
+  private remoteInterruptCleanup: (() => void) | null = null
   private muxNotificationCleanup: (() => void) | null = null
+  private pluginSettingsCleanup: (() => void) | null = null
+  private pluginInstallRetryTimer: ReturnType<typeof setTimeout> | null = null
+  private pluginInstallGeneration = 0
   // Why: onStateChange never fires when the relay channel closes but SSH stays up; this callback lets ssh.ts drive relay-level reconnect.
   private _onRelayLost: ((targetId: string) => void) | null = null
   // Why: a version mismatch or a blocked owner admission is terminal, so it needs a separate callback
@@ -329,6 +340,7 @@ export class SshRelaySession {
   // Why: a self-driven repair reconnect must not silently re-negotiate the target's grace window.
   private lastGraceTimeSeconds: number | undefined = undefined
   private hostPlatform: RemoteHostPlatform | null = null
+  private plainSsh: SshPlainSshModeSession | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
   private openCodeRuntimePreparation: {
     run: RemoteOpenCodeRuntimePreparation
@@ -548,6 +560,14 @@ export class SshRelaySession {
     this.lastGraceTimeSeconds = graceTimeSeconds
 
     try {
+      const deployed = await this.deployRelayOrEnterPlainSsh(
+        conn,
+        graceTimeSeconds,
+        () => this._state === 'deploying'
+      )
+      if (!deployed) {
+        return
+      }
       const {
         transport,
         serverBuildId,
@@ -558,7 +578,7 @@ export class SshRelaySession {
         credentialFile,
         hostPlatform,
         prepareOpenCodeRuntime
-      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      } = deployed
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -707,6 +727,14 @@ export class SshRelaySession {
     this.teardownProviders('connection_lost')
 
     try {
+      const deployed = await this.deployRelayOrEnterPlainSsh(
+        conn,
+        graceTimeSeconds,
+        () => this.abortController === abortController && !abortController.signal.aborted
+      )
+      if (!deployed) {
+        return
+      }
       const {
         transport,
         serverBuildId,
@@ -717,7 +745,7 @@ export class SshRelaySession {
         credentialFile,
         hostPlatform,
         prepareOpenCodeRuntime
-      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      } = deployed
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -1011,7 +1039,51 @@ export class SshRelaySession {
     })
   }
 
+  /** Rung D connects with plain SSH providers, so the ladder's reason reaches the user connected. */
+  getPlainSshSession(): SshPlainSshModeSession | null {
+    return this.plainSsh
+  }
+
   // ── Private ───────────────────────────────────────────────────────
+
+  private async deployRelayOrEnterPlainSsh(
+    conn: SshConnection,
+    graceTimeSeconds: number | undefined,
+    isAttemptCurrent: () => boolean
+  ): Promise<Awaited<ReturnType<typeof deployAndLaunchRelay>> | null> {
+    try {
+      return await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+    } catch (err) {
+      // Why system SSH is excluded: it has no ssh2 shell or SFTP channel to degrade onto.
+      if (
+        !(err instanceof RemoteRuntimeUnavailableError) ||
+        conn.usesSystemSshTransport?.() === true ||
+        this.isDisposed() ||
+        !isAttemptCurrent()
+      ) {
+        throw err
+      }
+      // Why: a superseded attempt's session must not stay registered beside this one.
+      this.leavePlainSshMode()
+      this.plainSsh = SshPlainSshModeSession.enter({
+        targetId: this.targetId,
+        connection: conn,
+        error: err,
+        onExitAccepted: (payload) => this.retireExitedPty(payload, true)
+      })
+      console.warn(
+        `[ssh-relay-session] ${this.targetId} connected in plain SSH mode: ${err.reason}`
+      )
+      this._state = 'ready'
+      this._onReady?.(this.targetId)
+      return null
+    }
+  }
+
+  private leavePlainSshMode(): void {
+    this.plainSsh?.leave()
+    this.plainSsh = null
+  }
 
   // Why: teardown itself can kill the mux — an aborted request emits rpc.cancel, and a saturated
   // control lane turns that admission failure into mux.dispose('connection_lost'). Every teardown
@@ -1087,6 +1159,13 @@ export class SshRelaySession {
       return false
     }
 
+    this.pluginSettingsCleanup?.()
+    this.pluginSettingsCleanup =
+      this.store.onSettingsChanged?.((updates) => {
+        if ('disabledTuiAgents' in updates || 'agentStatusHooksEnabled' in updates) {
+          void this.installPluginsOnRelay(mux)
+        }
+      }) ?? null
     await this.installPluginsOnRelay(mux)
     if (shouldContinue && !shouldContinue()) {
       return false
@@ -1538,21 +1617,37 @@ export class SshRelaySession {
   }
 
   // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy — the relay is versioned independently. Best-effort: failure only costs agent status on this host.
-  private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
-    if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
+  private async installPluginsOnRelay(
+    mux: SshChannelMultiplexer,
+    attempt = 0,
+    generation = ++this.pluginInstallGeneration
+  ): Promise<void> {
+    if (!isRemoteAgentHooksEnabled()) {
       return
     }
     try {
-      await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
-        opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
-        opencode2PluginSource: openCodeInternals.getOpenCode2PluginSource(),
-        piExtensionSource: getPiAgentStatusExtensionSource('pi'),
-        ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
-        primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent')
-      })
+      this.clearPluginInstallRetry()
+      const hooksEnabled = this.areAgentStatusHooksEnabled()
+      await mux.request(
+        AGENT_HOOK_INSTALL_PLUGINS_METHOD,
+        selectOpenCodePluginSources(
+          {
+            opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
+            opencode2PluginSource: openCodeInternals.getOpenCode2PluginSource(),
+            ...(hooksEnabled
+              ? {
+                  piExtensionSource: getPiAgentStatusExtensionSource('pi'),
+                  ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
+                  primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent')
+                }
+              : {})
+          },
+          this.store.getSettings?.() ?? null
+        )
+      )
     } catch (err) {
       // Why: -32601 = older relay without the handler; CONNECTION_LOST/DISPOSED = routine mid-flight teardown — swallow both.
-      const code = (err as { code?: unknown })?.code
+      const code = err instanceof Error && 'code' in err ? err.code : undefined
       if (code === -32601 || code === 'CONNECTION_LOST' || code === 'DISPOSED') {
         return
       }
@@ -1564,6 +1659,37 @@ export class SshRelaySession {
           err instanceof Error ? err.message : String(err)
         }`
       )
+      if (code === 'SSH_MUX_REQUEST_TIMEOUT') {
+        this.schedulePluginInstallRetry(mux, attempt, generation)
+      }
+    }
+  }
+
+  private schedulePluginInstallRetry(
+    mux: SshChannelMultiplexer,
+    attempt: number,
+    generation: number
+  ): void {
+    if (
+      attempt >= SSH_PLUGIN_INSTALL_MAX_RETRIES ||
+      this.mux !== mux ||
+      generation !== this.pluginInstallGeneration
+    ) {
+      return
+    }
+    this.pluginInstallRetryTimer = setTimeout(() => {
+      this.pluginInstallRetryTimer = null
+      if (this.mux === mux && !mux.isDisposed()) {
+        void this.installPluginsOnRelay(mux, attempt + 1, generation)
+      }
+    }, SSH_PLUGIN_INSTALL_RETRY_DELAY_MS)
+    this.pluginInstallRetryTimer.unref?.()
+  }
+
+  private clearPluginInstallRetry(): void {
+    if (this.pluginInstallRetryTimer !== null) {
+      clearTimeout(this.pluginInstallRetryTimer)
+      this.pluginInstallRetryTimer = null
     }
   }
 
@@ -1585,6 +1711,13 @@ export class SshRelaySession {
     }
     // Why: capture the disposer so teardownProviders can release this handler and re-wiring can't double-register it.
     this.muxNotificationCleanup?.()
+    this.remoteInterruptCleanup?.()
+    this.remoteInterruptCleanup = bindRemoteClaudeInterruptReconciliation(
+      agentHookServer,
+      mux,
+      this.targetId,
+      () => this.mux === mux
+    )
     this.muxNotificationCleanup = mux.onNotification((method, params) => {
       if (method !== AGENT_HOOK_NOTIFICATION_METHOD) {
         return
@@ -1601,6 +1734,7 @@ export class SshRelaySession {
       agentHookServer.ingestRemote(
         {
           paneKey: envelope.paneKey,
+          hostTurnRevision: envelope.hostTurnRevision,
           launchToken: typeof envelope.launchToken === 'string' ? envelope.launchToken : undefined,
           tabId: typeof envelope.tabId === 'string' ? envelope.tabId : undefined,
           worktreeId: typeof envelope.worktreeId === 'string' ? envelope.worktreeId : undefined,
@@ -1634,6 +1768,8 @@ export class SshRelaySession {
               : undefined,
           // Why: the SSH relay protocol advertises no run-serving capability.
           advertisedAgentStatusCapabilities: AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
+          evidenceAgeMs: envelope.evidenceAgeMs,
+          statusUnavailable: envelope.statusUnavailable,
           payload: envelope.payload
         },
         this.targetId
@@ -1675,8 +1811,15 @@ export class SshRelaySession {
     this.openCodeRuntimePreparation?.controller.abort()
     this.openCodeRuntimePreparation = null
     this.releaseRelayLossWatcher()
+    this.pluginSettingsCleanup?.()
+    this.pluginSettingsCleanup = null
+    this.pluginInstallGeneration += 1
+    this.clearPluginInstallRetry()
+    this.leavePlainSshMode()
     this.muxNotificationCleanup?.()
     this.muxNotificationCleanup = null
+    this.remoteInterruptCleanup?.()
+    this.remoteInterruptCleanup = null
     for (const cleanup of this.ptyRecoveryNotificationCleanups) {
       cleanup()
     }
@@ -2730,9 +2873,19 @@ export class SshRelaySession {
     if (hasLiveCurrentBinding) {
       return false
     }
-    return [lease.tabId, ...currentTabIds]
-      .filter((tabId) => isValidTerminalTabId(tabId))
-      .some(tombstoneMatches)
+    // Why only when no tab holds the leaf: a pane moved out of the tab before it closed lives on.
+    const leaseTabId = lease.tabId
+    const closedByRecord =
+      currentTabIds.length === 0 &&
+      candidates.some((candidate) =>
+        hasClosedTerminalTabRecord(candidate?.closedTerminalTabTombstonesByTabId, leaseTabId)
+      )
+    return (
+      closedByRecord ||
+      [lease.tabId, ...currentTabIds]
+        .filter((tabId) => isValidTerminalTabId(tabId))
+        .some(tombstoneMatches)
+    )
   }
 
   private async suppressRetiredReattachedPty(

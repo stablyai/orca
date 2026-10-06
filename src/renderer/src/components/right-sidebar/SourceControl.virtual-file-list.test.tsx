@@ -203,13 +203,13 @@ beforeEach(() => {
   // and 24px rows (both rect + row measurement read offsetHeight), and keep
   // the observer path inert so measurements stay deterministic.
   vi.stubGlobal('ResizeObserver', NoopResizeObserver)
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
-    function (this: HTMLElement) {
-      return this.classList.contains('overflow-auto')
-        ? VIEWPORT_HEIGHT_PX
-        : VIRTUALIZED_LIST_ROW_HEIGHT_PX
-    }
-  )
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return this.classList.contains('overflow-auto')
+      ? VIEWPORT_HEIGHT_PX
+      : VIRTUALIZED_LIST_ROW_HEIGHT_PX
+  })
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     // The panel scroller acts as the fixed viewport; everything inside it
     // shifts up by scrollTop, which is what the list's scroll-margin math

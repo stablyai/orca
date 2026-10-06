@@ -57,11 +57,11 @@ beforeEach(() => {
   document.body.appendChild(host)
   root = createRoot(host)
   vi.stubGlobal('ResizeObserver', NoopResizeObserver)
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
-    function (this: HTMLElement) {
-      return this.classList.contains('overflow-auto') ? VIEWPORT_HEIGHT_PX : TREE_ROW_HEIGHT_PX
-    }
-  )
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return this.classList.contains('overflow-auto') ? VIEWPORT_HEIGHT_PX : TREE_ROW_HEIGHT_PX
+  })
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const height = this.classList.contains('overflow-auto')
       ? VIEWPORT_HEIGHT_PX

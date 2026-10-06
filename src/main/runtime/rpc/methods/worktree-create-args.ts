@@ -47,21 +47,21 @@ export function buildManagedWorktreeCreateArgs(
     pushTarget: params.pushTarget,
     runHooks: params.runHooks === true,
     activate: params.activate === true,
-    // Why: create-activation is the caller's own view intent; without this a paired
-    // client's create dragged every other connected client and the host with it.
-    // Why 'runtime' only: a phone has no terminal-provisioning renderer, so when it
-    // creates without a startup command the host renderer is what runs the repo's
-    // setup/default tabs off this activation. Scoping mobile would drop that work.
-    // Why the CLI is excluded by payload and not by version: the CLI also pairs as a
-    // 'runtime' device but has no viewer of its own, so scoping it makes --activate
-    // reveal nothing. Current CLIs say so explicitly with `navigation`, but an older
-    // CLI against an updated host cannot; `cliProvenanceRequest` is the marker every
-    // CLI has always sent, and no renderer or phone sends it.
+    // Mobile needs host-renderer provisioning; CLI activation also belongs to the host, not its observers.
     navigation: resolveRuntimeNavigationTarget({
-      ...(params.navigation ? { navigation: params.navigation } : {}),
+      ...(params.navigation
+        ? {
+            // Older CLIs hardcode 'all' for --activate/--run-hooks; neither flag requests a client broadcast.
+            navigation:
+              params.cliProvenanceRequest !== undefined && params.navigation === 'all'
+                ? ('host' as const)
+                : params.navigation
+          }
+        : {}),
       ...(origin.clientKind === 'runtime' && params.cliProvenanceRequest === undefined
         ? { clientKind: origin.clientKind }
-        : {})
+        : {}),
+      defaultTarget: 'host'
     }),
     setupDecision: params.setupDecision,
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
@@ -78,6 +78,7 @@ export function buildManagedWorktreeCreateArgs(
       : undefined,
     ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
     ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
+    ...(params.launchSource ? { startupLaunchSource: params.launchSource } : {}),
     startupDraft: params.startupDraft,
     lineage: {
       parentWorkspace: params.parentWorkspace,

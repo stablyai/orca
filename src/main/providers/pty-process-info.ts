@@ -27,4 +27,7 @@ export type PtyProcessInfo = {
   /** The client identity the OWNING host recorded as having asked it to create this PTY. Absent
    *  whenever the host could not attest one, and absence must never be read as "unowned". */
   ownerClientInstanceId?: string
+  /** The owning host accepted a kill and is terminating this PTY. It is still live — liveness
+   *  readers count it — but nothing may adopt or restore it. Absent from hosts that predate it. */
+  exiting?: true
 }

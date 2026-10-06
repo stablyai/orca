@@ -36,6 +36,7 @@ export type AgentSessionMutationOperationAdmission = {
   hostFingerprint: string
   now: number
   operationIdScope?: 'global'
+  conversationWrite?: true
 }
 
 export type AgentSessionMutationOperationDecision = {
@@ -149,7 +150,8 @@ export function admitAgentSessionMutationOperation(
     envelope: args.envelope,
     hostFingerprint: args.hostFingerprint,
     ledger: ledger.decision,
-    lease: record.lease
+    lease: record.lease,
+    ...(args.conversationWrite ? { conversationWrite: true } : {})
   })
   if (ledger.decision.decision === 'admit' && admission.decision === 'refused') {
     ledger.rows.delete(agentSessionOperationKey(operation.callerKey, operation.operationId))
@@ -189,6 +191,23 @@ export function claimAgentSessionOperationInto(
   const claimed = claimAgentSessionOperation(state.operations, args)
   state.operations = claimed.rows
   return claimed.claim
+}
+
+/** Whether an admission left the right to run open, so the same transaction should claim it. */
+export type ClaimAfterAdmission = (decision: AgentSessionOperationDecision) => boolean
+
+/** Admission and, when `claimAfter` says so, the claim, in one transaction: the same swap as
+ *  `claimAgentSessionOperationInto`, with one durable write instead of two. */
+export function admitAndClaimAgentSessionOperationInto(
+  state: { operations: Map<string, AgentSessionOperationRow> },
+  args: AgentSessionOperationAdmission,
+  claimAfter: ClaimAfterAdmission
+): { decision: AgentSessionOperationDecision; claim: AgentSessionOperationClaim | null } {
+  const decision = admitAgentSessionOperationInto(state, args)
+  return {
+    decision,
+    claim: claimAfter(decision) ? claimAgentSessionOperationInto(state, args) : null
+  }
 }
 
 export function settleAgentSessionOperationInto(

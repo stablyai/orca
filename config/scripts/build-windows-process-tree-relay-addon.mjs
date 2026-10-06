@@ -22,12 +22,14 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
+import { canReusePreparedRelayAddon } from './relay-windows-process-tree-prepared-addon.mjs'
 import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../src/shared/relay-artifacts.ts'
 import {
   ensureWindowsProcessTreeCommandLinePatch,
   inspectWindowsProcessTreeAddon,
   nodeGypRebuildInvocation,
   stageWindowsProcessTreeNodeAddonApiHeaders,
+  windowsProcessTreeAddonHasRelayLauncher,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR as PACKAGE_DIR
 } from './windows-process-tree-gyp-rebuild.mjs'
 
@@ -122,6 +124,21 @@ function assertPatchApplied() {
     if (!present) {
       throw new Error(
         `${relativePath} does not contain the process creation-time patch (${expected}). ` +
+          'Run pnpm install before building the relay addon.'
+      )
+    }
+  }
+  // Without the launcher a standard-user SSH host cannot start a relay that outlives the session.
+  const requiredLauncherSources = [
+    ['binding.gyp', '"src/process_launch.cc"'],
+    ['src/addon.cc', 'exports.Set("spawnOutsideJob"'],
+    ['src/process_launch.cc', 'CREATE_BREAKAWAY_FROM_JOB']
+  ]
+  for (const [relativePath, expected] of requiredLauncherSources) {
+    const filePath = join(PACKAGE_DIR, relativePath)
+    if (!existsSync(filePath) || !readFileSync(filePath, 'utf8').includes(expected)) {
+      throw new Error(
+        `${relativePath} does not contain the relay launcher patch (${expected}). ` +
           'Run pnpm install before building the relay addon.'
       )
     }
@@ -394,14 +411,15 @@ function applyWindowsProcessTreeBuildFixes() {
   const repairedCreationTime = repairCreationTimeSources()
   stageWindowsProcessTreeNodeAddonApiHeaders(PACKAGE_DIR)
   const repairedCommandLine = ensureWindowsProcessTreeCommandLinePatch(PACKAGE_DIR)
-  if (
+  const repaired =
     bindingGyp !== originalBinding ||
     processCc !== originalProcess ||
     repairedCommandLine ||
     repairedCreationTime
-  ) {
+  if (repaired) {
     console.warn('[windows-process-tree] Repaired un-applied pnpm patch hunks before build.')
   }
+  return repaired
 }
 
 function main() {
@@ -415,14 +433,24 @@ function main() {
   if (!existsSync(PACKAGE_DIR)) {
     throw new Error(`${PACKAGE_DIR} is missing. Run pnpm install first.`)
   }
-  applyWindowsProcessTreeBuildFixes()
+  const sourceRepaired = applyWindowsProcessTreeBuildFixes()
   assertPatchApplied()
 
-  const gyp = nodeGypRebuildInvocation(arch)
-  console.log(`[windows-process-tree] building ${arch} from ${gyp.cwd}`)
-  execFileSync(process.execPath, gyp.args, { cwd: gyp.cwd, stdio: 'inherit' })
-
   const built = join(PACKAGE_DIR, 'build', 'Release', 'windows_process_tree.node')
+  if (
+    canReusePreparedRelayAddon({
+      enabled: process.argv.includes('--reuse-prepared-runtime'),
+      arch,
+      addonPath: built,
+      sourceRepaired
+    })
+  ) {
+    console.log(`[windows-process-tree] reusing the prepared ${arch} addon`)
+  } else {
+    const gyp = nodeGypRebuildInvocation(arch)
+    console.log(`[windows-process-tree] building ${arch} from ${gyp.cwd}`)
+    execFileSync(process.execPath, gyp.args, { cwd: gyp.cwd, stdio: 'inherit' })
+  }
   if (!existsSync(built)) {
     throw new Error(`node-gyp reported success but ${built} is missing.`)
   }
@@ -442,6 +470,12 @@ function main() {
         : 'node-gyp ignored --arch; a relay would get a binary its host cannot load.'
     throw new Error(
       `Built binary is ${describePeMachine(machine)}, expected 0x${PE_MACHINE[arch].toString(16)} for ${arch}. ${cause}`
+    )
+  }
+  if (!windowsProcessTreeAddonHasRelayLauncher(built)) {
+    throw new Error(
+      'The built addon does not export spawnOutsideJob. A relay would fall back to WMI, ' +
+        'which refuses to launch it for a standard user.'
     )
   }
 

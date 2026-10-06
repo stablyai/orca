@@ -66,6 +66,7 @@ export async function runRemoteSourceControlPlan(input: {
     stdout: result.stdout,
     stderr: result.stderr,
     label: plan.label,
+    outputFormat: plan.outputFormat,
     emptyResultName: input.emptyResultName,
     includeLocalMacDnsHint: false,
     includeStdoutDetail: operation !== 'branch-name'

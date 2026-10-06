@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { RESUMABLE_TUI_AGENTS } from '../../../shared/agent-session-resume'
 import {
+  AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QODER_CN_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QWEN_CODE_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
@@ -10,6 +16,12 @@ import {
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 
 describe('agentResumeHostAuthorityCapability', () => {
+  it('requires Cursor support from the owning host', () => {
+    expect(agentResumeHostAuthorityCapability('cursor')).toBe(
+      AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY
+    )
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY)
+  })
   it('gates Muse resume behind its own advertised capability', () => {
     expect(agentResumeHostAuthorityCapability('muse')).toBe(
       AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY
@@ -23,26 +35,11 @@ describe('agentResumeHostAuthorityCapability', () => {
     )
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY)
   })
-  it('gates Kimi resume behind its own capability', () => {
-    expect(agentResumeHostAuthorityCapability('kimi')).toBe(
-      AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
-    )
-  })
-
-  it('keeps the OMP resume-path gate', () => {
-    expect(agentResumeHostAuthorityCapability('omp')).toBe(
-      AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY
-    )
-  })
 
   it('leaves agents shipped with host authority on the generic probe', () => {
     expect(agentResumeHostAuthorityCapability('codex')).toBeUndefined()
     expect(agentResumeHostAuthorityCapability(null)).toBeUndefined()
     expect(agentResumeHostAuthorityCapability(undefined)).toBeUndefined()
-  })
-
-  it('advertises the Kimi resume capability from the host', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY)
   })
 
   it('pins the gate for every resumable agent so a new member is a deliberate decision', () => {
@@ -54,7 +51,12 @@ describe('agentResumeHostAuthorityCapability', () => {
       )
     ).toEqual({
       claude: undefined,
+      codebuddy: AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
       codex: undefined,
+      cursor: AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
+      qoder: AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
+      'qoder-cn': AGENT_SESSION_QODER_CN_RESUME_RUNTIME_CAPABILITY,
+      'qwen-code': AGENT_SESSION_QWEN_CODE_RESUME_RUNTIME_CAPABILITY,
       gemini: undefined,
       antigravity: undefined,
       opencode: undefined,
@@ -69,7 +71,8 @@ describe('agentResumeHostAuthorityCapability', () => {
       copilot: undefined,
       muse: AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
       omp: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
-      kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
+      kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+      dsh: AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY
     })
   })
 })

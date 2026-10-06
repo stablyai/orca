@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
-import { BRIDGE_BACK_CLAIM_NOTIFY, BRIDGE_BACK_FRAME } from './bridge-page-back'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
 import { createFakeBridgePortPair, type BridgePortPair } from './bridge-port-pair-test-harness'
 import type { FakeRpcClient } from '../bridge-host-test-fakes'
 
@@ -58,9 +58,7 @@ describe('a Back press crossing from the shell to the page', () => {
     release()
     await pair.flush()
     // The shell still sends one, standing in for a claim that went stale in flight.
-    pair.host.receive(
-      JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready', accepts: [BRIDGE_BACK_FRAME] })
-    )
+    pair.host.receive(JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }))
     await pair.flush()
     expect(pair.host.sendBack()).toBe(true)
     await pair.flush()
@@ -83,18 +81,14 @@ describe('a Back press crossing from the shell to the page', () => {
     expect(pair.backClaims).toEqual([true])
     // The page re-asks, which is what a stale `state` frame makes it do; the host drops the claim
     // answering it, and the page's re-assert is what puts the two back in step.
-    pair.host.receive(
-      JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready', accepts: [BRIDGE_BACK_FRAME] })
-    )
+    pair.host.receive(JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }))
     await pair.flush()
     expect(pair.backClaims).toEqual([true, false, true])
   })
 
   it('says nothing again when this document is holding nothing', async () => {
     const pair = await opened()
-    pair.host.receive(
-      JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready', accepts: [BRIDGE_BACK_FRAME] })
-    )
+    pair.host.receive(JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }))
     await pair.flush()
     expect(notifies(pair)).toEqual([])
     expect(pair.backClaims).toEqual([])
@@ -111,66 +105,22 @@ describe('a Back press crossing from the shell to the page', () => {
   })
 })
 
-/**
- * Both halves of the mixed-version matrix. The page bundle is served by a desktop that updates
- * independently of the installed shell, so one side older than the other is the normal state and
- * each direction has to degrade to exactly what Back did before this lane: the navigator pops.
- */
-describe('a shell and a page built either side of the Back lane', () => {
-  it('old shell, new page: the page never posts a claim it was not offered', async () => {
-    // The `init.accepts` this shell sends, with the claim taken back out of it on the wire — which
-    // is exactly the frame a shell built before the name would have posted.
-    const pair = createFakeBridgePortPair({
-      rewriteToPage: (json) => {
-        const frame: Record<string, unknown> = JSON.parse(json)
-        const accepts = frame.accepts
-        if (frame.type !== 'init' || !Array.isArray(accepts)) {
-          return json
-        }
-        return JSON.stringify({
-          ...frame,
-          accepts: accepts.filter((name) => name !== BRIDGE_BACK_CLAIM_NOTIFY)
-        })
-      }
-    })
-    await pair.flush()
-    pair.client.claimBack(() => true)
-    await pair.flush()
-    expect(notifies(pair)).toEqual([])
-    expect(pair.backClaims).toEqual([])
-    // And the re-assert is held to the same declaration: a second `init` from a shell that never
-    // named the claim is still one the page says nothing back to.
-    pair.host.receive(JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }))
-    await pair.flush()
-    expect(notifies(pair)).toEqual([])
-  })
-
-  it('new shell, old page: the shell never sends a press the page would refuse', async () => {
+describe('the Back lane with no negotiation', () => {
+  it('hands a press to any page it serves, whose ready declares nothing', async () => {
     const pair = await opened()
-    // The same document reloaded as a build that declares nothing, which is what a released page is.
     pair.host.receive(JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }))
     await pair.flush()
     const before = pair.toPage.length
-    expect(pair.host.sendBack()).toBe(false)
-    await pair.flush()
-    expect(pair.toPage).toHaveLength(before)
-  })
-
-  /** Why that gate has to exist: an older page's reader takes the whole frame down rather than
-   *  ignoring a type it has never heard of. */
-  it('a page too old to read the frame refuses it whole', async () => {
-    const pair = createFakeBridgePortPair({
-      rewriteToPage: (json) =>
-        JSON.parse(json).type === BRIDGE_BACK_FRAME ? '{"v":1,"type":"b4ck"}' : json
-    })
-    await pair.flush()
-    pair.host.receive(
-      JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready', accepts: [BRIDGE_BACK_FRAME] })
-    )
-    await pair.flush()
     expect(pair.host.sendBack()).toBe(true)
     await pair.flush()
-    expect(pair.diagnostics).toContainEqual({ kind: 'refused', refusal: 'unrecognised-message' })
-    expect(pair.backPops).toEqual([])
+    expect(pair.toPage.length).toBe(before + 1)
+  })
+
+  it('posts the claim to the shell with nothing offered in init', async () => {
+    const pair = await opened()
+    pair.client.claimBack(() => true)
+    await pair.flush()
+    expect(notifies(pair)).toEqual([BRIDGE_BACK_CLAIM_NOTIFY])
+    expect(pair.backClaims).toEqual([true])
   })
 })

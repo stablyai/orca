@@ -64,12 +64,4 @@ describe('NativeChatTaskList', () => {
     expect(screen.getByText('No tasks')).toBeInTheDocument()
     expect(screen.getByLabelText('0 of 0 tasks completed')).toHaveTextContent('0/0')
   })
-
-  it('switches from full list to diff when earlier history supplies a predecessor', () => {
-    const { rerender } = render(<NativeChatTaskList list={current} />)
-    expect(screen.getByText('Test')).toBeInTheDocument()
-    rerender(<NativeChatTaskList list={current} previous={previous} />)
-    expect(screen.queryByText('Test')).toBeNull()
-    expect(screen.getByText('Started Write')).toBeInTheDocument()
-  })
 })

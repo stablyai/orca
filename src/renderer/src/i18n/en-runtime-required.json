@@ -72,10 +72,6 @@
         "af6e02c44a": "page",
         "f5a6b38a14": "sheet"
       },
-      "NativeChatResumeOnRestartModal": {
-        "continueUnconfirmed_one": "Continuation delivery is unconfirmed for {{value0}} chat. Open it to check before sending another message.",
-        "continueUnconfirmed_other": "Continuation delivery is unconfirmed for {{value0}} chats. Open them to check before sending another message."
-      },
       "NewWorkspaceComposerCard": {
         "0e587e31fb": "yaml",
         "2132b670da": "both",
@@ -203,6 +199,14 @@
         },
         "ActivityScopeFilterControls": {
           "hiddenCount": "{{value0}} hidden"
+        },
+        "ActivityThreadContextMenu": {
+          "clearMany_one": "Clear {{count}} Agent from List",
+          "clearMany_other": "Clear {{count}} Agents from List",
+          "markManyRead_one": "Mark {{count}} Agent Read",
+          "markManyRead_other": "Mark {{count}} Agents Read",
+          "markManyUnread_one": "Mark {{count}} Agent Unread",
+          "markManyUnread_other": "Mark {{count}} Agents Unread"
         }
       },
       "artifacts": {
@@ -585,10 +589,15 @@
             "ab1a2c357d": "Roadmap (unsupported)",
             "b787682111": "Browse all",
             "ba0ab9a117": "Browse all (loading…)",
-            "cafb908f34": "TABLE_LAYOUT"
+            "cafb908f34": "TABLE_LAYOUT",
+            "d34ef9b554": "Board (unsupported)"
           },
           "ProjectRow": {
             "c3b81ddea2": "DRAFT_ISSUE"
+          },
+          "ProjectViewStates": {
+            "ac83c45672": "Switch to a Table or Roadmap view to work with this project in Orca.",
+            "e4cc8b14f2": "Orca renders table and roadmap project views. This view uses a layout it cannot render yet."
           },
           "ProjectViewWrapper": {
             "1bf8c01c8b": "Switch to a Table view to work with this project in Orca."
@@ -1026,6 +1035,10 @@
                 }
               },
               "discard": {
+                "confirmation": {
+                  "1426c2efff": "This will revert all changes to this file. This cannot be undone.",
+                  "40e9357b2a": "This will restore the file from HEAD and discard the deletion. This cannot be undone."
+                },
                 "dialog": {
                   "48c5ef95d9": "area",
                   "6de99d162b": "entry"
@@ -1159,6 +1172,7 @@
           "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}."
         },
         "BrowserUsePane": {
+          "de9b2f32f3": "Enable",
           "e44c5d681e": "From"
         },
         "CliSection": {
@@ -1489,7 +1503,19 @@
           "a9359c8aa9": "Unknown error"
         },
         "SparsePresetSettingsSection": {
-          "68bbcd864a": "new"
+          "2d7d45e991": "Cancel",
+          "3b6f1abd3e": "e.g. web-only",
+          "3dfa765ca7": "{{value0}} directories will be saved.",
+          "623b4cf910": "Edit Preset",
+          "68bbcd864a": "new",
+          "694cc55ecb": "Saved directories are used when creating sparse worktrees for this repository.",
+          "a05bc9183f": "Save Preset",
+          "a6fcdd9e3c": "Name",
+          "b532b9c17d": "1 directory will be saved.",
+          "b9922ec194": "Cancel preset edit",
+          "c240a16f25": "Use repo-relative paths like packages/web or apps/api.",
+          "caf33029cc": "Directories",
+          "fde7ff2cc3": "packages/web shared/ui"
         },
         "SshPane": {
           "94c5284560": "Targets",
@@ -1558,6 +1584,9 @@
           "7c3bb36706": "remove",
           "e2b0ee267f": "stale"
         },
+        "ZcodePlanAccountsSection": {
+          "keyRequired": "GLM Coding Plan API key is required."
+        },
         "accounts": {
           "search": {
             "d1d2ae383c": "Paste your opencode.ai session cookie for rate limit fetching."
@@ -1568,6 +1597,7 @@
           "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.",
           "e5995ce268": "Keep computer awake while agents are working",
           "modeDescriptionDefault": "Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.",
+          "modeDescriptionMac": "Choose On, Agent, or Off. Agent mode prevents idle sleep while agents work, so long runs finish with the lid open. Closing the lid still puts this Mac to sleep.",
           "modeDescriptionWindows": "Choose On, Agent, or Off. Agent mode stays awake while agents are working; lid-close behavior follows this device's power settings.",
           "modeTitle": "Keep computer awake"
         },
@@ -1589,6 +1619,7 @@
             "2afd3b5858": "enable",
             "2e188c771c": "hide",
             "32836788b0": "generated title",
+            "34337ed5c7": "isolate",
             "48f84d10f1": "running",
             "52115d0d7c": "auto",
             "5784ae8c43": "rename",
@@ -1598,16 +1629,22 @@
             "66b6b82eb4": "awake",
             "6956646a1e": "title",
             "6984d4291a": "status",
+            "7e15b89f6e": "server",
             "845ad9128a": "power",
             "848dcae8d3": "generated",
             "8599603496": "done",
             "87fffe6c20": "show",
             "8a17fd6026": "stable",
             "966890236d": "name",
+            "9a84e65118": "agents overview",
+            "9f3becc4e8": "shared",
             "a6d594c17d": "install",
             "a79d266f71": "session",
             "afbf35be68": "stable session",
             "affbf130f6": "working",
+            "agent-trust-folder": "folder",
+            "agent-trust-trust": "trust",
+            "agent-trust-worktree": "worktree",
             "be59907510": "override",
             "be7ea3553b": "tab",
             "c1317fe641": "restore",
@@ -1620,6 +1657,7 @@
             "ef804b7337": "Agent Location",
             "f2932bf22b": "detected",
             "f412abbba5": "claude",
+            "ff457e1e7b": "daemon",
             "ff8de8a2ad": "display"
           }
         },
@@ -1864,6 +1902,9 @@
         "CacheTimer": {
           "07729cc155": "expired"
         },
+        "DeleteWorktreeDirtyChangeHint": {
+          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk."
+        },
         "FolderWorkspaceComposerDialog": {
           "chooseSourceProject": "Choose task source",
           "connectFailed": "Failed to connect to project.",
@@ -2010,6 +2051,15 @@
                 "cea24c2b7d_other": "{{count}} workspaces removed",
                 "d42f1f14e0_one": "Retry {{count}} Branch",
                 "d42f1f14e0_other": "Retry {{count}} Branches"
+              }
+            }
+          }
+        },
+        "worktree": {
+          "card": {
+            "compact": {
+              "agents": {
+                "a128d7006b": "{{value0}} {{value1}} child {{value2}}"
               }
             }
           }
@@ -2188,7 +2238,18 @@
       },
       "sparse": {
         "SparseCheckoutPresetSelect": {
-          "bd6cec2056": "new"
+          "064c1e2d12": "Renderer UI",
+          "0e9ad9c798": "Directories",
+          "14952d451e": "{{value0}} directories",
+          "69c020eddc": "Edit preset",
+          "7c3275d307": "Edit {{value0}}",
+          "8b12c0850a": "Save",
+          "b3a500c623": "Name",
+          "bd6cec2056": "new",
+          "c7f9b3f0c1": "Off",
+          "ddbcaef7be": "src/renderer packages/ui",
+          "de8fce5854": "Cancel",
+          "e9283eb171": "1 directory"
         }
       },
       "stats": {
@@ -2472,8 +2533,16 @@
           "MobileDriverOverlay": {
             "3eed73394f": "Your keyboard is paused"
           },
+          "TerminalErrorToast": {
+            "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
+            "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again."
+          },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns."
+          },
+          "TerminalSessionStateSaveFailureDialog": {
+            "678c780a2c": "Disk space is unavailable",
+            "e2fcf07c0d": "Orca could not save this terminal session because local storage is full or not writable. Open the disk space analyzer to find workspace storage you can clean up."
           },
           "TerminalSshReconnectOverlay": {
             "connectButton": "Connect",
@@ -2570,13 +2639,28 @@
       }
     },
     "hooks": {
+      "ipc": {
+        "events": {
+          "os": {
+            "markdown": {
+              "file": {
+                "open": {
+                  "bridge": {
+                    "1e9a1a63c4": "Failed to open the Markdown file."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "useComposerState": {
-        "attachSkipMissing": "No longer at its original path.",
-        "attachSkipPermissionDenied": "Permission denied.",
-        "attachSkipSymlink": "Symbolic links cannot be attached.",
-        "attachSkipUnsupported": "Unsupported file type.",
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
         "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
+      },
+      "useGlobalFileDrop": {
+        "nativeDropTempCopyFailed_one": "Orca couldn't copy {{count}} dropped file.",
+        "nativeDropTempCopyFailed_other": "Orca couldn't copy {{count}} dropped files."
       },
       "useIpcEvents": {
         "60428567b4": "Local terminal reveal is unavailable while a remote runtime is active",
@@ -2595,6 +2679,12 @@
             }
           }
         }
+      },
+      "dropSkipReason": {
+        "missing": "No longer at its original path.",
+        "permissionDenied": "Permission denied.",
+        "symlink": "Symbolic links cannot be attached.",
+        "unsupported": "Unsupported file type."
       },
       "terminal": {
         "shortcut": {
@@ -2665,11 +2755,83 @@
       "ask": {
         "asked": "Asked:",
         "awaiting": "Awaiting user input:",
+        "awaitingUnnamed": "Awaiting user input",
         "questionCount": "{{value0}} questions"
       },
       "composer": {
         "effort": "Effort",
         "imageUnsupported": "Image paste is not supported for this agent."
+      },
+      "failureWords": {
+        "accountSwitchInProgress": "A Claude account switch is in progress. Try again after it finishes.",
+        "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+        "argumentsMissingValue": "Saved Arguments need a value for {{option}}.",
+        "argumentsMultipleValues": "Saved Arguments give {{option}} more than one value.",
+        "argumentsPositionalPrompt": "Saved Arguments include a prompt.",
+        "argumentsUnsupportedOption": "Saved Arguments contain an unsupported option ({{option}}).",
+        "attachmentAtMost": "{{agent}} accepts at most {{limit}} images in one message, so this message was not sent.",
+        "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
+        "attachmentInvalid": "An attachment on this message can't be sent to the agent.",
+        "attachmentLargerThan": "An image on this message is larger than {{size}} MB, so the message was not sent.",
+        "attachmentNoSource": "An image on this message has no file to send, so the message was not sent.",
+        "attachmentNotAFile": "An image on this message isn't a file, so the message was not sent.",
+        "attachmentTooLarge": "An image on this message is too large, so the message was not sent.",
+        "attachmentTooMany": "This message has too many images, so it was not sent.",
+        "attachmentTotalMoreThan": "The images on this message add up to more than {{size}} MB, so the message was not sent.",
+        "attachmentTotalTooLarge": "The images on this message are too large together, so the message was not sent.",
+        "attachmentUnreadable": "An attachment on this message couldn't be read, so the message was not sent.",
+        "attachmentUnsupportedType": "{{agent}} accepts only PNG, JPEG, GIF, and WebP images, so this message was not sent.",
+        "cancelUnconfirmed": "Cancellation was not confirmed.",
+        "cancelled": "This message was withdrawn before the agent started it.",
+        "chatClosed": "The chat closed before this message was sent.",
+        "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
+        "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
+        "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
+        "commandRefused": "This command didn't run.",
+        "commandRefusedTryAgain": "This command didn't run. Try it again.",
+        "compactionFailed": "Compaction failed.",
+        "compactionFailedQuoted": "Compaction failed: {{detail}}.",
+        "compactionUnconfirmed": "Compaction completion is unconfirmed.",
+        "couldNotRestart": "{{agent}} couldn't restart.",
+        "couldNotStart": "{{agent}} couldn't start.",
+        "editSavedArguments": "Edit them in Settings > Agents > Arguments.",
+        "emptyMessage": "This message is empty, so it was not sent.",
+        "historyTooLarge": "This conversation's history is too large to restore here.",
+        "hostFault": "Orca ran into a problem, so this didn't go through.",
+        "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
+        "hostRestarted": "Orca restarted before this message was sent.",
+        "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
+        "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
+        "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
+        "launchFolderMissing": "The folder this chat ran in no longer exists. Restore it to continue this chat.",
+        "noTurnToStop": "{{agent}} had no turn running to stop.",
+        "notDelivered": "This message was not delivered.",
+        "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
+        "notSignedIn": "{{agent}} is not signed in for the selected account.",
+        "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
+        "providerExitedRejection": "{{agent}} stopped before this message was sent.",
+        "providerExitedRow": "{{agent}} stopped while this response was in progress. You can continue in this conversation.",
+        "providerRateLimited": "{{agent}} is rate-limited and retrying.",
+        "providerRejected": "The provider did not accept this message.",
+        "providerRejectedQuoted": "The provider did not accept this message: {{detail}}.",
+        "providerRetrying": "{{agent}} hit a temporary problem and is retrying.",
+        "providerRetryingQuoted": "{{agent}} is retrying: {{detail}}.",
+        "providerStartFailed": "{{agent}} stopped before it finished starting.",
+        "queueFull": "Too many messages were waiting for the agent, so this one was not sent.",
+        "runCommandAgain": "Run /{{command}} again.",
+        "sendAgainToTryOnceMore": "Send your message again to try once more.",
+        "sendToTryAgain": "Send your message to try again.",
+        "signInFirst": "Sign in first.",
+        "signInThenRunCommand": "Sign in, then run /{{command}} again.",
+        "signInThenSend": "Sign in, then send your message again.",
+        "stopRefused": "{{agent}} didn't stop.",
+        "stopRefusedQuoted": "{{agent}} didn't stop: {{detail}}.",
+        "theAgent": "The agent",
+        "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
+      },
+      "notices": {
+        "historyItemTooLarge": "This part of the chat was too large to show.",
+        "historyRepaired": "Part of this chat's history couldn't be loaded."
       },
       "question": {
         "other": "Other…"
@@ -2693,8 +2855,11 @@
         }
       },
       "status": {
+        "failedAfter": "Failed after {{value0}}",
+        "interruptedAfter": "Interrupted after {{value0}}",
+        "queueAfterStop": "Queue a message to run after the stop",
         "responding": "Agent is responding",
-        "thinking": "Thinking",
+        "sendAfterStop": "Send a message to run after the stop",
         "toggleDetails": "Toggle turn details",
         "workedFor": "Worked for {{value0}}",
         "workingFor": "Working for {{value0}}"
@@ -2704,6 +2869,8 @@
         "countOne": "1 tool call",
         "failedCallsLabel": "Failed tool calls: {{value0}}",
         "failedCount": "{{value0}} failed",
+        "interruptedCallsLabel": "Interrupted tool calls: {{value0}}",
+        "interruptedCount": "{{value0}} interrupted",
         "moreCalls": "+{{value0}} more",
         "ranCommandManyToolsSummary": "Ran {{commandCount}} command and used {{toolCount}} tools",
         "ranCommandOneToolSummary": "Ran {{commandCount}} command and used {{toolCount}} tool",
@@ -2716,6 +2883,64 @@
         "runningPreview": "Running {{preview}}",
         "usedManySummary": "Used {{toolCount}} tools",
         "usedOneSummary": "Used 1 tool"
+      },
+      "writeNotice": {
+        "agentRefused": "The agent turned this down.",
+        "agentStarting": "The agent is still starting.",
+        "answerFirst": "Answer the question or approval first.",
+        "backgroundTasksRunning": "Background tasks are still running.",
+        "capacity": "Orca has received too many requests in the last day.",
+        "chatNotFound": "Orca can't find this chat.",
+        "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
+        "clearUnfinished": "The last /clear didn't finish.",
+        "commandRunning": "A /compact or /clear is still running.",
+        "conversationCleared": "This conversation has been cleared.",
+        "goalsUnsupported": "This agent doesn't support goals.",
+        "historyUnavailable": "Orca couldn't open this chat's history right now.",
+        "historyUnreadable": "Orca couldn't read this chat's saved history.",
+        "historyUnusable": "Unable to load this chat.",
+        "hostReconciling": "Orca is still checking on this chat after restarting.",
+        "messageNotSaved": "Couldn't save your message.",
+        "messagesUnsettled": "A message you sent earlier isn't confirmed yet.",
+        "notAvailable": "This isn't available in this chat.",
+        "cannotRunHere": "Orca can't run this agent in a chat here.",
+        "notDoneAnswer": "Your answer was not sent.",
+        "notDoneCommand": "The command didn't run.",
+        "notDoneGoal": "The goal wasn't changed.",
+        "notDoneOption": "The setting wasn't changed.",
+        "notDoneReadHistory": "This chat's history couldn't be loaded.",
+        "notDoneSend": "Your message was not sent.",
+        "notDoneStop": "The agent wasn't stopped.",
+        "notDoneStopTask": "The background task wasn't stopped.",
+        "notDoneStopTasks": "The background tasks weren't stopped.",
+        "openCurrentConversation": "Open the current conversation to continue.",
+        "optionRejected": "The agent didn't accept this setting.",
+        "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
+        "ownerUnproven": "The previous agent in this chat may still be running.",
+        "promptPending": "The agent is waiting for an answer to a question or approval.",
+        "questionChanged": "This question was already answered or has changed.",
+        "quitTerminalAgent": "Quit that agent to continue the chat here.",
+        "recordFailed": "Orca couldn't save this to the chat's history.",
+        "recordUnreadable": "Orca couldn't read this chat's saved state.",
+        "reopenChat": "Reopen the chat to check again.",
+        "restartFailed": "The agent couldn't restart.",
+        "savedByNewerOrca": "Chats were saved by a newer Orca.",
+        "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
+        "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
+        "startNewChat": "Start a new chat to continue.",
+        "terminalAgentHoldsChat": "This chat is still open in a terminal agent.",
+        "tryAgain": "Try again.",
+        "tryAgainComposerSend": "Send it again.",
+        "turnActive": "The agent is still responding.",
+        "unreachable": "Orca couldn't reach the agent.",
+        "unsupported": "This needs a newer Orca on the computer running this chat. Update Orca there, then try again.",
+        "updateOrcaToKeepUsing": "Update Orca to keep using them.",
+        "updateOrcaToOpenChat": "Update Orca to open it.",
+        "waitForBackgroundTasks": "Wait for the background tasks to finish.",
+        "waitForCommand": "Wait for the /compact or /clear to finish.",
+        "waitForStart": "Wait for the agent to finish starting.",
+        "waitForTurn": "Wait for the agent to finish responding, or stop it.",
+        "waitMoment": "Wait a moment."
       }
     },
     "onboarding": {
@@ -2775,6 +3000,13 @@
       "title": "Agent dashboard"
     }
   },
+  "fileExplorer": {
+    "root": {
+      "omittedFiles": "Files omitted by sparse checkout are not searched.",
+      "viewOnly": "Sparse checkout · View changes do not change checked-out files.",
+      "viewing": "Viewing: {{path}}"
+    }
+  },
   "runtimeRpc": {
     "startupFailure": {
       "guidance": {
@@ -2800,6 +3032,12 @@
         "title": "Browse through SSH workspace hosts"
       }
     }
+  },
+  "sparsePreset": {
+    "description": "Choose the folders a new workspace checks out.",
+    "findPath": "Find a folder…",
+    "finishEditing": "Save or cancel the preset to continue creating your workspace.",
+    "pathHelp": "One repository-relative directory per line. Spaces within a path are preserved."
   },
   "worktreeJumpPalette": {
     "filter": {

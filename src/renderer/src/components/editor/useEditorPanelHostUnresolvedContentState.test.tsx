@@ -33,6 +33,8 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: vi.fn(() => true)
 }))
 
+vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
+
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
@@ -96,7 +98,7 @@ describe('useEditorPanelContentState — host cannot resolve a mirrored file (#2
     latestFileContents = {}
     // Why: opening any tab arms useLocalLogTail's change subscription on window.api.
     vi.stubGlobal('api', {
-      fs: { authorizeExternalPath: vi.fn(), onLocalLogTailChanged: vi.fn(() => () => {}) }
+      fs: { onLocalLogTailChanged: vi.fn(() => () => {}) }
     })
     mocks.readRuntimeFileContent.mockReset()
     mocks.getState.mockReset()

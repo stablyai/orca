@@ -48,7 +48,6 @@ describe('launchAgentSessionContinuation', () => {
     writeClipboardText.mockClear()
     vi.stubGlobal('window', {
       api: {
-        agentTrust: { markTrusted: vi.fn(async () => undefined) },
         ui: { writeClipboardText }
       }
     })
@@ -65,7 +64,6 @@ describe('launchAgentSessionContinuation', () => {
         prompt: 'continue the unfinished task',
         worktreeId: 'wt-1',
         groupId: 'group-1',
-        workspacePath: '/repo/worktree',
         initialCwd: '/repo/worktree/packages/app',
         launchSource: 'terminal_context_menu'
       })
@@ -110,7 +108,6 @@ describe('launchAgentSessionContinuation', () => {
         agent: 'codex',
         prompt: 'continue',
         worktreeId: 'wt-1',
-        workspacePath: '/repo/worktree',
         launchSource: 'sidebar'
       })
     ).resolves.toBe(false)
@@ -130,7 +127,6 @@ describe('launchAgentSessionContinuation', () => {
       agent: 'codex',
       prompt: 'continue',
       worktreeId: 'wt-1',
-      workspacePath: '/repo/worktree',
       launchSource: 'sidebar'
     })
 
@@ -167,7 +163,6 @@ describe('launchAgentSessionContinuation', () => {
       agent: 'codex',
       prompt: 'continue the unfinished task',
       worktreeId: 'wt-1',
-      workspacePath: '/repo/worktree',
       launchSource: 'sidebar'
     })
 
@@ -194,7 +189,6 @@ describe('launchAgentSessionContinuation', () => {
       agent: 'codex',
       prompt: 'continue',
       worktreeId: 'wt-1',
-      workspacePath: '/repo/worktree',
       launchSource: 'sidebar'
     })
 

@@ -27,6 +27,7 @@ import { launchAgentInStructuredNewTab } from './launch-agent-in-new-tab-structu
 type Delivery = 'auto-submit' | 'submit-after-ready' | 'draft'
 const structuredPlan = (prompt: string, promptDelivery: Delivery) =>
   adoptAgentSessionLaunchVerdict({
+    requestId: 'request-1',
     route: 'structured-native-chat',
     agent: 'codex',
     worktreeId: 'wt-1',

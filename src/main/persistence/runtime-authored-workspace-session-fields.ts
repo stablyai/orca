@@ -4,9 +4,9 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
  * Keeps session fields the renderer persist snapshot does not author across a full write.
  *
  * A session write replaces the stored object. Zustand-built payloads omit runtime-owned
- * client-hosted pages, and they omit-when-empty the write-once default-terminal-tab marker.
- * Without this, those slices vanish on the next desktop write and only show up missing after
- * restart.
+ * client-hosted pages and terminal close records, and they omit-when-empty the write-once
+ * default-terminal-tab marker. Without this, those slices vanish on the next desktop write and
+ * only show up missing after restart.
  *
  * Callers do not opt in: the Store applies this inside setLocalWorkspaceSession and
  * setHostWorkspaceSession, so the before-unload stage path inherits it too.
@@ -42,6 +42,16 @@ export function preserveRuntimeAuthoredWorkspaceSessionFields(
     result = {
       ...result,
       clientHostedBrowserPagesByWorktree: prior.clientHostedBrowserPagesByWorktree
+    }
+  }
+  // Why: close records are main's alone (its close transaction); a renderer save never carries them.
+  if (
+    next.closedTerminalTabTombstonesByTabId === undefined &&
+    prior?.closedTerminalTabTombstonesByTabId !== undefined
+  ) {
+    result = {
+      ...result,
+      closedTerminalTabTombstonesByTabId: prior.closedTerminalTabTombstonesByTabId
     }
   }
   // Why union: persist snapshots omit this write-once map (empty Zustand slice, omit-when-empty

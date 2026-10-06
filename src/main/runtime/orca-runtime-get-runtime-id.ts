@@ -180,11 +180,15 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
     return this.workspaceSessions.get(worktreeId)
   }
 
+  protected getOwnWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
+    return this.workspaceSessions.getOwnPartition(worktreeId)
+  }
+
   protected setWorkspaceSessionForWorktree(
     worktreeId: string,
     session: WorkspaceSessionState
   ): void {
-    this.workspaceSessions.set(worktreeId, session)
+    this.workspaceSessions.setForWorktree(worktreeId, session)
   }
 
   protected getKnownWorkspaceSessionWorktreeIds(): Set<string> {

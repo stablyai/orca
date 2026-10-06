@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,11 +8,14 @@ import {
   readPersistedLease,
   writeOlderBuildLease
 } from '../../runtime/agent-session-older-build-lease.test-fixture'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { supervisedPosixLaunch } from '../../provider-process/provider-process-supervisor'
 import {
   resolveStructuredSessionRecovery,
   type StructuredSessionRecoveryResolutionDeps
 } from './structured-agent-session-recovery-resolution'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const MATCHED: AgentSessionOwnerProbe = { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
@@ -30,10 +34,7 @@ async function newStoreDirectory(): Promise<string> {
 }
 
 async function openStore(directory?: string): Promise<AgentSessionRecordStore> {
-  return AgentSessionRecordStore.open({
-    directory: directory ?? (await newStoreDirectory()),
-    hostId: 'local'
-  })
+  return openTestAgentSessionRecordStore(directory ?? (await newStoreDirectory()))
 }
 
 async function reserve(store: AgentSessionRecordStore) {
@@ -62,7 +63,7 @@ async function reserve(store: AgentSessionRecordStore) {
   })
 }
 
-async function liveOwner(store: AgentSessionRecordStore) {
+async function liveOwner(store: AgentSessionRecordStore, pid = 4242) {
   const reserved = await reserve(store)
   const fence = reserved.record.lease.runtimeFence
   await store.commitProcessIdentity({
@@ -70,7 +71,7 @@ async function liveOwner(store: AgentSessionRecordStore) {
     fence,
     process: {
       hostId: 'local',
-      pid: 4242,
+      pid,
       processStartTimeMs: NOW - 1_000,
       spawnToken: 'spawn-recovery'
     },
@@ -81,7 +82,7 @@ async function liveOwner(store: AgentSessionRecordStore) {
     fence,
     link: {
       linkId: 'link-recovery',
-      handle: { provider: 'codex', threadId: 'thread-recovery' },
+      handle: codexProviderHandle('thread-recovery'),
       origin: 'created',
       mintedAtFence: fence,
       observedAt: NOW
@@ -242,6 +243,31 @@ describe('structured session recovery resolution', () => {
     })
   })
 
+  it('releases a Windows owner the probe matches without signalling its saved pid', async () => {
+    const store = await openStore()
+    await liveOwner(store)
+    await latch(store)
+    const stopOwnerProcess = vi.fn()
+
+    const result = await resolveStructuredSessionRecovery(
+      deps(store, () => ({ outcome: 'identity-matched', matchedOn: ['process-start-time'] }), {
+        stopOwnerProcess,
+        platform: 'win32'
+      }),
+      SESSION
+    )
+
+    expect(result).toBe('resolved')
+    // Windows stops a tree only through a child it still holds; a saved pid is never signalled.
+    expect(stopOwnerProcess).not.toHaveBeenCalled()
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      ownerProcess: null,
+      deathEvidence: null
+    })
+  })
+
   it('waits out a terminal owner an older build recorded, and never stops it', async () => {
     const directory = await newStoreDirectory()
     await liveOwner(await openStore(directory))
@@ -302,3 +328,72 @@ describe('structured session recovery resolution', () => {
     ).toBe('not-applicable')
   })
 })
+
+describe.runIf(process.platform !== 'win32')(
+  'structured session recovery of a supervised owner',
+  () => {
+    const recordedPids: number[] = []
+    const alive = (pid: number): boolean => {
+      try {
+        process.kill(pid, 0)
+        return true
+      } catch (error) {
+        return !(error instanceof Error && 'code' in error && error.code === 'ESRCH')
+      }
+    }
+
+    afterEach(() => {
+      for (const pid of recordedPids.splice(0)) {
+        if (alive(pid)) {
+          process.kill(pid, 'SIGKILL')
+        }
+      }
+    })
+
+    it('evicts only after the supervisor has reaped a provider that ignores SIGTERM', async () => {
+      const launch = supervisedPosixLaunch(
+        {
+          command: process.execPath,
+          args: [
+            '-e',
+            "process.on('SIGTERM', () => {}); process.stdout.write(process.pid + '\\n'); setInterval(() => {}, 60000)"
+          ]
+        },
+        process.env
+      )
+      const supervisor = spawn(launch.command, launch.args, {
+        env: launch.env,
+        stdio: ['pipe', 'pipe', 'ignore'],
+        detached: true
+      })
+      recordedPids.push(supervisor.pid!)
+      const provider = await new Promise<number>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('provider never started')), 10_000)
+        supervisor.stdout.once('data', (chunk: Buffer) => {
+          clearTimeout(timeout)
+          resolve(Number(chunk.toString().trim()))
+        })
+      })
+      recordedPids.push(provider)
+      const store = await openStore()
+      await liveOwner(store, supervisor.pid!)
+      await latch(store)
+
+      const result = await resolveStructuredSessionRecovery(
+        {
+          store,
+          // The recorded pid is the supervisor's; its absence is the proof recovery evicts on.
+          probeRecord: async () =>
+            alive(supervisor.pid!) ? MATCHED : { outcome: 'pid-absent' as const },
+          now: () => NOW + 10_000
+        },
+        SESSION
+      )
+
+      expect(result).toBe('resolved')
+      // Evicted on proof of death, which must hold for the provider too, not only the supervisor.
+      expect(store.getRecord(SESSION)?.lease.deathEvidence).not.toBeNull()
+      expect(alive(provider)).toBe(false)
+    })
+  }
+)

@@ -1,4 +1,5 @@
 import { isAgentSessionId, type AgentSessionRecord } from '../../shared/agent-session-record'
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
@@ -92,7 +93,7 @@ export class AgentSessionTabTable {
   private put(tabId: string, sessionId: string): void {
     const owner = this.sessionByTab.get(tabId)
     if (owner !== undefined && owner !== sessionId) {
-      throw new Error('agent_session_conflict')
+      throw agentSessionRefusalError('agent_session_conflict', { reason: 'tabIdTaken' })
     }
     this.hide(sessionId)
     this.sessionByTab.set(tabId, sessionId)
@@ -113,6 +114,26 @@ function reopenedTabId(sessionId: string, held: (tabId: string) => boolean): str
   return tabId
 }
 
+/** The sessions whose chat tab is shown, in tab order, skipping any without a record. */
+export function listVisibleAgentSessionIds(state: AgentSessionStoreState): string[] {
+  return (state.sessionTabs?.sessionIds() ?? []).filter((sessionId) => state.records.has(sessionId))
+}
+
+/** Unrecorded, `sessionIds` are the tab rows a chat opened while the import was owed left. */
+export function agentSessionVisibleTabIndex(state: AgentSessionStoreState): {
+  present: boolean
+  sessionIds: string[]
+} {
+  return {
+    present: state.sessionTabs !== null,
+    sessionIds: state.sessionTabs
+      ? listVisibleAgentSessionIds(state)
+      : (state.unrecordedSessionTabs?.sessionIds() ?? []).filter((sessionId) =>
+          state.records.has(sessionId)
+        )
+  }
+}
+
 export function setAgentSessionTabVisibility(
   state: AgentSessionStoreState,
   sessionId: string,
@@ -120,7 +141,7 @@ export function setAgentSessionTabVisibility(
   tabId?: string
 ): void {
   if (visible && !state.records.has(sessionId)) {
-    throw new Error('agent_session_identity_required')
+    throw agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
   }
   state.sessionTabs ??= new AgentSessionTabTable()
   if (visible) {
@@ -130,25 +151,28 @@ export function setAgentSessionTabVisibility(
   }
 }
 
-export type PersistedAgentSessionTab = { tabId: string; sessionId: string }
-
-export function serializeAgentSessionTabTable(table: AgentSessionTabTable): {
-  sessionTabs: PersistedAgentSessionTab[]
-  visibleSessionIds: string[]
-} {
-  return {
-    sessionTabs: table.entries().map(([tabId, sessionId]) => ({ tabId, sessionId })),
-    // Written for older builds, which restore tabs from this list; never read beside the table.
-    visibleSessionIds: table.sessionIds()
+export function showAgentSessionTabs(
+  state: AgentSessionStoreState,
+  sessionIds: readonly string[]
+): void {
+  for (const sessionId of sessionIds) {
+    if (state.records.has(sessionId)) {
+      setAgentSessionTabVisibility(
+        state,
+        sessionId,
+        true,
+        state.unrecordedSessionTabs?.tabIdFor(sessionId)
+      )
+    }
   }
 }
 
+export type PersistedAgentSessionTab = { tabId: string; sessionId: string }
+
 /**
- * Reads the persisted table, or seeds it from what older builds wrote: the visible session list and,
- * for a chat created by a build that recorded one, the tab id on its record. That record field is
- * read here and nowhere else, and only when the file carries no table.
- *
- * Deterministic on purpose: a parsed store must hash the same on every read of the same bytes.
+ * Reads the records file's table, or seeds it from what older builds wrote: the visible session list
+ * and, for a chat created by a build that recorded one, the tab id on its record. That record field
+ * is read here and nowhere else, and only when the file carries no table.
  */
 export function parseAgentSessionTabTable(
   file: { sessionTabs?: unknown; visibleSessionIds?: unknown },

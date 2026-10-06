@@ -25,6 +25,7 @@ import {
   toHostFilesystemPath,
   toHostRemovalPath
 } from './local-worktree-filesystem'
+import { isWorktreePathMissing } from './worktree-removal-safety'
 
 function completeExecFile(stdout = ''): void {
   runProcessMock.mockResolvedValue({ code: 0, signal: null, stdout, stderr: '', timedOut: false })
@@ -218,23 +219,68 @@ describe('local worktree filesystem runtime access', () => {
     })
   })
 
-  it('reports missing WSL stat targets with an ENOENT-shaped error', async () => {
+  // Captured verbatim from live hosts: GNU coreutils 9.4 (Ubuntu 24.04) and BusyBox v1.36.1.
+  it.each([
+    ['GNU', "stat: cannot statx '/mnt/c/repo/missing/.git': No such file or directory\n"],
+    ['GNU', "stat: cannot statx '/mnt/c/repo/missing/.git': Not a directory\n"],
+    ['BusyBox', "stat: can't stat '/mnt/c/repo/missing/.git': No such file or directory\n"],
+    ['BusyBox', "stat: can't stat '/mnt/c/repo/missing/.git': Not a directory\n"]
+  ])('reports a missing WSL stat target as ENOENT on %s userland', async (_userland, stderr) => {
     await withPlatform('win32', async () => {
-      failExecFile(1, "stat: cannot statx '/mnt/c/repo/missing/.git': No such file or directory\n")
+      failExecFile(1, stderr)
       const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
 
       await expect(access.statPath('/mnt/c/repo/missing/.git')).rejects.toMatchObject({
         code: 'ENOENT'
       })
+      await expect(isWorktreePathMissing('/mnt/c/repo/missing', access.statPath)).resolves.toBe(
+        true
+      )
     })
   })
 
-  it('does not treat an unreadable WSL stat target as missing', async () => {
+  it.each([
+    ['GNU', "stat: cannot statx '/mnt/c/repo/locked': Permission denied\n"],
+    ['BusyBox', "stat: can't stat '/mnt/c/repo/locked': Permission denied\n"]
+  ])(
+    'does not treat an unreadable WSL stat target as missing on %s userland',
+    async (_userland, stderr) => {
+      await withPlatform('win32', async () => {
+        failExecFile(1, stderr)
+        const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
+
+        await expect(access.statPath('/mnt/c/repo/locked')).rejects.toThrow('Permission denied')
+        // A delete that did not happen still has to look like a failure, or cleanup silently "succeeds".
+        await expect(isWorktreePathMissing('/mnt/c/repo/locked', access.statPath)).resolves.toBe(
+          false
+        )
+      })
+    }
+  )
+
+  it('pins the stat probe to the C locale so its error text stays English', async () => {
     await withPlatform('win32', async () => {
-      failExecFile(1, "stat: cannot statx '/mnt/c/repo/locked': Permission denied\n")
+      completeExecFile('directory')
+      await getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' }).statPath('/mnt/c/repo/feature')
+
+      const args = runProcessMock.mock.calls[0]?.[0].args as string[]
+      expect(args.at(-1)).toContain('LC_ALL=C stat -c %F --')
+    })
+  })
+
+  it('reports a translated stat failure as a failure rather than as absence', async () => {
+    await withPlatform('win32', async () => {
+      // Synthetic: no host available here ships a non-English locale, and the probe pins LC_ALL=C
+      // anyway. The point is the direction it errs if that pin ever comes off.
+      failExecFile(1, "stat: <translated verb> '/mnt/c/repo/missing': <translated errno>\n")
       const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
 
-      await expect(access.statPath('/mnt/c/repo/locked')).rejects.toThrow('Permission denied')
+      await expect(access.statPath('/mnt/c/repo/missing')).rejects.not.toMatchObject({
+        code: 'ENOENT'
+      })
+      await expect(isWorktreePathMissing('/mnt/c/repo/missing', access.statPath)).resolves.toBe(
+        false
+      )
     })
   })
 })

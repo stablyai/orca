@@ -28,10 +28,6 @@ import {
   subscribeToRuntimeTerminalData,
   toRemoteRuntimePtyId
 } from '@/runtime/runtime-terminal-stream'
-import {
-  createSshBackgroundStartupDelivery,
-  sshBackgroundLaunchWaitsForShellReady
-} from '@/lib/ssh-background-startup-delivery'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { runBestEffortAgentBackgroundCleanups } from '@/lib/agent-background-session-cleanup'
@@ -65,18 +61,6 @@ export async function launchAgentBackgroundSession(
     worktreePath: worktree.path,
     repo
   })
-  const preflight = requireTuiAgentConfig(agent).preflightTrust
-  if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
-    try {
-      await window.api.agentTrust.markTrusted({
-        preset: preflight,
-        workspacePath: worktree.path,
-        ...(launchHost.connectionId ? { connectionId: launchHost.connectionId } : {})
-      })
-    } catch {
-      // Best-effort: the user can still accept the trust prompt.
-    }
-  }
   const { platform: launchPlatform, isRemote } = launchHost
   const startupShell = resolveLocalWindowsAgentStartupShell({
     platform: launchPlatform,
@@ -114,12 +98,6 @@ export async function launchAgentBackgroundSession(
     })
   let paneKey = makePaneKey(reservedTabId, leafId)
   const sshConnectionId = launchHost.connectionId
-  const sshStartupDelivery = createSshBackgroundStartupDelivery({
-    command: sshConnectionId ? startupPlan.launchCommand : null,
-    waitForShellReady:
-      Boolean(sshConnectionId) && sshBackgroundLaunchWaitsForShellReady(startupPlan),
-    write: (ptyId, data) => window.api.pty.write(ptyId, data)
-  })
   // Route by the worktree's owner host, not the focused runtime.
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(store, worktreeId)
@@ -142,7 +120,6 @@ export async function launchAgentBackgroundSession(
     exitHandled = true
     unsubscribeExit()
     unsubscribeData()
-    sshStartupDelivery.clear()
     if (tab) {
       settleTabPtyBinding(tab.id, exitPtyId, code)
     }
@@ -165,9 +142,7 @@ export async function launchAgentBackgroundSession(
     onAgentStatus
   })
   const handleData = (data: string): void => {
-    data = sshStartupDelivery.handleData(data)
     onData?.(data)
-    sshStartupDelivery.schedule(ptyId)
     agentStatusConsumer.consume(data)
   }
   try {
@@ -202,9 +177,12 @@ export async function launchAgentBackgroundSession(
         cwd: worktree.path,
         command: startupPlan.launchCommand,
         ...(!sshConnectionId && isWslUncPath(worktree.path) ? { shellOverride: 'wsl.exe' } : {}),
-        ...(!startupPlan.startupCommandDelivery
-          ? {}
-          : { startupCommandDelivery: startupPlan.startupCommandDelivery }),
+        // Why: the relay types, waits for the shell and stages long lines on the host that owns the PTY.
+        ...(sshConnectionId
+          ? { commandDelivery: 'provider' as const, startupCommandDelivery: 'shell-ready' as const }
+          : startupPlan.startupCommandDelivery
+            ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+            : {}),
         env: paneEnv,
         launchConfig: startupPlan.launchConfig,
         launchToken,
@@ -221,7 +199,6 @@ export async function launchAgentBackgroundSession(
       })
       ptyId = result.id
       spawned = result
-      sshStartupDelivery.applyHostShellReadyArmed(result.shellReadyArmed)
     }
     const adopted = await adoptAgentBackgroundSessionTab({
       store,
@@ -235,7 +212,6 @@ export async function launchAgentBackgroundSession(
       runtimeTerminalHandle,
       onRetire: () => {
         exitHandled = true
-        sshStartupDelivery.clear()
         store.clearAgentLaunchConfig(paneKey)
       },
       ...(title ? { title } : {})
@@ -291,8 +267,6 @@ export async function launchAgentBackgroundSession(
       // alive regardless of whether the tab is hidden or mounted.
       unsubscribeExit = subscribeToPtyExit(ptyId, (code) => handleExit(ptyId, code))
     }
-    sshStartupDelivery.armFallback(ptyId)
-
     // Why: bind the explicit PTY and ownership before mount; an earlier mount
     // can double-spawn, while later tracking can miss user takeover.
     requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
@@ -310,7 +284,6 @@ export async function launchAgentBackgroundSession(
     const createdTab = tab
     runBestEffortAgentBackgroundCleanups(unsubscribeExit, unsubscribeData)
     runBestEffortAgentBackgroundCleanups(() => eagerPtyBuffer?.dispose())
-    runBestEffortAgentBackgroundCleanups(() => sshStartupDelivery.clear())
     if (createdTab) {
       runBestEffortAgentBackgroundCleanups(() => store.clearTabPtyId(createdTab.id, ptyId))
     }

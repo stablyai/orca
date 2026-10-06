@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
@@ -14,8 +15,9 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
 )
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
-vi.mock('./use-native-chat-font-scale', () => moduleFactories.useNativeChatFontScale())
+vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
+vi.mock('./use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
 vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
@@ -25,6 +27,15 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { readOutbox } from './structured-agent-session-outbox-storage'
+import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
+
+const NOT_SIGNED_IN = {
+  kind: 'refused',
+  code: 'agent_session_operation_invalid',
+  details: { reason: 'notSignedIn' }
+} as const
+// Retry beside it is the resend, so the words keep only the step before it.
+const NOT_SIGNED_IN_TEXT = 'Codex is not signed in for the selected account. Sign in first.'
 
 function sessionView(): React.JSX.Element {
   return (
@@ -99,17 +110,86 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     expect(mocks.retryLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
   })
 
-  it('shows why a failed launch failed beside Retry', () => {
+  it('keys a floating chat launch by its owner even before any path context exists', () => {
+    mocks.ownerWorktreeId = FLOATING_TERMINAL_WORKTREE_ID
+    mocks.fileLinkContext = null
     mocks.launchLifecycle = 'failed'
-    mocks.launchFailureReason = 'claude is not signed in'
     render(sessionView())
 
-    expect(screen.getByText('Chat could not be started. claude is not signed in')).toBeTruthy()
+    expect(mocks.lifecycleLookup).toHaveBeenCalledWith(FLOATING_TERMINAL_WORKTREE_ID, 'session-1')
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(mocks.retryLaunch).toHaveBeenCalledWith(FLOATING_TERMINAL_WORKTREE_ID, 'session-1')
+  })
+
+  it('words why a failed launch failed beside Retry from the refusal, never its code', () => {
+    mocks.launchLifecycle = 'failed'
+    mocks.launchFailure = NOT_SIGNED_IN
+    render(sessionView())
+
+    expect(screen.getByText(`Chat could not be started. ${NOT_SIGNED_IN_TEXT}`)).toBeTruthy()
+    expect(screen.queryByText(/agent_session_/)).toBeNull()
+  })
+
+  it("keeps a step the Retry doesn't take, and drops one it does", () => {
+    mocks.launchLifecycle = 'failed'
+    mocks.launchFailure = {
+      kind: 'refused',
+      code: 'agent_session_conflict',
+      details: { reason: 'claimConflicted' }
+    }
+    const { rerender } = render(sessionView())
+    expect(
+      screen.getByText(
+        'Chat could not be started. This chat is still open in a terminal agent. Quit that agent to continue the chat here.'
+      )
+    ).toBeTruthy()
+
+    mocks.launchFailure = {
+      kind: 'refused',
+      code: 'agent_session_journal_unreadable',
+      details: { reason: 'journalUnavailable' }
+    }
+    rerender(sessionView())
+    expect(
+      screen.getByText(
+        "Chat could not be started. Orca couldn't open this chat's history right now."
+      )
+    ).toBeTruthy()
+  })
+
+  it('says only that the chat could not start when the refusal names no reason', () => {
+    mocks.launchLifecycle = 'failed'
+    mocks.launchFailure = { kind: 'refused', code: 'agent_session_operation_invalid' }
+    render(sessionView())
+
+    expect(screen.getByText('Chat could not be started.')).toBeTruthy()
+    expect(screen.queryByText(/agent_session_/)).toBeNull()
+  })
+
+  it('shows the saved Arguments cause and correction beside launch Retry', () => {
+    mocks.launchLifecycle = 'failed'
+    mocks.launchFailure = agentSessionRefusalFailure({
+      code: 'agent_session_operation_invalid',
+      details: {
+        reason: 'attachFailed',
+        argumentProblem: { agent: 'Codex', option: '--remote', problem: 'unsupportedOption' }
+      }
+    })
+    render(sessionView())
+
+    expect(
+      screen.getByText(
+        "Codex couldn't start. Saved Arguments contain an unsupported option (--remote). Edit them in Settings > Agents > Arguments."
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText('Chat could not be started.')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(mocks.retryLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
   })
 
   it('keeps a stale reason off a launch that is no longer failed', () => {
     mocks.launchLifecycle = 'visibility-unknown'
-    mocks.launchFailureReason = 'claude is not signed in'
+    mocks.launchFailure = NOT_SIGNED_IN
     render(sessionView())
 
     expect(screen.getByText('Chat connection could not be confirmed.')).toBeTruthy()
@@ -177,10 +257,10 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     const { rerender } = render(sessionView())
 
     expect(composerSend()('still there?', [])).toBe(true)
-    mocks.launchFailureReason = 'claude is not signed in'
+    mocks.launchFailure = NOT_SIGNED_IN
     rerender(sessionView())
 
-    expect(screen.getByText('Chat could not be started. claude is not signed in')).toBeTruthy()
+    expect(screen.getByText(`Chat could not be started. ${NOT_SIGNED_IN_TEXT}`)).toBeTruthy()
     expect(mocks.call).not.toHaveBeenCalled()
     expect(readOutbox('session-1')).toEqual([
       expect.objectContaining({

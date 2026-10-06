@@ -302,9 +302,6 @@ describeDrawer('the device Back key reaching a sheet on the page', () => {
         host: SHELL_HOST,
         storage: {},
         faultGrant,
-        // What a shell that knows the lane offers, and the frame it would send. Without the first
-        // the page posts no claim at all, which is the older-shell arm the unit suites pin.
-        accepts: [backNames.claim],
         backFrame: backNames.frame
       })
       await page.goto(`${origin}/`, { waitUntil: 'load' })

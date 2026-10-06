@@ -15,8 +15,10 @@ import {
   normalizeState,
   parseState,
   shouldReplaceMarker,
+  splitDismissedAll,
   type AgentSessionResumeFailureInput,
   type AgentSessionResumeFailureRecord,
+  type KeepRecord,
   type RecoveryCapsuleState,
   type RecoveryEntry
 } from './agent-session-recovery-capsule-entries'
@@ -199,17 +201,22 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
-  /** Forgets the named sessions whatever their state. Unlike `clearAll`, this is not a fence: a
-   *  later teardown of the same chat may record a fresh offer. */
-  dismiss(sessionIds: readonly string[], now: number): Promise<number> {
+  /** Forgets the named sessions, or every session, whatever their state. Unlike `clearAll`, this
+   *  is not a fence: a later teardown of the same chat may record a fresh offer. */
+  dismiss(
+    sessionIds: readonly string[] | 'all',
+    now: number,
+    /** A record this answers true for stays: read against the stored marker, under the lock. */
+    keep: (marker: AgentSessionResumeMarker) => boolean = () => false
+  ): Promise<number> {
     return withFileTransactionLock(this.filePath, async () => {
-      const named = new Set(sessionIds)
+      const named = sessionIds === 'all' ? null : new Set(sessionIds)
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
       const dismissed = new Set(
         [...entries, ...failed]
+          .filter(({ marker }) => (named?.has(marker.sessionId) ?? true) && !keep(marker))
           .map((record) => record.marker.sessionId)
-          .filter((sessionId) => named.has(sessionId))
       )
       if (dismissed.size > 0) {
         await this.publish(
@@ -272,23 +279,24 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
-  clearAll(now: number): Promise<number> {
+  /** `keep` names records this host does not list; they stay for the Orca that can act on them. */
+  clearAll(now: number, keep: KeepRecord = () => false): Promise<number> {
     return withFileTransactionLock(this.filePath, async () => {
-      let entries: RecoveryEntry[]
+      let state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>
       try {
-        entries = normalizeState(await this.readState(), now).entries
+        state = normalizeState(await this.readState(), now)
       } catch {
         // Dismiss is an explicit request to forget this advisory file. Replace unreadable bytes
         // with an empty, fenced capsule so a late teardown writer cannot resurrect the offer.
         await this.publish({ entries: [], failed: [] }, now, now)
         return 0
       }
-      const pending = entries.filter((entry) => entry.state === 'pending')
-      // Dismiss is the explicit user request to forget every recovery record. An in-flight
-      // action may still finish, but its later complete/rollback becomes a no-op and cannot
-      // resurrect a row the user dismissed.
-      await this.publish({ entries: [], failed: [] }, now, now)
-      return pending.length
+      const { kept, dismissedPending } = splitDismissedAll(state, keep)
+      // Dismiss is the explicit user request to forget every recovery record it was shown. An
+      // in-flight action may still finish, but its later complete/rollback becomes a no-op and
+      // cannot resurrect a row the user dismissed.
+      await this.publish(kept, now, now)
+      return dismissedPending
     })
   }
 

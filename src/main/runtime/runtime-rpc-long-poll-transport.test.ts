@@ -44,6 +44,25 @@ describe('OrcaRuntimeRpcServer', () => {
     ).toBe('wait')
   })
 
+  it.each(['agent.launch', 'agent.launchReplay'])(
+    'keeps a prompted %s alive while it waits for the agent to be ready',
+    (method) => {
+      const prompt = { text: 'fix the build', delivery: 'submit' }
+      expect(
+        classifyRuntimeLongPoll({
+          id: 'req_launch',
+          authToken: 'token',
+          method,
+          params: { prompt }
+        })
+      ).toBe('wait')
+      // Without a prompt nothing waits on the agent, so the launch stays a short call.
+      expect(
+        classifyRuntimeLongPoll({ id: 'req_launch', authToken: 'token', method, params: {} })
+      ).toBeNull()
+    }
+  )
+
   it('keeps agent-prompt submission sockets alive during verification', () => {
     expect(
       classifyRuntimeLongPoll({

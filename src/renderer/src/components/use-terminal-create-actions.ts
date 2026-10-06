@@ -10,6 +10,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
@@ -96,6 +97,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
         state.activeGroupIdByWorktree[activeWorktreeId] ??
         state.groupsByWorktree[activeWorktreeId]?.[0]?.id
       const result = launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
         agent,
         worktreeId: activeWorktreeId,
         groupId: targetGroupId,
@@ -168,7 +170,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
   }, [])
 
   const handleDuplicateBrowserTab = useCallback(
-    (browserTabId: string) => {
+    (browserTabId: string, sourceUnifiedTabId: string) => {
       if (!activeWorktreeId) {
         return
       }
@@ -195,14 +197,16 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
           worktreeId: activeWorktreeId,
           environmentId: runtimeEnvironmentId,
           url: source.url,
-          profileId: source.sessionProfileId
+          profileId: source.sessionProfileId,
+          clientAfterTabId: sourceUnifiedTabId
         }).catch(showClientCreationActionError)
         return
       }
       try {
         createBrowserTab(activeWorktreeId, source.url, {
           ...buildDuplicatedBrowserTabOptions(source),
-          ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
+          ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {}),
+          afterTabId: sourceUnifiedTabId
         })
       } catch (error) {
         showClientCreationActionError(error)

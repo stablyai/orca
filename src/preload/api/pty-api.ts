@@ -3,6 +3,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
@@ -17,6 +18,7 @@ import type { TerminalViewAttributes } from '../../shared/terminal-view-attribut
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyManagementApi } from './pty-management-api'
 import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
+import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'
 
 export type PtyApi = {
   spawn: (opts: {
@@ -75,14 +77,21 @@ export type PtyApi = {
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }>
-  write: (id: string, data: string) => void
-  writeAccepted: (id: string, data: string) => Promise<boolean>
+  write: (id: string, data: string, inputKind: TerminalInputKind) => void
+  /** `requireWriteSettlement` waits for the provider's acknowledgment on any provider. */
+  writeAccepted: (
+    id: string,
+    data: string,
+    inputKind: TerminalInputKind,
+    options?: { requireWriteSettlement?: true }
+  ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void
   reportGeometry: (id: string, cols: number, rows: number) => void
   signal: (id: string, signal: string) => void
   clearBuffer: (id: string) => void
+  resetInputModes: (id: string) => void
   kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
   ackColdRestore: (id: string) => void
   ackData: (id: string, charCount: number, processedChars?: number) => void
@@ -124,6 +133,11 @@ export type PtyApi = {
     }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>
+  /** Local panes only; never joined for any other pane. */
+  isCodexOnSharedServer: (id: string) => Promise<CodexSharedServerStatus>
+  /** Runs the fix with the pane's own Codex; true only once verified. Local panes only. */
+  disableCodexSharedServerAutoStart: (id: string) => Promise<boolean>
+  stopCodexSharedServer: (id: string) => Promise<boolean>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
   listSessions: (scope?: PtySessionListScope) => Promise<PtyListedSession[]>
@@ -228,6 +242,7 @@ export type PtyApi = {
     }) => void
   ) => () => void
   onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void
+  onResetInputModesRequest: (callback: (data: { ptyId: string }) => void) => () => void
   sendSerializedBuffer: (
     requestId: string,
     snapshot: {

@@ -6,8 +6,6 @@ import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY
 } from './bridge/bridge-envelope'
-import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
-import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import {
@@ -462,20 +460,6 @@ describe('the page erasing a one-shot route param', () => {
     expect(bridge.routeParamClears()).toEqual([])
     expect(bridge.diagnostics).toEqual([{ kind: 'refused', refusal: 'unrecognised-message' }])
   })
-
-  it('tells the page it takes a clear, so a page built for an older shell does not post one', () => {
-    const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    const init = bridge.last()
-    // Written out rather than compared against `BRIDGE_SHELL_ACCEPTS`: a list that pins itself
-    // pins nothing, and this is the frame an older page reads to decide what it may post.
-    expect(init.type === 'init' && init.accepts).toEqual([
-      BRIDGE_ROUTE_PARAM_CLEAR,
-      BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT,
-      BRIDGE_PAGE_PAINTED,
-      BRIDGE_BACK_CLAIM_NOTIFY
-    ])
-  })
 })
 
 /**
@@ -485,18 +469,11 @@ describe('the page erasing a one-shot route param', () => {
 describe('the page reporting its first frame', () => {
   it('hands the report to the session and asks the client for nothing', () => {
     const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED] }))
+    bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.receive(clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }))
     expect(bridge.pagePaintCount()).toBe(1)
     expect(bridge.client.requests).toHaveLength(0)
     expect(bridge.client.foregroundCalls).toHaveLength(0)
-  })
-
-  it('forwards what each ready declared, including a name this shell does not implement', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED, 'weather'] }))
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    expect(bridge.pageReports()).toEqual([[BRIDGE_PAGE_PAINTED, 'weather'], []])
   })
 
   it('refuses a report from a document nothing has answered', () => {

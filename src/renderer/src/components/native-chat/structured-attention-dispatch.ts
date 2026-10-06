@@ -13,15 +13,19 @@
  * adapter, and the same delivery tail — so suppression, acknowledgement, addressing, the success
  * sound and the blocked-permission fallback all have exactly one implementation.
  *
- * EVERY SETTLED TURN NOTIFIES, matching the CLI lane: success says "finished", and failure and
- * cancellation say "stopped" through the shipped `agentInterrupted` flag rather than a second
- * vocabulary. A turn with no outcome is UNKNOWN — the host sends no event for one, and nothing
- * here may turn that absence into success.
+ * EVERY SETTLED TURN NOTIFIES, matching the CLI lane: the outcome picks the wording — "finished",
+ * "failed" or "stopped" — exactly as the hook lane's verdict does. A turn with no outcome is UNKNOWN — the host sends no event for one, and nothing
+ * here may turn that absence into success. A request that settles while a prompt (a subagent's
+ * approval, say) waits on the user is worded "needs input" instead, as the hook lane words a
+ * blocked row.
  *
  * Unread and delivery come out of ONE `resolveAgentAttention` decision. "Do not alert me about
  * something I am watching" is already answered by focus, in the surface adapter's viewed gates and
  * in main's `suppressWhenFocused`; there is no second suppression path here.
  */
+import { notificationSourceForOwner } from '../../../../shared/notification-source'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { AGENT_JOURNAL_TURN_OUTCOMES } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
@@ -38,7 +42,8 @@ import type { StructuredTab } from './structured-agent-session-tabs'
 
 export function dispatchStructuredTurnCompletionAttention(
   tab: StructuredTab,
-  completion: AgentSessionTurnCompletion
+  completion: AgentSessionTurnCompletion,
+  subscriptionTarget?: RuntimeClientTarget
 ): void {
   // ABSENT OUTCOME IS UNKNOWN AND LIGHTS NOTHING. The wire type makes it required and this host
   // never omits it, but a host that predates the field reaches here as `undefined`, and reading
@@ -102,15 +107,22 @@ export function dispatchStructuredTurnCompletionAttention(
           worktreeId: request.workspaceId,
           paneKey: request.subjectKey ?? undefined,
           ...getNotificationWorkspaceLabels(state, request.workspaceId, tab.label),
+          notificationSourceId: notificationSourceForOwner(
+            // The receiving subscription identifies the paired source even when tab ownership is ambiguous.
+            subscriptionTarget?.kind === 'environment'
+              ? { executionHostId: null, runtimeEnvironmentId: subscriptionTarget.environmentId }
+              : resolveNotificationTabOwner(state, tab),
+            state
+          ),
           terminalTitle: tab.label,
           isActiveWorktree: request.workspaceIsActive,
           ...(row?.agentType ? { agentType: row.agentType } : {}),
           // 'done' is what the host told us, not an inference from the row — the row's own state
           // can still read 'working' when the completion outruns the status re-projection, and
-          // main words a 'working' notification as "working". The outcome picks the wording from
-          // there: interrupted covers failure and cancellation alike.
-          agentState: 'done',
-          agentInterrupted: completion.outcome !== 'success',
+          // main words a 'working' notification as "working". The outcome picks the wording from there.
+          // `awaitingUser` is the row's 'blocked': the user has a prompt to answer.
+          agentState: completion.awaitingUser ? 'blocked' : 'done',
+          agentTurnOutcome: completion.outcome,
           ...(row?.prompt ? { agentPrompt: row.prompt } : {}),
           ...(row?.lastAssistantMessage
             ? { agentLastAssistantMessage: row.lastAssistantMessage }

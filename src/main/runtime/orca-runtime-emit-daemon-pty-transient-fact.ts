@@ -5,7 +5,17 @@ import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
 } from '../../shared/terminal-side-effect-facts'
-import { isCursorNativeAgentTitle, normalizeTerminalTitle } from '../../shared/agent-detection'
+import {
+  detectAgentStatusFromTitle,
+  isCursorNativeAgentTitle,
+  normalizeTerminalTitle
+} from '../../shared/agent-detection'
+import {
+  getLeafDisplayRecord,
+  getPtyDisplayRecord,
+  type TitleDisplayClear
+} from './runtime-worktree-status-projection'
+import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { TerminalTitleFactMeta } from '../../shared/terminal-output-side-effects'
 
 export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
@@ -23,6 +33,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
           kind: 'command-finished',
           exitCode: fact.exitCode
         })
+        this.openCodeRunLifetime.onCommandFinished(ptyId, fact.exitCode)
         return
       case 'pr-link':
         this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link: fact.link })
@@ -51,6 +62,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
       pty.tailPendingAnsi = ''
+      pty.commandPaint = undefined
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.tailPendingAnsi = ''
@@ -184,9 +196,24 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
   /** Display fallback for identities intentionally omitted from liveness records. */
   protected getTrackedDisplayTitleForPty(ptyId: string): string | null {
     return (
+      this.getPtyTitleDisplayClear(ptyId)?.title ??
       this.getTrackedRawTitleForPty(ptyId) ??
       this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.getLastNormalizedTitle() ??
       null
     )
+  }
+
+  /** The stale-working timer's display-only clear of this PTY's native title, while it stands. */
+  protected getPtyTitleDisplayClear(ptyId: string | null | undefined): TitleDisplayClear | null {
+    const clear = ptyId ? this.ptysById.get(ptyId)?.titleDisplayClear : null
+    return clear ? { ...clear, status: detectAgentStatusFromTitle(clear.title) } : null
+  }
+
+  protected getPtyDisplayRecord(pty: RuntimePtyWorktreeRecord): RuntimePtyWorktreeRecord {
+    return getPtyDisplayRecord(pty, this.getPtyTitleDisplayClear(pty.ptyId))
+  }
+
+  protected getLeafDisplayRecord(leaf: RuntimeLeafRecord): RuntimeLeafRecord {
+    return getLeafDisplayRecord(leaf, this.getPtyTitleDisplayClear(leaf.ptyId))
   }
 }

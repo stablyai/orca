@@ -97,17 +97,3 @@ export function listReferencesCommand(host: RemoteHostPlatform, remoteHome: stri
     `printf '%s\\n' ${REFS_OK}`
   ].join('\n')
 }
-
-// A concurrent installer may already have recreated the original directory.
-export function restoreEntryCommand(
-  host: RemoteHostPlatform,
-  source: string,
-  destination: string
-): string {
-  if (isWindowsRemoteHost(host)) {
-    return powerShellCommand(
-      `if (-not (Test-Path -LiteralPath ${powerShellLiteral(destination)})) { Move-Item -LiteralPath ${powerShellLiteral(source)} -Destination ${powerShellLiteral(destination)} -ErrorAction Stop; 'MOVED' } else { 'BUSY' }`
-    )
-  }
-  return `if [ ! -e ${shellEscape(destination)} ]; then mv ${shellEscape(source)} ${shellEscape(destination)} && echo MOVED; else echo BUSY; fi`
-}

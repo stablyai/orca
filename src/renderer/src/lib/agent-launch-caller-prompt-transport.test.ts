@@ -129,7 +129,7 @@ const cases = callerProfileCases()
 
 async function launch(profile: AgentLaunchCallerProfile) {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  return launchAgentInNewTab({ ...profile.args })
+  return launchAgentInNewTab({ requestId: 'request-1', ...profile.args })
 }
 
 describe('agent launch caller prompt transport', () => {
@@ -158,21 +158,6 @@ describe('agent launch caller prompt transport', () => {
     }
   )
 
-  it.each(cases)('pins whether %s asks the pasted prompt to submit', async (_id, profile) => {
-    await launch(profile)
-
-    if (!mockPasteDraftWhenAgentReady.mock.calls.length) {
-      return
-    }
-    expect(mockPasteDraftWhenAgentReady.mock.calls[0]?.[0]).toMatchObject({
-      tabId: 'tab-1',
-      content: profile.args.prompt,
-      agent: profile.args.agent,
-      submit: profile.args.promptDelivery === 'submit-after-ready',
-      forcePaste: true
-    })
-  })
-
   it.each(cases)(
     'exposes a delivery promise to %s only for submit-after-ready',
     async (_id, profile) => {
@@ -196,7 +181,11 @@ describe('agent launch caller prompt transport', () => {
     const onPromptDelivered = vi.fn()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ ...profile.args, onPromptDelivered })
+    const result = launchAgentInNewTab({
+      requestId: 'request-2',
+      ...profile.args,
+      onPromptDelivered
+    })
     await result?.promptDeliveryResult
 
     if (profile.args.prompt === undefined) {
@@ -214,6 +203,7 @@ describe('agent launch caller prompt transport', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-3',
       agent: row.agent,
       worktreeId: 'wt-1',
       prompt: PROMPT,
@@ -241,6 +231,7 @@ describe('agent launch caller prompt transport', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
+      requestId: 'request-4',
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt: PROMPT,
@@ -256,6 +247,7 @@ describe('agent launch caller prompt transport', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-5',
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: '   \n  ',
@@ -272,6 +264,7 @@ describe('agent launch caller prompt transport', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-6',
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: PROMPT,

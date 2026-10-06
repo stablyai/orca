@@ -10,7 +10,9 @@ import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
 } from '../../../src/shared/native-chat-turn-status'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-drafts'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
@@ -37,6 +39,8 @@ export type MobileNativeChatController = {
   /** Structured lane: host-recorded turn timing for the per-turn status rows. */
   nativeChatWorkingStartedAt: number | null
   nativeChatSettledTurns: NativeChatSettledTurns | null
+  /** Structured lane: the journal that places each transcript row in its turn. */
+  nativeChatTurnJournal: NativeChatTurnJournal | null
   nativeChatCanStop: boolean
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */
@@ -44,6 +48,8 @@ export type MobileNativeChatController = {
   /** Host/workspace/tab/session scope for stateful streaming suppression. */
   nativeChatStreamScopeKey: string
   nativeChatPermission: ReturnType<typeof detectAgentPermission>
+  /** Terminal prompt occurrence; a replacement resets only the card's local submission state. */
+  nativeChatPromptKey: string | null
   nativeChatQuestion: ReturnType<typeof parseAgentQuestion>
   /** The pending ask, already null while dismissed (dismissal lives here so it
    *  survives the chat-view subtree unmounting on a view toggle). */
@@ -57,12 +63,20 @@ export type MobileNativeChatController = {
     selections: AskAnswerSelection[]
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
+  /** Terminal lane: fold the occurrence to a strip and free Send, writing nothing. */
+  collapseNativeChatAsk: () => void
+  collapseNativeChatPrompt?: () => void
+  /** The collapsed terminal occurrence, shown as a strip above the composer. */
+  nativeChatCollapsedPrompt: { title: string; expand: () => void } | null
   handleNativeChatCancelPrompt?: (prompt?: {
     itemId: string
     expectedRevision: number
   }) => Promise<boolean>
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
   handleNativeChatStop: () => void
+  /** Host-held queued drafts shown as cards above the composer (structured lane; any host
+   *  that publishes them). */
+  nativeChatQueued: MobileStructuredQueuedMessageControls
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
   handleNativeChatQuestionAnswer: (text: string) => Promise<boolean>

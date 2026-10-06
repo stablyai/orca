@@ -3,15 +3,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
-import { openJournalDatabase, type OpenJournalDatabase } from './journal-database'
-import { journalDatabaseFile } from './journal-paths'
+import type { JournalHostDatabase } from './journal-host-database'
 import { replayJournal } from './journal-open'
-import { insertJournalRow, upsertJournalSessionRow } from './journal-row-table'
 import type { JournalRow } from './journal-row-schema'
 import * as reducer from './journal-reducer'
+import {
+  openTestJournalHostDatabase,
+  insertTestJournalRow,
+  publishTestJournalEpoch,
+  insertTestJournalRowJson
+} from './journal-host-database-test-support'
 
 let root: string
-let opened: OpenJournalDatabase
+let opened: JournalHostDatabase
 const sessionId = 'streaming-session'
 const epoch = 'epoch-1'
 
@@ -43,18 +47,18 @@ function revision(seq: number, text = 'content'): JournalRow {
 }
 
 function put(row: JournalRow): void {
-  insertJournalRow(opened.db, sessionId, row)
+  insertTestJournalRow(opened.db, sessionId, row)
 }
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-stream-replay-'))
-  opened = openJournalDatabase(journalDatabaseFile(root))
-  upsertJournalSessionRow(opened.db, sessionId, epoch, 1)
+  opened = openTestJournalHostDatabase(root)
+  publishTestJournalEpoch(opened.db, sessionId, epoch)
 })
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  opened.db.close()
+  opened.close()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -86,7 +90,7 @@ describe('streaming journal replay', () => {
       }
       apply(state, row)
     })
-    const loaded = replayJournal(opened.db, false, sessionId)!
+    const loaded = replayJournal(opened.db, sessionId)!
     expect(loaded.state.items.size).toBe(1)
     expect(loaded.state.items.get('message-1')?.revision).toBe(2049)
     expect(loaded.state.lastSequence).toBe(2049)
@@ -108,47 +112,45 @@ describe('streaming journal replay', () => {
       }
       apply(state, row)
     })
-    const loaded = replayJournal(opened.db, false, sessionId)!
+    const loaded = replayJournal(opened.db, sessionId)!
     expect(loaded.state.lastSequence).toBe(300)
     expect(checkpoints.map((entry) => entry.busy)).toEqual([0, 0])
   })
 
-  it('keeps the prefix but latches read-only for a future row beyond a gap', () => {
+  it('reads past a gap to a future row, which names the newer row and no damage', () => {
     put(anchor())
     put(revision(2))
     put(revision(4))
     put({ ...revision(5), v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION + 1 })
-    const loaded = replayJournal(opened.db, false, sessionId)!
-    expect(loaded).toMatchObject({ readOnly: true, corrupt: true, malformedRows: 0 })
-    expect(loaded.truncateFrom).toBeUndefined()
+    const loaded = replayJournal(opened.db, sessionId)!
+    expect(loaded).toMatchObject({ newer: { sequence: 5 }, damage: null })
     expect(loaded.state.items.get('message-1')?.revision).toBe(2)
     expect(loaded.state.lastSequence).toBe(2)
     const checkpoint = opened.db.pragma('wal_checkpoint(TRUNCATE)') as { busy: number }[]
     expect(checkpoint[0].busy).toBe(0)
   })
 
-  it('keeps gap repair precedence when a later row is malformed', () => {
+  it('names the first damage when a later row is malformed too', () => {
     put(anchor())
     put(revision(2))
     put(revision(4))
-    opened.db
-      .prepare('INSERT INTO journal_rows VALUES (?, ?, ?, ?, ?)')
-      .run(sessionId, epoch, 5, 5, '{')
-    const loaded = replayJournal(opened.db, false, sessionId)!
+    insertTestJournalRowJson(opened.db, sessionId, 5, '{')
+    const loaded = replayJournal(opened.db, sessionId)!
     expect(loaded).toMatchObject({
-      readOnly: false,
-      corrupt: true,
-      malformedRows: 1,
-      truncateFrom: 4
+      newer: null,
+      damage: { sequence: 3, cause: 'sequence-gap' }
     })
     expect(loaded.state.lastSequence).toBe(2)
   })
 
-  it('rejects an unanchored prefix before a later gap', () => {
+  it('names a missing epoch row before a later gap', () => {
     put(revision(1))
     put(revision(3))
-    const loaded = replayJournal(opened.db, false, sessionId)!
-    expect(loaded).toMatchObject({ readOnly: false, corrupt: true, truncateFrom: 1 })
+    const loaded = replayJournal(opened.db, sessionId)!
+    expect(loaded).toMatchObject({
+      newer: null,
+      damage: { sequence: 1, cause: 'no-epoch-row' }
+    })
     expect(loaded.state.items.size).toBe(0)
     expect(loaded.state.lastSequence).toBe(0)
   })

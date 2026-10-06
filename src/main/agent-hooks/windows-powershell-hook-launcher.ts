@@ -42,8 +42,7 @@ export function getWindowsPowerShellExecutablePath(): string {
  *
  * #18875 took that answer for the Claude lifecycle hook, which now registers the
  * managed `.cmd` path directly (`windows-direct-cmd-hook-command.ts`) and reaches
- * this launcher only when the profile path is not cmd-safe or Git Bash is not
- * resolvable. Every other caller still comes through here on every event.
+ * this launcher only when the profile path is not cmd-safe. Every other caller still comes through here on every event.
  */
 export const WINDOWS_POWERSHELL_HOOK_SWITCHES = '-NoProfile'
 

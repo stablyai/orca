@@ -1,3 +1,4 @@
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 // @vitest-environment happy-dom
 import {
   makeRepo as makeGridTestRepo,
@@ -136,6 +137,7 @@ describe('launching from the session grid', () => {
         launchSessionGridTab(TARGET_WT, host)
       } else {
         launchAgentInNewTab({
+requestId: newAgentLaunchRequestId(),
           agent: 'claude',
           worktreeId: TARGET_WT,
           executionHostId: host,
@@ -175,6 +177,7 @@ describe('launching from the session grid', () => {
     const before = foreground()
 
     const result = launchAgentInNewTab({
+requestId: newAgentLaunchRequestId(),
       agent: 'claude',
       worktreeId: TARGET_WT,
       activate: false,
@@ -193,6 +196,7 @@ describe('launching from the session grid', () => {
     const before = foreground()
 
     const result = launchAgentInNewTab({
+requestId: newAgentLaunchRequestId(),
       agent: 'claude',
       worktreeId: ACTIVE_WT,
       activate: false,
@@ -207,7 +211,8 @@ describe('launching from the session grid', () => {
 
   // The tab bar's `+` is the other caller, and it still hands focus to what it just opened.
   it('still activates for a caller that did not ask to stay put', () => {
-    const result = launchAgentInNewTab({ agent: 'claude', worktreeId: ACTIVE_WT })
+    const result = launchAgentInNewTab({
+requestId: newAgentLaunchRequestId(), agent: 'claude', worktreeId: ACTIVE_WT })
 
     if (result?.surface.kind !== 'local-terminal') {
       throw new Error('Expected terminal launch')

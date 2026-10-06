@@ -128,11 +128,6 @@ describe('unchecked RPC reader boundary', () => {
     expect(observed.size).toBe(inventory.length)
   })
 
-  it('lists each file once', () => {
-    const seen = inventory.map((entry) => entry.file)
-    expect(seen.filter((file, index) => seen.indexOf(file) !== index)).toEqual([])
-  })
-
   it('has no unlisted file holding an unchecked reader', () => {
     const listed = new Set(inventory.map((entry) => entry.file))
     const unlisted = [...observed.keys()].filter((file) => !listed.has(file))

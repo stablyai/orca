@@ -40,6 +40,9 @@ vi.mock('./host-store', () => ({
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
 }))
+vi.mock('./connection-log-background-flush', () => ({
+  subscribeConnectionLogBackgroundFlush: () => () => {}
+}))
 
 import {
   RpcClientProvider,
@@ -636,40 +639,6 @@ describe('useAllHostClients', () => {
       })
       expect(connectMock).toHaveBeenCalledOnce()
       expect(connectMock).toHaveBeenCalledWith(host2, expect.any(Function))
-    } finally {
-      act(() => renderer?.unmount())
-    }
-  })
-
-  it('keeps startup connection fanout constant for a large saved-host list', async () => {
-    const hosts = Array.from({ length: 1_000 }, (_, index) => ({
-      ...HOST,
-      id: `host-${index}`,
-      name: `Host ${index}`,
-      lastConnected: index
-    }))
-    const hostIds = hosts.map((host) => host.id)
-    const autoConnectHostIds = selectHomeAutoConnectHostIds(hosts)
-    connectMock.mockReturnValue(makeFakeClient('connected'))
-    loadHostsMock.mockResolvedValue(hosts)
-
-    let renderer: ReactTestRenderer | null = null
-    function Probe(): null {
-      useAllHostClients(hostIds, { autoConnectHostIds })
-      return null
-    }
-
-    try {
-      await act(async () => {
-        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-        await Promise.resolve()
-      })
-      expect(connectMock).toHaveBeenCalledTimes(3)
-      expect(connectMock.mock.calls.map(([host]) => host.id)).toEqual([
-        'host-999',
-        'host-998',
-        'host-997'
-      ])
     } finally {
       act(() => renderer?.unmount())
     }

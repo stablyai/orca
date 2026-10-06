@@ -4,7 +4,14 @@ import React, { act, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
-import CodexRestartChip from './CodexRestartChip'
+import CodexRestartChipComponent from './CodexRestartChip'
+
+const returnFocus = vi.fn()
+function CodexRestartChip(
+  props: Omit<React.ComponentProps<typeof CodexRestartChipComponent>, 'onReturnFocus'>
+) {
+  return <CodexRestartChipComponent {...props} onReturnFocus={returnFocus} />
+}
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -30,6 +37,7 @@ function button(scope: ParentNode, label: string): HTMLButtonElement {
 }
 
 beforeEach(() => {
+  returnFocus.mockReset()
   useAppStore.setState(useAppStore.getInitialState(), true)
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -67,30 +75,6 @@ describe('CodexRestartChip pane ownership', () => {
     expect(container.textContent).not.toContain('old-one@example.com')
   })
 
-  it('uses configuration wording for a home-route restart', async () => {
-    useAppStore.setState({
-      codexRestartNoticeByPtyId: {
-        [PTY_ONE]: {
-          previousAccountLabel: 'System default',
-          nextAccountLabel: 'System default',
-          previousAccountId: null,
-          nextAccountId: null,
-          homeRouteChanged: true
-        }
-      }
-    })
-
-    await act(async () => {
-      root.render(<CodexRestartChip ptyId={PTY_ONE} />)
-    })
-
-    expect(container.textContent).toContain('Codex setup changed')
-    expect(container.textContent).toContain('This Codex session is using an outdated configuration')
-    expect(container.textContent).toContain(
-      'Restart this session to load your current Codex configuration.'
-    )
-  })
-
   it('restarts only the pane whose action was clicked', async () => {
     useAppStore.setState({
       codexRestartNoticeByPtyId: {
@@ -118,6 +102,7 @@ describe('CodexRestartChip pane ownership', () => {
       button(firstPane, 'Restart').click()
     })
 
+    expect(returnFocus).toHaveBeenCalledOnce()
     const state = useAppStore.getState()
     expect(state.pendingCodexPaneRestartIds).toEqual({ [PTY_ONE]: true })
     expect(state.codexRestartNoticeByPtyId[PTY_ONE]?.restartRequested).toBe(true)
@@ -155,6 +140,7 @@ describe('CodexRestartChip pane ownership', () => {
       button(firstPane, 'Keep old account').click()
     })
 
+    expect(returnFocus).toHaveBeenCalledOnce()
     expect(forgetStalePanes).toHaveBeenCalledExactlyOnceWith({ ptyIds: [PTY_ONE] })
     expect(useAppStore.getState().codexRestartNoticeByPtyId[PTY_ONE]?.dismissed).toBe(true)
     expect(useAppStore.getState().codexRestartNoticeByPtyId[PTY_TWO]?.dismissed).toBeUndefined()
@@ -272,6 +258,67 @@ describe('CodexRestartChip pane focus', () => {
     })
     return terminalInput
   }
+
+  it.each(['outside', 'keep', 'escape', 'restart'])(
+    'returns focus to the terminal after %s',
+    async (action) => {
+      const terminalInput = await renderPane(true)
+      returnFocus.mockImplementation(() => terminalInput.focus())
+      const dialog = container.querySelector('[role="dialog"]')!
+      await act(async () => {
+        if (action === 'outside') {
+          dialog.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))
+        } else if (action === 'escape') {
+          dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+        } else {
+          button(container, action === 'restart' ? 'Restart' : 'Keep old account').click()
+        }
+      })
+      expect(document.activeElement).toBe(terminalInput)
+      expect(container.querySelector('[role="dialog"]')).toBeNull()
+      expect(returnFocus).toHaveBeenCalledOnce()
+      if (action !== 'restart') {
+        expect(forgetStalePanes).toHaveBeenCalledExactlyOnceWith({ ptyIds: [PTY_ONE] })
+        expect(useAppStore.getState().pendingCodexPaneRestartIds).toEqual({})
+      }
+    }
+  )
+
+  it('does not dismiss when the card body is clicked', async () => {
+    await renderPane(true)
+    await act(async () => {
+      container
+        .querySelector('[role="dialog"] > div')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(returnFocus).not.toHaveBeenCalled()
+    expect(forgetStalePanes).not.toHaveBeenCalled()
+  })
+
+  it('does not dismiss when a card text selection ends on the backdrop', async () => {
+    await renderPane(true)
+    const dialog = container.querySelector('[role="dialog"]')!
+    await act(async () => {
+      dialog.querySelector('div')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      dialog.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(returnFocus).not.toHaveBeenCalled()
+    expect(forgetStalePanes).not.toHaveBeenCalled()
+  })
+
+  it('does not dismiss on a secondary mouse button press', async () => {
+    await renderPane(true)
+    await act(async () => {
+      container
+        .querySelector('[role="dialog"]')!
+        .dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 2 }))
+    })
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(returnFocus).not.toHaveBeenCalled()
+  })
 
   it('focuses the dialog itself for the active stale pane', async () => {
     const terminalInput = await renderPane(true)

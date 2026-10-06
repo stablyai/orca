@@ -1,5 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { waitForProcessExitUntil } from './codex-process-exit-deadline'
+import { waitForProcessExitUntil } from '../provider-process/provider-process-exit-deadline'
+import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import {
@@ -7,7 +8,7 @@ import {
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn
 } from './codex-app-server-process-tree-kill'
-import { createCodexAppServerRecordReader } from './codex-app-server-record-reader'
+import { createProviderRecordReader } from '../provider-process/provider-record-reader'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -25,13 +26,13 @@ export type CodexAppServerInvocation = {
    *
    * Required, and `null` only for a guest-side launcher (wsl.exe) where the host
    * path means nothing. Optional would let a native builder omit it and silently
-   * fall back to pairing against a cmd.exe wrapper with no type error.
+   * skip the pairing with no type error.
    */
   cliPath: string | null
   /** Overlay applied on top of the inherited environment (e.g. CODEX_HOME). */
   env?: Record<string, string>
-  /** Env keys stripped from the inherited environment before spawn (e.g. an
-   *  inherited CODEX_HOME, so a default-home grant runs against the real ~/.codex). */
+  /** Env keys stripped from the inherited environment before spawn (e.g. an inherited
+   *  CODEX_HOME, so `listCodexHooks` with no `codexHome` lists the real ~/.codex). */
   envToDelete?: readonly string[]
   /** Whole-session deadline. The codex child is SIGKILLed when it lapses. */
   timeoutMs: number
@@ -102,10 +103,7 @@ export async function runCodexAppServerSession<T>(
 ): Promise<T> {
   // Why: a default-home grant must run against the real ~/.codex, so strip an
   // inherited CODEX_HOME (envToDelete) after applying the overlay, not before.
-  const childEnv: NodeJS.ProcessEnv = { ...process.env, ...invocation.env }
-  for (const key of invocation.envToDelete ?? []) {
-    delete childEnv[key]
-  }
+  const childEnv = resolveProviderChildEnv(invocation, process.env)
   const pairedEnv = invocation.cliPath
     ? withCliRuntimeOnPath(invocation.cliPath, childEnv)
     : childEnv
@@ -154,7 +152,7 @@ export async function runCodexAppServerSession<T>(
     failPending(error)
   })
 
-  createCodexAppServerRecordReader({
+  createProviderRecordReader({
     stdout: child.stdout,
     onRecord: (parsed) => {
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {

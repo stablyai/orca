@@ -12,7 +12,7 @@ import {
   resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 
 /**
  * Everything `useTabAgent` reads from the store for one tab. Every field is a
@@ -21,15 +21,15 @@ import type { TuiAgent } from '../../../shared/tui-agent'
  * agent-status write that does not move one of these values rerenders nothing.
  */
 export type TabAgentStoreSignals = {
-  focusedHookAgent: TuiAgent | null
-  siblingHookAgent: TuiAgent | null
-  focusedCompletedHookAgent: TuiAgent | null
-  siblingCompletedHookAgent: TuiAgent | null
+  focusedHookAgent: TerminalAgent | null
+  siblingHookAgent: TerminalAgent | null
+  focusedCompletedHookAgent: TerminalAgent | null
+  siblingCompletedHookAgent: TerminalAgent | null
   /** Recognized foreground process in the focused pane (local panes only). */
-  processAgent: TuiAgent | null
+  processAgent: TerminalAgent | null
   /** OSC 133;D: the focused pane's foreground is proven back at the shell. */
   processShellForeground: boolean
-  sleepingSessionAgent: TuiAgent | null
+  sleepingSessionAgent: TerminalAgent | null
   /** Focused pane's PTY; only used to reset per-process-generation signals on respawn. */
   ptyId: string | null
   /** Whether a completed row can be attributed to the focused pane at all. */

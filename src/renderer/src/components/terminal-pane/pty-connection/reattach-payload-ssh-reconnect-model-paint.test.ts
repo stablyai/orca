@@ -36,11 +36,13 @@ function createSession(
   fireLog: FireLog,
   overrides: Record<string, unknown> = {}
 ): ReattachPayloadSession {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test read only these session members.
   return {
     pane: createPane(1),
     rememberReattachPayloadAgentSignal: vi.fn(),
     writeReplayData: vi.fn((data: string) => fireLog.push(`write:${data}`)),
-    reattachReplayResetSequence: vi.fn(() => '<reset>'),
+    chooseReattachReplayReset: vi.fn(() => '<reset>'),
+    writeReplayEpilogue: vi.fn((profile: string) => fireLog.push(`write:${profile}`)),
     sendFocusedReattachFocusInAfterReplay: vi.fn(),
     applySnapshotKittyKeyboardModes: vi.fn(() => fireLog.push('kitty:snapshot-baseline')),
     setRestoredSnapshotBaseline: vi.fn(),
@@ -87,7 +89,9 @@ function paintedBytes(fireLog: FireLog): string {
 // test over sshReconnectPaintsFromModel stayed green, so the coverage has to run
 // through createReattachPayloadHandlers rather than the gate itself.
 describe('reattach payload SSH reconnect model paint', () => {
-  beforeEach(() => installTerminalTestGlobals())
+  beforeEach(async () => {
+    await installTerminalTestGlobals()
+  })
 
   afterEach(async () => restoreTerminalTestGlobals())
 

@@ -10,6 +10,7 @@ import { resolveRunScope } from '../runs/run-scope'
 import type { CheckParams } from '../schemas'
 import type { z } from 'zod'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
+import { checkRunPendingMail } from './check-run-pending-mail'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
 
@@ -38,8 +39,7 @@ export async function checkRunMailbox(args: {
     signal,
     legacyCoordinatorRunId,
     revalidateLegacyCoordinator,
-    orchestrationCompatibilityEvidence,
-    recordMutationReceipt
+    orchestrationCompatibilityEvidence
   } = args
   const routeDirectSnapshot = async (
     runId: string,
@@ -72,41 +72,45 @@ export async function checkRunMailbox(args: {
       db.routeUnreadDirectMessagesToRunMailbox(run.id, coordinatorHandle, throughSequence)
     )
   }
-  revalidateLegacyCoordinator?.()
-  const currentRun = resolveRunScope(runtime, {
-    runId: run.id,
-    callerTerminalHandle: handle,
-    callerPaneKey: paneKey,
-    callerSession,
-    requireCurrentConsumer: true,
-    legacyCoordinatorRunId,
-    callerEvidence: orchestrationCompatibilityEvidence
-  })
-  if (currentRun.consumer_generation !== generation) {
-    throw new OrchestrationError(
-      'consumer_fenced',
-      'This mailbox consumer was replaced while routing pending mail.'
-    )
+  const revalidateConsumer = (): void => {
+    revalidateLegacyCoordinator?.()
+    const currentRun = resolveRunScope(runtime, {
+      runId: run.id,
+      callerTerminalHandle: handle,
+      callerPaneKey: paneKey,
+      callerSession,
+      requireCurrentConsumer: true,
+      legacyCoordinatorRunId,
+      callerEvidence: orchestrationCompatibilityEvidence
+    })
+    if (currentRun.consumer_generation !== generation) {
+      throw new OrchestrationError(
+        'consumer_fenced',
+        'This mailbox consumer was replaced while routing pending mail.'
+      )
+    }
   }
+  revalidateConsumer()
 
-  const acknowledged = params.ack
-    ? db.acknowledgeRunDelivery({
-        runId: run.id,
-        consumerGeneration: generation,
-        deliveryId: params.ack
-      })
-    : undefined
-  if (acknowledged) {
-    recordMutationReceipt?.(
-      interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'outcome_unknown')
-    )
+  const pending = await checkRunPendingMail({ ...args, run, revalidateConsumer })
+  try {
+    revalidateConsumer()
+  } catch (error) {
+    if (pending.acknowledged) {
+      return interruptedAcknowledgedCheck(run.id, pending.acknowledged, 'consumer_fenced')
+    }
+    throw error
   }
+  if (pending.result) {
+    return pending.result
+  }
+  const acknowledged = pending.acknowledged
   if (params.all || (params.unread === false && !params.peek)) {
     const messages = db.getRunMailboxHistory(run.id, 100, typeFilter)
     const result = {
       messages: exposeMessages(messages),
       count: messages.length,
-      acknowledged: acknowledged?.delivery.id ?? null
+      acknowledged: acknowledged ?? null
     }
     if (params.format || params.inject) {
       return {
@@ -122,7 +126,7 @@ export async function checkRunMailbox(args: {
     runId: run.id,
     messages: exposeMessages(messages),
     count: messages.length,
-    acknowledged: acknowledged?.delivery.id ?? null,
+    acknowledged: acknowledged ?? null,
     ...(params.format || params.inject
       ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
       : {})
@@ -142,7 +146,7 @@ export async function checkRunMailbox(args: {
       messages: exposeMessages(current.messages),
       count: current.messages.length,
       replayed: current.replayed,
-      acknowledged: acknowledged?.delivery.id ?? null,
+      acknowledged: acknowledged ?? null,
       timedOut: false,
       cancelled: false,
       connectionLost: false,
@@ -160,7 +164,7 @@ export async function checkRunMailbox(args: {
       deliveryId: null,
       messages: [],
       count: 0,
-      acknowledged: acknowledged?.delivery.id ?? null,
+      acknowledged: acknowledged ?? null,
       timedOut: false,
       cancelled: false,
       connectionLost: false
@@ -174,17 +178,17 @@ export async function checkRunMailbox(args: {
     exclusive: true
   })
   try {
-    revalidateLegacyCoordinator?.()
+    revalidateConsumer()
   } catch (error) {
     if (!acknowledged) {
       throw error
     }
-    return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'consumer_fenced')
+    return interruptedAcknowledgedCheck(run.id, acknowledged, 'consumer_fenced')
   }
   const latestRun = db.getRun(run.id)
   if (!latestRun || latestRun.consumer_generation !== generation) {
     if (acknowledged) {
-      return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'consumer_fenced')
+      return interruptedAcknowledgedCheck(run.id, acknowledged, 'consumer_fenced')
     }
     throw new OrchestrationError(
       'consumer_fenced',
@@ -193,7 +197,7 @@ export async function checkRunMailbox(args: {
   }
   if (waitResult === 'waiter_exists') {
     if (acknowledged) {
-      return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'waiter_exists')
+      return interruptedAcknowledgedCheck(run.id, acknowledged, 'waiter_exists')
     }
     throw new OrchestrationError(
       'waiter_exists',
@@ -209,7 +213,7 @@ export async function checkRunMailbox(args: {
       deliveryId: null,
       messages: [],
       count: 0,
-      acknowledged: acknowledged?.delivery.id ?? null,
+      acknowledged: acknowledged ?? null,
       timedOut: true,
       cancelled: false,
       connectionLost: false
@@ -229,7 +233,7 @@ export async function checkRunMailbox(args: {
       deliveryId: null,
       messages: [],
       count: 0,
-      acknowledged: acknowledged?.delivery.id ?? null,
+      acknowledged: acknowledged ?? null,
       timedOut: false,
       cancelled: true,
       connectionLost: signal?.aborted === true
@@ -246,7 +250,7 @@ export async function checkRunMailbox(args: {
     messages: exposeMessages(current?.messages ?? []),
     count: current?.messages.length ?? 0,
     replayed: current?.replayed ?? false,
-    acknowledged: acknowledged?.delivery.id ?? null,
+    acknowledged: acknowledged ?? null,
     timedOut: false,
     cancelled: false,
     connectionLost: false,

@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { PROCESS_BOUNDARY_GROUND } from '../../../../../shared/terminal-mode-reset-profiles'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
@@ -43,6 +44,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       releaseDeferredCwdFence()
       return Promise.resolve(null)
     }
+    if (session.buffersInputOnlyForReattach) {
+      // Why: keys typed for the shell this pane meant to reattach must not run in its replacement.
+      session.transport.abandonPreconnectInput?.()
+    }
     session.authoritativeReattachGeneration += 1
     // Every fresh connect creates or rebinds a PTY. Do not let a legacy
     // response that omits `incarnationId` inherit the predecessor's fence.
@@ -52,11 +57,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     // Why: a canceled old replay clear can preserve xterm's native
     // isUserScrolling flag. A replacement shell must start in follow mode.
     session.resetFreshSpawnFollowOutput()
-    // Why: a fresh spawn is a new process with kitty keyboard flags at
-    // zero. The exit-handler reset alone is not enough: a late exit from a
-    // replaced PTY takes the stale-transport early return and skips it, so
-    // a restart-in-place would leak the old TUI's flags into a fresh shell.
-    session.kittyKeyboardModes.reset()
+    // Why: a fresh spawn is a new process, so a restart-in-place must not
+    // inherit the old TUI's screen, mouse or kitty modes in xterm or the mirror.
+    session.writeInputModeGround(PROCESS_BOUNDARY_GROUND)
     session.prepareFreshShellViewportForSpawn(options)
     const coldRestoreOverride =
       startupOverride && 'launchConfig' in startupOverride

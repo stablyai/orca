@@ -23,7 +23,6 @@ import type {
   AgentLaunchModeReason,
   AgentLaunchModeReceipt
 } from '../../shared/agent-launch-intent'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import {
   prefersStructuredNativeChatByDefault,
@@ -32,7 +31,6 @@ import {
   type StructuredNativeChatBlocker
 } from '../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
 import type { WorkspaceLaunchKind } from '../../shared/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
@@ -57,9 +55,7 @@ export const DEFAULT_LAUNCH_VOCABULARY: AgentLaunchModeVocabulary = {
   terminal: 'a terminal agent'
 }
 
-export type AgentLaunchModeSettings = Partial<
-  NativeChatDefaultSettings & Pick<GlobalSettings, 'agentCmdOverrides'>
->
+export type AgentLaunchModeSettings = Partial<NativeChatDefaultSettings>
 
 /** The placement facts the decision reads. `worktree`, `model` and `effort` are deliberately not
  *  here: a structured launch honours all three, and a placement flag must never imply a mode. */
@@ -87,7 +83,7 @@ const DOWNGRADE_DETAIL: Record<Exclude<AgentLaunchModeReason, 'user_default'>, s
   remote_execution_host: 'this launch runs on a remote execution host',
   reused_terminal: 'it reuses a running terminal agent',
   agent_without_structured_session: 'this agent has no structured session',
-  tui_launch_command: 'this agent has a custom launch command that only a terminal runs',
+  tui_launch_command: 'it asks to start in a folder other than its workspace',
   structured_sessions_unavailable: 'this runtime does not support structured agent sessions',
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
@@ -101,12 +97,12 @@ const BLOCKER_REASON: Record<
 > = {
   'reused-terminal': 'reused_terminal',
   'agent-without-structured-session': 'agent_without_structured_session',
-  'floating-workspace': 'structured_unsupported_on_host',
-  'tui-launch-command': 'tui_launch_command',
+  'custom-start-directory': 'tui_launch_command',
   'remote-execution-host': 'remote_execution_host',
   'project-runtime': 'wsl_execution_runtime',
   'runtime-capability': 'structured_sessions_unavailable',
-  'runtime-capability-unknown': 'structured_support_unknown'
+  'runtime-capability-unknown': 'structured_support_unknown',
+  'client-capability': 'structured_sessions_unavailable'
 }
 
 /** The host's own create-support verdict (`agentSession.createSupport`) in this vocabulary. */
@@ -138,23 +134,27 @@ export function decideAgentLaunchMode(args: {
       detail: `Started ${vocabulary.terminal}, the default for new agent tabs in your settings.`
     }
   }
+  // A worker placed on another runtime starts through federation, which creates terminal agents
+  // only; this host cannot answer for that runtime's structured support.
+  if (placement.on) {
+    return downgraded('remote_execution_host', vocabulary)
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; isAgentSessionHandleProvider rejects it and the launch downgrades to a terminal.
   const agent = placement.agent as TuiAgent
   const support = resolveStructuredNativeChatSupport({
     agent,
-    executionHostId: placement.on ? `runtime:${placement.on}` : 'local',
+    executionHostId: 'local',
     reusesTerminal: Boolean(placement.terminal),
     hostCapabilities: RUNTIME_CAPABILITIES,
-    // The floating workspace has nowhere to keep a session, so it is decided here rather than left
-    // to the host probe below, which cannot answer for a workspace with no record. WSL still is:
-    // the create-support probe reads the resolved workspace rather than guessing from a
-    // client-side project runtime.
+    // The host resolves the floating workspace to its configured directory; create-support still
+    // answers for the resolved workspace, including whether it uses WSL.
     ...(placement.workspaceKind ? { workspaceKind: placement.workspaceKind } : {}),
     // Mirrors the renderer's own route input (`agent-launch-route-input.ts`): a cwd is terminal-only
     // when it names somewhere other than the workspace root, by the same shared rule.
-    requiresTuiLaunchCommand:
-      requestsCwdOutsideWorkspaceRoot(placement.workspacePath, placement.cwd) ||
-      hasExplicitTuiLaunchCommand(settings, agent)
+    startsOutsideWorkspaceRoot: requestsCwdOutsideWorkspaceRoot(
+      placement.workspacePath,
+      placement.cwd
+    )
   })
   if (!support.supported) {
     return downgraded(BLOCKER_REASON[support.blocker], vocabulary)
@@ -207,7 +207,7 @@ async function readStructuredCreateSupport(
 
 /**
  * Applies the executing host's `agentSession.createSupport` answer, which is the authority on WSL,
- * remoteness and the Windows process-start-time gate for the resolved workspace.
+ * remoteness and per-agent support for the resolved workspace.
  */
 export function downgradeAgentLaunchModeForHost(
   receipt: AgentLaunchModeReceipt,

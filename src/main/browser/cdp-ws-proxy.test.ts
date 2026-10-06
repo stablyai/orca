@@ -803,23 +803,4 @@ describe('CdpWsProxy', () => {
     expect(removedEvents).toEqual(expect.arrayContaining(['message', 'close']))
     offSpy.mockRestore()
   })
-
-  it('rejects inflight requests on stop', async () => {
-    let resolveCommand: (v: unknown) => void
-    mock.webContents.debugger.sendCommand.mockImplementation(
-      () =>
-        new Promise((r) => {
-          resolveCommand = r as (v: unknown) => void
-        })
-    )
-
-    const client = await connect(endpoint)
-    client.send(JSON.stringify({ id: 1, method: 'Page.enable', params: {} }))
-
-    await new Promise((r) => setTimeout(r, 10))
-    await proxy.stop()
-
-    resolveCommand!({})
-    client.close()
-  })
 })

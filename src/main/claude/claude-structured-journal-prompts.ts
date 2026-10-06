@@ -1,7 +1,9 @@
 import type {
   AgentJournalApprovalItem,
   AgentJournalItemIdentity,
-  AgentJournalQuestionItem
+  AgentJournalProducerLinkage,
+  AgentJournalQuestionItem,
+  AgentJournalTurnScope
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
@@ -22,12 +24,22 @@ const ADMITTED = { accepted: true } as const
 type ClaudeJournalPrompt = {
   identity: AgentJournalItemIdentity
   body: AgentJournalApprovalItem | AgentJournalQuestionItem
+  turnScope: AgentJournalTurnScope
 }
 
 type ClaudeJournalPromptEntry = {
   items: ClaudeJournalPrompt[]
   cancellationPending: boolean
+  /** The subagent that raised it, as its rows name it; absent for the session's own agent. */
+  asker?: string
+  /** Its rows have landed in the journal, so a reader of the journal sees the card. */
+  written: boolean
+  /** Settles once `written` is decided, for a sink that writes later. */
+  landed?: Promise<void>
 }
+
+/** A card the journal holds pending, by the subagent that raised it. */
+export type ClaudeOpenPromptCard = { promptKey: string; asker: string }
 
 function cancelledPromptBody(
   body: AgentJournalApprovalItem | AgentJournalQuestionItem
@@ -54,34 +66,46 @@ export class ClaudeJournalPrompts {
   constructor(
     private readonly deps: {
       sink: StructuredAgentSessionEventSink
+      /** The turn that raised the prompt: the open one, else the conversation. */
+      turnScope: () => AgentJournalTurnScope
       bindPromptItemId?: (journalItemId: string, promptKey: string) => void
       questionItems?: (input: {
         sessionId: string
         prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']
       }) => ClaudeQuestionItem[]
+      /** The agent that raised the prompt, as a row's producer linkage; empty for the session's own. */
+      producerOf?: (
+        prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']
+      ) => AgentJournalProducerLinkage
     }
   ) {}
 
   /**
-   * Prompt rows carry NO producer linkage, and cannot.
-   *
-   * A prompt is not a transcript frame: it reaches Orca through the SDK's
-   * permission callback, whose options carry a request id and the tool awaiting
-   * approval and no parent reference of any kind. So when a subagent asks, the
-   * row cannot name it — unattributable at this site, not deliberately root.
-   *
-   * No reader is wrong because of it. A pending prompt projects the session as
-   * `attention` whoever raised it, which is the truth: the USER has to answer.
+   * A prompt row carries the linkage of the agent that raised it: the permission callback names the
+   * subagent that asked, or the tool call it gates names one. The pending row still makes the session
+   * `attention` whoever asked; the linkage files the card under that subagent.
    */
   handle(event: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>): void {
+    const producer = this.deps.producerOf?.(event.prompt) ?? {}
     const items: ClaudeJournalPrompt[] = []
+    const turnScope = this.deps.turnScope()
+    let admitted = true
+    const append = (identity: AgentJournalItemIdentity, body: ClaudeJournalPrompt['body']) => {
+      const options = { ...producer, turnScope }
+      if (this.deps.sink.tryAppendItem) {
+        const admission = this.deps.sink.tryAppendItem(identity, body, options)
+        admitted &&= admission.accepted
+      } else {
+        this.deps.sink.appendItem(identity, body, options)
+      }
+    }
     if (event.prompt.kind === 'question') {
       for (const question of (this.deps.questionItems ?? claudeQuestionItems)({
         sessionId: event.sessionId,
         prompt: event.prompt
       })) {
-        items.push(question)
-        this.deps.sink.appendItem(question.identity, question.body)
+        items.push({ ...question, turnScope })
+        append(question.identity, question.body)
         this.deps.bindPromptItemId?.(agentJournalItemKey(question.identity), event.prompt.promptKey)
       }
     } else {
@@ -90,13 +114,40 @@ export class ClaudeJournalPrompts {
         promptKey: event.prompt.promptKey
       })
       const body = claudeApprovalItem(event.prompt)
-      items.push({ identity, body })
-      this.deps.sink.appendItem(identity, body)
+      items.push({ identity, body, turnScope })
+      append(identity, body)
       this.deps.bindPromptItemId?.(agentJournalItemKey(identity), event.prompt.promptKey)
     }
     this.deletePrompt(event.prompt.promptKey)
-    this.items.set(event.prompt.promptKey, { items, cancellationPending: false })
+    const entry: ClaudeJournalPromptEntry = {
+      items,
+      cancellationPending: false,
+      ...(producer.agentId ? { asker: producer.agentId } : {}),
+      written: false
+    }
+    this.items.set(event.prompt.promptKey, entry)
     this.deps.sink.publish()
+    if (admitted) {
+      this.markWritten(entry)
+    }
+  }
+
+  /** A sink that cannot say when its writes land wrote them already. */
+  private markWritten(entry: ClaudeJournalPromptEntry): void {
+    const written = this.deps.sink.written?.()
+    if (!written) {
+      entry.written = true
+      return
+    }
+    entry.landed = written.then((barrier) => {
+      entry.written = barrier.ok
+    })
+  }
+
+  /** Settles once the card's rows have landed, or proved they never will; nothing for a card a
+   *  sink wrote at once, or one already closed. */
+  whenWritten(promptKey: string): Promise<void> | undefined {
+    return this.items.get(promptKey)?.landed
   }
 
   private admitCancellation(promptKey: string): StructuredAgentSessionSinkAdmission {
@@ -104,10 +155,11 @@ export class ClaudeJournalPrompts {
     if (items.length === 0) {
       return ADMITTED
     }
-    const mutations = items.map(({ identity, body }) => ({
+    const mutations = items.map(({ identity, body, turnScope }) => ({
       kind: 'item' as const,
       identity,
-      body: cancelledPromptBody(body)
+      body: cancelledPromptBody(body),
+      turnScope
     }))
     let admission: StructuredAgentSessionSinkAdmission
     if (this.deps.sink.tryAppendLifecycleBatch) {
@@ -129,9 +181,10 @@ export class ClaudeJournalPrompts {
         return ADMITTED
       }
       const body = cancelledPromptBody(item.body)
+      const options = { lifecycle: true, turnScope: item.turnScope }
       admission = this.deps.sink.tryAppendItem
-        ? this.deps.sink.tryAppendItem(item.identity, body, { lifecycle: true })
-        : (this.deps.sink.appendItem(item.identity, body, { lifecycle: true }), ADMITTED)
+        ? this.deps.sink.tryAppendItem(item.identity, body, options)
+        : (this.deps.sink.appendItem(item.identity, body, options), ADMITTED)
     } else {
       return { accepted: false, reason: 'failed' }
     }
@@ -193,6 +246,29 @@ export class ClaudeJournalPrompts {
 
   resolve(promptKey: string): void {
     this.deletePrompt(promptKey)
+  }
+
+  /** Subagents' cards whose rows have landed and that nobody has closed or taken over yet. */
+  *openCards(): IterableIterator<ClaudeOpenPromptCard> {
+    for (const [promptKey, entry] of this.items) {
+      if (entry.written && entry.asker !== undefined) {
+        yield { promptKey, asker: entry.asker }
+      }
+    }
+  }
+
+  /** The host records the card itself, so nothing here writes it any more. The returned undo hands
+   *  it back when that record fails, so Claude's own withdrawal can still close it. */
+  handOver(promptKey: string): () => void {
+    const entry = this.items.get(promptKey)
+    this.deletePrompt(promptKey)
+    return () => {
+      if (entry && !this.items.has(promptKey)) {
+        // The same entry, so a write still landing marks the card it hands back.
+        entry.cancellationPending = false
+        this.items.set(promptKey, entry)
+      }
+    }
   }
 
   clear(): void {

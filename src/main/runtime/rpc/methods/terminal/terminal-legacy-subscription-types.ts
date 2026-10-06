@@ -1,11 +1,11 @@
 import type { z } from 'zod'
 import type { RpcContext } from '../../core'
-import type { SubscriptionRegistration } from '../../../orca-runtime'
 import type { TerminalReplyQuerySequence } from '../../../../../shared/terminal-reply-query-scan'
 import type { TerminalOutputChunk } from './terminal-stream-types'
 import type { TerminalSubscribe } from './stream-schemas'
 import type { TerminalOutputBatcher } from './terminal-output-batcher'
 import type { TerminalStreamOpcode } from '../../../../../shared/terminal-stream-protocol'
+import type { TerminalSubscriptionRegistration } from './terminal-subscription-registration'
 
 export type TerminalSubscribeParams = z.infer<typeof TerminalSubscribe>
 export type TerminalSubscriptionEmit = (result: unknown) => void
@@ -13,10 +13,9 @@ export type TerminalSubscriptionEmit = (result: unknown) => void
 export type TerminalSubscriptionArgs = {
   params: TerminalSubscribeParams
   runtime: RpcContext['runtime']
-  connectionId: RpcContext['connectionId']
+  registration: TerminalSubscriptionRegistration
   sendBinary: RpcContext['sendBinary']
   registerBinaryStreamHandler: RpcContext['registerBinaryStreamHandler']
-  signal: RpcContext['signal']
   emit: TerminalSubscriptionEmit
   ptyId: string
   clientId: string | undefined
@@ -48,7 +47,6 @@ export type LegacyBinarySubscriptionState = {
   unsubscribeFit: () => void
   registeredRemoteDesktopDriver: boolean
   displayMode: string
-  readonly registration: SubscriptionRegistration
   readonly streamClosed: Promise<void>
   readonly sendFrame: (
     opcode: TerminalStreamOpcode,

@@ -1,7 +1,8 @@
 import { waitForTerminalReplayWritesParsed } from '../replay-guard'
 import {
   POST_REPLAY_MODE_RESET,
-  RESET_GRAPHIC_RENDITION
+  RESET_GRAPHIC_RENDITION,
+  RELEASE_SYNCHRONIZED_OUTPUT
 } from '../../../../../shared/terminal-mode-reset-profiles'
 import {
   buildMainModelSnapshotReplayWrites,
@@ -60,7 +61,9 @@ export function createReattachPayloadHandlers(
           session.suppressStructuralReplayPtyResize = false
         }
       }
-      session.writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`)
+      session.writeReplayData(
+        `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`
+      )
       // Why: re-arm the kitty keyboard mirror from the snapshot preamble so Option chords keep their encoding after a window reload.
       session.applySnapshotKittyKeyboardModes(daemonSnapshotReplay, {
         kittyKeyboardFlags: ctx.connectResult.snapshotKittyKeyboardFlags,
@@ -91,8 +94,8 @@ export function createReattachPayloadHandlers(
             : daemonSnapshotReplay
         }`
       )
-      session.writeReplayData(
-        session.reattachReplayResetSequence(
+      session.writeReplayEpilogue(
+        session.chooseReattachReplayReset(
           daemonSnapshotReplay,
           Boolean(ctx.connectResult.coldRestore),
           ctx.connectResult.isAlternateScreen,
@@ -198,8 +201,8 @@ export function createReattachPayloadHandlers(
         })) {
           session.writeReplayData(replayChunk)
         }
-        session.writeReplayData(
-          session.reattachReplayResetSequence(
+        session.writeReplayEpilogue(
+          session.chooseReattachReplayReset(
             modelData,
             Boolean(ctx.connectResult?.coldRestore),
             modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen,
@@ -226,7 +229,9 @@ export function createReattachPayloadHandlers(
           fullScreenReplay: true
         })
         // Relay replay may overlap xterm's pre-disconnect content; clear first to avoid duplication.
-        session.writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`)
+        session.writeReplayData(
+          `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`
+        )
         // Why: raw relay replay may contain the app's own kitty pushes; re-arm with set semantics so redelivery can't grow the stack.
         // A constructor-fresh mirror (window reload) first demotes to unproven:
         // the replay window proves nothing about negotiations that predate it.
@@ -237,8 +242,8 @@ export function createReattachPayloadHandlers(
         session.writeReplayData(
           `${ctx.connectResult.coldRestore ? RESET_GRAPHIC_RENDITION : ''}${ctx.connectResult.replay}`
         )
-        session.writeReplayData(
-          session.reattachReplayResetSequence(
+        session.writeReplayEpilogue(
+          session.chooseReattachReplayReset(
             ctx.connectResult.replay,
             Boolean(ctx.connectResult.coldRestore),
             ctx.connectResult.isAlternateScreen
@@ -266,7 +271,9 @@ export function createReattachPayloadHandlers(
         // The current xterm grid remains a safe lower bound for blanking.
       }
       // Why: shrinking first would promote clipped stale viewport rows into scrollback, beyond the reach of a later viewport-only clear.
-      session.writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`)
+      session.writeReplayData(
+        `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`
+      )
       await waitForTerminalReplayWritesParsed(session.pane.terminal)
       if (!ctx.isCurrentReattachPayload()) {
         return
@@ -305,9 +312,7 @@ export function createReattachPayloadHandlers(
         session.clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
       }
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.
-      session.writeReplayData(POST_REPLAY_MODE_RESET)
-      // Why: the dead run's kitty flags died with it and its scrollback was never scanned — the fresh shell starts at zero.
-      session.kittyKeyboardModes.reset()
+      session.writeInputModeGround(POST_REPLAY_MODE_RESET)
       session.consumeRestoredViewportBlankingMarker()
       // Why: a taller destination fit must not pull recovered rows back into the fresh shell's viewport after source-grid replay.
       session.writeFreshShellViewportBlanking(Math.max(destinationRows, session.pane.terminal.rows))

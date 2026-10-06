@@ -9,6 +9,11 @@ import {
   type TerminalQuickCommandMutation
 } from '../../shared/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai'
+import {
+  SOURCE_CONTROL_LAUNCH_ACTION_IDS,
+  type SourceControlAiActionDefaults
+} from '../../shared/source-control-ai-actions'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-options'
@@ -17,6 +22,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export type RuntimeClientSettings = Pick<
@@ -42,6 +48,7 @@ export type RuntimeClientSettings = Pick<
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
   | 'minimaxEndpoint'
+  | 'zcodePlanSite'
   | 'prBotAuthorOverrides'
   | 'artifactSharingEnabled'
   | 'worktreeVisibilityDefaults'
@@ -49,7 +56,11 @@ export type RuntimeClientSettings = Pick<
   | 'machineName'
 > & {
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
+  sourceControlAi: RuntimeClientSourceControlAi
 }
+
+/** The saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
+export type RuntimeClientSourceControlAi = { actions: SourceControlAiActionDefaults }
 
 /** Safe paired projection: host labels only; filesystem defaults stay host-private. */
 export type RuntimeHostDisplayLabelOverrides = Partial<
@@ -74,6 +85,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
   | 'minimaxEndpoint'
+  | 'zcodePlanSite'
   | 'prBotAuthorOverrides'
   | 'worktreeVisibilityDefaults'
   | 'machineName'
@@ -122,11 +134,15 @@ export class RuntimeClientSettingsController {
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       minimaxEndpoint: settings.minimaxEndpoint ?? 'overseas',
+      zcodePlanSite: settings.zcodePlanSite ?? 'zai',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
       artifactSharingEnabled: isArtifactSharingEnabled(settings),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
       machineName: settings.machineName ?? '',
+      // Why projected: a paired client's AI buttons start these actions' agents, and must honour
+      // the agent saved for each one as the desktop does. Absent on older hosts.
+      sourceControlAi: projectSourceControlLaunchRecipes(settings),
       hostSettingOverrides: Object.fromEntries(
         [
           ...getHostDisplayLabelOverrides({ hostSettingOverrides: settings.hostSettingOverrides })
@@ -221,15 +237,28 @@ export class RuntimeClientSettingsController {
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const current = this.store?.getSettings()
-          return (
-            current !== undefined &&
-            current.agentStatusHooksEnabled !== false &&
-            !current.disabledTuiAgents?.includes(agent)
-          )
+          return current !== undefined && isAgentStatusHooksEnabledForAgent(current, agent)
         }
       })
     })
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation
+  }
+}
+
+function projectSourceControlLaunchRecipes(
+  settings: Partial<Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>>
+): RuntimeClientSourceControlAi {
+  const { actions } = normalizeSourceControlAiSettings(
+    settings.sourceControlAi,
+    settings.commitMessageAi
+  )
+  return {
+    actions: Object.fromEntries(
+      SOURCE_CONTROL_LAUNCH_ACTION_IDS.flatMap((actionId) => {
+        const recipe = actions?.[actionId]
+        return recipe ? [[actionId, recipe]] : []
+      })
+    )
   }
 }

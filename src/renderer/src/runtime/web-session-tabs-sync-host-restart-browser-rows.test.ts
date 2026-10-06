@@ -215,17 +215,33 @@ describe('reading whether a snapshot answers for a worktree', () => {
     ).toBe(false)
   })
 
-  // Both halves are load-bearing: a published worktree can legitimately sit at version zero, and
-  // only the placeholder epoch marks a frame the runtime synthesized without consulting anything.
+  // A published worktree can legitimately sit at version zero; only the placeholder epoch marks a
+  // frame the runtime synthesized without consulting anything.
   it('answers for a real epoch even at version zero', () => {
     expect(
       hostSnapshotAffirmsWorktreeContents({ publicationEpoch: 'headless:abc', snapshotVersion: 0 })
     ).toBe(true)
   })
 
-  it('answers for the placeholder epoch once it carries a version', () => {
+  // A paired client's projection renames the epoch and adds its navigation revision to the version.
+  it('treats a paired client projection of the placeholder as no answer', () => {
     expect(
-      hostSnapshotAffirmsWorktreeContents({ publicationEpoch: 'none', snapshotVersion: 1 })
+      hostSnapshotAffirmsWorktreeContents({
+        publicationEpoch: 'none:client-navigation',
+        snapshotVersion: 0
+      })
+    ).toBe(false)
+    expect(
+      hostSnapshotAffirmsWorktreeContents({
+        publicationEpoch: 'none:client-navigation',
+        snapshotVersion: 2
+      })
+    ).toBe(false)
+    expect(
+      hostSnapshotAffirmsWorktreeContents({
+        publicationEpoch: 'epoch-1:client-navigation',
+        snapshotVersion: 0
+      })
     ).toBe(true)
   })
 })

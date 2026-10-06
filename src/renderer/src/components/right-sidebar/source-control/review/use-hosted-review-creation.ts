@@ -10,62 +10,76 @@ import type { SourceControlWorktreeContext } from '../listing/use-worktree-conte
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import type { SourceControlCreateReviewComposer } from './use-create-review-composer'
 import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
+import type { HostedReviewCreatedContext } from './hosted-review-creation-state'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
+import type { SourceControlPullRequestGeneration } from './use-pull-request-generation'
+import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
+import { useGenerateBeforeCreatePullRequest } from '../../use-generate-before-create-pull-request'
+import { createdReviewIsForeground } from '../../created-review-foreground'
 
 /**
  * Submits the composer as a hosted review (optionally stacked) and reconciles the "already open" and
  * partially-created-stack outcomes, both of which still leave a real review to link.
  */
 export function useSourceControlHostedReviewCreation({
+  activePullRequestGenerationKey,
   activeRepo,
   activeWorktreeId,
   branchName,
   createHostedReview,
   createPrInFlightRef,
   createStackedHostedReview,
+  handleGeneratePullRequestFields,
   handlePullRequestCreated,
   hostedReviewCreateCopy,
   hostedReviewCreateProvider,
   hostedReviewCreation,
+  prAiGenerationEnabled,
   prBase,
   prBody,
   prDraft,
+  prFieldsAreSeedPlaceholders,
   prGenerating,
   prTitle,
   resolvedPrCreationDefaults,
   setCreatePrInFlightByWorktree,
   setCreatePrIntentNoticeForWorktree,
+  settings,
   worktreePath
 }: {
+  activePullRequestGenerationKey: SourceControlPullRequestGeneration['activePullRequestGenerationKey']
   activeRepo: SourceControlWorktreeContext['activeRepo']
   activeWorktreeId: string | null
   branchName: string
   createHostedReview: SourceControlStoreActions['createHostedReview']
   createPrInFlightRef: SourceControlWorktreeOperationState['createPrInFlightRef']
   createStackedHostedReview: SourceControlStoreActions['createStackedHostedReview']
+  handleGeneratePullRequestFields: SourceControlCreateReviewComposer['handleGeneratePullRequestFields']
   handlePullRequestCreated: SourceControlHostedReviewCreated['handlePullRequestCreated']
   hostedReviewCreateCopy: SourceControlHostedReviewState['hostedReviewCreateCopy']
   hostedReviewCreateProvider: SourceControlHostedReviewState['hostedReviewCreateProvider']
   hostedReviewCreation: SourceControlHostedReviewState['hostedReviewCreation']
+  prAiGenerationEnabled: SourceControlCreateReviewComposer['prAiGenerationEnabled']
   prBase: SourceControlCreateReviewComposer['prBase']
   prBody: SourceControlCreateReviewComposer['prBody']
   prDraft: SourceControlCreateReviewComposer['prDraft']
+  prFieldsAreSeedPlaceholders: SourceControlCreateReviewComposer['prFieldsAreSeedPlaceholders']
   prGenerating: boolean
   prTitle: SourceControlCreateReviewComposer['prTitle']
   resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
   setCreatePrInFlightByWorktree: SourceControlWorktreeOperationState['setCreatePrInFlightByWorktree']
   setCreatePrIntentNoticeForWorktree: SourceControlWorktreeOperationState['setCreatePrIntentNoticeForWorktree']
+  settings: SourceControlWorktreeContext['settings']
   worktreePath: string | null
 }) {
-  const handleCreatePullRequest = useCallback(
-    async (stacked = false): Promise<void> => {
+  const createPullRequest = useCallback(
+    async (stacked = false, generated?: PullRequestGenerationFields): Promise<void> => {
       if (
         !activeRepo ||
         !activeWorktreeId ||
         !worktreePath ||
         !hostedReviewCreation ||
-        prGenerating ||
-        createPrInFlightRef.current[activeWorktreeId]
+        prGenerating
       ) {
         return
       }
@@ -82,8 +96,9 @@ export function useSourceControlHostedReviewCreation({
         return
       }
 
-      const base = stripBaseRef(prBase).trim()
-      const title = prTitle.trim()
+      const fields = generated ?? { base: prBase, title: prTitle, body: prBody, draft: prDraft }
+      const base = stripBaseRef(fields.base).trim()
+      const title = fields.title.trim()
 
       if (!title) {
         setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
@@ -109,9 +124,14 @@ export function useSourceControlHostedReviewCreation({
         return
       }
 
-      createPrInFlightRef.current[activeWorktreeId] = true
-      setCreatePrInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
       setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
+      const createdContext = (): HostedReviewCreatedContext => ({
+        repoPath: activeRepo.path,
+        repoId: activeRepo.id,
+        branch: branchName,
+        worktreeId: activeWorktreeId,
+        openChecks: createdReviewIsForeground(activeWorktreeId)
+      })
       try {
         const createInput = {
           repoId: activeRepo.id,
@@ -119,8 +139,8 @@ export function useSourceControlHostedReviewCreation({
           base,
           head: normalizeHostedReviewHeadRef(branchName),
           title,
-          body: prBody,
-          draft: prDraft,
+          body: fields.body,
+          draft: fields.draft,
           worktreePath,
           useTemplate: resolvedPrCreationDefaults.useTemplate
         }
@@ -130,12 +150,16 @@ export function useSourceControlHostedReviewCreation({
 
         if (result.ok) {
           setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
-          await handlePullRequestCreated({
-            provider: hostedReviewCreateProvider,
-            number: result.number,
-            url: result.url
-          })
-          if (resolvedPrCreationDefaults.openAfterCreate) {
+          const context = createdContext()
+          await handlePullRequestCreated(
+            {
+              provider: hostedReviewCreateProvider,
+              number: result.number,
+              url: result.url
+            },
+            context
+          )
+          if (context.openChecks && resolvedPrCreationDefaults.openAfterCreate) {
             window.api.shell.openUrl(result.url)
           }
           return
@@ -168,11 +192,14 @@ export function useSourceControlHostedReviewCreation({
           )
           if (number) {
             setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
-            await handlePullRequestCreated({
-              provider: hostedReviewCreateProvider,
-              number,
-              url: result.existingReview.url
-            })
+            await handlePullRequestCreated(
+              {
+                provider: hostedReviewCreateProvider,
+                number,
+                url: result.existingReview.url
+              },
+              createdContext()
+            )
             return
           }
         }
@@ -183,11 +210,14 @@ export function useSourceControlHostedReviewCreation({
         if ('createdReview' in result && result.createdReview?.url) {
           const { number, url } = result.createdReview
           if (number) {
-            await handlePullRequestCreated({
-              provider: hostedReviewCreateProvider,
-              number,
-              url
-            })
+            await handlePullRequestCreated(
+              {
+                provider: hostedReviewCreateProvider,
+                number,
+                url
+              },
+              createdContext()
+            )
           }
         }
 
@@ -207,9 +237,6 @@ export function useSourceControlHostedReviewCreation({
                   { value0: hostedReviewCreateCopy.reviewLabel }
                 )
         })
-      } finally {
-        createPrInFlightRef.current[activeWorktreeId] = false
-        setCreatePrInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
       }
     },
     [
@@ -217,7 +244,6 @@ export function useSourceControlHostedReviewCreation({
       activeWorktreeId,
       branchName,
       createHostedReview,
-      createPrInFlightRef,
       createStackedHostedReview,
       handlePullRequestCreated,
       hostedReviewCreation,
@@ -232,9 +258,44 @@ export function useSourceControlHostedReviewCreation({
       prTitle,
       resolvedPrCreationDefaults.openAfterCreate,
       resolvedPrCreationDefaults.useTemplate,
-      setCreatePrInFlightByWorktree,
       setCreatePrIntentNoticeForWorktree,
       worktreePath
+    ]
+  )
+
+  const { handleCreatePullRequest: generateThenCreatePullRequest } =
+    useGenerateBeforeCreatePullRequest({
+      aiGenerationEnabled: prAiGenerationEnabled,
+      canCreate: hostedReviewCreation?.canCreate === true,
+      createPullRequest,
+      fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
+      generatePullRequestFields: handleGeneratePullRequestFields,
+      generationKey: activePullRequestGenerationKey,
+      repo: activeRepo,
+      settings
+    })
+
+  const handleCreatePullRequest = useCallback(
+    async (stacked = false): Promise<void> => {
+      const worktreeId = activeWorktreeId
+      if (!worktreeId || createPrInFlightRef.current[worktreeId]) {
+        return
+      }
+      // Why: like the prepare-branch route, the click is in flight until its create settles, so the composer stays up through generation instead of closing while eligibility refreshes.
+      createPrInFlightRef.current[worktreeId] = true
+      setCreatePrInFlightByWorktree((prev) => ({ ...prev, [worktreeId]: true }))
+      try {
+        await generateThenCreatePullRequest(stacked)
+      } finally {
+        createPrInFlightRef.current[worktreeId] = false
+        setCreatePrInFlightByWorktree((prev) => ({ ...prev, [worktreeId]: false }))
+      }
+    },
+    [
+      activeWorktreeId,
+      createPrInFlightRef,
+      generateThenCreatePullRequest,
+      setCreatePrInFlightByWorktree
     ]
   )
 

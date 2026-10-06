@@ -41,10 +41,3 @@ export function sameSafeAreaInsets(
     left.left === right.left
   )
 }
-
-/**
- * What a page puts in `ready.accepts` to say it pads for the system bars itself. The shell draws
- * the WebView edge-to-edge only for such a page: an older page has no reader for the insets and
- * would lay its header under the status bar, so it keeps the strips the shell reserves.
- */
-export const BRIDGE_SAFE_AREA_ACCEPT = 'safe-area-insets'

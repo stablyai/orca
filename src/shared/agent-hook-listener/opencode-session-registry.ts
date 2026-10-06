@@ -5,9 +5,9 @@ import type { HookListenerState } from './listener-state'
 /**
  * Which pane owns one OpenCode session, as observed from the client side.
  *
- * Why this exists: OpenCode v2 serves every pane from a single shared server
- * process, so the status plugin's per-post stamp (`process.env.ORCA_PANE_KEY`)
- * is frozen to whichever pane started the server. The session id is the only
+ * Why this exists: OpenCode 1 `opencode serve` serves every `opencode attach`
+ * pane from one server process, so the status plugin's per-post stamp
+ * (`process.env.ORCA_PANE_KEY`) is frozen to the pane that started it. The session id is the only
  * per-event truth that survives — every post carries it — but nothing maps it
  * back to a pane. This registry is that map, filled by the main-process binder
  * (client argv, then creation-correlation against the session store) and read
@@ -19,7 +19,7 @@ export type OpenCodeSessionBinding = {
   /** ms epoch of the bind; oldest-bound evicts first once capped. */
   boundAt: number
   /** How the binder learned this owner. */
-  basis: 'argv' | 'creation-correlation' | 'single-pane-directory'
+  basis: 'argv' | 'creation-correlation' | 'single-pane-directory' | 'tui'
 }
 
 /** Upper bound; sessions are cheap rows but the map must not grow forever. */
@@ -68,6 +68,61 @@ export function lookupOpenCodeSessionPane(
   sessionId: string
 ): OpenCodeSessionBinding | undefined {
   return bindings(state).get(sessionId.trim())
+}
+
+/** Structural client evidence strengthens an existing owner without transferring it. */
+export function bindOpenCodeTuiSession(
+  state: HookListenerState,
+  source: AgentHookSource,
+  body: unknown,
+  sessionId: string | undefined
+): void {
+  if (!sessionId || source !== 'opencode' || !isOpenCodeSharedServerPost(source, body)) {
+    return
+  }
+  if (!body || typeof body !== 'object') {
+    return
+  }
+  if (!('opencodeTui' in body) || body.opencodeTui !== 1) {
+    return
+  }
+  if (!('paneKey' in body) || typeof body.paneKey !== 'string') {
+    return
+  }
+  const existing = lookupOpenCodeSessionPane(state, sessionId)
+  bindOpenCodeSession(state, sessionId, {
+    paneKey: existing?.paneKey ?? body.paneKey,
+    worktreeId: existing
+      ? existing.worktreeId
+      : 'worktreeId' in body && typeof body.worktreeId === 'string'
+        ? body.worktreeId
+        : undefined,
+    boundAt: Date.now(),
+    basis: 'tui'
+  })
+}
+
+/** A capable shared server cannot speak for an unknown root or override its TUI. */
+export function suppressOpenCodeSharedServerPost(
+  state: HookListenerState,
+  source: AgentHookSource,
+  body: unknown,
+  sessionId: string | undefined
+): boolean {
+  if (source !== 'opencode' || !isOpenCodeSharedServerPost(source, body)) {
+    return false
+  }
+  if (!body || typeof body !== 'object') {
+    return false
+  }
+  if ('opencodeTui' in body && body.opencodeTui === 1) {
+    return false
+  }
+  const binding = sessionId ? lookupOpenCodeSessionPane(state, sessionId) : undefined
+  return (
+    binding?.basis === 'tui' ||
+    ('opencodeSharedServer' in body && body.opencodeSharedServer === 1 && !binding)
+  )
 }
 
 /**
@@ -139,6 +194,19 @@ export function lookupOpenCodePaneLaunchToken(
   return state.lastLaunchTokenByPaneKey.get(paneKey)
 }
 
+/**
+ * OpenCode-1-only: remove with OpenCode 1 support. OpenCode 2 posts declare `opencodeMajor: 2`
+ * and always name their own pane; posts without it (OpenCode 1, mimo-code, older plugins) may
+ * come from a shared server.
+ */
+export function isOpenCodeSharedServerPost(source: AgentHookSource, body: unknown): boolean {
+  if ((source !== 'opencode' && source !== 'mimo-code') || typeof body !== 'object' || !body) {
+    return false
+  }
+  const major = 'opencodeMajor' in body ? body.opencodeMajor : undefined
+  return !(typeof major === 'number' && major >= 2)
+}
+
 /** Envelope fields the rewrite may substitute, as stamped by the poster. */
 export type OpenCodeStampedEnvelope = {
   paneKey: string
@@ -159,13 +227,24 @@ export function resolveOpenCodeSharedServerEnvelope(args: {
   source: AgentHookSource
   stamped: OpenCodeStampedEnvelope
   sessionId: string | undefined
+  /** The raw post; see isOpenCodeSharedServerPost. */
+  body: unknown
 }): OpenCodeStampedEnvelope {
   const { state, source, stamped, sessionId } = args
-  if ((source !== 'opencode' && source !== 'mimo-code') || !sessionId) {
+  if (!isOpenCodeSharedServerPost(source, args.body) || !sessionId) {
     return stamped
   }
   const binding = lookupOpenCodeSessionPane(state, sessionId)
   if (!binding) {
+    return stamped
+  }
+  if (
+    binding.paneKey === stamped.paneKey &&
+    typeof args.body === 'object' &&
+    args.body &&
+    'opencodeTui' in args.body &&
+    args.body.opencodeTui === 1
+  ) {
     return stamped
   }
   return {

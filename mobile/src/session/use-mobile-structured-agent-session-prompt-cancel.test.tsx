@@ -5,7 +5,14 @@ import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-j
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 
-const mocks = vi.hoisted(() => ({ sendRequest: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  sendRequest: vi.fn(),
+  promptResponses: vi.fn(() => ({
+    groupedDraft: null,
+    respondPermission: vi.fn(),
+    respondQuestion: vi.fn()
+  }))
+}))
 vi.mock('./use-mobile-structured-agent-state', () => ({
   useMobileStructuredAgentState: () => ({
     state,
@@ -25,11 +32,7 @@ vi.mock('./use-mobile-structured-agent-options', () => ({
   })
 }))
 vi.mock('./use-mobile-structured-prompt-responses', () => ({
-  useMobileStructuredPromptResponses: () => ({
-    groupedDraft: null,
-    respondPermission: vi.fn(),
-    respondQuestion: vi.fn()
-  })
+  useMobileStructuredPromptResponses: mocks.promptResponses
 }))
 vi.mock('./use-mobile-structured-send-operation-reconciliation', () => ({
   useMobileStructuredSendOperationReconciliation: vi.fn()
@@ -104,7 +107,13 @@ const client: RpcClient = {
   close: () => {}
 }
 
-function Harness({ promptCancelSupported }: { promptCancelSupported: boolean }): null {
+function Harness({
+  promptCancelSupported,
+  questionAnswersSupported = false
+}: {
+  promptCancelSupported: boolean
+  questionAnswersSupported?: boolean
+}): null {
   hook = useMobileStructuredAgentSession({
     client,
     sessionId: 'session-1',
@@ -112,7 +121,13 @@ function Harness({ promptCancelSupported }: { promptCancelSupported: boolean }):
     enabled: true,
     connected: true,
     agent: 'codex',
-    promptCancelSupported,
+    hostSupport: {
+      promptCancel: promptCancelSupported,
+      questionAnswers: questionAnswersSupported,
+      queuedMessages: false,
+      statusFeed: false,
+      quietRepeatedStop: false
+    },
     onSendError: vi.fn()
   })
   return null
@@ -130,7 +145,8 @@ describe('mobile structured prompt cancellation', () => {
       fence: 3,
       items: [runningTurn(), pendingApproval()],
       submissions: [],
-      retainedItemLimit: 1024,
+      retainedOwnItemLimit: 1024,
+      retainedItemCap: 8192,
       hasOlder: false,
       status: 'ready'
     }
@@ -149,6 +165,17 @@ describe('mobile structured prompt cancellation', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+  })
+
+  it('hands question answering the host answers capability', () => {
+    act(() => {
+      renderer = create(
+        createElement(Harness, { promptCancelSupported: false, questionAnswersSupported: true })
+      )
+    })
+    expect(mocks.promptResponses).toHaveBeenLastCalledWith(
+      expect.objectContaining({ questionAnswersSupported: true })
+    )
   })
 
   it('sends the clicked prompt identity on capable hosts', async () => {
@@ -198,6 +225,49 @@ describe('mobile structured prompt cancellation', () => {
     )
   })
 
+  it("stops the host's running turn when its record is not loaded", async () => {
+    state = {
+      ...state,
+      hasOlder: true,
+      items: [pendingApproval()],
+      latestTurn: {
+        itemId: 'turn-status',
+        observedAt: 1,
+        turn: { turnId: 'turn-1', state: 'running', startedAt: 1 }
+      }
+    }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.isWorking).toBe(true)
+    await act(async () => {
+      expect(await hook.cancelPrompt()).toBe(true)
+    })
+    expect(mocks.sendRequest).toHaveBeenCalledWith(
+      'agentSession.cancel',
+      expect.objectContaining({
+        turnId: 'turn-1',
+        prompt: { itemId: 'approval-1', expectedRevision: 4 }
+      }),
+      expect.any(Object)
+    )
+  })
+
+  it('reads a turn the host ended as ended, though its running row is still loaded', () => {
+    state = {
+      ...state,
+      latestTurn: {
+        itemId: 'turn-status',
+        observedAt: 1,
+        turn: { turnId: 'turn-1', state: 'completed', startedAt: 1, completedAt: 2 }
+      }
+    }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.turnId).toBeNull()
+  })
+
   it('uses the rendered prompt identity when the journal changes before tap', async () => {
     act(() => {
       renderer = create(createElement(Harness, { promptCancelSupported: true }))
@@ -216,5 +286,29 @@ describe('mobile structured prompt cancellation', () => {
       expect.objectContaining({ prompt: renderedIdentity }),
       expect.any(Object)
     )
+  })
+
+  it("names the host's running turn for a plain Stop when its record is not loaded", async () => {
+    state = {
+      ...state,
+      hasOlder: true,
+      items: [],
+      latestTurn: {
+        itemId: 'turn-status',
+        observedAt: 1,
+        turn: { turnId: 'turn-1', state: 'running' }
+      }
+    }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.turnId).toBe('turn-1')
+    await act(async () => {
+      hook.cancel()
+    })
+    const call = mocks.sendRequest.mock.calls.find(([method]) => method === 'agentSession.cancel')
+    expect(call).toBeDefined()
+    expect(call?.[1]).toMatchObject({ turnId: 'turn-1' })
+    expect(call?.[1]).not.toHaveProperty('prompt')
   })
 })

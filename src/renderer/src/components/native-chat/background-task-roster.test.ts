@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import { backgroundTasksHeaderContent } from './background-task-header-content'
 import {
+  backgroundTaskCountedState,
   buildBackgroundTaskGroups,
   formatBackgroundTaskTokens,
   resolveBackgroundTaskName
@@ -77,8 +78,8 @@ describe('backgroundTasksHeaderContent', () => {
     expect(
       header([agent('a', { state: 'unverifiable' }), agent('b', { state: 'unverifiable' })])
     ).toEqual({
-      segments: [{ text: '2 agents unverifiable', kind: 'agent' }],
-      detail: 'no contact'
+      segments: [{ text: '2 agents with status unavailable', kind: 'agent' }],
+      detail: null
     })
   })
 
@@ -172,8 +173,8 @@ describe('buildBackgroundTaskGroups', () => {
       [agent('settled', { state: 'done', startedAt: 0 })]
     )
     expect(built.map((group) => group.kind)).toEqual(['agent', 'monitor'])
-    expect(built[0].tasks.map((entry) => entry.task.id)).toEqual(['settled', 'early', 'late'])
-    expect(built[0].tasks[0].settled).toBe(true)
+    expect(built[0].tasks.map((entry) => entry.row.id)).toEqual(['settled', 'early', 'late'])
+    expect(built[0].tasks[0].row.settled).toBe(true)
   })
 
   it('defaults the state slot so a stateless row still reads as work', () => {
@@ -181,6 +182,18 @@ describe('buildBackgroundTaskGroups', () => {
     expect(built[0].tasks[0].state).toBe('working')
     const monitor = buildBackgroundTaskGroups([{ id: 'm', kind: 'monitor' }], [])
     expect(monitor[0].tasks[0].state).toBe('monitoring')
+  })
+})
+
+describe('backgroundTaskCountedState', () => {
+  it('words a count with each state as one sentence', () => {
+    expect(backgroundTaskCountedState('2 agents', 'working')).toBe('2 agents working')
+    expect(backgroundTaskCountedState('2 agents', 'monitoring')).toBe('2 agents monitoring')
+    expect(backgroundTaskCountedState('2 agents', 'waiting')).toBe('2 agents waiting')
+    expect(backgroundTaskCountedState('2 agents', 'blocked')).toBe('2 agents blocked')
+    expect(backgroundTaskCountedState('2 agents', 'done')).toBe('2 agents done')
+    expect(backgroundTaskCountedState(3, 'idle')).toBe('3 stopped')
+    expect(backgroundTaskCountedState(3, 'unverifiable')).toBe('3 with status unavailable')
   })
 })
 
@@ -234,9 +247,19 @@ describe('resumed tasks from mixed-version hosts', () => {
       [live, ...shells],
       [settled, agent('sibling', { state: 'done' })]
     )
-    expect(
-      groups.flatMap((group) => group.tasks).filter((entry) => entry.task.id === live.id)
-    ).toEqual([{ task: live, settled: false, state: 'working', name: 'Background agent' }])
+    const owners = groups
+      .flatMap((group) => group.tasks)
+      .filter((entry) => entry.row.id === live.id)
+    expect(owners).toHaveLength(1)
+    expect(owners[0]).toMatchObject({
+      row: {
+        settled: false,
+        displayState: 'working',
+        name: 'Background agent',
+        totalTokens: 20000
+      },
+      state: 'working'
+    })
     expect(backgroundTasksHeaderContent(groups, { narrow: false, now: NOW }).segments).toEqual([
       { text: '2 agents', kind: 'agent' },
       { text: '4 shells', kind: 'command' }

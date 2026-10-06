@@ -22,7 +22,7 @@ import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-t
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
@@ -34,7 +34,7 @@ const REPO_ID = 'repo-1'
 const FOCUSED_PANE = makePaneKey(TAB_ID, FOCUSED_LEAF_ID)
 const SIBLING_PANE = makePaneKey(TAB_ID, SIBLING_LEAF_ID)
 
-let latestAgent: TuiAgent | null | undefined
+let latestAgent: TerminalAgent | null | undefined
 let root: Root | null = null
 
 const baseTab: TerminalTab = {
@@ -65,7 +65,7 @@ function layoutFocusedOn(activeLeafId: string): TerminalLayoutSnapshot {
   }
 }
 
-function foreground(agent: TuiAgent | null, shellForeground = false): PaneForegroundAgentEntry {
+function foreground(agent: TerminalAgent | null, shellForeground = false): PaneForegroundAgentEntry {
   return { agent, shellForeground }
 }
 

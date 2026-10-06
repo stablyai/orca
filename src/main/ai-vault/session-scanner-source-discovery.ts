@@ -2,6 +2,7 @@ import { delimiter } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { discoverFiles } from './session-scanner-discovery'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
+import { zcodeDiscoveries } from './session-scanner-zcode-sources'
 import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
 import { AI_VAULT_AGENT_SOURCES, type AiVaultAgentSource } from './session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from './session-scanner-roots'
@@ -28,6 +29,7 @@ export async function discoverAiVaultSessionSources(args: {
     // SQLite DB. discoverOpenCodeSessions runs both the file scanner (legacy)
     // and the SQLite scanner (1.17.x); dedup by sessionId happens inside.
     ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+    ...zcodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...Object.entries(AI_VAULT_AGENT_SOURCES).flatMap(([agent, source]) =>
       source

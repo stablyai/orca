@@ -110,7 +110,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
       session.hiddenStartupRendererQueryPending
     )
     session.hiddenStartupRendererQueryPending = extracted.pending
-    if (extracted.oscColorQueryData) {
+    if (extracted.oscColorQueryData && session.shouldAnswerPaneOscColorQueries()) {
       // Why: Codex's startup palette probe has a 100ms budget; answer hidden color queries immediately so scheduling/remote-input debounce (#7329) can't miss it.
       sendTerminalOscColorQueryReplies(
         extracted.oscColorQueryData,

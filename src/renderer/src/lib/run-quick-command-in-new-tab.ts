@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand,
@@ -65,6 +66,7 @@ export function runQuickCommandInNewTab({
       return null
     }
     const result = launchAgentInNewTab({
+      requestId: newAgentLaunchRequestId(),
       agent: command.agent,
       prompt: command.prompt,
       worktreeId,

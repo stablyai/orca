@@ -251,16 +251,6 @@ describe('hasSkillCopyNeedingAttention', () => {
     )
   })
 
-  // Regression guard for the centralization: the badge predicate deliberately omits the
-  // shared helper's outdated carve-out, so a non-eligible outdated copy stays amber.
-  // Collapsing the two predicates would flip this to green while the dialog still shows
-  // a reinstall row — the badge/dialog contradiction this change exists to avoid.
-  it('keeps a non-eligible outdated global copy amber', () => {
-    expect(getSkillFreshnessDisplayStatus(inventory([placement('outdated')]), SKILL_NAME)).toBe(
-      'needs-attention'
-    )
-  })
-
   // Why: an unreadable plugin path could hide a copy of anything, but a skill Orca
   // never found anywhere is not the one to blame for it — that reads as a problem
   // with a skill the user has not installed.

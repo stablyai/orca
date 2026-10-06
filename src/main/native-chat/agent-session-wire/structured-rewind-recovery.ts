@@ -1,5 +1,7 @@
-import { restoreRewindJournalBody } from './structured-rewind-journal-body'
-import { mergeRetainedHostLifecycleRows } from './structured-rewind-retained-host-rows'
+import {
+  mergeRetainedHostLifecycleRows,
+  retainedRowReplacement
+} from './structured-rewind-retained-host-rows'
 import { isDeepStrictEqual } from 'node:util'
 import {
   agentJournalItemKey,
@@ -11,6 +13,9 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 import { rewindRefusal } from './structured-rewind-refusal'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+
+type RewindRecoveryDeps = { store: AgentSessionRecordStore; logger: StructuredAgentSessionLogger }
 
 export function persistRewindRecord(
   store: AgentSessionRecordStore,
@@ -31,7 +36,7 @@ export function persistRewindRecord(
  * settled refused rather than proven. Bookkeeping only: the chat is already attached either way.
  */
 async function settleUnsupportedClaudeRewind(
-  store: AgentSessionRecordStore,
+  { store, logger }: RewindRecoveryDeps,
   sessionId: string,
   fence: number,
   rewind: AgentSessionRewindRecord
@@ -50,7 +55,8 @@ async function settleUnsupportedClaudeRewind(
       outcome: { status: 'failed', code: refusal.code, rewindReason: 'unsupported' }
     })
   } catch (error) {
-    console.warn('[structured-rewind] pending Claude rewind was not settled:', {
+    logger.warn('a pending Claude rewind was not settled', {
+      scope: 'rewind-unsupported-settlement',
       sessionId,
       operationId: rewind.operationId,
       error
@@ -60,20 +66,21 @@ async function settleUnsupportedClaudeRewind(
 
 /** Recovery observes provider state; it never repeats an ambiguous native mutation. */
 export async function recoverStructuredRewind(
-  store: AgentSessionRecordStore,
+  deps: RewindRecoveryDeps,
   sessionId: string,
   journal: AgentSessionJournal,
   fence: number,
   adapter?: StructuredAgentSessionAdapter,
   now: () => number = Date.now
 ): Promise<void> {
+  const { store } = deps
   let rewind = store.getRecord(sessionId)?.rewind
   if (rewind?.phase !== 'provider-succeeded' && rewind?.phase !== 'prepared') {
     return
   }
   const target = parseAgentJournalItemKey(rewind.providerItemId ?? rewind.itemId)
   if (target?.provider === 'claude') {
-    await settleUnsupportedClaudeRewind(store, sessionId, fence, rewind)
+    await settleUnsupportedClaudeRewind(deps, sessionId, fence, rewind)
     return
   }
   if (target?.provider === 'codex' && !rewind.hydrationVerified) {
@@ -83,11 +90,9 @@ export async function recoverStructuredRewind(
       beforeTurnId: target.turnId
     })
     if (!recovered?.ok) {
-      if (
-        recovered?.reason === 'provider-refused' &&
-        rewind.phase === 'prepared' &&
-        !rewind.providerApplied
-      ) {
+      // The target is still in the provider's history, and the journal is replaced only once the
+      // revert is proven, so both still hold it even when the provider acknowledged the revert.
+      if (recovered?.reason === 'provider-refused' && rewind.phase === 'prepared') {
         await persistRewindRecord(store, sessionId, fence, {
           ...rewind,
           phase: 'refused',
@@ -141,19 +146,16 @@ export async function recoverStructuredRewind(
   if (rewind.phase !== 'provider-succeeded') {
     return
   }
-  const replacement = rewind.retained.map((item) => {
-    const identity = parseAgentJournalItemKey(item.itemId)
-    if (!identity) {
-      throw new Error('agent_session_rewind:invalid-retained-identity')
-    }
-    return { identity, body: restoreRewindJournalBody(item.body), observedAt: item.observedAt }
-  })
+  const replacement = rewind.retained.map(retainedRowReplacement)
   // A crash after the journal transaction must settle its existing epoch, not replace it twice.
   const alreadyReplaced = journal.cursor().epoch !== rewind.expectedEpoch
   if (
     alreadyReplaced &&
     !isDeepStrictEqual(
-      journal.snapshot().items.map(({ itemId, body }) => ({ itemId, body })),
+      journal.snapshot().items.map(({ itemId }) => ({
+        itemId,
+        body: journal.itemBody(itemId)
+      })),
       replacement.map(({ identity, body }) => ({ itemId: agentJournalItemKey(identity), body }))
     )
   ) {

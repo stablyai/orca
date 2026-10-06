@@ -320,7 +320,7 @@ export function writeHooksJson(
   config: Record<string, unknown>,
   // Why: `serialized` lets a JSONC config (Devin) supply text edited in place, so the
   // atomic write + rolling backup below stay shared instead of being reimplemented.
-  options?: { preserveMode?: boolean; serialized?: string }
+  options?: { preserveMode?: boolean; defaultMode?: number; serialized?: string }
 ): void {
   const writePath = resolveHooksJsonWritePath(configPath)
   const dir = dirname(writePath)
@@ -331,7 +331,9 @@ export function writeHooksJson(
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
   const existingMode =
-    options?.preserveMode === true && existsSync(writePath) ? statSync(writePath).mode : undefined
+    options?.preserveMode === true && existsSync(writePath)
+      ? statSync(writePath).mode & 0o777
+      : options?.defaultMode
 
   // Why: skip the write (and therefore the .bak rotation) when the on-disk
   // content is already identical. Without this, every install() rewrites the
@@ -348,7 +350,11 @@ export function writeHooksJson(
   }
 
   try {
-    writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: existingMode })
+    writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: existingMode, flag: 'wx' })
+    if (existingMode !== undefined && process.platform !== 'win32') {
+      // Preserve requested permissions even with a stricter process umask.
+      chmodSync(tmpPath, existingMode)
+    }
     // Why: single rolling backup — one file, no accumulation in ~/.claude.
     // Protects against a merge-logic bug producing bad JSON; the original is
     // always recoverable from <configPath>.bak until the next write.

@@ -15,9 +15,17 @@ import type {
   AgentSessionHandoffStage,
   AgentSessionLease
 } from './agent-session-record'
-import type { AgentSessionOwnerVerdict } from './agent-session-wire-refusals'
+import type {
+  AgentSessionOwnerVerdict,
+  AgentSessionRefusalDetailsByCode
+} from './agent-session-wire-refusals'
 
-export type AgentSessionIdentityMatchField = 'process-start-time' | 'spawn-token'
+/** What a PID probe can compare against the recorded owner. */
+export type AgentSessionProcessIdentityField = 'process-start-time' | 'spawn-token'
+
+/** `held-child`: this runtime still holds the child at the record's fence and has not seen it exit.
+ *  Only lease renewal in that runtime asserts it; restart and recovery probes never can. */
+export type AgentSessionIdentityMatchField = AgentSessionProcessIdentityField | 'held-child'
 
 export type AgentSessionOwnerProbe =
   /** Orca watched this exact process exit. */
@@ -25,7 +33,7 @@ export type AgentSessionOwnerProbe =
   /** The recorded pid is not present on the host. */
   | { outcome: 'pid-absent' }
   /** The pid is present but is a different process. */
-  | { outcome: 'identity-mismatch'; field: AgentSessionIdentityMatchField | 'command-line' }
+  | { outcome: 'identity-mismatch'; field: AgentSessionProcessIdentityField | 'command-line' }
   /** The pid is present and at least one identity element was verified. */
   | { outcome: 'identity-matched'; matchedOn: readonly AgentSessionIdentityMatchField[] }
   /** No process carries the reserved spawn token and the provider saw no activity after it. */
@@ -44,7 +52,13 @@ export type AgentSessionAcquisitionDecision =
   | { decision: 'granted'; nextFence: number }
   /** The same acquisition operation re-entering its own reservation; no new fence, no new spawn. */
   | { decision: 'retry-reservation'; fence: number }
-  | { decision: 'refused'; code: AgentSessionLeaseRefusalCode }
+  | {
+      [C in AgentSessionLeaseRefusalCode]: {
+        decision: 'refused'
+        code: C
+        details: AgentSessionRefusalDetailsByCode[C]
+      }
+    }[AgentSessionLeaseRefusalCode]
 
 export type AgentSessionRestartAdjudication =
   /** Nothing is outstanding — no owner, no reservation. Clear any latched stage; the fence stays. */
@@ -71,16 +85,23 @@ export function isProvenAliveProbe(probe: AgentSessionOwnerProbe): boolean {
 
 function deathEvidenceFor(
   probe: AgentSessionOwnerProbe,
-  observedAt: number
+  observedAt: number,
+  lease: AgentSessionLease
 ): AgentSessionDeathEvidence | null {
+  // Capped so a clock that stepped back across the restart still writes a valid interval.
+  const interval = {
+    observedAt,
+    ownerFence: lease.runtimeFence,
+    lastProvenAliveAt: Math.min(lease.lastRenewedAt, observedAt)
+  }
   if (probe.outcome === 'exit-observed') {
-    return { kind: 'exit-observed', detail: 'observed process exit', observedAt }
+    return { kind: 'exit-observed', detail: 'observed process exit', ...interval }
   }
   if (probe.outcome === 'pid-absent') {
-    return { kind: 'pid-absent', detail: 'recorded pid absent on host', observedAt }
+    return { kind: 'pid-absent', detail: 'recorded pid absent on host', ...interval }
   }
   if (probe.outcome === 'identity-mismatch') {
-    return { kind: 'identity-mismatch', detail: `mismatched ${probe.field}`, observedAt }
+    return { kind: 'identity-mismatch', detail: `mismatched ${probe.field}`, ...interval }
   }
   return null
 }
@@ -131,23 +152,43 @@ export function evaluateAgentSessionAcquisition(args: {
 }): AgentSessionAcquisitionDecision {
   const { lease, expectedFence, handoffOperationId, probe } = args
   if (lease.unreconciled) {
-    return { decision: 'refused', code: 'execution_owner_reconciling' }
+    return {
+      decision: 'refused',
+      code: 'execution_owner_reconciling',
+      details: { reason: 'hostReconciling' }
+    }
   }
   if (!isAgentSessionFenceCurrent(lease, expectedFence)) {
-    return { decision: 'refused', code: 'agent_session_checkpoint_stale' }
+    return {
+      decision: 'refused',
+      code: 'agent_session_checkpoint_stale',
+      details: { reason: 'fenceStale' }
+    }
   }
   if (lease.claimStatus === 'conflicted') {
     // Why: the user's own terminal agent; restart adjudication and recovery retire it once gone.
-    return { decision: 'refused', code: 'agent_session_conflict' }
+    return {
+      decision: 'refused',
+      code: 'agent_session_conflict',
+      details: { reason: 'claimConflicted' }
+    }
   }
   if (lease.handoffStage === 'recovering') {
     // Why: no stage expires into an owner; recovery resolution concludes about it first.
-    return { decision: 'refused', code: 'agent_session_ownership_unknown' }
+    return {
+      decision: 'refused',
+      code: 'agent_session_ownership_unknown',
+      details: { reason: 'ownerUnproven' }
+    }
   }
   if (lease.handoffStage !== null && lease.handoffOperationId !== null) {
     if (handoffOperationId !== lease.handoffOperationId) {
       // Why: the retry key is operation id + fence + stage; a different id is a different intent.
-      return { decision: 'refused', code: 'agent_session_operation_conflict' }
+      return {
+        decision: 'refused',
+        code: 'agent_session_operation_conflict',
+        details: { reason: 'handoffInFlight' }
+      }
     }
     if (
       lease.ownerProcess === null &&
@@ -162,19 +203,24 @@ export function evaluateAgentSessionAcquisition(args: {
     if (!isProvenDeadProbe(probe)) {
       // Why: a lapsed deadline means Orca stopped hearing from the owner, not that the child
       // stopped editing files and spending tokens.
-      return {
-        decision: 'refused',
-        code: isProvenAliveProbe(probe)
-          ? 'agent_session_conflict'
-          : 'agent_session_ownership_unknown'
-      }
+      return isProvenAliveProbe(probe)
+        ? { decision: 'refused', code: 'agent_session_conflict', details: { reason: 'ownerAlive' } }
+        : {
+            decision: 'refused',
+            code: 'agent_session_ownership_unknown',
+            details: { reason: 'ownerUnproven' }
+          }
     }
     return { decision: 'granted', nextFence: nextAgentSessionFence(lease) }
   }
   if (lease.claimStatus === 'reserved' && probe.outcome !== 'reservation-unused') {
     // Why: a reservation with no proven process is not a free lease — the crash may have lost
     // the race with the spawn rather than beaten it.
-    return { decision: 'refused', code: 'agent_session_ownership_unknown' }
+    return {
+      decision: 'refused',
+      code: 'agent_session_ownership_unknown',
+      details: { reason: 'ownerUnproven' }
+    }
   }
   return { decision: 'granted', nextFence: nextAgentSessionFence(lease) }
 }
@@ -199,14 +245,19 @@ export function adjudicateAgentSessionRestart(args: {
     // Why: a child spawned before its identity was recorded lost its stdio with the runtime that
     // crashed, so nothing can drive it. A token scan that proves no child is the only evidence there
     // can be; without it the lease is released anyway. A live child still carrying the token is
-    // not signalled here, and the orphan reaper, which runs once at store open, may have seen this
-    // lease still claiming it.
+    // never signalled: the token is inherited by every descendant, so it cannot prove which one is
+    // the provider child.
     return {
       disposition: 'evicted',
       nextFence: nextAgentSessionFence(lease),
       evidence:
         probe.outcome === 'reservation-unused'
-          ? { kind: 'pid-absent', detail: 'reservation never spawned', observedAt }
+          ? {
+              kind: 'pid-absent',
+              detail: 'reservation never spawned',
+              observedAt,
+              ownerFence: lease.runtimeFence
+            }
           : null
     }
   }
@@ -219,7 +270,7 @@ export function adjudicateAgentSessionRestart(args: {
       reason: 'owner outlived the runtime that held its transport'
     }
   }
-  const evidence = deathEvidenceFor(probe, observedAt)
+  const evidence = deathEvidenceFor(probe, observedAt, lease)
   if (evidence) {
     return { disposition: 'evicted', nextFence: nextAgentSessionFence(lease), evidence }
   }
@@ -230,20 +281,4 @@ export function adjudicateAgentSessionRestart(args: {
     reason:
       probe.outcome === 'indeterminate' ? probe.reason : 'process identity could not be verified'
   }
-}
-
-/**
- * A process carrying an Orca spawn token with no matching lease is an orphan: stop it, never
- * adopt it. Neither age nor CPU is evidence — only a token match justifies acting on a process.
- */
-export function classifyObservedAgentSessionSpawnToken(args: {
-  spawnToken: string
-  leases: readonly AgentSessionLease[]
-}): 'owned' | 'orphan' {
-  const owned = args.leases.some(
-    (lease) =>
-      lease.reservedSpawnToken === args.spawnToken ||
-      lease.ownerProcess?.spawnToken === args.spawnToken
-  )
-  return owned ? 'owned' : 'orphan'
 }

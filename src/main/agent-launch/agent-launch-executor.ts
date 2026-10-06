@@ -21,10 +21,11 @@
  * for a workspace it can resolve. That is why the decision is in two halves rather than one.
  *
  * What genuinely differs per surface is only how a surface is *built* — an orchestration worker's
- * session takes a dispatch hold and a mailbox that a plain launch must not take — so that is
- * injected as a factory instead of branched on here.
+ * session takes a redrive subscription and a mailbox that a plain launch must not take — so that
+ * is injected as a factory instead of branched on here.
  */
 
+import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type {
   AgentLaunchIntent,
@@ -38,6 +39,7 @@ import {
   HANDED_TO_TERMINAL,
   launchCommandPrompt,
   promptReceipt,
+  settledAtCreation,
   settleLaunchPromptDisposal
 } from './agent-launch-prompt-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -70,12 +72,25 @@ export type AgentLaunchExecution = {
   vocabulary?: AgentLaunchModeVocabulary
   /** Attributes a throw to the step that was running, the way a dispatch's own stages do. */
   onStage?: (stage: 'worktree_create' | 'mode_settle' | 'surface_create') => void
+  /** The surface exists and its tab is published; runs before any prompt delivery. Must not throw. */
+  onSurfacePublished?: (surface: AgentLaunchPublishedSurface) => void
 }
+
+/**
+ * The launch as it stands once its surface exists: a complete result whose prompt receipt says only
+ * what creation itself settled — carried on the launch command, a draft the host never delivers, or
+ * a submit still `unconfirmed`. Complete so a host that dies during the delivery still leaves a
+ * truthful answer behind.
+ */
+export type AgentLaunchPublishedSurface = AgentLaunchResult
 
 export async function executeAgentLaunch(
   execution: AgentLaunchExecution
 ): Promise<AgentLaunchResult> {
   const { intent, runtime } = execution
+  if (intent.reuseTerminal || intent.target.kind === 'create-worktree') {
+    assertOpenCodeModelLaunchPreferencesAbsent(intent.agent, intent.sessionOptions)
+  }
   const vocabulary = execution.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
   const settings = readAgentLaunchModeSettings(runtime)
   const preflight = decideAgentLaunchMode({
@@ -95,13 +110,19 @@ export async function executeAgentLaunch(
   // A reused terminal already downgraded in the pre-flight; there is nothing to create. Its agent
   // was running before this launch existed, so argv is unreachable and the PTY is the only way in.
   if (intent.reuseTerminal) {
-    return {
+    const reused = published(execution, {
       outcome: { kind: 'terminal', handle: intent.reuseTerminal.handle },
       worktreeId: existingWorktreeId(intent.target),
       receipt: preflight,
+      ...promptReceipt(intent, settledAtCreation(intent, {}))
+    })
+    return {
+      ...reused,
       ...promptReceipt(
         intent,
-        await deliverTerminalLaunchPrompt(execution, intent.reuseTerminal.handle)
+        await deliverTerminalLaunchPrompt(execution, intent.reuseTerminal.handle, {
+          freshLaunch: false
+        })
       )
     }
   }
@@ -109,7 +130,7 @@ export async function executeAgentLaunch(
   const placed = await resolveWorkspace(execution, preflight)
   // Agent-first creation already produced the agent, so the pre-flight verdict is final.
   if (placed.startupTerminalHandle) {
-    return {
+    const startup = published(execution, {
       outcome: {
         kind: 'terminal',
         handle: placed.startupTerminalHandle,
@@ -118,11 +139,17 @@ export async function executeAgentLaunch(
       worktreeId: placed.worktreeId,
       receipt: preflight,
       ...(placed.warning ? { warning: placed.warning } : {}),
+      ...promptReceipt(intent, settledAtCreation(intent, placed))
+    })
+    return {
+      ...startup,
       ...promptReceipt(
         intent,
         placed.promptRodeLaunchCommand
           ? HANDED_TO_TERMINAL
-          : await deliverTerminalLaunchPrompt(execution, placed.startupTerminalHandle)
+          : await deliverTerminalLaunchPrompt(execution, placed.startupTerminalHandle, {
+              freshLaunch: true
+            })
       )
     }
   }
@@ -165,13 +192,25 @@ export async function executeAgentLaunch(
   // not start while looking at it. Telling those apart needs `createManagedWorktree` to stop
   // multiplexing "couldn't copy untracked files" and "startup terminal failed" into one string.
   const warning = combineLaunchWarnings(placed.warning, created.warning)
-  return {
+  const surface = published(execution, {
     outcome: created.outcome,
     worktreeId: placed.worktreeId,
     receipt: settled,
     ...(warning ? { warning } : {}),
+    ...promptReceipt(intent, settledAtCreation(intent, created))
+  })
+  return {
+    ...surface,
     ...promptReceipt(intent, await settleLaunchPromptDisposal(execution, created))
   }
+}
+
+function published(
+  execution: AgentLaunchExecution,
+  surface: AgentLaunchPublishedSurface
+): AgentLaunchPublishedSurface {
+  execution.onSurfacePublished?.(surface)
+  return surface
 }
 
 function downgradeAgentLaunchModeForStructuredRefusal(
@@ -219,9 +258,10 @@ async function resolveWorkspace(
   })
   // Only when a startup terminal actually came back: a create that produced none ran no command,
   // so nothing carried the prompt and the launch still owes it to whatever surface it builds next.
-  return created.startupTerminalHandle && startupPrompt
-    ? { ...created, promptRodeLaunchCommand: true }
-    : created
+  const { promptRodeLaunchCommand, ...rest } = created
+  return rest.startupTerminalHandle && promptRodeLaunchCommand
+    ? { ...rest, promptRodeLaunchCommand: true }
+    : rest
 }
 
 /** `structured` is the same surface `outcome` names, kept typed so prompt delivery reads the create's
@@ -265,16 +305,7 @@ async function createSurface(
 }
 
 /**
- * A structured session cannot apply launch arguments, so a launch that carried some and got one
- * anyway has to say so.
- *
- * Reported rather than routed around: the arguments field is a TUI concern by an explicit decision
- * (`hasExplicitTuiLaunchCommand` reads the launch command and pointedly not the args, because the
- * Agent SDK and app-server version their option sets independently of the interactive CLI), so
- * downgrading here would override a stated user preference on the strength of a field that is not
- * evidence about the surface. `null` warns too: "no arguments" is also unapplied, and the structured
- * path still reads the bypass-permissions bit out of the user's *settings* default, so a caller that
- * asked for none can get a session running with more permission than it requested.
+ * Structured chat uses saved Arguments, so a per-call override still needs a truthful warning.
  */
 function ignoredStructuredAgentArgsWarning(
   intent: AgentLaunchIntent
@@ -283,7 +314,7 @@ function ignoredStructuredAgentArgsWarning(
     ? undefined
     : {
         warning:
-          'Started a structured chat session, which does not apply launch arguments; the requested arguments were ignored.'
+          'Started a structured chat session using saved agent Arguments; the per-launch argument override was ignored.'
       }
 }
 
@@ -323,7 +354,7 @@ async function createTerminalSurface(
       ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
     },
     ...(terminal.warning ? { warning: terminal.warning } : {}),
-    ...(startupPrompt ? { promptRodeLaunchCommand: true } : {})
+    ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
   }
 }
 

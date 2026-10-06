@@ -12,8 +12,7 @@
 //
 // Every offset below is in the scroll container's own pixels (rows are placed at
 // `item.start - scrollMargin` inside a sizer sitting `scrollMargin` down), which is
-// the same space as `scrollTop`. That keeps the comparison honest under the
-// transcript's `zoom`, where a bounding rect would be off by exactly the zoom factor.
+// the same coordinate space as `scrollTop`.
 
 import { NATIVE_CHAT_BOTTOM_THRESHOLD_PX } from './native-chat-autoscroll'
 
@@ -24,9 +23,15 @@ export type NativeChatRailVirtualItem = {
   end: number
 }
 
-/** Only the field the rail reads, so a test needs no slot builder. */
+/** Only the fields the rail reads, so a test needs no slot builder. */
 export type NativeChatRailSlot = {
   turnKey: string | undefined
+  /** A user row in no turn (one shown as not sent) lights its own tick. */
+  message?: { id: string; role: string }
+}
+
+function railTickOf(slot: NativeChatRailSlot | undefined): string | null {
+  return slot?.turnKey ?? (slot?.message?.role === 'user' ? slot.message.id : null)
 }
 
 export function findActiveNativeChatRailItem({
@@ -53,7 +58,7 @@ export function findActiveNativeChatRailItem({
   const atBottom = scrollHeight - clientHeight - scrollTop <= NATIVE_CHAT_BOTTOM_THRESHOLD_PX
   if (atBottom) {
     const last = virtualItems.at(-1)
-    return last === undefined ? previousActiveId : (slots[last.index]?.turnKey ?? null)
+    return last === undefined ? previousActiveId : railTickOf(slots[last.index])
   }
 
   let fold: NativeChatRailVirtualItem | undefined
@@ -65,12 +70,12 @@ export function findActiveNativeChatRailItem({
   // Scrolled above everything the window holds: the first windowed row is the
   // nearest thing to the fold.
   if (fold === undefined) {
-    return slots[virtualItems[0]?.index ?? -1]?.turnKey ?? null
+    return railTickOf(slots[virtualItems[0]?.index ?? -1])
   }
   // The window lags the scroll by a commit, so a fold past every row it holds is
   // a stale read, not an answer. Holding the previous tick beats blanking one.
   if (fold.end <= scrollTop) {
     return previousActiveId
   }
-  return slots[fold.index]?.turnKey ?? null
+  return railTickOf(slots[fold.index])
 }

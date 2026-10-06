@@ -68,11 +68,8 @@ export type AgentLaunchIntent = {
    * caller explicitly wants none, and collapsing the two would make a recipe that clears its args
    * silently inherit whatever the settings happen to hold.
    *
-   * Deliberately NOT a route input. `hasExplicitTuiLaunchCommand` reads the launch *command* and
-   * pointedly not the arguments, because structured chat drives Claude through the Agent SDK and
-   * Codex through app-server, whose option sets are versioned independently of the interactive
-   * CLI's. So args reaching a structured launch are ignored rather than forcing a terminal — the
-   * host says so in `warning` instead of quietly honouring neither the args nor the preference.
+   * Deliberately NOT a route input. Structured chat reads the execution host's saved Arguments;
+   * per-call overrides remain terminal-only and the host reports that in `warning`.
    */
   agentArgs?: string | null
   /**
@@ -154,6 +151,13 @@ export type AgentLaunchPromptDisposal =
   | { outcome: 'handed-to-terminal' }
   /** Not delivered by this call; the caller still owns the text. */
   | { outcome: 'not-delivered' }
+  /**
+   * Only ever replayed, never a live answer: the host recorded the running agent, then stopped
+   * before the delivery reported back, so the text may or may not have arrived. The caller must not
+   * resend. Sent only to a caller advertising `agent.launch.prompt-unconfirmed.v1`; every other
+   * caller is refused with `agent_session_operation_unknown` instead.
+   */
+  | { outcome: 'unconfirmed' }
 
 export type AgentLaunchPromptReceipt = {
   delivery: AgentLaunchPromptDelivery
@@ -189,6 +193,8 @@ export type AgentLaunchModeReason =
   | 'remote_execution_host'
   | 'reused_terminal'
   | 'agent_without_structured_session'
+  /** Historical name, kept because receipts carry it: the launch asked for a start directory
+   *  outside its workspace. A custom launch command no longer produces it. */
   | 'tui_launch_command'
   | 'structured_sessions_unavailable'
   | 'structured_support_unknown'
@@ -242,7 +248,9 @@ function isAgentLaunchPromptReceipt(value: unknown): value is AgentLaunchPromptR
   }
   return value.outcome === 'journaled'
     ? 'messageId' in value && typeof value.messageId === 'string'
-    : value.outcome === 'handed-to-terminal' || value.outcome === 'not-delivered'
+    : value.outcome === 'handed-to-terminal' ||
+        value.outcome === 'not-delivered' ||
+        value.outcome === 'unconfirmed'
 }
 
 function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {
@@ -305,7 +313,9 @@ export const AGENT_LAUNCH_RESERVED_CREATE_FIELDS = [
   'startupDraft',
   'startupLaunchConfig',
   'startupEnv',
-  'startupCommandDelivery'
+  'startupCommandDelivery',
+  // The launch carries its own; a create's copy would be a second, possibly contradicting, answer.
+  'launchSource'
 ] as const
 
 /** Strips the reserved agent fields from a create payload. Callers migrating from

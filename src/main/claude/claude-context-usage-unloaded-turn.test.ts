@@ -14,14 +14,11 @@ import {
   type StructuredAgentSessionState
 } from '../../shared/structured-agent-session-reducer'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  readStructuredAgentSessionOptions,
-  type StructuredAgentSessionMutationContext
-} from '../native-chat/agent-session-wire/structured-agent-session-host-mutations'
+import type { StructuredAgentSessionMutationContext } from '../native-chat/agent-session-wire/structured-agent-session-host-mutations'
+import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
 import {
   assistantFrame,
   initFrame,
@@ -29,6 +26,13 @@ import {
   userFrame
 } from './claude-context-usage-test-support'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import {
+  claudeAndCodexAgents,
+  NO_STRUCTURED_AGENTS
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import type { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 
 const SESSION = 'orca-session'
 const journals = createTrackedJournalOpener()
@@ -50,15 +54,15 @@ async function openJournal(): Promise<AgentSessionJournal> {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'claude',
-      providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: null }
+      providerHandle: claudeProviderHandle('claude-session', null)
     },
     now: () => 9_000,
-    journalDir: join(root, SESSION)
+    stateDirectory: join(root, SESSION)
   })
 }
 
 function translate(journal: AgentSessionJournal) {
-  const deferred = createDeferredStructuredAgentSessionEventSink()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, coalesceMs: 0 })
   deferred.bind({ journal, fence: 1, publish: () => {} })
   const settle = async (): Promise<void> => {
@@ -81,21 +85,24 @@ function runTurn(
   })
 }
 
-function readOptions(
-  journal: AgentSessionJournal,
-  adapter: Partial<StructuredAgentSessionAdapter>
-) {
+function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegistry) {
+  const running = {
+    journal,
+    child: { fence: 1, generation: 'generation-1' },
+    params: { provider: 'claude' }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the options read touches only these members.
   const context = {
     deps: {
       adapter: {
-        readOptions: async () => ({ models: [], current: { model: 'opus' } }),
-        ...adapter
+        readOptions: async () => ({ models: [], current: { model: 'opus' } })
       },
+      agents,
       store: { getRecord: () => undefined }
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
-    requireSession: () => ({ journal, fence: 1 })
+    openConversation: async () => running,
+    conversation: async () => running
   } as unknown as StructuredAgentSessionMutationContext
   return readStructuredAgentSessionOptions(context, SESSION)
 }
@@ -165,7 +172,7 @@ describe('context usage for a turn row outside the loaded page', () => {
     const state = attachTail(journal, 3)
     expect(state.hasOlder).toBe(true)
     expect(hasTurnRow(state)).toBe(false)
-    const options = await readOptions(journal, { recordsContextUsage: () => true })
+    const options = await readOptions(journal, claudeAndCodexAgents())
 
     expect(options.contextUsage?.current).toEqual(
       latestStructuredAgentContextFacts(journal.snapshot().items)
@@ -184,7 +191,7 @@ describe('context usage for a turn row outside the loaded page', () => {
     runTurn(translator, 'turn-a', 1_000, [120_000, 130_000, 140_000])
     await settle()
 
-    const options = await readOptions(journal, {})
+    const options = await readOptions(journal, NO_STRUCTURED_AGENTS)
     expect(options).not.toHaveProperty('contextUsage')
     // An older host answers the same way, so the ring reads only the loaded page, as before.
     expect(selectStructuredAgentContextUsage(attachTail(journal, 2).items)).toBeNull()
@@ -207,7 +214,7 @@ describe('context usage for a turn row outside the loaded page', () => {
 
     expect(hasTurnRow(live)).toBe(false)
     expect(live.unloadedTurnRevisions).toBe(1)
-    const options = await readOptions(journal, { recordsContextUsage: () => true })
+    const options = await readOptions(journal, claudeAndCodexAgents())
     expect(
       selectStructuredAgentContextUsage(live.items, options.contextUsage?.current)
     ).toMatchObject({ usedTokens: 250_000, windowTokens: 1_000_000 })
@@ -221,7 +228,7 @@ describe('context usage for a turn row outside the loaded page', () => {
     runTurn(translator, 'turn-b', 3_000, [])
     await settle()
     const hostAnswer = async () =>
-      (await readOptions(journal, { recordsContextUsage: () => true })).contextUsage?.current
+      (await readOptions(journal, claudeAndCodexAgents())).contextUsage?.current
     // The client reads the host once per turn, and again whenever its window loses a turn row.
     let state = attachTail(journal, 200)
     let host = await hostAnswer()

@@ -319,18 +319,15 @@ describe('GitHandler', () => {
 
       expect(gitMock.mock.calls.map(([args]) => args)).toEqual([
         ['ls-files', '-z', '--', ...filePaths.map((filePath) => `:(literal)${filePath}`)],
-        [
-          'restore',
-          '--worktree',
-          '--source=HEAD',
-          '--',
-          ':(literal)docs\\',
-          ':(literal)[ab].txt',
-          ':(literal)docs///',
-          ':(literal)docs\\'
-        ],
+        ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
         ['clean', '-ffdx', '--', ':(literal)new', ':(literal)new', ':(literal)src/file']
       ])
+      expect(gitMock).toHaveBeenNthCalledWith(
+        2,
+        ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
+        tmpDir,
+        { stdin: ':(literal)docs\\\0:(literal)[ab].txt\0:(literal)docs///\0:(literal)docs\\\0' }
+      )
     })
 
     it('handles large tracked path lists during bulk discard classification', async () => {
@@ -354,8 +351,9 @@ describe('GitHandler', () => {
 
       expect(gitMock).toHaveBeenNthCalledWith(
         2,
-        ['restore', '--worktree', '--source=HEAD', '--', ':(literal)docs'],
-        tmpDir
+        ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
+        tmpDir,
+        { stdin: ':(literal)docs\0' }
       )
     })
 

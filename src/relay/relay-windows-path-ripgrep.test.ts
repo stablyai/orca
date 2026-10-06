@@ -1,13 +1,16 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   configureRelayBundledRipgrep,
   isDriveRootedWindowsPath,
   pathRipgrepCommand,
   resetRelayRipgrepPathCacheForTests
 } from './relay-bundled-ripgrep'
+
+// These tests isolate PATH safety; effective-environment coverage lives in the cache suite.
+vi.mock('./relay-command-env', () => ({ buildRelayCommandEnv: () => ({ ...process.env }) }))
 
 const originalPlatform = process.platform
 const originalPath = process.env.PATH
@@ -68,7 +71,7 @@ describe('relay PATH ripgrep resolution', () => {
   // while the spawn -- running with the user's repo as cwd -- resolves them against the repo's.
   it('skips rooted PATH entries that carry no drive', () => {
     setPlatform('win32')
-    process.env.PATH = `\\tools${delimiter}/tools${delimiter}C:tools`
+    process.env.PATH = '\\tools;/tools;C:tools'
     resetRelayRipgrepPathCacheForTests()
 
     expect(pathRipgrepCommand()).toBeNull()
@@ -77,7 +80,7 @@ describe('relay PATH ripgrep resolution', () => {
   // Why a relative PATH entry is skipped: it resolves against the cwd, the hazard being avoided.
   it('ignores relative PATH entries on Windows', () => {
     setPlatform('win32')
-    process.env.PATH = `.${delimiter}node_modules/.bin`
+    process.env.PATH = '.;node_modules/.bin'
     resetRelayRipgrepPathCacheForTests()
 
     expect(pathRipgrepCommand()).toBeNull()

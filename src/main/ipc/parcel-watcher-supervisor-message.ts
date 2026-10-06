@@ -3,7 +3,8 @@ import type { WatcherCancellationTracker } from './parcel-watcher-cancellation-t
 import {
   handleWatcherHostMessage,
   type PendingWatcherUnsubscribe,
-  reportWatcherTerminalError
+  reportWatcherTerminalError,
+  retireHostWatcherSubscription
 } from './parcel-watcher-host-subscriptions'
 import {
   startInterruptedSubscribeTimeout,
@@ -28,6 +29,7 @@ type WatcherSupervisorMessageContext = {
   ) => void
   restartAfterCancelledSubscribe: (child: ChildProcess | null) => void
   terminateUnavailableChild: (child: ChildProcess | null) => void
+  shouldReportTerminalError: () => boolean
   killWatcherChildIfIdle: () => void
 }
 
@@ -61,13 +63,13 @@ export function handleWatcherSupervisorMessage(
     }
   }
   if (message.op === 'watch-error') {
-    handleWatcherHostMessage(
-      message,
-      context.records,
-      context.pendingUnsubscribes,
-      reportWatcherTerminalError,
-      context.killWatcherChildIfIdle
-    )
+    if (record) {
+      void retireHostWatcherSubscription(
+        record,
+        new Error(message.message),
+        context.shouldReportTerminalError
+      )
+    }
     return
   }
   if (message.op === 'cancel-requires-restart') {

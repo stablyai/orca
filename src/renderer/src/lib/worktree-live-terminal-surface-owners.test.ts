@@ -64,7 +64,38 @@ describe('live terminal surface owners', () => {
       WORKTREE_ID
     )
 
-    expect(owners.get(ptyId)).toBe('unowned')
+    expect(owners.get(ptyId)).toEqual({ unowned: true, recorded: null })
+  })
+
+  it('carries the pane the host last recorded for a live orphan', () => {
+    const ptyId = `${WORKTREE_ID}@@orphan`
+    const owners = indexLiveTerminalSurfaceOwners(
+      [
+        summary({
+          ptyId,
+          orphaned: true,
+          tabId: `pty:${ptyId}`,
+          leafId: `pty:${ptyId}`,
+          recordedPaneKey: `tab-live:${LEAF_ID}`
+        })
+      ],
+      WORKTREE_ID
+    )
+
+    expect(owners.get(ptyId)).toEqual({
+      unowned: true,
+      recorded: { paneKey: `tab-live:${LEAF_ID}`, ptyId, tabId: 'tab-live' }
+    })
+  })
+
+  it('ignores a recorded pane that is not a terminal pane key', () => {
+    const ptyId = `${WORKTREE_ID}@@orphan`
+    const owners = indexLiveTerminalSurfaceOwners(
+      [summary({ ptyId, orphaned: true, recordedPaneKey: 'tab-live:not-a-leaf' })],
+      WORKTREE_ID
+    )
+
+    expect(owners.get(ptyId)).toEqual({ unowned: true, recorded: null })
   })
 
   it('does not authorize adoption of a disconnected orphan', () => {

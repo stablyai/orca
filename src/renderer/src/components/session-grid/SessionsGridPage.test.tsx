@@ -115,6 +115,7 @@ describe('SessionsGridPage', () => {
     vi.stubGlobal('cancelAnimationFrame', () => {})
     useAppStore.setState({
       activeView: 'sessions',
+      refreshGitHubForWorktreeIfStale: vi.fn(),
       sessionsGridFilter: 'all',
       sessionsGridPreset: '2x2',
       sessionsGridZoom: 1,

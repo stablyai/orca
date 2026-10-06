@@ -47,18 +47,22 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
 
     const stoppedPtyIds: string[] = []
     for (const ptyId of [...expected].sort()) {
-      if (opts.keepHistory) {
-        this.intentionalHandlelessPtyStops.set(
-          ptyId,
-          this.ptysById.get(ptyId)?.incarnationId ?? null
-        )
-      }
+      // Why: exact-stop is the sleep transaction boundary; its exit must leave the sleeping surface for wake.
+      const settleStop = opts.keepHistory
+        ? this.intentionalPtyStops.mark(
+            ptyId,
+            'reversible',
+            this.ptysById.get(ptyId)?.incarnationId ?? null
+          )
+        : null
+      let stopped = false
       try {
-        if (!(await this.ptyController.stopAndWait(ptyId, { keepHistory: opts.keepHistory }))) {
-          throw Object.assign(new Error('terminal_exact_stop_failed'), { ptyId })
-        }
+        stopped = await this.ptyController.stopAndWait(ptyId, { keepHistory: opts.keepHistory })
       } finally {
-        this.intentionalHandlelessPtyStops.delete(ptyId)
+        settleStop?.(stopped)
+      }
+      if (!stopped) {
+        throw Object.assign(new Error('terminal_exact_stop_failed'), { ptyId })
       }
       stoppedPtyIds.push(ptyId)
     }

@@ -109,8 +109,7 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
       oscLinks?: TerminalOscLinkRange[]
       kittyKeyboardFlags?: number
     },
-    trailingOutput: { data: string; seq: number }[] = [],
-    targetSize?: { cols: number; rows: number }
+    trailingOutput: { data: string; seq: number }[] = []
   ): void {
     if (!snapshot.data) {
       return
@@ -128,9 +127,10 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
         kittyKeyboardFlags: snapshot.kittyKeyboardFlags
       }
     )
-    // Serialized ANSI must be parsed at its source geometry before live bytes use the new grid.
-    if (targetSize) {
-      this.resizeHeadlessTerminal(ptyId, targetSize.cols, targetSize.rows)
+    // Why: a hidden pane answers at its own size; later bytes paint the PTY grid.
+    const ptyGrid = this.getTerminalSize(ptyId)
+    if (ptyGrid) {
+      this.resizeHeadlessTerminal(ptyId, ptyGrid.cols, ptyGrid.rows)
     }
     for (const chunk of trailingOutput) {
       this.trackHeadlessTerminalData(ptyId, chunk.data, chunk.seq)
@@ -152,16 +152,6 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
   }
 
   // Why: a leaf exists before its PTY spawns; a handle issued while ptyId is null gets invalidated on the next sync, so wait for a connected PTY.
-  protected countLeavesInTab(tabId: string): number {
-    let count = 0
-    for (const leaf of this.leaves.values()) {
-      if (leaf.tabId === tabId) {
-        count++
-      }
-    }
-    return count
-  }
-
   protected resolveHandleForTab(tabId: string): string | null {
     for (const leaf of this.leaves.values()) {
       if (leaf.tabId === tabId && leaf.ptyId !== null) {

@@ -3,9 +3,9 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError,
-  rethrowAfterAgentSessionAcquisitionCleanup,
   type StructuredAgentSessionProviderChildPhase
 } from './structured-agent-session-adapter'
+import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
 import { journalIdentityFor } from './structured-agent-session-attach'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
@@ -55,13 +55,19 @@ export async function acquireOwner(
     const options =
       providerChildPhase === 'starting'
         ? undefined
-        : await withAgentSessionCreatePhase('restore_options', input.recordPhase, () =>
-            readNativeSessionOptions({
-              adapter: input.adapter,
-              sessionId: record.sessionId,
-              fence,
-              ...(record.options ? { priorOptions: record.options } : {})
-            })
+        : await withAgentSessionCreatePhase('restore_options', input.recordPhase, async () =>
+            input.adapter.readAcquisitionOptions
+              ? input.adapter.readAcquisitionOptions({
+                  sessionId: record.sessionId,
+                  fence,
+                  ...(record.options ? { priorOptions: record.options } : {})
+                })
+              : readNativeSessionOptions({
+                  adapter: input.adapter,
+                  sessionId: record.sessionId,
+                  fence,
+                  ...(record.options ? { priorOptions: record.options } : {})
+                })
           )
     if (record.lease.ownerProcess === null) {
       await input.store.commitProcessIdentity({

@@ -1,3 +1,4 @@
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../shared/tab-types'
 
@@ -87,6 +88,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     ]
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     launchAgentInNewTab({
+requestId: newAgentLaunchRequestId(),
       agent: 'claude',
       worktreeId: 'wt-1',
       executionHostId: 'runtime:chosen',
@@ -114,6 +116,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     }))
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     launchAgentInNewTab({
+requestId: newAgentLaunchRequestId(),
       agent: 'claude',
       worktreeId: 'wt-1',
       executionHostId: 'runtime:chosen',
@@ -128,6 +131,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     store.tabsByWorktree['wt-1'].push({ id: 'local-agent-tab', launchAgent: 'claude' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     launchAgentInNewTab({
+requestId: newAgentLaunchRequestId(),
       agent: 'claude',
       worktreeId: 'wt-1',
       executionHostId: 'runtime:chosen',
@@ -163,6 +167,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-1',
       agent: 'claude',
       worktreeId: 'wt-1',
       groupId: 'group-1'
@@ -196,6 +201,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-2',
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'fix the spinner',

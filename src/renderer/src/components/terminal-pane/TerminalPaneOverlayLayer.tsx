@@ -9,7 +9,10 @@ import {
 } from '../activity/activity-terminal-portal'
 import { shouldMountBackgroundWorktreeTab } from '../terminal/background-terminal-worktree-mount'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
+import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
+import { captureWorkspaceEmptiedReaction } from '../tab-group/workspace-emptied-reaction'
+import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 type TerminalOverlayAssignment = {
@@ -32,7 +35,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   shouldMeasureHiddenWorktree = false,
   activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
   backgroundMountTabIds = null,
-  activationDeferredMountTabIds = null
+  activationDeferredMountTabIds = null,
+  ownsNativeChatToggleShortcut = true
 }: {
   worktreeId: string
   worktreePath: string
@@ -46,6 +50,9 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   backgroundMountTabIds?: ReadonlySet<string> | null
   /** Cold-activation deferred tabs receive immediate parked watcher coverage. */
   activationDeferredMountTabIds?: ReadonlySet<string> | null
+  /** False for overlay hosts whose workspace is visible while another owns global keyboard
+   *  chords — the toggle listener is gated to one live workspace at a time. */
+  ownsNativeChatToggleShortcut?: boolean
 }): React.JSX.Element | null {
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
     useShallow((state) => ({
@@ -57,21 +64,13 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
-  const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
-  const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
 
-  useNativeChatToggleShortcut(worktreeId, isWorktreeActive)
+  useNativeChatToggleShortcut(worktreeId, isWorktreeActive && ownsNativeChatToggleShortcut)
 
-  const leaveWorktreeIfEmpty = useCallback(() => {
-    const state = useAppStore.getState()
-    if (state.activeWorktreeId !== worktreeId) {
-      return
-    }
-    const { renderableTabCount } = reconcileWorktreeTabModel(worktreeId)
-    if (renderableTabCount === 0) {
-      setActiveWorktree(null)
-    }
-  }, [reconcileWorktreeTabModel, setActiveWorktree, worktreeId])
+  const captureEmptiedReaction = useCallback(
+    () => captureWorkspaceEmptiedReaction(worktreeId),
+    [worktreeId]
+  )
 
   const focusOwningGroup = useCallback(
     (groupId: string) => focusGroup(worktreeId, groupId),
@@ -132,40 +131,50 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
 
   return (
     <>
-      {terminalTabs
-        .filter((terminalTab) =>
-          shouldMountBackgroundWorktreeTab(backgroundMountTabIds, terminalTab.id)
-        )
-        .map((terminalTab) => {
-          const assignment = assignments.get(terminalTab.id)
-          const isVisible = Boolean(isWorktreeActive && assignment?.isActiveInGroup)
-          const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
-          const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
-            worktreeId,
-            tabId: terminalTab.id
-          })
-          if (parkedTerminalTabIds.has(terminalTab.id)) {
-            return null
-          }
-          return (
-            <TerminalOverlaySlot
+      {terminalTabs.map((terminalTab) => {
+        const assignment = assignments.get(terminalTab.id)
+        const isVisible = Boolean(isWorktreeActive && assignment?.isActiveInGroup)
+        if (!shouldMountBackgroundWorktreeTab(backgroundMountTabIds, terminalTab.id)) {
+          // Why only the startup hold lands here visible: reveal admits every other visible
+          // deferred tab in the same render pass.
+          return isVisible ? (
+            <RetainedPaneHost
               key={terminalTab.id}
-              terminalTabId={terminalTab.id}
-              terminalGeneration={terminalTab.generation}
-              worktreeId={worktreeId}
-              worktreePath={worktreePath}
-              startupCwd={terminalTab.startupCwd}
               groupId={assignment?.groupId}
-              isWorktreeActive={isWorktreeActive}
-              isVisible={isVisible}
-              isActive={isActive}
-              activityTerminalPortal={activityTerminalPortal}
+              isVisible
               onFocusOwningGroup={focusOwningGroup}
-              consumeSuppressedPtyExit={consumeSuppressedPtyExit}
-              leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
-            />
-          )
-        })}
+            >
+              <TerminalRestoringPlaceholder />
+            </RetainedPaneHost>
+          ) : null
+        }
+        const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
+        const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
+          worktreeId,
+          tabId: terminalTab.id
+        })
+        if (parkedTerminalTabIds.has(terminalTab.id)) {
+          return null
+        }
+        return (
+          <TerminalOverlaySlot
+            key={terminalTab.id}
+            terminalTabId={terminalTab.id}
+            terminalGeneration={terminalTab.generation}
+            worktreeId={worktreeId}
+            worktreePath={worktreePath}
+            startupCwd={terminalTab.startupCwd}
+            groupId={assignment?.groupId}
+            isWorktreeActive={isWorktreeActive}
+            isVisible={isVisible}
+            isActive={isActive}
+            activityTerminalPortal={activityTerminalPortal}
+            onFocusOwningGroup={focusOwningGroup}
+            consumeSuppressedPtyExit={consumeSuppressedPtyExit}
+            captureEmptiedReaction={captureEmptiedReaction}
+          />
+        )
+      })}
     </>
   )
 })

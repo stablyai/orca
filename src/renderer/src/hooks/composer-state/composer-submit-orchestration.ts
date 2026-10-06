@@ -181,7 +181,6 @@ export function useComposerSubmitOrchestration(
     selectedRepoHookContextKey: target.runtimeTargetSelection.selectedRepoHookContextKey,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
     setAdvancedOpen: target.asyncComposerState.setAdvancedOpen,
-    setLoadedIssueCommand: target.asyncComposerState.setLoadedIssueCommand,
     settings: target.composerTargetStore.settings,
     setupConfig: target.derivedComposerState.setupConfig,
     setupDecision: target.asyncComposerState.setupDecision,

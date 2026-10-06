@@ -139,4 +139,30 @@ describe('ExternalFileChangeCompareDialog', () => {
     })
     expect(onKeepEdits).toHaveBeenCalledTimes(1)
   })
+
+  it.each([
+    [
+      'a floating-workspace tab as the file the user named',
+      'global-floating-terminal',
+      null,
+      'user-file'
+    ],
+    ['a project tab inside its root', 'wt-1', null, undefined]
+  ])('reads %s', async (_label, worktreeId, connectionId, kind) => {
+    mocks.getConnectionIdForFile.mockReturnValue(connectionId)
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk version', isBinary: false })
+
+    await render(
+      <ExternalFileChangeCompareDialog
+        file={{ ...file, worktreeId }}
+        currentContent="buffer version"
+        open
+        onOpenChange={vi.fn()}
+        onReload={vi.fn()}
+        onKeepEdits={vi.fn()}
+      />
+    )
+
+    expect(mocks.readRuntimeFileContent.mock.calls[0]?.[0]?.access?.kind).toBe(kind)
+  })
 })

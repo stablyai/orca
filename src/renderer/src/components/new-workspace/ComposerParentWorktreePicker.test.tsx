@@ -88,56 +88,6 @@ vi.mock('@/components/ui/popover', async () => {
   }
 })
 
-vi.mock('@/components/ui/command', () => ({
-  Command: ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <div className={className}>{children}</div>
-  ),
-  CommandInput: ({
-    ref,
-    value,
-    placeholder,
-    onValueChange,
-    onKeyDown,
-    onKeyUp,
-    onCompositionStart,
-    onCompositionEnd
-  }: {
-    ref?: React.Ref<HTMLInputElement>
-    value?: string
-    placeholder?: string
-    onValueChange?: (value: string) => void
-    onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>
-    onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>
-    onCompositionStart?: React.CompositionEventHandler<HTMLInputElement>
-    onCompositionEnd?: React.CompositionEventHandler<HTMLInputElement>
-  }) => (
-    <input
-      ref={ref}
-      data-slot="command-input"
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onValueChange?.(event.target.value)}
-      onKeyDown={onKeyDown}
-      onKeyUp={onKeyUp}
-      onCompositionStart={onCompositionStart}
-      onCompositionEnd={onCompositionEnd}
-    />
-  ),
-  CommandList: ({
-    ref,
-    children,
-    className
-  }: {
-    ref?: React.Ref<HTMLDivElement>
-    children: React.ReactNode
-    className?: string
-  }) => (
-    <div ref={ref} className={className}>
-      {children}
-    </div>
-  )
-}))
-
 // The virtual window needs real layout the test DOM has none of; render every row.
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({

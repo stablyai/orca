@@ -38,6 +38,7 @@ import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/na
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { useAppStore } from '@/store'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { beginFullCreationStructuredLaunch } from './full-creation-structured-launch'
 import { finalizeFullCreation } from './full-creation-finalization'
 import { buildFullCreationIssueCommand } from './full-creation-issue-command'
@@ -130,6 +131,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
       }
 
       const launchPlan = planAgentSessionLaunch(useAppStore.getState(), {
+        requestId: newAgentLaunchRequestId(),
         agent: tuiAgent,
         workspace: {
           kind: selectedRepoIsGit ? 'git-worktree' : 'folder',

@@ -270,6 +270,24 @@ describe('durable restart offers', () => {
     expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'third' }), marker()])
   })
 
+  it('forgets every record of any state except the ones kept, without a fence', async () => {
+    await capsule.record(
+      [marker(), marker({ sessionId: 'second' }), marker({ sessionId: 'kept' })],
+      NOW
+    )
+    await fileFailure()
+    expect(await capsule.listFailed(NOW)).toHaveLength(1)
+    await capsule.beginResume(['second'], 'operation-b', NOW)
+
+    const keep = (stored: { sessionId: string }) => stored.sessionId === 'kept'
+    expect(await capsule.dismiss('all', NOW, keep)).toBe(2)
+    expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'kept' })])
+    expect(await capsule.listFailed(NOW)).toEqual([])
+    // Unlike clearAll, a later teardown of a dismissed chat may offer it again.
+    await capsule.record([marker()], NOW)
+    expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'kept' }), marker()])
+  })
+
   // A failure record has no expiry either; it ends only with the user's own actions.
   it('keeps a months-old failure on record', async () => {
     await capsule.record([marker()], NOW)
@@ -340,6 +358,41 @@ describe('durable restart offers', () => {
     ])
     expect(await capsule.listFailed(NOW)).toEqual([readable])
     expect(JSON.parse(await readFile(filePath, 'utf8')).failed).toEqual([readable])
+  })
+
+  it('keeps refusal details beside the code, read back against that code', async () => {
+    const readable = {
+      marker: marker(),
+      failedAt: NOW,
+      outcome: 'refused',
+      reason: 'agent_session_conflict',
+      latestPrompt: '',
+      latestUserItemId: null
+    }
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 2,
+        entries: [],
+        failed: [
+          { ...readable, details: { reason: 'claimConflicted', note: 'dropped' } },
+          // An unreleased build wrote a cause here; it still parses, naming nothing.
+          { ...readable, marker: marker({ sessionId: 'older' }), cause: 'claimConflicted' },
+          // A reason the code does not list is not this code's.
+          {
+            ...readable,
+            marker: marker({ sessionId: 'foreign' }),
+            details: { reason: 'promptGone' }
+          }
+        ]
+      })
+    )
+
+    expect(await capsule.listFailed(NOW)).toEqual([
+      { ...readable, details: { reason: 'claimConflicted' } },
+      { ...readable, marker: marker({ sessionId: 'older' }) },
+      { ...readable, marker: marker({ sessionId: 'foreign' }) }
+    ])
   })
 
   it('reads a malformed failure list as no failures', async () => {

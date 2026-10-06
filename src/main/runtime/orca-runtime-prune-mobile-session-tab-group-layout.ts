@@ -99,6 +99,7 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       getRetainedStatus: (paneKey, pty, tab, getRows) =>
         this.getFreshRetainedAgentStatusForMobileTab(paneKey, pty, tab, getRows),
       getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId),
+      getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
       issuePtyHandle: (pty) => this.issuePtyHandle(pty),
       recordPty: (ptyId, worktreeId, state) => this.recordPtyWorktree(ptyId, worktreeId, state),
       buildPtyStatus: (pty, tab, terminalHandle, retained, getRows) =>
@@ -117,12 +118,23 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     retained: RuntimeAgentRowSnapshot | null,
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
-    return buildRuntimeMobileAgentStatus(pty, tab, terminalHandle, retained, getHookRowsForPane, {
-      getPaneKey: (candidate) => this.getMobileTerminalPaneKey(candidate),
-      getLeaf: (candidate) =>
-        this.leaves.get(this.getLeafKey(candidate.parentTabId, candidate.leafId)) ?? null,
-      getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId)
-    })
+    // Why display records: a phone status is presentation, so it shows the stale-working clear.
+    const displayPty = pty ? this.getPtyDisplayRecord(pty) : null
+    return buildRuntimeMobileAgentStatus(
+      displayPty,
+      tab,
+      terminalHandle,
+      retained,
+      getHookRowsForPane,
+      {
+        getPaneKey: (candidate) => this.getMobileTerminalPaneKey(candidate),
+        getLeaf: (candidate) => {
+          const leaf = this.leaves.get(this.getLeafKey(candidate.parentTabId, candidate.leafId))
+          return leaf ? this.getLeafDisplayRecord(leaf) : null
+        },
+        getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId)
+      }
+    )
   }
 
   protected getFreshRetainedAgentStatusForMobileTab(
@@ -216,9 +228,10 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
   }
 
   // Why: group address resolution (Section 4.5) queries per-handle status and must not throw on stale handles; return null on any error.
-  getAgentStatusForHandle(handle: string): string | null {
+  async getAgentStatusForHandle(handle: string): Promise<string | null> {
     // A structured worker has no pane and no title, so every PTY probe below answers null and
-    // `@idle` would enumerate it and then silently drop it. Its status is the journal's.
+    // `@idle` would enumerate it and then silently drop it. Its status is the journal's, read
+    // through a conversation the idle sweep may have closed.
     const structured = resolveStructuredWorkerAuthority(handle, this._orchestrationDb)
     if (structured) {
       return structuredWorkerAgentStatus(structured.identity.sessionId)

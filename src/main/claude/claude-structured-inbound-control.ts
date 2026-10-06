@@ -6,30 +6,10 @@ import {
   claudePermissionSubject
 } from './claude-permission-presentation'
 
-export const CLAUDE_CAN_USE_TOOL_SUBTYPE = 'can_use_tool'
-export const CLAUDE_REQUEST_USER_DIALOG_SUBTYPE = 'request_user_dialog'
-
-/**
- * The blocking control requests Orca answers, each mapped to the SDK consumer callback that
- * answers it. This is the stable surface a real turn can block on: `can_use_tool` through
- * `canUseTool` and `request_user_dialog` through `onUserDialog`. Every other control-request
- * subtype the SDK routes (elicitation, oauth/host token refresh, mcp_message, hook_callback)
- * is either not surfaced to this consumer or fails closed inside the SDK; adding a new
- * blocking control Orca must answer means adding its callback here, and the catalog test
- * fails if a named callback is missing.
- */
-export const CLAUDE_BLOCKING_CONTROL_CALLBACKS = {
-  [CLAUDE_CAN_USE_TOOL_SUBTYPE]: 'canUseTool',
-  [CLAUDE_REQUEST_USER_DIALOG_SUBTYPE]: 'onUserDialog'
-} as const
-
-export type ClaudeBlockingControlSubtype = keyof typeof CLAUDE_BLOCKING_CONTROL_CALLBACKS
-
 export type ClaudePermissionCallbackDeps = {
   sessionId: string
   prompts: ClaudePromptRegistry
   emit: (event: ClaudeStructuredSessionEvent) => void
-  currentTurnId?: () => string | null
 }
 
 function denySafeResult(toolUseId: string | undefined): PermissionResult {
@@ -72,7 +52,7 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
         input,
         suggestions: options.suggestions ?? [],
         settle,
-        turnId: deps.currentTurnId?.() ?? null
+        ...(options.agentID ? { agentId: options.agentID } : {})
       })
       if (!prompt) {
         settle(denySafeResult(options.toolUseID))

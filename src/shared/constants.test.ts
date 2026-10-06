@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY, getDefaultSettings } from './constants'
+import { getDefaultNotificationSettings } from './notification-settings-defaults'
 import {
-  DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
-  getDefaultNotificationSettings,
   getDefaultPrimarySelectionMiddleClickPaste,
-  getDefaultTerminalRightClickToPaste,
-  getDefaultSettings
-} from './constants'
+  getDefaultTerminalRightClickToPaste
+} from './terminal-platform-defaults'
 
 describe('getDefaultSettings', () => {
   it('uses platform-consistent separators for the default workspace directory', () => {
@@ -115,8 +114,6 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBeUndefined()
     expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBeUndefined()
   })
-
-  it('routes fresh Codex profiles through the real-home rollout by default', () => {})
 
   it('defaults local Windows projects to the host runtime', () => {
     expect(getDefaultSettings('/tmp').localWindowsRuntimeDefault).toEqual({

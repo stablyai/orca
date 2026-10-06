@@ -15,12 +15,16 @@ const FAILURE_RETRY_MAX_DELAY_MS = 15_000
  * answered something this build cannot decode — an answer, not a failure, so it is delivered
  * rather than retried. A refusal or transport rejection schedules a retry instead.
  *
+ * `onAttemptFailed` runs on each refusal or rejection, once its retry is scheduled, for a caller
+ * that must show something while the probe keeps asking.
+ *
  * The parameter names the raw port rather than RpcClient because one of the capability callers
  * holds only the sender; the request itself goes through hostStatusProbe.
  */
 export function startRuntimeStatusProbe(
   client: UnvalidatedRpcRequestPort,
-  onStatus: (status: HostStatusReply | null) => void
+  onStatus: (status: HostStatusReply | null) => void,
+  onAttemptFailed?: () => void
 ): () => void {
   let cancelled = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -55,6 +59,7 @@ export function startRuntimeStatusProbe(
       ? CUTOVER_RETRY_DELAY_MS
       : Math.min(FAILURE_RETRY_BASE_DELAY_MS * 2 ** failureRetries++, FAILURE_RETRY_MAX_DELAY_MS)
     retryTimer = setTimeout(attempt, delay)
+    onAttemptFailed?.()
   }
 
   attempt()

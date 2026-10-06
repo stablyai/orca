@@ -20,13 +20,15 @@ export function resolveProfileStateBackupWorkerPath(moduleDir = __dirname): stri
   return [entry, join(dirname(entry), '..', WORKER_FILENAME)].find(existsSync) ?? entry
 }
 
-/** Bun snapshot copying and desktop validation run off the owning runtime thread. */
+/** Snapshot copying and full validation run off the owning runtime thread. */
 export function runProfileStateBackup(
   job: ProfileStateBackupJob,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  workerPath = resolveProfileStateBackupWorkerPath()
 ): Promise<void> {
-  return process.versions.electron || process.versions.bun
-    ? runProfileStateBackupWorker(job, { signal })
+  // Electron always ships the entry, so a missing one there must fail, not block the thread.
+  return process.versions.electron || existsSync(workerPath)
+    ? runProfileStateBackupWorker(job, { workerPath, signal })
     : writeProfileStateBackup(job)
 }
 

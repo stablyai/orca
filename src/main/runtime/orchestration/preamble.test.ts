@@ -83,7 +83,7 @@ describe('buildDispatchPreamble', () => {
   )
 
   it('renders every injected lifecycle command on one cross-shell-safe line', () => {
-    const result = buildDispatchPreamble(baseParams({ dispatchCapability: 'dcap_secret' }))
+    const result = buildDispatchPreamble(baseParams())
     const commandLines = result
       .split('\n')
       .filter((line) => line.trimStart().startsWith('orca orchestration'))
@@ -182,27 +182,14 @@ describe('buildDispatchPreamble', () => {
     expect(cadence).toContain('immediately before\n  # you send worker_done')
   })
 
-  it('carries the minted Dispatch capability on lifecycle and question commands', () => {
-    const result = buildDispatchPreamble({
-      ...baseParams(),
-      dispatchCapability: 'dcap_test_secret'
-    })
-
-    expect(result.match(/--dispatch-capability dcap_test_secret/g)).toHaveLength(4)
-    expect(result).not.toContain('"dispatchCapability"')
-  })
-
-  it('renders capability-bound worker_done and heartbeat recipes', () => {
-    const result = buildDispatchPreamble({
-      ...baseParams(),
-      dispatchCapability: 'dcap_test_secret'
-    })
+  it('renders worker_done and heartbeat recipes bound to the exact Dispatch', () => {
+    const result = buildDispatchPreamble(baseParams())
 
     expect(result).toMatch(
-      /orchestration send --from term_worker --dispatch-capability dcap_test_secret --type worker_done .*?--task-id task_abc123 --dispatch-id ctx_def456/u
+      /orchestration send --from term_worker --type worker_done .*?--task-id task_abc123 --dispatch-id ctx_def456/u
     )
     expect(result).toMatch(
-      /orchestration send --from term_worker --dispatch-capability dcap_test_secret --type heartbeat .*?--task-id task_abc123 --dispatch-id ctx_def456/u
+      /orchestration send --from term_worker --type heartbeat .*?--task-id task_abc123 --dispatch-id ctx_def456/u
     )
   })
 
@@ -263,12 +250,6 @@ describe('buildDispatchPreamble', () => {
     for (const fragment of fragments) {
       expect(fragment).not.toMatch(/orca orchestration/)
     }
-  })
-
-  it('uses orca CLI when devMode is false', () => {
-    const result = buildDispatchPreamble(baseParams({ devMode: false }))
-    expect(result).toContain('orca orchestration send')
-    expect(result).toContain('orca orchestration check')
   })
 
   it('uses the exact orca-ide command for packaged WSL workers', () => {
@@ -401,5 +382,50 @@ describe('sub-dispatch section', () => {
   it('keeps the task block last so the spec is not buried', () => {
     const preamble = buildDispatchPreamble({ ...base, canDispatchSubWorkers: true })
     expect(preamble.indexOf('=== SUB-DISPATCH ===')).toBeLessThan(preamble.indexOf('=== TASK ==='))
+  })
+})
+
+describe('how the preamble names the worker and its coordinator, by kind', () => {
+  const SESSION_COORD = 'orca_session_id:4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
+  const SESSION_WORKER = 'orca_session_id:7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64'
+  const header = (preamble: string) => preamble.slice(0, preamble.indexOf('\n\n'))
+  const FIRST = 'You are working inside Orca, a multi-agent IDE. You are a dispatched worker.'
+
+  it('names terminals by their handle, with no line about the worker itself', () => {
+    expect(header(buildDispatchPreamble(baseParams()))).toBe(
+      `${FIRST}\nYour coordinator's terminal handle is: term_coord\nYour task ID is: task_abc123`
+    )
+  })
+
+  it('names a session by its Orca session ID, coordinator and worker alike', () => {
+    const preamble = buildDispatchPreamble(
+      baseParams({ coordinatorHandle: SESSION_COORD, workerHandle: SESSION_WORKER })
+    )
+
+    expect(header(preamble)).toBe(
+      `${FIRST}\nYour coordinator's Orca session ID is: ${SESSION_COORD}\nYour task ID is: task_abc123\nYour Orca session ID is: ${SESSION_WORKER}`
+    )
+    expect(cliFence(preamble)).toContain(`--from ${SESSION_WORKER} `)
+  })
+
+  it("follows each party's own kind when a session and a terminal meet", () => {
+    expect(header(buildDispatchPreamble(baseParams({ workerHandle: SESSION_WORKER })))).toBe(
+      `${FIRST}\nYour coordinator's terminal handle is: term_coord\nYour task ID is: task_abc123\nYour Orca session ID is: ${SESSION_WORKER}`
+    )
+    expect(header(buildDispatchPreamble(baseParams({ coordinatorHandle: SESSION_COORD })))).toBe(
+      `${FIRST}\nYour coordinator's Orca session ID is: ${SESSION_COORD}\nYour task ID is: task_abc123`
+    )
+  })
+
+  it("teaches a session worker a terminal worker's text but for how it is named", () => {
+    const terminal = buildDispatchPreamble(baseParams())
+    const session = buildDispatchPreamble(baseParams({ workerHandle: SESSION_WORKER }))
+
+    expect(
+      session
+        .replace(`\nYour Orca session ID is: ${SESSION_WORKER}`, '')
+        .split(SESSION_WORKER)
+        .join('term_worker')
+    ).toBe(terminal)
   })
 })

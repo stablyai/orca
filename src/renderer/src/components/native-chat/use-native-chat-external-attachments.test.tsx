@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import type * as AttachmentUploadModule from './native-chat-attachment-upload'
 
 const mocks = vi.hoisted(() => ({
-  authorizeExternalPath: vi.fn(),
+  stat: vi.fn(),
   resolveNativeChatAttachmentOwner: vi.fn(),
   resolveNativeChatAttachmentOwnerForWorktree: vi.fn(),
   uploadNativeChatAttachmentPaths: vi.fn()
@@ -61,6 +61,9 @@ function Probe({
   return null
 }
 
+// One past NATIVE_FILE_DROP_MAX_PATHS.
+const pathsOverDropLimit = Array.from({ length: 257 }, (_, index) => `/external/${index}.png`)
+
 let root: Root | null = null
 
 async function renderProbe(args: {
@@ -114,11 +117,9 @@ async function renderProbe(args: {
 }
 
 beforeEach(() => {
-  mocks.authorizeExternalPath.mockReset().mockResolvedValue(undefined)
+  mocks.stat.mockReset().mockResolvedValue(undefined)
   mocks.resolveNativeChatAttachmentOwnerForWorktree.mockReset().mockReturnValue({ kind: 'local' })
-  window.api = {
-    fs: { authorizeExternalPath: mocks.authorizeExternalPath }
-  } as unknown as Window['api']
+  vi.stubGlobal('api', { fs: { stat: mocks.stat } })
 })
 
 afterEach(() => {
@@ -135,52 +136,76 @@ describe('useNativeChatExternalAttachments', () => {
     await act(async () => {
       probe.latest().attachExternalPaths(['/local/a.txt'])
     })
-    expect(mocks.authorizeExternalPath).toHaveBeenCalledExactlyOnceWith({
-      targetPath: '/local/a.txt'
+    expect(mocks.stat).toHaveBeenCalledExactlyOnceWith({
+      filePath: '/local/a.txt',
+      access: { kind: 'user-file' }
     })
     expect(attachResolvedPaths).toHaveBeenCalledWith(['/local/a.txt'])
     expect(mocks.uploadNativeChatAttachmentPaths).not.toHaveBeenCalled()
   })
 
-  it('waits for local authorization and skips rejected paths without blocking other files', async () => {
+  it('rejects a whole batch over the drop path limit, like a drop does', async () => {
     mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
-    const authorization = deferred<void>()
-    mocks.authorizeExternalPath
-      .mockReturnValueOnce(authorization.promise)
-      .mockRejectedValueOnce(new Error('denied'))
+    const attachResolvedPaths = vi.fn()
+    const setNotice = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths, setNotice })
+    await act(async () => {
+      probe.latest().attachExternalPaths(pathsOverDropLimit)
+    })
+    expect(setNotice).toHaveBeenCalledExactlyOnceWith('Attach 256 or fewer files at a time.')
+    expect(mocks.stat).not.toHaveBeenCalled()
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
+  it('reports a remote runtime before the path limit, since trimming would not help', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'runtime' })
+    const setNotice = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths: vi.fn(), setNotice })
+    await act(async () => {
+      probe.latest().attachExternalPaths(pathsOverDropLimit)
+    })
+    expect(setNotice).toHaveBeenCalledExactlyOnceWith(
+      'Local attachments are not available for remote sessions.'
+    )
+  })
+
+  it('waits for the local file check and skips rejected paths without blocking other files', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
+    const fileCheck = deferred<void>()
+    mocks.stat.mockReturnValueOnce(fileCheck.promise).mockRejectedValueOnce(new Error('denied'))
     const attachResolvedPaths = vi.fn()
     const probe = await renderProbe({ attachResolvedPaths })
     act(() =>
       probe.latest().attachExternalPaths(['/external/a.png', '/external/b.png', '/external/c.png'])
     )
     expect(attachResolvedPaths).not.toHaveBeenCalled()
-    expect(mocks.authorizeExternalPath).toHaveBeenCalledTimes(1)
-    await act(async () => authorization.resolve())
+    expect(mocks.stat).toHaveBeenCalledTimes(1)
+    await act(async () => fileCheck.resolve())
     expect(attachResolvedPaths).toHaveBeenCalledExactlyOnceWith([
       '/external/a.png',
       '/external/c.png'
     ])
-    expect(mocks.authorizeExternalPath).toHaveBeenCalledTimes(3)
+    expect(mocks.stat).toHaveBeenCalledTimes(3)
   })
 
-  it('does not attach local paths when disabled during authorization', async () => {
+  it('does not attach local paths when disabled during the file check', async () => {
     mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
-    const authorization = deferred<void>()
-    mocks.authorizeExternalPath.mockReturnValueOnce(authorization.promise)
+    const fileCheck = deferred<void>()
+    mocks.stat.mockReturnValueOnce(fileCheck.promise)
     const attachResolvedPaths = vi.fn()
     const probe = await renderProbe({ attachResolvedPaths })
     act(() => probe.latest().attachExternalPaths(['/external/a.png', '/external/b.png']))
     await probe.setDisabled(true)
-    await act(async () => authorization.resolve())
+    await act(async () => fileCheck.resolve())
     expect(attachResolvedPaths).not.toHaveBeenCalled()
-    expect(mocks.authorizeExternalPath).toHaveBeenCalledTimes(1)
+    expect(mocks.stat).toHaveBeenCalledTimes(1)
   })
 
-  it('does not attach local paths when the owner changes during authorization', async () => {
-    const authorization = deferred<void>()
+  it('does not attach local paths when the owner changes during the file check', async () => {
+    const fileCheck = deferred<void>()
     let owner: { kind: 'local' } | { kind: 'runtime' } = { kind: 'local' }
     mocks.resolveNativeChatAttachmentOwner.mockImplementation(() => owner)
-    mocks.authorizeExternalPath.mockReturnValueOnce(authorization.promise)
+    mocks.stat.mockReturnValueOnce(fileCheck.promise)
     const attachResolvedPaths = vi.fn()
     const notices: (string | null)[] = []
     const probe = await renderProbe({
@@ -190,10 +215,10 @@ describe('useNativeChatExternalAttachments', () => {
 
     act(() => probe.latest().attachExternalPaths(['/external/a.png', '/external/b.png']))
     owner = { kind: 'runtime' }
-    await act(async () => authorization.resolve())
+    await act(async () => fileCheck.resolve())
 
     expect(attachResolvedPaths).not.toHaveBeenCalled()
-    expect(mocks.authorizeExternalPath).toHaveBeenCalledTimes(1)
+    expect(mocks.stat).toHaveBeenCalledTimes(1)
     expect(notices.at(-1)).toBe(
       'This workspace changed hosts while attaching — drop the files again.'
     )
@@ -202,11 +227,11 @@ describe('useNativeChatExternalAttachments', () => {
   // The owner flipping during the LAST path has no next iteration to catch it,
   // so the post-loop check is the only thing standing between a one-file drop
   // and a path attached to a host that no longer owns it.
-  it('reports a one-file drop whose owner changes during its authorization', async () => {
-    const authorization = deferred<void>()
+  it('reports a one-file drop whose owner changes during its file check', async () => {
+    const fileCheck = deferred<void>()
     let owner: { kind: 'local' } | { kind: 'runtime' } = { kind: 'local' }
     mocks.resolveNativeChatAttachmentOwner.mockImplementation(() => owner)
-    mocks.authorizeExternalPath.mockReturnValueOnce(authorization.promise)
+    mocks.stat.mockReturnValueOnce(fileCheck.promise)
     const attachResolvedPaths = vi.fn()
     const notices: (string | null)[] = []
     const probe = await renderProbe({
@@ -216,7 +241,7 @@ describe('useNativeChatExternalAttachments', () => {
 
     act(() => probe.latest().attachExternalPaths(['/external/only.pdf']))
     owner = { kind: 'runtime' }
-    await act(async () => authorization.resolve())
+    await act(async () => fileCheck.resolve())
 
     expect(attachResolvedPaths).not.toHaveBeenCalled()
     expect(notices.at(-1)).toBe(
@@ -226,10 +251,10 @@ describe('useNativeChatExternalAttachments', () => {
 
   // Both workspaces answer `local`, so the owner alone cannot tell them apart:
   // only asking which workspace this composer serves now catches a tab that
-  // moved while the authorization was still in flight.
-  it('does not attach when the pane changes workspace during authorization', async () => {
-    const authorization = deferred<void>()
-    mocks.authorizeExternalPath.mockReturnValueOnce(authorization.promise)
+  // moved while the file check was still in flight.
+  it('does not attach when the pane changes workspace during the file check', async () => {
+    const fileCheck = deferred<void>()
+    mocks.stat.mockReturnValueOnce(fileCheck.promise)
     const attachResolvedPaths = vi.fn()
     const notices: (string | null)[] = []
     const probe = await renderProbe({
@@ -240,7 +265,7 @@ describe('useNativeChatExternalAttachments', () => {
 
     act(() => probe.latest().attachExternalPaths(['/external/only.pdf']))
     await probe.setStructuredWorktreeId('worktree-2')
-    await act(async () => authorization.resolve())
+    await act(async () => fileCheck.resolve())
 
     expect(attachResolvedPaths).not.toHaveBeenCalled()
     expect(notices.at(-1)).toBe(
@@ -305,7 +330,7 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshConnectionGeneration: 4
     })
     expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'], 'conn-1')
-    expect(mocks.authorizeExternalPath).not.toHaveBeenCalled()
+    expect(mocks.stat).not.toHaveBeenCalled()
   })
 
   it('delivers concurrent SSH resolutions in order without deduplicating paths', async () => {

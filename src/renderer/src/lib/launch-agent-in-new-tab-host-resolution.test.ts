@@ -1,3 +1,4 @@
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 // Execution-host coverage for launchAgentInNewTab, split from launch-agent-in-new-tab.test.ts to
 // keep both files within the lines budget.
 
@@ -98,7 +99,12 @@ function worktreeOn(hostId: string, path: string): StoreWorktree {
 
 async function launchOnLinux(): Promise<void> {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  launchAgentInNewTab({ agent: 'claude-agent-teams', worktreeId: 'wt-1', launchPlatform: 'linux' })
+  launchAgentInNewTab({
+    requestId: 'request-1',
+    agent: 'claude-agent-teams',
+    worktreeId: 'wt-1',
+    launchPlatform: 'linux'
+  })
 }
 
 function queuedCommand(): string {
@@ -133,6 +139,7 @@ describe('launchAgentInNewTab execution host resolution', () => {
       worktreeId: 'wt-1',
       activate: false,
       agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
+requestId: newAgentLaunchRequestId(),
         route: 'structured-native-chat',
         agent: 'codex',
         worktreeId: 'wt-1',
@@ -180,6 +187,7 @@ describe('launchAgentInNewTab execution host resolution', () => {
     store.getKnownWorktreeById.mockReturnValue(worktreeOn('ssh:remote', '/srv'))
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     launchAgentInNewTab({
+requestId: newAgentLaunchRequestId(),
       agent: 'claude-agent-teams',
       worktreeId: 'wt-1',
       executionHostId: 'ssh:remote',

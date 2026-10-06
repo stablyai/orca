@@ -42,6 +42,7 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:resolvePrBase',
   'worktrees:resolveMrBase',
   'worktrees:remove',
+  'worktrees:previewNestedRemoval',
   'worktrees:forgetLocal',
   'worktrees:forceDeletePreservedBranch',
   'worktrees:updateMeta',

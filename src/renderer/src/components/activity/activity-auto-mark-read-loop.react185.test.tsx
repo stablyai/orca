@@ -61,7 +61,7 @@ let root: Root
 let seededContainer: HTMLElement
 
 beforeEach(() => {
-  useAppStore.setState(initialState, true)
+  useAppStore.setState({ ...initialState, refreshGitHubForWorktreeIfStale: () => {} }, true)
 })
 
 afterEach(() => {

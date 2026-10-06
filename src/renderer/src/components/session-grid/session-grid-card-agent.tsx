@@ -6,10 +6,10 @@ import { ShellIcon } from '@/components/tab-bar/shell-icons'
 import { cn } from '@/lib/utils'
 import type { SessionGridItem } from '../../../../shared/session-grid-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 
 /** The tab bar's agent identity for a card, resolved from the store tab behind `item.tabId`. */
-export function useSessionGridCardAgent(item: SessionGridItem): TuiAgent | null {
+export function useSessionGridCardAgent(item: SessionGridItem): TerminalAgent | null {
   const storeTab = useAppStore(
     (s) => s.tabsByWorktree[item.worktreeId]?.find((tab) => tab.id === item.tabId) ?? null
   )
@@ -39,7 +39,7 @@ export function SessionGridCardIdentityIcon({
   shell,
   className
 }: {
-  agent: TuiAgent | null
+  agent: TerminalAgent | null
   shell: TerminalTab['shellOverride']
   className?: string
 }): React.JSX.Element {

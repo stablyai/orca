@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+import { CODEX_STRUCTURED_AGENT } from '../../../src/main/codex/codex-structured-agent-definition'
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -53,6 +54,9 @@ export function structuredHostStub(
     })),
     waitForSendSettlement: vi.fn(),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessageSend: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessageDelete: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessagesResume: vi.fn(async () => ({ ok: true, replayed: false })),
     rewind: vi.fn(async () => ({
       ok: true,
       replayed: false,
@@ -75,6 +79,7 @@ export function structuredHostStub(
     modelCatalog: vi.fn(() => ({ origin: 'unknown' as const })),
     readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    sessionAgent: vi.fn(() => null),
     journalSnapshot: vi.fn(() => ({
       sessionId,
       cursor: { epoch: 'epoch-a', sequence: 0 },
@@ -89,7 +94,9 @@ export function structuredHostStub(
     // No opening emit, unlike the status feed above: a completion is an edge, so this stream
     // opens empty and a subscriber that was away has missed what passed.
     subscribeTurnCompletions: vi.fn(() => () => undefined),
-    unsubscribe: vi.fn()
+    unsubscribe: vi.fn(),
+    agentDefinitions: vi.fn(() => [CODEX_STRUCTURED_AGENT]),
+    knownAgentIds: vi.fn(() => [CODEX_STRUCTURED_AGENT.agent])
   }
 }
 
@@ -102,7 +109,8 @@ export function installableHost(
 ): StructuredAgentSessionHost {
   const host = {
     ...hostCalls,
-    deps: { modelCatalog: { read: hostCalls.modelCatalog } },
+    // The catalog read checks the session's record for a floating chat's own folder; none here.
+    deps: { modelCatalog: { read: hostCalls.modelCatalog }, store: { getRecord: () => null } },
     restartResume: {
       list: hostCalls.restartResumableList,
       listFailures: hostCalls.restartResumableFailures,
