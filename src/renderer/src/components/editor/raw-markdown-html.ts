@@ -3,6 +3,10 @@ import { Node, mergeAttributes } from '@tiptap/core'
 import { isEditableDetailsHtmlBlock, matchDetailsHtmlBlock } from './details-markdown-html'
 import { formatMarkdownDocLinkBody, parseMarkdownDocLink } from './markdown-doc-links'
 import { normalizeMarkdownReferenceLinks } from './markdown-reference-link-normalization'
+import {
+  findMarkdownLineEnd,
+  skipMarkdownLineBreak
+} from './markdown-fence-scanner'
 import type {
   RichMarkdownEditorCodec,
   RichMarkdownSourceKind,
@@ -58,42 +62,33 @@ export function encodeRawMarkdownHtmlForRichEditor(
   const { transport } = codec
   let index = 0
   let isLineStart = true
-  let activeFence: '`' | '~' | null = null
+  let activeFence = ''
   let activeFenceLength = 0
   let result = ''
-  const nonWhitespace = /\S/g
-  const fencePrefix = /(`{3,}|~{3,})/y
-  let fenceProbe = -1
-  let fenceMatch: RegExpExecArray | null = null
 
   while (index < normalizedContent.length) {
     if (isLineStart) {
-      // Reuse the lookahead across blank lines, preserving cross-line fence semantics.
-      if (index > fenceProbe) {
-        nonWhitespace.lastIndex = index
-        fenceProbe = nonWhitespace.exec(normalizedContent)?.index ?? normalizedContent.length
-        fencePrefix.lastIndex = fenceProbe
-        fenceMatch = fencePrefix.exec(normalizedContent)
-      }
+      const lineEnd = findMarkdownLineEnd(normalizedContent, index)
+      const wasInsideFence = activeFenceLength > 0
+      const fenceMatch = normalizedContent.slice(index, lineEnd).match(/^[ \t]*(`{3,}|~{3,})/)
       if (fenceMatch) {
-        const fenceChar = fenceMatch[1][0] as '`' | '~'
-        const fenceLength = fenceMatch[1].length
-        if (activeFence === null) {
-          activeFence = fenceChar
-          activeFenceLength = fenceLength
-        } else if (activeFence === fenceChar && fenceLength >= activeFenceLength) {
-          activeFence = null
+        const marker = fenceMatch[1][0]
+        const length = fenceMatch[1].length
+        if (!wasInsideFence) {
+          activeFence = marker
+          activeFenceLength = length
+        } else if (activeFence === marker && length >= activeFenceLength) {
+          activeFence = ''
           activeFenceLength = 0
         }
       }
-    }
-
-    if (activeFence) {
-      const nextChar = normalizedContent[index]
-      result += nextChar
-      isLineStart = nextChar === '\n'
-      index += 1
-      continue
+      // Delimiter backticks must not become inline spans crossing into another fence.
+      if (wasInsideFence || fenceMatch) {
+        const nextLine = skipMarkdownLineBreak(normalizedContent, lineEnd)
+        result += normalizedContent.slice(index, nextLine)
+        index = nextLine
+        continue
+      }
     }
 
     if (normalizedContent[index] === '`') {
