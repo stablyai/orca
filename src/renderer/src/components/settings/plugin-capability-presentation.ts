@@ -37,6 +37,11 @@ export function pluginCapabilityDescription(kind: string, fallback: string): str
         'auto.components.settings.PluginConsentDialog.capability.settingsOwn',
         "Read and change the plugin's own settings"
       )
+    case 'commands:own':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.commandsOwn',
+        "Let its panel run the plugin's own commands"
+      )
     default:
       return fallback
   }

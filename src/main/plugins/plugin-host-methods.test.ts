@@ -26,7 +26,8 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
       getAll: vi.fn().mockReturnValue({}),
       set: vi.fn().mockReturnValue({ ok: true })
     },
-    subscribeEvents: vi.fn().mockReturnValue([])
+    subscribeEvents: vi.fn().mockReturnValue([]),
+    invokeOwnCommand: vi.fn().mockResolvedValue(null)
   }
 }
 
@@ -141,7 +142,8 @@ function createTerminalHarness(terminalHandles: string[]): {
     services: bindPluginHostServices({
       delegate,
       pluginsDataDir: join(tmpdir(), 'plugin-host-methods-test'),
-      subscribeEvents: vi.fn().mockReturnValue([])
+      subscribeEvents: vi.fn().mockReturnValue([]),
+      invokeCommand: vi.fn()
     })
   }
 }
@@ -245,5 +247,95 @@ describe('terminal.sendText', () => {
 
     expect(outcome).toEqual({ ok: true, value: { accepted: true } })
     expect(delegate.sendTerminal).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('commands.invokeOwn', () => {
+  const PLUGIN = 'femave.claude-mods'
+
+  function servicesWith(invokeOwnCommand: PluginHostServices['invokeOwnCommand']) {
+    return { ...createServices(vi.fn().mockReturnValue({ ok: true })), invokeOwnCommand }
+  }
+
+  function call(overrides: Partial<Parameters<typeof executePluginHostCall>[0]> = {}) {
+    return executePluginHostCall({
+      pluginId: PLUGIN,
+      method: 'commands.invokeOwn',
+      params: { commandId: 'mods.panel', args: { op: 'list' } },
+      viaPanel: true,
+      grantedCapabilities: ['commands:own'],
+      services: servicesWith(vi.fn().mockResolvedValue({ items: [] })),
+      audit: { record: vi.fn().mockResolvedValue(undefined) },
+      ...overrides
+    })
+  }
+
+  it("runs the calling plugin's own command from a panel and returns its value", async () => {
+    const invoke = vi.fn().mockResolvedValue({ items: [1] })
+    const outcome = await call({ services: servicesWith(invoke) })
+    expect(outcome).toEqual({ ok: true, value: { value: { items: [1] } } })
+    expect(invoke).toHaveBeenCalledWith(PLUGIN, 'mods.panel', { op: 'list' })
+  })
+
+  it('rejects a smuggled plugin identity in params', async () => {
+    const invoke = vi.fn()
+    const outcome = await call({
+      params: { commandId: 'mods.panel', pluginKey: 'other.plugin' },
+      services: servicesWith(invoke)
+    })
+    expect(outcome).toMatchObject({ ok: false, code: 'invalid_params' })
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('is refused to workers', async () => {
+    const invoke = vi.fn()
+    const outcome = await call({ viaPanel: false, services: servicesWith(invoke) })
+    expect(outcome).toMatchObject({ ok: false, code: 'action_failed' })
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('is refused without the commands:own capability', async () => {
+    const invoke = vi.fn()
+    const outcome = await call({ grantedCapabilities: ['storage'], services: servicesWith(invoke) })
+    expect(outcome).toMatchObject({ ok: false, code: 'capability_denied' })
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('surfaces an undeclared or failing command as a failed outcome', async () => {
+    const invoke = vi
+      .fn()
+      .mockRejectedValue(new Error('plugin femave.claude-mods does not contribute command nope'))
+    const outcome = await call({
+      params: { commandId: 'nope' },
+      services: servicesWith(invoke)
+    })
+    expect(outcome).toMatchObject({ ok: false, code: 'action_failed' })
+    expect((outcome as { error: string }).error).toContain('nope')
+  })
+
+  it('audit-logs the invocation by command id only', async () => {
+    const record = vi.fn().mockResolvedValue(undefined)
+    await call({ audit: { record } })
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'commands.invokeOwn',
+        actor: `plugin:${PLUGIN}`,
+        summary: 'command=mods.panel'
+      })
+    )
+  })
+
+  it('binds invokeOwnCommand to the service invokeCommand', async () => {
+    const invokeCommand = vi.fn().mockResolvedValue('done')
+    const services = bindPluginHostServices({
+      delegate: {} as PluginRuntimeDelegate,
+      pluginsDataDir: join(tmpdir(), 'orca-invoke-own-test'),
+      subscribeEvents: () => [],
+      invokeCommand
+    })
+    await expect(services.invokeOwnCommand(PLUGIN, 'mods.panel', { op: 'list' })).resolves.toBe(
+      'done'
+    )
+    expect(invokeCommand).toHaveBeenCalledWith(PLUGIN, 'mods.panel', { op: 'list' })
   })
 })

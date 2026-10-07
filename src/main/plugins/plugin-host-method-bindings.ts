@@ -47,13 +47,15 @@ export type PluginHostServices = {
     set(pluginId: string, key: string, value: unknown): { ok: true } | { ok: false; error: string }
   }
   subscribeEvents(pluginId: string, events: PluginEventName[]): PluginEventName[]
+  /** Runs a command the plugin itself declared; the allowlist lives in the service. */
+  invokeOwnCommand(pluginId: string, commandId: string, args: unknown): Promise<unknown>
 }
 
 export type BoundPluginHostMethod = {
   spec: PluginHostMethodSpec
   handler: (
     params: unknown,
-    ctx: { pluginId: string; services: PluginHostServices }
+    ctx: { pluginId: string; services: PluginHostServices; viaPanel: boolean }
   ) => Promise<unknown>
 }
 
@@ -167,6 +169,15 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
   definePluginMethod('events.subscribe', async (params, { pluginId, services }) => {
     const { events } = params as { events: PluginEventName[] }
     return { subscribed: services.subscribeEvents(pluginId, events) }
+  }),
+  definePluginMethod('commands.invokeOwn', async (params, { pluginId, services, viaPanel }) => {
+    // Why: a worker can call its own functions directly; routing it back
+    // through the host would only open a re-entrancy path.
+    if (!viaPanel) {
+      throw new Error('commands.invokeOwn is only available to panels')
+    }
+    const { commandId, args } = params as { commandId: string; args?: unknown }
+    return { value: await services.invokeOwnCommand(pluginId, commandId, args) }
   })
 ])
 

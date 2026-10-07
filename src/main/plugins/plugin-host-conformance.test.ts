@@ -53,7 +53,8 @@ function createServices(): PluginHostServices {
       getAll: vi.fn().mockReturnValue({ theme: 'dark' }),
       set: vi.fn().mockReturnValue({ ok: true })
     },
-    subscribeEvents: vi.fn().mockImplementation((_pluginKey, events) => events)
+    subscribeEvents: vi.fn().mockImplementation((_pluginKey, events) => events),
+    invokeOwnCommand: vi.fn().mockResolvedValue({ ran: true })
   }
 }
 
@@ -117,12 +118,13 @@ const successParams: Record<string, unknown> = {
   'secrets.delete': { key: 'token' },
   'settings.get': {},
   'settings.set': { key: 'theme', value: 'dark' },
-  'events.subscribe': { events: ['worktree.created'] }
+  'events.subscribe': { events: ['worktree.created'] },
+  'commands.invokeOwn': { commandId: 'demo.run' }
 }
 
 describe('plugin host main/relay conformance', () => {
-  it('runs a granted success through both transports for all 13 v0 methods', async () => {
-    expect(PLUGIN_HOST_API_V0).toHaveLength(13)
+  it('runs a granted success through both transports for all 14 methods', async () => {
+    expect(PLUGIN_HOST_API_V0).toHaveLength(14)
     expect(Object.keys(successParams).sort()).toEqual(
       PLUGIN_HOST_API_V0.map((entry) => entry.name).sort()
     )

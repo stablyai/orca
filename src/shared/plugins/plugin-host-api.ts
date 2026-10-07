@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
+import { PLUGIN_EVENT_NAMES, pluginCommandIdSchema } from './plugin-manifest'
 import type { PluginCapabilityKind } from './plugin-capabilities'
 
 /**
@@ -94,6 +94,12 @@ const eventsSubscribeParams = z.object({
   events: z.array(z.enum(PLUGIN_EVENT_NAMES)).min(1).max(PLUGIN_EVENT_NAMES.length)
 })
 const eventsSubscribeResult = z.object({ subscribed: z.array(z.enum(PLUGIN_EVENT_NAMES)) })
+// Why: strict so a panel cannot smuggle a plugin identity; the host binds the
+// caller's key from the authenticated panel session.
+const commandsInvokeOwnParams = z
+  .object({ commandId: pluginCommandIdSchema, args: z.unknown().optional() })
+  .strict()
+const commandsInvokeOwnResult = z.object({ value: z.unknown() })
 
 export type PluginHostMethodSpec = {
   name: string
@@ -249,6 +255,17 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: false,
     params: eventsSubscribeParams,
     result: eventsSubscribeResult
+  }),
+  spec({
+    name: 'commands.invokeOwn',
+    since: '1.1',
+    scope: 'plugin-private',
+    capability: 'commands:own',
+    // Why: the command runs arbitrary worker code, so it is audited like any mutation.
+    mutation: true,
+    panel: true,
+    params: commandsInvokeOwnParams,
+    result: commandsInvokeOwnResult
   })
 ]
 

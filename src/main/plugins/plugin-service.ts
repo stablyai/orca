@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Why: PluginService is the one chokepoint that binds host services to plugin identity; commands.invokeOwn needs it to pass its own invokeCommand, and splitting the class would scatter that binding. */
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
 import {
   capabilityKinds,
@@ -260,7 +261,8 @@ export class PluginService {
           ? bindPluginHostServices({
               delegate: this.runtimeDelegate,
               pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
-              subscribeEvents: (key, events) => this.eventBus.subscribe(key, events)
+              subscribeEvents: (key, events) => this.eventBus.subscribe(key, events),
+              invokeCommand: (key, commandId, args) => this.invokeCommand(key, commandId, args)
             })
           : null,
         audit: this.audit

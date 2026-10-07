@@ -92,7 +92,8 @@ export async function executePluginHostCall(
   try {
     const value = await bound.handler(parsedParams.data, {
       pluginId: input.pluginId,
-      services: input.services
+      services: input.services,
+      viaPanel: input.viaPanel
     })
     const validated = bound.spec.result.safeParse(value)
     if (!validated.success) {
@@ -138,6 +139,8 @@ function summarizeParams(method: string, params: unknown): string {
     case 'secrets.delete':
     case 'settings.set':
       return `key=${String(record.key)}`
+    case 'commands.invokeOwn':
+      return `command=${String(record.commandId)}`
     default:
       return ''
   }
