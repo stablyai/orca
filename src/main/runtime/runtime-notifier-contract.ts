@@ -104,7 +104,8 @@ export type RuntimeNotifier = {
       newLeafId?: string
     }
   ): void
-  renameTerminal(tabId: string, title: string | null): void
+  /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
+  renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>

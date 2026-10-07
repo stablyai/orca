@@ -13,7 +13,7 @@ vi.mock('./NativeChatComposerActions', () => ({
   NativeChatComposerActions: () => <div data-testid="composer-actions" />
 }))
 vi.mock('./NativeChatAutocompleteMenus', () => ({
-  NativeChatMentionHint: () => null,
+  NativeChatMentionMenu: () => null,
   NativeChatPickerMenu: () => null
 }))
 vi.mock('../../store', () => {

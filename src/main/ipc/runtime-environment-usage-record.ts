@@ -13,7 +13,7 @@ import { markEnvironmentUsed } from '../../shared/runtime-environment-store'
 export function recordRuntimeEnvironmentUsage(
   userDataPath: string,
   selector: string,
-  args: { runtimeId?: string | null; pairedDeviceId?: string } = {}
+  args: Parameters<typeof markEnvironmentUsed>[2] = {}
 ): void {
   try {
     markEnvironmentUsed(userDataPath, selector, args)

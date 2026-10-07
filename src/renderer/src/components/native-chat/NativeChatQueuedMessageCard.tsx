@@ -21,10 +21,7 @@ import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/st
 import { classifyDispatchRejection } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
-import {
-  QUEUED_MESSAGE_PAUSED_KEPT,
-  QUEUED_MESSAGE_PAUSED_SEND_FAILED
-} from '../../../../shared/agent-session-wire'
+import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session-wire'
 import { isMacPlatform } from './native-chat-shortcut'
 import {
   queuedMessageCardSteers,
@@ -65,12 +62,6 @@ export function queuedMessageCardCaption(card: QueuedMessageCard): string | null
         return translate(
           'components.native-chat.queuedMessages.pausedSendFailed',
           "Couldn't send — press Send to retry."
-        )
-      }
-      if (card.pausedReason === QUEUED_MESSAGE_PAUSED_KEPT) {
-        return translate(
-          'components.native-chat.queuedMessages.pausedKept',
-          'Not sent yet — press Send to send it.'
         )
       }
       return translate('components.native-chat.queuedMessages.paused', 'Paused')

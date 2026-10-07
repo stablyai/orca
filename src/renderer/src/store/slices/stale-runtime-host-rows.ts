@@ -60,3 +60,17 @@ export function dropWorktreeRowsForRemovedRuntimeEnvironments<
   }
   return changed ? { rowsByRepo: next, removedWorktreeIds } : { rowsByRepo, removedWorktreeIds: [] }
 }
+
+/**
+ * Drops catalog rows (project groups, folder workspaces) stamped with a removed runtime host, so a
+ * stopped server leaves no empty heading behind. Returns the SAME reference when nothing changed.
+ */
+export function dropRuntimeHostedCatalogRows<T extends { executionHostId?: string | null }>(
+  rows: readonly T[],
+  removedEnvironmentIds: ReadonlySet<string>
+): readonly T[] {
+  const kept = rows.filter(
+    (row) => !isRemovedRuntimeHostId(row.executionHostId, removedEnvironmentIds)
+  )
+  return kept.length === rows.length ? rows : kept
+}

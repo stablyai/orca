@@ -31,8 +31,8 @@ import {
   renderJournalState
 } from '../../../src/main/native-chat/agent-session-journal/journal-reducer'
 
-// A release that knows neither the Stop event nor the Resume marker: an unknown row kind would
-// make it delete the journal from that row on, so both ride a tombstone it already reads.
+// A release that knows none of the Stop event, the Resume marker and the reopen mark: an unknown
+// row kind would make it delete the journal from that row on, so each rides a tombstone it reads.
 const BASELINE_REF = 'v1.4.218'
 const JOURNAL = 'src/main/native-chat/agent-session-journal'
 // A main build that shares this one's host database and schema version, so a downgrade to it opens
@@ -143,7 +143,7 @@ type OldReplay = {
 }
 
 // Both downgrade probes load real old builds, including cold extraction and transforms.
-test("an older build keeps every row around a Stop's event and a Resume, and folds the rows after them", async () => {
+test("an older build keeps every row around a Stop's event, a Resume and a reopen mark, and folds the rows after them", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-stop-event-downgrade-'))
   const journals = createTrackedJournalOpener()
   try {
@@ -160,6 +160,7 @@ test("an older build keeps every row around a Stop's event and a Resume, and fol
     await journal.appendStopEvent({ reason: 'user-stop', turnId: 'turn-1', caller: 'client-1' }, 1)
     await journal.appendStopEvent({ reason: 'user-close', turnId: 'turn-1' }, 1)
     await journal.appendQueueResume(1)
+    await journal.appendQueueReopen(1)
     const afterMarks = journal.cursor()
     await append(1, 'after the Stop')
     const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
@@ -226,7 +227,7 @@ test("an older build keeps every row around a Stop's event and a Resume, and fol
       })
       expect(projected.ok).toBe(true)
       expect(projected.batch?.items).toEqual([])
-      expect(projected.batch?.removedItemIds).toHaveLength(2)
+      expect(projected.batch?.removedItemIds).toHaveLength(3)
       const liveIds = new Set(journal.snapshot().items.map((entry) => entry.itemId))
       expect(projected.batch?.removedItemIds.some((id) => liveIds.has(id))).toBe(false)
     } finally {
@@ -274,9 +275,7 @@ test("an older build opens this build's journal writable and appends to it; the 
     await journal.appendStopEvent({ reason: 'user-stop', turnId: 'turn-1', caller: 'client-1' }, 1)
     await journal.appendItem(item(1), { kind: 'status', text: 'after the Stop' }, scope)
     const wrote = { cursor: journal.cursor(), items: itemIds(journal) }
-    expect(journal.queuedMessages.pauses('host-a').map((pause) => pause.reason)).toEqual([
-      'stopped'
-    ])
+    expect(journal.queuedMessages.pauses().map((pause) => pause.reason)).toEqual(['stopped'])
     await journals.closeAll()
     const rowsBefore = storedRows(directory)
 
@@ -303,9 +302,7 @@ test("an older build opens this build's journal writable and appends to it; the 
     const upgraded = await journals.open({ identity: IDENTITY, stateDirectory: directory })
     expect(upgraded.cursor().sequence).toBe(wrote.cursor.sequence + 1)
     expect(itemIds(upgraded)).toEqual([...wrote.items, 'codex:thread-1:turn-1:2'])
-    expect(upgraded.queuedMessages.pauses('host-a').map((pause) => pause.reason)).toEqual([
-      'stopped'
-    ])
+    expect(upgraded.queuedMessages.pauses().map((pause) => pause.reason)).toEqual(['stopped'])
   } finally {
     await journals.closeAll()
     rmSync(directory, { recursive: true, force: true })

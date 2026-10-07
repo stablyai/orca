@@ -43,7 +43,8 @@ internal val MOBILE_WEB_SHELL_CSP = listOf(
   // fence for fetch and XMLHttpRequest; the document-start script covers only the two things the
   // native layer cannot see.
   "connect-src 'self'",
-  "media-src 'none'",
+  // Media previews play bytes downloaded through authenticated RPC, never a network URL.
+  "media-src blob:",
   "object-src 'none'",
   "frame-src 'none'",
   "child-src 'none'",

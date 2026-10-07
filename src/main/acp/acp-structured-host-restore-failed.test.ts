@@ -17,6 +17,7 @@ import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { GROK, GROK_CONFIG_OPTIONS, PROVIDER_SESSION } from './acp-structured-adapter.test-support'
 import { ACP_HANDLE_TRANSPORT } from './acp-structured-agent-definitions'
 import { replayJournal } from '../native-chat/agent-session-journal/journal-open'
+import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createAcpStructuredLaunchResolver } from './acp-structured-launch-resolution'
 import {
   attachParams,
@@ -220,13 +221,13 @@ describe('a created Grok session Grok reports missing on the first reopen', () =
 describe('the warning row of a replacement whose attach failed', () => {
   async function replaceThenFailAttach() {
     const opened = await openRestoreRig(-32603, 'session file is corrupt')
-    const { host, store, fence, journalDatabase, warnings } = opened
+    const { host, store, fence, warnings } = opened
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
     await host.close(SESSION, 'user-close')
     // The journal's open fails after the fresh session's link is durable, before its row is written.
-    vi.spyOn(journalDatabase, 'legacyDirectoryFor').mockImplementationOnce(() => {
-      throw new Error('journal path unavailable')
-    })
+    vi.spyOn(AgentSessionJournal.prototype, 'open').mockRejectedValueOnce(
+      new Error('journal path unavailable')
+    )
     await expect(host.attach(CALLER, attachParams(fence()))).rejects.toThrow(
       'journal path unavailable'
     )

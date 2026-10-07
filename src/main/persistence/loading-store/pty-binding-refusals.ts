@@ -25,7 +25,7 @@ export function ptyBindingIsRefused(
   bindingWorktreeId: string,
   paneKey: string,
   /** Every host partition: a close is recorded where the tab lived, which need not be where this
-   *  binding lands (a relay reattach binds into `local`). */
+   *  binding lands (older relay reattaches left SSH panes in `local`). */
   partitions: readonly TerminalSessionPartition[]
 ): boolean {
   if (args.expectedSourceBinding) {

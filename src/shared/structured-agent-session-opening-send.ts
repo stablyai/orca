@@ -10,7 +10,6 @@ import type {
   AgentJournalTurnScope
 } from './agent-session-journal-types'
 import { readAgentJournalTurn } from './agent-session-turn-record'
-import { isStructuredAgentSessionStopNote } from './structured-agent-session-stop-note-key'
 
 /** What the read needs of each journal item; the host visits its fold without a snapshot. */
 export type StructuredAgentSessionOpeningSendItem = {
@@ -22,15 +21,15 @@ export type StructuredAgentSessionOpeningSendItem = {
 }
 
 /**
- * A send handed over while no turn ran, still unsettled, with no turn record and no taken Stop's
- * note written since its handover (`fence`, when given: handed over by that child). A message handed over now would join
+ * A send handed over while no turn ran, still unsettled, with no turn record written since its
+ * handover (`fence`, when given: handed over by that child). A message handed over now would join
  * the turn that send is opening (Codex steers it in once the turn opens, Claude folds it into the
  * running cycle), yet its handover row would be written before that turn exists, and so read as
  * belonging to none. So the host holds it until the turn opens, and a client draws it after the
  * live turn meanwhile. Every way the send stops opening — its turn record, its echo, its refusal, a
- * lost answer's doubt, its child's end, a Stop that took — is a journal commit. After a Stop that
- * took, the next message is a new instruction, not one for that turn; a Stop that failed or was
- * refused (its note carries the failure) leaves the turn opening, so the next message still waits.
+ * lost answer's doubt, its child's end, a Stop that took — is a journal commit that settles it or
+ * records its turn. A Stop that failed or was refused leaves the turn opening, so the next message
+ * still waits.
  */
 export function structuredAgentSessionSendOpeningTurn(
   submissions: readonly Pick<
@@ -79,12 +78,7 @@ export function structuredAgentSessionOpeningSendItemId(
       newest.handover = item.itemId
       newest.handoverAt = item.sequence
     }
-    if (
-      (readAgentJournalTurn(item.body) && isRootAgentJournalItem(item)) ||
-      (isStructuredAgentSessionStopNote(item.itemId) &&
-        item.body.kind === 'status' &&
-        item.body.failure === undefined)
-    ) {
+    if (readAgentJournalTurn(item.body) && isRootAgentJournalItem(item)) {
       newest.settledAt = Math.max(newest.settledAt, item.sequence)
     }
   })

@@ -9,6 +9,7 @@ import {
   applyRuntimeWorktreePsSessionActivity,
   applyRuntimeWorktreePsTerminalActivity
 } from './runtime-worktree-ps-activity'
+import { applyRuntimeWorktreePsUnverifiableTerminals } from './runtime-worktree-ps-unverifiable-terminals'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
 import type { Repo } from '../../shared/repo-types'
@@ -86,17 +87,30 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
     )
     const missingRuntimeWorktreeIds = new Set<string>()
     const session = this.store?.getWorkspaceSession?.()
+    const countedPtyIds = new Set<string>()
     const workingTerminalEvidenceByWorktreeId = applyRuntimeWorktreePsTerminalActivity({
       summaries,
       pathIndex: runtimeWorktreeSummaryPathIndex,
       missingIds: missingRuntimeWorktreeIds,
       freshPtyLiveness,
+      countedPtyIds,
       leaves: this.leaves.values(),
       ptysById: this.ptysById,
       tabs: this.tabs,
       session,
       getPaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
       getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
+      getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
+        this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
+    })
+    applyRuntimeWorktreePsUnverifiableTerminals({
+      summaries,
+      pathIndex: runtimeWorktreeSummaryPathIndex,
+      missingIds: missingRuntimeWorktreeIds,
+      countedPtyIds,
+      leaves: this.leaves.values(),
+      ptysById: this.ptysById,
+      getLivenessVerdict: (ptyId) => this.getPtyLivenessVerdict(ptyId),
       getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
         this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
     })

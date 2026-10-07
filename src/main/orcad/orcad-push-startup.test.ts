@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   controller: null as RuntimeMobileNotificationController | null,
   registry: null as DeviceRegistry | null,
   rpcStarted: false,
+  profileStartupErrors: new Array<Error>(),
   onSettingsChanged: vi.fn<ProfilePreferences['onSettingsChanged']>(),
   removeSettingsListener: vi.fn(),
   startDaemon: vi.fn(async () => {}),
@@ -28,12 +29,24 @@ vi.mock('./orcad-app-paths', () => ({
   resolveUserDataPath: () => state.root
 }))
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: state.browserProvider }))
-vi.mock('./orcad-instance-lock', () => ({ acquireOrcadInstanceLock: () => ({ release() {} }) }))
+vi.mock('./orcad-instance-lock', () => ({
+  acquireOrcadInstanceLock: () => ({
+    path: join(state.root, 'orcad.lock'),
+    record: { pid: process.pid, startedAtMs: null, nonce: 'headless-instance' },
+    release() {}
+  })
+}))
 vi.mock('./orcad-daemon-supervision', () => ({
   startOrcadDaemon: state.startDaemon,
   stopOrcadDaemon: async () => {}
 }))
 vi.mock('./orcad-health', () => ({ collectOrcadHealth: async () => ({}) }))
+// The runtime stub has no automation surface; orcad-automations.test.ts covers that wiring.
+vi.mock('./orcad-automations', () => ({
+  startOrcadAutomations: () => {},
+  stopOrcadAutomationScheduler: () => {},
+  orcadAutomationsKeepHostBusy: () => false
+}))
 // Why: the real updater would fetch rules from GitHub inside a unit test.
 vi.mock('../runtime/agent-state-rules/agent-state-rules-live-update', () => ({
   startAgentStateRulesLiveUpdates: () => {}
@@ -45,21 +58,27 @@ vi.mock('../ipc/pty', () => ({
   getSshPtyProvider: () => null
 }))
 vi.mock('./orcad-profile-state-startup', () => ({
-  createOrcadProfileStateStartup: async () => ({
-    store: {
-      getSettings: () => ({}),
-      onSettingsChanged: state.onSettingsChanged,
-      flushFinalOrThrowAsync: async () => {},
-      freezeWritesAsync: async () => {}
-    },
-    authority: {
-      backend: 'sqlite',
-      classification: 'neither',
-      authority_mode: 'sqlite-candidate',
-      runtime: 'orcad',
-      migrated: false
+  createOrcadProfileStateStartup: async () => {
+    const error = state.profileStartupErrors.shift()
+    if (error) {
+      throw error
     }
-  })
+    return {
+      store: {
+        getSettings: () => ({}),
+        onSettingsChanged: state.onSettingsChanged,
+        flushFinalOrThrowAsync: async () => {},
+        freezeWritesAsync: async () => {}
+      },
+      authority: {
+        backend: 'sqlite',
+        classification: 'neither',
+        authority_mode: 'sqlite-candidate',
+        runtime: 'orcad',
+        migrated: false
+      }
+    }
+  }
 }))
 vi.mock('../orca-profiles/profile-index-store', () => ({
   initOrcaProfilePaths() {},
@@ -83,6 +102,8 @@ vi.mock('../runtime/orca-runtime', () => ({
     rehydrateClientHostedBrowserPages() {}
     async refreshRestoredOrchestrationAuthority() {}
     async reconcileLegacyWorkerTerminals() {}
+    async stopLegacyWorkerTerminalRecovery() {}
+    syncWindowGraph() {}
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]
     ) {
@@ -135,6 +156,7 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(state.root, { recursive: true, force: true })
+  state.profileStartupErrors.length = 0
   vi.clearAllMocks()
 })
 
@@ -197,11 +219,30 @@ it('starts push after RPC identity is available and stops dispatch on shutdown',
 
 it('releases admission when host setup fails before a runtime exists', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-setup-failure-'))
-  state.browserProvider.mockRejectedValueOnce(new Error('browser setup failed'))
+  state.profileStartupErrors.push(new Error('profile startup failed'))
   const { startOrcad } = await import('./orcad-entry')
-  await expect(startOrcad()).rejects.toThrow('browser setup failed')
+  await expect(startOrcad()).rejects.toThrow('profile startup failed')
   expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
   acquireProfileStateMaintenance(state.root).release()
+})
+
+it('serves RPC without waiting for browser discovery', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-browser-pending-'))
+  let finishDiscovery!: () => void
+  state.browserProvider.mockReturnValueOnce(
+    new Promise<null>((resolve) => {
+      finishDiscovery = () => resolve(null)
+    })
+  )
+  const { startOrcad } = await import('./orcad-entry')
+  const host = await startOrcad({ noPairing: true, json: true })
+  expect(host.managedStop).toMatchObject({
+    runtimeId: 'headless-runtime',
+    instance: { pid: process.pid, nonce: 'headless-instance' }
+  })
+  finishDiscovery()
+  await host.stop()
+  expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
 })
 
 it('unsubscribes settings when daemon startup fails after hook setup', async () => {

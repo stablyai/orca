@@ -25,6 +25,7 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown
 } from './local-runtime-capabilities'
+import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'
 /** Read a capability through the runtime's existing status cache. A failed/unknown
  *  probe is treated as legacy so a newer call is never made before the host has
  *  proved it understands it. */
@@ -135,7 +136,7 @@ async function subscribeStructuredAgentSessionMethod<TEvent>(
   if (target.kind === 'local') {
     return window.api.runtime.subscribe({ method, params }, onResponse)
   }
-  return window.api.runtimeEnvironments.subscribe(
+  return subscribeRuntimeEnvironment(
     {
       selector: target.environmentId,
       method,

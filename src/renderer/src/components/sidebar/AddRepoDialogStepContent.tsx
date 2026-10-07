@@ -230,6 +230,7 @@ export function AddRepoDialogStepContent({
         onDestChange={onCloneDestinationChange}
         onPickDestination={onPickCloneDestination}
         onClone={onClone}
+        submitDisabled={actionsDisabled}
       />
     )
   }
@@ -269,6 +270,7 @@ export function AddRepoDialogStepContent({
         onParentChange={onCreateParentChange}
         onPickParent={onPickCreateParent}
         onCreate={onCreate}
+        submitDisabled={actionsDisabled}
       />
     )
   }

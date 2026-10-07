@@ -68,6 +68,7 @@ function Probe({ worktreeId }: { worktreeId?: string }): React.JSX.Element {
     structuredWorktreeId: worktreeId,
     disabled: false,
     attachResolvedPaths: attachments.attachResolvedPaths,
+    pendingChips: attachments.pendingChips,
     setNotice
   })
   api = { ...attachments, ...external }

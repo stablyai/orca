@@ -23,6 +23,7 @@ const transforms = {
 const testOptions = {
   environment: 'node',
   clearMocks: false,
+  fsModuleCache: true,
   env: { ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.

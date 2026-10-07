@@ -8,13 +8,13 @@ import {
   ORCAD_VERSION,
   orcadArtifactFilenames
 } from '../../shared/orcad-artifacts'
-import { SERVER_TARGETS } from '../../shared/node-runtime-pin'
+import { COMPAT_SERVER_TARGETS, SERVER_TARGETS } from '../../shared/node-runtime-pin'
 import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
 
 /** Hash installed bytes in the build's order; a version marker is not proof of delivery. */
 export async function readOrcadArtifactIdentity(directory: string): Promise<string> {
   const target = z
-    .enum(SERVER_TARGETS)
+    .enum([...SERVER_TARGETS, ...COMPAT_SERVER_TARGETS])
     .parse((await readFile(join(directory, ORCAD_SERVER_TARGET_FILENAME), 'utf8')).trim())
   const platform = target.startsWith('win32-')
     ? 'win32'

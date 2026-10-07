@@ -62,3 +62,37 @@ describe('a launch tab while its agent is starting', () => {
     )
   })
 })
+
+describe('a launch tab this window made, which the host never showed early', () => {
+  it('takes the agent the host reveals under its own id, and lets its pane attach at once', async () => {
+    const scenario = await setupTerminalCreateSurfacing(() => false)
+    const { createTab, updateTabPtyId, createTerminalListenerRef, storeState } = scenario
+    if (!createTerminalListenerRef.current) {
+      throw new Error('Expected the create-terminal listener to be registered')
+    }
+    Object.assign(window.api, { pty: { kill: vi.fn(async () => {}) } })
+    // The harness resets modules; the bridge reads the instance it imported.
+    const { holdAgentLaunchPaneSpawn, agentLaunchPaneSpawnHold } =
+      await import('@/lib/agent-launch-pane-spawn-hold')
+    holdAgentLaunchPaneSpawn('tab-made', LEAF)
+    storeState.tabsByWorktree['wt-1'] = [
+      { id: 'tab-made', ptyId: null, agentLaunchPane: { leafId: LEAF } }
+    ]
+    storeState.terminalLayoutsByTabId['tab-made'] = { root: { type: 'leaf', leafId: LEAF } }
+    const held = agentLaunchPaneSpawnHold('tab-made', LEAF)
+
+    createTerminalListenerRef.current({
+      requestId: 'reveal-window-made-launch-tab',
+      worktreeId: 'wt-1',
+      ptyId: 'pty-agent',
+      tabId: 'tab-made',
+      leafId: LEAF
+    })
+
+    // Never a second tab under the same id, and the waiting pane is let go to attach.
+    expect(createTab).not.toHaveBeenCalled()
+    expect(updateTabPtyId).toHaveBeenCalledWith('tab-made', 'pty-agent')
+    await expect(held).resolves.toBeUndefined()
+    expect(agentLaunchPaneSpawnHold('tab-made', LEAF)).toBeNull()
+  })
+})

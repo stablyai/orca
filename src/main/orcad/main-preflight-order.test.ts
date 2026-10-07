@@ -3,6 +3,10 @@ import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_STARTUP_PREFLIGHT_FLAG
 } from '../../shared/orcad-profile-preflight'
+import {
+  ORCAD_CANCEL_MANAGED_STOP_FLAG,
+  ORCAD_COMPLETE_MANAGED_STOP_FLAG
+} from '../../shared/orcad-stop-request'
 
 /**
  * The precondition is only worth anything if it runs first. A loader failure is not
@@ -38,6 +42,12 @@ vi.mock('./orcad-native-preflight', () => ({
   }
 }))
 
+vi.mock('./orcad-managed-stop-command', () => ({
+  runOrcadManagedStopCommandAndExit: async (argv: string[]) => {
+    order.push(`managed-stop:${argv.join(' ')}`)
+  }
+}))
+
 vi.mock('./orcad-entry', () => ({
   main: async () => {
     order.push('main')
@@ -66,5 +76,44 @@ describe('orcad entry', () => {
     await vi.waitFor(() => expect(order).toContain('main'))
 
     expect(order).toEqual(['profile-admission', 'preflight', 'main'])
+  })
+
+  it.each([ORCAD_COMPLETE_MANAGED_STOP_FLAG, ORCAD_CANCEL_MANAGED_STOP_FLAG])(
+    'runs %s without preflights, the bundled handoff, or a runtime',
+    async (flag) => {
+      vi.spyOn(process, 'argv', 'get').mockReturnValue(['runtime', 'orcad.js', flag, '{}'])
+      await import('./main')
+      await vi.waitFor(() => expect(order).toHaveLength(1))
+
+      expect(order).toEqual([`managed-stop:${flag} {}`])
+    }
+  )
+
+  it('runs the Windows breakaway launcher without preflights or a runtime', async () => {
+    vi.spyOn(process, 'argv', 'get').mockReturnValue([
+      'runtime',
+      'orcad.js',
+      '--windows-breakaway-launch',
+      '--stdout-file',
+      'out',
+      '--stderr-file',
+      'err',
+      '--orcad-args',
+      '--json'
+    ])
+    const write = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation((_chunk: unknown, callback?: unknown) => {
+        if (typeof callback === 'function') {
+          callback()
+        }
+        return true
+      })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub only records the call; nothing reads its never return.
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    await import('./main')
+    await vi.waitFor(() => expect(exit).toHaveBeenCalled())
+    expect(String(write.mock.calls[0]?.[0])).toMatch(/^ORCA_ORCAD_LAUNCH /u)
+    expect(order).toEqual([])
   })
 })

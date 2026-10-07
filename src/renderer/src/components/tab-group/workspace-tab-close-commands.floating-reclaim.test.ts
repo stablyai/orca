@@ -33,7 +33,7 @@ vi.mock('@/store/pinned-tab-close-guard', () => ({
 
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import { useAppStore } from '../../store'
-import { makeOpenFile } from '../../store/slices/store-test-helpers'
+import { makeOpenFile } from '../../store/slices/store-session-test-harness'
 
 const terminalTab: Tab = {
   id: 'unified-terminal',

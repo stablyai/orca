@@ -4,6 +4,7 @@ import { NativeChatResolvedView } from './NativeChatResolvedView'
 import { useNativeChatStatusEntry } from './use-native-chat-status-entry'
 import type { NativeChatViewProps } from './native-chat-view-types'
 import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
+import { NativeChatVisualOwnerProvider } from './native-chat-visual-owner'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
@@ -12,7 +13,14 @@ export default function NativeChatView(props: NativeChatViewProps): React.JSX.El
   return (
     <NativeChatPaneFileDropSurface className="relative flex h-full min-h-0 min-w-0 w-full">
       {props.mode === 'structured' ? (
-        <NativeChatStructuredSession key={props.sessionId} {...props} />
+        <NativeChatVisualOwnerProvider
+          key={props.sessionId}
+          target={props.target}
+          sessionId={props.sessionId}
+          tabId={props.tabId}
+        >
+          <NativeChatStructuredSession {...props} />
+        </NativeChatVisualOwnerProvider>
       ) : (
         <NativeChatBridgeView {...props} />
       )}

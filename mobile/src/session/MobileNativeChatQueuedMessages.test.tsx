@@ -281,8 +281,7 @@ describe('MobileNativeChatQueuedMessages', () => {
 
     it('heads the box with why the queue is paused, for each reason', async () => {
       const rows: readonly [AgentSessionQueuePause['reason'], string][] = [
-        ['stopped', 'Queue paused because you interrupted'],
-        ['cleared', 'Queue paused after you cleared the conversation']
+        ['stopped', 'Queue paused because you interrupted']
       ]
       for (const [reason, label] of rows) {
         const mounted = await mountPaused({ pause: { reason } })

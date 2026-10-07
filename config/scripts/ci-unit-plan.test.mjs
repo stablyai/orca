@@ -77,3 +77,46 @@ it.each([true, false])(
     }
   }
 )
+
+it.each(['5', '10', 'invalid'])(
+  'validates the requested full shard count and keeps fallback coverage: %s',
+  (requestedCount) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-unit-count-'))
+    try {
+      mkdirSync(join(root, 'src'))
+      writeFileSync(join(root, 'src/retained.test.ts'), 'export const retained = true')
+      const eventPath = join(root, 'event.json')
+      writeFileSync(eventPath, '{}')
+      const result = runProcessSync({
+        program: process.execPath,
+        args: [fileURLToPath(new URL('./ci-unit-plan.mjs', import.meta.url))],
+        cwd: root,
+        env: {
+          ...process.env,
+          ORCA_BACKGROUND_LAUNCH: '1',
+          ORCA_UNIT_FULL_SHARD_COUNT: requestedCount,
+          GITHUB_EVENT_NAME: 'workflow_dispatch',
+          GITHUB_EVENT_PATH: eventPath,
+          ORCA_SHARD_SOURCE_SHA: 'full-count-fixture'
+        }
+      })
+      if (requestedCount === 'invalid') {
+        expect(result.code).not.toBe(0)
+        expect(result.stderr).toContain('ORCA_UNIT_FULL_SHARD_COUNT must be 5 or 10')
+        return
+      }
+      expect(result.code, result.stderr).toBe(0)
+      const plan = JSON.parse(readFileSync(join(root, 'ci-shards/unit-selection.json'), 'utf8'))
+      expect(plan.mode).toBe('shadow')
+      expect(plan.executionFiles).toEqual(['src/retained.test.ts'])
+      expect(plan.shards).toEqual(
+        Array.from({ length: Number(requestedCount) }, (_, index) => ({
+          index: index + 1,
+          count: Number(requestedCount)
+        }))
+      )
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+)

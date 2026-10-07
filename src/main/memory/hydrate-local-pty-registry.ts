@@ -2,7 +2,6 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/ex
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
-import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
 import { splitWorktreeId, worktreeIdComparisonKey } from '../../shared/worktree/id'
@@ -17,6 +16,7 @@ import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktr
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { listLocalRepoWorktreesStrict } from '../repo-worktrees'
 import { listRegisteredPtys, registerPty } from './pty-registry'
+import { getVerifiedLocalFolderWorkspaceKeys } from './verified-local-folder-workspaces'
 
 type HydrationStore = Store
 
@@ -165,6 +165,11 @@ async function hydrateLocalPtyRegistry(
   }
 
   throwIfSignalAborted(signal)
+  const verifiedLocalFolderKeys = getVerifiedLocalFolderWorkspaceKeys({
+    folderWorkspaces: store.getFolderWorkspaces(),
+    projectGroups: store.getProjectGroups(),
+    repos: store.getRepos()
+  })
   for (const info of inventory.sessions) {
     throwIfSignalAborted(signal)
     if (alreadyRegistered.has(info.sessionId)) {
@@ -186,7 +191,7 @@ async function hydrateLocalPtyRegistry(
   return complete
 
   function isVerifiedLocalWorktree(worktreeId: string): boolean {
-    if (verifiedFolderWorktreeIds.has(worktreeId)) {
+    if (verifiedLocalFolderKeys.has(worktreeId) || verifiedFolderWorktreeIds.has(worktreeId)) {
       return true
     }
     const key = worktreeIdComparisonKey(worktreeId)
@@ -220,17 +225,6 @@ function getVerifiedFolderWorktreeIds(
   repoCatalog: LocalRepoCatalog
 ): Set<string> {
   const verified = new Set<string>()
-  const folders = store.getFolderWorkspaces()
-  const counts = new Map<string, number>()
-  for (const folder of folders) {
-    counts.set(folder.id, (counts.get(folder.id) ?? 0) + 1)
-  }
-  for (const folder of folders) {
-    const worktree = folderWorkspaceToWorktree(folder)
-    if (counts.get(folder.id) === 1 && worktree.hostId === LOCAL_EXECUTION_HOST_ID) {
-      verified.add(worktree.id)
-    }
-  }
   const metadata = readAllWorktreeMetaForHost(store, LOCAL_EXECUTION_HOST_ID)
   for (const [worktreeId, meta] of Object.entries(metadata)) {
     const parsed = splitWorktreeId(worktreeId)

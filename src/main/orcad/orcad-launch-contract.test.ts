@@ -26,6 +26,25 @@ describe('parseArgs', () => {
     })
   })
 
+  it('takes the desktop serve flags orca serve forwards', () => {
+    expect(
+      parseArgs([
+        '--mobile-pairing',
+        '--recipe-json',
+        '--project-root',
+        '/work/app',
+        '--no-pairing'
+      ])
+    ).toEqual({
+      mobilePairing: true,
+      recipeJson: true,
+      projectRoot: '/work/app',
+      noPairing: true
+    })
+    expect(() => parseArgs(['--recipe-json'])).toThrow('--recipe-json requires --project-root')
+    expect(() => parseArgs(['--project-root'])).toThrow('--project-root expects a value')
+  })
+
   it('rejects --bind with no value rather than silently binding the default', () => {
     expect(() => parseArgs(['--bind'])).toThrow('--bind expects a value')
     expect(() => parseArgs(['--bind', '--json'])).not.toThrow()

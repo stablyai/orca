@@ -31,12 +31,31 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
   private readonly retries = new Map<string, RecoveryRetry>()
   private readonly receiptEpochByPane = new Map<string, number>()
   private readonly recoveredPtys = new Set<string>()
+  private readonly backgroundWork = new Set<Promise<unknown>>()
+  private stopped = false
 
   constructor(private readonly ports: LegacyWorkerRecoveryPorts) {}
+
+  /** Cancels retries and refuses new passes; resolves once running and released work drained. */
+  async stop(): Promise<void> {
+    this.stopped = true
+    this.cancelAllRetries()
+    await this.queue
+    await Promise.all(this.backgroundWork)
+  }
+
+  /** Work a pass starts without awaiting; shutdown still waits for it. */
+  trackBackgroundWork(work: Promise<unknown>): void {
+    this.backgroundWork.add(work)
+    void work.finally(() => this.backgroundWork.delete(work))
+  }
 
   reconcile(
     options: LegacyWorkerRecoveryOptions = {}
   ): Promise<LegacyWorkerTerminalRecoveryResult> {
+    if (this.stopped) {
+      return Promise.reject(new Error('worker_terminal_recovery_stopped'))
+    }
     if (!options.retry) {
       this.cancelScope(options.connectionId ? `ssh:${options.connectionId}` : 'local')
     }
@@ -48,6 +67,9 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
     })
     const run = this.queue.then(async () => {
       try {
+        if (this.stopped) {
+          throw new Error('worker_terminal_recovery_stopped')
+        }
         if (!options.retry) {
           this.cancelScope(options.connectionId ? `ssh:${options.connectionId}` : 'local')
         }
@@ -82,6 +104,9 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
     deferredDispatchIds: ReadonlySet<string>,
     options: LegacyWorkerRecoveryOptions
   ): void {
+    if (this.stopped) {
+      return
+    }
     const scopeKey = options.connectionId ? `ssh:${options.connectionId}` : 'local'
     const dispatchIds = plan.candidates.flatMap((candidate) => {
       const sshPty = parseAppSshPtyId(candidate.ptyId)
@@ -136,7 +161,7 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
   }
 
   private armRetry(scopeKey: string, retry: RecoveryRetry): void {
-    if (retry.timer) {
+    if (this.stopped || retry.timer) {
       return
     }
     const delayMs = Math.min(1_000 * 2 ** retry.attempt, 30_000)

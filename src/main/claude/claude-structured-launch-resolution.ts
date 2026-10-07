@@ -1,5 +1,4 @@
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
-import { createHash } from 'node:crypto'
 import type {
   Options as ClaudeAgentSdkOptions,
   PermissionMode
@@ -44,6 +43,9 @@ import type { ClaudeThinkingDisplaySupport } from './claude-thinking-display-sup
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-launch-directory'
 import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
+import { claudeSessionIdForOrcaSession } from './claude-structured-session-id'
+
+export { claudeSessionIdForOrcaSession }
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
@@ -135,6 +137,9 @@ export type ClaudeStructuredLaunchResolverDeps = {
   authSwitchSettleTimeoutMs?: number
   /** Account state for the managed-account gate; null when it cannot be read, which refuses. */
   readManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
+  /** The host's chat attachment store: files a client attached live there, outside the workspace,
+   *  and the agent reads them without asking. */
+  attachmentDirectory?: string
   /** Whether this CLI takes the thinking-display flag. Absent ⇒ the flag is never passed. */
   thinkingDisplay?: Pick<ClaudeThinkingDisplaySupport, 'argsFor'>
   /** Whether Claude wrote a transcript for this id; defaults to the transcript resolver. */
@@ -198,14 +203,6 @@ export async function assertClaudeAuthSwitchSettled(
   }
 }
 
-export function claudeSessionIdForOrcaSession(sessionId: string): string {
-  const bytes = createHash('sha256').update(`orca-claude:${sessionId}`).digest().subarray(0, 16)
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80
-  const hex = bytes.toString('hex')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
-}
-
 export function createClaudeStructuredLaunchResolver(
   deps: ClaudeStructuredLaunchResolverDeps
 ): (input: { identity: AgentSessionJournalIdentity }) => Promise<ClaudeStructuredLaunch> {
@@ -265,7 +262,11 @@ export function createClaudeStructuredLaunchResolver(
       env: claudeProbeEnv(sources)
     })
     const configured = claudeStructuredLaunchArgs(await deps.resolveLaunchArgs())
-    const { additionalDirectories } = configured
+    // The user's own --add-dir folders, plus the host's chat attachment store.
+    const additionalDirectories = [
+      ...configured.additionalDirectories,
+      ...(deps.attachmentDirectory ? [deps.attachmentDirectory] : [])
+    ]
     const permission = claudeStructuredPermissionOptions(
       (await deps.resolvePermissionMode?.()) ?? 'default'
     )

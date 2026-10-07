@@ -21,6 +21,7 @@ export const DOCKER_SSH_E2E_SPECS = [
   'tests/e2e/ssh-lost-kill-tab-resurrection.spec.ts',
   'tests/e2e/ssh-pi-compatible-agent-title.spec.ts',
   'tests/e2e/ssh-port-forward-lifecycle.spec.ts',
+  'tests/e2e/ssh-reattach-home-partition.spec.ts',
   'tests/e2e/ssh-reconnect-tab-destruction.spec.ts',
   'tests/e2e/ssh-restart-tab-accumulation.spec.ts',
   'tests/e2e/ssh-skill-installation.spec.ts',
@@ -38,11 +39,23 @@ export const NODE_NETWORK_E2E_SPEC =
   'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts'
 export const LOCALHOST_SSH_E2E_SPEC = 'tests/e2e/ssh-localhost.spec.ts'
 export const NATIVE_IME_E2E_SPEC = 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
+// Needs the packaged orcad slot, which only its own job builds.
+export const ORCAD_SERVE_MODE_SWITCH_E2E_SPEC = 'tests/e2e/orcad-serve-mode-switch.spec.ts'
+// Needs the orcad template for its host's target, which only its own job builds.
+export const ORCAD_AUTO_CONVERT_E2E_SPEC = 'tests/e2e/ssh-orcad-auto-convert.spec.ts'
+// Windows-only; its own job runs it on a Windows runner.
+export const WINDOWS_MISSING_APPDATA_E2E_SPEC = 'tests/e2e/windows-missing-appdata-startup.spec.ts'
+// Runs in the auto-convert job, which builds the template it needs.
+export const ORCAD_IDLE_EXIT_E2E_SPEC = 'tests/e2e/ssh-orcad-idle-exit.spec.ts'
 export const DEDICATED_E2E_SPECS = [
   ...DOCKER_SSH_E2E_SPECS,
   NODE_NETWORK_E2E_SPEC,
   LOCALHOST_SSH_E2E_SPEC,
-  NATIVE_IME_E2E_SPEC
+  NATIVE_IME_E2E_SPEC,
+  ORCAD_SERVE_MODE_SWITCH_E2E_SPEC,
+  ORCAD_AUTO_CONVERT_E2E_SPEC,
+  WINDOWS_MISSING_APPDATA_E2E_SPEC,
+  ORCAD_IDLE_EXIT_E2E_SPEC
 ]
 const dedicatedSpecs = new Set(DEDICATED_E2E_SPECS)
 const dockerSpecs = new Set(DOCKER_SSH_E2E_SPECS)
@@ -77,7 +90,14 @@ export function classifyE2eJobs(input, sshSourceChanged = 'false') {
     e2e_needs_build:
       runChanged ||
       sshSourceChanged !== 'false' ||
-      specs.some((spec) => dockerSpecs.has(spec) || spec === LOCALHOST_SSH_E2E_SPEC)
+      specs.some(
+        (spec) =>
+          dockerSpecs.has(spec) ||
+          spec === LOCALHOST_SSH_E2E_SPEC ||
+          spec === ORCAD_SERVE_MODE_SWITCH_E2E_SPEC ||
+          spec === ORCAD_AUTO_CONVERT_E2E_SPEC ||
+          spec === ORCAD_IDLE_EXIT_E2E_SPEC
+      )
   }
 }
 

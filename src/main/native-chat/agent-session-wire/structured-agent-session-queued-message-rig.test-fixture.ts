@@ -203,13 +203,10 @@ export async function createQueuedMessageTestRig(
     })
   }
 
-  /** A host-process restart, as the queue sees it: the conversation closes, and
-   *  opens afresh under a new instance id while its rows survive. The close is an eviction, whose
-   *  Stop event ends a person's Stop pause if work runs; a quit writes none, so a test of that
-   *  pause across a restart uses `crashRestartHostProcess`. */
+  /** A host-process restart: the app quits (its own teardown runs) and a new host opens the same
+   *  state. A quit writes no close's Stop event, so a person's Stop pause survives it. */
   async function restartHostProcess(): Promise<void> {
-    await host.close(SESSION, 'evict')
-    rotateStructuredAgentSessionHostInstanceForTests()
+    await quitRestartHostProcess()
   }
 
   /** A host process that dies with no close: a new host opens the same state directory. */

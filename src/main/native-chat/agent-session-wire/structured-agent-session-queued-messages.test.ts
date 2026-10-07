@@ -298,7 +298,7 @@ describe('held drafts', () => {
     await new Promise((resolve) => setTimeout(resolve, 250))
     expect(await rig.handoff(draftId)).toBeUndefined()
     expect(await rig.queuePause()).toBeNull()
-    // The user's send starting its turn lifts it, and adopts the row into this instance.
+    // The user's send starting its turn lifts it.
     const next = send('user starts a new turn')
     await next.result
     expect(await rig.handoff(draftId)).toBeUndefined()
@@ -420,10 +420,12 @@ describe('Stop and Delete', () => {
     await stop()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     await settleAccepted(working, 'a')
-    // Evict the handle and reopen (the history read opens the conversation at
-    // rest): the pause is derived from what the journal holds, so nothing drains.
+    // Close and reopen it (the history read opens it at rest): the derived pause still holds, so
+    // nothing drains; a close hides the row, as nothing runs there until its next turn.
     await host.close(SESSION, 'evict')
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    expect(await rig.queuePause()).toBeNull()
+    const reopened = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    expect(structuredQueuePauses(reopened).map((pause) => pause.reason)).toContain('stopped')
     await new Promise((resolve) => setTimeout(resolve, 250))
     expect(await rig.handoff(draftId)).toBeUndefined()
     // Send-now overrides the pause — the user acting is a release.
@@ -614,15 +616,15 @@ describe('/clear', () => {
     if (!replacementId) {
       throw new Error('expected a replacement session')
     }
-    // The source's cards are spent tombstones; the replacement shows them on a
-    // queue paused by the clear — not "because you interrupted" — until the user
-    // acts: Resume, or their next send starting its turn.
+    // The source's cards are spent tombstones; the replacement shows them as plain waiting cards,
+    // held by the clear with no row (nothing runs there), until the user acts: Resume, or their
+    // next send starting its turn.
     expect(await drafts()).toHaveLength(0)
     expect(await drafts(replacementId)).toEqual([
       { messageId: firstId, state: 'waiting' },
       { messageId: secondId, state: 'waiting' }
     ])
-    expect(await rig.queuePause(replacementId)).toEqual({ reason: 'cleared' })
+    expect(await rig.queuePause(replacementId)).toBeNull()
     // Paused from before the first carried card lands: the idle replacement auto-sends nothing.
     await new Promise((resolve) => setTimeout(resolve, 250))
     expect((await host.journalSnapshot(replacementId)).submissions).toHaveLength(0)
@@ -663,14 +665,14 @@ describe('/clear', () => {
     )
   })
 
-  it("the replacement's 'cleared' pause lifts through Resume exactly like a Stop's", async () => {
+  it("the replacement's unshown 'cleared' pause lifts through Resume exactly like a Stop's", async () => {
     const [firstId] = await pausedDrafts()
     const cleared = await clear(hostTestOperationId())
     const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
     if (!replacementId) {
       throw new Error('expected a replacement session')
     }
-    expect(await rig.queuePause(replacementId)).toEqual({ reason: 'cleared' })
+    expect(await rig.queuePause(replacementId)).toBeNull()
     const resumed = await host.queuedMessagesResume(CALLER, {
       envelope: envelope(
         {},
@@ -733,7 +735,7 @@ describe('/clear', () => {
     // The refusal belonged to the source's submissions; on the replacement the
     // text is simply a waiting draft again, behind the replacement's pause.
     expect(await drafts(replacementId)).toEqual([{ messageId: draftId, state: 'waiting' }])
-    expect(await rig.queuePause(replacementId)).toEqual({ reason: 'cleared' })
+    expect(await rig.queuePause(replacementId)).toBeNull()
     expect(await drafts()).toHaveLength(0)
   })
 

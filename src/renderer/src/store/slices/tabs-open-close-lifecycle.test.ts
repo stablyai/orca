@@ -4,7 +4,13 @@ import { getDefaultUIState } from '../../../../shared/constants'
 import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph'
 import { closeMobileSessionTabInStore } from '../../runtime/mobile-session-tab-close'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore, makeOpenFile, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
+import {
+  createTestStore,
+  makeOpenFile,
+  makeTabGroup,
+  makeUnifiedTab,
+  makeWorktree
+} from './store-test-helpers'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -72,6 +78,19 @@ describe('TabsSlice', () => {
       store.setState({ activeWorktreeId: WT, activeWorkspaceExecutionHostId: null })
 
       expect(store.getState().createUnifiedTab(WT, 'browser').executionHostId).toBe('local')
+    })
+
+    it("stamps an SSH worktree's own host when activation passed none", () => {
+      store.setState({
+        repos: [
+          { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+        ],
+        worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', hostId: 'ssh:box' })] },
+        activeWorktreeId: WT,
+        activeWorkspaceExecutionHostId: null
+      })
+
+      expect(store.getState().createUnifiedTab(WT, 'browser').executionHostId).toBe('ssh:box')
     })
 
     it('activates the newly created tab', () => {

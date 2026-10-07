@@ -194,6 +194,39 @@ describe('sftp-upload', () => {
     }
   })
 
+  it('never throws an uncaught error when a quit aborts an upload whose read already ended', async () => {
+    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-quit-'))
+    const localPath = join(localDir, 'orcad.js')
+    const controller = new AbortController()
+    // Accepts every byte but never finishes, as a remote write still flushing at quit does.
+    const flushing = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback()
+      },
+      final() {}
+    })
+    const sftp = createSftpMock()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the upload only pipes into and awaits this stream.
+    vi.mocked(sftp.createWriteStream).mockReturnValue(flushing as never)
+    const uncaught = vi.fn()
+    process.prependListener('uncaughtException', uncaught)
+    try {
+      await writeFile(localPath, Buffer.alloc(64 * 1024, 7))
+      const upload = uploadFile(sftp, localPath, '/remote/orcad.js', { signal: controller.signal })
+      upload.catch(() => {})
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      // The quit's disconnect aborts with the signal's own AbortError as the reason.
+      controller.abort()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(uncaught).not.toHaveBeenCalled()
+    } finally {
+      process.off('uncaughtException', uncaught)
+      flushing.destroy()
+      await rm(localDir, { recursive: true, force: true })
+    }
+  })
+
   it('joins the local read when the remote write fails', async () => {
     const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-failure-'))
     const localPath = join(localDir, 'relay.js')

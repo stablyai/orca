@@ -1016,7 +1016,6 @@
         "workspaceHostUnresolved": "El espacio de trabajo de destino abarca más de un host, así que esta ejecución no tiene un único host que usar."
       },
       "useComposerState": {
-        "7eb3f44ff7": "El agente seleccionado está deshabilitado. Elige un agente habilitado antes de crear.",
         "b2ead86962": "No se pudo resolver la base del PR.",
         "3db83fc58a": "No hay ninguna ruta de proyecto remoto disponible para los archivos adjuntos.",
         "ba6cb77082": "No se pudo conectar al proyecto.",
@@ -12876,7 +12875,6 @@
             "ea4788705e": "Cancelar",
             "7ec6abbf2a": "Reiniciar",
             "f4f3c9ca4a": "Plantilla de prompt",
-            "1bc0bdbb5e": "Lanzamiento:",
             "fe119187bb": "--model sonnet",
             "bc8dc39f4b": "Argumentos CLI",
             "b99c33cec5": "Ajustes",
@@ -17695,6 +17693,8 @@
         "cannotRunHere": "Orca no puede ejecutar este agente en un chat aquí.",
         "unreachable": "Orca no pudo comunicarse con el agente.",
         "recordFailed": "Orca no pudo guardar esto en el historial del chat.",
+        "attachmentExpired": "Este archivo adjunto caducó.",
+        "reattachFile": "Quítelo y vuelva a adjuntarlo.",
         "conversationCleared": "Esta conversación se borró.",
         "openCurrentConversation": "Abra la conversación actual para continuar.",
         "clearUnfinished": "El último /clear no terminó.",
@@ -17729,13 +17729,18 @@
         "send": "Enviar",
         "noPty": "No hay terminal activa: vuelva a alternar para volver a conectarse.",
         "locked": "La entrada está retenida por otro dispositivo.",
-        "placeholder": "Enviar un mensaje…",
-        "mentionHint": "Archivo de referencia:",
+        "placeholder": "Pregunta lo que quieras, @ para mencionar archivos, / para comandos",
+        "loadingFiles": "Cargando archivos...",
+        "noFiles": "No hay archivos coincidentes",
+        "filesLoadFailed": "No se pudieron cargar los archivos",
         "attach": "Adjuntar archivo",
         "startDictation": "Iniciar dictado",
         "stopDictation": "Detener dictado",
         "noSkills": "Sin habilidades coincidentes",
         "localAttachmentUnsupported": "Los archivos adjuntos locales no están disponibles para sesiones remotas.",
+        "attachFailed": "No se pudo adjuntar {{files}}.",
+        "attachFailedBecause": "No se pudo adjuntar {{files}}. {{reason}}",
+        "uploadingFile": "Subiendo {{name}}…",
         "removeAttachment": "Quitar archivo adjunto",
         "pastedImageLabel": "Imagen pegada",
         "copyImage": "Copiar imagen",
@@ -17760,6 +17765,8 @@
         "options": "Opciones",
         "sessionOptions": "Opciones de sesión",
         "chooseInAgentPicker": "Elegir en el selector del agente…",
+        "searchModels": "Buscar modelos…",
+        "noModelsMatch": "Ningún modelo coincide con la búsqueda.",
         "toggleOption": "Alternar {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "Enviado al agente — sin confirmar",
@@ -17799,7 +17806,9 @@
         "workspaceAttachmentMismatch": "Los archivos solo se pueden adjuntar a su espacio de trabajo de origen.",
         "attachmentOwnerChanged": "Este espacio de trabajo cambió de host durante la conexión; vuelve a soltar los archivos.",
         "attachmentUnreadable": "No se pudieron leer los archivos soltados.",
-        "tooManyAttachments": "Adjunta {{value0}} archivos o menos a la vez."
+        "tooManyAttachments": "Adjunta {{value0}} archivos o menos a la vez.",
+        "pasteFailed": "Error al pegar.",
+        "commandAttachmentsUnsupported": "Quita los archivos adjuntos antes de usar un comando de la sesión de chat."
       },
       "tool": {
         "running": "Ejecutando…",
@@ -18021,10 +18030,8 @@
         "turnOffQueueing": "Desactivar la cola",
         "withdrawnHold": "Detenido antes de enviarse",
         "pausedSendFailed": "No se pudo enviar. Pulsa Enviar para reintentar.",
-        "pausedKept": "Aún no se ha enviado. Pulsa Enviar para enviarlo.",
         "paused": "En pausa",
         "queuePausedStopped": "Cola en pausa porque interrumpiste",
-        "queuePausedCleared": "Cola en pausa después de que borraste la conversación",
         "queuePaused": "Cola en pausa",
         "resume": "Reanudar",
         "sendConfirmTitle": "¿Enviar mensaje?",
@@ -18118,7 +18125,9 @@
         "plan": "Plan",
         "historyRepaired": "No se pudo cargar parte del historial de este chat.",
         "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla.",
-        "stoppedBeforeStart": "Detenido antes de que el agente empezara"
+        "stoppedBeforeStart": "Detenido antes de que el agente empezara",
+        "dismiss": "Descartar",
+        "copyError": "Copiar error"
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
@@ -18566,6 +18575,13 @@
       "label": "Asignado",
       "automatic": "Automático",
       "assignToMe": "Asignármelo ({{name}})"
+    },
+    "markdown-callout": {
+      "note": "Nota",
+      "tip": "Consejo",
+      "important": "Importante",
+      "warning": "Advertencia",
+      "caution": "Precaución"
     }
   },
   "dashboardPopout": {
@@ -19224,5 +19240,10 @@
       "confirm": "Eliminar todos los worktrees indicados",
       "preservedBranches": "Se conservaron algunas ramas de worktrees anidados"
     }
+  },
+  "mediaPreview": {
+    "unavailable": "No se puede reproducir este archivo multimedia. El archivo puede no estar disponible o usar un códec no compatible.",
+    "openFailed": "No se pudo abrir el archivo en la aplicación predeterminada.",
+    "openDefault": "Abrir en la aplicación predeterminada"
   }
 }

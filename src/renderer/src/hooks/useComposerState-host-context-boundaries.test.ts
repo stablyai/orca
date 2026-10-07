@@ -6,7 +6,7 @@ import {
   isExplicitWorkspaceNameInput,
   resolveSmartGitHubCreateNames,
   resolveInitialWorkspaceRunSeed
-} from './useComposerState'
+} from './composer-state/composer-decisions'
 
 describe('useComposerState host-context boundaries', () => {
   it('seeds TaskPage pull requests as submit-time PR start points', () => {

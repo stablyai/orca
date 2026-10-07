@@ -2,13 +2,15 @@ import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useLayoutEffect, useRef } from 'react'
-import { ImageOff } from 'lucide-react'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
-import { NativeChatMentionHint, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
+import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
+import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
+import { NativeChatComposerNotices } from './NativeChatComposerNotices'
+import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
 import {
   nativeChatComposerPlaceholder,
@@ -42,9 +44,12 @@ export type NativeChatComposerFieldProps = {
   hasPty: boolean
   canSend: boolean
   autocomplete: ComposerAutocomplete
+  mentionFiles: NativeChatMentionFiles
   activeSuggestion: number
-  notice: string | null
+  notices: readonly NativeChatComposerNotice[]
   imageAttachments: readonly NativeChatComposerImageAttachment[]
+  /** The paired server a structured chat runs on, which reads back files stored there. */
+  attachmentEnvironmentId?: string
   sendButtonDisabled: boolean
   /** Why the send button is disabled, when the user can do something about it. */
   sendBlockedReason?: string | null
@@ -67,7 +72,7 @@ export type NativeChatComposerFieldProps = {
   pickerListboxId: string
   onChoosePickerItem: (item: NativeChatPickerItem) => void
   onRetrySkills: () => void
-  onAcceptMention: () => void
+  onChooseMentionFile: (path: string) => void
   onRemoveImageAttachment: (id: string) => void
   onAttach: () => void
   onDictationToggle: () => void
@@ -94,6 +99,10 @@ export type NativeChatComposerImageAttachment = {
   previewUrl?: string
   /** True while the pasted image is still being written to disk or uploaded. */
   pending?: boolean
+  /** The file's name while it uploads: a dropped or picked file, not a pasted image. */
+  pendingName?: string
+  /** Owed to the message but not shown yet: a rich-text paste's image while its server is asked. */
+  hidden?: true
   /** Set on an image the draft names but can't send: the file to attach again. */
   unavailableName?: string
 }
@@ -128,9 +137,11 @@ export function NativeChatComposerField({
   hasPty,
   canSend,
   autocomplete,
+  mentionFiles,
   activeSuggestion,
-  notice,
+  notices,
   imageAttachments,
+  attachmentEnvironmentId,
   sendButtonDisabled,
   sendBlockedReason,
   isWorking,
@@ -149,7 +160,7 @@ export function NativeChatComposerField({
   pickerListboxId,
   onChoosePickerItem,
   onRetrySkills,
-  onAcceptMention,
+  onChooseMentionFile,
   onRemoveImageAttachment,
   onAttach,
   onDictationToggle,
@@ -165,7 +176,14 @@ export function NativeChatComposerField({
   sessionOptionsPickerRequest,
   goalMode
 }: NativeChatComposerFieldProps): React.JSX.Element {
+  const shownAttachments = imageAttachments.filter((attachment) => !attachment.hidden)
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
+  const optionCount =
+    autocomplete.mode === 'slash'
+      ? autocomplete.items.length
+      : autocomplete.mode === 'mention'
+        ? mentionFiles.files.length
+        : 0
   // Value the IME started from, and whether a programmatic clear was dropped on top of it.
   const compositionBaseRef = useRef('')
   const droppedDraftClearRef = useRef(false)
@@ -227,14 +245,28 @@ export function NativeChatComposerField({
             />
           ) : null}
           {autocomplete.mode === 'mention' ? (
-            <NativeChatMentionHint query={autocomplete.query} onAccept={onAcceptMention} />
+            <NativeChatMentionMenu
+              mention={mentionFiles}
+              activeIndex={activeSuggestion}
+              listboxId={pickerListboxId}
+              onChoose={onChooseMentionFile}
+            />
           ) : null}
-          {notice ? (
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ImageOff className="size-3.5 shrink-0" />
-              <span>{notice}</span>
-            </div>
-          ) : null}
+          <NativeChatComposerNotices
+            notices={notices.map((notice) =>
+              // A dismissed row takes its focused × with it; the message box gets focus back.
+              notice.onDismiss
+                ? {
+                    ...notice,
+                    onDismiss: () => {
+                      notice.onDismiss?.()
+                      textareaRef.current?.focus()
+                    }
+                  }
+                : notice
+            )}
+            className="mb-1.5"
+          />
           <div
             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
             data-composer-scope-key={dropScopeKey}
@@ -254,12 +286,13 @@ export function NativeChatComposerField({
               '[contain:paint]'
             )}
           >
-            {imageAttachments.length > 0 ? (
+            {shownAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
-                {imageAttachments.map((attachment) => (
+                {shownAttachments.map((attachment) => (
                   <NativeChatImageAttachmentPreview
                     key={attachment.id}
                     attachment={attachment}
+                    hostEnvironmentId={attachmentEnvironmentId}
                     onRemove={onRemoveImageAttachment}
                   />
                 ))}
@@ -298,11 +331,11 @@ export function NativeChatComposerField({
               }}
               onPasteCapture={onPaste}
               onSelect={onTextareaSelect}
-              aria-expanded={autocomplete.mode === 'slash'}
-              aria-controls={autocomplete.mode === 'slash' ? pickerListboxId : undefined}
+              aria-expanded={autocomplete.mode !== 'none'}
+              aria-controls={autocomplete.mode !== 'none' ? pickerListboxId : undefined}
               aria-activedescendant={
-                autocomplete.mode === 'slash' && autocomplete.items.length > 0
-                  ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
+                optionCount > 0
+                  ? `${pickerListboxId}-option-${Math.min(activeSuggestion, optionCount - 1)}`
                   : undefined
               }
               placeholder={

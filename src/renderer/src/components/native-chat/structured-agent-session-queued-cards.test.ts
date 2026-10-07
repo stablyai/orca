@@ -176,14 +176,10 @@ describe('queued message cards', () => {
     const project = (messages: AgentSessionQueuedMessage[], queuePaused = true) =>
       projectQueuedMessageCards(messages, [], { hasPendingPrompt: false, queuePaused })
     expect(queuedMessagesQueuePause(project([draft('held', 1)]), stopped)).toEqual(stopped)
-    expect(queuedMessagesQueuePause(project([draft('held', 1)]), { reason: 'cleared' })).toEqual({
-      reason: 'cleared'
-    })
     const unsendable = [
       draft('returned', 1, { state: 'returned', returnedReason: null }),
       draft('behind', 2),
-      draft('failed', 3, { paused: true, pausedReason: 'send_failed' }),
-      draft('kept', 4, { paused: true, pausedReason: 'kept' })
+      draft('failed', 3, { paused: true, pausedReason: 'send_failed' })
     ]
     expect(queuedMessagesQueuePause(project(unsendable), stopped)).toBeNull()
     // No published pause (an idle chat after a restart): plain cards, no header.
@@ -192,13 +188,13 @@ describe('queued message cards', () => {
     expect(queuedMessagesQueuePause(unpaused, null)).toBeNull()
   })
 
-  // A kept card is held on its own, like a failed one: the host sends the cards behind it.
-  it('a card behind a kept or a send_failed card is not held by it', () => {
+  // A card held on its own (a failed send, or a newer host's hold) holds nothing behind it.
+  it('a card behind a card held on its own is not held by it', () => {
     const cards = projectQueuedMessageCards(
       [
         draft('failed', 1, { paused: true, pausedReason: 'send_failed' }),
         draft('after-failed', 2),
-        draft('kept', 3, { paused: true, pausedReason: 'kept' }),
+        draft('newer-hold', 3, { paused: true }),
         draft('behind', 4)
       ],
       [],

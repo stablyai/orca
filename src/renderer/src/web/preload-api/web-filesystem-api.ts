@@ -168,6 +168,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       throw new Error('Uploading local files is not supported in the web client')
     },
     resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
+    uploadPathsToAgentSessionAttachments: async () => ({ uploaded: [], skipped: [], failed: [] }),
     watchWorktree: () => Promise.resolve(),
     unwatchWorktree: () => Promise.resolve(),
     onFsChanged: () => noopUnsubscribe

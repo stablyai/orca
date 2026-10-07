@@ -15,8 +15,6 @@ export function NativeChatStructuredSessionStatus(props: {
   sessionId: string
   /** The session's own status row, whose verdict the strip's children read. */
   paneKey: string
-  error: string | null
-  composerError: string | null
   isVisible: boolean
   backgroundTasks: StructuredSessionBackgroundTasksView
   stopBackgroundTask: (taskId?: string) => Promise<unknown>
@@ -58,11 +56,6 @@ export function NativeChatStructuredSessionStatus(props: {
 
   return (
     <>
-      {props.error || props.composerError ? (
-        <p className="mx-auto w-full max-w-(--chat-content-max-width) px-4 py-1 text-xs text-destructive">
-          {props.error ?? props.composerError}
-        </p>
-      ) : null}
       {props.backgroundTasks.show ? (
         <NativeChatBackgroundTasksStatus
           isVisible={props.isVisible}

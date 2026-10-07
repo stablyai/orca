@@ -1,5 +1,5 @@
 import { act } from '@testing-library/react'
-import { forwardRef, useImperativeHandle, useRef } from 'react'
+import { useImperativeHandle } from 'react'
 import { vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
@@ -12,6 +12,8 @@ import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import type { NativeChatLaunchSeed } from './native-chat-composer-types'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
+import type { NativeChatComposerNotice } from './native-chat-composer-notice'
+import { createStructuredSessionComposerMock } from './NativeChatStructuredSession.test-composer'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import type { StructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
@@ -141,12 +143,16 @@ export function createStructuredSessionMocks() {
     messageListProps: initialMessageListProps,
     composerProps: nullable<{
       launchSeed?: NativeChatLaunchSeed
-      structuredTransport?: Record<string, unknown> & { queueResume?: QueueResumeMock }
+      structuredTransport?: Record<string, unknown> & {
+        queueResume?: QueueResumeMock
+        onError?: (text: string | null, errorText?: string) => void
+      }
       isWorking?: boolean
       isStopping?: boolean
       afterStop?: 'queue' | 'send'
       steerQueued?: () => boolean
       onStop?: () => void
+      notices?: readonly NativeChatComposerNotice[]
     }>(),
     approvalCardProps: initialApprovalCardProps,
     questionCardProps: null as NativeChatQuestionCardProps | null,
@@ -341,24 +347,7 @@ export function createStructuredSessionMocks() {
         return <DeliveryNoticesMock notices={props?.deliveryNotices} />
       }
     }),
-    nativeChatComposer: () => ({
-      NativeChatComposer: forwardRef((props: typeof mocks.composerProps, ref) => {
-        mocks.composerProps = props
-        const fieldRef = useRef<HTMLTextAreaElement>(null)
-        useImperativeHandle(ref, () => ({
-          // Real DOM focus: the reveal-focus loop retries until focus lands in the pane.
-          focus: () => {
-            fieldRef.current?.focus()
-            return true
-          },
-          insertTypedText: () => true,
-          handlePasteEvent: mocks.handlePasteEvent,
-          pasteFromClipboard: mocks.pasteFromClipboard,
-          contains: (node: Node | null) => fieldRef.current?.contains(node) === true
-        }))
-        return <textarea ref={fieldRef} data-testid="structured-composer" />
-      })
-    }),
+    nativeChatComposer: () => createStructuredSessionComposerMock(mocks),
     nativeChatEmptyState: () => ({ NativeChatEmptyState: () => null }),
     nativeChatApprovalCard: () => ({
       NativeChatApprovalCard: (props: NativeChatApprovalCardProps) => {

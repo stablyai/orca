@@ -70,15 +70,62 @@ suite. A shard verifies the plan's source SHA and complete discovery list before
 using it. Missing/stale artifacts fall back to full coverage, even if that means
 running the suite on fewer shards.
 
-The initial policy is **shadow**, with every shard retained. A full run spends
-`FULL_SHARD_COUNT` (five) concurrency slots: the account is charged a slot per job
-rather than per core, so eight 6.5-minute shards made this matrix 68% of daily slot
-demand while the arm pool queued 10.5 minutes at p95. The first
-local inventory matched Vitest exactly (9,950 files at validation); representative
-source changes retained roughly 88% of files because of indirect input readers.
+The initial policy was **shadow**, with every shard retained and five concurrency
+slots for a full run. The account is charged a slot per job rather than per core;
+in the September baseline, eight 6.5-minute shards made this matrix 68% of daily
+slot demand while the ARM pool queued 10.5 minutes at p95. The first local
+inventory matched Vitest exactly (9,950 files at validation); representative source
+changes retained roughly 88% of files because of indirect input readers.
 That is evidence for conservative coverage, not evidence of the analysis's
 hypothetical 50% unit-work reduction. Improvements to indirect dependency
 modeling should be demonstrated against full results before expanding selection.
+
+### Controlled full-PR sharding
+
+Full PR unit runs now request ten four-worker ARM shards through the existing
+planner. Daily Node 24/26 reference runs retain five shards per Node version, and
+selected draft runs retain their five-shard cap. Coverage, isolation, setup files,
+worker flags and the protected actual-Node runtime projects remain unchanged.
+
+Set the repository Actions variable `ORCA_UNIT_FULL_SHARD_COUNT` to `5` to roll
+back full PR runs. Remove the override or set it to `10` to restore ten. Only `5`
+and `10` are valid; invalid values fail planning. If change/graph evidence is
+unavailable, planning still retains every discovered file at the requested full
+count. Confirm the actual matrix and complete selection evidence on a new run
+when changing the variable; do not infer the effective count from the setting.
+
+The ordinary [five-shard run](https://github.com/stablyai/orca/actions/runs/37657068640)
+and [ten-shard run](https://github.com/stablyai/orca/actions/runs/37657071738) used
+identical definition/source trees on pinned main `7d6d7ca6`. Both first attempts
+passed all required jobs and ran 11,678 files exactly once, with identical module
+counts, states and actual runtime routes: 112,615 passed cases, one expected
+failure and 1,052 stock skips.
+
+| Observed boundary or resource                     | Five shards | Ten shards |                   Change |
+| ------------------------------------------------- | ----------: | ---------: | -----------------------: |
+| Longest unit test step                            |        571s |       322s |         43.61% less time |
+| Unit prerequisite release to last unit completion |        618s |       362s |         41.42% less time |
+| Unit release to required verification             |        628s |       371s |         40.92% less time |
+| PR creation to required verification              |        819s |       545s | 33.46% less time; 1.503× |
+| Aggregate unit test-step time                     |      2,649s |     2,852s |               7.66% more |
+| Aggregate held ARM runner time                    |      2,827s |     3,206s |              13.41% more |
+| Aggregate setup before tests                      |        157s |       317s |             101.91% more |
+| Aggregate dependency installation                 |         57s |       112s |              96.49% more |
+
+Nominal peak unit worker slots increased from twenty to forty. The comparison was
+one observational pair on different hosts and cache states; unit runners started
+6–8 seconds after allocation. Four additional diagnostic ARM jobs started after
+all fifteen comparison runners had been allocated. This is not a quiet-fleet,
+representative queue-tail or historical twofold-speedup result. Stock artifacts
+prove module counts/states/routes, not complete individual case identities.
+
+This is a controlled latency rollout with a resource tradeoff. The representative
+week-long capacity evaluation below remains pending; one successful pair does not
+satisfy that fleet gate or erase the earlier oversharding concern. Monitor queue
+and provisioning delays, PR-to-verification latency and aggregate ARM runner time
+in equivalent traffic windows, including cancellations and planning/reference
+costs. Use the five-shard rollback if queue delay erases the latency gain.
+Temporary benchmark PRs #26271 and #26272 never merge.
 
 Every shard uploads `unit-selection.json`, `unit-timings.json` (including module
 outcomes), and its assignment. The evidence job combines these into
@@ -99,7 +146,7 @@ PRs**. Keep full ready-PR checks and the daily compatibility suite. Inspect at
 least a week's evidence across renderer, main, shared, SSH and fixture changes
 before promotion, including red runs rather than only successful examples.
 Unknown variable values retain shadow mode. Unset the variable or set it to
-`shadow` to roll back immediately. Selected runs use one to eight timing-balanced
+`shadow` to roll back immediately. Selected runs use one to five timing-balanced
 shards based on retained work.
 
 Ready-for-review result reuse includes `unit full` in its source/workflow

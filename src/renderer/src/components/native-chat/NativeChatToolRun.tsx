@@ -47,6 +47,13 @@ import type {
 import { NativeChatToolRunIcon } from './NativeChatToolIcon'
 import { NativeChatToolRunCallCounts } from './NativeChatToolRunCallCounts'
 
+/** Rows drawn among an open run's lines, each keyed: before the block they are keyed by, or
+ *  after the last. */
+export type NativeChatToolRunAsides = {
+  before: ReadonlyMap<NativeChatBlock, readonly React.JSX.Element[]>
+  after: readonly React.JSX.Element[]
+}
+
 /** Stable empty default: a fresh array literal per render breaks memoization. */
 const NO_SUBAGENT_GROUPS: NativeChatSubagentGroupBlock[] = []
 const NO_BACKGROUND_TASKS: NativeChatBackgroundTaskBlock[] = []
@@ -67,7 +74,8 @@ export function NativeChatToolRun({
   trailing,
   expandOverride,
   disclosureId,
-  onLinkClick
+  onLinkClick,
+  asides
 }: {
   blocks: NativeChatBlock[]
   previousTodoWrite?: NativeChatToolCallBlock
@@ -95,6 +103,7 @@ export function NativeChatToolRun({
    *  opened has to be remembered somewhere that outlives the row. */
   disclosureId?: string
   onLinkClick?: CommentMarkdownLinkClickHandler
+  asides?: NativeChatToolRunAsides
 }): React.JSX.Element | null {
   // This row owns the language subscription for its tool, diff, and task labels.
   useTranslation()
@@ -327,7 +336,7 @@ export function NativeChatToolRun({
         <div className="ml-[7px] mt-0.5 border-l border-chat-code-border pl-[13px]">
           {(() => {
             const seen = new Map<string, number>()
-            return headerBlocks.map((block, blockIndex) => {
+            const lines = headerBlocks.map((block, blockIndex) => {
               const taskList = taskLists?.rows.get(block)
               if (taskList) {
                 return <NativeChatTaskList key={`tasks:${blockIndex}`} {...taskList} />
@@ -396,6 +405,16 @@ export function NativeChatToolRun({
                 />
               )
             })
+            // One flat keyed list with or without asides, so a row gaining its first never remounts a line.
+            return asides
+              ? [
+                  ...headerBlocks.flatMap((block, blockIndex) => [
+                    ...(asides.before.get(block) ?? []),
+                    lines[blockIndex]
+                  ]),
+                  ...asides.after
+                ]
+              : lines
           })()}
         </div>
       ) : null}

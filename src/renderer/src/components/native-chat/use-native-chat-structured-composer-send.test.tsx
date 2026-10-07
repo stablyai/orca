@@ -48,7 +48,6 @@ function harness(
       structuredTransport,
       isComposing: () => false,
       clearSkillOrigin: vi.fn(),
-      setHistory: vi.fn(),
       setDraft: vi.fn(),
       setCaret: vi.fn()
     })
@@ -100,6 +99,22 @@ describe('attachment guard follows what the host claims', () => {
   })
 })
 
+describe('an attachment still uploading', () => {
+  it('holds a picked command, as Send is held, rather than send the chip without its path', async () => {
+    const { send, structuredTransport } = harness('claude')
+    const pending: NativeChatComposerImageAttachment = {
+      id: 'p1',
+      path: '',
+      pending: true,
+      pendingName: 'notes.pdf'
+    }
+    send('/review', [pending])
+    await Promise.resolve()
+    expect(structuredTransport.send).not.toHaveBeenCalled()
+    expect(structuredTransport.onError).not.toHaveBeenCalled()
+  })
+})
+
 // The pane brings the latest into view on this: a conversation command at the press, a message
 // once admitted, and neither for a refusal or a command the chat does not run.
 describe('reports the sends that bring the latest into view', () => {
@@ -126,5 +141,23 @@ describe('reports the sends that bring the latest into view', () => {
       )
     )
     expect(onSubmitted).not.toHaveBeenCalled()
+  })
+})
+
+describe("says a failed send in Orca's words, with the error it hit apart", () => {
+  it('keeps a main-process failure apart from the words saying the message was not sent', async () => {
+    const { send, structuredTransport } = harness('claude')
+    vi.mocked(structuredTransport.send).mockImplementation(() => {
+      throw new Error(
+        "Error invoking remote method 'agentSession:send': Error: connect ECONNREFUSED /tmp/a.sock"
+      )
+    })
+    send('hello', [])
+    await vi.waitFor(() =>
+      expect(structuredTransport.onError).toHaveBeenCalledWith(
+        'Your message was not sent.',
+        'connect ECONNREFUSED /tmp/a.sock'
+      )
+    )
   })
 })

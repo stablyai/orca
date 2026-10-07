@@ -1016,7 +1016,6 @@
         "workspaceHostUnresolved": "ターゲットワークスペースは複数のホストにまたがっているため、この実行では使用する単一のホストがありません。"
       },
       "useComposerState": {
-        "7eb3f44ff7": "選択した Agent は無効です。作成する前に、有効な Agent を選択してください。",
         "b2ead86962": "PR ベースを解決できませんでした。",
         "3db83fc58a": "このホスト上に、添付に使用できるプロジェクトパスがありません。",
         "ba6cb77082": "プロジェクトへの接続に失敗しました。",
@@ -3174,6 +3173,7 @@
             "42b283ecfc": "ホストが保存されたセッションを確認できなかったため、Orca はこのターミナルを安全に再接続できませんでした。 Orca は保存されたセッションを変更せずに残しました。今すぐ再接続を試みるには、「再試行」をクリックします。それでも再接続できない場合は、新規ターミナルを開きます。",
             "e16012e31e": "このセッションを所有していたターミナルデーモンが終了したため、セッションとそのスクロールバックを回復できませんでした。続行するには、新規ターミナルを開いてください。",
             "sessionUnavailable": "Orca はホスト上のこのペインのターミナルセッションに再接続できませんでした。続行するには、新規ターミナルを開いてください。",
+            "heldByPreviousRelay": "このターミナルは以前のバージョンの Orca のもとでホスト上でまだ実行中ですが、このバージョンからは接続できません。終了するまで実行され続けます。ここで作業を続けるには新しいターミナルを開いてください。",
             "sourceRestoring": "このターミナルを再接続しています — その出力が再確立されています。セッションはまだ実行中です。",
             "ptyAllocationLimit": "システムはこれ以上 pty デバイスを割り当てられません。Orca または他のプログラムで使っていないターミナルをいくつか閉じてから、もう一度お試しください。",
             "terminalProcessLimit": "システムはこれ以上ターミナルプロセスを起動できません。使っていないターミナルを閉じるか、不要なプロセスを終了してから、もう一度お試しください。"
@@ -12866,7 +12866,6 @@
             "38b899cc02": "すべてのリポジトリ"
           },
           "SourceControlAgentActionDialogForm": {
-            "1bc0bdbb5e": "起動：",
             "7ec6abbf2a": "リセット",
             "f4f3c9ca4a": "コマンドテンプレート",
             "fe119187bb": "--model sonnet",
@@ -17730,6 +17729,8 @@
         "cannotRunHere": "Orca はここでこの Agent をチャットで実行できません。",
         "unreachable": "Orca は Agent に接続できませんでした。",
         "recordFailed": "Orca はこれをチャットの履歴に保存できませんでした。",
+        "attachmentExpired": "この添付ファイルは期限切れです。",
+        "reattachFile": "削除してから、もう一度添付してください。",
         "conversationCleared": "この会話はクリアされました。",
         "openCurrentConversation": "続けるには、現在の会話を開いてください。",
         "clearUnfinished": "前回の /clear は完了しませんでした。",
@@ -17764,13 +17765,18 @@
         "send": "送信",
         "noPty": "ライブターミナルがありません - 再接続するには元に切り替えてください。",
         "locked": "入力は別のデバイスによって保持されます。",
-        "placeholder": "メッセージを送信してください…",
-        "mentionHint": "参照ファイル:",
+        "placeholder": "何でも質問、@ でファイルをメンション、/ でコマンド",
+        "loadingFiles": "ファイルを読み込み中…",
+        "noFiles": "一致するファイルがありません",
+        "filesLoadFailed": "ファイルを読み込めませんでした",
         "attach": "ファイルを添付する",
         "startDictation": "ディクテーションを開始する",
         "stopDictation": "ディクテーションを停止する",
         "noSkills": "一致するスキルがありません",
         "localAttachmentUnsupported": "ローカル添付ファイルはリモートセッションでは使用できません。",
+        "attachFailed": "{{files}} を添付できませんでした。",
+        "attachFailedBecause": "{{files}} を添付できませんでした。{{reason}}",
+        "uploadingFile": "{{name}} をアップロードしています…",
         "removeAttachment": "添付ファイルを削除する",
         "pastedImageLabel": "貼り付けた画像",
         "draftNotSaved": "この下書きはまだ保存できていません。Orca は保存を再試行し続けます。",
@@ -17791,6 +17797,8 @@
         "options": "オプション",
         "sessionOptions": "セッションオプション",
         "chooseInAgentPicker": "Agent の選択画面で選ぶ…",
+        "searchModels": "モデルを検索…",
+        "noModelsMatch": "検索に一致するモデルはありません。",
         "toggleOption": "{{value0}}を切り替える",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "Agent に送信済み — 未確認",
@@ -17834,7 +17842,9 @@
         "workspaceAttachmentMismatch": "ファイルはソースワークスペースにのみ添付できます。",
         "attachmentOwnerChanged": "このワークスペースは接続中にホストを変更しました。ファイルを再度ドロップしてください。",
         "attachmentUnreadable": "ドロップされたファイルを読み取れませんでした。",
-        "tooManyAttachments": "一度に添付できるファイルは {{value0}} 個以下です。"
+        "tooManyAttachments": "一度に添付できるファイルは {{value0}} 個以下です。",
+        "pasteFailed": "貼り付けに失敗しました。",
+        "commandAttachmentsUnsupported": "チャットセッションのコマンドを使う前に添付ファイルを削除してください。"
       },
       "tool": {
         "running": "実行中…",
@@ -18040,7 +18050,9 @@
         "plan": "プラン",
         "historyRepaired": "このチャットの履歴の一部を読み込めませんでした。",
         "historyItemTooLarge": "チャットのこの部分は大きすぎるため表示できません。",
-        "stoppedBeforeStart": "Agent の開始前に停止しました"
+        "stoppedBeforeStart": "Agent の開始前に停止しました",
+        "dismiss": "閉じる",
+        "copyError": "エラーをコピー"
       },
       "providerFrame": {
         "byteLength": "{{value0}}バイト"
@@ -18185,10 +18197,8 @@
         "turnOffQueueing": "キューへの追加をオフにする",
         "withdrawnHold": "送信前に停止されました",
         "pausedSendFailed": "送信できませんでした。「送信」を押して再試行してください。",
-        "pausedKept": "まだ送信されていません。「送信」を押すと送信されます。",
         "paused": "一時停止中",
         "queuePausedStopped": "中断したため、キューを一時停止しました",
-        "queuePausedCleared": "会話を消去したため、キューを一時停止しました",
         "queuePaused": "キューは一時停止中です",
         "resume": "再開",
         "sendConfirmTitle": "メッセージを送信しますか？",
@@ -18566,6 +18576,13 @@
       "label": "担当者",
       "automatic": "自動",
       "assignToMe": "自分に割り当てる（{{name}}）"
+    },
+    "markdown-callout": {
+      "note": "メモ",
+      "tip": "ヒント",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
     }
   },
   "dashboardPopout": {
@@ -19224,5 +19241,10 @@
       "confirm": "一覧表示されたすべてのワークツリーを削除",
       "preservedBranches": "一部のネストされたワークツリーブランチは保持されました"
     }
+  },
+  "mediaPreview": {
+    "unavailable": "このメディアファイルを再生できません。ファイルが利用できないか、コーデックが対応していない可能性があります。",
+    "openFailed": "既定のアプリでファイルを開けませんでした。",
+    "openDefault": "既定のアプリで開く"
   }
 }

@@ -66,7 +66,10 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   },
   openFilesByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByBespokeRule' },
   activeFileIdByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByOwnerKey' },
-  markdownFrontmatterVisible: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
+  markdownFrontmatterVisible: {
+    onRepoRemoval: 'prunedByBespokeRule',
+    onTransfer: 'copiedByBespokeRule'
+  },
   browserTabsByWorktree: {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'

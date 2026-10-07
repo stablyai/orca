@@ -58,7 +58,6 @@ export function settleOwedQueuedMessages(
       consumedRef,
       reason: submission?.reason ?? null,
       rejection: submission?.rejection,
-      origin: submission?.origin,
       now: input.now
     })
     settled += changed ? 1 : 0
@@ -124,7 +123,6 @@ export function settleQueuedMessagesForRow(
     consumedRef: row.clientMessageId,
     reason: row.reason,
     rejection: row.rejection,
-    origin: submission?.origin,
     now: input.now
   })
   return changed + (settled ? 1 : 0)

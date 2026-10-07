@@ -79,6 +79,29 @@ describe('OrcaRuntimeService', () => {
     expect(terminalPtyIds(listed?.tabs ?? [])).toEqual([DAEMON_PTY_ID, SERVE_PTY_ID].sort())
   })
 
+  it('lists persisted editor tabs beside the terminals after a cold restart', async () => {
+    const runtime = makeRestartedServeRuntime({
+      openFilesByWorktree: {
+        [TEST_WORKTREE_ID]: [
+          {
+            filePath: '/repo/README.md',
+            relativePath: 'README.md',
+            worktreeId: TEST_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      }
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(terminalPtyIds(listed.tabs)).toEqual([DAEMON_PTY_ID, SERVE_PTY_ID].sort())
+    expect(listed.tabs.filter((tab) => tab.type === 'markdown').map((tab) => tab.id)).toEqual([
+      '/repo/README.md'
+    ])
+  })
+
   it('restores a persisted split group layout on the cold rebuild', async () => {
     const runtime = makeRestartedServeRuntime({
       tabGroups: {

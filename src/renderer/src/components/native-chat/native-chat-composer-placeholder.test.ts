@@ -17,7 +17,9 @@ describe("the composer's placeholder", () => {
   })
 
   it('reads as usual otherwise', () => {
-    expect(nativeChatComposerPlaceholder(true, true)).toBe('Send a message…')
+    expect(nativeChatComposerPlaceholder(true, true)).toBe(
+      'Ask anything, @ to mention files, / for commands'
+    )
   })
 
   // A held input or a lost terminal says why first: nothing can be queued from here then.

@@ -17,6 +17,7 @@ import type { SshConnectionState, SshConnectionStatus } from './ssh-types'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
+import { annotateManagedOrcadExecutionHosts } from './managed-orcad-execution-host'
 
 export type ExecutionHostHealth =
   | 'local'
@@ -41,12 +42,16 @@ export type ExecutionHostRegistryEntry = {
   platform?: NodeJS.Platform | null
   remoteControlState?: RuntimeStatus['remoteControl']
   source?: RuntimeEnvironmentSource
+  /** See managed-orcad-execution-host: pairs an SSH host with its managed server. */
+  aliasHostIds?: readonly ExecutionHostId[]
+  mergedIntoHostId?: ExecutionHostId
 }
 
 type RuntimeEnvironmentSummary = {
   id: string
   name?: string | null
   source?: RuntimeEnvironmentSource
+  orcadDeployment?: { sshTargetId: string } | null
 }
 
 type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeEnvironmentStatus>
@@ -292,12 +297,21 @@ export function buildExecutionHostRegistry(args: {
     })
   }
 
+  annotateManagedOrcadExecutionHosts({
+    hosts,
+    runtimeEnvironments: args.runtimeEnvironments ?? [],
+    sshConnectionStates: args.sshConnectionStates
+  })
+
   const overrides = args.hostLabelOverrides
   if (!overrides || overrides.size === 0) {
     return [...hosts.values()]
   }
   return [...hosts.values()].map((host) => {
-    const label = overrides.get(host.id)
+    // Why the alias fallback: a rename saved on the merged-away id still names the merged row.
+    const label =
+      overrides.get(host.id) ??
+      host.aliasHostIds?.map((aliasHostId) => overrides.get(aliasHostId)).find(Boolean)
     return label ? { ...host, label } : host
   })
 }

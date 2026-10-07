@@ -47,11 +47,12 @@ export function splitPaneAroundMountedSubtree(
   if (!sourceContainer) {
     return null
   }
-  const createdPane = splitManagedPane({
+  return splitManagedPane({
     paneId: args.fallbackPaneId,
     direction: args.direction,
     opts: args.opts,
     sourceContainer,
+    newPaneFirst: args.opts?.placement === 'before',
     panes: args.panes,
     root: args.root,
     styleOptions: args.styleOptions,
@@ -63,15 +64,6 @@ export function splitPaneAroundMountedSubtree(
     setActivePaneId: args.setActivePaneId,
     isDestroyed: args.isDestroyed
   })
-  if (!createdPane || args.opts?.placement !== 'before') {
-    return createdPane
-  }
-
-  const createdInternal = args.panes.get(createdPane.id)
-  if (createdInternal) {
-    placeCreatedPaneBeforeSource(sourceContainer, createdInternal.container)
-  }
-  return createdPane
 }
 
 function findMountedSubtreeContainer(
@@ -123,25 +115,5 @@ function setsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>): boole
       return false
     }
   }
-  return true
-}
-
-function placeCreatedPaneBeforeSource(
-  sourceContainer: HTMLElement,
-  createdContainer: HTMLElement
-): boolean {
-  const split = createdContainer.parentElement
-  if (!split || sourceContainer.parentElement !== split) {
-    return false
-  }
-  const divider = Array.from(split.children).find(
-    (child): child is HTMLElement =>
-      child instanceof HTMLElement && child.classList.contains('pane-divider')
-  )
-  if (!divider) {
-    return false
-  }
-
-  split.replaceChildren(createdContainer, divider, sourceContainer)
   return true
 }

@@ -90,6 +90,37 @@ describe('MessageRow control visibility', () => {
     })
   })
 
+  it('copies an assistant reply without its visual lines, which mean nothing outside Orca', async () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(window, { api: { ui: { writeClipboardText } } })
+
+    render(
+      <TooltipProvider>
+        <MessageRow
+          message={{
+            id: 'message',
+            role: 'assistant',
+            timestamp: 0,
+            source: 'transcript',
+            blocks: [
+              {
+                type: 'text',
+                text: 'Here it is.\n\n::orca-visual{file="usage.html" title="Usage"}\n\nDone.'
+              }
+            ]
+          }}
+          expandSignal={false}
+          onScrollMessageToTop={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Copy message' }))
+
+    await waitFor(() => {
+      expect(writeClipboardText).toHaveBeenCalledWith('Here it is.\n\nDone.')
+    })
+  })
+
   it('omits the copy button on image-only user messages', () => {
     render(
       <MessageRow

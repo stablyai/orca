@@ -1117,7 +1117,6 @@
         "workspaceHostUnresolved": "L'espace de travail cible s'étend sur plusieurs hôtes, cette exécution n'a donc aucun hôte unique à utiliser."
       },
       "useComposerState": {
-        "7eb3f44ff7": "L'agent sélectionné est désactivé. Choisissez un agent activé avant de créer.",
         "b2ead86962": "Échec de la résolution de la base de la PR.",
         "3db83fc58a": "Aucun chemin de projet n'est disponible sur cet hôte pour les pièces jointes.",
         "ba6cb77082": "Échec de la connexion au projet.",
@@ -3278,6 +3277,7 @@
             "retryUnavailable": "Réessayez mais impossible de vous reconnecter pour l'instant. Réessayez sous peu.",
             "ownerUnknown": "Orca n'a pas pu vérifier le propriétaire de ce terminal.",
             "42b283ecfc": "Orca n'a pas pu reconnecter ce terminal en toute sécurité car l'hôte n'a pas pu vérifier sa session enregistrée. Orca a laissé la session enregistrée inchangée. Cliquez sur Réessayer pour essayer de vous reconnecter maintenant. S'il ne parvient toujours pas à se reconnecter, ouvrez un nouveau terminal.",
+            "heldByPreviousRelay": "Ce terminal s'exécute toujours sur l'hôte sous la version précédente d'Orca, à laquelle cette version ne peut pas se connecter. Il continue jusqu'à sa fin. Ouvrez un nouveau terminal pour continuer à travailler ici.",
             "sourceRestoring": "Reconnexion de ce terminal - sa sortie est en cours de rétablissement. La session est toujours en cours.",
             "remoteTerminalClosed": "Le terminal distant était fermé.",
             "ptyAllocationLimit": "Votre système ne peut plus allouer de périphériques pty. Fermez quelques terminaux inutilisés, dans Orca ou dans un autre programme, puis réessayez.",
@@ -12981,7 +12981,6 @@
             "ea4788705e": "Annuler",
             "7ec6abbf2a": "Réinitialiser",
             "f4f3c9ca4a": "Modèle de prompt",
-            "1bc0bdbb5e": "Lancement :",
             "fe119187bb": "--model sonnet",
             "bc8dc39f4b": "Arguments CLI",
             "b99c33cec5": "Paramètres",
@@ -17796,6 +17795,8 @@
         "cannotRunHere": "Orca ne peut pas exécuter cet agent dans un chat ici.",
         "unreachable": "Orca n'a pas pu joindre l'agent.",
         "recordFailed": "Orca n'a pas pu enregistrer ceci dans l'historique du chat.",
+        "attachmentExpired": "Cette pièce jointe a expiré.",
+        "reattachFile": "Retirez-la et joignez-la à nouveau.",
         "conversationCleared": "Cette conversation a été effacée.",
         "openCurrentConversation": "Ouvrez la conversation actuelle pour continuer.",
         "clearUnfinished": "Le dernier /clear ne s'est pas terminé.",
@@ -17830,8 +17831,10 @@
         "send": "Envoyer",
         "noPty": "Aucun terminal actif — rebasculez pour vous reconnecter.",
         "locked": "La saisie est détenue par un autre appareil.",
-        "placeholder": "Envoyer un message…",
-        "mentionHint": "Fichier référencé :",
+        "placeholder": "Demandez ce que vous voulez, @ pour mentionner des fichiers, / pour les commandes",
+        "loadingFiles": "Chargement des fichiers...",
+        "noFiles": "Aucun fichier correspondant",
+        "filesLoadFailed": "Impossible de charger les fichiers",
         "attach": "Joindre un fichier",
         "startDictation": "Démarrer la dictée",
         "stopDictation": "Arrêter la dictée",
@@ -17852,6 +17855,9 @@
         "skillScopeBuiltIn": "Intégrée",
         "skillScopePlugin": "Plugin",
         "localAttachmentUnsupported": "Les pièces jointes locales ne sont pas disponibles pour les sessions distantes.",
+        "attachFailed": "Impossible de joindre {{files}}.",
+        "attachFailedBecause": "Impossible de joindre {{files}}. {{reason}}",
+        "uploadingFile": "Envoi de {{name}}…",
         "removeAttachment": "Retirer la pièce jointe",
         "pastedImageLabel": "Image collée",
         "draftNotSaved": "Ce brouillon n'a pas encore pu être enregistré. Orca continue d'essayer.",
@@ -17872,6 +17878,8 @@
         "options": "Options",
         "sessionOptions": "Options de session",
         "chooseInAgentPicker": "Choisir dans le sélecteur d'agents…",
+        "searchModels": "Rechercher des modèles…",
+        "noModelsMatch": "Aucun modèle ne correspond à votre recherche.",
         "toggleOption": "Basculer {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "Envoyé à l'agent — non confirmé",
@@ -17900,7 +17908,9 @@
         "workspaceAttachmentMismatch": "Les fichiers ne peuvent être joints qu'à leur espace de travail source.",
         "attachmentOwnerChanged": "Cet espace de travail a changé d'hôte lors de la connexion : supprimez à nouveau les fichiers.",
         "attachmentUnreadable": "Impossible de lire les fichiers supprimés.",
-        "tooManyAttachments": "Joignez {{value0}} fichiers maximum à la fois."
+        "tooManyAttachments": "Joignez {{value0}} fichiers maximum à la fois.",
+        "pasteFailed": "Échec du collage.",
+        "commandAttachmentsUnsupported": "Retirez les pièces jointes avant d'utiliser une commande de session de chat."
       },
       "tool": {
         "running": "En cours…",
@@ -18106,7 +18116,9 @@
         "plan": "Plan",
         "historyRepaired": "Une partie de l'historique de ce chat n'a pas pu être chargée.",
         "historyItemTooLarge": "Cette partie du chat était trop volumineuse pour être affichée.",
-        "stoppedBeforeStart": "Arrêté avant le démarrage de l'agent"
+        "stoppedBeforeStart": "Arrêté avant le démarrage de l'agent",
+        "dismiss": "Ignorer",
+        "copyError": "Copier l'erreur"
       },
       "providerFrame": {
         "byteLength": "{{value0}} octets"
@@ -18251,10 +18263,8 @@
         "turnOffQueueing": "Désactiver la file d'attente",
         "withdrawnHold": "Arrêté avant l'envoi",
         "pausedSendFailed": "Envoi impossible. Appuyez sur Envoyer pour réessayer.",
-        "pausedKept": "Pas encore envoyé. Appuyez sur Envoyer pour l'envoyer.",
         "paused": "En pause",
         "queuePausedStopped": "File d'attente en pause, car vous avez interrompu",
-        "queuePausedCleared": "File d'attente en pause après l'effacement de la conversation",
         "queuePaused": "File d'attente en pause",
         "resume": "Reprendre",
         "sendConfirmTitle": "Envoyer le message ?",
@@ -18667,6 +18677,13 @@
       "label": "Assigné",
       "automatic": "Automatique",
       "assignToMe": "M'assigner ({{name}})"
+    },
+    "markdown-callout": {
+      "note": "Remarque",
+      "tip": "Conseil",
+      "important": "Important",
+      "warning": "Avertissement",
+      "caution": "Attention"
     }
   },
   "dashboardPopout": {
@@ -19224,5 +19241,10 @@
       "confirm": "Supprimer tous les worktrees listés",
       "preservedBranches": "Certaines branches de worktrees imbriqués ont été conservées"
     }
+  },
+  "mediaPreview": {
+    "unavailable": "Impossible de lire ce fichier multimédia. Le fichier peut être indisponible ou utiliser un codec non pris en charge.",
+    "openFailed": "Impossible d’ouvrir ce fichier dans l’application par défaut.",
+    "openDefault": "Ouvrir dans l’application par défaut"
   }
 }

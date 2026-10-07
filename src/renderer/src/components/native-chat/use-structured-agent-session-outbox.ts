@@ -188,7 +188,8 @@ export function useStructuredAgentSessionOutbox(args: {
 
   // The one place that owns the refs, the React state and the storage write.
   const applyDisposition = useCallback(
-    (disposition: StructuredAgentSessionSendDisposition): void => {
+    (outcome: StructuredAgentSessionSendDisposition): void => {
+      const disposition = restoreWithdrawn.byRefusal(outcome)
       // Released here rather than in a `.finally`: the state write below is what re-runs the
       // drain, so a later microtask would leave the queue with no trigger to move on.
       inFlightIdRef.current = null
@@ -196,7 +197,7 @@ export function useStructuredAgentSessionOutbox(args: {
       recordFailures(getStructuredAgentSessionOutbox(sessionId), disposition.entries)
       commitStructuredAgentSessionOutbox(sessionId, disposition.entries)
     },
-    [recordFailures, sessionId]
+    [recordFailures, restoreWithdrawn, sessionId]
   )
 
   const [drains, setDrains] = useState(0)

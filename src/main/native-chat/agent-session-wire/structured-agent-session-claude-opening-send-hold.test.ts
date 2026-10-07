@@ -35,6 +35,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import { DISPATCH_DOUBT_PROVIDER_IDLE } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import { claudeUnwrittenUserMessageError } from '../../claude/claude-agent-sdk-user-message-queue'
 
@@ -290,6 +291,52 @@ it('releases the follow-up when the CLI goes idle on a started send it never ech
   expect(submissions.find((entry) => entry.clientMessageId === steer)?.handedOverAt).toBeDefined()
 })
 
+/** A person's Stop naming no turn. */
+function stop() {
+  return host.cancel(CALLER, {
+    envelope: {
+      sessionId: SESSION,
+      clientOperationId: hostTestOperationId(),
+      expectedRuntimeFence: store.getRecord(SESSION)!.lease.runtimeFence,
+      payloadFingerprint: computeAgentSessionPayloadFingerprint({
+        method: 'agentSession.cancel',
+        sessionId: SESSION,
+        fields: {}
+      })
+    }
+  })
+}
+
+// Claude's interrupt names no turn, but its Stop ends the CLI, and that end settles the send.
+it('settles a send a Stop took before its echo, and the next message goes out', async () => {
+  const connection = claude.connections[0]!
+  const first = await send('FIRST prompt')
+  await eventually(() => expect(written(connection, 'FIRST prompt')).toBeDefined())
+
+  expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+  await eventually(() => expect(connection.closeCount).toBe(1))
+  await eventually(async () =>
+    expect(
+      (await snapshot()).submissions.find((entry) => entry.clientMessageId === first)?.dispatchState
+    ).not.toBe('pending')
+  )
+  const after = await snapshot()
+  expect(
+    isStructuredAgentSessionMainAgentWorking(
+      null,
+      after.submissions,
+      store.getRecord(SESSION)!.lease.runtimeFence
+    )
+  ).toBe(false)
+
+  await send('NEXT prompt')
+  await eventually(() => {
+    const resumed = claude.connections.at(-1)!
+    expect(resumed).not.toBe(connection)
+    expect(written(resumed, 'NEXT prompt')).toBeDefined()
+  })
+})
+
 /** As the real connection: once a close begins it refuses every write; the first `failures`
  *  closes come back unproven. */
 function closeUnprovenFor(connection: FakeConnection, failures: number): void {
@@ -339,19 +386,7 @@ async function stoppedWithUnprovenClose(): Promise<FakeConnection> {
     ).toBe('accepted')
   )
   closeUnprovenFor(connection, 1)
-  const stopped = await host.cancel(CALLER, {
-    envelope: {
-      sessionId: SESSION,
-      clientOperationId: hostTestOperationId(),
-      expectedRuntimeFence: store.getRecord(SESSION)!.lease.runtimeFence,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.cancel',
-        sessionId: SESSION,
-        fields: {}
-      })
-    }
-  })
-  expect(stopped).toMatchObject({ ok: true })
+  expect(await stop()).toMatchObject({ ok: true })
   frame(connection, {
     type: 'result',
     subtype: 'error_during_execution',

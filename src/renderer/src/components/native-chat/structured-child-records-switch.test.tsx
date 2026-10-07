@@ -199,8 +199,6 @@ function Surfaces(props: { roster: AgentSessionBackgroundTaskState | null }): Re
       <NativeChatStructuredSessionStatus
         sessionId={tab.entityId}
         paneKey={PANE_KEY}
-        error={null}
-        composerError={null}
         isVisible
         backgroundTasks={structuredSessionBackgroundTasksView(props.roster, null)}
         stopBackgroundTask={async () => undefined}

@@ -14,6 +14,7 @@ import {
 } from './codex-app-server-connection'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import { isCodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
 
 // close() waits out the supervisor's own stop before forcing the tree.
 const GRACEFUL_EXIT_MS = process.platform === 'win32' ? 1_500 : PROVIDER_SUPERVISOR_MAX_STOP_MS
@@ -126,18 +127,11 @@ async function flushStreams(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve))
 }
 
-async function closeWithoutObservedExit(
-  connection: CodexAppServerConnection,
-  child: StubChild
-): Promise<boolean> {
+async function closeWithoutObservedExit<T>(start: () => Promise<T>, child: StubChild): Promise<T> {
   const forcedKill = new Promise<void>((resolve) => {
-    child.kill.mockImplementation((signal) => {
-      if (signal === 'SIGKILL') {
-        resolve()
-      }
-    })
+    child.kill.mockImplementation((signal) => (signal === 'SIGKILL' ? resolve() : undefined))
   })
-  const closing = connection.close()
+  const closing = start()
   await flushStreams()
   await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS)
   await forcedKill
@@ -461,25 +455,28 @@ describe('openCodexAppServerConnection', () => {
   })
 
   it('exposes an unproven handshake child for later cleanup', async () => {
-    vi.useFakeTimers()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     child.stdin.once('data', () => {
       child.stdout.write(
         `${JSON.stringify({ id: 1, error: { code: -32602, message: 'initialize failed' } })}\n`
       )
     })
-    const opening = rejection(
-      openCodexAppServerConnection({ command: 'codex', args: ['app-server'] }, {}, spawnImpl)
+    const error = await closeWithoutObservedExit(
+      () =>
+        rejection(
+          openCodexAppServerConnection({ command: 'codex', args: ['app-server'] }, {}, spawnImpl)
+        ),
+      child
     )
-
-    await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS + 3_500)
-    const error = (await opening) as Error & { connection?: CodexAppServerConnection }
-
     expect(error.name).toBe('CodexAppServerHandshakeExitUnprovenError')
+    if (!isCodexAppServerHandshakeExitUnprovenError(error)) {
+      throw error
+    }
     expect(error.connection).toBeDefined()
     child.emit('exit', 1, null)
     child.emit('close', 1, null)
-    await expect(error.connection?.close()).resolves.toBe(true)
+    await expect(error.connection.close()).resolves.toBe(true)
   })
 
   it('times out one request without ending the connection', async () => {
@@ -531,7 +528,7 @@ describe('openCodexAppServerConnection', () => {
       spawnImpl
     )
 
-    await expect(closeWithoutObservedExit(connection, child)).resolves.toBe(false)
+    await expect(closeWithoutObservedExit(() => connection.close(), child)).resolves.toBe(false)
     expect(vi.getTimerCount()).toBe(0)
   }, 10_000)
 
@@ -567,7 +564,7 @@ describe('openCodexAppServerConnection', () => {
       spawnImpl
     )
 
-    await expect(closeWithoutObservedExit(connection, child)).resolves.toBe(false)
+    await expect(closeWithoutObservedExit(() => connection.close(), child)).resolves.toBe(false)
     child.emit('exit', 0, null)
 
     await expect(connection.close()).resolves.toBe(true)

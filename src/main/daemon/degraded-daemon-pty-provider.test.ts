@@ -685,3 +685,17 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.listProcesses).toHaveBeenCalledTimes(3)
   })
 })
+
+it('lists the in-process terminals a census must count, apart from the daemon inventory', async () => {
+  const current = createDaemonAdapter('current')
+  const fallback = createProvider('fallback')
+  const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+  const fresh = await provider.spawn({ cols: 80, rows: 24 })
+
+  expect(fallback.spawn).toHaveBeenCalledOnce()
+  expect(await provider.fallback.listProcesses()).toEqual([
+    expect.objectContaining({ id: fresh.id })
+  ])
+  expect(provider.getAllAdapters()).toEqual([current])
+})

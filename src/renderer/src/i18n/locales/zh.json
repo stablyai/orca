@@ -1016,7 +1016,6 @@
         "workspaceHostUnresolved": "目标工作区跨越多个主机，因此此运行没有可供使用的单个主机。"
       },
       "useComposerState": {
-        "7eb3f44ff7": "所选智能体已禁用。创建之前选择启用的智能体。",
         "b2ead86962": "无法解析 PR 基础引用。",
         "3db83fc58a": "没有可用于附件的远程项目路径。",
         "ba6cb77082": "无法连接到项目。",
@@ -3174,6 +3173,7 @@
             "42b283ecfc": "Orca 无法安全地重新连接此终端，因为主机无法验证其保存的会话。 Orca 保持保存的会话不变。单击“重试”立即尝试重新连接。如果仍然无法重新连接，请打开一个新终端。",
             "e16012e31e": "拥有该会话的终端守护程序已退出，因此该会话及其回滚无法恢复。打开新终端以继续。",
             "sessionUnavailable": "Orca 无法重新连接到主机上此窗格的终端会话。打开新终端以继续。",
+            "heldByPreviousRelay": "该终端仍在主机上以先前版本的 Orca 运行，当前版本无法连接到它。它会一直运行直到退出。请打开新终端以继续在此工作。",
             "sourceRestoring": "重新连接该终端 — 正在重新建立其输出。会话仍在进行。",
             "ptyAllocationLimit": "系统无法再分配 pty 设备。请在 Orca 或其他程序中关闭一些不用的终端，然后重试。",
             "terminalProcessLimit": "系统无法再启动终端进程。请关闭不用的终端或退出不用的进程，然后重试。"
@@ -12866,7 +12866,6 @@
             "38b899cc02": "所有仓库"
           },
           "SourceControlAgentActionDialogForm": {
-            "1bc0bdbb5e": "启动：",
             "7ec6abbf2a": "重置",
             "f4f3c9ca4a": "提示词模板",
             "fe119187bb": "--model sonnet",
@@ -17695,6 +17694,8 @@
         "cannotRunHere": "Orca 无法在此处以聊天方式运行此智能体。",
         "unreachable": "Orca 无法连接到智能体。",
         "recordFailed": "Orca 无法将此内容保存到聊天历史记录中。",
+        "attachmentExpired": "此附件已过期。",
+        "reattachFile": "请将其移除后重新附加。",
         "conversationCleared": "此对话已被清除。",
         "openCurrentConversation": "请打开当前对话以继续。",
         "clearUnfinished": "上一次 /clear 未完成。",
@@ -17729,13 +17730,18 @@
         "send": "发送",
         "noPty": "没有实时终端，请切回终端以重新连接。",
         "locked": "输入正被另一台设备占用。",
-        "placeholder": "发送消息…",
-        "mentionHint": "引用文件：",
+        "placeholder": "随便问，@ 提及文件，/ 使用命令",
+        "loadingFiles": "正在加载文件...",
+        "noFiles": "没有匹配的文件",
+        "filesLoadFailed": "无法加载文件",
         "attach": "附加文件",
         "startDictation": "开始听写",
         "stopDictation": "停止听写",
         "noSkills": "没有匹配的技能",
         "localAttachmentUnsupported": "远程会话不支持本地附件。",
+        "attachFailed": "无法附加 {{files}}。",
+        "attachFailedBecause": "无法附加 {{files}}。{{reason}}",
+        "uploadingFile": "正在上传 {{name}}…",
         "removeAttachment": "移除附件",
         "pastedImageLabel": "粘贴的图片",
         "draftNotSaved": "此草稿尚未保存成功。Orca 会继续尝试。",
@@ -17756,6 +17762,8 @@
         "options": "选项",
         "sessionOptions": "会话选项",
         "chooseInAgentPicker": "在智能体选择器中选择…",
+        "searchModels": "搜索模型…",
+        "noModelsMatch": "没有符合搜索条件的模型。",
         "toggleOption": "切换{{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "已发送给智能体 — 尚未确认",
@@ -17799,7 +17807,9 @@
         "workspaceAttachmentMismatch": "文件只能附加到其源工作区。",
         "attachmentOwnerChanged": "此工作区在附加时更改了主机 - 再次删除文件。",
         "attachmentUnreadable": "无法读取删除的文件。",
-        "tooManyAttachments": "每次最多附加 {{value0}} 个文件。"
+        "tooManyAttachments": "每次最多附加 {{value0}} 个文件。",
+        "pasteFailed": "粘贴失败。",
+        "commandAttachmentsUnsupported": "使用聊天会话命令前，请先移除附件。"
       },
       "tool": {
         "running": "正在运行…",
@@ -18005,7 +18015,9 @@
         "plan": "计划",
         "historyRepaired": "此聊天的部分历史记录无法加载。",
         "historyItemTooLarge": "聊天的这一部分过大，无法显示。",
-        "stoppedBeforeStart": "在智能体开始前已停止"
+        "stoppedBeforeStart": "在智能体开始前已停止",
+        "dismiss": "关闭",
+        "copyError": "复制错误"
       },
       "providerFrame": {
         "byteLength": "{{value0}} 字节"
@@ -18150,10 +18162,8 @@
         "turnOffQueueing": "关闭排队",
         "withdrawnHold": "在发送前已停止",
         "pausedSendFailed": "无法发送。点按发送以重试。",
-        "pausedKept": "尚未发送。点按发送即可发送。",
         "paused": "已暂停",
         "queuePausedStopped": "因你中断了操作，队列已暂停",
-        "queuePausedCleared": "清除对话后，队列已暂停",
         "queuePaused": "队列已暂停",
         "resume": "继续",
         "sendConfirmTitle": "发送消息？",
@@ -18566,6 +18576,13 @@
       "label": "负责人",
       "automatic": "自动",
       "assignToMe": "分配给我（{{name}}）"
+    },
+    "markdown-callout": {
+      "note": "备注",
+      "tip": "提示",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
     }
   },
   "dashboardPopout": {
@@ -19224,5 +19241,10 @@
       "confirm": "删除所有列出的工作树",
       "preservedBranches": "部分嵌套工作树分支已保留"
     }
+  },
+  "mediaPreview": {
+    "unavailable": "无法播放此媒体文件。文件可能不可用或使用了不支持的编解码器。",
+    "openFailed": "无法在默认应用中打开此文件。",
+    "openDefault": "在默认应用中打开"
   }
 }

@@ -52,9 +52,11 @@ function createPreservedDaemonHandle(
   return handle
 }
 
+export type DaemonLaunchPolicy = { macosLoginSessionWatch?: boolean; startupTimeoutMs?: number }
+
 export function createOutOfProcessLauncher(
   runtimeDir: string,
-  macosLoginSessionWatch = false
+  { macosLoginSessionWatch = false, startupTimeoutMs }: DaemonLaunchPolicy = {}
 ): DaemonLauncher {
   return async (socketPath, tokenPath, suppliedPidPath, suppliedLaunchNonce) => {
     const entryPath = getDaemonEntryPath()
@@ -132,7 +134,8 @@ export function createOutOfProcessLauncher(
           tokenPath,
           pidPath,
           launchNonce,
-          macosLoginSessionWatch
+          macosLoginSessionWatch,
+          startupTimeoutMs
         })
       } catch (error) {
         if (!(error instanceof DaemonEndpointUnavailableError) || error.reason !== 'occupied') {

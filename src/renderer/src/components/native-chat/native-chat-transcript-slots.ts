@@ -47,6 +47,7 @@ import {
   type NativeChatSubagentSectionSlot
 } from './native-chat-subagent-section-slots'
 import { nativeChatRowRendersProse, nativeChatRowSpeaksOrActs } from './native-chat-trailing-run'
+import { nativeChatTranscriptWorkRuns } from './native-chat-transcript-work-runs'
 
 export type NativeChatTranscriptSlot =
   | NativeChatMessageSlot
@@ -86,6 +87,9 @@ export type NativeChatMessageSlot = {
   depth: number
   /** Height to reserve before the row has ever been measured. */
   estimatedHeight: number
+  /** Set when this row draws an unbroken stretch of tool calls and thoughts as one run:
+   *  every message in it, `message` first. */
+  workRun?: readonly NativeChatMessage[]
 }
 
 export type NativeChatTranscriptSlotsInput = {
@@ -246,7 +250,7 @@ export function buildNativeChatTranscriptSlots(
     sectionSlots.openAnchoredAt(message, roster, turnKey)
   }
   sectionSlots.openBefore(pending, undefined, 0)
-  return slots
+  return nativeChatTranscriptWorkRuns(slots, typography)
 }
 
 /** Stable key for a slot: its message id, the agent whose section it heads, or its
@@ -262,8 +266,8 @@ export function nativeChatSlotKey(slot: NativeChatTranscriptSlot): string {
   }
 }
 
-/** Slot index of a message id, or -1. Reveal targets arrive as ids because the
- *  row that owns them may not be mounted to be pointed at. */
+/** Slot index of a message id, or -1, counting a work run's members as its row. Reveal
+ *  targets arrive as ids because the row that owns them may not be mounted to be pointed at. */
 export function nativeChatSlotIndexOf(
   slots: readonly NativeChatTranscriptSlot[],
   messageId: string | undefined
@@ -271,7 +275,12 @@ export function nativeChatSlotIndexOf(
   if (messageId === undefined) {
     return -1
   }
-  return slots.findIndex((slot) => slot.kind === 'message' && slot.message.id === messageId)
+  return slots.findIndex(
+    (slot) =>
+      slot.kind === 'message' &&
+      (slot.message.id === messageId ||
+        slot.workRun?.some((member) => member.id === messageId) === true)
+  )
 }
 
 /** Splits off the slots of messages waiting behind the live turn, and of ones shown as not sent

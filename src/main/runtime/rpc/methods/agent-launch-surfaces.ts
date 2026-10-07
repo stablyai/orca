@@ -37,7 +37,10 @@ import {
   type TerminalSpawnDispatch
 } from '../../../agent-launch/agent-launch-not-started'
 import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
-import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
+import {
+  agentLaunchMovesHostWindow,
+  type EarlyAgentLaunchTab
+} from './agent-launch-tab-publication'
 
 /** Replay-safe launches keep the nested attach in the same stable caller namespace as the launch. */
 export function agentLaunchSurfaceFactory(
@@ -51,6 +54,7 @@ export function agentLaunchSurfaceFactory(
   // close can both land after admission.
   earlyTab: Pick<EarlyAgentLaunchTab, 'windowShowsTab' | 'closedByUser'> | null = null
 ): AgentLaunchSurfaceFactory {
+  const movesHostWindow = agentLaunchMovesHostWindow(context)
   return {
     createStructuredSession: async ({
       worktreeId,
@@ -154,7 +158,7 @@ export function agentLaunchSurfaceFactory(
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),
         ...(viewMode ? { viewMode } : {}),
-        ...(earlyTab?.windowShowsTab() ? { surfaceOwner: false as const } : {}),
+        ...(earlyTab?.windowShowsTab() || !movesHostWindow ? { surfaceOwner: false as const } : {}),
         onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
       })
       const terminal = await created.catch(terminalSpawn.rethrow)

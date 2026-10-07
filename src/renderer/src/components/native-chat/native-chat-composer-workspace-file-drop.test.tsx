@@ -74,7 +74,7 @@ vi.mock('./NativeChatComposerActions', () => ({
   NativeChatComposerActions: () => <div data-testid="composer-actions" />
 }))
 vi.mock('./NativeChatAutocompleteMenus', () => ({
-  NativeChatMentionHint: () => null,
+  NativeChatMentionMenu: () => null,
   NativeChatPickerMenu: () => null
 }))
 vi.mock('./NativeChatImageAttachmentPreview', () => ({
@@ -174,7 +174,7 @@ function ComposerProbe({
           canSend={!disabled}
           autocomplete={{ mode: 'none' }}
           activeSuggestion={0}
-          notice={notice}
+          notices={notice ? [{ key: 'composer', kind: 'attachment', text: notice }] : []}
           imageAttachments={attachments.imageAttachments}
           sendButtonDisabled={false}
           isWorking={false}
@@ -197,7 +197,8 @@ function ComposerProbe({
           pickerListboxId="picker"
           onChoosePickerItem={() => {}}
           onRetrySkills={() => {}}
-          onAcceptMention={() => {}}
+          onChooseMentionFile={() => {}}
+          mentionFiles={{ files: [], loading: false, failed: false }}
           onRemoveImageAttachment={attachments.removeImageAttachment}
           onAttach={() => {}}
           onDictationToggle={() => {}}

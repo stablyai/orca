@@ -26,7 +26,9 @@ import { useStructuredNativeChatPaneCommands } from './use-structured-native-cha
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
-import { NativeChatLaunchRetry } from './NativeChatLaunchRetry'
+import { structuredSessionNotices } from './native-chat-structured-session-notices'
+import { NativeChatPromptSlotNotices } from './NativeChatComposerNotices'
+import { useNativeChatComposerError } from './use-native-chat-composer-notice'
 import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
 import { useStructuredAgentSessionHostExecution } from './StructuredAgentSessionStatusBridge'
 import { useNativeChatRewindHost } from './use-native-chat-rewind-host'
@@ -62,6 +64,8 @@ export function NativeChatStructuredSession(
   // Chat-wide: absent means on; only an explicit off keeps mid-turn sends immediate.
   const queueFollowUps = useAppStore((store) => store.settings?.nativeChatQueueFollowUps !== false)
   const composerRef = useRef<NativeChatComposerHandle>(null)
+  // Paste target while a question card replaces the composer.
+  const questionAnswerInputRef = useRef<HTMLInputElement>(null)
   const { rewindHost, focusComposer } = useNativeChatRewindHost(props, composerRef)
   const controller = useStructuredAgentSession({
     ...props,
@@ -83,7 +87,7 @@ export function NativeChatStructuredSession(
     // phases, that empty list must not become the draft's turn baseline.
     transcriptLoading: controller.status === 'idle' || controller.status === 'loading'
   })
-  const [composerError, setComposerError] = useState<string | null>(null)
+  const { composerError, reportComposerError } = useNativeChatComposerError()
   const [optionPickerRequest, setOptionPickerRequest] = useState<OptionPickerRequest | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const paneCommands = useStructuredNativeChatPaneCommands({
@@ -92,6 +96,7 @@ export function NativeChatStructuredSession(
     isVisible: props.isVisible,
     rootRef,
     composerRef,
+    questionAnswerInputRef,
     terminalPaneActions: props.contextMenuActions,
     sessionId: props.sessionId,
     target: props.target
@@ -191,24 +196,23 @@ export function NativeChatStructuredSession(
     worktreeId: ownerWorktreeId ?? undefined,
     optionPickerRequest,
     setOptionPickerRequest,
-    onError: setComposerError,
+    onError: reportComposerError,
     onSubmitted: revealLatest,
     queuedMessages: submits.queuedMessages
   })
 
+  // Said once: on the pane when the failure took it, else in the composer's notices.
+  const sessionError =
+    viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text
+  const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
+  const notices = structuredSessionNotices({ launch, agentLabel, sessionError, composerError })
   return (
     <div
       ref={rootRef}
       data-native-chat-root="true"
       data-native-chat-working={controller.isWorking ? 'true' : 'false'}
       tabIndex={-1}
-      onPointerDownCapture={(event) => {
-        if (event.button === 2) {
-          paneCommands.onSelectionCapture()
-        }
-      }}
-      onMouseUpCapture={paneCommands.onSelectionCapture}
-      onKeyUpCapture={paneCommands.onSelectionCapture}
+      onPointerDownCapture={paneCommands.onPointerDownCapture}
       onKeyDownCapture={paneCommands.onKeyDownCapture}
       onContextMenuCapture={paneCommands.onContextMenuCapture}
       className={cn(
@@ -259,12 +263,6 @@ export function NativeChatStructuredSession(
       </div>
       {readFailedFinally ? null : (
         <>
-          <NativeChatLaunchRetry
-            lifecycle={provisionalLaunch.lifecycle}
-            failure={provisionalLaunch.failure}
-            agentLabel={agentLabel}
-            onRetry={submits.retryLaunch}
-          />
           {/* Host-held drafts, never transcript rows. Above the status area, so running shells and agents sit next to the composer. */}
           <NativeChatQueuedMessageList
             controller={submits.queuedMessages}
@@ -275,10 +273,6 @@ export function NativeChatStructuredSession(
           <NativeChatStructuredSessionStatus
             sessionId={props.sessionId}
             paneKey={paneKey}
-            // Said once: on the pane when the failure took it, else here. A loaded chat stores only a
-            // refusal the host sent, so one beside messages is the host's or from before any load.
-            error={viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text}
-            composerError={composerError}
             isVisible={props.isVisible}
             backgroundTasks={controller.backgroundTasks}
             stopBackgroundTask={controller.stopBackgroundTask}
@@ -298,6 +292,7 @@ export function NativeChatStructuredSession(
             />
           ) : null}
           {/* Prompt cards take the composer's slot, below the background-task dock. */}
+          {composerShown ? null : <NativeChatPromptSlotNotices notices={notices} />}
           {prompt && approval ? (
             <NativeChatApprovalCard
               key={`${prompt.itemId}:${prompt.revision}`}
@@ -339,6 +334,7 @@ export function NativeChatStructuredSession(
                 }
               }}
               onCancel={cancelPrompt}
+              answerInputRef={questionAnswerInputRef}
             />
           ) : null}
           {composerShown ? (
@@ -353,6 +349,8 @@ export function NativeChatStructuredSession(
               steerQueued={stopControls.stopping ? undefined : submits.queuedMessages.steerNewest}
               structuredTransport={structuredTransport}
               launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft: true }}
+              notices={notices}
+              recallSource={{ messages: session.messages }}
             />
           ) : null}
         </>

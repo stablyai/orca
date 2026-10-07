@@ -1016,7 +1016,6 @@
         "workspaceHostUnresolved": "대상 워크스페이스는 두 개 이상의 호스트에 걸쳐 있으므로 이 실행에는 사용할 단일 호스트가 없습니다."
       },
       "useComposerState": {
-        "7eb3f44ff7": "선택한 agent가 비활성화되었습니다. 생성하기 전에 활성화된 agent를 선택하세요.",
         "b2ead86962": "PR 기반을 해결하지 못했습니다.",
         "3db83fc58a": "이 호스트에 첨부 파일에 사용할 수 있는 프로젝트 경로가 없습니다.",
         "ba6cb77082": "프로젝트에 연결하지 못했습니다.",
@@ -3174,6 +3173,7 @@
             "42b283ecfc": "호스트가 저장된 세션을 확인할 수 없기 때문에 Orca가 이 터미널을 안전하게 다시 연결할 수 없습니다. 오르카는 저장된 세션을 변경하지 않고 그대로 두었습니다. 지금 다시 연결을 시도하려면 재시도를 클릭하세요. 그래도 다시 연결할 수 없으면 새 터미널을 엽니다.",
             "e16012e31e": "이 세션을 소유한 터미널 데몬이 종료되었으므로 세션과 해당 스크롤백을 복구할 수 없습니다. 계속하려면 새 터미널을 여세요.",
             "sessionUnavailable": "Orca가 호스트에서 이 창의 터미널 세션에 다시 연결할 수 없습니다. 계속하려면 새 터미널을 여세요.",
+            "heldByPreviousRelay": "이 터미널은 이전 버전의 Orca에서 호스트에서 계속 실행 중이며, 이 버전에서는 연결할 수 없습니다. 종료될 때까지 계속 실행됩니다. 여기서 계속 작업하려면 새 터미널을 여세요.",
             "sourceRestoring": "이 터미널을 다시 연결하는 중 - 출력이 다시 설정되고 있습니다. 세션이 아직 실행 중입니다.",
             "ptyAllocationLimit": "시스템에서 더 이상 pty 장치를 할당할 수 없습니다. Orca 또는 다른 프로그램에서 사용하지 않는 터미널을 몇 개 닫은 후 다시 시도하세요.",
             "terminalProcessLimit": "시스템에서 터미널 프로세스를 더 시작할 수 없습니다. 사용하지 않는 터미널을 닫거나 불필요한 프로세스를 종료한 후 다시 시도하세요."
@@ -12866,7 +12866,6 @@
             "38b899cc02": "모든 리포지토리"
           },
           "SourceControlAgentActionDialogForm": {
-            "1bc0bdbb5e": "실행:",
             "7ec6abbf2a": "재설정",
             "f4f3c9ca4a": "프롬프트 템플릿",
             "fe119187bb": "--model sonnet",
@@ -17730,6 +17729,8 @@
         "cannotRunHere": "Orca는 여기에서 이 에이전트를 채팅으로 실행할 수 없습니다.",
         "unreachable": "Orca가 에이전트에 연결하지 못했습니다.",
         "recordFailed": "Orca가 이 내용을 채팅 기록에 저장하지 못했습니다.",
+        "attachmentExpired": "이 첨부 파일이 만료되었습니다.",
+        "reattachFile": "제거한 후 다시 첨부하세요.",
         "conversationCleared": "이 대화는 지워졌습니다.",
         "openCurrentConversation": "계속하려면 현재 대화를 여세요.",
         "clearUnfinished": "마지막 /clear가 완료되지 않았습니다.",
@@ -17764,13 +17765,18 @@
         "send": "보내기",
         "noPty": "라이브 terminal이 없습니다. 다시 연결하려면 다시 전환하세요.",
         "locked": "입력이 다른 장치에 의해 보류됩니다.",
-        "placeholder": "메시지 보내기…",
-        "mentionHint": "참조 파일:",
+        "placeholder": "무엇이든 물어보세요, @로 파일 멘션, /로 명령어",
+        "loadingFiles": "파일 로드 중...",
+        "noFiles": "일치하는 파일이 없습니다",
+        "filesLoadFailed": "파일을 불러오지 못했습니다",
         "attach": "파일첨부",
         "startDictation": "받아쓰기 시작",
         "stopDictation": "받아쓰기 중지",
         "noSkills": "어울리는 스킬 없음",
         "localAttachmentUnsupported": "원격 세션에는 로컬 첨부 파일을 사용할 수 없습니다.",
+        "attachFailed": "{{files}}을(를) 첨부할 수 없습니다.",
+        "attachFailedBecause": "{{files}}을(를) 첨부할 수 없습니다. {{reason}}",
+        "uploadingFile": "{{name}} 업로드 중…",
         "removeAttachment": "첨부파일 삭제",
         "pastedImageLabel": "붙여넣은 이미지",
         "draftNotSaved": "이 초안을 아직 저장하지 못했습니다. Orca가 계속 다시 시도합니다.",
@@ -17791,6 +17797,8 @@
         "options": "옵션",
         "sessionOptions": "세션 옵션",
         "chooseInAgentPicker": "에이전트 선택기에서 선택…",
+        "searchModels": "모델 검색…",
+        "noModelsMatch": "검색어와 일치하는 모델이 없습니다.",
         "toggleOption": "{{value0}} 전환",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "에이전트에 전송됨 — 확인되지 않음",
@@ -17834,7 +17842,9 @@
         "workspaceAttachmentMismatch": "파일은 소스 워크스페이스에만 첨부할 수 있습니다.",
         "attachmentOwnerChanged": "이 워크스페이스는 첨부하는 동안 호스트를 변경했습니다. 파일을 다시 삭제하세요.",
         "attachmentUnreadable": "삭제된 파일을 읽을 수 없습니다.",
-        "tooManyAttachments": "한 번에 {{value0}}개 이하의 파일을 첨부하세요."
+        "tooManyAttachments": "한 번에 {{value0}}개 이하의 파일을 첨부하세요.",
+        "pasteFailed": "붙여넣기 실패.",
+        "commandAttachmentsUnsupported": "채팅 세션 명령을 사용하기 전에 첨부 파일을 제거하세요."
       },
       "tool": {
         "running": "실행 중…",
@@ -18040,7 +18050,9 @@
         "plan": "계획",
         "historyRepaired": "이 채팅 기록의 일부를 불러올 수 없습니다.",
         "historyItemTooLarge": "채팅의 이 부분은 너무 커서 표시할 수 없습니다.",
-        "stoppedBeforeStart": "에이전트가 시작되기 전에 중지됨"
+        "stoppedBeforeStart": "에이전트가 시작되기 전에 중지됨",
+        "dismiss": "닫기",
+        "copyError": "오류 복사"
       },
       "providerFrame": {
         "byteLength": "{{value0}}바이트"
@@ -18185,10 +18197,8 @@
         "turnOffQueueing": "대기열 사용 안 함",
         "withdrawnHold": "전송 전에 중지됨",
         "pausedSendFailed": "보낼 수 없습니다. 보내기를 눌러 다시 시도하세요.",
-        "pausedKept": "아직 보내지 않았습니다. 보내기를 눌러 보내세요.",
         "paused": "일시 중지됨",
         "queuePausedStopped": "중단했기 때문에 대기열이 일시 중지되었습니다",
-        "queuePausedCleared": "대화를 지워서 대기열이 일시 중지되었습니다",
         "queuePaused": "대기열이 일시 중지되었습니다",
         "resume": "재개",
         "sendConfirmTitle": "메시지를 보낼까요?",
@@ -18566,6 +18576,13 @@
       "label": "담당자",
       "automatic": "자동",
       "assignToMe": "나에게 할당 ({{name}})"
+    },
+    "markdown-callout": {
+      "note": "참고",
+      "tip": "팁",
+      "important": "중요",
+      "warning": "경고",
+      "caution": "주의"
     }
   },
   "dashboardPopout": {
@@ -19224,5 +19241,10 @@
       "confirm": "나열된 모든 워크트리 삭제",
       "preservedBranches": "일부 중첩 워크트리 브랜치가 유지되었습니다"
     }
+  },
+  "mediaPreview": {
+    "unavailable": "미디어 파일을 재생할 수 없습니다. 파일을 사용할 수 없거나 지원하지 않는 코덱일 수 있습니다.",
+    "openFailed": "기본 앱에서 파일을 열 수 없습니다.",
+    "openDefault": "기본 앱에서 열기"
   }
 }

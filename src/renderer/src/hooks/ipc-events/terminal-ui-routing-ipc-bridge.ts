@@ -111,8 +111,10 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
   unsubs.push(window.api.ui.onSplitTerminal(routeRuntimeTerminalSplitRequest))
 
   unsubs.push(
-    window.api.ui.onRenameTerminal(({ tabId, title }) => {
-      useAppStore.getState().setTabCustomTitle(tabId, title)
+    window.api.ui.onRenameTerminal(({ tabId, title, recordInteraction }) => {
+      useAppStore
+        .getState()
+        .setTabCustomTitle(tabId, title, recordInteraction === false ? { recordInteraction } : {})
     })
   )
 

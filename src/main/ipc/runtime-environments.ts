@@ -19,6 +19,13 @@ import { registerRuntimeEnvironmentRecoveryHandler } from './runtime-environment
 import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { resetSharedControlSupport } from './runtime-environment-transport-routing'
 import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
+import { registerOrcadRuntimeLifecycleHandlers } from './orcad-runtime-lifecycle-handlers'
+import { registerOrcadRuntimeConversionHandlers } from './orcad-runtime-conversion-handlers'
+import { registerOrcadDeltaMoveHandlers } from './orcad-delta-move-handlers'
+import { registerOrcadRuntimeMaintenanceHandlers } from './orcad-runtime-maintenance-handlers'
+import { clearPublishedManagedServer } from './ssh-renderer-broadcast'
+import { reconcileOrphanedRuntimeSessions } from './runtime-environment-session-reconcile'
+import { registerRuntimeSshAccessHandlers } from './runtime-ssh-access-handlers'
 import { retirePairedRuntimeBrowserClientHostEnvironment } from '../browser/paired-runtime-browser-client-host-runtime'
 import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-environment-browser-client-host-handler'
 import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
@@ -92,6 +99,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     ipcMain.removeHandler(channel)
   }
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
+  reconcileOrphanedRuntimeSessions(store, getUserDataPath())
 
   registerRuntimeEnvironmentConnectivityHandlers({
     store,
@@ -109,6 +117,20 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
       getRuntimeEnvironmentStatusOwner(getUserDataPath(), environment.id).activate()
     }
   }
+  registerRuntimeSshAccessHandlers({
+    getUserDataPath,
+    invalidateTransport: invalidateRuntimeEnvironmentTransport
+  })
+  registerOrcadRuntimeLifecycleHandlers({ getUserDataPath })
+  registerOrcadRuntimeConversionHandlers(getUserDataPath)
+  registerOrcadDeltaMoveHandlers(getUserDataPath)
+  registerOrcadRuntimeMaintenanceHandlers({
+    getUserDataPath,
+    getActiveEnvironmentId: () => store.getSettings().activeRuntimeEnvironmentId,
+    invalidateTransport: invalidateRuntimeEnvironmentTransport,
+    clearHostServerStatus: clearPublishedManagedServer,
+    forgetHostSession: (hostId) => store.removeWorkspaceSessionHost(hostId)
+  })
   registerRuntimeEnvironmentSubscriptionHandlers({
     getUserDataPath,
     remoteRuntimeSubscriptions,

@@ -305,7 +305,6 @@ describe('NativeChatQueuedMessageList', () => {
 
   it.each([
     ['stopped', 'Queue paused because you interrupted'],
-    ['cleared', 'Queue paused after you cleared the conversation'],
     ['some-newer-reason', 'Queue paused']
   ])(
     "a queue the host holds ('%s') shows one header row above the cards, with Resume; the held card still reads Steer",
@@ -526,22 +525,6 @@ describe('NativeChatQueuedMessageList', () => {
     expect(screen.getAllByRole('button', { name: 'Send' }).length).toBeGreaterThan(0)
   })
 
-  // A message the host kept after a restart or a close is not a mid-turn steer: on an idle chat
-  // its action is plainly Send, and its caption says it was never sent.
-  it('a kept card says it was not sent yet and offers Send, with no Resume over it', async () => {
-    renderList(
-      // The controller names no pause over a card held on its own (`queuedMessagesQueuePause`).
-      controller([card({ messageId: 'held', hold: 'paused', pausedReason: 'kept' })], null)
-    )
-    const [row] = screen.getAllByRole('listitem')
-    expect(row?.textContent).toContain('Not sent yet — press Send to send it.')
-    expect(row?.textContent).not.toContain('kept')
-    fireEvent.focus(screen.getByRole('button', { name: 'Send' }))
-    expect((await screen.findAllByText('Send this message now')).length).toBeGreaterThan(0)
-    expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
-  })
-
   it('an absent or unknown pause marker reads as a plain pause, never raw', () => {
     renderList(
       controller([
@@ -581,11 +564,7 @@ describe('NativeChatQueuedMessageList', () => {
   ])(
     'offers Turn off queueing and the send chord only when the host queues sends ($queueCapable)',
     async ({ queueCapable, offered }) => {
-      const owner = controller(
-        [card({ messageId: 'kept', hold: 'paused', pausedReason: 'kept' })],
-        null,
-        queueCapable
-      )
+      const owner = controller([card({ messageId: 'kept', hold: 'paused' })], null, queueCapable)
       renderList(owner)
       fireEvent.focus(screen.getByRole('button', { name: 'Send' }))
       const hint = await screen.findAllByText('Send this message now')

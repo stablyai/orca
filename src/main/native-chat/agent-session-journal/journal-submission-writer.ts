@@ -5,7 +5,8 @@ import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { queuedMessageConsumeHook, type JournalQueuedMessages } from './journal-queued-messages'
+import type { JournalQueuedMessages } from './journal-queued-messages'
+import { journalSubmissionHook, type JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalReducerState } from './journal-reducer'
 import { journalDispatchRowBuilder, journalSubmissionRowBuilder } from './journal-row-builders'
 import type {
@@ -24,6 +25,7 @@ export type JournalSubmissionWriterDeps = {
   identity: AgentSessionJournalIdentity
   rowWriter: JournalRowWriter
   queuedMessages: JournalQueuedMessages
+  claimAttachments: JournalAttachmentClaim
 }
 
 export class JournalSubmissionWriter {
@@ -42,10 +44,10 @@ export class JournalSubmissionWriter {
     /** The send's ledger answer, committed with this row. */
     receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
-    const { identity, queuedMessages, rowWriter, state } = this.deps
+    const { claimAttachments, identity, queuedMessages, rowWriter, state } = this.deps
     return rowWriter.append(
       journalSubmissionRowBuilder(state, identity, input, consume),
-      consume && queuedMessageConsumeHook(queuedMessages, input.clientMessageId, consume),
+      journalSubmissionHook(queuedMessages, claimAttachments, input, consume),
       receipt
     )
   }

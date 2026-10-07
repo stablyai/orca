@@ -43,7 +43,8 @@ export type AgentLaunchTabPublishReply =
   | {
       requestId: string
       tabId: string
-      /** False when a tab with this id already existed and was reused: a retry. */
+      /** True when the tab exists only for this launch: the window made it now, or made it for this
+       *  launch just before asking (a desktop launch). False for a retry that found the tab. */
       created: boolean
       placement: AgentLaunchPlacementReceipt
     }

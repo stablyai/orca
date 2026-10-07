@@ -5,7 +5,10 @@
 // working status, teardown, or the idle sweep.
 
 import type Database from '../../sqlite/sync-database'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
@@ -13,9 +16,9 @@ import {
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
-import type { JournalOperationReceipt, JournalRowTransactionHook } from './journal-row-writer'
+import type { JournalOperationReceipt } from './journal-row-writer'
 import type { JournalSubmissionConsume } from './journal-store-contracts'
-import { adoptQueuedMessages, holdQueuedMessages } from './queued-message-holds'
+import { holdQueuedMessages } from './queued-message-holds'
 import {
   deriveQueuePauses,
   journalUserStopInForce,
@@ -42,6 +45,7 @@ import {
   settleQueuedMessagesForRow
 } from './queued-message-settlement'
 import { AgentSessionJournalError, assertJournalWritable } from './journal-write-guards'
+import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalWriteBody, JournalWriteResult } from './journal-write-queue'
 
 /** Tombstones must outlive the window in which their operation id could still be admitted as new. */
@@ -55,14 +59,15 @@ export type JournalQueuedMessagesDeps = {
   database: () => JournalHostDatabase
   readOnly: () => boolean
   state: () => JournalReducerState
-  /** Whether this handle found the row at `sequence` on disk when it opened. */
-  wroteBeforeOpen: (sequence: number) => boolean
+  /** Where the reopen's pause begins when this handle could not mark it (`reopenFloor`). */
+  reopenFloor: () => AgentJournalCursor | null
   /** The journal's own commit notification. Every standalone draft-table
    *  transaction that changed rows fires it after COMMIT, so a draft or hold
    *  change publishes and wakes the drain through the same path a journal row
    *  does — no call site can forget. In-transaction consume and the returned
    *  transition already ride their row's own commit. */
   committed: () => void
+  claimAttachments: JournalAttachmentClaim
 }
 
 export class JournalQueuedMessages {
@@ -107,8 +112,10 @@ export class JournalQueuedMessages {
   }
 
   /** `carriedFrom`: a /clear's carry. The card is its own 'cleared' pause, so it lands paused;
-   *  `holdReason` carries a hold of its own over with it. `receipt`: the send's ledger answer,
-   *  committed with the draft only when this inserts it. */
+   *  `holdReason` carries a hold of its own over with it.
+   *  `requireAttachments`: a client's own draft, refused whole when an attachment it names is no
+   *  longer stored; the host's own writes (the carry) claim best effort.
+   *  `receipt`: the send's ledger answer, committed with the draft only when this inserts it. */
   insert(
     input: {
       messageId: string
@@ -116,11 +123,13 @@ export class JournalQueuedMessages {
       fingerprint: string
       hostInstance: string
       carriedFrom?: string
+      requireAttachments?: true
       holdReason?: QueuedMessageHoldReason
     },
     receipt?: JournalOperationReceipt
   ): Promise<QueuedMessageRow> {
     const { sessionId } = this.deps
+    const { requireAttachments, ...draft } = input
     let inserted = false
     return this.transact(
       (db) => {
@@ -130,10 +139,11 @@ export class JournalQueuedMessages {
           // gets here, so an existing row is the same accept landing twice.
           return existing
         }
+        this.deps.claimAttachments(db, input.body, requireAttachments === true)
         inserted = true
         const { epoch, lastSequence } = this.deps.state()
         const row = insertQueuedMessage(db, {
-          ...input,
+          ...draft,
           sessionId,
           queuedAt: { epoch, sequence: lastSequence },
           now: this.deps.now()
@@ -157,8 +167,21 @@ export class JournalQueuedMessages {
   }
 
   /** The queue's pauses in force, derived from the fold and the cards (`queued-message-pause.ts`). */
-  pauses(hostInstance: string): DerivedQueuePause[] {
-    return this.derivePauses(this.list(), hostInstance)
+  pauses(): DerivedQueuePause[] {
+    return this.derivePauses(this.list())
+  }
+
+  /** A card waits, or is mid-hand-off and may come back to waiting: a chat that stops running
+   *  marks it (`AgentSessionJournal.markQueueReopen`). */
+  awaitReopenMark(): boolean {
+    const { submissions } = this.deps.state()
+    return this.list().some((row) => {
+      if (row.state === 'waiting') {
+        return true
+      }
+      const handOff = row.consumedAs ? submissions.get(row.consumedAs)?.dispatchState : undefined
+      return row.state === 'dispatched' && (handOff === 'pending' || handOff === 'unknown')
+    })
   }
 
   /** The person's Stop still pausing the queue, if any (`journalUserStopInForce`). */
@@ -167,35 +190,15 @@ export class JournalQueuedMessages {
     return journalUserStopInForce(state.queuePauseMarks, state.latestAcceptedTurnSequence)
   }
 
-  private derivePauses(
-    cards: readonly QueuedMessageRow[],
-    hostInstance: string
-  ): DerivedQueuePause[] {
+  private derivePauses(cards: readonly QueuedMessageRow[]): DerivedQueuePause[] {
     const state = this.deps.state()
     return deriveQueuePauses({
       epoch: state.epoch,
       marks: state.queuePauseMarks,
       latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
       cards,
-      hostInstance,
-      restartEnded: this.restartEnded()
+      reopenFloor: this.deps.reopenFloor()
     })
-  }
-
-  /** A turn started since this handle opened, which ends a restart's pause. */
-  restartEnded(): boolean {
-    const latest = this.deps.state().latestAcceptedTurnSequence
-    return latest > 0 && !this.deps.wroteBeforeOpen(latest)
-  }
-
-  /** Adopts waiting rows another host instance wrote into this one, ending a restart's pause.
-   *  Returns whether anything changed. */
-  adopt(hostInstance: string): Promise<boolean> {
-    const { sessionId } = this.deps
-    return this.transact(
-      (db) => adoptQueuedMessages(db, { sessionId, hostInstance }),
-      (changed) => changed > 0
-    ).then((changed) => changed > 0)
   }
 
   /** Inside the caller's journal-row transaction (`journal-unsent-send-hold.ts`): one kept send
@@ -286,7 +289,7 @@ export class JournalQueuedMessages {
       // pick and this claim (both run on the session's serialized lane, held across the send), so
       // this guards any pause-relevant row written off that lane from overtaking a held card.
       const cards = listQueuedMessages(db, this.deps.sessionId)
-      const pauses = this.derivePauses(cards, input.yieldsToPause.hostInstance)
+      const pauses = this.derivePauses(cards)
       if (nextSendableQueuedCard(pauses, cards)?.messageId !== input.messageId) {
         throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
       }
@@ -365,15 +368,6 @@ export class JournalQueuedMessages {
       (changed) => changed > 0
     ).then(() => undefined)
   }
-}
-
-/** The per-append hook converting one draft inside the append's own transaction. */
-export function queuedMessageConsumeHook(
-  queuedMessages: JournalQueuedMessages,
-  consumedAs: string,
-  consume: JournalSubmissionConsume
-): JournalRowTransactionHook {
-  return (db) => queuedMessages.consumeInTransaction(db, { ...consume, consumedAs })
 }
 
 export class QueuedMessageNotConsumableError extends Error {
