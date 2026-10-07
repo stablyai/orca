@@ -11,6 +11,7 @@ import type { DeviceScope } from '../device-registry'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
+import { createRuntimeSnapshotReply } from '../rpc/runtime-snapshot-reply'
 
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
@@ -104,7 +105,12 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
     const replyForRequest =
       request.method === 'status.get'
         ? (response: string): void => reply(injectDeviceScope(response, device.scope))
-        : reply
+        : createRuntimeSnapshotReply(
+            request.method,
+            device.scope,
+            authenticatedSocket?.clientCapabilities,
+            reply
+          )
 
     const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined
     const pairingProvider = this.mobileRelayPairingProvider

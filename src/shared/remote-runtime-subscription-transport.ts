@@ -26,6 +26,7 @@ import {
   serializeRemoteRuntimeRpcRequest
 } from './remote-runtime-memory-limits'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
+import { RUNTIME_SNAPSHOT_DEFLATE_CAPABILITY } from './remote-runtime-snapshot-compression'
 import { RemoteRuntimeSubscriptionFrameRouter } from './remote-runtime-subscription-frame-router'
 import { RemoteRuntimeSubscriptionOutbound } from './remote-runtime-subscription-outbound'
 import { RemoteRuntimeSubscriptionRequestChannel } from './remote-runtime-subscription-request-channel'
@@ -69,7 +70,12 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
     deviceToken: pairing.deviceToken,
-    clientCapabilities: remoteRuntimeClientCapabilities(options?.clientCapabilities)
+    clientCapabilities: [
+      ...remoteRuntimeClientCapabilities(options?.clientCapabilities).filter(
+        (capability) => capability !== RUNTIME_SNAPSHOT_DEFLATE_CAPABILITY
+      ),
+      ...(options?.snapshotCompression === false ? [] : [RUNTIME_SNAPSHOT_DEFLATE_CAPABILITY])
+    ]
   })
   return await new Promise((resolve, reject) => {
     const keyPair = generateKeyPair()
@@ -94,6 +100,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       fail: (error) => fail(error)
     })
     const frameRouter = new RemoteRuntimeSubscriptionFrameRouter({
+      snapshotCompression: options?.snapshotCompression !== false,
       sharedKey,
       serializedAuth,
       serializedRequest,
