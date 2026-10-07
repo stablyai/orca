@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { useRouter } from 'expo-router'
 import { REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import type { MobileWorkspaceRepo } from '../components/new-worktree-modal-types'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
 import { savePinnedIds } from '../storage/preferences'
@@ -236,7 +237,11 @@ export function useHostWorktreeActions(args: {
     async (repo: MobileWorkspaceRepo) => {
       const confirmed = await fetchWorktrees({ allowDuringModal: true })
       const defaultCheckout = confirmed?.find(
-        (worktree) => worktree.repoId === repo.id && worktree.isMainWorktree
+        (worktree) =>
+          worktree.repoId === repo.id &&
+          worktree.isMainWorktree &&
+          getRepoExecutionHostId(repo) ===
+            getRepoExecutionHostId({ executionHostId: worktree.hostId })
       )
       if (defaultCheckout) {
         openWorktreeSession(defaultCheckout)

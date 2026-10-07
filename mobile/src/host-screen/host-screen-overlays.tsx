@@ -241,6 +241,8 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
       <AddProjectModal
         visible={state.showAddProject}
         client={client}
+        hostCapabilities={hostCapabilities}
+        sshTargets={state.sshTargetSummaries}
         onProjectAdded={(repo) => void actions.handleProjectAdded(repo)}
         onClose={() => state.setShowAddProject(false)}
       />

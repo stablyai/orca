@@ -77,6 +77,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   )
   const [hostLabelById, setHostLabelById] = useState<Map<ExecutionHostId, string>>(new Map())
   const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
+  const [sshTargetSummaries, setSshTargetSummaries] = useState<readonly { id: string; label: string }[]>([])
   const [showSortPicker, setShowSortPicker] = useState(false)
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
@@ -124,6 +125,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     hostLabelById,
     hostName,
     hostPlatform,
+    sshTargetSummaries,
     hostStoredDescriptor,
     lastKnownWorktrees,
     newWorktreeModalRef,
@@ -149,6 +151,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setHostLabelById,
     setHostName,
     setHostPlatform,
+    setSshTargetSummaries,
     setHostStoredDescriptor,
     setLastKnownWorktrees,
     setOptimisticActiveWorktreeIdentity,

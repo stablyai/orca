@@ -251,4 +251,48 @@ describe('AddProjectFolderBrowser', () => {
     expect(button(renderer!, 'Add this folder as a project').props.disabled).toBe(false)
     expect(sendRequest).toHaveBeenCalled()
   })
+
+  it('restarts from host home and ignores the prior target reply when switching SSH targets', async () => {
+    const first = deferred<ReturnType<typeof listing>>()
+    const second = deferred<ReturnType<typeof listing>>()
+    const sendRequest = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    act(() => {
+      renderer = create(
+        createElement(AddProjectFolderBrowser, {
+          client: clientWith(sendRequest),
+          sshConnectionId: 'ssh-one',
+          busy: false,
+          error: '',
+          onBack: vi.fn(),
+          onPick: vi.fn()
+        })
+      )
+    })
+    act(() => {
+      renderer!.update(
+        createElement(AddProjectFolderBrowser, {
+          client: clientWith(sendRequest),
+          sshConnectionId: 'ssh-two',
+          busy: false,
+          error: '',
+          onBack: vi.fn(),
+          onPick: vi.fn()
+        })
+      )
+    })
+    second.resolve(listing('/home/two', []))
+    await settle()
+    first.resolve(listing('/home/one', []))
+    await settle()
+    expect(sendRequest).toHaveBeenNthCalledWith(1, 'files.browseServerDir', {
+      path: '~',
+      sshConnectionId: 'ssh-one'
+    })
+    expect(sendRequest).toHaveBeenNthCalledWith(2, 'files.browseServerDir', {
+      path: '~',
+      sshConnectionId: 'ssh-two'
+    })
+    expect(renderer!.root.findAllByType(Text).some((node) => node.props.children === '/home/two')).toBe(true)
+    expect(renderer!.root.findAllByType(Text).some((node) => node.props.children === '/home/one')).toBe(false)
+  })
 })

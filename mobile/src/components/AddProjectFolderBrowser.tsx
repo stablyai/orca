@@ -23,11 +23,13 @@ type FolderListing = { path: string; entries: FolderEntry[] }
 
 type Props = {
   client: RpcClient | null
+  sshConnectionId?: string | null
   /** True while the parent is registering the picked folder, which disables navigation. */
   busy: boolean
   error: string
   onBack: () => void
   onPick: (path: string) => void
+  pickLabel?: string
 }
 
 // The host resolves a blank path and "~" both to its own home directory.
@@ -71,7 +73,7 @@ function parentPathOf(path: string): string | null {
   return /^[A-Za-z]:$/.test(parent) ? parent + separator : parent
 }
 
-export function AddProjectFolderBrowser({ client, busy, error, onBack, onPick }: Props) {
+export function AddProjectFolderBrowser({ client, sshConnectionId, busy, error, onBack, onPick, pickLabel = 'Add this folder' }: Props) {
   const [listing, setListing] = useState<FolderListing | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
@@ -89,7 +91,10 @@ export function AddProjectFolderBrowser({ client, busy, error, onBack, onPick }:
       setLoading(true)
       setLoadError('')
       try {
-        const reply = await serverDirectoryBrowseRun.request(requestClient, { path })
+        const reply = await serverDirectoryBrowseRun.request(requestClient, {
+          path,
+          ...(sshConnectionId ? { sshConnectionId } : {})
+        })
         if (!mounted.current || generation !== requestGeneration.current) {
           return
         }
@@ -116,7 +121,7 @@ export function AddProjectFolderBrowser({ client, busy, error, onBack, onPick }:
         }
       }
     },
-    [client]
+    [client, sshConnectionId]
   )
 
   useEffect(() => {
@@ -210,12 +215,12 @@ export function AddProjectFolderBrowser({ client, busy, error, onBack, onPick }:
           disabled={!currentPath || busy || loading}
           onPress={() => onPick(currentPath)}
           accessibilityRole="button"
-          accessibilityLabel="Add this folder as a project"
+          accessibilityLabel={pickLabel === 'Add this folder' ? 'Add this folder as a project' : pickLabel}
         >
           {busy ? (
             <ActivityIndicator size="small" color={colors.bgBase} />
           ) : (
-            <Text style={formStyles.createText}>Add this folder</Text>
+            <Text style={formStyles.createText}>{pickLabel}</Text>
           )}
         </Pressable>
       </View>

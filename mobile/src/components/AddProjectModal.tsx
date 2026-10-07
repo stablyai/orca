@@ -1,6 +1,7 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ChevronLeft, FolderOpen, Globe, Plus } from 'lucide-react-native'
+import { REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import {
   repoAddExistingRun,
   repoCloneRun,
@@ -11,25 +12,35 @@ import type { RpcClient } from '../transport/rpc-client'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { ActionSheetContent } from './ActionSheetModal'
 import { AddProjectFolderBrowser } from './AddProjectFolderBrowser'
+import { AddProjectTargetSelector, type AddProjectTarget } from './AddProjectTargetSelector'
 import { BottomDrawer } from './BottomDrawer'
 import { ConfirmContent } from './ConfirmModal'
 import { newWorktreeFormStyles as formStyles } from './new-worktree-form-styles'
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 
-type AddProjectView = 'start' | 'clone' | 'create' | 'addExisting' | 'confirmFolder'
+type AddProjectView = 'start' | 'clone' | 'create' | 'addExisting' | 'confirmFolder' | 'pickDestination'
 
-// The host's refusal for a directory that is not a git repository; the same substring the desktop
-// Add project dialog watches for to offer the folder downgrade.
 const NOT_A_GIT_REPOSITORY = 'Not a valid git repository'
+const EMPTY_HOST_CAPABILITIES: readonly string[] = []
+const EMPTY_SSH_TARGETS: readonly { id: string; label: string }[] = []
 
 type AddProjectModalProps = {
   visible: boolean
   client: RpcClient | null
   onProjectAdded: (repo: MobileWorkspaceRepo) => void
   onClose: () => void
+  hostCapabilities?: readonly string[]
+  sshTargets?: readonly { id: string; label: string }[]
 }
 
-type AddedRepo = { id: string; path: string; displayName: string }
+type AddedRepo = {
+  id: string
+  path: string
+  displayName: string
+  connectionId?: string | null
+  executionHostId?: string | null
+}
+type FolderCandidate = { path: string; sshConnectionId: string | null; client: RpcClient }
 
 function toMobileRepo(repo: AddedRepo): MobileWorkspaceRepo {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the receipt's looseObject keeps every member the host sent; the trio it requires is exactly what MobileWorkspaceRepo requires.
@@ -46,11 +57,10 @@ export function AddProjectModal({
   visible,
   client,
   onProjectAdded,
-  onClose
+  onClose,
+  hostCapabilities = EMPTY_HOST_CAPABILITIES,
+  sshTargets = EMPTY_SSH_TARGETS
 }: AddProjectModalProps) {
-  // Why: each opening is a fresh form session; remounting resets local form state before
-  // paint instead of clearing it in a visible-prop Effect (same reason NewWorktreeModal
-  // remounts its session).
   const [session, setSession] = useState({ openEpoch: 0, visible })
   if (session.visible !== visible) {
     setSession({
@@ -59,8 +69,6 @@ export function AddProjectModal({
     })
   }
 
-  // Why: the handoff must outlive the content — the drawer unmounts its children before
-  // onAfterClose fires, so the pending repo lives here rather than in the form state.
   const handoffRef = useRef<MobileWorkspaceRepo | null>(null)
   const fireHandoff = useCallback(() => {
     const repo = handoffRef.current
@@ -77,6 +85,8 @@ export function AddProjectModal({
       client={client}
       onClose={onClose}
       onAfterClose={fireHandoff}
+      hostCapabilities={hostCapabilities}
+      sshTargets={sshTargets}
       onAdded={(repo) => {
         handoffRef.current = repo
         onClose()
@@ -90,31 +100,56 @@ function AddProjectModalContent({
   client,
   onAdded,
   onClose,
-  onAfterClose
+  onAfterClose,
+  hostCapabilities,
+  sshTargets
 }: {
   visible: boolean
   client: RpcClient | null
   onAdded: (repo: MobileWorkspaceRepo) => void
   onClose: () => void
   onAfterClose: () => void
+  hostCapabilities: readonly string[]
+  sshTargets: readonly { id: string; label: string }[]
 }) {
   const [view, setView] = useState<AddProjectView>('start')
   const [cloneUrl, setCloneUrl] = useState('')
   const [projectName, setProjectName] = useState('')
-  const [folderCandidate, setFolderCandidate] = useState('')
+  const [folderCandidate, setFolderCandidate] = useState<FolderCandidate | null>(null)
+  const [destinationPath, setDestinationPath] = useState('')
+  const [destinationKind, setDestinationKind] = useState<'clone' | 'create' | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  // Why: a ref, not state — ConfirmContent calls onConfirm then onCancel in the same tick, so the
-  // flag has to be readable before React re-renders.
+  const mountedRef = useRef(true)
+  const busyRef = useRef(false)
+  const operationGenerationRef = useRef(0)
+  const latestClientRef = useRef(client)
+  latestClientRef.current = client
+  const [sshConnectionId, setSshConnectionId] = useState<string | null>(null)
   const confirmingFolderRef = useRef(false)
 
   const value = view === 'clone' ? cloneUrl : projectName
   const canSubmit = value.trim().length > 0 && !busy && client != null
+  const sshSupported = hostCapabilities.includes(REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY)
+  const targetOptions: AddProjectTarget[] = hostCapabilities.includes(REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY)
+    ? [{ id: null, label: 'This host' }, ...sshTargets]
+    : []
+  const activeSshConnectionId = sshSupported && targetOptions.some((target) => target.id === sshConnectionId) ? sshConnectionId : null
+  const requestTarget = activeSshConnectionId ? { sshConnectionId: activeSshConnectionId } : {}
+  const selectTarget = (id: string | null) => {
+    if (id !== activeSshConnectionId) { setDestinationPath('') }
+    setSshConnectionId(id)
+  }
+
+  useEffect(() => () => { mountedRef.current = false }, [])
 
   const submit = useCallback(() => {
-    if (!canSubmit || !client) {
+    if (!canSubmit || !client || busyRef.current) {
       return
     }
+    const operationGeneration = operationGenerationRef.current + 1
+    operationGenerationRef.current = operationGeneration
+    busyRef.current = true
     setBusy(true)
     setError('')
     const run = async (): Promise<MobileWorkspaceRepo> => {
@@ -122,7 +157,7 @@ function AddProjectModalContent({
         const reply = repoCloneRun.interpret(
           await repoCloneRun.request(
             client,
-            { url: cloneUrl.trim() },
+            { url: cloneUrl.trim(), ...(destinationPath ? { destination: destinationPath } : {}), ...requestTarget },
             {
               timeoutMs: REPO_CLONE_TIMEOUT_MS
             }
@@ -132,62 +167,81 @@ function AddProjectModalContent({
       }
       if (view === 'create') {
         const reply = repoCreateRun.interpret(
-          await repoCreateRun.request(client, { name: projectName.trim(), kind: 'git' })
+          await repoCreateRun.request(client, {
+            name: projectName.trim(),
+            kind: 'git',
+            ...(destinationPath ? { parentPath: destinationPath } : {}),
+            ...requestTarget
+          })
         )
         if ('error' in reply) {
-          // Why: repo.create reports failures inside a successful result; raise it so the
-          // same error row renders it as a thrown refusal would.
           throw new Error(reply.error || 'Failed to create the project')
         }
         return toMobileRepo(reply.repo)
       }
       throw new Error('Unsupported add project step')
     }
+    const current = () => mountedRef.current && operationGenerationRef.current === operationGeneration && latestClientRef.current === client
     run()
-      .then((repo) => onAdded(repo))
+      .then((repo) => { if (current()) { onAdded(repo) } })
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : String(cause))
+        if (current()) { setError(cause instanceof Error ? cause.message : String(cause)) }
       })
-      .finally(() => setBusy(false))
-  }, [canSubmit, client, cloneUrl, onAdded, projectName, view])
+      .finally(() => { if (current()) { busyRef.current = false; setBusy(false) } })
+  }, [canSubmit, client, cloneUrl, onAdded, projectName, requestTarget, view])
 
-  // Why: the same order the desktop dialog uses — try git, and only offer the folder downgrade
-  // once the host has refused the path, so a git repository never lands in folder mode.
   const addFolder = useCallback(
     async (path: string, kind: 'git' | 'folder'): Promise<void> => {
-      if (!client || busy) {
+      if (!client || busy || busyRef.current) {
         return
       }
+      const operationGeneration = operationGenerationRef.current + 1
+      operationGenerationRef.current = operationGeneration
+      busyRef.current = true
       setBusy(true)
       setError('')
       try {
         const reply = repoAddExistingRun.interpret(
-          await repoAddExistingRun.request(client, { path, kind })
+          await repoAddExistingRun.request(client, { path, kind, ...requestTarget })
         )
-        onAdded(toMobileRepo(reply.repo))
+        if (mountedRef.current && operationGenerationRef.current === operationGeneration && latestClientRef.current === client) {
+          onAdded(toMobileRepo(reply.repo))
+        }
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause)
-        if (kind === 'git' && message.includes(NOT_A_GIT_REPOSITORY)) {
-          setFolderCandidate(path)
+        const current = mountedRef.current && operationGenerationRef.current === operationGeneration && latestClientRef.current === client
+        if (current && kind === 'git' && message.includes(NOT_A_GIT_REPOSITORY)) {
+          setFolderCandidate({ path, sshConnectionId: activeSshConnectionId, client })
           setView('confirmFolder')
-        } else {
-          // Why: back to the browser, the only step with an error row; ConfirmContent has none.
+        } else if (current) {
           setError(message)
           setView('addExisting')
         }
       } finally {
-        setBusy(false)
+        if (mountedRef.current && operationGenerationRef.current === operationGeneration) {
+          busyRef.current = false
+          setBusy(false)
+        }
       }
     },
-    [busy, client, onAdded]
+    [busy, client, onAdded, requestTarget]
+  )
+
+  const targetSelector = (
+    <AddProjectTargetSelector
+      busy={busy}
+      targets={targetOptions}
+      selectedId={sshConnectionId}
+      onSelect={selectTarget}
+    />
   )
 
   const content = (() => {
     if (view === 'start') {
       return (
-        // No onClose: picking a row switches this sheet's content in place; closing is the
-        // drawer's own drag or the area outside it.
-        <ActionSheetContent
+        <View>
+          {targetSelector}
+          <ActionSheetContent
           title="Add project"
           actions={[
             {
@@ -200,28 +254,55 @@ function AddProjectModalContent({
               label: 'Clone from URL',
               icon: Globe,
               hint: 'Clone a remote Git repository',
-              onPress: () => setView('clone')
+              onPress: () => {
+                if (activeSshConnectionId) { setDestinationKind('clone') }
+                setView(activeSshConnectionId ? 'pickDestination' : 'clone')
+              }
             },
             {
               label: 'Create new project',
               icon: Plus,
               hint: 'Start from an empty folder',
-              onPress: () => setView('create')
+              onPress: () => {
+                if (activeSshConnectionId) { setDestinationKind('create') }
+                setView(activeSshConnectionId ? 'pickDestination' : 'create')
+              }
             }
           ]}
-        />
+          />
+        </View>
       )
     }
 
     if (view === 'addExisting') {
       return (
-        <AddProjectFolderBrowser
-          client={client}
-          busy={busy}
-          error={error}
-          onBack={() => setView('start')}
-          onPick={(path) => void addFolder(path, 'git')}
-        />
+        <View>
+          {targetSelector}
+          <AddProjectFolderBrowser
+            client={client}
+            sshConnectionId={activeSshConnectionId}
+            busy={busy}
+            error={error}
+            onBack={() => setView('start')}
+            onPick={(path) => void addFolder(path, 'git')}
+          />
+        </View>
+      )
+    }
+
+    if (view === 'pickDestination') {
+      return (
+        <View>
+          <AddProjectFolderBrowser
+            client={client}
+            sshConnectionId={activeSshConnectionId}
+            busy={busy}
+            error={error}
+            pickLabel="Select folder"
+            onBack={() => setView(destinationKind ?? 'start')}
+            onPick={(path) => { setDestinationPath(path); setView(destinationKind ?? 'start') }}
+          />
+        </View>
       )
     }
 
@@ -229,14 +310,17 @@ function AddProjectModalContent({
       return (
         <ConfirmContent
           title="Add as a folder project?"
-          message={`${folderCandidate} is not a Git repository. Folder projects have no worktrees, source control, pull requests, or checks.`}
+          message={`${folderCandidate?.path ?? ''} is not a Git repository. Folder projects have no worktrees, source control, pull requests, or checks.`}
           confirmLabel="Add folder"
           onConfirm={() => {
-            // Why: ConfirmContent also fires onCancel on confirm; hold this sheet until the add
-            // settles so a success does not flash the browser first and a refusal still has a
-            // place to land. addFolder's own catch is what leaves this view.
             confirmingFolderRef.current = true
-            void addFolder(folderCandidate, 'folder')
+            if (!folderCandidate || folderCandidate.client !== client || folderCandidate.sshConnectionId !== activeSshConnectionId) {
+              setError('The host or SSH target changed. Choose the folder again.')
+              setView('addExisting')
+              confirmingFolderRef.current = false
+              return
+            }
+            void addFolder(folderCandidate.path, 'folder')
           }}
           onCancel={() => {
             if (!confirmingFolderRef.current) {
@@ -253,20 +337,25 @@ function AddProjectModalContent({
         title: 'Clone from URL',
         label: 'Repository URL',
         placeholder: 'https://github.com/owner/repo',
-        hint: "Cloned into the host's default projects folder. Large repositories can take a few minutes.",
+        hint: activeSshConnectionId
+          ? 'Choose a destination folder on the selected host. Large repositories can take a few minutes.'
+          : "Cloned into the host's default projects folder. Large repositories can take a few minutes.",
         button: 'Clone repository'
       },
       create: {
         title: 'Create new project',
         label: 'Project name',
         placeholder: 'my-project',
-        hint: "An empty git repository with an initial commit, created in the host's default projects folder.",
+        hint: activeSshConnectionId
+          ? 'Choose a parent folder on the selected host for the new project.'
+          : "An empty git repository with an initial commit, created in the host's default projects folder.",
         button: 'Create project'
       }
     }[view]
 
     return (
       <View>
+        {targetSelector}
         <View style={styles.headerRow}>
           <Pressable
             style={styles.backButton}
@@ -322,7 +411,7 @@ function AddProjectModalContent({
       visible={visible}
       onClose={onClose}
       onAfterClose={onAfterClose}
-      contentScrollable={view !== 'addExisting'}
+      contentScrollable={view !== 'addExisting' && view !== 'pickDestination'}
     >
       {content}
     </BottomDrawer>
@@ -330,20 +419,11 @@ function AddProjectModalContent({
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.md
-  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
   backButton: {
     marginLeft: -spacing.xs,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.xs
   },
-  hint: {
-    marginTop: spacing.xs,
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  }
+  hint: { marginTop: spacing.xs, fontSize: typography.metaSize, color: colors.textMuted }
 })

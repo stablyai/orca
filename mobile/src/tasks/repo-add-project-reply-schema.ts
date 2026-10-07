@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { fileDirectoryEntriesSchema } from '../files/file-explorer-reply-schema'
+import { salvagedOptional } from '../../../src/shared/zod-salvage'
 
 // Bringing a new project onto the paired host from the Add project sheet. Checked against
 // src/main/runtime/rpc/methods/repo.ts:105-137: repo.add and repo.clone answer `{ repo }` and
@@ -17,13 +18,23 @@ export const repoAddProjectReceiptSchema = z.looseObject({
   repo: z.looseObject({
     id: z.string(),
     path: z.string(),
-    displayName: z.string()
+    displayName: z.string(),
+    connectionId: salvagedOptional('connectionId', z.string().nullable()),
+    executionHostId: salvagedOptional('executionHostId', z.string().nullable())
   })
 })
 
 export type RepoCreateReply =
   | { error: string }
-  | { repo: { id: string; path: string; displayName: string } }
+  | {
+      repo: {
+        id: string
+        path: string
+        displayName: string
+        connectionId?: string | null
+        executionHostId?: string | null
+      }
+    }
 
 // Annotated rather than inferred so `'error' in reply` narrows at the call site: a
 // `looseObject`'s index signature puts `error` on both arms as far as the checker is

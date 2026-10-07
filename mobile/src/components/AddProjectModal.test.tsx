@@ -43,6 +43,7 @@ vi.mock('./BottomDrawer', () => ({
 }))
 
 import { REPO_CLONE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
+import { REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { AddProjectFolderBrowser } from './AddProjectFolderBrowser'
 import { AddProjectModal } from './AddProjectModal'
 import { ActionSheetContent } from './ActionSheetModal'
@@ -113,7 +114,12 @@ describe('AddProjectModal', () => {
   const onClose = vi.fn()
   const onProjectAdded = vi.fn()
 
-  function render(sendRequest: ReturnType<typeof vi.fn>, visible = true): ReactTestRenderer {
+  function render(
+    sendRequest: ReturnType<typeof vi.fn>,
+    visible = true,
+    hostCapabilities: readonly string[] = [],
+    sshTargets: readonly { id: string; label: string }[] = []
+  ): ReactTestRenderer {
     const client = { sendRequest } as unknown as RpcClient
     act(() => {
       renderer = create(
@@ -121,7 +127,9 @@ describe('AddProjectModal', () => {
           visible,
           client,
           onProjectAdded,
-          onClose
+          onClose,
+          hostCapabilities,
+          sshTargets
         })
       )
     })
@@ -145,6 +153,58 @@ describe('AddProjectModal', () => {
       ['Clone from URL', 'Clone a remote Git repository'],
       ['Create new project', 'Start from an empty folder']
     ])
+  })
+
+  it('gates SSH targets on the host capability and keeps old-host payloads unchanged', () => {
+    const oldHost = render(vi.fn())
+    expect(() => button(oldHost, 'Run on This host')).toThrow()
+    act(() => oldHost.unmount())
+
+    const capableHost = render(
+      vi.fn(),
+      true,
+      [REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY],
+      [{ id: 'ssh-vm', label: 'Build VM' }]
+    )
+    expect(button(capableHost, 'Run on This host')).toBeDefined()
+    act(() => button(capableHost, 'Run on This host').props.onPress())
+    expect(button(capableHost, 'Select Build VM')).toBeDefined()
+  })
+
+  it('uses the selected SSH target for browse and clone while local stays the default', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce(listing('/home/remote', ['projects']))
+      .mockResolvedValueOnce(listing('/home/remote', ['projects']))
+      .mockResolvedValue({ ok: true, result: { repo: repoRow }, _meta: { runtimeId: 'r' } })
+    const tree = render(
+      sendRequest,
+      true,
+      [REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY],
+      [{ id: 'ssh-vm', label: 'Build VM' }]
+    )
+    act(() => button(tree, 'Run on This host').props.onPress())
+    act(() => button(tree, 'Select Build VM').props.onPress())
+    act(() => startActions(tree).find((a) => a.label === 'Browse folder')!.onPress())
+    await flushUpdates()
+    expect(sendRequest).toHaveBeenNthCalledWith(1, 'files.browseServerDir', {
+      path: '~',
+      sshConnectionId: 'ssh-vm'
+    })
+
+    act(() => button(tree, 'Back to Add project').props.onPress())
+    act(() => startActions(tree).find((a) => a.label === 'Clone from URL')!.onPress())
+    await flushUpdates()
+    act(() => button(tree, 'Select folder').props.onPress())
+    act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/repo.git'))
+    act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/repo.git'))
+    act(() => button(tree, 'Clone repository').props.onPress())
+    await flushUpdates()
+    expect(sendRequest).toHaveBeenLastCalledWith(
+      'repo.clone',
+      { url: 'https://example.com/repo.git', destination: '/home/remote', sshConnectionId: 'ssh-vm' },
+      { timeoutMs: REPO_CLONE_TIMEOUT_MS }
+    )
   })
 
   it('gives the folder browser the only list scroll and resets it on reopen', async () => {
