@@ -90,10 +90,11 @@ export async function callRuntimeEnvironment(
   // environment, so a re-pair between enqueue and dispatch can change it.
   let endpoint = getPreferredPairingOffer(environment).endpoint
   try {
-    return await enqueueRuntimeCall(
+    const pendingResponse = enqueueRuntimeCall(
       environment.id,
       method,
-      async () => {
+      params,
+      async (queuedParams, queuedEnvelope) => {
         const currentEnvironment = resolveEnvironment(userDataPath, environment.id)
         const revisionFailure = runtimeEnvironmentRevisionFailure(
           currentEnvironment,
@@ -107,14 +108,18 @@ export async function callRuntimeEnvironment(
         const pairing = getPreferredPairingOffer(currentEnvironment)
         endpoint = pairing.endpoint
         const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
-        const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
-        if (envelope && !sharedControlEnvelope) {
+        const sharedControlEnvelope = shouldUseSharedControlEnvelope(
+          method,
+          queuedParams,
+          queuedEnvelope
+        )
+        if (queuedEnvelope && !sharedControlEnvelope) {
           const response = await sendRemoteRuntimeRequestAbortable(
             pairing,
             method,
-            params,
+            queuedParams,
             effectiveTimeoutMs,
-            envelope,
+            queuedEnvelope,
             options?.signal,
             ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
           )
@@ -126,7 +131,7 @@ export async function callRuntimeEnvironment(
             currentEnvironment.id,
             pairing,
             method,
-            params,
+            queuedParams,
             effectiveTimeoutMs,
             options?.signal
           )
@@ -138,7 +143,7 @@ export async function callRuntimeEnvironment(
             userDataPath,
             environment: currentEnvironment,
             method,
-            params,
+            params: queuedParams,
             timeoutMs: effectiveTimeoutMs,
             expectedPairingRevision: expectedEnvironmentPairingRevision,
             envelope: sharedControlEnvelope,
@@ -150,7 +155,7 @@ export async function callRuntimeEnvironment(
         const response = await sendRemoteRuntimeRequestAbortable(
           pairing,
           method,
-          params,
+          queuedParams,
           effectiveTimeoutMs,
           sharedControlEnvelope,
           options?.signal,
@@ -159,8 +164,13 @@ export async function callRuntimeEnvironment(
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
         return response
       },
-      options?.signal
+      options?.signal,
+      envelope
     )
+    // Async frames otherwise keep the original graphs beside the admitted snapshot.
+    params = undefined
+    envelope = undefined
+    return await pendingResponse
   } catch (error) {
     if (error instanceof Error && error.name !== 'AbortError') {
       error.message = withRemoteRuntimeTailscaleHint(error.message, endpoint)
