@@ -21,10 +21,7 @@ export type {
   MobileSessionTabViewModeBridge,
   MobileSessionViewModeController
 } from './mobile-session-view-mode-state'
-/** Resolves each tab's terminal/chat view: a host-published value when the host shares it,
- *  otherwise a per-device default (reloaded on focus so a Settings change applies without
- *  remounting the route) overlaid by persisted per-tab overrides that pin a session regardless
- *  of what the default later becomes. */
+/** Resolves host-published or persisted per-tab terminal/chat views over the reloaded device default. */
 export function useMobileSessionViewMode(args: {
   hostId: string
   worktreeId: string
