@@ -4,7 +4,7 @@ import { createServer as createHttpServer, type Server as HttpServer } from 'nod
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
 import { createStaticWebClientHandler } from './static-web-client-handler'
-import { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
+import { AcceptedSocketLiveness } from './accepted-socket-liveness'
 
 const MAX_WS_MESSAGE_BYTES = 1024 * 1024
 // Why: one desktop remote-host client can hold many concurrent streams, so keep the cap high enough that stale streams don't starve control RPCs.
@@ -48,8 +48,7 @@ export class WebSocketTransport implements RpcTransport {
   private readonly port: number
   private readonly tlsCert: string | undefined
   private readonly tlsKey: string | undefined
-  private readonly heartbeat: RemoteRuntimeServerHeartbeat
-  private readonly preAuthTimeoutMs: number
+  private readonly liveness: AcceptedSocketLiveness
   private readonly staticRoot: string | undefined
   private readonly fallbackPort: number | undefined
   private readonly preferPinnedPort: boolean
@@ -61,8 +60,6 @@ export class WebSocketTransport implements RpcTransport {
     | null = null
   // Why: maps each socket to its authenticated clientId so close can report which device disconnected.
   private wsClientIds = new Map<WebSocket, string>()
-  private heartbeatConnections = new Set<WebSocket>()
-  private preAuthTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>()
 
   constructor({
     host,
@@ -80,12 +77,12 @@ export class WebSocketTransport implements RpcTransport {
     this.port = port
     this.tlsCert = tlsCert
     this.tlsKey = tlsKey
-    this.heartbeat = new RemoteRuntimeServerHeartbeat(
+    this.liveness = new AcceptedSocketLiveness(
+      preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS,
       heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS,
       heartbeatNow,
       MAX_WS_CONNECTIONS
     )
-    this.preAuthTimeoutMs = preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS
     this.staticRoot = staticRoot
     this.fallbackPort = fallbackPort
     this.preferPinnedPort = preferPinnedPort === true
@@ -104,7 +101,7 @@ export class WebSocketTransport implements RpcTransport {
 
   setClientId(ws: WebSocket, clientId: string): void {
     this.wsClientIds.set(ws, clientId)
-    this.clearPreAuthTimer(ws)
+    this.liveness.authenticate(ws)
   }
 
   terminateClientConnections(clientId: string): number {
@@ -225,8 +222,7 @@ export class WebSocketTransport implements RpcTransport {
     const httpServer = this.httpServer
     this.wss = null
     this.httpServer = null
-    this.heartbeat.stop()
-    this.heartbeatConnections.clear()
+    this.liveness.stop()
 
     if (wss) {
       for (const client of wss.clients) {
@@ -253,11 +249,11 @@ export class WebSocketTransport implements RpcTransport {
   private handleConnection(ws: WebSocket): void {
     let finalized = false
     const onPong = (): void => {
-      this.heartbeat.noteAlive(ws)
+      this.liveness.noteAlive(ws)
     }
     const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
       // Why: any inbound frame counts as proof of life, so an actively-talking client isn't reaped mid-request.
-      this.heartbeat.noteAlive(ws)
+      this.liveness.noteAlive(ws)
       const msg =
         typeof data === 'string'
           ? data
@@ -289,28 +285,13 @@ export class WebSocketTransport implements RpcTransport {
       ws.off('message', onMessage)
       ws.off('close', finalizeConnection)
       ws.off('error', onError)
-      this.clearPreAuthTimer(ws)
-      this.heartbeatConnections.delete(ws)
-      if (this.heartbeatConnections.size === 0) {
-        this.heartbeat.stop()
-      }
+      this.liveness.release(ws)
       const clientId = this.wsClientIds.get(ws) ?? null
       this.wsClientIds.delete(ws)
       const hasOtherConnections =
         clientId !== null && Array.from(this.wsClientIds.values()).includes(clientId)
       this.connectionCloseHandler?.(clientId, ws, hasOtherConnections)
     }
-
-    const preAuthTimer = setTimeout(() => {
-      if (!this.wsClientIds.has(ws)) {
-        // Why: a silent auto-ponging client would otherwise hold a finite mobile slot forever without starting the E2EE handshake.
-        ws.terminate()
-      }
-    }, this.preAuthTimeoutMs)
-    if (typeof preAuthTimer.unref === 'function') {
-      preAuthTimer.unref()
-    }
-    this.preAuthTimers.set(ws, preAuthTimer)
 
     ws.on('pong', onPong)
     ws.on('message', onMessage)
@@ -320,21 +301,7 @@ export class WebSocketTransport implements RpcTransport {
     ws.on('error', onError)
 
     // Why: install lifecycle ownership before periodic heartbeat ticks can observe this socket.
-    this.heartbeatConnections.add(ws)
-    this.heartbeat.noteAlive(ws)
-    if (this.heartbeatConnections.size === 1) {
-      // Unauthenticated sockets are protected by the pre-auth timeout; heartbeat probes begin only
-      // after E2EE binds a client id, avoiding control frames during the handshake.
-      this.heartbeat.start(() => this.wsClientIds.keys())
-    }
-  }
-
-  private clearPreAuthTimer(ws: WebSocket): void {
-    const timer = this.preAuthTimers.get(ws)
-    if (timer) {
-      clearTimeout(timer)
-      this.preAuthTimers.delete(ws)
-    }
+    this.liveness.accept(ws)
   }
 }
 
