@@ -48,12 +48,12 @@ export function findManagedDshPatchRegion(text: string): ManagedDshPatchRegion |
   return null
 }
 
-function buildManagedBlock(managedHooksPath: string): string[] {
+function buildManagedBlock(managedHooksPath: string, statusPluginPath?: string): string[] {
   return [
     START_MARKER,
     '- insert:',
     `    - id: ${MANAGED_ROW_ID}`,
-    "      name: '@deepseek-ai/dsh-hooks-claude-code'",
+    `      name: ${quoteYamlScalar(statusPluginPath ?? '@deepseek-ai/dsh-hooks-claude-code')}`,
     '      config:',
     `        configPath: ${quoteYamlScalar(managedHooksPath)}`,
     END_MARKER
@@ -84,6 +84,21 @@ export function readManagedDshHooksConfigPath(text: string): string | undefined 
   }
   for (const line of splitLines(text).slice(region.startLine + 1, region.endLine)) {
     const match = /^\s*configPath:\s*(.+?)\s*$/.exec(line)
+    if (match) {
+      return unquoteYamlScalar(match[1])
+    }
+  }
+  return undefined
+}
+
+/** Only the module pointer inside Orca's owned region can establish installation. */
+export function readManagedDshModulePath(text: string): string | undefined {
+  const region = findManagedDshPatchRegion(text)
+  if (!region) {
+    return undefined
+  }
+  for (const line of splitLines(text).slice(region.startLine + 1, region.endLine)) {
+    const match = /^\s*name:\s*(.+?)\s*$/.exec(line)
     if (match) {
       return unquoteYamlScalar(match[1])
     }
@@ -153,9 +168,13 @@ function joinPreservingTrailingNewline(lines: readonly string[]): string {
  * Returns null when the file cannot be edited safely — see isNonEmptyFlowDocument. The
  * caller reports that; it must never write a file DSH would then fail to parse.
  */
-export function applyManagedDshPatch(text: string, managedHooksPath: string): string | null {
+export function applyManagedDshPatch(
+  text: string,
+  managedHooksPath: string,
+  statusPluginPath?: string
+): string | null {
   const lines = splitLines(text)
-  const block = buildManagedBlock(managedHooksPath)
+  const block = buildManagedBlock(managedHooksPath, statusPluginPath)
   const region = findManagedDshPatchRegion(text)
   if (region) {
     return joinPreservingTrailingNewline([

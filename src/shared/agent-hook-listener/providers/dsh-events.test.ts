@@ -21,7 +21,7 @@ describe('normalizeDshEvent', () => {
     state = createHookListenerState()
   })
 
-  it('reports a prompt as working and a stop as done', () => {
+  it('keeps a pre-finalization Stop working and ends only on native idle', () => {
     const submitted = normalizeAndAccept(
       state,
       'dsh',
@@ -32,7 +32,9 @@ describe('normalizeDshEvent', () => {
     expect(submitted?.payload.prompt).toBe('fix the flaky test')
 
     const stopped = normalizeAndAccept(state, 'dsh', event('Stop', { stop_hook_active: false }))
-    expect(stopped?.payload.state).toBe('done')
+    expect(stopped?.payload.state).toBe('working')
+    const idle = normalizeAndAccept(state, 'dsh', event('NativeIdle'))
+    expect(idle?.payload.state).toBe('done')
     // The prompt is carried across the turn so a finished row still names the work.
     expect(stopped?.payload.prompt).toBe('fix the flaky test')
   })
@@ -90,7 +92,7 @@ describe('normalizeDshEvent', () => {
 
   it('ignores subagent lifecycle events', () => {
     normalizeAndAccept(state, 'dsh', event('UserPromptSubmit', { prompt: 'delegate this' }))
-    const done = normalizeAndAccept(state, 'dsh', event('Stop', {}))
+    const done = normalizeAndAccept(state, 'dsh', event('NativeIdle', {}))
     expect(done?.payload.state).toBe('done')
 
     // The bridge stamps the CHILD's session id and a constant `general-purpose` agent_type

@@ -26,6 +26,7 @@ import {
   applyManagedDshPatch,
   isDshPatchFileUnappendable,
   readManagedDshHooksConfigPath,
+  readManagedDshModulePath,
   removeManagedDshPatch
 } from './dsh-home-patch'
 import {
@@ -36,11 +37,13 @@ import {
   getDshManagedCommandMatcher,
   getDshManagedHooksPath,
   getDshManagedScriptPath,
+  getDshStatusPluginPath,
   getDshRemoteConfigPath,
   getDshRemoteManagedCommand,
   getDshRemoteManagedHooksPath,
   readManagedDshHookEvents
 } from './hook-settings'
+import { getDshStatusPluginSource } from './status-plugin-source'
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
@@ -170,6 +173,10 @@ function buildStatus(
 export class DshHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getDshManagedScriptPath(), getManagedScript())
+    await refreshManagedScriptIfPresent(
+      getDshStatusPluginPath(),
+      getDshStatusPluginSource(getDshManagedCommand(getDshManagedScriptPath()))
+    )
   }
 
   getStatus(): AgentHookInstallStatus {
@@ -179,7 +186,21 @@ export class DshHookService {
       return status(configPath, 'error', 'Could not read the DSH home patch file')
     }
     const managedHooksPath = getDshManagedHooksPath()
-    return buildStatus(patchText, managedHooksPath, readTextOrAbsent(managedHooksPath), configPath)
+    const result = buildStatus(
+      patchText,
+      managedHooksPath,
+      readTextOrAbsent(managedHooksPath),
+      configPath
+    )
+    if (
+      result.state === 'installed' &&
+      (readManagedDshModulePath(patchText) !== getDshStatusPluginPath() ||
+        readTextOrAbsent(getDshStatusPluginPath()) !==
+          getDshStatusPluginSource(getDshManagedCommand(getDshManagedScriptPath())))
+    ) {
+      return status(configPath, 'partial', 'Native DSH status plugin missing or outdated', true)
+    }
+    return result
   }
 
   install(): AgentHookInstallStatus {
@@ -198,7 +219,11 @@ export class DshHookService {
       { hooks: {} },
       { serialized: buildDshManagedHooksFile(getDshManagedCommand(scriptPath)) }
     )
-    const nextText = applyManagedDshPatch(patchText, managedHooksPath)
+    writeManagedScript(
+      getDshStatusPluginPath(),
+      getDshStatusPluginSource(getDshManagedCommand(scriptPath))
+    )
+    const nextText = applyManagedDshPatch(patchText, managedHooksPath, getDshStatusPluginPath())
     if (nextText === null) {
       // Why refuse rather than edit: YAML forbids a block entry after a flow sequence, so
       // appending here would leave DSH unable to parse the user's own patch layer either.
@@ -215,6 +240,7 @@ export class DshHookService {
     const remoteConfigPath = getDshRemoteConfigPath(remoteHome)
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/dsh-hook.sh`
     const remoteManagedHooksPath = getDshRemoteManagedHooksPath(remoteHome)
+    const remoteStatusPluginPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/dsh-status.mjs`
     try {
       const body = (await readTextFileRemote(sftp, remoteConfigPath)) ?? ''
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
@@ -223,7 +249,12 @@ export class DshHookService {
         remoteManagedHooksPath,
         buildDshManagedHooksFile(getDshRemoteManagedCommand(remoteScriptPath))
       )
-      const nextText = applyManagedDshPatch(body, remoteManagedHooksPath)
+      await writeManagedScriptRemote(
+        sftp,
+        remoteStatusPluginPath,
+        getDshStatusPluginSource(getDshRemoteManagedCommand(remoteScriptPath))
+      )
+      const nextText = applyManagedDshPatch(body, remoteManagedHooksPath, remoteStatusPluginPath)
       if (nextText === null) {
         return status(remoteConfigPath, 'error', FLOW_STYLE_DETAIL)
       }
@@ -246,6 +277,7 @@ export class DshHookService {
     }
     // Why force: the file is Orca's own and may already be gone; its absence is the goal.
     rmSync(getDshManagedHooksPath(), { force: true })
+    rmSync(getDshStatusPluginPath(), { force: true })
     return this.getStatus()
   }
 }
