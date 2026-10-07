@@ -187,7 +187,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       chatLeafId?: string | null
       titlesByLeafId?: Record<string, string>
     }
-  ): Promise<{ updated: true }> {
+  ): Promise<{ updated: true; publicationEpoch?: string; snapshotVersion?: number }> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
@@ -195,7 +195,16 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     // control), it owns pane geometry and republishes it — a headless write here
     // would be overwritten and could fight the renderer. Persist only headlessly.
     if (this.getAvailableAuthoritativeWindow()) {
-      return { updated: true }
+      const published = this.mobileSessionTabsByWorktree.get(worktreeId)
+      return {
+        updated: true,
+        ...(published
+          ? {
+              publicationEpoch: published.publicationEpoch,
+              snapshotVersion: published.snapshotVersion
+            }
+          : {})
+      }
     }
     // Why: resolve to the host tab id (older/raw-id clients) so the persisted
     // layout entry matches, matching setMobileSessionTabProps.
@@ -214,7 +223,16 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         ...(acceptedLayout.titlesByLeafId ? { titlesByLeafId: acceptedLayout.titlesByLeafId } : {})
       })
     }
-    return { updated: true }
+    const published = this.mobileSessionTabsByWorktree.get(worktreeId)
+    return {
+      updated: true,
+      ...(published
+        ? {
+            publicationEpoch: published.publicationEpoch,
+            snapshotVersion: published.snapshotVersion
+          }
+        : {})
+    }
   }
 
   // Why: tab color/pin are host-authoritative for remote-server tabs but had no
@@ -242,15 +260,11 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       const hostTabId = snapshot
         ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
         : args.tabId
-      await this.notifier.setSessionTabProps(
-        worktreeId,
-        hostTabId,
-        {
-          ...(args.color !== undefined ? { color: args.color } : {}),
-          ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
-          ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
-        }
-      )
+      await this.notifier.setSessionTabProps(worktreeId, hostTabId, {
+        ...(args.color !== undefined ? { color: args.color } : {}),
+        ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
+        ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
+      })
       return { updated: true }
     }
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)

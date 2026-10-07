@@ -10,22 +10,17 @@ import {
   isOverrideScope,
   mergeOverrides,
   isNewerPublication,
+  reachesPublication,
+  createViewOverridesRuntime,
+  type MobileSessionTabViewModeBridge,
+  type PendingHostViewWrite,
   type ViewOverridesRuntime,
   type ViewOverridesState
 } from './mobile-session-view-mode-state'
+export type { MobileSessionTabViewModeBridge } from './mobile-session-view-mode-state'
 export type MobileSessionViewModeController = {
   isTabChatView: (tabId: string) => boolean
   toggleTabChatView: (tabId: string) => void
-}
-/** Lets a phone share one tab's terminal/chat view with the host and its paired clients.
- *  `writeHostViewMode` is null when the host cannot accept the write, which also means its
- *  published view is not adoptable — the two are one capability. */
-export type MobileSessionTabViewModeBridge = {
-  hostViewSource?: object
-  readHostViewPublication?: () => { epoch: string | null; version: number }
-  readHostViewMode: (tabId: string) => MobileSessionView | undefined
-  writeHostViewMode: ((tabId: string, view: MobileSessionView) => Promise<void>) | null
-  onHostViewModeWriteError?: (error: unknown) => void
 }
 /** Resolves each tab's terminal/chat view: a host-published value when the host shares it,
  *  otherwise a per-device default (reloaded on focus so a Settings change applies without
@@ -48,20 +43,7 @@ export function useMobileSessionViewMode(args: {
   const viewOverridesStateRef = useRef(viewOverridesState)
   viewOverridesStateRef.current = viewOverridesState
   const viewOverridesRuntimeRef = useRef<ViewOverridesRuntime | null>(null)
-  const pendingHostViewWritesRef = useRef(
-    new Map<
-      string,
-      {
-        hostId: string
-        worktreeId: string
-        source?: object
-        viewMode: MobileSessionView
-        token: number
-        accepted: boolean
-        acceptedPublication?: { epoch: string | null; version: number }
-      }
-    >()
-  )
+  const pendingHostViewWritesRef = useRef(new Map<string, PendingHostViewWrite>())
   const nextHostViewWriteTokenRef = useRef(0)
   const [, setPendingVersion] = useState(0)
   const mountedRef = useRef(true)
@@ -76,13 +58,11 @@ export function useMobileSessionViewMode(args: {
     if (current?.hostId === scopeHostId && current.worktreeId === scopeWorktreeId) {
       return current
     }
-    const next: ViewOverridesRuntime = {
-      hostId: scopeHostId,
-      worktreeId: scopeWorktreeId,
-      loadPromise: readSessionViewOverridesPreference(scopeHostId, scopeWorktreeId),
-      currentOverrides: new Map(),
-      mutationRevisions: new Map()
-    }
+    const next = createViewOverridesRuntime(
+      scopeHostId,
+      scopeWorktreeId,
+      readSessionViewOverridesPreference
+    )
     viewOverridesRuntimeRef.current = next
     return next
   }, [])
@@ -110,9 +90,12 @@ export function useMobileSessionViewMode(args: {
         write.worktreeId === worktreeId &&
         write.source === bridge.hostViewSource &&
         write.accepted &&
-        write.acceptedPublication &&
-        isNewerPublication(bridge.readHostViewPublication?.(), write.acceptedPublication) &&
-        bridge.readHostViewMode(tabId) === write.viewMode
+        ((write.acknowledgedPublication &&
+          reachesPublication(bridge.readHostViewPublication?.(), write.acknowledgedPublication)) ||
+          (!write.acknowledgedPublication &&
+            write.acceptedPublication &&
+            isNewerPublication(bridge.readHostViewPublication?.(), write.acceptedPublication) &&
+            bridge.readHostViewMode(tabId) === write.viewMode))
       ) {
         pending.delete(tabId)
       }
@@ -227,7 +210,7 @@ export function useMobileSessionViewMode(args: {
         void Promise.resolve()
           .then(() => writeHostViewMode(tabId, nextView))
           .then(
-            () => {
+            (ack) => {
               const pending = pendingWrites.get(tabId)
               if (
                 pending?.token === token &&
@@ -237,6 +220,12 @@ export function useMobileSessionViewMode(args: {
               ) {
                 pending.accepted = true
                 pending.acceptedPublication = bridge.readHostViewPublication?.()
+                if (ack?.publicationEpoch && typeof ack.snapshotVersion === 'number') {
+                  pending.acknowledgedPublication = {
+                    epoch: ack.publicationEpoch,
+                    version: ack.snapshotVersion
+                  }
+                }
                 if (mountedRef.current) {
                   setPendingVersion((version) => version + 1)
                 }

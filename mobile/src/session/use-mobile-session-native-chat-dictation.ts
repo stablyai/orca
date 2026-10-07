@@ -85,7 +85,10 @@ export function useMobileSessionNativeChatDictation(
           ? (tabId, view) =>
               sessionTabSetProps
                 .request(client, { worktree: `id:${worktreeId}`, tabId, viewMode: view })
-                .then(() => undefined)
+                .then((response) => {
+                  const verdict = sessionTabSetProps.interpret(response)
+                  return verdict.accepted ? verdict.value : undefined
+                })
           : null,
       // Why: a rejected shared-view write left the user on a view the host never took, silently.
       onHostViewModeWriteError: () => {

@@ -4,6 +4,7 @@ import { markdownTabDocumentSchema } from './session-read-reply-schema'
 import { terminalSendAcceptedSchema } from '../terminal/terminal-reply-schema'
 import {
   sessionCreatedTerminalTabSchema,
+  sessionTabPropsWriteReplySchema,
   sessionWriteUnreadReplySchema
 } from './session-write-reply-schema'
 import { quickCommandsReader } from './mobile-session-read-operations'
@@ -159,7 +160,7 @@ export const sessionTabSetProps = bindDeferredRpcOperation(
     method: 'session.tabs.setTabProps',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('session-tab-props-set', sessionWriteUnreadReplySchema)
+    read: rpcResultVariant('session-tab-props-set', sessionTabPropsWriteReplySchema)
   })
 )
 

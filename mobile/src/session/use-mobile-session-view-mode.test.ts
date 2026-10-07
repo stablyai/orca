@@ -388,7 +388,12 @@ describe('useMobileSessionViewMode', () => {
     defaultView: MobileSessionView
     overrides?: Map<string, MobileSessionView>
     hostViews: Map<string, MobileSessionView>
-    writeHostViewMode: ((tabId: string, view: MobileSessionView) => Promise<void>) | null
+    writeHostViewMode:
+      | ((
+          tabId: string,
+          view: MobileSessionView
+        ) => Promise<{ publicationEpoch?: string; snapshotVersion?: number } | undefined>)
+      | null
     hostViewSource?: object
     hostPublication?: { epoch: string | null; version: number }
     onHostViewModeWriteError?: (error: unknown) => void
@@ -400,7 +405,7 @@ describe('useMobileSessionViewMode', () => {
     })
     const bridge: MobileSessionTabViewModeBridge = {
       hostViewSource: args.hostViewSource,
-      readHostViewPublication: () => args.hostPublication ?? { epoch: 'host', version: 1 },
+      ...(args.hostPublication ? { readHostViewPublication: () => args.hostPublication! } : {}),
       readHostViewMode: (tabId) => args.hostViews.get(tabId),
       writeHostViewMode: args.writeHostViewMode,
       ...(args.onHostViewModeWriteError
@@ -531,6 +536,66 @@ describe('useMobileSessionViewMode', () => {
     rerenderShared?.()
     // The matching value was from the same pre-ack publication, so a peer update in that
     // publication must still be hidden by the pending write rather than being treated as ack.
+    expect(controller?.isTabChatView('t1')).toBe(true)
+  })
+
+  it('clears on the acknowledged publication even when the peer changed the view', async () => {
+    const hostViews = new Map<string, MobileSessionView>([['t1', 'terminal']])
+    const publication = { epoch: 'host', version: 10 }
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews,
+      hostPublication: publication,
+      writeHostViewMode: async () => ({ publicationEpoch: 'host', snapshotVersion: 11 })
+    })
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    publication.version = 11
+    hostViews.set('t1', 'terminal')
+    rerenderShared?.()
+    expect(controller?.isTabChatView('t1')).toBe(false)
+  })
+
+  it('clears when the acknowledged snapshot arrived before the RPC reply', async () => {
+    const hostViews = new Map<string, MobileSessionView>([['t1', 'terminal']])
+    const publication = { epoch: 'host', version: 10 }
+    const write = deferred<{ publicationEpoch: string; snapshotVersion: number }>()
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews,
+      hostPublication: publication,
+      writeHostViewMode: async () => write.promise
+    })
+    act(() => controller?.toggleTabChatView('t1'))
+    publication.version = 11
+    hostViews.set('t1', 'terminal')
+    rerenderShared?.()
+    await act(async () => {
+      write.resolve({ publicationEpoch: 'host', snapshotVersion: 11 })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(controller?.isTabChatView('t1')).toBe(false)
+  })
+
+  it('keeps legacy matching echo acknowledgement when the host sends no marker', async () => {
+    const hostViews = new Map<string, MobileSessionView>([['t1', 'terminal']])
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews,
+      hostViewSource: {},
+      writeHostViewMode: async () => undefined
+    })
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    hostViews.set('t1', 'chat')
+    rerenderShared?.()
     expect(controller?.isTabChatView('t1')).toBe(true)
   })
 

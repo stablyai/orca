@@ -18,6 +18,44 @@ export type ViewOverridesRuntime = {
   mutationRevisions: Map<string, number>
 }
 
+export type PendingHostViewWrite = {
+  hostId: string
+  worktreeId: string
+  source?: object
+  viewMode: MobileSessionView
+  token: number
+  accepted: boolean
+  acceptedPublication?: { epoch: string | null; version: number }
+  acknowledgedPublication?: { epoch: string; version: number }
+}
+
+export type MobileSessionTabViewModeBridge = {
+  hostViewSource?: object
+  readHostViewPublication?: () => { epoch: string | null; version: number }
+  readHostViewMode: (tabId: string) => MobileSessionView | undefined
+  writeHostViewMode:
+    | ((
+        tabId: string,
+        view: MobileSessionView
+      ) => Promise<{ publicationEpoch?: string; snapshotVersion?: number } | undefined>)
+    | null
+  onHostViewModeWriteError?: (error: unknown) => void
+}
+
+export function createViewOverridesRuntime(
+  hostId: string,
+  worktreeId: string,
+  load: (hostId: string, worktreeId: string) => Promise<SessionViewOverridesPreference>
+): ViewOverridesRuntime {
+  return {
+    hostId,
+    worktreeId,
+    loadPromise: load(hostId, worktreeId),
+    currentOverrides: new Map(),
+    mutationRevisions: new Map()
+  }
+}
+
 export function isOverrideScope(
   state: ViewOverridesState,
   hostId: string,
@@ -44,5 +82,14 @@ export function isNewerPublication(
   return (
     current !== undefined &&
     (current.epoch !== previous.epoch || current.version > previous.version)
+  )
+}
+
+export function reachesPublication(
+  current: { epoch: string | null; version: number } | undefined,
+  target: { epoch: string; version: number }
+): boolean {
+  return (
+    current !== undefined && (current.epoch !== target.epoch || current.version >= target.version)
   )
 }
