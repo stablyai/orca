@@ -159,6 +159,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/runtime/orchestration/orchestration-party-location.test.ts',
   'src/main/runtime/orchestration/structured-worker-journal-page.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-caller-selection.test.ts',
+  'src/main/runtime/rpc/methods/agent-launch-instant-tab.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-pane-reservation.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-prestart-failure.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-replay.test.ts',
