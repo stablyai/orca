@@ -1,6 +1,15 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer } from './orca-runtime-maybe-hydrate-headless-from-renderer'
 import type { RuntimeHeadlessTerminal } from './runtime-terminal-state-records'
+import type {
+  HeadlessInlineImageConfiguration,
+  HeadlessModelConfiguration
+} from '../daemon/headless-model-checkpoint'
+import {
+  captureRuntimeHeadlessModel,
+  publishRuntimeHeadlessModel,
+  type RuntimeHeadlessModelCapture
+} from './headless-terminal-model-checkpoint'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
@@ -9,43 +18,18 @@ import { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
 
 export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
-  /** Shared factory for the per-PTY runtime emulators (seed, hydration, and
-   *  lazy live-byte creation): wires the Phase-5 query-reply sink and the
-   *  ConPTY DA1 override. The daemon emulator never goes through here. */
-  protected createPtyHeadlessTerminalState(
+  protected createPtyHeadlessEmulator(
     ptyId: string,
-    dims: { cols: number; rows: number }
-  ): RuntimeHeadlessTerminal {
-    let state: RuntimeHeadlessTerminal | null = null
-    const pathFlavor = this.pathFlavorForPty(this.ptysById.get(ptyId))
+    configuration: HeadlessModelConfiguration,
+    ownsModel: (model: HeadlessEmulator) => boolean
+  ): HeadlessEmulator {
     const emulator = new HeadlessEmulator({
-      cols: dims.cols,
-      rows: dims.rows,
-      pathFlavor,
-      remotePosixFileUriAuthority:
-        !!this.ptysById.get(ptyId)?.connectionId && pathFlavor !== 'win32',
-      wslDistro: this.ptysById.get(ptyId)?.connectionId
-        ? undefined
-        : (this.wslDistroByPtyId.get(ptyId) ?? this.ptysById.get(ptyId)?.wslDistro ?? undefined),
-      // Why: replies take the provider input path (same entry as pty:write —
-      // daemon shell-ready gating and the SSH relay write apply unchanged),
-      // NOT writePtyInput, so renderer interactive-output metering never
-      // counts responder traffic as user-input echo.
+      ...configuration,
       onQueryReply: (reply) => {
-        // Why the identity check: queued writeChain links can parse after
-        // disposeHeadlessTerminal, and daemon respawns reuse session ids — a
-        // stale link's reply must never reach a successor PTY under this id.
-        if (state !== null && this.headlessTerminals.get(ptyId) === state) {
-          if (
-            !shouldForwardHeadlessTerminalQueryReply(this.ptysById.get(ptyId)?.launchAgent, reply)
-          ) {
-            return
-          }
-          // Why this write is safe pre-shell-ready: daemon Session.write
-          // QUEUES (never drops) input while the POSIX shell-ready gate is
-          // pending and flushes at the ready marker or the 15s
-          // SHELL_READY_TIMEOUT_MS bound (session.ts) — a spawn-time query
-          // reply is delayed at most that bound, not lost.
+        if (
+          ownsModel(emulator) &&
+          shouldForwardHeadlessTerminalQueryReply(this.ptysById.get(ptyId)?.launchAgent, reply)
+        ) {
           this.ptyController?.write(ptyId, reply, 'query-reply')
         }
       }
@@ -53,13 +37,36 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     if (isNativeWindowsConptyPty(ptyId)) {
       emulator.installConptyPrimaryDeviceAttributesOverride()
     }
-    // Why the lazy getter: replies must use the freshest renderer push at
-    // parse time, and stay silent (never default) before the first push.
     emulator.installViewAttributeResponder(() => getTerminalViewAttributes())
     const viewAttributes = getTerminalViewAttributes()
     if (viewAttributes) {
       emulator.applyPushedViewAttributes(viewAttributes)
     }
+    return emulator
+  }
+
+  protected createPtyHeadlessTerminalState(
+    ptyId: string,
+    dims: { cols: number; rows: number },
+    images?: HeadlessInlineImageConfiguration
+  ): RuntimeHeadlessTerminal {
+    let state: RuntimeHeadlessTerminal | null = null
+    const pathFlavor = this.pathFlavorForPty(this.ptysById.get(ptyId))
+    const emulator = this.createPtyHeadlessEmulator(
+      ptyId,
+      {
+        ...dims,
+        images,
+        pathFlavor,
+        remotePosixFileUriAuthority:
+          !!this.ptysById.get(ptyId)?.connectionId && pathFlavor !== 'win32',
+        wslDistro: this.ptysById.get(ptyId)?.connectionId
+          ? undefined
+          : (this.wslDistroByPtyId.get(ptyId) ?? this.ptysById.get(ptyId)?.wslDistro ?? undefined)
+      },
+      (model) =>
+        state !== null && this.headlessTerminals.get(ptyId) === state && state.emulator === model
+    )
     const constructed: RuntimeHeadlessTerminal = {
       emulator,
       outputSequence: 0,
@@ -83,6 +90,53 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     }
     state = constructed
     return state
+  }
+
+  captureHeadlessTerminalModelCheckpoint(
+    ptyId: string,
+    maxBytes: number
+  ): Promise<RuntimeHeadlessModelCapture | null> {
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return Promise.resolve(null)
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const incarnation = this.ptysById.get(ptyId)?.incarnationId
+    const viewAttributes = getTerminalViewAttributes()
+    return captureRuntimeHeadlessModel(
+      state,
+      maxBytes,
+      () =>
+        this.headlessTerminals.get(ptyId) === state &&
+        this.getPtyLifecycleGeneration(ptyId) === generation &&
+        this.ptysById.get(ptyId)?.incarnationId === incarnation &&
+        getTerminalViewAttributes() === viewAttributes
+    )
+  }
+
+  async restoreHeadlessTerminalModelCheckpoint(
+    ptyId: string,
+    capture: RuntimeHeadlessModelCapture
+  ): Promise<void> {
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state || state !== capture.source) {
+      throw new Error('Terminal model changed after capture')
+    }
+    const retired = await publishRuntimeHeadlessModel(
+      state,
+      capture,
+      (configuration) =>
+        this.createPtyHeadlessEmulator(
+          ptyId,
+          configuration,
+          (model) => this.headlessTerminals.get(ptyId) === state && state.emulator === model
+        ),
+      () =>
+        this.headlessTerminals.get(ptyId) === state &&
+        this.getPtyOutputSequence(ptyId) === capture.outputSequence
+    )
+    retired.disableQueryReplyForwarding()
+    retired.dispose()
   }
 
   /** Phase-5 ConPTY DA1 retrofit (terminal-query-authority.md): invoked via
@@ -145,6 +199,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
         state.outputSequence = snapshot.seq
       })
       .catch(() => {
+        state.modelOperationFailed = true
         // Best-effort: live bytes already chain behind this replacement state.
       })
       .finally(() => {
@@ -172,6 +227,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
         state.emulator.resize(cols, rows)
       })
       .catch(() => {
+        state.modelOperationFailed = true
         // Best-effort mirror tracking; live PTY streaming must continue even
         // if xterm rejects a raced resize during teardown.
       })
@@ -207,8 +263,11 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     // Why: headless writes are queued to preserve xterm parser order. Clear
     // must join that same chain or an earlier PTY chunk can finish after the
     // clear request and repopulate mobile scrollback.
-    state.writeChain = state.writeChain.then(() => state.emulator.clearScrollback())
-    await state.writeChain
+    const completion = state.writeChain.then(() => state.emulator.clearScrollback())
+    state.writeChain = completion.catch(() => {
+      state.modelOperationFailed = true
+    })
+    await completion
   }
 
   // Public: Reset Terminal must ground this model too; park/reveal and mobile restore from it.
@@ -224,7 +283,9 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     const completion = state.writeChain.then(async () => {
       await state.emulator.write(state.ownership.groundInputModes())
     })
-    state.writeChain = completion.catch(() => {})
+    state.writeChain = completion.catch(() => {
+      state.modelOperationFailed = true
+    })
     await completion
   }
 }

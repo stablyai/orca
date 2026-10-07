@@ -12,6 +12,18 @@ import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequen
 import { splitTerminalSnapshotAnsi } from './terminal-snapshot-ansi-buffers'
 import type { TerminalSnapshot } from './terminal-snapshot'
 
+export function readHeadlessTerminalLines(
+  buffer: Terminal['buffer']['active'],
+  start: number,
+  endExclusive: number
+): string[] {
+  const lines: string[] = []
+  for (let row = start; row < endExclusive; row += 1) {
+    lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
+  }
+  return lines
+}
+
 export function captureHeadlessTerminalSnapshot(
   terminal: Terminal,
   serializer: SerializeAddon,

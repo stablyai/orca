@@ -35,6 +35,7 @@ export type TerminalViewAttributeResponder = {
    *  on a visible pane's theme apply. Identical re-pushes (fresh renderer
    *  process) are filtered in main's store and never reach this. */
   clearColorOverrides: () => void
+  serializeColorOverrides: () => string
 }
 
 type SpecialColorSlot = 'foreground' | 'background' | 'cursor'
@@ -186,6 +187,16 @@ export function installTerminalViewAttributeResponder(
     clearColorOverrides: () => {
       ansiOverrides.clear()
       specialOverrides.clear()
+    },
+    serializeColorOverrides: () => {
+      let ansi = ''
+      for (const [index, rgb] of ansiOverrides) {
+        ansi += `\x1b]4;${index};${formatXColorRgbSpec(rgb)}\x1b\\`
+      }
+      for (const [slot, rgb] of specialOverrides) {
+        ansi += `\x1b]${SPECIAL_COLOR_IDENTS[slot]};${formatXColorRgbSpec(rgb)}\x1b\\`
+      }
+      return ansi
     }
   }
 }

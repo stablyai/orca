@@ -179,6 +179,7 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
         this.providerSnapshotPreferredPtys.delete(ptyId)
       })
       .catch(() => {
+        state.modelOperationFailed = true
         // Seeding is best-effort; live data will continue to populate the
         // emulator even if the snapshot replay fails.
       })

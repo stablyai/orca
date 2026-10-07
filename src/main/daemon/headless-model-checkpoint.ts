@@ -43,6 +43,23 @@ export type HeadlessModelCheckpointMetadata = {
   byteLength: number
 }
 
+export function requireDrainedImageAddon(
+  addon: ImageAddon | undefined,
+  disposed: boolean,
+  pendingWrites: number
+): ImageAddon {
+  if (disposed) {
+    throw new Error('Headless terminal is disposed')
+  }
+  if (pendingWrites > 0) {
+    throw new Error('Terminal writes must drain before checkpoint capture')
+  }
+  if (!addon) {
+    throw new Error('Headless terminal image support is not configured')
+  }
+  return addon
+}
+
 export function copyHeadlessModelConfiguration(
   opts: HeadlessModelConfiguration
 ): HeadlessModelConfiguration {
@@ -209,8 +226,13 @@ export function captureHeadlessModelCheckpoint(
   configuration: HeadlessModelConfiguration,
   snapshot: TerminalSnapshot,
   addon: ImageAddon,
-  maxBytes: number
+  maxBytes: number,
+  colorOverridesAnsi = ''
 ): HeadlessModelCheckpoint {
+  snapshot = {
+    ...snapshot,
+    rehydrateSequences: colorOverridesAnsi + snapshot.rehydrateSequences
+  }
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0 || maxBytes > CHECKPOINT_LEASE_BYTES) {
     throw new RangeError('Invalid complete terminal checkpoint budget')
   }

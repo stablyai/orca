@@ -103,6 +103,7 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
         this.providerSnapshotPreferredPtys.delete(ptyId)
         seeded = true
       } catch {
+        state.modelOperationFailed = true
         // Hydration is best-effort. Live writes continue via the same
         // writeChain that this catch-arm leaves intact.
       } finally {
@@ -206,7 +207,9 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
       state.outputSequence = outputSequence
     })
     // Legacy callers remain best-effort; bounded SSH admission observes the raw receipt.
-    state.writeChain = completion.catch(() => {})
+    state.writeChain = completion.catch(() => {
+      state.modelOperationFailed = true
+    })
     return completion
   }
 }

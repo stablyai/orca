@@ -4,9 +4,13 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { ImageAddon } from '@xterm/addon-image'
 import { createHeadlessImageAddon } from './headless-image-addon'
-import { prepareHeadlessModelCheckpoint } from './headless-model-checkpoint-restore'
+import {
+  prepareHeadlessModelCheckpoint,
+  type HeadlessModelPreparationOptions
+} from './headless-model-checkpoint-restore'
 import {
   captureHeadlessModelCheckpoint,
+  requireDrainedImageAddon,
   copyHeadlessModelConfiguration,
   type HeadlessModelConfiguration,
   type HeadlessModelCheckpoint
@@ -21,7 +25,10 @@ import {
 } from './terminal-view-attribute-responder'
 import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
 import type { TerminalSnapshot } from './types'
-import { captureHeadlessTerminalSnapshot } from './headless-terminal-snapshot-capture'
+import {
+  captureHeadlessTerminalSnapshot,
+  readHeadlessTerminalLines
+} from './headless-terminal-snapshot-capture'
 import { submitHeadlessTerminalWrite } from './headless-terminal-write-submission'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'
@@ -260,33 +267,27 @@ export class HeadlessEmulator {
   }
 
   captureModelCheckpoint(maxBytes: number): HeadlessModelCheckpoint {
-    if (this.disposed) {
-      throw new Error('Headless terminal is disposed')
-    }
-    if (this.pendingWrites > 0) {
-      throw new Error('Terminal writes must drain before checkpoint capture')
-    }
-    if (!this.imageAddon) {
-      throw new Error('Headless terminal image support is not configured')
-    }
+    const addon = requireDrainedImageAddon(this.imageAddon, this.disposed, this.pendingWrites)
     return captureHeadlessModelCheckpoint(
       {
         ...this.configuration,
         scrollback: this.terminal.options.scrollback
       },
       this.getSnapshot(),
-      this.imageAddon,
-      maxBytes
+      addon,
+      maxBytes,
+      this.viewAttributeResponder?.serializeColorOverrides() ?? ''
     )
   }
 
   static prepareModelCheckpoint(
     checkpoint: HeadlessModelCheckpoint,
-    options: { onQueryReply?: (reply: string) => void; isCurrent?: () => boolean } = {}
+    options: HeadlessModelPreparationOptions = {}
   ): Promise<HeadlessEmulator> {
     return prepareHeadlessModelCheckpoint(
       checkpoint,
-      (configuration) => new this({ ...configuration, onQueryReply: options.onQueryReply }),
+      options.construct ??
+        ((configuration) => new this({ ...configuration, onQueryReply: options.onQueryReply })),
       (model) => model.imageAddon,
       options
     )
@@ -308,11 +309,11 @@ export class HeadlessEmulator {
 
   getVisibleLines(): string[] {
     const buffer = this.terminal.buffer.active
-    const lines: string[] = []
-    for (let row = buffer.viewportY; row < buffer.viewportY + this.terminal.rows; row += 1) {
-      lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
-    }
-    return lines
+    return readHeadlessTerminalLines(
+      buffer,
+      buffer.viewportY,
+      buffer.viewportY + this.terminal.rows
+    )
   }
 
   getVisibleBufferRange(): { start: number; endExclusive: number; totalLength: number } {
@@ -332,11 +333,7 @@ export class HeadlessEmulator {
   getBufferTailLines(limit: number): string[] {
     const buffer = this.terminal.buffer.active
     const start = Math.max(0, buffer.length - Math.max(0, Math.floor(limit)))
-    const lines: string[] = []
-    for (let row = start; row < buffer.length; row += 1) {
-      lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
-    }
-    return lines
+    return readHeadlessTerminalLines(buffer, start, buffer.length)
   }
 
   getCwd(): string | null {

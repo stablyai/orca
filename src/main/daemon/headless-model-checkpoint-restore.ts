@@ -6,6 +6,12 @@ import type {
 } from './headless-model-checkpoint'
 import type { HeadlessEmulator } from './headless-emulator'
 
+export type HeadlessModelPreparationOptions = {
+  onQueryReply?: (reply: string) => void
+  isCurrent?: () => boolean
+  construct?: (configuration: HeadlessModelConfiguration) => HeadlessEmulator
+}
+
 export async function prepareHeadlessModelCheckpoint(
   checkpoint: HeadlessModelCheckpoint,
   construct: (configuration: HeadlessModelConfiguration) => HeadlessEmulator,
