@@ -1,15 +1,19 @@
 import { Pressable, Text, View } from 'react-native'
+import { newWorktreeFormStyles } from './new-worktree-form-styles'
 
 export function AddProjectTargetRecovery({ onChooseThisHost }: { onChooseThisHost: () => void }) {
   return (
     <View>
-      <Text>That SSH target is no longer available. Choose This host or go back.</Text>
+      <Text style={newWorktreeFormStyles.emptyText}>
+        That SSH target is no longer available. Choose This host to continue.
+      </Text>
       <Pressable
+        style={newWorktreeFormStyles.createButton}
         accessibilityRole="button"
         accessibilityLabel="Choose This host"
         onPress={onChooseThisHost}
       >
-        <Text>Choose This host</Text>
+        <Text style={newWorktreeFormStyles.createText}>Choose This host</Text>
       </Pressable>
     </View>
   )

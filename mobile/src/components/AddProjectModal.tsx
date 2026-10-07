@@ -135,7 +135,7 @@ function AddProjectModalContent({
   const selectTarget = (id: string | null) =>
     selectAddProjectTarget(
       id,
-      activeSshConnectionId,
+      sshConnectionId,
       invalidate,
       () => setDestinationPath(''),
       setSshConnectionId
@@ -156,7 +156,7 @@ function AddProjectModalContent({
             client,
             {
               url: cloneUrl.trim(),
-              ...(destinationPath ? { destination: destinationPath } : {}),
+              ...(destinationPath && activeSshConnectionId ? { destination: destinationPath } : {}),
               ...requestTarget
             },
             {
@@ -171,7 +171,7 @@ function AddProjectModalContent({
           await repoCreateRun.request(client, {
             name: projectName.trim(),
             kind: 'git',
-            ...(destinationPath ? { parentPath: destinationPath } : {}),
+            ...(destinationPath && activeSshConnectionId ? { parentPath: destinationPath } : {}),
             ...requestTarget
           })
         )

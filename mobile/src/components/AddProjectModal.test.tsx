@@ -551,7 +551,7 @@ describe('AddProjectModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('blocks submit when the selected SSH target disappears instead of falling back local', () => {
+  it('blocks submit when the selected SSH target disappears instead of falling back local', async () => {
     const sendRequest = vi.fn()
     const tree = render(
       sendRequest,
@@ -583,11 +583,56 @@ describe('AddProjectModal', () => {
     )
     act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/orca.git'))
     expect(button(tree, 'Clone repository').props.disabled).toBe(true)
-    expect(sendRequest).toHaveBeenCalledTimes(1)
-    expect(sendRequest).toHaveBeenLastCalledWith('files.browseServerDir', {
+    act(() => button(tree, 'Run on This host').props.onPress())
+    act(() => button(tree, 'Select This host').props.onPress())
+    act(() => button(tree, 'Clone repository').props.onPress())
+    await flushUpdates()
+    expect(sendRequest).toHaveBeenLastCalledWith(
+      'repo.clone',
+      { url: 'https://example.com/orca.git' },
+      { timeoutMs: REPO_CLONE_TIMEOUT_MS }
+    )
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect(sendRequest).toHaveBeenNthCalledWith(1, 'files.browseServerDir', {
       path: '~',
       sshConnectionId: 'ssh-vm'
     })
+  })
+
+  it('keeps the unavailable-target recovery controls readable on the dark sheet', () => {
+    const sendRequest = vi.fn().mockResolvedValue(listing('/home/remote', ['projects']))
+    const tree = render(
+      sendRequest,
+      true,
+      [REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY],
+      [{ id: 'ssh-vm', label: 'Build VM' }]
+    )
+    act(() => button(tree, 'Run on This host').props.onPress())
+    act(() => button(tree, 'Select Build VM').props.onPress())
+    act(() =>
+      startActions(tree)
+        .find((action) => action.label === 'Browse folder')!
+        .onPress()
+    )
+    act(() =>
+      renderer.update(
+        createElement(AddProjectModal, {
+          visible: true,
+          client: tree.root.findByType(AddProjectModal).props.client,
+          onProjectAdded,
+          onClose,
+          hostCapabilities: [REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY],
+          sshTargets: []
+        })
+      )
+    )
+    expect(button(tree, 'Choose This host').props.style).toBeDefined()
+    const recoveryText = tree.root.findAll(
+      (node) =>
+        node.type === hostType('Text') &&
+        String(node.props.children).includes('That SSH target is no longer available')
+    )[0]
+    expect(recoveryText?.props.style).toBeDefined()
   })
 
   it('ignores a reply retained through close and reopen', async () => {
