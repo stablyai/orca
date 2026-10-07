@@ -3,6 +3,8 @@
 // a running Orca desktop instance. Responds to the same RPC methods the real
 // runtime exposes, with realistic fake data. Supports E2EE handshake.
 import { WebSocketServer, type WebSocket } from 'ws'
+import { appendFileSync, chmodSync, existsSync, mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { deriveSharedKey, e2eeDecrypt, e2eeEncrypt, type E2EEState } from './mock-server-encryption'
 import { loadOrCreateMockServerKeyPair } from './mock-server-key-pair'
 import {
@@ -14,6 +16,21 @@ import {
 
 const PORT = Number(process.env.PORT) || 6768
 const AUTH_TOKEN = 'mock-device-token'
+const RPC_LOG_FILE = process.env.MOCK_RPC_LOG_FILE
+
+function logRpc(record: Record<string, unknown>): void {
+  if (!RPC_LOG_FILE) {
+    return
+  }
+  try {
+    if (!existsSync(dirname(RPC_LOG_FILE))) {
+      mkdirSync(dirname(RPC_LOG_FILE), { recursive: true, mode: 0o700 })
+    }
+    const line = JSON.stringify(record).slice(0, 12000)
+    appendFileSync(RPC_LOG_FILE, `${line}\n`, { mode: 0o600 })
+    chmodSync(RPC_LOG_FILE, 0o600)
+  } catch {}
+}
 
 // Why: generate a persistent server keypair for this mock session.
 // The public key is printed at startup so it can be used in pairing QR data.
@@ -106,10 +123,18 @@ wss.on('connection', (ws) => {
       return
     }
 
+    logRpc({ direction: 'request', method: request.method, params: request.params ?? null })
     console.log(`[mock] ${request.method} (id: ${request.id})`)
     handleRequest(
       request,
       (response) => {
+        logRpc({
+          direction: 'response',
+          method: request.method,
+          ok: response.ok,
+          result: response.ok ? (response.result ?? null) : null,
+          error: response.ok ? null : (response.error ?? null)
+        })
         if (ws.readyState === ws.OPEN) {
           ws.send(e2eeEncrypt(JSON.stringify(response), e2ee.sharedKey))
         }
