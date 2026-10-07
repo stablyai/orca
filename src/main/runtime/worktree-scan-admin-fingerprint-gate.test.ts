@@ -466,7 +466,7 @@ describe('worktree scan admin-fingerprint gate', () => {
     }
   })
 
-  it('scans when the awaited probe outlives its deadline', async () => {
+  it('waits for the awaited probe to its deadline, then serves the reusable cache', async () => {
     vi.useFakeTimers()
     try {
       const { list } = makeRuntime()
@@ -485,8 +485,81 @@ describe('worktree scan admin-fingerprint gate', () => {
 
       await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
       await drainMicrotasks()
-      expect(scanCount()).toBe(2)
+      // Was `toBe(2)`: expiry used to share the `null` sentinel with a fingerprint mismatch and
+      // fall into a full scan. It is a different epistemic state — a mismatch proves the cache is
+      // stale, an expiry proves nothing — and the entry is still inside the reconcile interval,
+      // so it is served as-is. What this test still pins is unchanged: the wait is bounded by the
+      // probe's own deadline and the refresh settles there, not at the caller's budget.
+      expect(scanCount()).toBe(1)
+      expect(secondSettled()).toBe(true)
       await second
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('serves the cached rows on an expired probe without trusting the late answer', async () => {
+    vi.useFakeTimers()
+    try {
+      const { list } = makeRuntime()
+
+      const firstHeads = heads(await list())
+      expect(scanCount()).toBe(1)
+
+      const releaseExpiredProbe = stallProbeOnce()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const second = list()
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      await drainMicrotasks()
+
+      // The caller gets the cached scan's own rows, not persisted placeholders and not a rescan.
+      expect(scanCount()).toBe(1)
+      expect(heads(await second)).toEqual(firstHeads)
+
+      // The abandoned read finally lands. It was taken after the cached scan, so adopting it as
+      // the entry's fingerprint would stamp a later state onto an earlier result and mask any
+      // mutation in between until the reconcile deadline. The last *confirmed* fingerprint stays
+      // the baseline, so this unchanged repo still gates on the next poll instead of rescanning.
+      releaseExpiredProbe('fp-taken-after-the-cached-scan')
+      await drainMicrotasks()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      await list()
+      expect(scanCount()).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still reconciles on schedule when every probe keeps expiring', async () => {
+    vi.useFakeTimers()
+    try {
+      const { list } = makeRuntime()
+      await list()
+      expect(scanCount()).toBe(1)
+
+      const STEP_MS = SCAN_TTL_MS + 1_000 + WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS
+      for (
+        let elapsed = STEP_MS;
+        elapsed < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS;
+        elapsed += STEP_MS
+      ) {
+        const releaseExpiredProbe = stallProbeOnce()
+        vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+        const pending = list()
+        await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+        await pending
+        // The wedged read lands too late to have gated this refresh; releasing it lets the next
+        // poll issue a probe of its own instead of hitting the still-outstanding-probe gate.
+        releaseExpiredProbe('fp-1')
+        await drainMicrotasks()
+      }
+      expect(scanCount()).toBe(1)
+
+      vi.advanceTimersByTime(WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS)
+      await list()
+      // Serving an unconfirmed cache must not disarm the ceiling: age is still measured from the
+      // last real scan, so no run of timeouts can keep a repo stale past the reconcile interval.
+      expect(scanCount()).toBe(2)
     } finally {
       vi.useRealTimers()
     }
@@ -521,7 +594,7 @@ describe('worktree scan admin-fingerprint gate', () => {
     }
   })
 
-  it('still returns scanned rows within the per-repo budget when the probe stalls', async () => {
+  it('still returns real rows within the per-repo budget when the probe stalls', async () => {
     vi.useFakeTimers()
     try {
       const { list } = makeRuntime()
@@ -537,7 +610,11 @@ describe('worktree scan admin-fingerprint gate', () => {
       await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
       await drainMicrotasks()
       expect(secondSettled()).toBe(true)
-      expect(scanCount()).toBe(2)
+      // Was `toBe(2)`: an expired probe no longer means "changed", so the answer inside the budget
+      // is now the cached scan rather than a fresh one. The property this test exists for is
+      // unchanged — the caller is answered in time with the repo's real rows, never stranded on
+      // the persisted-row fallback — and the rows themselves are byte-identical either way.
+      expect(scanCount()).toBe(1)
       expect(heads(await second)).toEqual(['abc', 'def'])
     } finally {
       vi.useRealTimers()
