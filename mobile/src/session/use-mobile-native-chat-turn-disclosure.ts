@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { useCallback, useMemo } from 'react'
 import {
   isBackgroundTaskBlock,
@@ -13,7 +12,7 @@ import {
 import { nativeChatLiveLine } from '../../../src/shared/native-chat-live-line'
 import {
   nativeChatTurnFold,
-  type NativeChatTurnFoldRow
+  nativeChatTurnAnswerRows
 } from '../../../src/shared/native-chat-turn-fold'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import {
@@ -27,10 +26,6 @@ import { isStoppedBeforeStartBlock } from '../../../src/shared/native-chat-stopp
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../src/shared/agent-session-orca-stop'
 import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scoped-open-keys'
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
-import type {
-  MobileNativeChatLiveLine,
-  MobileNativeChatTurnRow
-} from './mobile-native-chat-turn-disclosure-types'
 export type {
   MobileNativeChatLiveLine,
   MobileNativeChatTurnRow
@@ -62,16 +57,7 @@ export function useMobileNativeChatTurnDisclosure({
   lineYields?: boolean
   toolsExpanded?: boolean
   scopeKey: string
-}): {
-  active: ReturnType<typeof useMobileNativeChatTurnStatus>['active']
-  activeActivityText: string | null
-  onToggleTurn: (turnKey: string) => void
-  resolveRow: (index: number, message: NativeChatMessage) => MobileNativeChatTurnRow
-  listMessages: readonly NativeChatMessage[]
-  waitingRows: readonly { item: NativeChatMessage; index: number }[]
-  liveLine: MobileNativeChatLiveLine | null
-  onToggleReasoning: (key: string) => void
-} {
+}) {
   const { rows, turnKeys, liveTurnKey } = useMemo(() => {
     if (!enabled) {
       return { rows: messages, turnKeys: NO_TURN_KEYS, liveTurnKey: undefined }
@@ -106,15 +92,13 @@ export function useMobileNativeChatTurnDisclosure({
         bars: new Map<string, { index: number; above: boolean }>()
       }
     }
-    const ids = enabled
-      ? nativeChatMessagesWaitingBehindLiveTurn(
-          rows,
-          turnJournal?.items,
-          stopping,
-          turnJournal?.submissions
-        )
-      : null
-    const foldRows: NativeChatTurnFoldRow[] = rows.map((message, index) => {
+    const ids = nativeChatMessagesWaitingBehindLiveTurn(
+      rows,
+      turnJournal?.items,
+      stopping,
+      turnJournal?.submissions
+    )
+    const foldRows = rows.map((message, index) => {
       const content = deriveNativeChatRowContent(message.blocks)
       return {
         turnKey: turnKeys[index],
@@ -165,7 +149,7 @@ export function useMobileNativeChatTurnDisclosure({
     }
     const carrierRows = new Set<number>()
     const firstRowByTurn = new Map<string, number>()
-    const hasAnswer = new Set<string>()
+    const answerRows = nativeChatTurnAnswerRows(foldRows)
     for (const [index, row] of foldRows.entries()) {
       if (row.turnKey === undefined) {
         continue
@@ -173,17 +157,11 @@ export function useMobileNativeChatTurnDisclosure({
       if (!firstRowByTurn.has(row.turnKey)) {
         firstRowByTurn.set(row.turnKey, index)
       }
-      if (
-        row.rendersProse &&
-        (row.role === 'assistant' || (row.role === 'system' && row.reportsFailure))
-      ) {
-        hasAnswer.add(row.turnKey)
-      }
     }
     for (const [turnKey, index] of firstRowByTurn) {
       if (
         settledTurnKeys.has(turnKey) &&
-        !hasAnswer.has(turnKey) &&
+        !answerRows.has(turnKey) &&
         !expandedTurnIds.has(turnKey) &&
         foldedRows.has(index)
       ) {
@@ -250,8 +228,7 @@ export function useMobileNativeChatTurnDisclosure({
       }),
     [active, activeActivityText, enabled, inLiveWorkingTurn, isWorking, lineYields, rows, stopping]
   )
-  const liveReasoningId = line?.reasoning?.message.id
-  const liveLine = useMemo<MobileNativeChatLiveLine | null>(
+  const liveLine = useMemo(
     () =>
       line && {
         ...line,
@@ -261,12 +238,10 @@ export function useMobileNativeChatTurnDisclosure({
       },
     [expandedReasoning, line]
   )
-  const latestAssistantId = useMemo(
-    () => waiting.listMessages.findLast((row) => row.role === 'assistant')?.id ?? null,
-    [waiting.listMessages]
-  )
+  const latestAssistantId =
+    waiting.listMessages.findLast((row) => row.role === 'assistant')?.id ?? null
   const resolveRow = useCallback(
-    (listIndex: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
+    (listIndex: number, message: NativeChatMessage) => {
       const index = waiting.indexById.get(message.id) ?? listIndex
       const turnKey = turnKeys[index]
       const bar = turnKey === undefined ? undefined : waiting.bars.get(turnKey)
@@ -283,7 +258,7 @@ export function useMobileNativeChatTurnDisclosure({
         turnKey: turnKey && turnStatus?.workedSeconds != null ? turnKey : undefined,
         activeTurnIsWorking: inLiveWorkingTurn(index),
         mayStillGrow: !lineYields && message.id === latestAssistantId,
-        reasoningIsLive: message.id === liveReasoningId,
+        reasoningIsLive: message.id === line?.reasoning?.message.id,
         reasoningExpanded:
           message.role === 'reasoning' &&
           expandedReasoning.has(nativeChatReasoningDisclosureKey(message.id)),
@@ -305,7 +280,7 @@ export function useMobileNativeChatTurnDisclosure({
       inLiveWorkingTurn,
       latestAssistantId,
       lineYields,
-      liveReasoningId,
+      line,
       expandedReasoning,
       toggleReasoning,
       openSubagentGroups,
