@@ -1,5 +1,9 @@
-import { app } from 'electron'
+import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
+import {
+  installOsShutdownExitRecord,
+  reportPreviousUncleanMainExit
+} from '../crash-reporting/main-unclean-exit-report'
 import { AgentAwakeService } from '../agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../system-resume-broadcast'
@@ -101,6 +105,10 @@ export function initializeMainProcessObservers(): void {
     packaged: app.isPackaged,
     platform: process.platform
   })
+  void reportPreviousUncleanMainExit().catch((error) =>
+    console.warn('[crash-reporting] previous-session exit report failed:', error)
+  )
+  installOsShutdownExitRecord(powerMonitor, process.platform)
   state.skillTransactionRecovery = recoverPendingSkillTransactions(
     join(app.getPath('userData'), 'skill-installs')
   )

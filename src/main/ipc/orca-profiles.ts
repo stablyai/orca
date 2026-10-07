@@ -145,7 +145,7 @@ function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebConte
     sender.send('app:restart-committed')
   }
   setTimeout(() => {
-    relaunchApp(reason)
+    relaunchApp(reason, 'app-quit')
     // Why: app.quit() (not app.exit) so before-quit/will-quit still run —
     // renderer scrollback capture, PTY kill, stats flush, and daemon final
     // checkpoints must not be skipped on a profile switch.

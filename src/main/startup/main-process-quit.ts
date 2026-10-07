@@ -32,6 +32,7 @@ import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { mainProcessState as state } from './main-process-state'
 import { isDevParentShutdownRequested } from './configure-process'
 import { getCanonicalUserDataPath } from '../persistence'
+import { recordMainSessionExit } from '../crash-reporting/main-session-exit-marker'
 
 // Why: will-quit fires twice — first pass preventDefaults and runs teardown; second pass exits.
 let daemonDisconnectDone = false
@@ -40,6 +41,8 @@ let watcherShutdownPromise: Promise<void> | null = null
 const GROK_HOOK_CLEANUP_DEADLINE_MS = 2_000
 // Why 2s: long enough for a `pack-refs` child to take SIGTERM and unlink its lock.
 const REF_MAINTENANCE_QUIT_DEADLINE_MS = 2_000
+// Why 2s: a stalled profile mount must not hold the quit; a missed record only costs a false unclean report.
+const SESSION_EXIT_RECORD_DEADLINE_MS = 2_000
 
 function shutdownWatchersOnce(): Promise<void> {
   if (state.watcherShutdownDone) {
@@ -285,6 +288,13 @@ function installWillQuitHandler(): void {
       .catch(() => {
         /* swallow — telemetry must never prevent app.quit() */
       })
+      // Why last: a native crash during teardown above must still read as unclean next launch.
+      .then(() =>
+        settleWithinMs(
+          recordMainSessionExit(updateQuitInProgress ? 'update-install' : 'quit'),
+          SESSION_EXIT_RECORD_DEADLINE_MS
+        )
+      )
       .then(() => {
         daemonDisconnectDone = true
         app.quit()

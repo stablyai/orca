@@ -194,7 +194,7 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(destroySystemTrayMock).toHaveBeenCalledTimes(1)
-    expect(relaunchAppMock).toHaveBeenCalledWith('renderer-request')
+    expect(relaunchAppMock).toHaveBeenCalledWith('renderer-request', 'app-exit')
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).toHaveBeenCalledWith(0)
     expect(destroySystemTrayMock.mock.invocationCallOrder[0]).toBeLessThan(
@@ -243,7 +243,7 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
-    expect(relaunchAppMock).toHaveBeenCalledWith('admin-restart')
+    expect(relaunchAppMock).toHaveBeenCalledWith('admin-restart', 'app-quit')
     expect(appQuitMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).not.toHaveBeenCalled()
   })

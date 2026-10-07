@@ -5,6 +5,7 @@ import {
   recordCoalescedCrashBreadcrumb
 } from '../crash-reporting/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { revokeProvisionalMainSessionExit } from '../crash-reporting/main-session-exit-marker'
 import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
 import { resolveConsent } from '../telemetry/consent'
 import { trackAppOpenedOnce } from '../telemetry/client'
@@ -99,6 +100,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {
       state.isQuitting = false
+      revokeProvisionalMainSessionExit()
       clearExpectedRendererReload()
     },
     onRendererProcessGone: (details, webContentsId) => {

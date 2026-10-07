@@ -302,7 +302,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     setTimeout(() => {
       // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
       destroySystemTray()
-      relaunchApp('renderer-request')
+      relaunchApp('renderer-request', 'app-exit')
       app.exit(0)
     }, 150)
   })
@@ -311,7 +311,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     // Why: use the normal quit pipeline so daemon checkpoints and telemetry flush before exit.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
-      relaunchApp('admin-restart')
+      relaunchApp('admin-restart', 'app-quit')
       app.quit()
     }, 150)
   })
