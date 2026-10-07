@@ -4,42 +4,17 @@ import {
   loadDefaultSessionView,
   readSessionViewOverridesPreference,
   updateSessionViewOverride,
-  type MobileSessionView,
-  type SessionViewOverridesPreference
+  type MobileSessionView
 } from '../storage/session-view-preferences'
 
-type ViewOverridesState = {
-  hostId: string
-  worktreeId: string
-  overrides: Map<string, MobileSessionView>
-  loaded: boolean
-}
-
-type ViewOverridesRuntime = {
-  hostId: string
-  worktreeId: string
-  loadPromise: Promise<SessionViewOverridesPreference>
-  currentOverrides: Map<string, MobileSessionView>
-  mutationRevisions: Map<string, number>
-}
-
-function isOverrideScope(state: ViewOverridesState, hostId: string, worktreeId: string): boolean {
-  return state.hostId === hostId && state.worktreeId === worktreeId
-}
-
-function mergeOverrides(
-  persisted: ReadonlyMap<string, MobileSessionView>,
-  current: ReadonlyMap<string, MobileSessionView>
-): Map<string, MobileSessionView> {
-  const merged = new Map(persisted)
-  for (const [tabId, view] of current) {
-    merged.set(tabId, view)
-  }
-  return merged
-}
+import {
+  isOverrideScope,
+  mergeOverrides,
+  type ViewOverridesRuntime,
+  type ViewOverridesState
+} from './mobile-session-view-mode-state'
 
 export type MobileSessionViewModeController = {
-  /** Whether a tab's effective view is chat (host value when shared, else per-tab override, else the default). */
   isTabChatView: (tabId: string) => boolean
   toggleTabChatView: (tabId: string) => void
 }
@@ -48,12 +23,9 @@ export type MobileSessionViewModeController = {
  *  `writeHostViewMode` is null when the host cannot accept the write, which also means its
  *  published view is not adoptable — the two are one capability. */
 export type MobileSessionTabViewModeBridge = {
-  /** Identity of the connected client; a reconnect must not inherit old optimistic writes. */
   hostViewSource?: object
   readHostViewMode: (tabId: string) => MobileSessionView | undefined
-  /** Rejects when the host write fails; the hook clears its pending state and reverts on rejection. */
   writeHostViewMode: ((tabId: string, view: MobileSessionView) => Promise<void>) | null
-  /** Surfaces a rejected shared-view write to the user; present only with the write capability. */
   onHostViewModeWriteError?: (error: unknown) => void
 }
 
@@ -300,17 +272,19 @@ export function useMobileSessionViewMode(args: {
             },
             (error) => {
               const pending = pendingWrites.get(tabId)
-              if (
+              const isCurrentWrite =
                 pending?.token === token &&
                 pending.hostId === hostId &&
                 pending.worktreeId === worktreeId &&
-                pending.source === bridge?.hostViewSource
-              ) {
+                pending.source === bridge?.hostViewSource &&
+                sessionTabViewModeRef.current?.hostViewSource === bridge?.hostViewSource
+              if (isCurrentWrite) {
                 pendingWrites.delete(tabId)
               }
               // Why: the host never took this mode, so drop the override claiming it — unless a
               // newer toggle for this tab has since replaced it.
               if (
+                isCurrentWrite &&
                 mountedRef.current &&
                 viewOverridesRuntimeRef.current === runtime &&
                 runtime.mutationRevisions.get(tabId) === revision
@@ -328,8 +302,8 @@ export function useMobileSessionViewMode(args: {
                   viewOverridesStateRef.current = revertedState
                   setViewOverridesState(revertedState)
                 }
+                sessionTabViewModeRef.current?.onHostViewModeWriteError?.(error)
               }
-              bridge?.onHostViewModeWriteError?.(error)
             }
           )
       }

@@ -604,6 +604,85 @@ describe('useMobileSessionViewMode', () => {
     expect(controller?.isTabChatView('t1')).toBe(false)
   })
 
+  it('ignores a stale rejection after reconnect and still handles the current source', async () => {
+    const source1 = {}
+    const source2 = {}
+    const firstWrite = deferred<void>()
+    const secondWrite = deferred<void>()
+    const firstError = vi.fn()
+    const secondError = vi.fn()
+    const hostViews = new Map<string, MobileSessionView>()
+
+    function Harness(props: {
+      source: object
+      write: (tabId: string, view: MobileSessionView) => Promise<void>
+      onError: (error: unknown) => void
+    }): null {
+      controller = useMobileSessionViewMode({
+        hostId: 'h',
+        worktreeId: 'w',
+        sessionTabViewMode: {
+          hostViewSource: props.source,
+          readHostViewMode: (tabId) => hostViews.get(tabId),
+          writeHostViewMode: props.write,
+          onHostViewModeWriteError: props.onError
+        }
+      })
+      return null
+    }
+
+    await act(async () => {
+      renderer = create(
+        createElement(Harness, {
+          source: source1,
+          write: () => firstWrite.promise,
+          onError: firstError
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+    expect(controller?.isTabChatView('t1')).toBe(true)
+
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, {
+          source: source2,
+          write: () => secondWrite.promise,
+          onError: secondError
+        })
+      )
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      firstWrite.reject(new Error('stale host refused'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(firstError).not.toHaveBeenCalled()
+    expect(controller?.isTabChatView('t1')).toBe(true)
+
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+    expect(controller?.isTabChatView('t1')).toBe(false)
+
+    await act(async () => {
+      secondWrite.reject(new Error('current host refused'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(secondError).toHaveBeenCalledWith(expect.any(Error))
+    expect(controller?.isTabChatView('t1')).toBe(true)
+  })
+
   it('never writes to a host that does not share the view', async () => {
     const writes: Array<[string, MobileSessionView]> = []
     const hostViews = new Map<string, MobileSessionView>([['t1', 'chat']])
