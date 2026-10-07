@@ -225,6 +225,82 @@ describe('CommentMarkdown', () => {
     expect(markup).not.toContain('<pre')
   })
 
+  it('keeps an unfinished mermaid fence as source and mounts only a closed one', () => {
+    const openFence = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'```mermaid\ngraph TD; A-->B;'} />
+    )
+    expect(openFence).toContain('<pre')
+    expect(openFence).toContain('graph TD')
+    expect(openFence).not.toContain('class="mermaid-block"')
+
+    const indentedOpen = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'   ```mermaid\n   graph TD; A-->B;'} />
+    )
+    expect(indentedOpen).toContain('<pre')
+    expect(indentedOpen).not.toContain('class="mermaid-block"')
+
+    const closedButInvalid = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'```mermaid\nflowchart TD\n  A["x"\n```'} />
+    )
+    expect(closedButInvalid).toContain('class="mermaid-block"')
+    expect(closedButInvalid).not.toContain('<pre')
+
+    const mixed = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content={'```mermaid\ngraph TD; A-->B;\n```\n\n```mermaid\ngraph TD; C-->D;'}
+      />
+    )
+    expect(mixed.match(/class="mermaid-block"/g)).toHaveLength(1)
+    expect(mixed).toContain('<pre')
+    expect(mixed).toContain('C--&gt;D;')
+  })
+
+  it('mounts a closed mermaid fence inside a blockquote, list, or deep indent', () => {
+    const quote = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'> ```mermaid\n> graph TD; A-->B;\n> ```'} />
+    )
+    expect(quote).toContain('<blockquote')
+    expect(quote).toContain('class="mermaid-block"')
+    expect(quote).not.toContain('<pre')
+
+    const list = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'- ```mermaid\n  graph TD; A-->B;\n  ```'} />
+    )
+    expect(list).toContain('class="mermaid-block"')
+    expect(list).not.toContain('<pre')
+
+    const indented = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content={'- notes\n\n    ```mermaid\n    graph TD; A-->B;\n    ```'}
+      />
+    )
+    expect(indented).toContain('class="mermaid-block"')
+    expect(indented).not.toContain('<pre')
+  })
+
+  it('keeps an unclosed fence when the last line only looks like a closer', () => {
+    const indentedBody = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'```mermaid\ngraph TD; A-->B;\n    ```'} />
+    )
+    expect(indentedBody).toContain('<pre')
+    expect(indentedBody).toContain('```')
+    expect(indentedBody).not.toContain('class="mermaid-block"')
+
+    const shorterMarker = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'````mermaid\ngraph TD; A-->B;\n```'} />
+    )
+    expect(shorterMarker).toContain('<pre')
+    expect(shorterMarker).not.toContain('class="mermaid-block"')
+
+    const differentMarker = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'```mermaid\ngraph TD; A-->B;\n~~~'} />
+    )
+    expect(differentMarker).toContain('<pre')
+    expect(differentMarker).not.toContain('class="mermaid-block"')
+  })
+
   it('uses the supplied code-block renderer for fenced document markdown', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown

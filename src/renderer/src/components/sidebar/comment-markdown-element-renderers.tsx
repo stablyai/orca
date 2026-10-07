@@ -1,6 +1,7 @@
 import React from 'react'
-import type { Components } from 'react-markdown'
+import type { ExtraProps, Components } from 'react-markdown'
 import { NATIVE_CHAT_FILE_HREF_PREFIX } from '../../../../shared/native-chat-href-routing'
+import { markdownFenceIsClosed } from '@/components/editor/markdown-fence-close'
 import { isMermaidFence, isMermaidPre, renderMermaidFence } from './comment-mermaid-fence'
 import {
   GitHubUserAttachmentImage,
@@ -239,6 +240,38 @@ export function createCompactCommentMarkdownComponents(
   }
 }
 
+// Why: the fence component only sees the fence body. The raw message is what
+// shows whether the closing backticks have arrived, including while the next
+// streaming chunk is still on screen as source.
+export const CommentMarkdownSourceContext = React.createContext<string | null>(null)
+
+const MERMAID_FENCE_CLASS =
+  'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]'
+
+function DocumentCommentCode({
+  className,
+  children,
+  node
+}: React.ComponentPropsWithoutRef<'code'> & ExtraProps): React.JSX.Element {
+  const source = React.useContext(CommentMarkdownSourceContext)
+  if (!isMermaidFence(className)) {
+    return (
+      <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
+        {children}
+      </code>
+    )
+  }
+
+  const fenceStart = node?.position?.start
+  const fenceEndLine = node?.position?.end.line
+  const fenceClosed =
+    source !== null &&
+    fenceStart !== undefined &&
+    typeof fenceEndLine === 'number' &&
+    markdownFenceIsClosed(source, fenceStart.line, fenceStart.column, fenceEndLine)
+  return renderMermaidFence(children, MERMAID_FENCE_CLASS, fenceClosed)
+}
+
 export function createDocumentCommentMarkdownComponents(
   onLinkClick?: CommentMarkdownLinkClickHandler,
   renderCodeBlock?: DocumentCodeBlockRenderer
@@ -262,17 +295,7 @@ export function createDocumentCommentMarkdownComponents(
           {children}
         </a>
       ),
-    code: ({ className, children }) =>
-      isMermaidFence(className) ? (
-        renderMermaidFence(
-          children,
-          'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]'
-        )
-      ) : (
-        <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
-          {children}
-        </code>
-      ),
+    code: DocumentCommentCode,
     // Mermaid fences render a <div>, which is invalid inside <pre>, so unwrap them.
     pre: ({ children }) =>
       isMermaidPre(children) ? (

@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import {
   compactCommentMarkdownComponents,
   createCompactCommentMarkdownComponents,
+  CommentMarkdownSourceContext,
   createDocumentCommentMarkdownComponents,
   documentCommentMarkdownComponents,
   isTrustedCompactImageSrc,
@@ -245,16 +246,18 @@ const CommentMarkdown = React.memo(
         )}
         {...rest}
       >
-        <Markdown
-          remarkPlugins={activeRemarkPlugins}
-          rehypePlugins={rehypePlugins}
-          components={components}
-          urlTransform={
-            allowFileUriLinks ? commentMarkdownFileUriUrlTransform : commentMarkdownUrlTransform
-          }
-        >
-          {content}
-        </Markdown>
+        <CommentMarkdownSourceContext.Provider value={content}>
+          <Markdown
+            remarkPlugins={activeRemarkPlugins}
+            rehypePlugins={rehypePlugins}
+            components={components}
+            urlTransform={
+              allowFileUriLinks ? commentMarkdownFileUriUrlTransform : commentMarkdownUrlTransform
+            }
+          >
+            {content}
+          </Markdown>
+        </CommentMarkdownSourceContext.Provider>
       </div>
     )
   })
