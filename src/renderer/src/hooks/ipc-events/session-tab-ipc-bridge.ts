@@ -21,9 +21,11 @@ import { flushRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 export async function applySessionTabProps(args: {
   worktreeId: string
   tabId: string
+  color?: string | null
+  isPinned?: boolean
   viewMode?: 'terminal' | 'chat'
 }): Promise<void> {
-  if (args.viewMode === undefined) {
+  if (args.color === undefined && args.isPinned === undefined && args.viewMode === undefined) {
     return
   }
   const localTabId = resolveWindowTabIdForHostTab(args.worktreeId, args.tabId)
@@ -33,8 +35,16 @@ export async function applySessionTabProps(args: {
     throw new Error('session_tab_not_found')
   }
   useAppStore.setState((state) => ({
-    ...patchTab(state.unifiedTabsByWorktree, localTabId, { viewMode: args.viewMode }),
-    ...patchTerminalTabRow(state.tabsByWorktree, localTabId, { viewMode: args.viewMode })
+    ...patchTab(state.unifiedTabsByWorktree, localTabId, {
+      ...(args.color !== undefined ? { color: args.color } : {}),
+      ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
+      ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
+    }),
+    ...patchTerminalTabRow(state.tabsByWorktree, localTabId, {
+      ...(args.color !== undefined ? { color: args.color } : {}),
+      ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
+      ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
+    })
   }))
   // The direct authoritative patch bypasses the normal tab action, so explicitly publish the
   // updated viewMode before the next stale graph snapshot can overwrite the two local rows.
@@ -153,17 +163,19 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
 
   if (window.api.ui.onSetSessionTabProps) {
     unsubs.push(
-      window.api.ui.onSetSessionTabProps(async ({ requestId, worktreeId, tabId, viewMode }) => {
-        try {
-          await applySessionTabProps({ worktreeId, tabId, viewMode })
-          window.api.ui.respondSessionTabProps?.({ requestId })
-        } catch (error) {
-          window.api.ui.respondSessionTabProps?.({
-            requestId,
-            error: error instanceof Error ? error.message : 'session_tab_props_failed'
-          })
+      window.api.ui.onSetSessionTabProps(
+        async ({ requestId, worktreeId, tabId, color, isPinned, viewMode }) => {
+          try {
+            await applySessionTabProps({ worktreeId, tabId, color, isPinned, viewMode })
+            window.api.ui.respondSessionTabProps?.({ requestId })
+          } catch (error) {
+            window.api.ui.respondSessionTabProps?.({
+              requestId,
+              error: error instanceof Error ? error.message : 'session_tab_props_failed'
+            })
+          }
         }
-      })
+      )
     )
   }
 }

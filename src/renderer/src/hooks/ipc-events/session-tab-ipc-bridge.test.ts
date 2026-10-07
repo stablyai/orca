@@ -22,6 +22,8 @@ type SessionTabPropsRequest = {
   requestId: string
   worktreeId: string
   tabId: string
+  color?: string | null
+  isPinned?: boolean
   viewMode?: 'terminal' | 'chat'
 }
 
@@ -86,11 +88,21 @@ describe('renderer-authoritative session tab props', () => {
     useAppStore.setState(initialState, true)
   })
 
-  it('resolves the host tab to the local tab and patches unified plus legacy rows', async () => {
-    await applySessionTabProps({ worktreeId: WORKTREE_ID, tabId: HOST_TAB_ID, viewMode: 'chat' })
+  it('applies every relayed property to unified plus legacy rows', async () => {
+    await applySessionTabProps({
+      worktreeId: WORKTREE_ID,
+      tabId: HOST_TAB_ID,
+      color: '#abc',
+      isPinned: true,
+      viewMode: 'chat'
+    })
 
     const state = useAppStore.getState()
+    expect(state.unifiedTabsByWorktree[WORKTREE_ID]?.[0].color).toBe('#abc')
+    expect(state.unifiedTabsByWorktree[WORKTREE_ID]?.[0].isPinned).toBe(true)
     expect(state.unifiedTabsByWorktree[WORKTREE_ID]?.[0].viewMode).toBe('chat')
+    expect(state.tabsByWorktree[WORKTREE_ID]?.[0].color).toBe('#abc')
+    expect(state.tabsByWorktree[WORKTREE_ID]?.[0].isPinned).toBe(true)
     expect(state.tabsByWorktree[WORKTREE_ID]?.[0].viewMode).toBe('chat')
     expect(state.setTabViewMode).not.toHaveBeenCalled()
     expect(flushRuntimeGraphSync).toHaveBeenCalledWith(WORKTREE_ID)
@@ -146,6 +158,8 @@ describe('renderer-authoritative session tab props', () => {
       requestId: 'request-1',
       worktreeId: WORKTREE_ID,
       tabId: HOST_TAB_ID,
+      color: '#def',
+      isPinned: true,
       viewMode: 'chat'
     })
     await Promise.resolve()

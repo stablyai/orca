@@ -227,12 +227,21 @@ export const uiTerminalAndSessionTabsApi = {
       requestId: string
       worktreeId: string
       tabId: string
+      color?: string | null
+      isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
     }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { requestId: string; worktreeId: string; tabId: string; viewMode?: 'terminal' | 'chat' }
+      data: {
+        requestId: string
+        worktreeId: string
+        tabId: string
+        color?: string | null
+        isPinned?: boolean
+        viewMode?: 'terminal' | 'chat'
+      }
     ) => callback(data)
     ipcRenderer.on('ui:sessionTabPropsRequest', listener)
     return () => ipcRenderer.removeListener('ui:sessionTabPropsRequest', listener)

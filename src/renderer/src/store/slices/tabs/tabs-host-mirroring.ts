@@ -18,7 +18,7 @@ import {
 export function patchTerminalTabRow(
   tabsByWorktree: Record<string, TerminalTab[]>,
   tabId: string,
-  patch: Partial<Pick<TerminalTab, 'isPinned' | 'viewMode'>>
+  patch: Partial<Pick<TerminalTab, 'color' | 'isPinned' | 'viewMode'>>
 ): Partial<Pick<AppState, 'tabsByWorktree'>> {
   const location = locateTerminalTab(tabsByWorktree, tabId)
   if (!location) {

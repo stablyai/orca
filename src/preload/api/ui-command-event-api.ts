@@ -232,6 +232,8 @@ export type UiCommandEventApi = {
       requestId: string
       worktreeId: string
       tabId: string
+      color?: string | null
+      isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
     }) => void
   ) => () => void
