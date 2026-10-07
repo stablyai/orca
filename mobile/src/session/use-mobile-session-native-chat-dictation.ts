@@ -11,8 +11,10 @@ import {
   isDictationSetupRequiredError
 } from '../dictation/mobile-dictation-setup'
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
-import { sessionTabSetProps } from './mobile-session-write-operations'
-import { requireAcceptedSessionTabProps } from './session-tab-set-props-bridge'
+import {
+  requireAcceptedSessionTabProps,
+  sessionTabSetProps
+} from './mobile-session-write-operations'
 import type { MobileSessionTabViewModeBridge } from './use-mobile-session-view-mode'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'

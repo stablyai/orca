@@ -8,6 +8,7 @@ import {
   sessionWriteUnreadReplySchema
 } from './session-write-reply-schema'
 import { quickCommandsReader } from './mobile-session-read-operations'
+import type { RpcResponse } from '../transport/types'
 
 // The session screen's writes: terminal input from native chat and the image surfaces, the tab
 // strip's rename/close/activate, the New Tab terminal create, the terminal menu's display-mode
@@ -163,6 +164,17 @@ export const sessionTabSetProps = bindDeferredRpcOperation(
     read: rpcResultVariant('session-tab-props-set', sessionTabPropsWriteReplySchema)
   })
 )
+
+export function requireAcceptedSessionTabProps(response: RpcResponse): {
+  publicationEpoch?: string
+  snapshotVersion?: number
+} {
+  const verdict = sessionTabSetProps.interpret(response)
+  if (!verdict.accepted) {
+    throw new Error('session.tabs.setTabProps was not accepted')
+  }
+  return verdict.value
+}
 
 /**
  * Writing the review notes and the per-file review state onto the worktree record. Both call sites

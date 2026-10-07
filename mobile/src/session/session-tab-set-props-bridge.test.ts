@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { rpcRefusal, rpcSuccess } from '../transport/rpc-operation-test-families'
-import { requireAcceptedSessionTabProps } from './session-tab-set-props-bridge'
+import { requireAcceptedSessionTabProps } from './mobile-session-write-operations'
 
 describe('session tab props mobile bridge', () => {
   it('rejects an RPC refusal instead of fulfilling with undefined', () => {
