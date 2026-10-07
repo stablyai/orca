@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { setCachedWorktrees } from '../cache/worktree-cache'
 import type { RpcClient } from '../transport/rpc-client'
@@ -16,6 +16,9 @@ import { savePinnedIds } from '../storage/preferences'
 import type { Worktree } from '../worktree/workspace-list-sections'
 import type { FetchHostRepoMetadata } from './use-host-repo-metadata'
 import type { HostScreenState } from './use-host-screen-state'
+
+type WorktreeFetchOptions = { allowDuringModal?: boolean }
+type FetchWorktrees = (options?: WorktreeFetchOptions) => Promise<Worktree[] | undefined>
 
 export function useHostWorktreeCatalog(args: {
   client: RpcClient | null
@@ -50,9 +53,10 @@ export function useHostWorktreeCatalog(args: {
     setWorktreesLoaded,
     worktreeCatalogRef
   } = state
+  const fetchWorktreesRef = useRef<FetchWorktrees | null>(null)
 
   const fetchWorktrees = useCallback(
-    async (options: { allowDuringModal?: boolean } = {}): Promise<Worktree[] | undefined> => {
+    async (options: WorktreeFetchOptions = {}): Promise<Worktree[] | undefined> => {
       if (!client || connState !== 'connected' || !hostId) {
         return undefined
       }
@@ -74,6 +78,7 @@ export function useHostWorktreeCatalog(args: {
         if (fetchWorktreesInFlightRef.current === inFlight) {
           fetchWorktreesInFlightRef.current = null
         }
+        return fetchWorktreesRef.current?.({ allowDuringModal: true })
       }
       const requestClient = client
       const requestHostId = hostId
@@ -159,6 +164,7 @@ export function useHostWorktreeCatalog(args: {
     },
     [client, connState, hostId]
   )
+  fetchWorktreesRef.current = fetchWorktrees
 
   useFocusEffect(
     useCallback(() => {

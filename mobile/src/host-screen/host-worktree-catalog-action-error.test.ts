@@ -15,6 +15,7 @@ import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
 type Worktree = { worktreeId: string; repo: string; isPinned: boolean }
 
 const CONFIRMED: Worktree[] = [{ worktreeId: 'wt-1', repo: 'orca', isPinned: false }]
+const FRESH: Worktree[] = [{ worktreeId: 'wt-new', repo: 'new-project', isPinned: false }]
 
 /**
  * The clear the list depends on to stop showing a failure the host has since disproved.
@@ -26,7 +27,8 @@ function catalogHook(
   fetched: unknown,
   actionErrors: string[],
   catalogErrors: (string | null)[],
-  catalogFetch?: () => Promise<unknown>
+  catalogFetch?: () => Promise<unknown>,
+  admit: () => Worktree[] | null = () => (fetched === null && !catalogFetch ? null : CONFIRMED)
 ) {
   const state = {
     clientRef: { current: {} },
@@ -43,7 +45,7 @@ function catalogHook(
     worktreeCatalogRef: {
       current: {
         fetch: catalogFetch ?? (async () => fetched),
-        admit: () => (fetched === null && !catalogFetch ? null : CONFIRMED)
+        admit
       }
     }
   }
@@ -131,13 +133,14 @@ describe('the fetch a handoff awaits', () => {
     await expect(held.fetchWorktrees?.()).resolves.toEqual(CONFIRMED)
   })
 
-  it('shares the in-flight request instead of leaving a concurrent caller empty-handed', async () => {
+  it('waits for a pre-mutation poll, then returns the fresh post-mutation rows', async () => {
     // A holder, not a `let`: control flow would narrow a `let` to its null initializer here and
     // call the later assignment — made inside the fetch callback — unreachable typing.
     const releasers: Array<() => void> = []
     const catalogCalls: number[] = []
     const actionErrors: string[] = []
     const catalogErrors: (string | null)[] = []
+    let admits = 0
     const catalogFetch = () =>
       new Promise((resolve) => {
         catalogCalls.push(catalogCalls.length)
@@ -150,7 +153,8 @@ describe('the fetch a handoff awaits', () => {
       { kind: 'response', pending: { admission: { kind: 'valid' } } },
       actionErrors,
       catalogErrors,
-      catalogFetch
+      catalogFetch,
+      () => (admits++ === 0 ? CONFIRMED : FRESH)
     ) as unknown as Parameters<typeof useHostWorktreeCatalog>[0]
     const held: {
       fetchWorktrees: ((options?: { allowDuringModal?: boolean }) => Promise<unknown>) | null
@@ -171,7 +175,43 @@ describe('the fetch a handoff awaits', () => {
     const secondRequest = releasers[1]
     expect(secondRequest).toBeDefined()
     secondRequest?.()
-    await expect(second).resolves.toEqual(CONFIRMED)
+    await expect(second).resolves.toEqual(FRESH)
     expect(catalogCalls).toEqual([0, 1])
+  })
+
+  it('keeps ordinary concurrent polls joined to the existing request', async () => {
+    const releaser: { release: (() => void) | null } = { release: null }
+    const catalogCalls: number[] = []
+    const catalogFetch = () =>
+      new Promise((resolve) => {
+        catalogCalls.push(catalogCalls.length)
+        releaser.release = () =>
+          resolve({ kind: 'response', pending: { admission: { kind: 'valid' } } })
+      })
+    const actionErrors: string[] = []
+    const catalogErrors: (string | null)[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reachable surface as fetchWith above.
+    const args = catalogHook(
+      { kind: 'response', pending: { admission: { kind: 'valid' } } },
+      actionErrors,
+      catalogErrors,
+      catalogFetch
+    ) as unknown as Parameters<typeof useHostWorktreeCatalog>[0]
+    const held: {
+      fetchWorktrees: ((options?: { allowDuringModal?: boolean }) => Promise<unknown>) | null
+    } = { fetchWorktrees: null }
+    function Probe(): null {
+      held.fetchWorktrees = useHostWorktreeCatalog(args).fetchWorktrees
+      return null
+    }
+    await act(async () => {
+      create(createElement(Probe))
+    })
+    const first = held.fetchWorktrees?.()
+    const second = held.fetchWorktrees?.()
+    releaser.release?.()
+    await expect(first).resolves.toEqual(CONFIRMED)
+    await expect(second).resolves.toEqual(CONFIRMED)
+    expect(catalogCalls).toEqual([0])
   })
 })
