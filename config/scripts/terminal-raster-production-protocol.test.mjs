@@ -33,7 +33,13 @@ function kitty(command, bytes) {
   return `\x1b_G${command};${Buffer.from(bytes).toString('base64')}\x1b\\`
 }
 
+const compactQoi = Buffer.from('716f696600000008000000080400ffff0000fffdc00000000000000001', 'hex')
+
 const sequences = [
+  [
+    'IIP compact QOI',
+    `\x1b]1337;File=inline=1;width=8px;height=8px:${compactQoi.toString('base64')}\x07`
+  ],
   ...Object.keys(fixtures).map((format) => [
     `IIP ${format}`,
     `\x1b]1337;File=inline=1;width=8px;height=8px:${fixtures[format]}\x07`
@@ -83,6 +89,87 @@ describe('production raster backend in the headless terminal parser', () => {
       }
     }
   )
+
+  it.each([
+    [
+      'minimum QOI',
+      Buffer.from('716f696600000001000000010300c00000000000000001', 'hex'),
+      [0, 0, 0, 255]
+    ],
+    [
+      'RGB, diff, luma, index and run QOI',
+      Buffer.from('716f696600000006000000010301fe1002037fa18704c10000000000000001', 'hex'),
+      [16, 2, 3, 255, 17, 3, 4, 255, 18, 4, 4, 255, 16, 2, 3, 255, 16, 2, 3, 255, 16, 2, 3, 255]
+    ]
+  ])('%s preserves every pixel and consumes the suffix', (_name, bytes, expected) => {
+    const h = terminal()
+    try {
+      h.core._core.writeSync(`\x1b]1337;File=inline=1:${bytes.toString('base64')}\x07AFTER`)
+      expect(h.addon._storage._images.size).toBe(1)
+      expect([...h.addon._storage._images.values()][0].orig.data).toEqual(
+        new Uint8ClampedArray(expected)
+      )
+      expect(
+        Array.from({ length: 10 }, (_, row) =>
+          h.core.buffer.active.getLine(row).translateToString(true)
+        ).join('\n')
+      ).toContain('AFTER')
+    } finally {
+      h.core.dispose()
+    }
+  })
+
+  it.each([
+    ['header only', compactQoi.subarray(0, 14)],
+    ['truncated end marker', compactQoi.subarray(0, 28)],
+    [
+      'missing RGBA bytes',
+      Buffer.concat([
+        compactQoi.subarray(0, 14),
+        Buffer.from([255, 255, 0]),
+        compactQoi.subarray(-8)
+      ])
+    ],
+    ['short pixel stream', Buffer.concat([compactQoi.subarray(0, 19), compactQoi.subarray(-8)])],
+    [
+      'long pixel stream',
+      Buffer.concat([compactQoi.subarray(0, 20), Buffer.from([193]), compactQoi.subarray(-8)])
+    ],
+    [
+      'missing luma byte',
+      Buffer.concat([compactQoi.subarray(0, 14), Buffer.from([128]), compactQoi.subarray(-8)])
+    ],
+    [
+      'extra encoded pixel',
+      Buffer.concat([compactQoi.subarray(0, -8), Buffer.from([0]), compactQoi.subarray(-8)])
+    ],
+    ['invalid channels', Buffer.from(compactQoi).fill(2, 12, 13)],
+    ['invalid color space', Buffer.from(compactQoi).fill(2, 13, 14)],
+    [
+      'negative signed dimensions',
+      Buffer.from(compactQoi).fill(255, 4, 12).fill(248, 7, 8).fill(248, 11, 12)
+    ],
+    ['invalid end marker', Buffer.from(compactQoi).fill(0, 28, 29)]
+  ])('drops QOI with %s and accepts the next image', (_name, bytes) => {
+    const h = terminal()
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      h.core._core.writeSync(`BEFORE\x1b]1337;File=inline=1:${bytes.toString('base64')}\x07AFTER`)
+      expect(h.addon._storage._images.size).toBe(0)
+      expect(h.core.buffer.active.getLine(0).translateToString(true)).toBe('BEFOREAFTER')
+      h.core._core.writeSync(`\x1b]1337;File=inline=1:${compactQoi.toString('base64')}\x07VALID`)
+      expect(h.addon._storage._images.size).toBe(1)
+      expect(warning).toHaveBeenCalledOnce()
+      expect(
+        Array.from({ length: 10 }, (_, row) =>
+          h.core.buffer.active.getLine(row).translateToString(true)
+        ).join('\n')
+      ).toContain('VALID')
+    } finally {
+      warning.mockRestore()
+      h.core.dispose()
+    }
+  })
 
   it('applies crop, resize and offsets without losing the suffix or retaining intermediates', () => {
     const h = terminal()

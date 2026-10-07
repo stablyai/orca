@@ -202,6 +202,67 @@ index 28037a8973014b7892a7fe397d8136e39e18c73a..e9777c6e502768920f82ccbc71356b46
      this._storage.addImage(img, this._addImageOpts);
    }
  }
+diff --git a/src/IIPMetrics.ts b/src/IIPMetrics.ts
+index 217a7fc93d5dca938dd086509027919f2f1c7902..a93ca203fbb8ea22310ec23d21179777e7688e29 100644
+--- a/src/IIPMetrics.ts
++++ b/src/IIPMetrics.ts
+@@ -19,6 +19,13 @@ export const UNSUPPORTED_TYPE: IMetrics = {
+ };
+ 
+ export function imageType(d: Uint8Array): IMetrics {
++  // QOI: qoif
++  if (d.length >= 14 && d[0] === 0x71 && d[1] === 0x6F && d[2] === 0x69 && d[3] === 0x66) {
++    const width = d[4] << 24 | d[5] << 16 | d[6] << 8 | d[7];
++    const height = d[8] << 24 | d[9] << 16 | d[10] << 8 | d[11];
++    return width > 0 && height > 0 && hasCompleteQoiPixels(d, width * height)
++      ? { mime: 'image/qoi', width, height } : UNSUPPORTED_TYPE;
++  }
+   if (d.length < 32) {
+     return UNSUPPORTED_TYPE;
+   }
+@@ -45,14 +52,6 @@ export function imageType(d: Uint8Array): IMetrics {
+       height: d[9] << 8 | d[8]
+     };
+   }
+-  // QOI: qoif
+-  if (d32[0] === 0x66696F71) {
+-    return {
+-      mime: 'image/qoi',
+-      width:  d[4] << 24 | d[5] << 16 | d[6] << 8 | d[7],
+-      height: d[8] << 24 | d[9] << 16 | d[10] << 8 | d[11]
+-    };
+-  }
+   // WEBP: RIFF | xxxx | WEBP | VP8x
+   if (d32[0] === 0x46464952 && d32[2] === 0x50424557 && (d32[3] & 0xFFFFFF) === 0x385056) {
+     switch (d[15]) {
+@@ -114,6 +113,27 @@ export function imageType(d: Uint8Array): IMetrics {
+ }
+ 
+ 
++function hasCompleteQoiPixels(data: Uint8Array, pixels: number): boolean {
++  if (data.length < 23 || !Number.isSafeInteger(pixels) || pixels <= 0 ||
++      (data[12] !== 3 && data[12] !== 4) || data[13] > 1) return false;
++  const end = data.length - 8;
++  for (let i = end; i < data.length - 1; i++) {
++    if (data[i] !== 0) return false;
++  }
++  if (data[data.length - 1] !== 1) return false;
++  let offset = 14;
++  let decoded = 0;
++  // The WASM decoder accepts incomplete streams, so validate without allocating pixels.
++  while (offset < end && decoded < pixels) {
++    const op = data[offset++];
++    const extra = op === 0xFE ? 3 : op === 0xFF ? 4 : (op & 0xC0) === 0x80 ? 1 : 0;
++    if (offset + extra > end) return false;
++    offset += extra;
++    decoded += op >= 0xC0 && op < 0xFE ? (op & 0x3F) + 1 : 1;
++  }
++  return decoded === pixels && offset === end;
++}
++
+ function jpgSize(d: Uint8Array): [number, number] {
+   const len = d.length;
+   let i = 4;
 diff --git a/src/ImageAddon.ts b/src/ImageAddon.ts
 index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ff6dd36b41a5e6f927a2c4b590a01d54c7ba5622 100644
 --- a/src/ImageAddon.ts
@@ -714,10 +775,10 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..017f3becd57d5e9a6048b84e5b6b0783
    public get document(): Document | undefined {
 diff --git a/src/ImageSource.ts b/src/ImageSource.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..6a809ebaa64cb7c754c716dbaa6702dfe9303c38
+index 0000000000000000000000000000000000000000..ac5c3557b998ca129a3b6b445b64c92c3d5ae661
 --- /dev/null
 +++ b/src/ImageSource.ts
-@@ -0,0 +1,182 @@
+@@ -0,0 +1,191 @@
 +/**
 + * Copyright (c) 2026 The xterm.js authors. All rights reserved.
 + * @license MIT
@@ -820,7 +881,16 @@ index 0000000000000000000000000000000000000000..6a809ebaa64cb7c754c716dbaa6702df
 +    if (size) this._checkSize(size.width, size.height);
 +    const resizing = size && (size.width !== width || size.height !== height);
 +    if ((bitmap || resizing) && typeof createImageBitmap === 'function') {
-+      return createImageBitmap(image, { resizeWidth: size?.width, resizeHeight: size?.height, premultiplyAlpha: 'premultiply' });
++      const decoded = createImageBitmap(image, { premultiplyAlpha: 'premultiply' });
++      if (!resizing) return decoded;
++      // Premultiply before interpolating pixels with different alpha values.
++      return decoded.then(async source => {
++        try {
++          return await this.resize(source, size.width, size.height);
++        } finally {
++          source.close();
++        }
++      });
 +    }
 +    const canvas = createImageCanvas(undefined, width, height);
 +    canvas.getContext('2d')?.putImageData(image, 0, 0);
