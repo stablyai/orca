@@ -160,12 +160,15 @@ export async function resolvePRForBranchOutcome(input: {
     const branchLookup = await lookupPRByBranchName({
       candidates,
       headRepo,
+      headRepoInferred: true,
       branchName,
+      currentHeadOid: explicitCurrentHeadOid,
       ghOptions,
       executionScope
     })
     data = branchLookup.data
     dataRepo = branchLookup.dataRepo
+    dataHeadRepo = branchLookup.dataHeadRepo ?? headRepo
     if ('pendingError' in branchLookup) {
       pendingBranchLookupError = branchLookup.pendingError
       hasPendingBranchLookupError = true
@@ -179,13 +182,13 @@ export async function resolvePRForBranchOutcome(input: {
         localGitOptions
       )
       if (upstreamBranch) {
-        const upstreamHeadRepo =
-          (await getGitHubApiRepositoryForRemote(
-            repoPath,
-            upstreamBranch.remoteName,
-            connectionId,
-            localGitOptions
-          )) ?? headRepo
+        const trackedHeadRepo = await getGitHubApiRepositoryForRemote(
+          repoPath,
+          upstreamBranch.remoteName,
+          connectionId,
+          localGitOptions
+        )
+        const upstreamHeadRepo = trackedHeadRepo ?? headRepo
         if (
           upstreamHeadRepo &&
           shouldRetryTrackedUpstreamBranch(upstreamBranch, branchName, upstreamHeadRepo, headRepo)
@@ -193,7 +196,9 @@ export async function resolvePRForBranchOutcome(input: {
           const upstreamLookup = await lookupPRByBranchName({
             candidates,
             headRepo: upstreamHeadRepo,
+            headRepoInferred: trackedHeadRepo === null,
             branchName: upstreamBranch.branchName,
+            currentHeadOid: explicitCurrentHeadOid,
             ghOptions,
             executionScope
           })
@@ -204,7 +209,7 @@ export async function resolvePRForBranchOutcome(input: {
             hasPendingBranchLookupError = true
           }
           if (data) {
-            dataHeadRepo = upstreamHeadRepo
+            dataHeadRepo = upstreamLookup.dataHeadRepo ?? upstreamHeadRepo
           }
         }
       }
