@@ -24,6 +24,7 @@ import {
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat-messages-waiting-behind-live-turn'
 import { nativeChatRowsInDrawOrder } from '../../../src/shared/native-chat-turn-grouping'
 import { isStoppedBeforeStartBlock } from '../../../src/shared/native-chat-stopped-before-start'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../src/shared/agent-session-orca-stop'
 import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scoped-open-keys'
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import type {
@@ -127,10 +128,16 @@ export function useMobileNativeChatTurnDisclosure({
             isStoppedBeforeStartBlock(block)
         ),
         reportsFailure: message.blocks.some(
-          (block) => block.type === 'text' && block.tone === 'error'
+          (block) =>
+            block.type === 'text' &&
+            block.tone === 'error' &&
+            block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION
         ),
         explainsTurn: message.blocks.some(
-          (block) => block.type === 'text' && block.presentation === 'compaction'
+          (block) =>
+            block.type === 'text' &&
+            (block.presentation === 'compaction' ||
+              block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION)
         )
       }
     })

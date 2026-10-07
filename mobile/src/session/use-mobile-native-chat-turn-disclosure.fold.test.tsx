@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../src/shared/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../src/shared/agent-session-orca-stop'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 const message = (
@@ -305,6 +306,38 @@ describe('useMobileNativeChatTurnDisclosure settled folding', () => {
     })
     const disclosure = renderer!.root.findByType(Host).props.disclosure
     expect(disclosure.listMessages[0].blocks).toEqual(compact.blocks)
+  })
+
+  it('keeps the final answer beside an Orca stop notice', () => {
+    const messages = [
+      message('u1', 'user', [{ type: 'text', text: 'go' }]),
+      message('narration', 'assistant', [{ type: 'text', text: 'working' }]),
+      message('answer', 'assistant', [{ type: 'text', text: 'done' }]),
+      message('stop', 'system', [
+        {
+          type: 'text',
+          text: 'stopped',
+          tone: 'error',
+          presentation: AGENT_SESSION_ORCA_STOP_PRESENTATION
+        }
+      ])
+    ]
+    const turnJournal = journal([
+      ['u1', said('user'), null],
+      ['t1', turn('t1', 'u1'), null],
+      ['narration', said('assistant'), 't1'],
+      ['answer', said('assistant'), 't1'],
+      ['stop', said('system'), 't1']
+    ])
+    act(() => {
+      renderer = create(createElement(Harness, { messages, turnJournal }))
+    })
+    const disclosure = renderer!.root.findByType(Host).props.disclosure
+    expect(disclosure.listMessages.map((item: NativeChatMessage) => item.id)).toEqual([
+      'u1',
+      'answer',
+      'stop'
+    ])
   })
 
   it('does not clear an outliving-task-only carrier', () => {
