@@ -20,6 +20,14 @@ export type CliInstallerOptions = {
   userPathWriter?: (value: string) => Promise<void>
   userPathCacheInvalidator?: () => void
   windowsEnvironment?: NodeJS.ProcessEnv
+  /**
+   * Why explicit: Windows PowerShell 5.1 pipes to `orca.exe` as US-ASCII (#24428).
+   * Tests pass `platform` and must not rewrite the developer profile. Production
+   * `new CliInstaller()` leaves this unset and turns the shim on.
+   */
+  syncWindowsPowerShellProfile?: boolean
+  windowsDocumentsPath?: string
+  windowsPowerShellShimPath?: string
   /** Trusted caller override; production discovers AppImage only from a complete runtime identity. */
   appImagePath?: string | null
   appImageCacheRootPath?: string

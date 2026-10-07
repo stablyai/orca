@@ -14,6 +14,23 @@ import {
 import { isAppImageStableLauncherReady } from './appimage-stable-launcher'
 import { CliPathRegistration } from './cli-path-registration'
 
+let windowsPowerShellProfileQueue: Promise<void> = Promise.resolve()
+
+function enqueueWindowsPowerShellProfileWork(operation: () => Promise<void>): Promise<void> {
+  const run = windowsPowerShellProfileQueue.then(operation, operation)
+  windowsPowerShellProfileQueue = run.then(
+    () => undefined,
+    () => undefined
+  )
+  return run
+}
+import {
+  defaultWindowsPowerShellShimPath,
+  installWindowsPowerShellCliShim,
+  removeWindowsPowerShellCliShim,
+  resolveWindowsMyDocumentsPath
+} from './windows-powershell-cli-shim'
+
 export class CliInstaller extends CliPathRegistration {
   isAppImageRegistrationOwnedBySibling(status: CliInstallStatus): boolean {
     if (
@@ -148,6 +165,7 @@ export class CliInstaller extends CliPathRegistration {
     if (this.platform === 'win32') {
       // Why: Windows shells find commands via user PATH, so the installer owns that entry, not the desktop installer.
       await this.ensureWindowsPathEntry(dirname(status.commandPath))
+      await this.syncWindowsPowerShellCliShim()
     }
     if (extractedRoot) {
       await pruneAppImageExtractedRoots(extractedRoot.rootPath)
@@ -166,12 +184,14 @@ export class CliInstaller extends CliPathRegistration {
     const status = await this.getStatus()
     if (!status.supported || !status.commandPath || !status.launcherPath || !status.installMethod) {
       await this.removeLinuxAppImagePayloads()
+      await this.removeWindowsPowerShellCliProfile()
       return status
     }
     if (status.state === 'not_installed') {
       await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
       if (this.platform === 'win32') {
         await this.removeWindowsPathEntry(dirname(status.commandPath))
+        await this.removeWindowsPowerShellCliProfile()
         return this.getStatus()
       }
       await this.removeLinuxAppImagePayloads()
@@ -200,7 +220,62 @@ export class CliInstaller extends CliPathRegistration {
     }
 
     await this.removeLinuxAppImagePayloads()
+    await this.removeWindowsPowerShellCliProfile()
     return this.getStatus()
+  }
+
+  /**
+   * Why on startup, not only install(): Windows `install()` is not run every
+   * launch, and an already-registered `orca.exe` would keep the ASCII pipe (#24428).
+   */
+  async syncWindowsPowerShellCliShim(options: { requireInstalled?: boolean } = {}): Promise<void> {
+    if (!this.syncWindowsPowerShellProfile || this.platform !== 'win32') {
+      return
+    }
+    await enqueueWindowsPowerShellProfileWork(() =>
+      this.syncWindowsPowerShellCliShimQueued(options)
+    )
+  }
+
+  private async syncWindowsPowerShellCliShimQueued(options: {
+    requireInstalled?: boolean
+  }): Promise<void> {
+    // Why: the bundled exe survives CLI removal, so startup must not put the
+    // function back into a profile the user already cleared (#24428).
+    if (options.requireInstalled && (await this.getStatus()).state !== 'installed') {
+      return
+    }
+    const launcherPath = await this.resolveLauncherPath()
+    // Why .exe only: a .cmd launcher is itself a native pipe target, so it
+    // would recode the UTF-8 stdin this function just produced (#24428).
+    if (!launcherPath || !launcherPath.toLowerCase().endsWith('.exe')) {
+      return
+    }
+    const documentsPath = this.windowsDocumentsPath ?? (await resolveWindowsMyDocumentsPath())
+    const shimPath =
+      this.windowsPowerShellShimPath ?? defaultWindowsPowerShellShimPath(this.localAppDataPath)
+    const status = await installWindowsPowerShellCliShim({
+      launcherPath,
+      documentsPath,
+      shimPath
+    })
+    if (status !== 'installed') {
+      console.warn(`[cli] left the Windows PowerShell profile unchanged (${status})`)
+    }
+  }
+
+  private async removeWindowsPowerShellCliProfile(): Promise<void> {
+    if (!this.syncWindowsPowerShellProfile || this.platform !== 'win32') {
+      return
+    }
+    await enqueueWindowsPowerShellProfileWork(() => this.removeWindowsPowerShellCliProfileQueued())
+  }
+
+  private async removeWindowsPowerShellCliProfileQueued(): Promise<void> {
+    const documentsPath = this.windowsDocumentsPath ?? (await resolveWindowsMyDocumentsPath())
+    const shimPath =
+      this.windowsPowerShellShimPath ?? defaultWindowsPowerShellShimPath(this.localAppDataPath)
+    await removeWindowsPowerShellCliShim({ documentsPath, shimPath })
   }
 
   private async removeLinuxAppImagePayloads(): Promise<void> {

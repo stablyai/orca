@@ -37,6 +37,7 @@ import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-l
 import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
+import { CliInstaller } from '../cli/cli-installer'
 
 // Headless serve never opens a window, so the sweep still has to run off a timer there.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -128,6 +129,29 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     }).catch((error: unknown) =>
       console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
     )
+  }
+  // Why not inside install(): a Windows PATH entry already registered is not
+  // rewritten on launch, so the PowerShell ASCII pipe would stay broken (#24428).
+  // Why deferred on the desktop: resolving the launcher calls existsSync before its
+  // first await, and that stat competes with the first window paint.
+  // Why immediate on serve: headless serve never opens a window, so the 15s
+  // fallback would leave the ASCII pipe in place for the first commands (#24428).
+  if (process.platform === 'win32') {
+    const refreshWindowsPowerShellCliShim = (): void => {
+      void new CliInstaller({
+        syncWindowsPowerShellProfile: true,
+        windowsDocumentsPath: app.getPath('documents')
+      })
+        .syncWindowsPowerShellCliShim({ requireInstalled: true })
+        .catch((error: unknown) => {
+          console.warn('[cli] failed to refresh the Windows PowerShell UTF-8 shim:', error)
+        })
+    }
+    if (state.isServeMode) {
+      refreshWindowsPowerShellCliShim()
+    } else {
+      runAfterFirstWindowShown(refreshWindowsPowerShellCliShim, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+    }
   }
   // Why: process-gone metrics only see survivors, and the gone-time host memory
   // read lands after the corpse released its pages; both need a live pre-gone
