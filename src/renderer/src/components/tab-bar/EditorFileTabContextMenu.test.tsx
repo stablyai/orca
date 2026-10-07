@@ -120,7 +120,10 @@ const useAppStoreMock = Object.assign(
         'wt-1': [{ id: 'group-1', tabOrder: ['tab-1', 'tab-2'] }]
       },
       folderWorkspaces: [{ id: 'fw-1', executionHostId: 'ssh:ssh-1' }],
-      repos: [{ id: 'wt-1', executionHostId: 'local' }]
+      repos: [
+        { id: 'wt-1', executionHostId: 'local' },
+        { id: 'repo-ssh', executionHostId: 'ssh:ssh-1' }
+      ]
     }),
   {
     getState: () => ({
@@ -209,7 +212,6 @@ async function renderMenu(
   overrides: {
     onActivate?: () => void
     onOpenRenameInput?: () => void
-    repoConnectionId?: string | null
     runtimeEnvironmentId?: string | null
     externalSshTargetId?: string
     mode?: 'edit' | 'check-details'
@@ -249,7 +251,6 @@ async function renderMenu(
     canRename: true,
     canShowMarkdownPreview: false,
     resolvedLanguage: 'typescript',
-    repoConnectionId: null,
     skipMenuFocusRestoreRef: { current: false },
     onOpenChange: vi.fn(),
     onActivate: vi.fn(),
@@ -411,7 +412,7 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
   })
 
   it.each([
-    ['on an SSH host', { repoConnectionId: 'ssh-1' }],
+    ['on an SSH host', { worktreeId: 'repo-ssh' }],
     ['owned by a remote runtime', { runtimeEnvironmentId: 'env-1' }],
     ['opened from an SSH host outside the workspace', { externalSshTargetId: 'ssh-1' }],
     // Why: a folder workspace's synthetic repo has no connectionId, and SSH is not a runtime.

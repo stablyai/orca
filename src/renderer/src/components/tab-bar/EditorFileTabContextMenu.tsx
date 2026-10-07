@@ -47,7 +47,6 @@ type EditorFileTabContextMenuProps = {
   canRename: boolean
   canShowMarkdownPreview: boolean
   resolvedLanguage: string
-  repoConnectionId: string | null
   skipMenuFocusRestoreRef: React.MutableRefObject<boolean>
   onOpenChange: (open: boolean) => void
   onActivate: () => void
@@ -84,7 +83,6 @@ export function EditorFileTabContextMenu({
   canRename,
   canShowMarkdownPreview,
   resolvedLanguage,
-  repoConnectionId,
   skipMenuFocusRestoreRef,
   onOpenChange,
   onActivate,
@@ -107,7 +105,7 @@ export function EditorFileTabContextMenu({
     return (
       connectionId === undefined ||
       isRevealInFileManagerBlocked(s.settings, {
-        connectionId: connectionId ?? repoConnectionId,
+        connectionId,
         runtimeEnvironmentId: file.runtimeEnvironmentId
       })
     )
