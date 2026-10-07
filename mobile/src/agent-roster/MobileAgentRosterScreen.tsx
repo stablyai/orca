@@ -126,7 +126,12 @@ export function MobileAgentRosterScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable
+          style={styles.backButton}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <ChevronLeft size={22} color={colors.textPrimary} />
         </Pressable>
         <View style={styles.titleWrap}>
@@ -141,6 +146,8 @@ export function MobileAgentRosterScreen() {
           style={styles.iconButton}
           onPress={() => void refresh()}
           disabled={!client || refreshing || connState !== 'connected'}
+          accessibilityRole="button"
+          accessibilityLabel="Refresh agents"
         >
           {refreshing ? (
             <ActivityIndicator size="small" color={colors.textSecondary} />

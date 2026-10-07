@@ -17,6 +17,8 @@ function AgentRosterRowComponent({ entry, now, onPress }: Props) {
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={() => onPress(entry)}
+      accessibilityRole="button"
+      accessibilityLabel={`Open agent in ${entry.worktreeLabel}`}
     >
       <WorktreeAgentRow agent={entry.agent} depth={0} now={now} unvisited={entry.unvisited} />
       <Text style={styles.worktreeLabel} numberOfLines={1}>
