@@ -1,0 +1,34 @@
+diff --git a/src/common/InputHandler.ts b/src/common/InputHandler.ts
+index 995fe7670a10f11fb9b0b42332484b038ea6c989..3df13f60209ccd097b861d94efd481988d38400f 100644
+--- a/src/common/InputHandler.ts
++++ b/src/common/InputHandler.ts
+@@ -2468,6 +2468,7 @@ export class InputHandler extends Disposable implements IInputHandler {
+       case 58:
+         attr.extended = attr.extended.clone();
+         attr.extended.underlineColor = this._updateAttrColor(attr.extended.underlineColor, accu[1], accu[3], accu[4], accu[5]);
++        attr.updateExtended();
+     }
+ 
+     return advance;
+diff --git a/src/common/buffer/AttributeData.ts b/src/common/buffer/AttributeData.ts
+index 3bcb22a00689361badb16152300ee45b42b9fe41..65701456e06ff675f4c206dfe4a9291ade4f3ede 100644
+--- a/src/common/buffer/AttributeData.ts
++++ b/src/common/buffer/AttributeData.ts
+@@ -167,7 +167,7 @@ export class ExtendedAttrs implements IExtendedAttrs {
+   }
+   public set underlineColor(value: number) {
+     this._ext &= ~(Attributes.CM_MASK | Attributes.RGB_MASK);
+-    this._ext |= value & (Attributes.CM_MASK | Attributes.RGB_MASK);
++    this._ext |= (value === -1 ? 0 : value) & (Attributes.CM_MASK | Attributes.RGB_MASK);
+   }
+ 
+   private _urlId: number = 0;
+@@ -207,6 +207,7 @@ export class ExtendedAttrs implements IExtendedAttrs {
+    * that needs to be persistant in the buffer.
+    */
+   public isEmpty(): boolean {
+-    return this.underlineStyle === UnderlineStyle.NONE && this._urlId === 0;
++    return this.underlineStyle === UnderlineStyle.NONE && this._urlId === 0
++      && (this.underlineColor & Attributes.CM_MASK) === 0;
+   }
+ }

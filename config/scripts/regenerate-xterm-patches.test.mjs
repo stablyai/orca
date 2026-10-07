@@ -7,12 +7,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertBuildStepsAllowed,
   assertPublishedCommit,
+  assertPristineSourceMatches,
   assertSourcemapPolicy,
   lockfileHasPatchEntry,
   lockfilePatchHashIsStale,
+  overlayBuildOutput,
   patchHash,
   readLockfilePatchHash,
   readLockfileResolutionHashes,
+  resetCheckoutSource,
   stampVersionSource,
   updateLockfilePatchHash
 } from './regenerate-xterm-patches.mjs'
@@ -96,6 +99,76 @@ const PATCHED = {
   'lib/widget.js': 'function widget(){return 2}\n',
   'lib/widget.js.map': '{"version":3,"sources":["../src/Widget.ts"],"mappings":"AAAC"}\n'
 }
+
+describe('source checkout reset', () => {
+  it('removes new source files between packages while retaining build dependencies', async () => {
+    const root = await createDirectory()
+    await writeTree(root, { 'src/Tracked.ts': 'original\n' })
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' })
+    git(['init', '--quiet'])
+    git(['add', 'src/'])
+    git([
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.com',
+      '-c',
+      'core.hooksPath=/dev/null',
+      'commit',
+      '--quiet',
+      '-m',
+      'pristine'
+    ])
+    const commit = git(['rev-parse', 'HEAD']).trim()
+    await writeTree(root, {
+      'src/Tracked.ts': 'modified\n',
+      'src/NewCore.ts': 'new core\n',
+      'addons/addon-webgl/src/NewRenderer.ts': 'new renderer\n',
+      'node_modules/dependency/index.js': 'retained dependency\n',
+      'out/build.js': 'retained build\n'
+    })
+    git(['add', '--intent-to-add', 'src/NewCore.ts'])
+
+    resetCheckoutSource(root, commit)
+
+    expect(await readFile(path.join(root, 'src/Tracked.ts'), 'utf8')).toBe('original\n')
+    for (const file of ['src/NewCore.ts', 'addons/addon-webgl/src/NewRenderer.ts']) {
+      await expect(readFile(path.join(root, file))).rejects.toMatchObject({ code: 'ENOENT' })
+    }
+    expect(await readFile(path.join(root, 'node_modules/dependency/index.js'), 'utf8')).toBe(
+      'retained dependency\n'
+    )
+    expect(await readFile(path.join(root, 'out/build.js'), 'utf8')).toBe('retained build\n')
+  })
+
+  it('ships a newly added source module while excluding upstream test files', async () => {
+    const root = await createDirectory()
+    const pristine = path.join(root, 'pristine')
+    const upstream = path.join(root, 'upstream')
+    const patched = path.join(root, 'patched')
+    await writeTree(pristine, { 'src/Tracked.ts': 'original\n', 'package.json': '{"name":"test"}' })
+    await writeTree(upstream, {
+      'src/Tracked.ts': 'modified\n',
+      'src/new/Renderer.ts': 'new renderer\n',
+      'src/new/Renderer name.ts': 'new renderer with space\n',
+      'src/new/Renderer.test.ts': 'excluded test\n'
+    })
+    execFileSync('git', ['init', '--quiet'], { cwd: upstream })
+    execFileSync('git', ['add', 'src/Tracked.ts'], { cwd: upstream })
+
+    overlayBuildOutput(pristine, upstream, { packageDir: '.' }, patched)
+
+    expect(await readFile(path.join(patched, 'src/new/Renderer.ts'), 'utf8')).toBe('new renderer\n')
+    expect(await readFile(path.join(patched, 'src/new/Renderer name.ts'), 'utf8')).toBe(
+      'new renderer with space\n'
+    )
+    await expect(readFile(path.join(patched, 'src/new/Renderer.test.ts'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+    expect(diffFolders(pristine, patched)).toContain('new file mode 100644')
+    expect(await readFile(path.join(patched, 'package.json'), 'utf8')).toBe('{"name":"test"}')
+  })
+})
 
 describe('pnpm diff format', () => {
   it('matches pnpm git config isolation', () => {
@@ -276,6 +349,89 @@ describe('source derivation agreement', () => {
       CHECKOUT_DIFF_FLAGS.indexOf('--')
     )
   })
+})
+
+it('omits source only when a package explicitly publishes none', async () => {
+  const root = await createDirectory()
+  const entry = { name: '@xterm/headless', sourceDistribution: 'omitted' }
+  expect(() => assertPristineSourceMatches(root, root, entry)).not.toThrow()
+  expect(() => assertPristineSourceMatches(root, root, { name: '@xterm/headless' })).toThrow()
+  await writeTree(root, { 'src/Terminal.ts': 'published source' })
+  expect(() => assertPristineSourceMatches(root, root, entry)).toThrow(/omits published source/)
+  expect(() => assertPristineSourceMatches(root, root, { sourceDistribution: 'typo' })).toThrow(
+    /unknown/
+  )
+})
+
+it('copies headless output without introducing unpublished source or package metadata', async () => {
+  const root = await createDirectory()
+  const pristine = path.join(root, 'pristine')
+  const upstream = path.join(root, 'upstream')
+  const target = path.join(root, 'patched')
+  await writeTree(pristine, {
+    'lib-headless/xterm-headless.js': 'before',
+    'typings/xterm-headless.d.ts': 'before types',
+    'package.json': 'registry'
+  })
+  await writeTree(upstream, {
+    'headless/lib-headless/xterm-headless.js': 'after',
+    'typings/xterm-headless.d.ts': 'after types',
+    'src/Terminal.ts': 'unpublished source'
+  })
+  overlayBuildOutput(
+    pristine,
+    upstream,
+    {
+      packageDir: '.',
+      buildOutputDir: 'headless',
+      sourceDistribution: 'omitted'
+    },
+    target
+  )
+  expect(await readFile(path.join(target, 'lib-headless/xterm-headless.js'), 'utf8')).toBe('after')
+  expect(await readFile(path.join(target, 'package.json'), 'utf8')).toBe('registry')
+  expect(await readFile(path.join(target, 'typings/xterm-headless.d.ts'), 'utf8')).toBe(
+    'after types'
+  )
+  await expect(readFile(path.join(target, 'src/Terminal.ts'), 'utf8')).rejects.toThrow()
+  await rm(path.join(upstream, 'headless/lib-headless/xterm-headless.js'))
+  await writeTree(upstream, { 'lib-headless/xterm-headless.js': 'stale output in wrong directory' })
+  expect(() =>
+    overlayBuildOutput(
+      pristine,
+      upstream,
+      { packageDir: '.', buildOutputDir: 'headless', sourceDistribution: 'omitted' },
+      target
+    )
+  ).toThrow(/no build-tree counterpart/)
+})
+
+it('keeps bundle-only source policy explicit and rejects silent or empty derivations', () => {
+  const source =
+    'diff --git a/src/InputHandler.ts b/src/InputHandler.ts\n--- a/src/InputHandler.ts\n+++ b/src/InputHandler.ts\n@@ -1 +1 @@\n-before\n+after\n'
+  const bundle = source.replaceAll('src/InputHandler.ts', 'lib-headless/xterm-headless.js')
+  expect(() => assertSourceDerivationsAgree(source, bundle)).toThrow(/disagree/)
+  expect(() =>
+    assertSourceDerivationsAgree(source, bundle, {
+      sourceDistribution: 'omitted',
+      generatedPaths: ['lib-headless/']
+    })
+  ).not.toThrow()
+  for (const [left, right] of [
+    ['', bundle],
+    [source, ''],
+    [source, source + bundle]
+  ]) {
+    expect(() =>
+      assertSourceDerivationsAgree(left, right, {
+        sourceDistribution: 'omitted',
+        generatedPaths: ['lib-headless/']
+      })
+    ).toThrow(/omitted-source/)
+  }
+  expect(() =>
+    assertSourceDerivationsAgree(source, bundle, { sourceDistribution: 'typo' })
+  ).toThrow(/Unknown/)
 })
 
 describe('manifest guards', () => {
@@ -467,7 +623,12 @@ describe('committed xterm patch artifacts', () => {
     for (const packageEntry of manifest.packages) {
       const patch = await readFile(path.join(REPO_ROOT, packageEntry.patch), 'utf8')
       const source = await readFile(path.join(REPO_ROOT, packageEntry.sourcePatch), 'utf8')
-      expect(sourceHunks(source)).toBe(sourceHunks(patch))
+      expect(() =>
+        assertSourceDerivationsAgree(source, patch, {
+          sourceDistribution: packageEntry.sourceDistribution,
+          generatedPaths: packageEntry.generatedPaths
+        })
+      ).not.toThrow()
       expect(generatedHunks(patch, packageEntry.generatedPaths)).not.toBe('')
     }
   })

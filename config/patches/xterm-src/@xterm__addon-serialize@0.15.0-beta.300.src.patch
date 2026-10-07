@@ -1,8 +1,8 @@
 diff --git a/src/SerializeAddon.ts b/src/SerializeAddon.ts
-index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd3062e1be 100644
+index e1728feb219c362dfa2ecb602ff99f830d520757..7dfafae1588b0a6931bada53d7924b08b22049e8 100644
 --- a/src/SerializeAddon.ts
 +++ b/src/SerializeAddon.ts
-@@ -5,13 +5,66 @@
+@@ -5,12 +5,65 @@
   * (EXPERIMENTAL) This Addon is still under development
   */
  
@@ -12,8 +12,9 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
  import { IColor } from 'common/Types';
  import { IAttributeData } from 'common/buffer/Types';
  import { DEFAULT_ANSI_COLORS } from 'browser/Types';
- import { UnderlineStyle } from 'common/buffer/Constants';
- 
+-import { UnderlineStyle } from 'common/buffer/Constants';
++import { Attributes, UnderlineStyle } from 'common/buffer/Constants';
++
 +type OscLinkData = { id?: string; uri: string };
 +type OscLinkedCell = { extended?: { urlId?: number } };
 +type TerminalWithOscLinks = Terminal & {
@@ -66,10 +67,9 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
 +  (cell as IBufferCell & { content: number }).content = BLANK_CELL_CONTENT;
 +  return cell;
 +}
-+
+ 
  function constrain(value: number, low: number, high: number): number {
    return Math.max(low, Math.min(value, high));
- }
 @@ -27,7 +80,8 @@ function escapeHTMLChar(c: string): string {
  // TODO: Refine this template class later
  abstract class BaseSerializeHandler {
@@ -99,7 +99,55 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
            this._nextCell(c, oldCell, row, col);
            oldCell = c;
          }
-@@ -148,18 +205,22 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -84,25 +141,17 @@ function equalBg(cell1: IBufferCell | IAttributeData, cell2: IBufferCell): boole
+     && cell1.getBgColor() === cell2.getBgColor();
+ }
+ 
++// Placeholder placement IDs use explicit underline colors even without an underline.
++function explicitUnderlineColor(cell: IBufferCell | IAttributeData): number {
++  if (!('extended' in cell)) return 0;
++  const attrs = cell.extended;
++  if (!attrs || typeof attrs !== 'object' || !('underlineColor' in attrs) || typeof attrs.underlineColor !== 'number') return 0;
++  return attrs.underlineColor & Attributes.CM_MASK ? attrs.underlineColor : 0;
++}
++
+ function equalUnderline(cell1: IBufferCell | IAttributeData, cell2: IBufferCell): boolean {
+-  // If neither cell has underline, consider them equal regardless of internal underline color
+-  // values
+-  if (!cell1.isUnderline() && !cell2.isUnderline()) {
+-    return true;
+-  }
+-  if (cell1.getUnderlineStyle() !== cell2.getUnderlineStyle()) {
+-    return false;
+-  }
+-  const cell1Default = cell1.isUnderlineColorDefault();
+-  const cell2Default = cell2.isUnderlineColorDefault();
+-  if (cell1Default && cell2Default) {
+-    return true;
+-  }
+-  if (cell1Default !== cell2Default) {
+-    return false;
+-  }
+-  return cell1.getUnderlineColor() === cell2.getUnderlineColor()
+-    && cell1.getUnderlineColorMode() === cell2.getUnderlineColorMode();
++  return cell1.getUnderlineStyle() === cell2.getUnderlineStyle()
++    && explicitUnderlineColor(cell1) === explicitUnderlineColor(cell2);
+ }
+ 
+ function equalFlags(cell1: IBufferCell | IAttributeData, cell2: IBufferCell): boolean {
+@@ -119,9 +168,8 @@ function equalFlags(cell1: IBufferCell | IAttributeData, cell2: IBufferCell): bo
+ }
+ 
+ function attributesEquals(cell1: IBufferCell | IAttributeData, cell2: IBufferCell): boolean {
+-  const cell1AsBufferCell = cell1 as IBufferCell;
+-  if (typeof cell1AsBufferCell.attributesEquals === 'function') {
+-    return cell1AsBufferCell.attributesEquals(cell2);
++  if ('attributesEquals' in cell1 && typeof cell1.attributesEquals === 'function') {
++    return cell1.attributesEquals(cell2) && equalUnderline(cell1, cell2);
+   }
+   return equalFg(cell1, cell2)
+     && equalBg(cell1, cell2)
+@@ -148,18 +196,22 @@ class StringSerializeHandler extends BaseSerializeHandler {
  
    // this is a null cell for reference for checking whether background is empty or not
    private _backgroundCell: IBufferCell = this._buffer.getNullCell();
@@ -123,7 +171,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
    }
  
    protected _beforeSerialize(rows: number, start: number, end: number): void {
-@@ -178,6 +239,9 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -178,6 +230,9 @@ class StringSerializeHandler extends BaseSerializeHandler {
      if (this._nullCellCount > 0 && !equalBg(this._cursorStyle, this._backgroundCell)) {
        // use clear right to set background.
        this._currentRow += `\u001b[${this._nullCellCount}X`;
@@ -133,7 +181,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
      }
  
      let rowSeparator = '';
-@@ -202,8 +266,12 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -202,8 +257,12 @@ class StringSerializeHandler extends BaseSerializeHandler {
          this._lastCursorCol = 0;
        } else {
          rowSeparator = '';
@@ -148,7 +196,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
          const nextRowFirstChar = nextLine.getCell(0, this._nextRowFirstChar)!;
          const isNextRowFirstCharDoubleWidth = nextRowFirstChar.getWidth() > 1;
  
-@@ -214,7 +282,7 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -214,7 +273,7 @@ class StringSerializeHandler extends BaseSerializeHandler {
          if (
            // you must output character to cause overflow, control sequence can't do this
            nextRowFirstChar.getChars() &&
@@ -157,7 +205,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
          ) {
            if (
              // the last character can't be null,
-@@ -251,9 +319,14 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -251,9 +310,14 @@ class StringSerializeHandler extends BaseSerializeHandler {
            if (this._nullCellCount > 0) {
              // do these because we filled the last several null slot, which we shouldn't
              rowSeparator += '\u001b[A';
@@ -174,11 +222,32 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
              rowSeparator += '\u001b[B';
            }
  
-@@ -310,7 +383,20 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -275,8 +339,8 @@ class StringSerializeHandler extends BaseSerializeHandler {
+     this._nullCellCount = 0;
+   }
+ 
+-  private _diffStyle(cell: IBufferCell | IAttributeData, oldCell: IBufferCell): number[] {
+-    const sgrSeq: number[] = [];
++  private _diffStyle(cell: IBufferCell | IAttributeData, oldCell: IBufferCell): (number | string)[] {
++    const sgrSeq: (number | string)[] = [];
+     if (attributesEquals(cell, oldCell)) {
+       return sgrSeq;
+     }
+@@ -285,7 +349,7 @@ class StringSerializeHandler extends BaseSerializeHandler {
+     const flagsChanged = !equalFlags(cell, oldCell);
+ 
+     if (fgChanged || bgChanged || flagsChanged) {
+-      if (cell.isAttributeDefault()) {
++      if (cell.isAttributeDefault() && !explicitUnderlineColor(cell)) {
+         if (!oldCell.isAttributeDefault()) {
+           sgrSeq.push(0);
+         }
+@@ -310,34 +374,39 @@ class StringSerializeHandler extends BaseSerializeHandler {
          }
          if (flagsChanged) {
            if (cell.isInverse() !== oldCell.isInverse()) { sgrSeq.push(cell.isInverse() ? 7 : 27); }
 -          if (cell.isBold() !== oldCell.isBold()) { sgrSeq.push(cell.isBold() ? 1 : 22); }
+-          if (!equalUnderline(cell, oldCell)) {
 +          // PATCH(orca): bold (1) and dim (2) share the single reset param 22, so
 +          // they must be diffed as one intensity group with the clearing 22 emitted
 +          // BEFORE any re-set. Upstream's independent per-flag diff could emit
@@ -193,10 +262,38 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
 +            if (cell.isBold() && (boldChanged || clearsIntensity)) { sgrSeq.push(1); }
 +            if (cell.isDim() && (dimChanged || clearsIntensity)) { sgrSeq.push(2); }
 +          }
-           if (!equalUnderline(cell, oldCell)) {
++          if (cell.getUnderlineStyle() !== oldCell.getUnderlineStyle()) {
              const style = cell.getUnderlineStyle();
-             if (style === UnderlineStyle.NONE) {
-@@ -337,7 +423,7 @@ class StringSerializeHandler extends BaseSerializeHandler {
+-            if (style === UnderlineStyle.NONE) {
+-              sgrSeq.push(24);
+-            } else if (style === UnderlineStyle.SINGLE && cell.isUnderlineColorDefault()) {
+-              sgrSeq.push(4);
++            sgrSeq.push(style === UnderlineStyle.NONE ? 24 : style === UnderlineStyle.SINGLE ? 4 : '4:' + style);
++          }
++          const underlineColor = explicitUnderlineColor(cell);
++          if (underlineColor !== explicitUnderlineColor(oldCell)) {
++            if (!underlineColor) {
++              sgrSeq.push(59);
++            } else if ((underlineColor & Attributes.CM_MASK) === Attributes.CM_RGB) {
++              sgrSeq.push(58, 2, (underlineColor >>> 16) & 0xFF, (underlineColor >>> 8) & 0xFF, underlineColor & 0xFF);
+             } else {
+-              // Use SGR 4:X format for underline styles
+-              sgrSeq.push('4:' + style as unknown as number);
+-              // Handle underline color
+-              if (!cell.isUnderlineColorDefault()) {
+-                const color = cell.getUnderlineColor();
+-                if (cell.isUnderlineColorRGB()) {
+-                  sgrSeq.push('58:2::' + ((color >>> 16) & 0xFF) + ':' + ((color >>> 8) & 0xFF) + ':' + (color & 0xFF) as unknown as number);
+-                } else {
+-                  sgrSeq.push('58:5:' + color as unknown as number);
+-                }
+-              }
++              sgrSeq.push(58, 5, underlineColor & Attributes.PCOLOR_MASK);
+             }
+-          } else if (cell.isUnderline() !== oldCell.isUnderline()) {
+-            sgrSeq.push(cell.isUnderline() ? 4 : 24);
+           }
+           if (cell.isOverline() !== oldCell.isOverline()) { sgrSeq.push(cell.isOverline() ? 53 : 55); }
            if (cell.isBlink() !== oldCell.isBlink()) { sgrSeq.push(cell.isBlink() ? 5 : 25); }
            if (cell.isInvisible() !== oldCell.isInvisible()) { sgrSeq.push(cell.isInvisible() ? 8 : 28); }
            if (cell.isItalic() !== oldCell.isItalic()) { sgrSeq.push(cell.isItalic() ? 3 : 23); }
@@ -205,7 +302,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
            if (cell.isStrikethrough() !== oldCell.isStrikethrough()) { sgrSeq.push(cell.isStrikethrough() ? 9 : 29); }
          }
        }
-@@ -346,6 +432,20 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -346,6 +415,20 @@ class StringSerializeHandler extends BaseSerializeHandler {
      return sgrSeq;
    }
  
@@ -226,7 +323,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
    protected _nextCell(cell: IBufferCell, oldCell: IBufferCell, row: number, col: number): void {
      // a width 0 cell don't need to be count because it is just a placeholder after a CJK character;
      const isPlaceHolderCell = cell.getWidth() === 0;
-@@ -356,12 +456,21 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -356,12 +439,21 @@ class StringSerializeHandler extends BaseSerializeHandler {
  
      // this cell don't have content
      const isEmptyCell = cell.getChars() === '';
@@ -251,7 +348,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
  
      /**
       *  handles style change
-@@ -395,7 +504,7 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -395,7 +487,7 @@ class StringSerializeHandler extends BaseSerializeHandler {
      /**
       *  handles actual content
       */
@@ -260,7 +357,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
        this._nullCellCount += cell.getWidth();
      } else {
        if (this._nullCellCount > 0) {
-@@ -411,7 +520,22 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -411,7 +503,22 @@ class StringSerializeHandler extends BaseSerializeHandler {
          this._nullCellCount = 0;
        }
  
@@ -284,7 +381,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
  
        // update cursor
        this._lastContentCursorRow = this._lastCursorRow = row;
-@@ -425,6 +549,15 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -425,6 +532,15 @@ class StringSerializeHandler extends BaseSerializeHandler {
      // the fixup is only required for data without scrollback
      // because it will always be placed at last line otherwise
      if (this._buffer.length - this._firstRow <= this._terminal.rows) {
@@ -300,7 +397,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
        rowEnd = this._lastContentCursorRow + 1 - this._firstRow;
        this._lastCursorCol = this._lastContentCursorCol;
        this._lastCursorRow = this._lastContentCursorRow;
-@@ -439,6 +572,9 @@ class StringSerializeHandler extends BaseSerializeHandler {
+@@ -439,6 +555,9 @@ class StringSerializeHandler extends BaseSerializeHandler {
        }
      }
  
@@ -310,7 +407,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
      // restore the cursor
      if (!excludeFinalCursorPosition) {
        const realCursorRow = this._buffer.baseY + this._buffer.cursorY;
-@@ -616,6 +752,9 @@ export class SerializeAddon implements ITerminalAddon, ISerializeApi {
+@@ -616,6 +735,9 @@ export class SerializeAddon implements ITerminalAddon, ISerializeApi {
        content += this._serializeScrollRegion(this._terminal);
      }
  
@@ -320,7 +417,7 @@ index e1728feb219c362dfa2ecb602ff99f830d520757..265b9792403601c286bc341f9d046dcd
      return content;
    }
  
-@@ -642,7 +781,7 @@ export class HTMLSerializeHandler extends BaseSerializeHandler {
+@@ -642,7 +764,7 @@ export class HTMLSerializeHandler extends BaseSerializeHandler {
      private readonly _terminal: Terminal,
      private readonly _options: Partial<IHTMLSerializeOptions>
    ) {

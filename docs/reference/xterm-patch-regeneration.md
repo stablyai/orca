@@ -24,11 +24,20 @@ truth. Everything else is derived from it by
 `config/scripts/regenerate-xterm-patches.mjs`, which is pinned to the exact
 upstream commit the published tarball was built from.
 
-`@xterm/addon-webgl`, `@xterm/addon-search`, `@xterm/addon-serialize` and `@xterm/addon-image` are
+`@xterm/headless`, `@xterm/addon-webgl`, `@xterm/addon-search`, `@xterm/addon-serialize` and `@xterm/addon-image` are
 generated the same way, from their own source patches under
-`config/patches/xterm-src/`. Their entries differ only in `packageDir` and build
-steps; everything below applies to all five. `@xterm/addon-ligatures` is the one
+`config/patches/xterm-src/`. Their entries specify their package directory and build
+steps; everything below applies to all six. `@xterm/addon-ligatures` is the one
 patch still written by hand — see [Known Gaps](#known-gaps).
+
+The headless tarball contains no `src/` directory. Its manifest entry explicitly
+sets `sourceDistribution: "omitted"`; the generator verifies that the registry
+tarball really omits sources, reproduces its pristine bundles byte for byte, and
+then builds the separate source patch into all four bundles and maps. The emitted
+patch must contain bundle changes and must not add unpublished sources. Other
+packages retain the source-hunk equality check. Headless bundles come from
+`headless/lib-headless/`, while its typings come from the checkout root. Preserve
+the registry package metadata and the runtime version found in its pristine map.
 
 The image patch bounds pending Kitty decoders by their maximum WASM capacity
 and caps transmitted image blobs by byte size. Both use the configured storage

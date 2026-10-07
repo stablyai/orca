@@ -34,6 +34,34 @@
       ]
     },
     {
+      "name": "@xterm/headless",
+      "version": "6.1.0-beta.302",
+      "packageDir": ".",
+      "buildOutputDir": "headless",
+      "sourceDistribution": "omitted",
+      "$note": "The tarball publishes bundles/maps only. Its mapped Version.ts still says 6.0.0, so this build must not stamp the registry version. Both pristine bundles must reproduce byte for byte before applying the separate source patch.",
+      "sourcePatch": "config/patches/xterm-src/@xterm__headless@6.1.0-beta.302.src.patch",
+      "patch": "config/patches/@xterm__headless@6.1.0-beta.302.patch",
+      "generatedPaths": ["lib-headless/"],
+      "build": [
+        {
+          "cwd": ".",
+          "command": "npm",
+          "args": ["run", "build"]
+        },
+        {
+          "cwd": ".",
+          "command": "npm",
+          "args": ["run", "esbuild-package-headless-only"]
+        },
+        {
+          "cwd": ".",
+          "command": "node",
+          "args": ["node_modules/webpack/bin/webpack.js", "--config", "webpack.config.headless.js"]
+        }
+      ]
+    },
+    {
       "name": "@xterm/addon-webgl",
       "version": "0.20.0-beta.299",
       "packageDir": "addons/addon-webgl",

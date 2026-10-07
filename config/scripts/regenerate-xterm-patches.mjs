@@ -227,8 +227,14 @@ function ensureUpstreamCheckout(manifest, workDir) {
     run('git', ['fetch', '--depth=1', 'origin', commit], { cwd: root, stdio: 'inherit' })
   }
   run('git', ['checkout', '--quiet', '--detach', commit], { cwd: root })
-  run('git', ['reset', '--quiet', '--hard', commit], { cwd: root })
+  resetCheckoutSource(root, commit)
   return root
+}
+
+export function resetCheckoutSource(root, commit) {
+  run('git', ['reset', '--quiet', '--hard', commit], { cwd: root })
+  // New source files from a previous package must not enter the pristine build.
+  run('git', ['clean', '-fd', '--', 'src/', ':(glob)addons/*/src/**'], { cwd: root })
 }
 
 function ensureDependencies(upstreamRoot, manifest) {
@@ -273,7 +279,16 @@ function assertToolchain(upstreamRoot, manifest) {
  * stamp publish.js rewrites. If it does not, the manifest points at the wrong
  * commit and every hunk below would be nonsense.
  */
-function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
+export function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
+  if (packageEntry.sourceDistribution === 'omitted') {
+    if (existsSync(path.join(pristineDir, 'src'))) {
+      throw new Error(`${packageEntry.name}: sourceDistribution omits published source files`)
+    }
+    return
+  }
+  if (packageEntry.sourceDistribution && packageEntry.sourceDistribution !== 'included') {
+    throw new Error(`${packageEntry.name}: unknown sourceDistribution`)
+  }
   const stampFile = packageEntry.versionStampFile
   const sourceRoot = path.join(pristineDir, 'src')
   const drifted = listFilesRelative(sourceRoot)
@@ -298,6 +313,10 @@ function buildPackage(upstreamRoot, packageEntry, manifest) {
   for (const directory of ['lib', 'out', 'out-esbuild']) {
     rmSync(path.join(packageRoot, directory), { recursive: true, force: true })
   }
+  const outputRoot = path.join(packageRoot, packageEntry.buildOutputDir ?? '.')
+  for (const directory of packageEntry.generatedPaths) {
+    rmSync(path.join(outputRoot, directory), { recursive: true, force: true })
+  }
   if (packageEntry.versionStampFile) {
     const stampPath = path.join(packageRoot, packageEntry.versionStampFile)
     writeFileSync(
@@ -313,7 +332,11 @@ function buildPackage(upstreamRoot, packageEntry, manifest) {
 
 /** Proves the pinned toolchain still reproduces the untouched published bundles. */
 function assertReproducesPristineBundles(pristineDir, upstreamRoot, packageEntry) {
-  const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
+  const packageRoot = path.join(
+    upstreamRoot,
+    packageEntry.packageDir,
+    packageEntry.buildOutputDir ?? '.'
+  )
   const drifted = listFilesRelative(pristineDir)
     .filter((relative) =>
       packageEntry.generatedPaths.some((prefix) => toPosix(relative).startsWith(prefix))
@@ -338,21 +361,48 @@ function toPosix(value) {
   return value.split(path.sep).join('/')
 }
 
-function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, destination) {
+export function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, destination) {
   rmSync(destination, { recursive: true, force: true })
   cpSync(pristineDir, destination, { recursive: true })
   const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
+  const outputRoot = path.join(packageRoot, packageEntry.buildOutputDir ?? '.')
   for (const relative of listFilesRelative(pristineDir)) {
     // package.json carries the registry's version/commit stamp, which the build
     // tree has no way to reproduce and which we never want to patch.
     if (relative === 'package.json') {
       continue
     }
-    const built = path.join(packageRoot, relative)
+    // Headless bundles live in headless/ while its published typings live at the root.
+    const built = path.join(
+      toPosix(relative).startsWith('typings/') ? packageRoot : outputRoot,
+      relative
+    )
     if (!existsSync(built)) {
       throw new Error(`Published file has no build-tree counterpart: ${relative}`)
     }
     copyFileSync(built, path.join(destination, relative))
+  }
+  if (packageEntry.sourceDistribution === 'omitted') {
+    return
+  }
+  // New production modules belong in the patch too; upstream excludes test sources.
+  const newSources = run(
+    'git',
+    ['ls-files', '-z', '--others', '--exclude-standard', '--', 'src/'],
+    {
+      cwd: packageRoot
+    }
+  )
+  for (const relative of newSources.split('\0').filter(Boolean)) {
+    if (
+      !/\.(ts|js|css|js\.map)$/.test(relative) ||
+      /\.test\.(ts|d\.ts|js|js\.map)$/.test(relative)
+    ) {
+      continue
+    }
+    const target = path.join(destination, relative)
+    mkdirSync(path.dirname(target), { recursive: true })
+    copyFileSync(path.join(packageRoot, relative), target)
   }
 }
 
@@ -397,7 +447,7 @@ function regeneratePackage(packageEntry, manifest, context) {
   buildPackage(upstreamRoot, packageEntry, manifest)
   assertReproducesPristineBundles(pristineDir, upstreamRoot, packageEntry)
 
-  run('git', ['reset', '--quiet', '--hard', manifest.upstream.commit], { cwd: upstreamRoot })
+  resetCheckoutSource(upstreamRoot, manifest.upstream.commit)
   const packageDir = toPosix(packageEntry.packageDir)
   run(
     'git',
@@ -423,6 +473,9 @@ function regeneratePackage(packageEntry, manifest, context) {
     })
   }
 
+  run('git', ['add', '--intent-to-add', '--', 'src/'], {
+    cwd: path.join(upstreamRoot, packageEntry.packageDir)
+  })
   const source = diffCheckoutSource(path.join(upstreamRoot, packageEntry.packageDir))
   if (source.trim().length === 0) {
     throw new Error(
@@ -432,7 +485,10 @@ function regeneratePackage(packageEntry, manifest, context) {
     )
   }
   const patch = diffFolders(pristineDir, patchedDir)
-  assertSourceDerivationsAgree(source, patch)
+  assertSourceDerivationsAgree(source, patch, {
+    sourceDistribution: packageEntry.sourceDistribution,
+    generatedPaths: packageEntry.generatedPaths
+  })
   return { patch, source }
 }
 
