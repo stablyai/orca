@@ -15,8 +15,10 @@ import {
 } from './host-filtering'
 import { filterProjectGroupsForRepoFilter } from './project-filter-group-scope'
 
-// Narrows repos, project groups, and folder workspaces to the hosts (and devices) the
-// current host filter admits, then drops project groups the project filter leaves empty.
+/**
+ * Narrows repos, project groups, and folder workspaces to the hosts (and devices) the
+ * current host filter admits, then drops project groups the project filter leaves empty.
+ */
 export function useSidebarHostVisibleScope(args: {
   filterState: SidebarWorktreeFilters['filterState']
   defaultHostId: ExecutionHostId
