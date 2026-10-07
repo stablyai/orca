@@ -1,4 +1,4 @@
-import { VisuallyHidden } from 'radix-ui'
+import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import type { ArtifactListItem } from '../../../../shared/artifacts'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { translate } from '@/i18n/i18n'

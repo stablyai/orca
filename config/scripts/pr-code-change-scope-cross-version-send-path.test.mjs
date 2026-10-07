@@ -8,7 +8,6 @@ describe('cross-version wire routing for the send path', () => {
     'src/shared/agent-session-wire-refusals.ts',
     'src/shared/structured-agent-session-mutation.ts',
     'src/shared/structured-agent-session-send-mutation.ts',
-    'src/shared/structured-agent-session-outbox.ts',
     'src/main/runtime/rpc/core.ts',
     'src/main/runtime/rpc/errors.ts',
     'src/main/runtime/rpc/rpc-streaming-dispatcher.ts',
@@ -23,9 +22,7 @@ describe('cross-version wire routing for the send path', () => {
   })
 
   it.each([
-    'src/shared/structured-agent-session-outbox-admission.ts',
-    'src/shared/structured-agent-session-outbox-delivery.ts',
-    'src/shared/structured-agent-session-outbox-stop-withdrawal.ts',
+    'src/shared/structured-agent-session-send-evidence.ts',
     'src/shared/structured-agent-session-composer.ts',
     'src/shared/structured-agent-session-reducer.ts',
     'src/main/runtime/orchestration/send-agent-turn.ts',

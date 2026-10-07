@@ -7,6 +7,7 @@ import type * as RecoveryModule from '@/lib/structured-agent-session-launch-reco
 const mocks = vi.hoisted(() => ({
   abandonIntent: vi.fn(),
   callStructuredAgentSession: vi.fn(),
+  callRuntimeRpc: vi.fn(),
   createIntent: vi.fn(),
   launch: vi.fn(),
   seedDraft: vi.fn(),
@@ -42,6 +43,11 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.callStructuredAgentSession
 }))
 
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc,
+  ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
+}))
+
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
@@ -73,7 +79,7 @@ import {
   startStructuredAgentLaunch,
   type StructuredAgentLaunchOptions
 } from './structured-agent-session-launch'
-import { readOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
 
 function launchIntent(worktreeId: string, sessionId: string): StructuredAgentSessionLaunchIntent {
   return {
@@ -129,6 +135,10 @@ describe('coalesced launch delivery mode', () => {
     mocks.rendererTabs = {}
     mocks.listeners.clear()
     mocks.callStructuredAgentSession.mockResolvedValue({ ok: true, page: { fence: 1 } })
+    mocks.callRuntimeRpc.mockResolvedValue({
+      ok: true,
+      value: { submission: { dispatchState: 'accepted' } }
+    })
   })
 
   async function coalesce(args: {
@@ -173,11 +183,11 @@ describe('coalesced launch delivery mode', () => {
     })
 
     // Why: an unset established mode must not read as submit; the joiner never consented to send.
-    expect(readOutbox(intent.sessionId)).toEqual([])
+    expect(hasStagedStructuredLaunchPrompt(intent.sessionId)).toBe(false)
     expect(joiner.promptDeliveryResult).toBeUndefined()
-    expect(
-      mocks.callStructuredAgentSession.mock.calls.some((call) => call[1] === 'agentSession.send')
-    ).toBe(false)
+    expect(mocks.callRuntimeRpc.mock.calls.some((call) => call[1] === 'agentSession.send')).toBe(
+      false
+    )
     expect(mocks.seedDraft).toHaveBeenLastCalledWith(
       expect.objectContaining({
         tabId: 'structured-agent-session-unset-delivery-session',

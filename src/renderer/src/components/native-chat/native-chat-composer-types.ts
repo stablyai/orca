@@ -34,6 +34,8 @@ export type NativeChatStructuredComposerTransport = {
     text: string,
     attachments: readonly NativeChatComposerImageAttachment[]
   ) => boolean | 'queued'
+  /** A send is out: Send stays disabled, and a send returns false, until it settles. */
+  sendOut?: boolean
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]

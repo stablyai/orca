@@ -113,9 +113,14 @@ function catalogAttributionForPartition(
   resolveWorktreeOwner: WorktreeOwnerResolver,
   host: WorkspaceSessionState,
   hostId: ExecutionHostId
-): { contestedSessionKeys: Set<string>; foreignSessionKeys: Set<string> } {
+): {
+  contestedSessionKeys: Set<string>
+  foreignSessionKeys: Set<string>
+  ownedSessionKeys: Set<string>
+} {
   const contestedSessionKeys = new Set<string>()
   const foreignSessionKeys = new Set<string>()
+  const ownedSessionKeys = new Set<string>()
   for (const workspaceId of workspaceIdsNamedByPartition(host)) {
     // A folder key names no repo, and `getRepoIdFromWorktreeId` hands back the whole key rather
     // than nothing, so the catalog would be asked about `folder:<uuid>` and answer `unknown`.
@@ -130,7 +135,9 @@ function catalogAttributionForPartition(
       }
     } else if (resolution.hostId !== hostId) {
       foreignSessionKeys.add(workspaceId)
+    } else {
+      ownedSessionKeys.add(workspaceId)
     }
   }
-  return { contestedSessionKeys, foreignSessionKeys }
+  return { contestedSessionKeys, foreignSessionKeys, ownedSessionKeys }
 }

@@ -13,10 +13,12 @@ import type {
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
+import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-drafts'
 import type { MobileProviderSessions } from './mobile-structured-provider-session'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
+import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
@@ -34,6 +36,8 @@ export type MobileNativeChatController = {
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
+  /** Structured lane with a live client: where the transcript's visuals are read from. */
+  nativeChatVisualSource: MobileNativeChatVisualSource | null
   nativeChatAgentWorking: boolean
   /** What labels the live turn's one indicator row; null off the structured lane. */
   nativeChatTurnIndicator: NativeChatLiveTurnIndicator | null
@@ -78,6 +82,8 @@ export type MobileNativeChatController = {
   /** Host-held queued drafts shown as cards above the composer (structured lane; any host
    *  that publishes them). */
   nativeChatQueued: MobileStructuredQueuedMessageControls
+  /** Running child work shown in a strip above the composer; null off the structured lane. */
+  nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
   handleNativeChatQuestionAnswer: (text: string) => Promise<boolean>

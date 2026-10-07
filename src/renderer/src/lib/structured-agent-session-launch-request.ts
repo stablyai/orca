@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
+import type { StagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
 import type { AgentLaunchRequestId } from './agent-launch-request-id'
 
 /** What a new start brings: the user action it serves, whether it carries text, and the tab group
@@ -17,7 +17,7 @@ export type StructuredLaunchAttempt =
       requestId: AgentLaunchRequestId
       /** The request carried no text: the chat is blank until something claims it. */
       blank: boolean
-      stagedEntry: StructuredAgentSessionOutboxEntry | null
+      stagedPrompt: StagedStructuredLaunchPrompt | null
     }
   | { kind: 'retry' }
 

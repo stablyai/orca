@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
@@ -10,6 +10,9 @@ const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted
 
 vi.mock('@/lib/structured-agent-session-launch', () =>
   moduleFactories.structuredAgentSessionLaunch()
+)
+vi.mock('@/lib/structured-agent-session-launch-message', () =>
+  moduleFactories.structuredAgentSessionLaunchMessage()
 )
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
@@ -26,7 +29,6 @@ vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
-import { readOutbox } from './structured-agent-session-outbox-storage'
 import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
 
 const NOT_SIGNED_IN = {
@@ -50,7 +52,7 @@ function sessionView(): React.JSX.Element {
   )
 }
 
-function composerSend(): (text: string, attachments: unknown[]) => boolean {
+function composerSend(): (text: string, attachments: unknown[]) => boolean | 'queued' {
   const send = mocks.composerProps?.structuredTransport?.send
   if (typeof send !== 'function') {
     throw new Error('Structured composer transport was not installed')
@@ -195,107 +197,45 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     expect(screen.getByText('Chat connection could not be confirmed.')).toBeTruthy()
   })
 
-  it('keeps the durable outbox parked until publication, then dispatches it once', async () => {
-    mocks.mode = 'outbox'
-    mocks.launchLifecycle = 'visibility-unknown'
-    mocks.call.mockResolvedValue({
-      ok: true,
-      value: { submission: { clientMessageId: 'client-1', dispatchState: 'accepted' } }
-    })
-    const { rerender } = render(sessionView())
-    const send = mocks.composerProps?.structuredTransport?.send
-    if (typeof send !== 'function') {
-      throw new Error('Structured composer transport was not installed')
-    }
-
-    expect(send('queued while launching', [])).toBe(true)
-    expect(mocks.call).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    expect(mocks.call).not.toHaveBeenCalled()
-
-    mocks.launchLifecycle = 'published'
-    rerender(sessionView())
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    expect(mocks.call).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'agentSession.send',
-      expect.objectContaining({ envelope: expect.objectContaining({ sessionId: 'session-1' }) })
-    )
-  })
-
-  it('relaunches a failed start on send, then delivers the message once it publishes', async () => {
-    mocks.mode = 'outbox'
+  // The message rides the restart as its first message, held until the chat exists.
+  it('relaunches a failed start on send, with the message as its first message', () => {
     mocks.launchLifecycle = 'failed'
-    mocks.call.mockResolvedValue({
-      ok: true,
-      value: { submission: { clientMessageId: 'client-1', dispatchState: 'accepted' } }
-    })
-    const { rerender } = render(sessionView())
+    render(sessionView())
 
     expect(composerSend()('restart and say hi', [])).toBe(true)
     // The relaunch is launch Retry's own: a new create operation under the same session.
     expect(mocks.retryLaunch).toHaveBeenCalledExactlyOnceWith('wt-1', 'session-1')
-    expect(mocks.call).not.toHaveBeenCalled()
-
-    mocks.launchLifecycle = 'published'
-    rerender(sessionView())
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    expect(mocks.call).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'agentSession.send',
-      expect.objectContaining({ envelope: expect.objectContaining({ sessionId: 'session-1' }) })
+    expect(mocks.relaunchWithMessage).toHaveBeenCalledWith(
+      'wt-1',
+      'session-1',
+      'restart and say hi'
     )
+    expect(mocks.send).not.toHaveBeenCalled()
   })
 
-  it('keeps the message queued with the reason shown when the relaunch fails again', async () => {
-    mocks.mode = 'outbox'
-    mocks.launchLifecycle = 'failed'
-    mocks.call.mockResolvedValue({
-      ok: true,
-      value: { submission: { clientMessageId: 'client-1', dispatchState: 'accepted' } }
-    })
-    const { rerender } = render(sessionView())
+  it.each(['pending', 'visibility-unknown'] as const)(
+    'takes no send while the chat is %s: Send is off and the text stays',
+    (lifecycle) => {
+      mocks.launchLifecycle = lifecycle
+      render(sessionView())
 
-    expect(composerSend()('still there?', [])).toBe(true)
-    mocks.launchFailure = NOT_SIGNED_IN
-    rerender(sessionView())
+      expect(composerSend()('sent while starting', [])).toBe(false)
+      expect(mocks.composerProps?.structuredTransport?.sendOut).toBe(true)
+      expect(mocks.retryLaunch).not.toHaveBeenCalled()
+      expect(mocks.send).not.toHaveBeenCalled()
+    }
+  )
 
-    expect(screen.getByText(`Chat could not be started. ${NOT_SIGNED_IN_TEXT}`)).toBeTruthy()
-    expect(mocks.call).not.toHaveBeenCalled()
-    expect(readOutbox('session-1')).toEqual([
-      expect.objectContaining({
-        state: 'queued',
-        body: expect.objectContaining({ blocks: [{ type: 'text', text: 'still there?' }] })
-      })
-    ])
-
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    mocks.launchLifecycle = 'published'
-    rerender(sessionView())
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-  })
-
-  // The parked messages are the transcript here, and the reader may have scrolled up among them.
-  it('brings the latest into view when launch Retry relaunches behind a parked message', async () => {
-    mocks.mode = 'outbox'
+  // Launch Retry relaunches the chat, and the reader may have scrolled up in it.
+  it('brings the latest into view when launch Retry relaunches a failed chat', async () => {
     mocks.launchLifecycle = 'failed'
     render(sessionView())
-    expect(composerSend()('still there?', [])).toBe(true)
     await screen.findByRole('button', { name: 'Retry' })
     mocks.revealLatest.mockClear()
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
     expect(mocks.revealLatest).toHaveBeenCalledOnce()
-  })
-
-  it('leaves a send into an unconfirmed start parked without relaunching', () => {
-    mocks.mode = 'outbox'
-    mocks.launchLifecycle = 'visibility-unknown'
-    render(sessionView())
-
-    expect(composerSend()('queued while unconfirmed', [])).toBe(true)
-    expect(mocks.retryLaunch).not.toHaveBeenCalled()
   })
 
   it.each([null, 'published'] as const)(

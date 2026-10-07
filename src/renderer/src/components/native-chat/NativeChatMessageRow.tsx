@@ -1,7 +1,7 @@
 import { memo, useCallback, useRef } from 'react'
 import { NativeChatRewindAction } from './NativeChatRewindAction'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
-import { Goal, RotateCcw } from 'lucide-react'
+import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
@@ -37,8 +37,8 @@ import { useNativeChatWorkRun } from './use-native-chat-work-run'
  *  place of its time, or that it did not go through, with its own Retry when the surface can send
  *  it again. */
 export type NativeChatDeliveryNotice =
-  | { sending: true; text?: never; onRetry?: never; onDismiss?: never }
-  | { sending?: never; text: string; onRetry?: () => void; onDismiss?: () => void }
+  | { sending: true; text?: never; onDismiss?: never }
+  | { sending?: never; text: string; onDismiss?: () => void }
 
 const USER_META_REVEAL =
   'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
@@ -259,15 +259,6 @@ export const MessageRow = memo(function MessageRow({
             {deliveryNotice.onDismiss ? (
               <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onDismiss}>
                 {translate('components.native-chat.dismissDeliveryNotice', 'Dismiss')}
-              </Button>
-            ) : null}
-            {deliveryNotice.onRetry ? (
-              <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onRetry}>
-                <RotateCcw className="size-3" />
-                {translate(
-                  'auto.components.native.chat.NativeChatStructuredSession.a5e7f14068',
-                  'Retry'
-                )}
               </Button>
             ) : null}
           </div>

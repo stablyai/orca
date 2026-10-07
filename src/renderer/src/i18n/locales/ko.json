@@ -17416,11 +17416,6 @@
       },
       "native": {
         "chat": {
-          "NativeChatStructuredSession": {
-            "1f772bb5d0": "메시지 전달이 확인되지 않았습니다.",
-            "93ef441197": "메시지가 전송되지 않았습니다.",
-            "a5e7f14068": "다시 시도"
-          },
           "NativeChatLaunchRetry": {
             "failed": "채팅을 시작할 수 없습니다.",
             "unknown": "채팅 연결을 확인할 수 없습니다.",
@@ -18014,7 +18009,11 @@
         "historyItemTooLarge": "채팅의 이 부분은 너무 커서 표시할 수 없습니다.",
         "stoppedBeforeStart": "에이전트가 시작되기 전에 중지됨",
         "dismiss": "닫기",
-        "copyError": "오류 복사"
+        "copyError": "오류 복사",
+        "orcaStopUpdate": "이 응답이 진행되는 동안 {{machine}}의 Orca가 업데이트를 위해 다시 시작되었습니다.",
+        "orcaStopQuit": "이 응답이 진행되는 동안 {{machine}}의 Orca가 종료되었습니다.",
+        "orcaStopCrash": "이 응답이 진행되는 동안 {{machine}}의 Orca가 예기치 않게 중지되었습니다.",
+        "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다."
       },
       "providerFrame": {
         "byteLength": "{{value0}}바이트"
@@ -18181,6 +18180,11 @@
         "offline": "{{hostName}}이(가) 오프라인입니다",
         "reconnecting": "{{hostName}}에 다시 연결하는 중…",
         "reconnect": "다시 연결"
+      },
+      "interruptedContinue": {
+        "continue": "계속",
+        "failed": "이 채팅을 계속할 수 없습니다. 다시 시도하거나 메시지를 보내세요.",
+        "explanation": "계속하면 에이전트가 먼저 마지막 단계가 완료되었는지 확인합니다."
       }
     },
     "tab": {

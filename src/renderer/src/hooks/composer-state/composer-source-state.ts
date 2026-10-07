@@ -2,7 +2,7 @@ import type { ComposerTargetState } from './composer-target-state-contract'
 import type { ComposerExternalSyncState } from './composer-external-sync-contract'
 import type { ComposerSourceState } from './composer-source-state-contract'
 import { useSourceIdentityActions } from './source-identity-actions'
-import { useAttachmentDropState } from './attachment-drop-state'
+import { useComposerAttachmentDropState } from './composer-attachment-drop-state'
 import { useTargetChangeActions } from './target-change-actions'
 import { useProjectTargetActions } from './project-target-actions'
 import { useBranchStartPointActions } from './branch-start-point-actions'
@@ -49,17 +49,7 @@ export function useComposerSourceState(
     smartGitHubPrStartPointSelectionRef:
       target.asyncComposerState.smartGitHubPrStartPointSelectionRef
   })
-  const attachmentDropState = useAttachmentDropState({
-    agentPromptRef: target.asyncComposerState.agentPromptRef,
-    cancelPromptCaretFrame: target.providerRuntimeSync.cancelPromptCaretFrame,
-    connectionId: target.workspaceIdentityState.connectionId,
-    promptCaretFrameRef: target.asyncComposerState.promptCaretFrameRef,
-    promptTextareaRef: target.asyncComposerState.promptTextareaRef,
-    selectedRepoPath: target.asyncComposerState.selectedRepoPath,
-    selectedRepoSettings: target.runtimeTargetSelection.selectedRepoSettings,
-    setAgentPrompt: target.sourceContextState.setAgentPrompt,
-    setAttachmentPaths: target.sourceContextState.setAttachmentPaths
-  })
+  const attachmentDropState = useComposerAttachmentDropState(target)
   const targetChangeActions = useTargetChangeActions({
     baseBranch: target.workspaceIdentityState.baseBranch,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,

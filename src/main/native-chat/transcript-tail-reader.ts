@@ -1,4 +1,5 @@
 import { readOpenCodeNativeChatTranscriptTail } from './transcript-opencode'
+import { isENOENT } from '../ipc/filesystem-path-containment'
 import type {
   AgentType,
   NativeChatMessage,
@@ -25,9 +26,9 @@ import {
 } from './transcript-tail-boundary'
 import {
   closeTranscriptHandle,
-  wslGatedOpen,
-  wslGatedRead,
-  wslGatedStat
+  openTranscriptFile,
+  readTranscriptFile,
+  transcriptFileStat
 } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
@@ -72,14 +73,14 @@ export async function readNativeChatTranscriptTailFile(
 }> {
   signal?.throwIfAborted()
   const end = Math.min(
-    (await wslGatedStat(filePath, 'exact', signal)).size,
+    (await transcriptFileStat(filePath, 'exact', signal)).size,
     endOffset ?? Number.MAX_SAFE_INTEGER
   )
   signal?.throwIfAborted()
   if (end === 0) {
     return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
   }
-  const handle = await wslGatedOpen(filePath, 'exact', signal)
+  const handle = await openTranscriptFile(filePath, 'exact', signal)
   const lineParts: Buffer[] = []
   let lineBytes = 0
   let lineOversized = false
@@ -112,7 +113,7 @@ export async function readNativeChatTranscriptTailFile(
       signal?.throwIfAborted()
       const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
       const buffer = Buffer.allocUnsafe(cursor - start)
-      const { bytesRead } = await wslGatedRead(
+      const { bytesRead } = await readTranscriptFile(
         handle,
         filePath,
         buffer,
@@ -292,8 +293,6 @@ export async function readNativeChatTranscriptTail(
   } catch (error) {
     signal?.throwIfAborted()
     const message = error instanceof Error ? error.message : String(error)
-    return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
-      ? { error: message, notFound: true }
-      : { error: message }
+    return isENOENT(error) ? { error: message, notFound: true } : { error: message }
   }
 }

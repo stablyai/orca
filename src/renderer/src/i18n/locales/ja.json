@@ -17416,11 +17416,6 @@
       },
       "native": {
         "chat": {
-          "NativeChatStructuredSession": {
-            "1f772bb5d0": "メッセージの配信は未確認です。",
-            "93ef441197": "メッセージは送信されませんでした。",
-            "a5e7f14068": "再試行"
-          },
           "NativeChatLaunchRetry": {
             "failed": "チャットを開始できませんでした。",
             "unknown": "チャット接続が確認できませんでした。",
@@ -18014,7 +18009,11 @@
         "historyItemTooLarge": "チャットのこの部分は大きすぎるため表示できません。",
         "stoppedBeforeStart": "Agent の開始前に停止しました",
         "dismiss": "閉じる",
-        "copyError": "エラーをコピー"
+        "copyError": "エラーをコピー",
+        "orcaStopUpdate": "この応答の途中で、{{machine}} の Orca がアップデートのため再起動しました。",
+        "orcaStopQuit": "この応答の途中で、{{machine}} の Orca が終了しました。",
+        "orcaStopCrash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
+        "orcaStopCanContinue": "この会話で続行できます。"
       },
       "providerFrame": {
         "byteLength": "{{value0}}バイト"
@@ -18181,6 +18180,11 @@
         "offline": "{{hostName}} はオフラインです",
         "reconnecting": "{{hostName}} に再接続しています…",
         "reconnect": "再接続"
+      },
+      "interruptedContinue": {
+        "continue": "続行",
+        "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
+        "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。"
       }
     },
     "tab": {

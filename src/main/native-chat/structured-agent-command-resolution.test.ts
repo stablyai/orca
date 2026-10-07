@@ -36,6 +36,21 @@ describe('structured agent executable resolution', () => {
     }
   )
 
+  it('reads the Command setting of any agent, and its stock binary by the name it is given', () => {
+    const { command } = executable()
+    expect(
+      resolveStructuredAgentCommand('opencode', { agentCmdOverrides: { opencode: `"${command}"` } })
+    ).toBe(command)
+    expect(
+      resolveStructuredAgentCommand(
+        'opencode',
+        { agentCmdOverrides: { claude: `"${command}"` } },
+        { pathEnv: '/nowhere' },
+        { command: 'opencode', resolve: (name) => `/stock/${name}` }
+      )
+    ).toBe('/stock/opencode')
+  })
+
   it('resolves a basename through the configured PATH and a home-relative path through the host home', () => {
     const { directory, command } = executable()
     const basenameCommand = join(directory, 'agent-custom')

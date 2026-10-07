@@ -9,7 +9,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { createStructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
+import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
@@ -254,15 +254,11 @@ describe('the next accepted turn releases a kept card', () => {
     if (!page.ok) {
       throw new Error('history refused')
     }
+    // The sending desktop's own bubble, had it not settled yet.
     const lingering = {
-      ...createStructuredAgentSessionOutboxEntry({
-        clientMessageId: id,
-        sessionId: SESSION,
-        text: 'the kept words',
-        attachments: [],
-        queuedAt: 1
-      }),
-      state: 'rejected' as const
+      clientMessageId: id,
+      body: structuredAgentSessionSendBody('the kept words', []),
+      queuedAt: 1
     }
     const shown = projectStructuredAgentSessionMessages(
       page.page.items,

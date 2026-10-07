@@ -11,6 +11,9 @@ import {
   type AgentSessionHostStatusPresentation
 } from '../../../../shared/agent-session-host-status-rows'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
+import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
+import { nativeChatOrcaStopRowText } from './native-chat-orca-stop-words'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../../shared/agent-session-orca-stop'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
@@ -35,6 +38,7 @@ export function NativeChatNoticeRow({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
 }): React.JSX.Element {
+  const orcaStopView = useNativeChatOrcaStopView()
   if (block.presentation === 'compaction') {
     const label = translate('components.native-chat.notices.compaction', 'Context compacted')
     return (
@@ -87,7 +91,16 @@ export function NativeChatNoticeRow({
       </Card>
     )
   }
-  const tone = block.tone
+  // The host's row about an Orca stop names the cause and the machine, muted: Orca stopped, not the
+  // agent. With no machine to name it keeps the host's own words.
+  const { orcaStop } = block
+  const { hostLabel, continueAvailable } = orcaStopView
+  const named = orcaStop !== undefined && hostLabel !== null
+  const text = named
+    ? nativeChatOrcaStopRowText(orcaStop.cause, hostLabel, { continueAvailable })
+    : block.text
+  const tone =
+    named || block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ? 'notice' : block.tone
   const Icon =
     tone === 'warning'
       ? AlertTriangle
@@ -108,7 +121,7 @@ export function NativeChatNoticeRow({
     >
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
-        <p className="min-w-0 whitespace-pre-wrap break-words">{block.text}</p>
+        <p className="min-w-0 whitespace-pre-wrap break-words">{text}</p>
       </div>
       {block.providerFrame ? (
         <ProviderFrameRow

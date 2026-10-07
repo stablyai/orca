@@ -20,7 +20,8 @@ const frameSchema = z.object({
     id: z.union([z.string(), z.number()]).optional(),
     method: z.string().optional(),
     params: z.unknown().optional(),
-    result: z.unknown().optional()
+    result: z.unknown().optional(),
+    error: z.unknown().optional()
   })
 })
 export type AcpFixtureFrame = z.infer<typeof frameSchema>

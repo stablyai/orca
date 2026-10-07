@@ -7,10 +7,7 @@ import {
   AgentSessionRefusalError,
   agentSessionRefusalFromReference
 } from '../../../shared/agent-session-wire-refusals'
-import type {
-  AgentSessionResumeMarker,
-  AgentSessionResumeTrigger
-} from '../../../shared/agent-session-resume-marker'
+import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
 import {
   createNewerOrcaChats,
   createStructuredAgentSessionRestartCandidateReaders
@@ -24,21 +21,21 @@ import { createStructuredAgentSessionRestartOfferRecords } from './structured-ag
 import {
   restartRowsFor,
   type StructuredAgentSessionRestartAudience,
-  type StructuredAgentSessionResumeCandidate,
-  type StructuredAgentSessionResumeFailure
+  type StructuredAgentSessionResumeCandidate
 } from './structured-agent-session-restart-resume-set'
 import {
   resumeStructuredAgentSessionsFromRestart,
-  StructuredAgentSessionResumeAdmission,
-  type StructuredAgentSessionResumeOutcome
+  StructuredAgentSessionResumeAdmission
 } from './structured-agent-session-restart-resume-runner'
+import type { StructuredAgentSessionRestartResume } from './structured-agent-session-restart-resume-contract'
 import {
-  restartContinuationDeps,
+  continuationDeps,
   startStructuredAgentSessionContinuation,
   type StructuredAgentSessionContinuationHost,
   type StructuredAgentSessionContinuationOutcome
 } from './structured-agent-session-restart-continuation'
 import { restartContinuationId } from './structured-agent-session-restart-continuation-envelope'
+import { createInterruptedContinuation } from './structured-agent-session-interrupted-continuation'
 import {
   createStructuredAgentSessionRestartOfferWithdrawal,
   type StructuredAgentSessionRestartOfferSession
@@ -54,40 +51,7 @@ import type { StructuredAgentSessionHostDeps } from './structured-agent-session-
 
 type LiveSession = StructuredAgentSessionRestartOfferSession
 
-export type StructuredAgentSessionRestartResume = {
-  /** Teardown: begin, then per session a snapshot right before its child stops and a confirmation
-   *  once the stop is proven, then one write of the confirmed offers. */
-  beginTeardown: (trigger: AgentSessionResumeTrigger) => void
-  captureBeforeStop: (sessionId: string) => void
-  confirmStopped: (sessionId: string) => void
-  recordMarkers: () => Promise<void>
-  list: (
-    audience?: StructuredAgentSessionRestartAudience
-  ) => Promise<StructuredAgentSessionResumeCandidate[]>
-  /** Offers already acted on whose agent did not carry on. Read-only; nothing here is spent. */
-  listFailures: (
-    audience?: StructuredAgentSessionRestartAudience
-  ) => Promise<StructuredAgentSessionResumeFailure[]>
-  /** Unnamed, continues every offer the audience sees; named, only those of them. */
-  continueAfterRestart: (
-    sessionIds: readonly string[] | undefined,
-    owner: string,
-    audience?: StructuredAgentSessionRestartAudience
-  ) => Promise<{
-    resumed: StructuredAgentSessionResumeOutcome[]
-    continued: StructuredAgentSessionContinuationOutcome[]
-    sessions?: StructuredAgentSessionResumeCandidate[]
-    failed?: StructuredAgentSessionResumeFailure[]
-  }>
-  /** Named sessions forget their offer or failure; unnamed, every record this host lists goes (a
-   *  newer Orca's stay). An audience limits either to the agents it sees. */
-  dismiss: (
-    sessionIds?: readonly string[],
-    audience?: StructuredAgentSessionRestartAudience
-  ) => Promise<number>
-  /** The chat's agent proved a start: its offer ends unless the start is a resume's own. */
-  onAgentStarted: (sessionId: string) => void
-}
+export type { StructuredAgentSessionRestartResume }
 
 export function createStructuredAgentSessionRestartResume(
   deps: Pick<
@@ -261,7 +225,7 @@ export function createStructuredAgentSessionRestartResume(
     // never starts more agents at once than the runner allows; the provider's answer comes after.
     const action = await run(sessionIds, owner, audience, async (marker, continuationId) => {
       const started = await startStructuredAgentSessionContinuation(
-        restartContinuationDeps(continuationHost, marker),
+        continuationDeps(continuationHost, () => continuationHost.stillResumable(marker)),
         marker.sessionId,
         marker,
         continuationId
@@ -327,6 +291,7 @@ export function createStructuredAgentSessionRestartResume(
         audience
       ),
     continueAfterRestart,
-    onAgentStarted: withdrawal.onAgentStarted
+    onAgentStarted: withdrawal.onAgentStarted,
+    continueInterrupted: createInterruptedContinuation(continuationHost, readMarkers)
   }
 }

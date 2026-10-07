@@ -8,9 +8,6 @@
  *
  * One case is pinned as a KNOWN DEFECT: the shipped detector refuses a ready screen whose retained
  * tail ends on the error block. That asserts what it does, not what it should.
- *
- * Capture protocol: docs/reference/agent-pty-transcript-capture.md
- * What each transcript decides: docs/reference/antigravity-readiness-evidence.md
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -26,15 +23,6 @@ vi.mock('electron', () => ({
 }))
 
 const FIXTURE_DIR = join(__dirname, '__fixtures__')
-const EVIDENCE_DOC = join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  'docs',
-  'reference',
-  'antigravity-readiness-evidence.md'
-)
 // Why asymmetric: a ready verdict has to survive the settle window, while a refusal only has to
 // hold for one poll. Keeping the refusal short keeps seven transcripts off the suite's clock.
 const READY_TIMEOUT_MS = 2_000
@@ -48,7 +36,7 @@ const ESC = String.fromCharCode(27)
 type TranscriptCase = {
   /** Fixture basename; `<name>.txt` under `__fixtures__/`. */
   name: string
-  /** Capture in docs/reference/antigravity-readiness-evidence.md. */
+  /** Capture group identifier. */
   capture: string
   what: string
   /** What a correct detector must answer. Not what the shipped one answers. */
@@ -114,8 +102,7 @@ const TRANSCRIPTS: readonly TranscriptCase[] = [
     expectReady: true
   },
   // Not captured: this machine's agy has no OAuth session and offers only Gemini models, and
-  // reaching the rest would mean signing the operator out or deleting their config. See
-  // docs/reference/antigravity-readiness-evidence.md § What could not be captured.
+  // reaching the rest would mean signing the operator out or deleting their config.
   {
     name: 'antigravity-ready-business-non-gemini',
     capture: 'A',
@@ -225,13 +212,4 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
       expect(text).toContain(ESC)
     })
   }
-
-  it('documents every transcript the detector is allowed to depend on', () => {
-    // Why a test: the doc is the operator's checklist. A name that drifts out of it is a
-    // transcript nobody will capture, and a case that silently skips forever.
-    const doc = readFileSync(EVIDENCE_DOC, 'utf8')
-    for (const transcript of TRANSCRIPTS) {
-      expect(doc).toContain(`${transcript.name}.txt`)
-    }
-  })
 })

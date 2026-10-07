@@ -206,27 +206,16 @@ describe('what a user message says about its delivery', () => {
     )
   }
 
-  it('says why under the message, with a Retry that sends this one', () => {
-    const onRetry = vi.fn()
-    renderUser({ text: "The agent couldn't restart. Your message was not sent.", onRetry })
-
-    expect(
-      screen.getByText("The agent couldn't restart. Your message was not sent.")
-    ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    expect(onRetry).toHaveBeenCalledOnce()
-  })
-
-  it('offers no Retry where the surface cannot send it again', () => {
+  it('says why under the message, with no control where the surface has none', () => {
     renderUser({ text: 'Not delivered — check the terminal' })
 
     expect(screen.getByText('Not delivered — check the terminal')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull()
   })
 
   it('says nothing when it went through', () => {
     renderUser()
-    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull()
   })
 
   // Muted, in the time's place, and shown without hover: a message nothing confirmed yet never
@@ -242,7 +231,7 @@ describe('what a user message says about its delivery', () => {
     expect(sending.parentElement!.parentElement).toHaveClass('group')
     expect(copy).toHaveClass('can-hover:opacity-0', 'group-hover:opacity-100')
     expect(screen.queryByRole('time')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull()
   })
 
   it('keeps the same row when the message is confirmed, with the time back in its place', () => {

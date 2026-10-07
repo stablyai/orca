@@ -1,14 +1,9 @@
 // @vitest-environment happy-dom
 
-/**
- * Native file drops never reach React in this app: preload claims them on
- * document capture and routes the paths to the editor. These tests pin the
- * window-capture interception that keeps a screenshot dropped on the feedback
- * dialog from being swallowed by that lane.
- */
 import { act } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { OS_FILE_DROP_OWNER_ATTRIBUTE } from '../../../../shared/native-file-drop-preparation'
 import { ORCA_INTERNAL_FILE_DRAG_TYPE } from '../../../../shared/native-file-drop'
 import { installOsFileDropCancellationGuard } from '../../lib/os-file-drop-cancellation-guard'
 import { useFeedbackImageDrop } from './use-feedback-image-drop'
@@ -18,6 +13,15 @@ let root: Root
 let preloadDropSpy: ReturnType<typeof vi.fn<(event: Event) => void>>
 
 function preloadDropListener(event: Event): void {
+  if (
+    event
+      .composedPath()
+      .some(
+        (entry) => entry instanceof HTMLElement && entry.hasAttribute(OS_FILE_DROP_OWNER_ATTRIBUTE)
+      )
+  ) {
+    return
+  }
   preloadDropSpy(event)
   // Why: preload consumes the gesture, which is why React's onDrop never runs.
   event.preventDefault()
@@ -68,6 +72,7 @@ async function renderHarness(
 
 function dragEvent(type: string, files: File[], types: string[] = ['Files']): Event {
   const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'isTrusted', { value: true })
   Object.defineProperty(event, 'dataTransfer', { value: { files, types } })
   return event
 }
@@ -89,6 +94,7 @@ describe('useFeedbackImageDrop', () => {
     const onAddFiles = vi.fn()
     await renderHarness(true, onAddFiles)
 
+    expect(container.querySelector('[data-os-file-drop-owner]')).not.toBeNull()
     const event = dragEvent('drop', [pngFile()])
     act(() => {
       dialogChild().dispatchEvent(event)
@@ -114,7 +120,7 @@ describe('useFeedbackImageDrop', () => {
     expect(preloadDropSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('ignores non-image drops so they keep their existing behavior', async () => {
+  it('claims non-image drops so they cannot open in the editor behind the dialog', async () => {
     const onAddFiles = vi.fn()
     await renderHarness(true, onAddFiles)
 
@@ -124,9 +130,8 @@ describe('useFeedbackImageDrop', () => {
     })
 
     expect(onAddFiles).not.toHaveBeenCalled()
-    expect(preloadDropSpy).toHaveBeenCalledTimes(1)
-    // Why: dragover accepted the drag, so an uncancelled drop navigates the web
-    // client to the file; preload still gets it because propagation continues.
+    expect(preloadDropSpy).not.toHaveBeenCalled()
+    // A refused file still cancels browser navigation.
     expect(event.defaultPrevented).toBe(true)
   })
 
@@ -174,6 +179,7 @@ describe('useFeedbackImageDrop', () => {
     try {
       const onAddFiles = vi.fn()
       await renderHarness(true, onAddFiles)
+      expect(container.querySelector('[data-os-file-drop-owner]')).not.toBeNull()
       const image = pngFile()
       const hover = dragEvent('dragover', [])
       act(() => {

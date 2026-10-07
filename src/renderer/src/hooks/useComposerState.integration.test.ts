@@ -70,13 +70,6 @@ describe('useComposerState integrated lifecycle', () => {
       worktreesByRepo: {},
       sparsePresetsByRepo: {}
     })
-    const unsubscribes: ReturnType<typeof vi.fn>[] = []
-    vi.spyOn(window.api.ui, 'onFileDrop').mockImplementation(() => {
-      const unsubscribe = vi.fn()
-      unsubscribes.push(unsubscribe)
-      return unsubscribe
-    })
-
     const first = renderHook(() => useComposerState({ initialName: 'first', persistDraft: false }))
     const second = renderHook(() =>
       useComposerState({ initialName: 'second', persistDraft: false })
@@ -88,12 +81,12 @@ describe('useComposerState integrated lifecycle', () => {
     expect(first.result.current.cardProps.onParentWorktreeIdChange).toBeTypeOf('function')
     act(() => first.result.current.cardProps.onParentWorktreeIdChange('repo-1::/parent'))
     expect(first.result.current.cardProps.parentWorktreeId).toBe('repo-1::/parent')
-    expect(window.api.ui.onFileDrop).toHaveBeenCalledTimes(2)
+    expect(first.result.current.cardProps.onNativeFileDrop).toBeUndefined()
+    expect(second.result.current.cardProps.onNativeFileDrop).toBeUndefined()
+    expect(window.api.ui.onFileDrop).not.toHaveBeenCalled()
 
     second.unmount()
     first.unmount()
-    expect(unsubscribes).toHaveLength(2)
-    expect(unsubscribes[0]).toHaveBeenCalledTimes(1)
-    expect(unsubscribes[1]).toHaveBeenCalledTimes(1)
+    expect(window.api.ui.onFileDrop).not.toHaveBeenCalled()
   })
 })

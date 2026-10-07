@@ -77,7 +77,11 @@ function unseenHistory(
   }
   return {
     ...history,
-    items: history.items.filter((item) => !committed.has(agentJournalItemKey(item.identity)))
+    // An item with no identity of its own cannot be one the journal committed under it; the
+    // adapter bounds its window to after the journal's last accepted send instead.
+    items: history.items.filter(
+      (item) => item.identity === undefined || !committed.has(agentJournalItemKey(item.identity))
+    )
   }
 }
 

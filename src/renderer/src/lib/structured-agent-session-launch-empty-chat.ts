@@ -1,4 +1,5 @@
-import { getStructuredAgentSessionOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
+import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
 import { readNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
 // The draft store, not the composer hook: the launch must not load the composer (a store cycle).
 import {
@@ -15,7 +16,8 @@ export function isStructuredLaunchChatEmpty(sessionId: string): boolean {
   const scopeKey = structuredAgentSessionDraftScopeKey(sessionId)
   return (
     !isNativeChatComposerDraftLoadPending() &&
-    getStructuredAgentSessionOutbox(sessionId).length === 0 &&
+    getStructuredAgentSessionPendingSends(sessionId).length === 0 &&
+    !hasStagedStructuredLaunchPrompt(sessionId) &&
     readNativeChatDraftCache(scopeKey).trim() === '' &&
     readNativeChatComposerDraft(scopeKey).images.length === 0
   )

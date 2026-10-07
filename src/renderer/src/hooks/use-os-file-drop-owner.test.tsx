@@ -102,6 +102,15 @@ afterEach(() => {
 })
 
 describe('useOsFileDropOwner', () => {
+  it('claims a trusted refused drop without reading file paths', () => {
+    const onDrop = vi.fn()
+    const view = render(<Owner onDrop={onDrop} canAccept={false} />)
+    drag(view.getByTestId('owner'), 'drop')
+    expect(getPathForFile).not.toHaveBeenCalled()
+    expect(onDrop).not.toHaveBeenCalled()
+    drag(view.getByTestId('owner'), 'drop', undefined, { trusted: false })
+    expect(onDrop).not.toHaveBeenCalled()
+  })
   it('registers the root with a callback ref and delivers one prepared drop to the nearest owner', async () => {
     const outerDrop = vi.fn<DropHandler>()
     const innerDrop = vi.fn<DropHandler>()
