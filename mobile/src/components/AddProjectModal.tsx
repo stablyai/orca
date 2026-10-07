@@ -10,7 +10,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { AddProjectStart } from './AddProjectStart'
 import { AddProjectTargetRecovery } from './AddProjectTargetRecovery'
 import { AddProjectFolderView } from './AddProjectFolderView'
-import { AddProjectTargetSelector } from './AddProjectTargetSelector'
+import { AddProjectTargetSelectorView } from './AddProjectTargetSelectorView'
 import { BottomDrawer } from './BottomDrawer'
 import { AddProjectFolderConfirmation } from './AddProjectFolderConfirmation'
 import { AddProjectForm } from './AddProjectForm'
@@ -35,7 +35,6 @@ function toMobileRepo(repo: AddedRepo): MobileWorkspaceRepo {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the receipt's looseObject keeps every member the host sent; the trio it requires is exactly what MobileWorkspaceRepo requires.
   return repo as MobileWorkspaceRepo
 }
-
 /**
  * The Add project sheet from the + action sheet: the desktop Add project start steps minus
  * the SSH row, then one form per row. A successful add closes the sheet and hands the repo
@@ -57,7 +56,6 @@ export function AddProjectModal({
       visible
     })
   }
-
   const handoffRef = useRef<{
     repo: MobileWorkspaceRepo
     client: RpcClient | null
@@ -83,7 +81,6 @@ export function AddProjectModal({
       onProjectAdded(handoff.repo)
     }
   }, [onProjectAdded])
-
   return (
     <AddProjectModalContent
       key={session.openEpoch}
@@ -101,7 +98,6 @@ export function AddProjectModal({
     />
   )
 }
-
 function AddProjectModalContent({
   visible,
   openEpoch,
@@ -277,15 +273,6 @@ function AddProjectModalContent({
     ]
   )
 
-  const targetSelector = (
-    <AddProjectTargetSelector
-      busy={busy}
-      targets={targetOptions}
-      selectedId={sshConnectionId}
-      onSelect={selectTarget}
-    />
-  )
-
   const invalidTargetMessage = !selectedTargetAvailable
     ? 'Choose a valid SSH target before submitting.'
     : ''
@@ -301,7 +288,14 @@ function AddProjectModalContent({
       return (
         <View>
           <AddProjectStart
-            targetSelector={targetSelector}
+            targetSelector={
+              <AddProjectTargetSelectorView
+                busy={busy}
+                targets={targetOptions}
+                selectedId={sshConnectionId}
+                onSelect={selectTarget}
+              />
+            }
             onBrowse={() => setView('addExisting')}
             onClone={() => {
               if (activeSshConnectionId) {
@@ -338,7 +332,14 @@ function AddProjectModalContent({
     if (view === 'addExisting' || view === 'pickDestination') {
       return (
         <AddProjectFolderView
-          targetSelector={targetSelector}
+          targetSelector={
+            <AddProjectTargetSelectorView
+              busy={busy}
+              targets={targetOptions}
+              selectedId={sshConnectionId}
+              onSelect={selectTarget}
+            />
+          }
           destination={view === 'pickDestination'}
           client={client}
           sshConnectionId={activeSshConnectionId}
@@ -395,7 +396,12 @@ function AddProjectModalContent({
 
     return (
       <View>
-        {targetSelector}
+        <AddProjectTargetSelectorView
+          busy={busy}
+          targets={targetOptions}
+          selectedId={sshConnectionId}
+          onSelect={selectTarget}
+        />
         <AddProjectForm
           mode={view}
           value={value}
