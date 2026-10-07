@@ -1,3 +1,4 @@
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -82,6 +83,9 @@ function makeStore(repoPath: string) {
   return {
     getRepo: vi.fn((repoId: string) => (repoId === 'repo-1' ? repo : null)),
     getRepos: vi.fn(() => [repo]),
+    getFolderWorkspaces: vi.fn(() => []),
+    getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
+    removeRuntimeWorkspaceSessionPartition: vi.fn(async () => true),
     getSettings: vi.fn(() => ({ activeRuntimeEnvironmentId })),
     updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
       activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
@@ -411,6 +415,10 @@ describe('registerEphemeralVmHandlers', () => {
     } as never)
     expect(cleaned).toEqual(expect.objectContaining({ status: 'cleaned' }))
     expect(listEnvironments(userDataPath)).toEqual([])
+    expect(store.removeRuntimeWorkspaceSessionPartition).toHaveBeenCalledExactlyOnceWith(
+      `runtime:${result.environment!.id}`,
+      expect.any(Function)
+    )
     expect(store.getSettings().activeRuntimeEnvironmentId).toBe(result.environment!.id)
     expect(store.updateSettings).toHaveBeenCalledTimes(1)
   })

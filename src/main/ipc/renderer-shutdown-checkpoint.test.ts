@@ -1,3 +1,7 @@
+vi.mock('./renderer-workspace-session-admission', () => ({
+  canCreateRendererSessionPartition: () => true
+}))
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { syncHandlers, invokeHandlers } = vi.hoisted(() => ({

@@ -150,6 +150,7 @@ function installRestartHarness(
     terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-old' }
   }
   const store = {
+    isRuntimeWorkspaceSessionRetired: vi.fn(() => false),
     getWorkspaceSession: vi.fn(() => session),
     setWorkspaceSession: vi.fn((next) => {
       session = next

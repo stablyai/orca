@@ -1,3 +1,7 @@
+vi.mock('../runtime/runtime-workspace-session-namespace-custody', () => ({
+  hasMainOwnedRuntimeSessionNamespace: () => false
+}))
+
 import type { RuntimeHostStatusSnapshot } from '../../shared/runtime-host-status'
 import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -8,6 +12,7 @@ import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../shared/protocol-ver
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import * as environmentStore from '../../shared/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import * as runtimeMaintenance from './orcad-runtime-maintenance-handlers'
 
 const {
   handleMock,
@@ -99,8 +104,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   let activeRuntimeEnvironmentId: string | null
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
+    removeRuntimeWorkspaceSessionPartition: ReturnType<typeof vi.fn>
     updateSettings: ReturnType<typeof vi.fn>
-    removeWorkspaceSessionHost: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -108,7 +113,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     activeRuntimeEnvironmentId = null
     store = {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
-      removeWorkspaceSessionHost: vi.fn(),
+      removeRuntimeWorkspaceSessionPartition: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })
@@ -135,6 +140,30 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   afterEach(() => {
     resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  it('preserves failed managed-server archives without stranding stop cleanup', async () => {
+    const registration = vi
+      .spyOn(runtimeMaintenance, 'registerOrcadRuntimeMaintenanceHandlers')
+      .mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      store.removeRuntimeWorkspaceSessionPartition.mockRejectedValue(new Error('archive failed'))
+      registerRuntimeEnvironmentHandlers(store as never)
+      const options = registration.mock.calls[0][0]
+      await expect(options.forgetHostSession('runtime:removed')).resolves.toBeUndefined()
+      expect(store.removeRuntimeWorkspaceSessionPartition).toHaveBeenCalledWith(
+        'runtime:removed',
+        expect.any(Function)
+      )
+      expect(warn).toHaveBeenCalledWith(
+        '[runtime-environments] Retaining managed-server session after archive failure:',
+        expect.any(Error)
+      )
+    } finally {
+      registration.mockRestore()
+      warn.mockRestore()
+    }
   })
 
   it('registers desktop runtime environment management handlers', () => {
@@ -283,9 +312,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
     expect(activeRuntimeEnvironmentId).toBeNull()
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
-    // A removed server's session partition goes too, so listings stop naming it as a host.
-    expect(store.removeWorkspaceSessionHost).toHaveBeenCalledWith(
-      `runtime:${encodeURIComponent(added.environment.id)}`
+    expect(store.removeRuntimeWorkspaceSessionPartition).toHaveBeenCalledWith(
+      `runtime:${encodeURIComponent(added.environment.id)}`,
+      expect.any(Function)
     )
     expect(JSON.stringify(removed)).not.toContain('device-token')
     expect(await list(null, undefined)).toEqual([])
@@ -473,7 +502,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:remove'
     )
 
-    expect(() => remove(null, { selector: added.environment.id })).toThrow(
+    await expect(remove(null, { selector: added.environment.id })).rejects.toThrow(
       'Choose another Active Server in Advanced'
     )
     expect(activeRuntimeEnvironmentId).toBe(added.environment.id)

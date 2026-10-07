@@ -1,3 +1,7 @@
+vi.mock('../runtime/runtime-workspace-session-namespace-custody', () => ({
+  hasMainOwnedRuntimeSessionNamespace: () => false
+}))
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, clearStorageMock, removeEnvironmentMock, resolveEnvironmentMock } = vi.hoisted(
@@ -47,13 +51,16 @@ describe('runtime environment removal storage clearing', () => {
     })
     clearStorageMock.mockResolvedValue({ clearedPartitions: ['persist:one'], livePartitions: [] })
     registerRuntimeEnvironmentConnectivityHandlers({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: remove reads only settings and the session-host prune.
-      store: { getSettings: () => ({}), removeWorkspaceSessionHost: vi.fn() } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked custody path uses only these Store methods.
+      store: {
+        getSettings: () => ({}),
+        removeRuntimeWorkspaceSessionPartition: vi.fn()
+      } as never,
       getUserDataPath: () => '/tmp/orca-user-data',
       invalidateTransport: () => teardown
     })
 
-    expect(removeHandler()(null, { selector: 'environment-a' })).toMatchObject({
+    expect(await removeHandler()(null, { selector: 'environment-a' })).toMatchObject({
       removed: { id: 'environment-a' }
     })
     await Promise.resolve()
@@ -68,8 +75,11 @@ describe('runtime environment removal storage clearing', () => {
       .mockResolvedValueOnce({ clearedPartitions: [], livePartitions: ['persist:one'] })
       .mockResolvedValueOnce({ clearedPartitions: ['persist:one'], livePartitions: [] })
     registerRuntimeEnvironmentConnectivityHandlers({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: remove reads only settings and the session-host prune.
-      store: { getSettings: () => ({}), removeWorkspaceSessionHost: vi.fn() } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked custody path uses only these Store methods.
+      store: {
+        getSettings: () => ({}),
+        removeRuntimeWorkspaceSessionPartition: vi.fn()
+      } as never,
       getUserDataPath: () => '/tmp/orca-user-data',
       invalidateTransport: () => Promise.resolve()
     })

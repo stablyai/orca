@@ -1,3 +1,4 @@
+import { retireUnownedRuntimeSession } from '../runtime/retire-unowned-runtime-session'
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import {
@@ -107,8 +108,11 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       }
       if (result.ok && runtime.runtimeEnvironmentId) {
         try {
-          removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
-        } catch {
+          const removed = removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
+          await invalidateRuntimeEnvironmentTransport(removed.id)
+          await retireUnownedRuntimeSession(store, removed.id)
+        } catch (error) {
+          console.warn('[ephemeral-vm] Preserving session after local retirement failure:', error)
           // Cleanup of provider resources matters more than hiding a stale local
           // environment row; users can still remove that manually.
         }

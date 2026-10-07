@@ -155,6 +155,7 @@ function installRestartHarness(
   setLocalPtyProvider(provider as unknown as Parameters<typeof setLocalPtyProvider>[0])
   let session = seedSession('pty-old')
   const store = {
+    isRuntimeWorkspaceSessionRetired: vi.fn(() => false),
     getWorkspaceSession: vi.fn((_hostId?: string): FakeSession => session),
     setWorkspaceSession: vi.fn((next) => {
       session = next

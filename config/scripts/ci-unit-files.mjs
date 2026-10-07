@@ -1,17 +1,10 @@
 import { globSync } from 'node:fs'
 import { defaultExclude } from 'vitest/config'
+import { UNIT_INCLUDE } from './unit-test-file-patterns.mjs'
+export { UNIT_INCLUDE } from './unit-test-file-patterns.mjs'
 
 // Why one constant: the cross-version-wire job runs this directory, so a new file there runs with no list to update.
 export const CROSS_VERSION_WIRE_DIR = 'tests/e2e/cross-version-wire/'
-
-export const UNIT_INCLUDE = [
-  'src/**/*.test.ts',
-  'src/**/*.test.tsx',
-  'config/scripts/**/*.test.ts',
-  'config/scripts/**/*.test.mjs',
-  'tests/tools/**/*.test.mjs',
-  'tests/e2e/**/*.unit.test.ts'
-]
 
 export const UNIT_EXCLUDE = [
   ...defaultExclude,

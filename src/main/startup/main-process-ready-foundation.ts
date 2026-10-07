@@ -1,3 +1,4 @@
+import { reconcileOrphanedRuntimeSessions } from '../ipc/runtime-environment-session-reconcile'
 import { app, session } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
@@ -154,6 +155,7 @@ export async function initializeReadyFoundation(): Promise<void> {
     migrated: profileState.migrated
   }
   const store = profileState.store
+  await reconcileOrphanedRuntimeSessions({ store, userDataPath: app.getPath('userData') })
   state.store = store
   // Why: create pending readiness before the guard can observe the default session.
   // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell

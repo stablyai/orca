@@ -120,6 +120,23 @@ function rendererSaveWithout(
 }
 
 describe('renderer close intents', () => {
+  it('durably closes a tab with no PTY and fences a stale save after restart', async () => {
+    const empty = makeSession()
+    empty.tabsByWorktree[WORKTREE_ID] = empty.tabsByWorktree[WORKTREE_ID]!.map((tab) => ({
+      ...tab,
+      ptyId: null
+    }))
+    empty.terminalLayoutsByTabId = {}
+    const { store, runtime, reload } = createPersistedRuntime(empty)
+    const stale = structuredClone(store.getWorkspaceSession())
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      target: { kind: 'tab', tabId: TAB_ID }
+    })
+    store.setWorkspaceSession(stale)
+    expect((await reload()).tabsByWorktree[WORKTREE_ID]).toEqual([])
+  })
+
   it('keeps a closed tab closed across a renderer save and a reload', async () => {
     const { store, runtime, reload } = createPersistedRuntime(makeSession())
 

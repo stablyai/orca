@@ -1,3 +1,4 @@
+import { retireUnownedRuntimeSession } from '../runtime/retire-unowned-runtime-session'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
@@ -102,16 +103,18 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
   ipcMain.handle(
     'runtimeEnvironments:remove',
-    (_event, args: { selector: string }): { removed: PublicKnownRuntimeEnvironment } => {
+    async (
+      _event,
+      args: { selector: string }
+    ): Promise<{ removed: PublicKnownRuntimeEnvironment }> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error('Choose another Active Server in Advanced before removing this server.')
       }
       const removed = removeEnvironment(getUserDataPath(), args.selector)
-      void retireRemovedRuntimeEnvironment(removed.id, invalidateTransport, (hostId) =>
-        store.removeWorkspaceSessionHost(hostId)
-      )
+      void retireRemovedRuntimeEnvironment(removed.id, invalidateTransport)
       closeLegacySelectorTransport(args.selector, removed.id)
+      await retireUnownedRuntimeSession(store, removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )

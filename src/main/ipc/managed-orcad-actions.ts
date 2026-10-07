@@ -17,8 +17,8 @@ export type ManagedOrcadActionOptions = {
   invalidateTransport: (environmentId: string) => Promise<void> | void
   /** Drops the SSH host's stale managed-server state once its server is unlinked. */
   clearHostServerStatus: (sshTargetId: string) => void
-  /** Drops the unlinked server's workspace session partition. */
-  forgetHostSession: (hostId: ExecutionHostId) => void
+  /** Preserves and retires the unlinked server's workspace session partition. */
+  forgetHostSession: (hostId: ExecutionHostId) => Promise<void> | void
 }
 
 export function createManagedOrcadActions(

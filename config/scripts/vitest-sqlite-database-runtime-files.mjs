@@ -1,5 +1,8 @@
 // Database opening and lifecycle fixtures exercise Node SQLite behavior.
 export const SQLITE_DATABASE_RUNTIME_INCLUDE = [
+  'src/main/ipc/runtime-environment-session-retirement.test.ts',
+  'src/main/ipc/runtime-environment-session-reconcile.test.ts',
+  'src/main/runtime/runtime-workspace-session-namespace-custody.test.ts',
   'src/main/ai-vault-search/session-search-file-write.test.ts',
   'src/main/ai-vault-search/session-search-live-transcript.test.ts',
   'src/main/ai-vault/session-scanner-devin-contention.test.ts',

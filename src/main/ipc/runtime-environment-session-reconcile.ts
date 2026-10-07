@@ -1,42 +1,44 @@
-/**
- * Startup reconcile for workspace sessions of servers that no longer exist. Unlinking a server drops
- * its `runtime:<id>` session, but a crash between the two, or a build that unlinked before that
- * drop existed, leaves an orphan that listings keep naming as an unselectable host.
- */
-import { existsSync } from 'node:fs'
-import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { listEnvironments } from '../../shared/runtime-environment-store'
-import { getEnvironmentStorePath } from '../../shared/runtime-environment-store-file'
+import { parseExecutionHostId } from '../../shared/execution-host'
+import type { Store } from '../persistence'
+import { retireUnownedRuntimeSession } from '../runtime/retire-unowned-runtime-session'
 
-type SessionHostStore = {
-  getWorkspaceSessionHostIds: () => ExecutionHostId[]
-  removeWorkspaceSessionHost: (hostId: ExecutionHostId) => void
-}
-
-/** Returns the dropped hosts. Local and ssh: sessions are never touched. */
-export function reconcileOrphanedRuntimeSessions(
-  store: SessionHostStore,
+export async function reconcileOrphanedRuntimeSessions({
+  store,
+  userDataPath,
+  listKnownEnvironments = listEnvironments,
+  log = console.warn
+}: {
+  store: Store
   userDataPath: string
-): ExecutionHostId[] {
-  // Why both guards: a missing file reads as "no servers", and a session must never be deleted
-  // on evidence that only means the environment store could not be read.
-  if (!existsSync(getEnvironmentStorePath(userDataPath))) {
-    return []
-  }
-  let known: Set<string>
+  listKnownEnvironments?: typeof listEnvironments
+  log?: (message: string, error?: unknown) => void
+}): Promise<void> {
+  let environments: ReturnType<typeof listEnvironments>
   try {
-    known = new Set(listEnvironments(userDataPath).map((environment) => environment.id))
-  } catch (error) {
-    console.warn('[runtime-environments] skipped orphaned session reconcile:', error)
-    return []
+    environments = listKnownEnvironments(userDataPath, { requireStoreFile: true })
+  } catch {
+    return
   }
-  // Safe because a runtime:<id> session is only ever written after that server is registered.
-  const dropped = store.getWorkspaceSessionHostIds().filter((hostId) => {
-    const parsed = parseExecutionHostId(hostId)
-    return parsed?.kind === 'runtime' && !known.has(parsed.environmentId)
-  })
-  for (const hostId of dropped) {
-    store.removeWorkspaceSessionHost(hostId)
+  // An empty registry may be a lost concurrent write; explicit observed removal handles the last host.
+  if (environments.length === 0) {
+    return
   }
-  return dropped
+  const known = new Set(environments.map((environment) => environment.id))
+  for (const hostId of store.getWorkspaceSessionHostIds()) {
+    const host = parseExecutionHostId(hostId)
+    // Older runtime namespaces need not be paired-host IDs.
+    if (
+      host?.kind !== 'runtime' ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(host.environmentId) ||
+      known.has(host.environmentId)
+    ) {
+      continue
+    }
+    try {
+      await retireUnownedRuntimeSession(store, host.environmentId)
+    } catch (error) {
+      log('[runtime-host-session] Retaining session after archive or persistence failure:', error)
+    }
+  }
 }

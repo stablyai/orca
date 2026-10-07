@@ -1,3 +1,4 @@
+import { preserveRetiredRuntimeEditorDrafts } from './runtime-session-recovery-archive'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobile-session-terminal-persistence-retirement'
@@ -12,6 +13,10 @@ import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-s
 import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-host-field-ownership'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { readTerminalScrollbackSnapshotSync } from '../../terminal-scrollback-snapshots'
+import {
+  isRuntimeSessionRetired,
+  retireRuntimeSessionPartition
+} from './runtime-session-retirement'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
 import { findWorktreeIdForTab } from '../restoring-sessions/pane-identity-migration'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
@@ -31,7 +36,14 @@ import type { TerminalBindingRecoveryOperations } from './terminal-binding-recov
 
 type SessionHostPartitionOperationsRuntime = Pick<
   StoreRuntimeState,
-  'state' | 'terminalScrollbackSnapshotStorage'
+  | 'state'
+  | 'terminalScrollbackSnapshotStorage'
+  | 'dataFile'
+  | 'runDurableMutation'
+  | 'dirtyProfileStateDomains'
+  | 'writesFrozen'
+  | 'quitFlushStarted'
+  | 'profileMaintenancePending'
 >
 
 const sessionHostPartitionOperationsContext = Symbol('SessionHostPartitionOperations')
@@ -93,6 +105,22 @@ export class SessionHostPartitionOperations {
     scheduleSave(this[sessionHostPartitionOperationsContext].scheduling, [
       'workspaceSessionsByHostId'
     ])
+  }
+
+  isRuntimeWorkspaceSessionRetired(hostId: string): boolean {
+    return isRuntimeSessionRetired(this[sessionHostPartitionOperationsContext].runtime, hostId)
+  }
+
+  removeRuntimeWorkspaceSessionPartition(
+    hostId: ExecutionHostId,
+    hasNamespaceCustody?: () => boolean
+  ): Promise<boolean> {
+    return retireRuntimeSessionPartition(
+      this[sessionHostPartitionOperationsContext].runtime,
+      this,
+      hostId,
+      hasNamespaceCustody
+    )
   }
 
   readTerminalScrollbackSnapshot(ref: string): string | null {
@@ -193,6 +221,13 @@ export function setHostWorkspaceSession(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState
 ): void {
+  if (owner.isRuntimeWorkspaceSessionRetired(hostId)) {
+    const { runtime, scheduling } = owner[sessionHostPartitionOperationsContext]
+    if (preserveRetiredRuntimeEditorDrafts(runtime, hostId, session)) {
+      scheduleSave(scheduling, ['retiredRuntimeWorkspaceSessions'])
+    }
+    return
+  }
   const prior =
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
   // Why here and not at the callers: the before-unload stage path writes the renderer's payload

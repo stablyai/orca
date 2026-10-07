@@ -98,6 +98,18 @@ export type PersistedState = {
   workspaceSession: WorkspaceSessionState
   /** Per-execution-host session partitions for non-'local' hosts (ssh:/runtime:); 'local' stays in workspaceSession so pre-partition builds keep working. */
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
+  /** Recovery archive and write fence for explicitly retired paired-host sessions. */
+  retiredRuntimeWorkspaceSessions?: Partial<
+    Record<
+      ExecutionHostId,
+      {
+        archiveFile: string
+        retiredAt: number
+        dirtyDraftDigest?: string
+        lateDraftArchiveFile?: string
+      }
+    >
+  >
   sshTargets: SshTarget[]
   /** Highest SSH target registration generation issued; prevents identity reuse after rollback. */
   sshTargetGenerationCounter?: number

@@ -1,3 +1,4 @@
+import { canAdmitRendererSessionWrite } from './renderer-workspace-session-admission'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -29,13 +30,13 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   })
 
   ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {
-    if (!isFenced(hostId)) {
+    if (!isFenced(hostId) && isRendererSessionAdmitted(store, hostId)) {
       store.setWorkspaceSession(args, hostId)
     }
   })
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
-    if (!isFenced(hostId)) {
+    if (!isFenced(hostId) && isRendererSessionAdmitted(store, hostId)) {
       store.patchWorkspaceSession(args, hostId)
     }
   })
@@ -72,7 +73,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   ipcMain.on('session:set-sync', (event, args: WorkspaceSessionState, hostId?: string | null) => {
     void (async () => {
       try {
-        if (!isFenced(hostId)) {
+        if (!isFenced(hostId) && isRendererSessionAdmitted(store, hostId)) {
           store.setWorkspaceSession(args, hostId)
         }
         await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
@@ -92,4 +93,15 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
         typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshot(args.ref) : null
     }
   )
+}
+
+// Why fail open: an ambiguity raised by an unrelated workspace must never silently drop a user's
+// session write. A resurrected partition is recoverable on the next unpair; a lost save is not.
+function isRendererSessionAdmitted(store: Store, hostId?: string | null): boolean {
+  try {
+    return canAdmitRendererSessionWrite(store, hostId)
+  } catch (error) {
+    console.error('[session] Admitting session write after partition authority failure:', error)
+    return true
+  }
 }

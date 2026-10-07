@@ -86,6 +86,9 @@ export class PtyBindingPersistenceOperations {
   ): Promise<boolean> {
     const { runtime, sessions } = this[ptyBindingPersistenceOperationsContext]
     const resolved = resolveHostId(hostId)
+    if (sessions.isRuntimeWorkspaceSessionRetired(resolved)) {
+      return false
+    }
     const publish = (session: WorkspaceSessionState): void => {
       if (resolved === LOCAL_EXECUTION_HOST_ID) {
         runtime.state.workspaceSession = session
@@ -100,6 +103,9 @@ export class PtyBindingPersistenceOperations {
       )
     }
     return runtime.runDurableMutation(() => {
+      if (sessions.isRuntimeWorkspaceSessionRetired(resolved)) {
+        return { value: false, persist: false }
+      }
       const session = sessions.getWorkspaceSession(resolved)
       const currentId =
         session.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[binding.leafId]
@@ -143,6 +149,9 @@ export class PtyBindingPersistenceOperations {
     let outcome: 'refused' | 'fast_lane' | 'flushed' = 'flushed'
     try {
       const persisted = await runtime.runDurableMutation(() => {
+        if (sessions.isRuntimeWorkspaceSessionRetired(resolvedHostId)) {
+          return { value: false, persist: false }
+        }
         const args = typeof input === 'function' ? input() : input
         if (!args) {
           return { value: false, persist: false }
@@ -240,6 +249,9 @@ function writePtyBinding(
   const { runtime, sessions } = owner[ptyBindingPersistenceOperationsContext]
   const sessionBeforeBinding = cloneWorkspaceSessionState(session)
   const restore = (restoredSession = sessionBeforeBinding): void => {
+    if (sessions.isRuntimeWorkspaceSessionRetired(resolvedHostId)) {
+      return
+    }
     if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
       runtime.state.workspaceSession = restoredSession
     } else {

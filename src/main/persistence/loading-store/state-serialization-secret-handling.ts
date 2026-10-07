@@ -107,6 +107,11 @@ export class StateSerializationSecretHandlingOperations {
             )
           }
           break
+        case 'retiredRuntimeWorkspaceSessions':
+          if (this.runtime.state.retiredRuntimeWorkspaceSessions !== undefined) {
+            stateToSave[domain] = this.runtime.state.retiredRuntimeWorkspaceSessions
+          }
+          break
         case 'sshRemotePtyLeases':
           stateToSave[domain] = this.runtime.state.sshRemotePtyLeases
           break

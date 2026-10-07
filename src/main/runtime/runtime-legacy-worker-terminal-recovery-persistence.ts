@@ -82,6 +82,9 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
           persist: originals.size > 0 || adopted,
           rollback: () => {
             for (const [hostId, original] of originals) {
+              if (store.getWorkspaceSessionHostIds?.().includes(hostId) === false) {
+                continue
+              }
               const stagedSession = staged.get(hostId)
               const current = getWorkspaceSession(hostId)
               if (!stagedSession || !current) {
