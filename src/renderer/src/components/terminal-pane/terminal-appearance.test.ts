@@ -196,6 +196,23 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.fontSize).toBe(settings.terminalFontSize + 2)
   })
 
+  it('drops the pane background under Terminals Use Chat Glass on a glass window only', () => {
+    const settings = { ...getDefaultSettings('/tmp'), terminalChatGlass: true }
+    const plain = makePane(1)
+    apply(plain, settings)
+    expect(plain.terminal.options.theme?.background).not.toBe('rgba(0, 0, 0, 0)')
+
+    vi.stubGlobal('window', { api: { platform: { get: () => ({ windowGlass: true }) } } })
+    try {
+      const glass = makePane(2)
+      apply(glass, settings)
+      expect(glass.terminal.options.theme?.background).toBe('rgba(0, 0, 0, 0)')
+      expect(glass.terminal.options.allowTransparency).toBe(true)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('applies regular and bold font weights independently', () => {
     const pane = makePane(1)
     const settings = getDefaultSettings('/tmp')

@@ -1561,6 +1561,23 @@
           "f012172e21": "Choose the theme used for terminal panes in dark mode.",
           "target_label": "Theme Mode"
         },
+        "TerminalWindowSection": {
+          "glass": {
+            "blurLinux": "Not available on Linux.",
+            "blurMac": "Frosted-glass desktop behind terminals and the chat UI; Interface Glass extends it to the rest of the window. Tune it with Background Opacity and Chat Glass Opacity. Uses some extra GPU power. Requires restart.",
+            "blurWeb": "Applies to the Orca desktop app window; it has no effect in this browser.",
+            "blurWindows": "Requests the Windows 11 acrylic backdrop. Orca's panels stay opaque on Windows, so terminals and chat don't show it yet. Requires restart.",
+            "chatOpacity": "Chat UI background opacity over the blurred desktop, 1 is solid. Lower values show more of the desktop.",
+            "chatOpacityNeedsBlur": "Turn on Window Blur (and restart) to use this.",
+            "interface": "Also show the blurred desktop through the sidebars, tab bar, status bar, and full pages such as Settings. Editors and dialogs stay solid.",
+            "interfaceNeedsBlur": "Turn on Window Blur (and restart) to use this. Extends the glass to the sidebars, tab bar, status bar, and full pages.",
+            "interfaceOpacity": "Background opacity of the sidebars, tab bar, status bar, and full pages over the blurred desktop, 1 is solid.",
+            "interfaceOpacityNeedsToggle": "Turn on Interface Glass to use this.",
+            "opacityMac": "Terminal background opacity, 1 is solid. With Window Blur on, lower values show the blurred desktop; with it off, they only blend into Orca's own background.",
+            "opacityOther": "Terminal background opacity, 1 is solid. Orca's window is opaque on this platform, so lower values blend into Orca's own background instead of showing the desktop.",
+            "terminalChatGlass": "Tint terminals with the chat glass color and Chat Glass Opacity instead of the terminal theme background and Background Opacity."
+          }
+        },
         "VoicePane": {
           "901985625d": "toggle",
           "b6536a1d12": "extracting"

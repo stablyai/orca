@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getTerminalPaneSearchEntries } from './terminal-search'
+import { getTerminalPaneSearchEntries, getTerminalWindowSearchEntries } from './terminal-search'
 import { getAppearancePaneSearchEntries, getSidebarEntries } from './appearance-search'
 import {
   getShowPinnedWorktreesInGroupsEntry,
@@ -252,5 +252,20 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(getSidebarEntries()).toContainEqual(entry)
     expect(getAppearancePaneSearchEntries()).toContainEqual(entry)
     expect(matchesSettingsSearch('duplicate', entry)).toBe(true)
+  })
+})
+
+describe('getTerminalWindowSearchEntries', () => {
+  it('only lists the chat and interface glass controls on macOS, where they render', () => {
+    const titles = (isMac: boolean): string[] =>
+      getTerminalWindowSearchEntries(isMac).map((entry) => entry.title)
+    const macOnly = [
+      'Chat Glass Opacity',
+      'Terminals Use Chat Glass',
+      'Interface Glass',
+      'Interface Glass Opacity'
+    ]
+    expect(titles(true)).toEqual(expect.arrayContaining(macOnly))
+    expect(titles(false).filter((title) => macOnly.includes(title))).toEqual([])
   })
 })

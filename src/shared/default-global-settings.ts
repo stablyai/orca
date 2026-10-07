@@ -15,6 +15,7 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
+import { DEFAULT_INTERFACE_GLASS_OPACITY, DEFAULT_NATIVE_CHAT_GLASS_OPACITY } from './window-glass'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 
 export function buildDefaultSettings(args: {
@@ -105,6 +106,10 @@ export function buildDefaultSettings(args: {
     // Why: opt-in only, matching Ghostty's default (upgrades never enable it unexpectedly).
     terminalFocusFollowsMouse: false,
     windowBackgroundBlur: false,
+    nativeChatGlassOpacity: DEFAULT_NATIVE_CHAT_GLASS_OPACITY,
+    terminalChatGlass: false,
+    interfaceGlass: false,
+    interfaceGlassOpacity: DEFAULT_INTERFACE_GLASS_OPACITY,
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,

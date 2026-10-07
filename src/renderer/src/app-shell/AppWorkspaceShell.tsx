@@ -177,7 +177,7 @@ export function AppWorkspaceShell(props: {
                     {layout.showRightSidebarControls ? <RightSidebarToggle /> : null}
                   </div>
                 )}
-                <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+                <div className="workspace-page-column flex flex-1 min-w-0 min-h-0 flex-col">
                   {layout.shouldMountTerminalWorkbench ? (
                     <TerminalWorkbenchContainer isVisible={layout.terminalWorkbenchVisible}>
                       <Suspense fallback={null}>

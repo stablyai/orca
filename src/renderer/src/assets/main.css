@@ -665,6 +665,139 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
   }
 }
 
+/* ── macOS window glass ─────────────────────────────── */
+/* Why: vibrancy sits behind the page, so glass surfaces clear every layer but one tint — stacked translucent
+   layers compound into a plain shade change. Surfaces with their own backgrounds stay opaque. */
+
+html.window-glass {
+  --native-chat-glass-base: var(--chat-canvas);
+  --native-chat-glass-solid-background: var(--background);
+}
+
+html.window-glass body {
+  background-color: transparent;
+}
+
+/* Why --chat-canvas: chat surfaces paint it, and it resolves on :root, so clearing --background alone misses them. */
+html.window-glass .native-chat-pane-shell {
+  --background: transparent;
+  --chat-canvas: transparent;
+  background-color: color-mix(
+    in srgb,
+    var(--native-chat-glass-base) calc(var(--native-chat-glass-opacity, 0.6) * 100%),
+    transparent
+  );
+}
+
+/* Why: the chat palette re-derives from --background on its appearance root, and glass clears --background, which
+   left every chat text color part-transparent. Resolve the palette on the root against the solid theme surface and
+   clear the canvas only below it, so text stays opaque over the tint. */
+html.window-glass .native-chat-pane-shell .native-chat-appearance {
+  --chat-source-background: var(--native-chat-glass-solid-background);
+  background-color: transparent;
+}
+
+html.window-glass .native-chat-pane-shell .native-chat-appearance > * {
+  --background: transparent;
+  --chat-canvas: transparent;
+}
+
+/* Why: the split root carries the terminal tint (Background Opacity); xterm repeats it on two inner layers. */
+html.window-glass .pane .xterm,
+html.window-glass .pane .xterm-scrollable-element {
+  background-color: transparent !important;
+}
+
+/* Why !important: pane-divider paints the split background inline on the root, above any nested split. */
+html.window-glass .pane-split-root:has(.pane > .native-chat-pane-shell) {
+  background: transparent !important;
+}
+
+html.window-glass
+  .pane-split-root:has(.pane > .native-chat-pane-shell)
+  .pane:not(:has(> .native-chat-pane-shell)) {
+  background: var(--pane-split-background);
+}
+
+html.window-glass .pane:has(> .native-chat-pane-shell) > .xterm-container {
+  visibility: hidden;
+}
+
+/* Why: opt-in, because a theme background at Background Opacity can read as mid-grey over the vibrancy; this gives
+   terminals the chat tint (its color and Chat Glass Opacity) so both read as one material. */
+html.terminal-chat-glass {
+  --terminal-chat-glass-background: color-mix(
+    in srgb,
+    var(--native-chat-glass-base) calc(var(--native-chat-glass-opacity, 0.6) * 100%),
+    transparent
+  );
+}
+
+html.terminal-chat-glass .pane-split-root {
+  background: var(--terminal-chat-glass-background) !important;
+}
+
+html.terminal-chat-glass
+  .pane-split-root:has(.pane > .native-chat-pane-shell)
+  .pane:not(:has(> .native-chat-pane-shell)) {
+  background: var(--terminal-chat-glass-background);
+}
+
+/* Interface glass: chrome keeps its own surface color at one shared alpha. Editors and dialogs stay solid. */
+html.interface-glass {
+  --interface-glass-mix: calc(var(--interface-glass-opacity, 0.75) * 100%);
+}
+
+html.interface-glass .titlebar-left,
+html.interface-glass .worktree-sidebar-panel {
+  background: color-mix(in srgb, var(--worktree-sidebar) var(--interface-glass-mix), transparent);
+}
+
+html.interface-glass .titlebar,
+html.interface-glass .status-bar-surface {
+  background: color-mix(
+    in srgb,
+    var(--bg-titlebar, var(--card)) var(--interface-glass-mix),
+    transparent
+  );
+}
+
+html.interface-glass [data-tab-group-strip-id] {
+  background: color-mix(in srgb, var(--card) var(--interface-glass-mix), transparent);
+}
+
+html.interface-glass .tab-strip-tab {
+  background: transparent;
+}
+
+html.interface-glass .tab-strip-tab-active {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+html.interface-glass .right-sidebar-panel,
+html.interface-glass .right-sidebar-activity-bar {
+  background: color-mix(in srgb, var(--sidebar) var(--interface-glass-mix), transparent);
+}
+
+/* Why: Settings, Tasks and the other full pages each paint a solid root inside this column. */
+html.interface-glass .workspace-page-column > :not([data-terminal-workbench-container]) {
+  background: color-mix(in srgb, var(--background) var(--interface-glass-mix), transparent);
+}
+
+/* Why: these repeat the fill of a region that already paints the tint; a second layer would darken them. */
+html.interface-glass .titlebar-left-floating,
+html.interface-glass .settings-view-shell > aside,
+html.interface-glass .worktree-sidebar-panel .bg-worktree-sidebar,
+html.interface-glass .right-sidebar-panel .bg-sidebar {
+  background: transparent;
+}
+
+/* Why: sidebar sticky headers and footers repeat the surface fill; blur keeps the list from showing through crisply. */
+html.interface-glass :is(.worktree-sidebar-panel, .right-sidebar-panel) .sticky {
+  background: transparent;
+  backdrop-filter: blur(12px);
+}
+
 /* ── Sleek scrollbar (VS Code-like) ─────────────────── */
 
 .scrollbar-sleek {

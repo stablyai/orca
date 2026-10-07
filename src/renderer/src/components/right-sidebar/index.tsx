@@ -161,7 +161,7 @@ function RightSidebarInner(): React.JSX.Element {
     >
       {/* Panel content area */}
       <div
-        className="flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
+        className="right-sidebar-panel flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
         style={{
           borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
         }}
@@ -209,7 +209,7 @@ function RightSidebarInner(): React.JSX.Element {
       {activityBarPosition === 'side' && (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
+            <div className="right-sidebar-activity-bar flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
               <TooltipProvider delayDuration={400}>{sideActivityBarIcons}</TooltipProvider>
             </div>
           </ContextMenuTrigger>

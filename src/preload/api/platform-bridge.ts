@@ -1,5 +1,6 @@
 import { getLinuxDisplayServer } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
+import { hasWindowGlassArgument } from '../../shared/window-glass'
 
 type PlatformInfo = ReturnType<PreloadApi['platform']['get']>
 
@@ -18,7 +19,8 @@ function resolvePlatformInfo(): PlatformInfo {
     // Why: these identify the default shell without probing user config files.
     // process.env is available in the sandboxed preload; node:os is not.
     shell: process.env.SHELL?.trim() || process.env.ComSpec?.trim() || '',
-    displayServer: getLinuxDisplayServer()
+    displayServer: getLinuxDisplayServer(),
+    windowGlass: hasWindowGlassArgument(process.argv)
   })
 }
 

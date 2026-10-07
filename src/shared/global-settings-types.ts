@@ -154,6 +154,14 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
   windowBackgroundBlur?: boolean
+  /** macOS window glass: native chat background opacity over the blurred backdrop. */
+  nativeChatGlassOpacity?: number
+  /** macOS window glass: terminals take the chat glass tint instead of their theme background. */
+  terminalChatGlass?: boolean
+  /** macOS window glass: sidebars, tab strip, status bar and full pages also show the blurred backdrop. */
+  interfaceGlass?: boolean
+  /** macOS window glass: background opacity of those interface surfaces. */
+  interfaceGlassOpacity?: number
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
   minimizeToTrayOnClose?: boolean
   /** macOS: toggles the additive menu-bar entry (Orca survives last-window close); doesn't change Dock behavior. */
