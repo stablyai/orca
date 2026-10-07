@@ -854,7 +854,7 @@ index 0000000000000000000000000000000000000000..1038c4f5ddc447c5a704ec1fcd61cb88
 +  return decoder;
 +}
 diff --git a/src/ImageAddon.ts b/src/ImageAddon.ts
-index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..18143ac00353add2c64d981ccea2401dc1941912 100644
+index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..c508007a7955725697977780a98fdac71467ae97 100644
 --- a/src/ImageAddon.ts
 +++ b/src/ImageAddon.ts
 @@ -113,6 +113,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
@@ -887,7 +887,15 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..18143ac00353add2c64d981ccea2401d
        /**
         * reset handlers covered:
         * - DECSTR
-@@ -190,13 +190,14 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -180,6 +180,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+       const sixelHandler = new SixelHandler(this._opts, sixelStorage, terminal);
+       this._handlers.set('sixel', sixelHandler);
+       this._disposeLater(
++        sixelHandler,
+         terminal._core._inputHandler._parser.registerDcsHandler({ final: 'q' }, sixelHandler)
+       );
+     }
+@@ -190,13 +191,14 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
        const iipHandler = new IIPHandler(this._opts, this._renderer!, iipStorage, terminal);
        this._handlers.set('iip', iipHandler);
        this._disposeLater(
@@ -2333,12 +2341,16 @@ index 0000000000000000000000000000000000000000..4794cd4b4d25007dd284375e1214c8df
 +  });
 +}
 diff --git a/src/SixelHandler.ts b/src/SixelHandler.ts
-index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..490f9121e120427e65063efc8223d22e8c7ded2f 100644
+index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..b570db72424db2d47caf73929b115f182342b115 100644
 --- a/src/SixelHandler.ts
 +++ b/src/SixelHandler.ts
-@@ -4,12 +4,14 @@
+@@ -3,13 +3,18 @@
+  * @license MIT
   */
  
++import type { IDisposable } from '@xterm/xterm';
++import { SixelStateCheckpoint, captureSixelStateCheckpoint, prepareSixelStateCheckpoint } from './SixelStateCheckpoint';
++import { requireImageParserState } from './ImageParserCheckpoint';
  import { SixelImageStorage } from './SixelImageStorage';
 -import { IDcsHandler, IParams, IImageAddonOptions, ITerminalExt, AttributeData, IResetHandler, ReadonlyColorSet } from './Types';
 +import { IDcsHandler, IParams, IImageAddonOptions, ITerminalExt, AttributeData, IResetHandler } from './Types';
@@ -2353,7 +2365,7 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..490f9121e120427e65063efc8223d22e
  
  // always free decoder ressources after decoding if it exceeds this limit
  const MEM_PERMA_LIMIT = 4194304; // 1024 pixels * 1024 pixels * 4 channels = 4MB
-@@ -18,48 +20,88 @@ const MEM_PERMA_LIMIT = 4194304; // 1024 pixels * 1024 pixels * 4 channels = 4MB
+@@ -18,48 +23,123 @@ const MEM_PERMA_LIMIT = 4194304; // 1024 pixels * 1024 pixels * 4 channels = 4MB
  const DEFAULT_PALETTE = PALETTE_ANSI_256;
  DEFAULT_PALETTE.set(PALETTE_VT340_COLOR);
  
@@ -2388,9 +2400,13 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..490f9121e120427e65063efc8223d22e
 +    idleDecoders.set(memoryLimit, idle);
 +  }
 +}
-+
  
- export class SixelHandler implements IDcsHandler, IResetHandler {
+-export class SixelHandler implements IDcsHandler, IResetHandler {
++
++export class SixelHandler implements IDcsHandler, IResetHandler, IDisposable {
++  private _generation = 0;
++  private _disposed = false;
++  private _escapeActive = false;
    private _size = 0;
    private _aborted = false;
    private _dec: Decoder | undefined;
@@ -2424,13 +2440,44 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..490f9121e120427e65063efc8223d22e
 -      // FIXME: missing interface on decoder to nullify full palette
 -      (this._dec as any)._palette.fill(0);
 -      this._dec.init(0, DEFAULT_PALETTE, this._opts.sixelPaletteLimit);
--    }
++    this._generation++;
++    this._aborted = true;
 +    this._returnDecoder();
 +    this._palette.fill(0);
 +    this._palette.set(DEFAULT_PALETTE);
++  }
++
++  public dispose(): void {
++    this._disposed = true;
++    this.reset();
++  }
++
++  public captureStateCheckpoint(maxBytes: number): SixelStateCheckpoint {
++    if (this._disposed) throw new Error('SIXEL handler is disposed');
++    if (this._escapeActive) throw new Error('SIXEL state checkpoint cannot capture an active command');
++    return captureSixelStateCheckpoint(this._palette, this._opts, maxBytes);
++  }
++
++  public restoreStateCheckpoint(checkpoint: SixelStateCheckpoint): void {
++    if (this._disposed) throw new Error('SIXEL handler is disposed');
++    requireImageParserState(this._coreTerminal, 0);
++    const generation = ++this._generation;
++    const scrolling = this._opts.sixelScrolling;
++    const paletteLimit = this._opts.sixelPaletteLimit;
++    const prepared = prepareSixelStateCheckpoint(checkpoint);
++    if (this._disposed || generation !== this._generation || checkpoint.isDisposed
++      || scrolling !== this._opts.sixelScrolling || paletteLimit !== this._opts.sixelPaletteLimit) {
++      throw new Error('SIXEL handler changed during state checkpoint preparation');
+     }
++    requireImageParserState(this._coreTerminal, 0);
++    this._palette.set(prepared.palette);
++    this._opts.sixelScrolling = prepared.options.sixelScrolling;
++    this._opts.sixelPaletteLimit = prepared.options.sixelPaletteLimit;
    }
  
    public hook(params: IParams): void {
++    this._generation++;
++    this._escapeActive = true;
      this._size = 0;
      this._aborted = false;
 -    if (this._dec) {
@@ -2464,10 +2511,11 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..490f9121e120427e65063efc8223d22e
    }
  
    public put(data: Uint32Array, start: number, end: number): void {
-@@ -83,6 +125,17 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
+@@ -83,6 +163,18 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
    }
  
    public unhook(success: boolean): boolean | Promise<boolean> {
++    this._escapeActive = false;
 +    try {
 +      return this._unhook(success);
 +    } catch (error) {
@@ -2482,7 +2530,7 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..490f9121e120427e65063efc8223d22e
      if (this._aborted || !success || !this._dec) {
        return true;
      }
-@@ -98,12 +151,10 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
+@@ -98,12 +190,10 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
        return true;
      }
  
@@ -2499,7 +2547,7 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..490f9121e120427e65063efc8223d22e
      return true;
    }
  }
-@@ -115,7 +166,7 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
+@@ -115,7 +205,7 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
  
  // get currently active background color from terminal
  // also respect INVERSE setting
@@ -2529,6 +2577,71 @@ index c2376a68ac773c0e657a04e733f04e8db3b7a2b7..350863c264b0876f8ef48e4ec421ee7c
      this._addImageOpts.scrolling = this._opts.sixelScrolling;
      this._storage.addImage(img, this._addImageOpts);
    }
+diff --git a/src/SixelStateCheckpoint.ts b/src/SixelStateCheckpoint.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..27624d8df9615a53a701a8a0287c14d5f011965e
+--- /dev/null
++++ b/src/SixelStateCheckpoint.ts
+@@ -0,0 +1,59 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++import { LIMITS } from 'sixel/lib/wasm';
++import { ImageCheckpointResources, type ICheckpointResource } from './ImageCheckpointResources';
++import { checkUploadCheckpointBudget } from './Base64UploadCheckpoint';
++
++export interface ISixelProgramOptions {
++  readonly sixelScrolling: boolean;
++  readonly sixelPaletteLimit: number;
++}
++export interface ISixelStateCheckpointMetadata extends ISixelProgramOptions {
++  readonly byteLength: number;
++  readonly resources: readonly ICheckpointResource[];
++}
++export class SixelStateCheckpoint extends ImageCheckpointResources<ISixelStateCheckpointMetadata> {}
++
++function checkedOptions(options: ISixelProgramOptions): ISixelProgramOptions {
++  const state = Object.freeze({ sixelScrolling: options.sixelScrolling, sixelPaletteLimit: options.sixelPaletteLimit });
++  if (typeof state.sixelScrolling !== 'boolean' || !Number.isSafeInteger(state.sixelPaletteLimit)
++    || state.sixelPaletteLimit < 0 || state.sixelPaletteLimit > LIMITS.PALETTE_SIZE) {
++    throw new Error('Invalid SIXEL program options');
++  }
++  return state;
++}
++export function captureSixelStateCheckpoint(
++  palette: Uint32Array, options: ISixelProgramOptions, maxBytes: number
++): SixelStateCheckpoint {
++  const state = checkedOptions(options);
++  const byteLength = LIMITS.PALETTE_SIZE * 4;
++  checkUploadCheckpointBudget(maxBytes, byteLength);
++  if (palette.length !== LIMITS.PALETTE_SIZE) throw new Error('Unsupported SIXEL palette layout');
++  const bytes = new Uint8Array(byteLength);
++  const view = new DataView(bytes.buffer);
++  for (let i = 0; i < palette.length; i++) view.setUint32(i * 4, palette[i], true);
++  return new SixelStateCheckpoint(Object.freeze({ ...state, byteLength,
++    resources: Object.freeze([Object.freeze({ id: 1, byteLength })])
++  }), new Map([[1, bytes]]));
++}
++export function prepareSixelStateCheckpoint(checkpoint: SixelStateCheckpoint): {
++  options: ISixelProgramOptions; palette: Uint32Array
++} {
++  if (checkpoint.isDisposed) throw new Error('SIXEL state checkpoint lease is disposed');
++  const supplied = checkpoint.metadata;
++  const options = checkedOptions(supplied);
++  const byteLength = LIMITS.PALETTE_SIZE * 4;
++  if (supplied.byteLength !== byteLength || !Array.isArray(supplied.resources) || supplied.resources.length !== 1
++    || supplied.resources[0].id !== 1 || supplied.resources[0].byteLength !== byteLength
++    || checkpoint.getResourceByteLength(1) !== byteLength) {
++    throw new Error('Invalid SIXEL state palette resource');
++  }
++  const bytes = checkpoint.copyResource(1, byteLength);
++  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
++  const palette = new Uint32Array(LIMITS.PALETTE_SIZE);
++  for (let i = 0; i < palette.length; i++) palette[i] = view.getUint32(i * 4, true);
++  return { options, palette };
++}
 diff --git a/src/Types.ts b/src/Types.ts
 index 53d357a973117b844ebf2e236d6892334f15c27b..b1991bb654305ac6e99fd66d00a8fd792c692078 100644
 --- a/src/Types.ts
