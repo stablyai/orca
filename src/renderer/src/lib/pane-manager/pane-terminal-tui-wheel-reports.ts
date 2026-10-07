@@ -228,6 +228,11 @@ export function resolveTerminalTuiMouseWheelReportCount(
   state: TerminalTuiMouseWheelDistanceState,
   metrics: TerminalTuiMouseWheelMetrics = {}
 ): number {
+  // Why: a non-finite delta would yield Infinity/NaN reports, hanging the
+  // replay drain loop and poisoning the carried remainder.
+  if (!Number.isFinite(event.deltaY)) {
+    return 0
+  }
   const direction = resolveTerminalWheelDirection(event)
   if (state.pendingDirection !== 0 && state.pendingDirection !== direction) {
     state.fastStreak = 0

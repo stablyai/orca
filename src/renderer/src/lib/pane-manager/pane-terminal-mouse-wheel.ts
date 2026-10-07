@@ -119,6 +119,13 @@ export function shouldMultiplyTerminalMouseWheel(
   return true
 }
 
+function canDispatchWheelReports(target: EventTarget, event: WheelEvent): boolean {
+  if (typeof Node !== 'undefined' && target instanceof Node && !target.isConnected) {
+    return false
+  }
+  return Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+}
+
 function drainTerminalTuiWheelReports(
   state: TerminalTuiMouseWheelReplayState,
   terminal: TerminalWheelTarget
@@ -139,7 +146,9 @@ function drainTerminalTuiWheelReports(
     return
   }
 
-  const reportsToDispatch = state.pendingReports
+  // Why: a detached or pointerless target makes xterm compute NaN report
+  // coordinates, which reach the PTY as literal ";NaN;NaNM" text (#20983).
+  const reportsToDispatch = canDispatchWheelReports(target, event) ? state.pendingReports : 0
   for (let i = 0; i < reportsToDispatch; i += 1) {
     target.dispatchEvent(cloneWheelReportEvent(event))
   }
