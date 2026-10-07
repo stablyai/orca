@@ -29,7 +29,13 @@ describe('partial escape scanning between sequences', () => {
     ['\x1b]2;building\x1b', '\\', '\x1b'],
     ['\x1bPqpayload', '\x1b\\', '\x1bPqpayload'],
     ['\x1bPqpayload\x1b', '\\', '\x1b'],
-    ['\x1b(', 'B', '\x1b(']
+    ['\x1b(', 'B', '\x1b('],
+    ['\u009b38;5;', '196m', '\u009b38;5;'],
+    ['\u009d1337;File=inline=1:', '\u009c', '\u009d1337;File=inline=1:'],
+    ['\u009fGa=T,f=32;', '\u009c', '\u009fGa=T,f=32;'],
+    ['\u0090qpayload', '\u009c', '\u0090qpayload'],
+    ['\u0090qpayload\x1b', '\\', '\x1b'],
+    ['\u009d2;building', '\x07', '\u009d2;building']
   ])('preserves %j through every split after ordinary text', (pending, completion, expected) => {
     const prefix = `\x1b[32m${'build output '.repeat(128)}\x1b[0m`
     for (let split = 0; split <= pending.length; split += 1) {

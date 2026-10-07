@@ -25,6 +25,8 @@ const ESC = 0x1b
 const CAN = 0x18
 const SUB = 0x1a
 const BEL = 0x07
+// oxlint-disable-next-line no-control-regex -- VT sequences start with ESC or C1 controls.
+const HAS_SEQUENCE_INTRODUCER = /[\x1b\x90\x98\x9b\x9d-\x9f]/
 
 // Why a cap: OSC/DCS payloads are unbounded and an unterminated one would
 // grow the tracked tail (and every snapshot) without limit. Real payloads
@@ -55,23 +57,37 @@ function stateAfterEscByte(code: number): ScanState {
  *  extract(a + b) === extract(extract(a) + b), which is how ingest-time
  *  trackers advance without keeping the whole stream. */
 export function extractPartialEscapeTail(stream: string): string {
+  // oxlint-disable-next-line no-control-regex -- Skip text until an ESC or C1 sequence starts.
+  const introducers = /[\x1b\x90\x98\x9b\x9d-\x9f]/g
   let state: ScanState = 'ground'
   let start = 0
   for (let i = 0; i < stream.length; i++) {
     if (state === 'ground') {
-      // Only ESC leaves ground; skip ordinary text without a per-code-unit walk.
-      // Check the current unit first: on dense escape streams it is usually the
-      // ESC itself, and indexOf's call + SIMD setup costs more than the compare.
-      const escape = stream.charCodeAt(i) === ESC ? i : stream.indexOf('\x1b', i)
+      // Skip ordinary output while retaining both ESC and C1 introducers.
+      introducers.lastIndex = i
+      const escape = stream.charCodeAt(i) === ESC ? i : (introducers.exec(stream)?.index ?? -1)
       if (escape === -1) {
         return ''
       }
       start = escape
       i = escape
-      state = 'esc'
+      const code = stream.charCodeAt(escape)
+      state = code === ESC ? 'esc' : code === 0x9b ? 'csi' : code === 0x9d ? 'osc' : 'string'
       continue
     }
     const code = stream.charCodeAt(i)
+    if (code >= 0x80 && code <= 0x9f) {
+      start = i
+      state =
+        code === 0x9b
+          ? 'csi'
+          : code === 0x9d
+            ? 'osc'
+            : code === 0x90 || code === 0x98 || code === 0x9e || code === 0x9f
+              ? 'string'
+              : 'ground'
+      continue
+    }
     if (
       code === ESC &&
       state !== 'osc' &&
@@ -156,12 +172,8 @@ export function extractPartialEscapeTail(stream: string): string {
 /** Ingest-time fold: advance the tracked tail with one more chunk. Returns ''
  *  (tracking abandoned) when the tail exceeds the cap — see the cap comment. */
 export function advancePartialEscapeTail(pendingTail: string, chunk: string): string {
-  // Why the pre-filter: `extractPartialEscapeTail` only leaves `ground` on an ESC byte, so with
-  // no pending tail and no ESC in the chunk the answer is always ''. Taking it here skips both
-  // the full-chunk concat and the per-code-unit walk on ESC-free output (build logs, `cat`,
-  // piped tool output) — the same gate `TerminalOscCwdTitleScanner.scan` already
-  // applies on the very same ingest path.
-  if (pendingTail.length === 0 && !chunk.includes('\x1b')) {
+  // Skip concatenation and scanning for ordinary output, including single-character echo.
+  if (pendingTail.length === 0 && !HAS_SEQUENCE_INTRODUCER.test(chunk)) {
     return ''
   }
   const tail = extractPartialEscapeTail(pendingTail + chunk)

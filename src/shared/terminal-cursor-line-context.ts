@@ -146,3 +146,15 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
     cursorViewportRow: cursorRow - buffer.viewportY
   }
 }
+
+/** PSReadLine repaint requires an empty prompt, excluding its continuation prompt. */
+export function isTerminalCursorOnEmptyPromptLine(terminal: TerminalCursorContextSource): boolean {
+  const buffer = terminal.buffer.active
+  const line = buffer.getLine(buffer.baseY + buffer.cursorY)
+  if (!line) {
+    return false
+  }
+  const upToCursor = line.translateToString(true, 0, buffer.cursorX).trimEnd()
+  const fullLine = line.translateToString(true).trimEnd()
+  return fullLine === upToCursor && upToCursor.endsWith('>') && !upToCursor.endsWith('>>')
+}

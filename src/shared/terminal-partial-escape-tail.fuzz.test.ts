@@ -61,11 +61,21 @@ const PENDINGS = [
   '\x1bPx\x1b',
   '\x1b(',
   '\x1b ',
-  '\x1b[1;2;3'
+  '\x1b[1;2;3',
+  '\u009b31;',
+  '\u009d0;title',
+  '\u0090q',
+  '\u009fG'
 ]
 
 const SEQUENCES = [
   '\x1b[1;31m',
+  '\u009b31m',
+  '\u009d1337;File=inline=1:payload\u009c',
+  '\u009fGa=T,f=32;payload\u009c',
+  '\u0090q#1~\u009c',
+  '\u009d2;title\x1b\\',
+  '\x1b[31;\u009b32m',
   '\x1b]0;my title\x07',
   '\x1b]8;;https://example.com\x1b\\',
   '\x1bPq#0;2;0;0;0#0!6~\x1b\\',
@@ -184,7 +194,7 @@ describe('advancePartialEscapeTail differential fuzz', () => {
   })
 
   it('ran the whole corpus', () => {
-    expect(checked).toBe(963_819)
-    expect(foldSplits).toBe(6_234_666)
+    expect(checked).toBe(1_030_623)
+    expect(foldSplits).toBe(6_790_381)
   })
 })

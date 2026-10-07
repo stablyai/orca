@@ -854,20 +854,26 @@ index 0000000000000000000000000000000000000000..254062d8af2156a3e40f6c758721601d
 +  return decoder;
 +}
 diff --git a/src/ImageAddon.ts b/src/ImageAddon.ts
-index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..32df7021443abb9808ba6ec09ee523a851c54754 100644
+index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..30d0c037701b16c30d053c56e8944c7d94e9a1f2 100644
 --- a/src/ImageAddon.ts
 +++ b/src/ImageAddon.ts
-@@ -5,6 +5,9 @@
+@@ -1,3 +1,4 @@
++import type {} from './ImageCheckpointApi';
+ /**
+  * Copyright (c) 2020 The xterm.js authors. All rights reserved.
+  * @license MIT
+@@ -5,6 +6,10 @@
  
  import type { ITerminalAddon, IDisposable } from '@xterm/xterm';
  import type { ImageAddon as IImageApi } from '@xterm/addon-image';
-+import { ImageAddonCheckpoint, captureImageAddonCheckpoint, type IImageCheckpointPart } from './ImageAddonCheckpoint';
++import { ImageAddonCheckpoint, captureImageAddonCheckpoint, validateImageAddonCheckpoint, type IImageAddonCheckpointMetadata, type IImageCheckpointPart } from './ImageAddonCheckpoint';
++import { ownImageCheckpointMetadata } from './ImageCheckpointMetadata';
 +import { restoreImageAddonCheckpoint } from './ImageAddonCheckpointRestore';
 +import { checkUploadCheckpointBudget } from './Base64UploadCheckpoint';
  import { Emitter, type IEvent } from 'common/Event';
  import { IIPHandler } from './IIPHandler';
  import { ImageRenderer } from './ImageRenderer';
-@@ -99,6 +102,7 @@ const enum GaStatus {
+@@ -99,6 +104,7 @@ const enum GaStatus {
  export class ImageAddon implements ITerminalAddon, IImageApi {
    private _opts: IImageAddonOptions;
    private _defaultOpts: IImageAddonOptions;
@@ -875,7 +881,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..32df7021443abb9808ba6ec09ee523a8
    private _storage: ImageStorage | undefined;
    private _renderer: ImageRenderer | undefined;
    private _disposables: IDisposable[] = [];
-@@ -113,6 +117,8 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -113,6 +119,8 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
    }
  
    public dispose(): void {
@@ -884,10 +890,20 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..32df7021443abb9808ba6ec09ee523a8
      for (const obj of this._disposables) {
        obj.dispose();
      }
-@@ -121,6 +127,58 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -121,6 +129,68 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
      this._onImageAdded.dispose();
    }
  
++  // The caller transfers resource ownership even when admission fails.
++  public static checkpointFromResources(metadata: IImageAddonCheckpointMetadata, resources: Map<number, Uint8Array>): ImageAddonCheckpoint {
++    let checkpoint: ImageAddonCheckpoint | undefined;
++    try {
++      checkpoint = new ImageAddonCheckpoint(ownImageCheckpointMetadata(metadata), resources);
++      validateImageAddonCheckpoint(checkpoint);
++      return checkpoint;
++    } catch (error) { resources.clear(); checkpoint?.dispose(); throw error; }
++  }
++
 +  public captureCheckpoint(maxBytes: number): ImageAddonCheckpoint {
 +    checkUploadCheckpointBudget(maxBytes, 0);
 +    const storage = this._storage;
@@ -943,7 +959,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..32df7021443abb9808ba6ec09ee523a8
    private _disposeLater(...args: IDisposable[]): void {
      for (const obj of args) {
        this._disposables.push(obj);
-@@ -131,8 +189,10 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -131,8 +201,10 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
      this._terminal = terminal;
  
      // internal data structures
@@ -955,7 +971,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..32df7021443abb9808ba6ec09ee523a8
      this._storage.onImageAdded = () => this._onImageAdded.fire();
  
      // enable size reports
-@@ -154,9 +214,6 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -154,9 +226,6 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
        terminal.parser.registerCsiHandler({ final: 'c' }, params => this._da1(params)),
        terminal.parser.registerCsiHandler({ prefix: '?', final: 'S' }, params => this._xtermGraphicsAttributes(params)),
  
@@ -965,7 +981,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..32df7021443abb9808ba6ec09ee523a8
        /**
         * reset handlers covered:
         * - DECSTR
-@@ -180,6 +237,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -180,6 +249,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
        const sixelHandler = new SixelHandler(this._opts, sixelStorage, terminal);
        this._handlers.set('sixel', sixelHandler);
        this._disposeLater(
@@ -973,7 +989,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..32df7021443abb9808ba6ec09ee523a8
          terminal._core._inputHandler._parser.registerDcsHandler({ final: 'q' }, sixelHandler)
        );
      }
-@@ -190,13 +248,14 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -190,13 +260,14 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
        const iipHandler = new IIPHandler(this._opts, this._renderer!, iipStorage, terminal);
        this._handlers.set('iip', iipHandler);
        this._disposeLater(
@@ -989,7 +1005,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..32df7021443abb9808ba6ec09ee523a8
        const kittyHandler = new KittyGraphicsHandler(this._opts, this._renderer!, kittyStorage, terminal);
        this._handlers.set('kitty', kittyHandler);
        this._disposeLater(
-@@ -209,6 +268,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -209,6 +280,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
  
    // Note: storageLimit is skipped here to not intoduce a surprising side effect.
    public reset(): boolean {
@@ -999,10 +1015,10 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..32df7021443abb9808ba6ec09ee523a8
      this._opts.sixelPaletteLimit = this._defaultOpts.sixelPaletteLimit;
 diff --git a/src/ImageAddonCheckpoint.ts b/src/ImageAddonCheckpoint.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..1d54d2dfb552447ea605e7b08232424ec47f5e91
+index 0000000000000000000000000000000000000000..23685d2fff0a86631b36a24ccab005eb4ea7b5e9
 --- /dev/null
 +++ b/src/ImageAddonCheckpoint.ts
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,190 @@
 +/**
 + * Copyright (c) 2026 The xterm.js authors. All rights reserved.
 + * @license MIT
@@ -1046,13 +1062,6 @@ index 0000000000000000000000000000000000000000..1d54d2dfb552447ea605e7b08232424e
 +  readonly byteLength: number;
 +}
 +
-+declare module '@xterm/addon-image' {
-+  interface ImageAddon {
-+    captureCheckpoint(maxBytes: number): ImageAddonCheckpoint;
-+    /** Apply only to an unpublished replacement with its text buffers restored. */
-+    restoreCheckpoint(checkpoint: ImageAddonCheckpoint): Promise<void>;
-+  }
-+}
 +
 +function component(part: IImageCheckpointPart, resourceIds: readonly number[]): IImageCheckpointComponent {
 +  switch (part.kind) {
@@ -1256,6 +1265,54 @@ index 0000000000000000000000000000000000000000..c99fcf0dea4fa9700c19e0d7ad30a3a5
 +      }
 +      checkCurrent();
 +    } finally { part.checkpoint.dispose(); }
++  }
++}
+diff --git a/src/ImageCheckpointApi.ts b/src/ImageCheckpointApi.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..492b5e20e28cafe6a76823c9d4b1d02c7849ad98
+--- /dev/null
++++ b/src/ImageCheckpointApi.ts
+@@ -0,0 +1,42 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++import type {} from '@xterm/addon-image';
++
++export interface IImageAddonCheckpointMetadata {
++  readonly version: 1;
++  readonly activeBuffer: 'normal' | 'alternate';
++  readonly components: readonly {
++    readonly kind: 'decoded' | 'kitty-sources' | 'kitty-pending' | 'iip-pending' | 'sixel-state' | 'kitty-active' | 'iip-active' | 'sixel-active';
++    readonly metadata: unknown;
++    readonly resourceIds: readonly number[];
++  }[];
++  readonly resources: readonly { readonly id: number; readonly byteLength: number }[];
++  readonly resourceByteLength: number;
++  readonly metadataByteLength: number;
++  readonly byteLength: number;
++}
++
++export interface IImageAddonCheckpoint {
++  readonly metadata: IImageAddonCheckpointMetadata;
++  readonly isDisposed: boolean;
++  getResourceByteLength(id: number): number;
++  readResource(id: number, offset: number, length: number): Uint8Array;
++  copyResource(id: number, maxBytes: number): Uint8Array;
++  takeResources(): Map<number, Uint8Array>;
++  dispose(): void;
++}
++
++declare module '@xterm/addon-image' {
++  namespace ImageAddon {
++    /** Transfers resource ownership; invalid headers release the transferred resources. */
++    function checkpointFromResources(metadata: IImageAddonCheckpointMetadata, resources: Map<number, Uint8Array>): IImageAddonCheckpoint;
++  }
++  interface ImageAddon {
++    captureCheckpoint(maxBytes: number): IImageAddonCheckpoint;
++    /** Apply only to an unpublished replacement with its text buffers restored. */
++    restoreCheckpoint(checkpoint: IImageAddonCheckpoint): Promise<void>;
 +  }
 +}
 diff --git a/src/ImageCheckpointMetadata.ts b/src/ImageCheckpointMetadata.ts

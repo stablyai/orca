@@ -2,38 +2,37 @@ import './xterm-env-polyfill'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
+import type { ImageAddon } from '@xterm/addon-image'
+import { createHeadlessImageAddon } from './headless-image-addon'
+import { prepareHeadlessModelCheckpoint } from './headless-model-checkpoint-restore'
 import {
-  readSavedCursorRegister,
-  serializeWithAbsoluteCursor
-} from '../../shared/terminal-serialize-absolute-cursor'
+  captureHeadlessModelCheckpoint,
+  copyHeadlessModelConfiguration,
+  type HeadlessModelConfiguration,
+  type HeadlessModelCheckpoint
+} from './headless-model-checkpoint'
+import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
-import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
-import { readTerminalModes } from './headless-emulator-modes'
-import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'
-import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequences'
-import { splitTerminalSnapshotAnsi } from './terminal-snapshot-ansi-buffers'
 import {
   installTerminalViewAttributeResponder,
   type TerminalViewAttributeResponder
 } from './terminal-view-attribute-responder'
 import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
-import type { TerminalSnapshot, TerminalModes } from './types'
+import type { TerminalSnapshot } from './types'
+import { captureHeadlessTerminalSnapshot } from './headless-terminal-snapshot-capture'
+import { submitHeadlessTerminalWrite } from './headless-terminal-write-submission'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'
-import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'
+import {
+  isTerminalCursorOnEmptyPromptLine,
+  readTerminalCursorLineContext
+} from '../../shared/terminal-cursor-line-context'
 
-export type HeadlessEmulatorOptions = {
-  cols: number
-  rows: number
-  scrollback?: number
+export type HeadlessEmulatorOptions = HeadlessModelConfiguration & {
   /** Query reply sink (terminal-query-authority.md); only `forwardQueryReplies` writes emit here. The daemon Session must never pass this. */
   onQueryReply?: (reply: string) => void
-  pathFlavor?: 'posix' | 'win32'
-  remotePosixFileUriAuthority?: boolean
-  wslDistro?: string
 }
 
 export type HeadlessEmulatorWriteOptions = {
@@ -44,23 +43,19 @@ export type HeadlessEmulatorWriteOptions = {
 type TerminalWithSynchronousWrite = Terminal & {
   _core?: {
     writeSync?: (data: string) => void
-    // Why: kitty keyboard flags aren't on the public IModes; read the core service the CSI u handlers mutate.
-    coreService?: {
-      kittyKeyboard?: { flags?: number }
-    }
   }
 }
 
-const DEFAULT_SCROLLBACK = 5000
 // Keep in sync with the renderer twin terminal-capability-replies.ts (main must not import renderer modules).
 const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
 export class HeadlessEmulator {
   protected terminal: Terminal
   protected serializer: SerializeAddon
+  protected imageAddon: ImageAddon | undefined
+  private readonly configuration: HeadlessModelConfiguration
+  private pendingWrites = 0
   private oscText: TerminalOscCwdTitleScanner
-  private readonly pathFlavor?: 'posix' | 'win32'
-  private readonly remotePosixFileUriAuthority: boolean
   private restoredOscLinks: TerminalOscLinkRange[] = []
   private disposed = false
   private onQueryReply: ((reply: string) => void) | null
@@ -72,17 +67,16 @@ export class HeadlessEmulator {
   private partialEscapeTail = ''
 
   constructor(opts: HeadlessEmulatorOptions) {
-    this.pathFlavor = opts.pathFlavor
-    this.remotePosixFileUriAuthority = opts.remotePosixFileUriAuthority === true
+    this.configuration = copyHeadlessModelConfiguration(opts)
     this.oscText = new TerminalOscCwdTitleScanner({
-      pathFlavor: this.pathFlavor,
-      remotePosixAuthority: this.remotePosixFileUriAuthority,
+      pathFlavor: opts.pathFlavor,
+      remotePosixAuthority: opts.remotePosixFileUriAuthority === true,
       wslDistro: opts.wslDistro
     })
     this.terminal = new Terminal({
       cols: opts.cols,
       rows: opts.rows,
-      scrollback: opts.scrollback ?? DEFAULT_SCROLLBACK,
+      scrollback: this.configuration.scrollback,
       allowProposedApi: true,
       logLevel: 'off',
       // Why: parse CSI =/>/< u pushes so CSI ? u answers with the flags the hidden app pushed (renderer parity).
@@ -95,6 +89,11 @@ export class HeadlessEmulator {
     // Why Unicode 11: must match the renderer's char-width measurement, else emoji rows mismeasure and the mirror accumulates cell-shifted tears.
     this.terminal.loadAddon(new Unicode11Addon())
     activateOrcaTerminalUnicodeProvider(this.terminal)
+
+    if (this.configuration.images) {
+      this.imageAddon = createHeadlessImageAddon(this.configuration.images)
+      this.terminal.loadAddon(this.imageAddon)
+    }
 
     // Why gated: an emulator query reply would beat the renderer's to the shell's stdin (OSC 11 default-black was the casualty).
     this.onQueryReply = opts.onQueryReply ?? null
@@ -175,20 +174,24 @@ export class HeadlessEmulator {
       return Promise.resolve()
     }
     this.oscText.scan(data)
-    // Why the sentinel: xterm parses writes async, so its zero-byte callback fires in FIFO order to open the window at exactly this chunk.
-    if (forwardQueryReplies) {
-      this.terminal.write('', () => {
-        this.queryReplyForwardingDepth += 1
-      })
-    }
-    return new Promise<void>((resolve) => {
-      this.terminal.write(data, () => {
-        if (forwardQueryReplies) {
-          this.queryReplyForwardingDepth -= 1
-        }
+    this.pendingWrites += 1
+    return submitHeadlessTerminalWrite(this.terminal, data, {
+      enterReplyWindow: forwardQueryReplies
+        ? () => {
+            this.queryReplyForwardingDepth += 1
+          }
+        : undefined,
+      leaveReplyWindow: forwardQueryReplies
+        ? () => {
+            this.queryReplyForwardingDepth -= 1
+          }
+        : undefined,
+      parsed: () => {
         this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
-        resolve()
-      })
+      },
+      settled: () => {
+        this.pendingWrites -= 1
+      }
     })
   }
 
@@ -201,6 +204,9 @@ export class HeadlessEmulator {
   }
 
   private tryWriteSync(data: string, opts: HeadlessEmulatorWriteOptions = {}): boolean {
+    if (this.pendingWrites > 0) {
+      return false
+    }
     const writeSync = (this.terminal as TerminalWithSynchronousWrite)._core?.writeSync
     if (typeof writeSync !== 'function') {
       return false
@@ -245,37 +251,45 @@ export class HeadlessEmulator {
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
-    const modes = this.getModes()
-    // Why absolute: relative cursor restore is off by a column after a wrap-pending final row; saved-cursor rides along for DECRC.
-    const serializedAnsi = serializeWithAbsoluteCursor(
-      this.serializer,
-      this.terminal,
-      { scrollback: opts.scrollbackRows },
-      readSavedCursorRegister(this.terminal)
-    )
-    const { snapshotAnsi, scrollbackAnsi } = splitTerminalSnapshotAnsi(serializedAnsi, modes)
-    const snapshot: TerminalSnapshot = {
-      snapshotAnsi,
-      scrollbackAnsi,
-      oscLinks: collectHeadlessOscLinkRanges(
-        this.terminal,
-        opts.scrollbackRows,
-        this.restoredOscLinks
-      ),
-      rehydrateSequences: buildRehydrateSequences(modes),
-      ...buildFrameRestoreSnapshotFields(this.serializer, this.terminal, modes),
+    return captureHeadlessTerminalSnapshot(this.terminal, this.serializer, opts, {
       cwd: this.oscText.cwd,
-      modes,
-      cols: this.terminal.cols,
-      rows: this.terminal.rows,
-      scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows,
-      lastTitle: this.oscText.lastTitle ?? undefined,
-      // Why written LAST by the restorer: the next live chunk must complete this dangling sequence, not render it literally (Bug E / #7329).
-      ...(this.partialEscapeTail.length > 0
-        ? { pendingEscapeTailAnsi: this.partialEscapeTail }
-        : {})
+      lastTitle: this.oscText.lastTitle,
+      partialEscapeTail: this.partialEscapeTail,
+      restoredOscLinks: this.restoredOscLinks
+    })
+  }
+
+  captureModelCheckpoint(maxBytes: number): HeadlessModelCheckpoint {
+    if (this.disposed) {
+      throw new Error('Headless terminal is disposed')
     }
-    return snapshot
+    if (this.pendingWrites > 0) {
+      throw new Error('Terminal writes must drain before checkpoint capture')
+    }
+    if (!this.imageAddon) {
+      throw new Error('Headless terminal image support is not configured')
+    }
+    return captureHeadlessModelCheckpoint(
+      {
+        ...this.configuration,
+        scrollback: this.terminal.options.scrollback
+      },
+      this.getSnapshot(),
+      this.imageAddon,
+      maxBytes
+    )
+  }
+
+  static prepareModelCheckpoint(
+    checkpoint: HeadlessModelCheckpoint,
+    options: { onQueryReply?: (reply: string) => void; isCurrent?: () => boolean } = {}
+  ): Promise<HeadlessEmulator> {
+    return prepareHeadlessModelCheckpoint(
+      checkpoint,
+      (configuration) => new this({ ...configuration, onQueryReply: options.onQueryReply }),
+      (model) => model.imageAddon,
+      options
+    )
   }
 
   get isAlternateScreen(): boolean {
@@ -289,14 +303,7 @@ export class HeadlessEmulator {
 
   /** PSReadLine's Ctrl+L repaint is only safe at an empty prompt; '>>' is PowerShell's continuation prompt, not empty. */
   isCursorOnEmptyPromptLine(): boolean {
-    const buffer = this.terminal.buffer.active
-    const line = buffer.getLine(buffer.baseY + buffer.cursorY)
-    if (!line) {
-      return false
-    }
-    const upToCursor = line.translateToString(true, 0, buffer.cursorX).trimEnd()
-    const fullLine = line.translateToString(true).trimEnd()
-    return fullLine === upToCursor && upToCursor.endsWith('>') && !upToCursor.endsWith('>>')
+    return isTerminalCursorOnEmptyPromptLine(this.terminal)
   }
 
   getVisibleLines(): string[] {
@@ -356,9 +363,5 @@ export class HeadlessEmulator {
   dispose(): void {
     this.disposed = true
     this.terminal.dispose()
-  }
-
-  private getModes(): TerminalModes {
-    return readTerminalModes(this.terminal)
   }
 }
