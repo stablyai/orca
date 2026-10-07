@@ -4,22 +4,31 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
-const measuredHeight = vi.hoisted(() => ({ value: null as number | null }))
+type FlatListMockProps = {
+  data?: NativeChatMessage[]
+  onContentSizeChange?: (width: number, height: number) => void
+  [key: string]: unknown
+}
+
+const measuredHeight = vi.hoisted<{ value: number | null }>(() => ({ value: null }))
 const scrollToOffset = vi.hoisted(() => vi.fn())
 
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
     ActivityIndicator: 'ActivityIndicator',
-    FlatList: React.forwardRef((props, ref) => {
-      React.useImperativeHandle(ref, () => ({ scrollToOffset }), [])
-      React.useEffect(() => {
-        if (measuredHeight.value !== null) {
-          props.onContentSizeChange?.(320, measuredHeight.value)
-        }
-      }, [props.onContentSizeChange])
-      return React.createElement('FlatList', props)
-    }),
+    FlatList: React.forwardRef<{ scrollToOffset: typeof scrollToOffset }, FlatListMockProps>(
+      (props, ref) => {
+        const { onContentSizeChange } = props
+        React.useImperativeHandle(ref, () => ({ scrollToOffset }), [])
+        React.useEffect(() => {
+          if (measuredHeight.value !== null) {
+            onContentSizeChange?.(320, measuredHeight.value)
+          }
+        }, [onContentSizeChange])
+        return React.createElement('FlatList', { ...props, testID: 'mobile-chat-list' })
+      }
+    ),
     Pressable: 'Pressable',
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: 'Text',
@@ -65,6 +74,7 @@ function view(folded: NativeChatMessage[], sendSurfaceId = 'tab-a') {
     onSend: vi.fn().mockResolvedValue(true),
     sendSurfaceId,
     getSendCompletionGeneration: () => 0,
+    getComposerEditGeneration: () => 0,
     pending: [],
     composerText: '',
     onComposerTextChange: vi.fn()
@@ -85,7 +95,7 @@ describe('MobileNativeChatView transcript measurement', () => {
     await act(async () => {
       renderer = create(view([message('first', 'same height')]))
     })
-    const first = renderer!.root.find((node) => node.type === 'FlatList')
+    const first = renderer!.root.find((node) => node.props.testID === 'mobile-chat-list')
     expect(first.props.data.map((row: NativeChatMessage) => row.id)).toEqual(['first'])
     expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 900 })
 
@@ -93,7 +103,7 @@ describe('MobileNativeChatView transcript measurement', () => {
     await act(async () => {
       renderer!.update(view([message('second', 'same height')], 'tab-b'))
     })
-    const second = renderer!.root.find((node) => node.type === 'FlatList')
+    const second = renderer!.root.find((node) => node.props.testID === 'mobile-chat-list')
     expect(second).not.toBe(first)
     expect(scrollToOffset).toHaveBeenCalledTimes(1)
     expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 900 })
@@ -115,7 +125,7 @@ describe('MobileNativeChatView transcript measurement', () => {
         view([message('second', 'updated text'), message('append', 'new row')], 'tab-b')
       )
     })
-    expect(renderer!.root.find((node) => node.type === 'FlatList')).toBe(second)
+    expect(renderer!.root.find((node) => node.props.testID === 'mobile-chat-list')).toBe(second)
     expect(scrollToOffset).not.toHaveBeenCalled()
 
     act(() => second.props.onContentSizeChange?.(320, 1_200))
