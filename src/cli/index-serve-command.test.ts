@@ -65,6 +65,7 @@ describe('orca cli worktree awareness', () => {
     expect(serveOrcaAppMock).toHaveBeenCalledWith({
       json: true,
       port: '6768',
+      bind: null,
       pairingAddress: '100.64.1.20',
       noPairing: true,
       mobilePairing: false,
@@ -84,6 +85,7 @@ describe('orca cli worktree awareness', () => {
     expect(serveOrcaAppMock).toHaveBeenCalledWith({
       json: true,
       port: null,
+      bind: null,
       pairingAddress: '100.64.1.20',
       noPairing: false,
       mobilePairing: true,
@@ -110,12 +112,126 @@ describe('orca cli worktree awareness', () => {
     expect(serveOrcaAppMock).toHaveBeenCalledWith({
       json: false,
       port: null,
+      bind: null,
       pairingAddress: 'wss://sandbox.example.com',
       noPairing: false,
       mobilePairing: false,
       recipeJson: true,
       projectRoot: '/workspace/repo'
     })
+  })
+
+  it('forwards a pinned bind address to the foreground server', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+
+    await main(['serve', '--bind', '127.0.0.1', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).toHaveBeenCalledWith({
+      json: true,
+      port: null,
+      bind: '127.0.0.1',
+      pairingAddress: null,
+      noPairing: false,
+      mobilePairing: false,
+      recipeJson: false,
+      projectRoot: null
+    })
+  })
+
+  it('rejects --bind with --mobile-pairing before launching the app', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['serve', '--bind', '127.0.0.1', '--mobile-pairing', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Use either --mobile-pairing or --bind'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects a value-less serve bind before launching the app', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['serve', '--bind', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --bind.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects an empty serve bind before launching the app', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['serve', '--bind=', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --bind.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects a trailing serve bind without a value', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['serve', '--bind'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --bind.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects an unsafe serve bind before launching the app', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['serve', '--bind', '127.0.0.1 & calc', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'literal IP address'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects a hostname serve bind before launching the app', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['serve', '--bind', 'internal.example', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'literal IP address'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 
   it('rejects recipe JSON output without a project root', async () => {

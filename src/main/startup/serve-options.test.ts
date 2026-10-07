@@ -158,4 +158,56 @@ describe('getServeOptions', () => {
       'Missing value for --serve-port.'
     )
   })
+
+  it('leaves bindHost absent without --bind and never resolves a default', () => {
+    const options = getServeOptions(['/AppRun', '--serve'])
+    expect('bindHost' in options).toBe(false)
+    // `pinnedBindHost` is only spread into the runtime when bindHost is defined
+    // (main-process-runtime-launch.ts), so an absent bindHost means no runtime pin.
+    expect(options.bindHost).toBeUndefined()
+    expect(getServeOptions(['/AppRun', '--serve', '--serve-bind', '127.0.0.1']).bindHost).toBe(
+      '127.0.0.1'
+    )
+  })
+
+  it('maps --bind localhost to loopback and refuses other hostnames', () => {
+    expect(getServeOptions(['/AppRun', '--serve', '--serve-bind=localhost']).bindHost).toBe(
+      '127.0.0.1'
+    )
+    expect(() =>
+      getServeOptions(['/AppRun', '--serve', '--serve-bind', 'internal.example'])
+    ).toThrow(/literal IP address/)
+  })
+
+  it('requires a value for --bind', () => {
+    expect(() => getServeOptions(['/AppRun', '--serve', '--serve-bind'])).toThrow(
+      'Missing value for --serve-bind.'
+    )
+    expect(() => getServeOptions(['/AppRun', '--serve', '--serve-bind='])).toThrow(
+      'Missing value for --serve-bind.'
+    )
+  })
+
+  it('rejects --bind with --mobile-pairing unless the bind is wildcard', () => {
+    expect(() =>
+      getServeOptions(['/AppRun', '--serve', '--serve-bind', '127.0.0.1', '--serve-mobile-pairing'])
+    ).toThrow(/--bind/)
+    expect(
+      getServeOptions(['/AppRun', '--serve', '--serve-bind', '0.0.0.0', '--serve-mobile-pairing'])
+        .bindHost
+    ).toBe('0.0.0.0')
+  })
+
+  it('keeps a tunnel pairing address working with a loopback bind', () => {
+    const options = getServeOptions([
+      '/AppRun',
+      '--serve',
+      '--serve-bind=127.0.0.1',
+      '--serve-pairing-address=wss://tunnel.example.com',
+      '--serve-recipe-json',
+      '--serve-project-root=/tmp/repo'
+    ])
+    expect(options.bindHost).toBe('127.0.0.1')
+    expect(options.pairingAddress).toBe('wss://tunnel.example.com')
+  })
 })

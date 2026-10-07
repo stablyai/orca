@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { runProcessSync } from '../../shared/child-process/run-process'
+import { resolveOrcadBindHost } from '../../main/orcad/orcad-bind-address'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath
@@ -77,10 +78,22 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
   child.unref()
 }
 
+function resolveServeBindHost(raw: string): string {
+  try {
+    return resolveOrcadBindHost(raw)
+  } catch (error) {
+    // Why RuntimeClientError: serveOrcaApp reports its other argument-level failures this way
+    // (see the recipe-JSON check below), so callers handle a single error type.
+    const message = error instanceof Error ? error.message : 'Invalid --bind value.'
+    throw new RuntimeClientError('invalid_argument', message)
+  }
+}
+
 export function serveOrcaApp(
   args: {
     json?: boolean
     port?: string | null
+    bind?: string | null
     pairingAddress?: string | null
     noPairing?: boolean
     mobilePairing?: boolean
@@ -96,6 +109,9 @@ export function serveOrcaApp(
   }
   if (args.port) {
     childArgs.push('--serve-port', args.port)
+  }
+  if (args.bind) {
+    childArgs.push('--serve-bind', resolveServeBindHost(args.bind))
   }
   if (args.pairingAddress) {
     childArgs.push('--serve-pairing-address', args.pairingAddress)

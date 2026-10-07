@@ -393,6 +393,84 @@ describe('serveOrcaApp', () => {
     )
   })
 
+  it('forwards a pinned bind address through to the foreground server child', async () => {
+    const child = {
+      kill: vi.fn(),
+      once: vi.fn(
+        (event: string, handler: (code: number | null, signal: string | null) => void) => {
+          if (event === 'exit') {
+            queueMicrotask(() => handler(0, null))
+          }
+          return child
+        }
+      )
+    }
+    spawnMock.mockReturnValue(child)
+
+    await expect(serveOrcaApp({ json: true, bind: '127.0.0.1' })).resolves.toBe(0)
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/Applications/Orca.app/Contents/MacOS/Orca',
+      ['--serve', '--serve-json', '--serve-bind', '127.0.0.1'],
+      expect.objectContaining({
+        cwd: resolve(__dirname, '../../..')
+      })
+    )
+  })
+
+  it('omits --serve-bind when no bind is given', async () => {
+    const child = {
+      kill: vi.fn(),
+      once: vi.fn(
+        (event: string, handler: (code: number | null, signal: string | null) => void) => {
+          if (event === 'exit') {
+            queueMicrotask(() => handler(0, null))
+          }
+          return child
+        }
+      )
+    }
+    spawnMock.mockReturnValue(child)
+
+    await expect(serveOrcaApp({ json: true })).resolves.toBe(0)
+
+    const childArgs = spawnMock.mock.calls[0]?.[1] as string[]
+    expect(childArgs).not.toContain('--serve-bind')
+  })
+
+  it('resolves a loopback bind alias before spawning the child', async () => {
+    const child = {
+      kill: vi.fn(),
+      once: vi.fn(
+        (event: string, handler: (code: number | null, signal: string | null) => void) => {
+          if (event === 'exit') {
+            queueMicrotask(() => handler(0, null))
+          }
+          return child
+        }
+      )
+    }
+    spawnMock.mockReturnValue(child)
+
+    await expect(serveOrcaApp({ json: true, bind: 'localhost' })).resolves.toBe(0)
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/Applications/Orca.app/Contents/MacOS/Orca',
+      ['--serve', '--serve-json', '--serve-bind', '127.0.0.1'],
+      expect.objectContaining({
+        cwd: resolve(__dirname, '../../..')
+      })
+    )
+  })
+
+  it.each(['127.0.0.1 & calc', 'internal.example'])(
+    'rejects an unsafe bind value %j before spawning the child',
+    (bind) => {
+      expect(() => serveOrcaApp({ json: true, bind })).toThrow(/literal IP address/)
+      expect(spawnMock).not.toHaveBeenCalled()
+    }
+  )
+
   it('passes the app root before serve flags for dev Electron executables', async () => {
     process.env.ORCA_APP_EXECUTABLE = '/repo/node_modules/.bin/electron'
     process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT = '1'

@@ -5,6 +5,7 @@ import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
 import { resolveCliStatusCaller } from '../runtime/status-caller'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
+import { resolveOrcadBindHost } from '../../main/orcad/orcad-bind-address'
 
 function envRecord(): Record<string, string> {
   // Why: the `orca` launcher runs Orca's Electron binary as Node, so this CLI
@@ -59,6 +60,24 @@ function getOptionalServePort(flags: Map<string, string | boolean>): string | nu
   return rawPort
 }
 
+function getOptionalServeBind(flags: Map<string, string | boolean>): string | null {
+  if (!flags.has('bind')) {
+    return null
+  }
+  const rawBind = flags.get('bind')
+  if (typeof rawBind !== 'string' || rawBind.length === 0) {
+    throw new RuntimeClientError('invalid_argument', 'Missing value for --bind.')
+  }
+  try {
+    return resolveOrcadBindHost(rawBind)
+  } catch (error) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      error instanceof Error ? error.message : 'Invalid --bind value.'
+    )
+  }
+}
+
 export const CORE_HANDLERS: Record<string, CommandHandler> = {
   'claude-teams': async ({ client, rawArgs }) => {
     if (process.platform === 'win32') {
@@ -103,7 +122,9 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const noPairing = flags.get('no-pairing') === true
     const mobilePairing = flags.get('mobile-pairing') === true
     const recipeJson = flags.get('recipe-json') === true
+    const bind = getOptionalServeBind(flags)
     const validationError = getServeOptionValidationError({
+      bindHost: bind,
       noPairing,
       mobilePairing,
       recipeJson,
@@ -117,6 +138,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const exitCode = await serveOrcaApp({
       json,
       port,
+      bind,
       pairingAddress: typeof pairingAddressValue === 'string' ? pairingAddressValue : null,
       noPairing,
       mobilePairing,
