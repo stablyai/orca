@@ -45,10 +45,12 @@ import {
   reserveAgentSessionOwner,
   type AgentSessionReservation
 } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 import { agentSessionRecordIdentityFields } from './agent-session-record-founding'
 
 export type AgentSessionReserveRequest = {
+  /** Host-resolved floating directory committed with the first owner reservation. */
+  launchDirectory?: string
   sessionId: string
   location: AgentSessionExecutionLocation
   provider: StructuredAgentId

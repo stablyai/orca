@@ -38,10 +38,7 @@ import {
   sourceControlAiSettingsFromLegacy as settingsFromLegacy
 } from './source-control-ai-settings'
 import { hasActionAgentRecipe } from './source-control-ai-command-template'
-import type {
-  SourceControlAiOperation,
-  SourceControlAiPrCreationDefaults
-} from './source-control-ai-types'
+import type { AiTextOperation, SourceControlAiPrCreationDefaults } from './source-control-ai-types'
 
 export const DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS = DEFAULT_PR_CREATION_DEFAULTS
 
@@ -73,7 +70,7 @@ type ResolveSourceControlAiInput = {
   > &
     Partial<Pick<GlobalSettings, 'disabledTuiAgents'>>
   repo?: Pick<Repo, 'sourceControlAi'> | null
-  operation: SourceControlAiOperation
+  operation: AiTextOperation
   discoveryHostKey?: string
   prCreationProductDefaults?: SourceControlAiPrCreationDefaults
 }
@@ -99,10 +96,11 @@ export const resolveSourceControlAiPrCreationDefaults = resolvePrDefaults
 export const resolveSourceControlAiEnabled = resolveEnabled
 export const resolveSourceControlActionRecipe = resolveActionRecipe
 
-const OPERATION_LABEL: Record<SourceControlAiOperation, string> = {
+const OPERATION_LABEL: Record<AiTextOperation, string> = {
   commitMessage: 'commit messages',
   pullRequest: 'pull request details',
-  branchName: 'branch names'
+  branchName: 'branch names',
+  conversationName: 'chat names'
 }
 
 function supportedAgentSummary(): string {
@@ -116,7 +114,15 @@ export function resolveSourceControlAiForOperation(
 ): ResolveSourceControlAiResult {
   const legacy = input.settings.commitMessageAi
   const source = normalizeSettings(input.settings.sourceControlAi, legacy)
-  const repoOverrides = normalizeRepoOverrides(input.repo?.sourceControlAi)
+  const repoOverrides =
+    input.operation === 'conversationName'
+      ? null
+      : normalizeRepoOverrides(input.repo?.sourceControlAi)
+  const settingsPath =
+    input.operation === 'conversationName'
+      ? 'Settings -> Chat -> Chat names'
+      : 'Settings -> Git -> Source Control AI'
+  const agentPurpose = input.operation === 'conversationName' ? 'chat name' : 'Source Control AI'
   const prCreationDefaults = resolvePrCreationDefaults(
     source,
     repoOverrides,
@@ -138,7 +144,7 @@ export function resolveSourceControlAiForOperation(
   if (!agentChoice) {
     return {
       ok: false,
-      error: `Choose a supported Source Control AI agent for this action in Settings -> Git -> Source Control AI. ${supportedAgentSummary()}`
+      error: `Choose a supported ${agentPurpose} agent for this action in ${settingsPath}. ${supportedAgentSummary()}`
     }
   }
 
@@ -158,7 +164,7 @@ export function resolveSourceControlAiForOperation(
     if (!customAgentCommand) {
       return {
         ok: false,
-        error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
+        error: `Custom command is empty. Add one in ${settingsPath}.`
       }
     }
     return {
@@ -188,14 +194,14 @@ export function resolveSourceControlAiForOperation(
   if (!resolvedAgent || isCustomAgentId(resolvedAgent)) {
     return {
       ok: false,
-      error: `Choose a supported Source Control AI agent for this action. ${supportedAgentSummary()}`
+      error: `Choose a supported ${agentPurpose} agent for this action in ${settingsPath}. ${supportedAgentSummary()}`
     }
   }
   const spec = getCommitMessageAgentSpec(resolvedAgent)
   if (!spec) {
     return {
       ok: false,
-      error: `Agent "${resolvedAgent}" does not support Source Control AI ${OPERATION_LABEL[input.operation]}. ${supportedAgentSummary()}`
+      error: `Agent "${resolvedAgent}" does not support ${input.operation === 'conversationName' ? '' : 'Source Control AI '}${OPERATION_LABEL[input.operation]}. ${supportedAgentSummary()}`
     }
   }
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY

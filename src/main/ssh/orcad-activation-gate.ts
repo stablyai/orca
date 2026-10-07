@@ -105,7 +105,8 @@ export function evaluateOrcadActivation(
       reason:
         'The candidate has no terminal daemon. Every terminal on this host would run in the ' +
         'orcad process and die with it, which is the exact regression the daemon exists to ' +
-        'prevent. Nothing was activated.'
+        "prevent. Nothing was activated; orcad.log carries the daemon's startup error, and " +
+        'the next connect retries.'
     }
   }
   if (daemon.state === 'degraded') {

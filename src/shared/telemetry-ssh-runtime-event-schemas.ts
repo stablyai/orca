@@ -63,6 +63,7 @@ export const SSH_RUNTIME_REFUSAL_VALUES = [
   'libc_floor',
   'illegal_instruction',
   'wrong_libc',
+  'security_software',
   'windows_host_unsupported',
   'target_unresolved',
   'artifacts_unavailable',
@@ -72,6 +73,8 @@ export const SSH_RUNTIME_REFUSAL_VALUES = [
 
 export const SSH_RUNTIME_DURATION_BUCKETS = ['lt_5s', '5s_15s', '15s_60s', 'gte_60s'] as const
 
+export const SSH_RUNTIME_OUTCOME_VALUES = ['resolved', 'unverifiable', 'failed'] as const
+
 export const sshRemoteRuntimeResolvedSchema = z
   .object({
     rung: z.enum(['a', 'b', 'c', 'd', 'legacy']),
@@ -80,10 +83,13 @@ export const sshRemoteRuntimeResolvedSchema = z
     host_libc: z.enum(['glibc', 'musl', 'none', 'unknown']),
     glibc_minor: z.enum(SSH_RUNTIME_GLIBC_MINOR_VALUES),
     first_refusal: z.enum(SSH_RUNTIME_REFUSAL_VALUES),
-    self_test: z.enum(['passed', 'refused', 'failed', 'not_run']),
+    self_test: z.enum(['passed', 'refused', 'failed', 'unverifiable', 'not_run']),
     runtime_transfer: z.enum(['uploaded', 'cached', 'none']),
     // Rung C only: the one rung whose behavior depends on the host's own Node.
     host_node_major: z.enum(SSH_RUNTIME_HOST_NODE_MAJOR_VALUES).optional(),
-    duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS)
+    duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS),
+    // Why: a connect whose self-test was unverifiable or failed settles no rung; without this the
+    // event only ever saw successes.
+    outcome: z.enum(SSH_RUNTIME_OUTCOME_VALUES)
   })
   .strict()

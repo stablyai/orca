@@ -104,7 +104,6 @@ describe('Codex structured session close lifecycle', () => {
       prompts,
       options: new Map(),
       reportedOptions: {},
-      fastModeTierByModel: new Map(),
       dispatchEchoes: createCodexDispatchEchoes(),
       turnOpenWaits: createCodexTurnOpenWaits(),
       translator

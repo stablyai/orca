@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-// Against the real menu: a `/model` request opens the menu once, and a period while the host still
-// lists models neither opens it later nor reopens one the user closed.
+// Against the real picker: a `/model` request opens it once with the search focused, and a period
+// while the host still lists models neither opens it later nor reopens one the user closed.
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -72,38 +72,38 @@ const settle = (): Promise<void> =>
 
 afterEach(() => cleanup())
 
-describe('model menu requests while the host lists models', () => {
-  it('spends a request made while pending without opening the menu once the list lands', async () => {
+describe('model picker requests while the host lists models', () => {
+  it('spends a request made while pending without opening the picker once the list lands', async () => {
     const request = { id: 'model', sequence: 1 }
     const { rerender } = render(view(true, request))
     const composer = screen.getByTestId('composer')
     composer.focus()
     await settle()
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.queryByRole('combobox')).toBeNull()
 
     rerender(view(false, request))
     await settle()
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.queryByRole('combobox')).toBeNull()
     expect(document.activeElement).toBe(composer)
 
     // A new request after the list landed still opens it.
     rerender(view(false, { id: 'model', sequence: 2 }))
     await settle()
-    expect(screen.queryByRole('menu')).not.toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('combobox'))
   })
 
-  it('does not reopen a menu the user closed when a pending period ends', async () => {
+  it('does not reopen a picker the user closed when a pending period ends', async () => {
     const request = { id: 'model', sequence: 1 }
     const { rerender } = render(view(false, request))
     await settle()
-    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' })
     await settle()
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.queryByRole('combobox')).toBeNull()
 
     rerender(view(true, request))
     await settle()
     rerender(view(false, request))
     await settle()
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.queryByRole('combobox')).toBeNull()
   })
 })

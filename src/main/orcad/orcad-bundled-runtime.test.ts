@@ -2,7 +2,11 @@ import { EventEmitter } from 'node:events'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handoffToBundledOrcad, resolveBundledOrcadSlot } from './orcad-bundled-runtime'
-import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
+import {
+  NODE_RUNTIME_ASSETS,
+  NODE_RUNTIME_COMPAT_ASSETS,
+  NODE_RUNTIME_PIN
+} from '../../shared/node-runtime-pin'
 import {
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_SERVER_TARGET_FILENAME,
@@ -82,6 +86,26 @@ describe('bundled Orca runtime handoff', () => {
     )
     expect(() => handoffToBundledOrcad()).toThrow(`does not name Node ${NODE_RUNTIME_PIN.version}`)
     expect(fixture.spawn).not.toHaveBeenCalled()
+  })
+
+  it('hands a glibc 2.17 compat slot to the compat runtime it names', () => {
+    const compatSha = NODE_RUNTIME_COMPAT_ASSETS['linux-x64-glibc217'].executableSha256
+    fixture.read.mockImplementation((path) =>
+      path.endsWith(ORCAD_SERVER_TARGET_FILENAME) ? 'linux-x64-glibc217\n' : `${compatSha}\n`
+    )
+    expect(handoffToBundledOrcad()).toBe(true)
+    expect(fixture.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: join('/slot', '..', 'runtimes', `node-${compatSha}`, 'bin', 'node')
+      })
+    )
+  })
+
+  it('refuses a compat slot that names the default runtime', () => {
+    fixture.read.mockImplementation((path) =>
+      path.endsWith(ORCAD_SERVER_TARGET_FILENAME) ? 'linux-x64-glibc217\n' : `${SHA}\n`
+    )
+    expect(() => handoffToBundledOrcad()).toThrow(`does not name Node ${NODE_RUNTIME_PIN.version}`)
   })
 
   it('refuses a slot without its runtime reference', () => {

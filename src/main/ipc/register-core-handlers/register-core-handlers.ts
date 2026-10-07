@@ -223,16 +223,16 @@ export function registerCoreHandlers(
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers(store)
   registerEphemeralVmHandlers(store, pluginService)
+  // Session history and terminal resume are not chats; a refused host leaves nothing to check.
+  const ensureStructuredSessionOwnership = () =>
+    ensureStructuredAgentSessionHostUnlessRefused(() => runtime.ensureStructuredAgentSessionHost())
   registerAiVaultSearchHandlers({
     callRuntimeSearch: (environmentId, method, params) =>
-      callRuntimeSessionSearch(app.getPath('userData'), environmentId, method, params)
+      callRuntimeSessionSearch(app.getPath('userData'), environmentId, method, params),
+    ensureStructuredSessionOwnership
   })
   registerAiVaultHandlers({
-    // Session history and terminal resume are not chats; a refused host leaves nothing to check.
-    ensureStructuredSessionOwnership: () =>
-      ensureStructuredAgentSessionHostUnlessRefused(() =>
-        runtime.ensureStructuredAgentSessionHost()
-      ),
+    ensureStructuredSessionOwnership,
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
     getActiveRuntimeAiVaultHostInfos: () =>

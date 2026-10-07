@@ -76,7 +76,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       />
     )
   }
-  const { message, turnKey, status, receipt, turnDiff } = slot
+  const { message, turnKey, status, receipt, turnDiff, workRun } = slot
   const deliveryNotice = context.deliveryNotices?.get(message.id)
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
@@ -103,7 +103,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           previousTodoWrite={predecessors?.todowrite}
           previousUpdatePlan={predecessors?.update_plan}
           revealedDiff={
-            context.revealedDiff?.messageId === message.id ? context.revealedDiff : undefined
+            (workRun ?? [message]).some((member) => member.id === context.revealedDiff?.messageId)
+              ? (context.revealedDiff ?? undefined)
+              : undefined
           }
           expandSignal={context.expandSignal}
           activeTurnIsWorking={slot.activeTurnIsWorking}
@@ -121,6 +123,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
               ? rewind
               : undefined
           }
+          workRun={workRun}
         />
       )}
       {slot.statusAbove ? null : statusRow}

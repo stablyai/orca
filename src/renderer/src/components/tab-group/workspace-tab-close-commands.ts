@@ -11,9 +11,13 @@ export function createWorkspaceTabCloseCommands({
   worktreeId: string
   groupTabs: Tab[]
 }) {
-  const { closeUnifiedTab, closeFile, setActiveWorktree } = useAppStore.getState()
+  const { closeUnifiedTab, closeFile } = useAppStore.getState()
 
-  const closeEditorIfUnreferenced = (entityId: string, closingTabId: string) => {
+  const closeEditorIfUnreferenced = (
+    entityId: string,
+    closingTabId: string,
+    whenEmptied: (() => void) | null
+  ) => {
     const otherReference = (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).some(
       (item) =>
         item.id !== closingTabId &&
@@ -27,7 +31,7 @@ export function createWorkspaceTabCloseCommands({
       const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === entityId)
       if (file?.isDirty) {
         // Why: route through Terminal.tsx so the unsaved-confirmation save/discard queue stays centralized across all close paths.
-        requestEditorFileClose(entityId)
+        requestEditorFileClose(entityId, whenEmptied ? { onClosed: whenEmptied } : undefined)
         return false
       }
       closeFile(entityId)
@@ -35,31 +39,19 @@ export function createWorkspaceTabCloseCommands({
     return true
   }
 
-  const leaveWorktreeIfEmpty = () => {
-    const state = useAppStore.getState()
-    if (state.activeWorktreeId !== worktreeId) {
-      return
-    }
-    // Why: split-group closes bypass legacy Terminal.tsx; deselect the emptied worktree here or the window goes blank instead of landing.
-    const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
-    if (renderableTabCount === 0) {
-      setActiveWorktree(null)
-    }
-  }
-
+  /** `whenEmptied` is captured by the caller when the close is requested, before any prompt. */
   const closeItem = (
     itemId: string,
-    opts?: { skipEmptyCheck?: boolean; skipRunningProcessConfirm?: boolean }
+    opts?: { whenEmptied?: () => void; skipRunningProcessConfirm?: boolean }
   ) => {
     const item = groupTabs.find((candidate) => candidate.id === itemId)
     if (!item) {
       return
     }
+    const whenEmptied = opts?.whenEmptied ?? null
     if (item.contentType === 'agent-session') {
       closeUnifiedTab(item.id)
-      if (!opts?.skipEmptyCheck) {
-        leaveWorktreeIfEmpty()
-      }
+      whenEmptied?.()
       return
     }
     if (item.contentType === 'terminal') {
@@ -67,7 +59,7 @@ export function createWorkspaceTabCloseCommands({
       // empty check has to run on the actual close — never on cancel.
       closeTerminalTab(item.entityId, {
         ...(opts?.skipRunningProcessConfirm ? { skipRunningProcessConfirm: true } : {}),
-        ...(!opts?.skipEmptyCheck ? { onClosed: leaveWorktreeIfEmpty } : {})
+        ...(whenEmptied ? { onClosed: whenEmptied } : {})
       })
       return
     }
@@ -81,16 +73,14 @@ export function createWorkspaceTabCloseCommands({
     } else if (item.contentType === 'simulator') {
       closeUnifiedTab(item.id)
     } else {
-      const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
+      const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id, whenEmptied)
       if (!canCloseTab) {
         return
       }
       closeUnifiedTab(item.id)
     }
-    if (!opts?.skipEmptyCheck) {
-      leaveWorktreeIfEmpty()
-    }
+    whenEmptied?.()
   }
 
-  return { closeItem, leaveWorktreeIfEmpty }
+  return { closeItem }
 }

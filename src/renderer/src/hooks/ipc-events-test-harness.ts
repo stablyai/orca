@@ -129,7 +129,6 @@ export async function loadIpcEventsHarness(
   }))
   vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
     createFloatingWorkspaceTerminalTab: vi.fn(),
-    isEmptyFloatingWorkspacePanelVisible: () => false,
     isFloatingWorkspacePanelFocused: () => false
   }))
   vi.doMock('@/runtime/web-runtime-session', () => ({

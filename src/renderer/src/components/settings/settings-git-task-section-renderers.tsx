@@ -17,7 +17,7 @@ export function renderGitSettingsSection(context: SettingsRenderContext): React.
         'Branch naming, base refs, and Git AI Author.'
       )}
       searchEntries={navigation.getSectionSearchEntries('git')}
-      forceVisible={interactions.hasUnsavedSourceControlAiPromptChanges}
+      forceVisible={model.hasUnsavedCommitPromptChanges || model.hasUnsavedBranchPromptChanges}
     >
       {view.isSectionMounted('git') ? (
         <>

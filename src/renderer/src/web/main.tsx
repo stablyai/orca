@@ -19,7 +19,10 @@ import {
 import { installWebPreloadApi } from './web-preload-api'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { translate } from '../i18n/i18n'
+import { installOsFileDropCancellationGuard } from '../lib/os-file-drop-cancellation-guard'
 
+const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
+import.meta.hot?.dispose(disposeOsFileDropGuard)
 const App = lazy(() => import('../App'))
 
 function WebRoot(): React.JSX.Element {

@@ -64,7 +64,7 @@ const CASES: GuardCase[] = [
     label: 'Use {basePrompt}'
   },
   {
-    file: 'components/settings/CommitMessageAiPane.tsx',
+    file: 'components/settings/CustomAgentCommandField.tsx',
     afterFallback: 'Use',
     label: 'Use {prompt}'
   },

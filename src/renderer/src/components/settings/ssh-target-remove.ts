@@ -1,7 +1,7 @@
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../../../shared/constants'
 
 export type SshTargetRemoveApi = {
-  terminateSessions: (args: { targetId: string }) => Promise<unknown>
+  terminateSessions: (args: { targetId: string; forRemoval?: boolean }) => Promise<unknown>
   connect: (args: { targetId: string }) => Promise<unknown>
   removeTarget: (args: { id: string }) => Promise<unknown>
 }
@@ -15,14 +15,15 @@ export async function removeSshTargetWithBestEffortCleanup(
   api: SshTargetRemoveApi,
   id: string
 ): Promise<void> {
+  // Main refuses a managed server's host here, before any terminal ends; removeTarget then says why.
   try {
-    await api.terminateSessions({ targetId: id })
+    await api.terminateSessions({ targetId: id, forRemoval: true })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     if (message.includes(SSH_TERMINATE_RECONNECT_REQUIRED)) {
       try {
         await api.connect({ targetId: id })
-        await api.terminateSessions({ targetId: id })
+        await api.terminateSessions({ targetId: id, forRemoval: true })
       } catch (reconnectErr) {
         console.warn(
           '[ssh] Skipping remote session cleanup during target removal:',

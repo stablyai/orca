@@ -10,6 +10,10 @@ import {
 } from './native-chat-types'
 import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 import { isNoiseMessage } from './native-chat-noise'
+import {
+  CODEX_PLAN_UPDATED_FRAME_KIND,
+  isWordlessProviderFrameMessage
+} from './native-chat-provider-frame-summary'
 
 function isToolOnlyMessage(message: NativeChatMessage): boolean {
   return (
@@ -46,6 +50,20 @@ function isSubagentRosterMessage(message: NativeChatMessage): boolean {
 
 function isBackgroundTaskMessage(message: NativeChatMessage): boolean {
   return message.blocks.some(isBackgroundTaskBlock)
+}
+
+/** A stored-only provider event draws nothing, so it must not split the run around it. A plan
+ *  update still does: the desktop draws it in place as the task list. */
+function isUndrawnProviderFrameMessage(message: NativeChatMessage): boolean {
+  return (
+    isWordlessProviderFrameMessage(message) &&
+    !message.blocks.some(
+      (block) =>
+        block.type === 'text' &&
+        block.providerFrame?.provider === 'codex' &&
+        block.providerFrame.kind === CODEX_PLAN_UPDATED_FRAME_KIND
+    )
+  )
 }
 
 function isInterruptionBoundary(message: NativeChatMessage): boolean {
@@ -131,6 +149,7 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
     } else if (
       !isSubagentRosterMessage(message) &&
       !isBackgroundTaskMessage(message) &&
+      !isUndrawnProviderFrameMessage(message) &&
       (!isNoiseMessage(message) || isInterruptionBoundary(message))
     ) {
       mutableAssistantIndex = -1

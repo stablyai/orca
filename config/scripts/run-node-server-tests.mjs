@@ -1,7 +1,7 @@
 // Runs the headless-server suites under the pinned Node (design D4/D4a), not the host's.
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { globSync, readFileSync } from 'node:fs'
 import { ORCAD_VERSION_FILENAME } from '../../src/shared/orcad-artifacts.ts'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
 import {
@@ -11,6 +11,7 @@ import {
 import { packagedNodeRuntimePath } from './build-orcad-node.mjs'
 import { ensurePinnedNodeExecutable } from './pinned-node-downloads.mjs'
 import { currentTarget } from './server-build-target.mjs'
+import { UNIT_INCLUDE } from './ci-unit-files.mjs'
 import { describeProcessFailure, runProcessSync } from './script-child-process.mjs'
 import {
   CROSS_RUNTIME_TEST_PATHS,
@@ -84,9 +85,14 @@ run(runtimePath, [
 ])
 
 function defaultTestArgs() {
-  return [
-    ...nodeServerTestPaths({ artifact, crossRuntime }),
-    // A directory selector would otherwise pull them into lanes that lack their inputs.
-    ...(crossRuntime ? [] : CROSS_RUNTIME_TEST_PATHS.flatMap((path) => ['--exclude', path]))
-  ]
+  // Why: vitest 5 drops CLI --exclude for inline projects, so the selectors' substring matches
+  // are resolved to files here and filtered before vitest sees them.
+  // Electron probes run in desktop jobs; headless compatibility containers have no display.
+  const selectors = nodeServerTestPaths({ artifact, crossRuntime })
+  const skipped = new Set(crossRuntime ? [] : CROSS_RUNTIME_TEST_PATHS)
+  return globSync(UNIT_INCLUDE, { cwd: root })
+    .map((path) => path.replaceAll('\\', '/'))
+    .filter((path) => selectors.some((selector) => path.includes(selector)))
+    .filter((path) => !path.endsWith('.electron.test.ts') && !skipped.has(path))
+    .sort()
 }

@@ -191,7 +191,7 @@ posixOnly('relay endpoint probe against a real socket', () => {
   it('refuses to call a relay with a live child an empty husk', async () => {
     const sockPath = join(workDir, 'busy.sock')
     await startFakeRelay(sockPath, { withChild: true })
-    const incumbent = await probe(sockPath)
+    const incumbent = hasLsof ? await waitForChildCount(sockPath, 1) : await probe(sockPath)
 
     expect(incumbent.verdict).toBe('live')
     if (!hasLsof) {

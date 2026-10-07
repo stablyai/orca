@@ -76,7 +76,9 @@ describe('packaged CLI assets', () => {
           '--composite',
           'false',
           '--incremental',
-          'false'
+          'false',
+          // This fixture checks the emitted package; the CLI typecheck runs separately.
+          '--noCheck'
         ],
         cwd: projectDir,
         timeoutMs: 60_000

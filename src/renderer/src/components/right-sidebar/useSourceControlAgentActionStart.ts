@@ -110,9 +110,8 @@ export function useSourceControlAgentActionStart({
       return buildSourceControlAgentDeliveryPlan({
         selectedAgent,
         commandInput,
-        // Why: the previewed command must show what the launch will really apply.
+        // Why: the check must judge the arguments the launch will really apply.
         agentArgs: agentArgsApply ? agentArgs : undefined,
-        promptDelivery,
         detectedAgents: currentDetectedAgents,
         connectionUnavailable,
         launchPlatform,
@@ -124,7 +123,6 @@ export function useSourceControlAgentActionStart({
       agentArgsApply,
       commandInput,
       connectionUnavailable,
-      promptDelivery,
       refreshDetectedAgents,
       selectedAgent,
       launchPlatform,

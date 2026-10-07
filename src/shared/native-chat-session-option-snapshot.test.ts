@@ -292,7 +292,7 @@ describe('defaults on load', () => {
   it('shows the default model before anything is picked', () => {
     const model = grokDraft()[0]!
     expect(model).toMatchObject({ id: 'model', valueSource: 'default' })
-    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('grok-4.6')
+    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('grok-4.7')
   })
 
   it('offers the effort row under that default model without naming its value', () => {
@@ -308,7 +308,7 @@ describe('defaults on load', () => {
     // default — as true of a running session as of a draft.
     const live = grokDraft(GROK_SESSION_OPTION_CATALOG.models, 'live')
     expect(live[0]).toMatchObject({ id: 'model', valueSource: 'default' })
-    expect(live[0]!.kind.type === 'select' ? live[0]!.kind.currentValue : null).toBe('grok-4.6')
+    expect(live[0]!.kind.type === 'select' ? live[0]!.kind.currentValue : null).toBe('grok-4.7')
     expect(live.find((descriptor) => descriptor.id === 'effort')).toMatchObject({
       valueSource: 'unknown'
     })

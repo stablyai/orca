@@ -1,3 +1,4 @@
+import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { readdir } from 'node:fs/promises'
@@ -31,8 +32,15 @@ function appendDiscoveredFiles(target: string[], source: readonly string[]): voi
   }
 }
 
-export async function listClaudeTranscriptFiles(): Promise<string[]> {
-  const roots = [CLAUDE_PROJECTS_DIR, CLAUDE_TRANSCRIPTS_DIR]
+/** Resolved by the host process: a scan worker has no account router of its own. */
+export function claudeProfileTranscriptDirs(): string[] {
+  return [...claudeProfileHistoryDirs('projects'), ...claudeProfileHistoryDirs('transcripts')]
+}
+
+export async function listClaudeTranscriptFiles(
+  profileDirs = claudeProfileTranscriptDirs()
+): Promise<string[]> {
+  const roots = [CLAUDE_PROJECTS_DIR, CLAUDE_TRANSCRIPTS_DIR, ...profileDirs]
   const files = await Promise.all(
     roots.map(async (root) => {
       try {

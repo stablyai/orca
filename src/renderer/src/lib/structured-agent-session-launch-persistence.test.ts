@@ -50,6 +50,28 @@ describe('structured agent launch persistence', () => {
     })
   })
 
+  it("keeps a registered agent's launch across a reload and drops a record naming no agent", () => {
+    localStorage.setItem(
+      'orca:structuredAgentLaunches:v1',
+      JSON.stringify(
+        [
+          ['grok_session', 'grok'],
+          ['bogus_session', 'not-an-agent']
+        ].map(([sessionId, agent]) => ({
+          sessionId,
+          agent,
+          lifecycle: 'pending',
+          clientOperationId: `${sessionId}-op`,
+          payloadFingerprint: 'fingerprint',
+          expectedRuntimeFence: null
+        }))
+      )
+    )
+
+    expect(readStructuredAgentLaunchRecord('grok_session')?.agent).toBe('grok')
+    expect(readStructuredAgentLaunchRecord('bogus_session')).toBeUndefined()
+  })
+
   it('keeps the host a launch was created on across a reload', () => {
     writeStructuredAgentLaunchRecord({
       sessionId: 'claude_remote',

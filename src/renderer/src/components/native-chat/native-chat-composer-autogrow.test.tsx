@@ -18,7 +18,7 @@ vi.mock('./NativeChatComposerActions', () => ({
 }))
 
 vi.mock('./NativeChatAutocompleteMenus', () => ({
-  NativeChatMentionHint: () => null,
+  NativeChatMentionMenu: () => null,
   NativeChatPickerMenu: () => null
 }))
 
@@ -55,7 +55,7 @@ function TestField({
       canSend
       autocomplete={{ mode: 'none' }}
       activeSuggestion={0}
-      notice={null}
+      notices={[]}
       imageAttachments={imageAttachments}
       sendButtonDisabled={false}
       isWorking={false}
@@ -72,7 +72,8 @@ function TestField({
       pickerListboxId="picker"
       onChoosePickerItem={vi.fn()}
       onRetrySkills={vi.fn()}
-      onAcceptMention={vi.fn()}
+      onChooseMentionFile={vi.fn()}
+      mentionFiles={{ files: [], loading: false, failed: false }}
       onRemoveImageAttachment={vi.fn()}
       onAttach={vi.fn()}
       onDictationToggle={vi.fn()}

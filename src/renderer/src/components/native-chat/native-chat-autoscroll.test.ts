@@ -5,7 +5,8 @@ import {
   nextFollowingEnd,
   shouldShowJumpToLatest,
   NATIVE_CHAT_BOTTOM_THRESHOLD_PX,
-  NATIVE_CHAT_FOLLOW_REARM_PX
+  NATIVE_CHAT_FOLLOW_REARM_PX,
+  readerGestureLeavesEnd
 } from './native-chat-autoscroll'
 
 const atBottom = { scrollTop: 952, scrollHeight: 1000, clientHeight: 48 }
@@ -76,8 +77,8 @@ describe('nextFollowingEnd', () => {
     expect(nextFollowingEnd({ ...following, programmatic: true, geometry: wellAway })).toBe(true)
   })
 
-  it('treats an unmarked offset away from the end as the reader leaving', () => {
-    expect(nextFollowingEnd({ ...following, geometry: wellAway })).toBe(false)
+  it('keeps following through unmarked passive layout offsets', () => {
+    expect(nextFollowingEnd({ ...following, geometry: wellAway })).toBe(true)
   })
 
   it.each([0, NATIVE_CHAT_FOLLOW_REARM_PX, 400])(
@@ -98,7 +99,7 @@ describe('nextFollowingEnd', () => {
   it('lets the reader park just inside the near-bottom band', () => {
     expect(NATIVE_CHAT_FOLLOW_REARM_PX).toBeLessThan(NATIVE_CHAT_BOTTOM_THRESHOLD_PX)
     const parked = parkedAbove(NATIVE_CHAT_BOTTOM_THRESHOLD_PX - 1)
-    expect(nextFollowingEnd({ ...following, geometry: parked })).toBe(false)
+    expect(nextFollowingEnd({ ...following, following: false, geometry: parked })).toBe(false)
     expect(isNearBottom(parked)).toBe(true)
     expect(shouldShowJumpToLatest(false, parked)).toBe(false)
   })
@@ -141,4 +142,18 @@ describe('nextFollowingEnd', () => {
   it('holds follow through rounding noise at the end', () => {
     expect(nextFollowingEnd({ ...following, geometry: parkedAbove(1.5) })).toBe(true)
   })
+})
+
+it('only detaches for gestures that can move away from the tail', () => {
+  expect(readerGestureLeavesEnd({ kind: 'wheel', deltaY: -10, zoom: false }, atBottom)).toBe(true)
+  expect(readerGestureLeavesEnd({ kind: 'wheel', deltaY: 10, zoom: false }, atBottom)).toBe(false)
+  expect(readerGestureLeavesEnd({ kind: 'wheel', deltaY: -10, zoom: true }, atBottom)).toBe(false)
+  expect(readerGestureLeavesEnd({ kind: 'key', key: 'Home' }, atBottom)).toBe(true)
+  expect(readerGestureLeavesEnd({ kind: 'key', key: 'End' }, atBottom)).toBe(false)
+  expect(readerGestureLeavesEnd({ kind: 'scrollbar-press' }, atBottom)).toBe(true)
+  expect(readerGestureLeavesEnd({ kind: 'touch-drag' }, parkedAbove(60))).toBe(true)
+  expect(readerGestureLeavesEnd({ kind: 'touch-drag' }, atBottom)).toBe(false)
+  expect(readerGestureLeavesEnd({ kind: 'wheel', deltaY: -10, zoom: false }, noOverflow)).toBe(
+    false
+  )
 })

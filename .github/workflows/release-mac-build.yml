@@ -13,6 +13,11 @@ on:
         description: release-cut workflow run that requested this build
         required: true
         type: string
+      javascript_source_sha:
+        description: Commit of the shared JavaScript artifact; empty keeps the legacy build
+        required: false
+        default: ''
+        type: string
 
 permissions:
   # actions: read downloads the orcad template the parent release-cut run built.
@@ -143,13 +148,29 @@ jobs:
           run-id: ${{ inputs.release_run_id }}
           github-token: ${{ github.token }}
 
+      - name: Download release JavaScript from the release run
+        if: inputs.javascript_source_sha != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: release-javascript
+          path: .build/release-javascript
+          run-id: ${{ inputs.release_run_id }}
+          github-token: ${{ github.token }}
+
       - name: Build app
-        run: pnpm build:release
+        run: |
+          if [ -n "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" ]; then
+            node config/scripts/release-javascript-artifact.mjs restore
+            pnpm run build:release:host
+          else
+            pnpm run build:release
+          fi
         env:
           # Why: Vite's web build crossed Node's default old-space ceiling on
           # the macOS release runner, leaving v1.4.2-rc.8 as an incomplete draft.
           NODE_OPTIONS: --max-old-space-size=4096
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
+          ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ inputs.javascript_source_sha }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
           # Fail the release rather than ship a relay that cannot launch outside

@@ -4,6 +4,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { Switch } from '../ui/switch'
+import { SettingsDisabledControlTooltip } from './SettingsDisabledControlTooltip'
 import { normalizeColor } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -275,6 +276,9 @@ type NumberFieldProps = {
   placeholder?: string
   suffix?: string
   className?: string
+  disabled?: boolean
+  /** Hover explanation shown only while the field is disabled. */
+  disabledReason?: string
 }
 
 export function ColorField({
@@ -323,7 +327,9 @@ export function NumberField({
   onClear,
   placeholder,
   suffix,
-  className
+  className,
+  disabled = false,
+  disabledReason
 }: NumberFieldProps): React.JSX.Element {
   const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
   const [prevValue, setPrevValue] = useState(value)
@@ -335,6 +341,9 @@ export function NumberField({
   }
 
   const commit = (): void => {
+    if (disabled) {
+      return
+    }
     const trimmed = draft.trim()
     if (trimmed === '') {
       if (onClear) {
@@ -374,23 +383,26 @@ export function NumberField({
       }
       control={
         <div className="flex items-center gap-2">
-          <Input
-            type="number"
-            min={min}
-            max={max}
-            step={step}
-            aria-label={label}
-            placeholder={placeholder}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                commit()
-              }
-            }}
-            className="number-input-clean w-24 tabular-nums"
-          />
+          <SettingsDisabledControlTooltip reason={disabled ? disabledReason : undefined}>
+            <Input
+              type="number"
+              disabled={disabled}
+              min={min}
+              max={max}
+              step={step}
+              aria-label={label}
+              placeholder={placeholder}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  commit()
+                }
+              }}
+              className="number-input-clean w-24 tabular-nums"
+            />
+          </SettingsDisabledControlTooltip>
           {suffix ? <span className="shrink-0 text-xs text-muted-foreground">{suffix}</span> : null}
         </div>
       }

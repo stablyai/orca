@@ -12,6 +12,7 @@ import {
 import { isAdmissibleDirectSshAuthority } from '../../../shared/ssh-retained-payload-admission'
 import { isCurrentSshProviderAuthority } from '../../ssh/ssh-provider-authority'
 import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
+import { visibleRepos } from '../../ssh/orcad-retained-source'
 
 function hasValidCatalogSshAuthority(
   args: ListReposForExecutionHostArgs
@@ -62,7 +63,7 @@ export async function listReposForExecutionHost(
     if ('expectedAuthority' in args) {
       return rejected('rejected')
     }
-    const repos = getConsistentRepoCatalogForHost(store.getRepos(), parsedHost)
+    const repos = getConsistentRepoCatalogForHost(visibleRepos(store), parsedHost)
     if (!repos) {
       return rejected('rejected')
     }
@@ -86,7 +87,7 @@ export async function listReposForExecutionHost(
   if (!provider) {
     return rejected('unavailable')
   }
-  const matchingRepos = getConsistentRepoCatalogForHost(store.getRepos(), parsedHost)
+  const matchingRepos = getConsistentRepoCatalogForHost(visibleRepos(store), parsedHost)
   if (!matchingRepos) {
     return rejected('rejected')
   }

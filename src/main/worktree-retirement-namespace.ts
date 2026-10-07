@@ -50,7 +50,7 @@ export function retirementNamespaceKey(hostIdentity: string, probePath: string):
 
 /** Rewrites a key's host identity, keeping its workspace-path half. Returns null when the key is
  *  not under `fromIdentity` or the swap is a no-op. */
-function swapRetirementNamespaceHost(
+export function swapRetirementNamespaceHost(
   namespaceKey: string,
   fromIdentity: string,
   toIdentity: string

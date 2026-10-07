@@ -1,3 +1,4 @@
+import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { JSONContent } from '@tiptap/react'
 // The composer's in-progress draft text and its editor document, keyed by the same stable pane
 // scope as image attachments. The composer unmounts when the pane toggles back to the hosted
@@ -86,4 +87,36 @@ export function writeNativeChatDraftDocument(
     return
   }
   updateNativeChatComposerDraft(scopeKey, { text, document }, 'deferred')
+}
+
+export function readNativeChatAttachmentCache(
+  scopeKey: string
+): NativeChatComposerImageAttachment[] {
+  return readNativeChatComposerDraft(scopeKey).images.map((image) => ({ ...image }))
+}
+
+/** Adds settled images after the ones the draft holds now, durably at once: when Stop gives images
+ *  back, the copy they came from goes right after this. Only an image the user attaches
+ *  (`fromUser`) takes the place of a placeholder with its file name, as a re-pick does. */
+export function appendNativeChatAttachmentCache(
+  scopeKey: string,
+  appended: readonly NativeChatComposerImageAttachment[],
+  options?: { fromUser?: boolean }
+): void {
+  if (appended.length === 0) {
+    return
+  }
+  // Preview URLs can retain the full clipboard Blob, so only the path is kept.
+  appendToNativeChatComposerDraft(scopeKey, {
+    images: appended.map(({ id, path, connectionId }) => ({
+      id,
+      path,
+      ...(connectionId ? { connectionId } : {})
+    })),
+    ...(options?.fromUser ? { fromUser: true } : {})
+  })
+}
+
+export function clearNativeChatAttachmentCacheForTests(): void {
+  clearNativeChatComposerDraftsForTests()
 }

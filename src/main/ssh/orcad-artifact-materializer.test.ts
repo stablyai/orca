@@ -7,11 +7,13 @@ import {
   renameSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { pruneOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
 import { z } from 'zod'
 import {
   NODE_RUNTIME_ASSETS,
@@ -133,6 +135,29 @@ function rewriteManifest(
 }
 
 describe('assembleOrcadArtifact', () => {
+  it('reuses the same version from cache after retention evicts other versions', async () => {
+    const fixture = createTemplate()
+    const first = await assembleOrcadArtifact({ ...fixture, target: TARGET })
+    const entry = statSync(join(first, 'orcad.js'))
+    // Older versions of the same target, used before this one.
+    const older = [1, 2, 3].map((age) => {
+      const dir = join(fixture.cacheRoot, TARGET, `0.0.${age}+old`)
+      write(join(dir, 'orcad.js'), 'old')
+      const at = new Date(Date.now() - age * 60_000)
+      utimesSync(dir, at, at)
+      return dir
+    })
+    const removed = await pruneOrcadArtifactCache(fixture.cacheRoot, {
+      inUseVersions: new Set([basename(first)])
+    })
+
+    expect(removed).toEqual([older[2]])
+    const second = await assembleOrcadArtifact({ ...fixture, target: TARGET })
+    expect(second).toBe(first)
+    // A verified hit: the same files, not a re-copy.
+    expect(statSync(join(second, 'orcad.js')).ino).toBe(entry.ino)
+  })
+
   it.skipIf(process.platform === 'win32')(
     'restores executable modes from a template copied without them',
     async () => {
@@ -163,6 +188,10 @@ describe('assembleOrcadArtifact', () => {
     expect(
       readFileSync(join(artifactDir, 'node_modules/node-pty/build/Release/pty.node'), 'utf8')
     ).toBe(`${target}:node_modules/node-pty/build/Release/pty.node`)
+    // The host-side preflight hashes it the same way, so managed orcad can run it.
+    expect(await readOrcadArtifactIdentity(artifactDir)).toBe(
+      readFileSync(join(artifactDir, ORCAD_VERSION_FILENAME), 'utf8').trim()
+    )
   })
 
   it('refuses a compat slot that names the default runtime', async () => {

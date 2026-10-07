@@ -49,6 +49,8 @@ export function useFeedbackImageDrop(
       return
     }
     event.preventDefault()
+    // Keep accepted web drags from reaching the unclaimed-file guard.
+    event.stopPropagation()
     event.dataTransfer.dropEffect = 'copy'
   }, [])
 

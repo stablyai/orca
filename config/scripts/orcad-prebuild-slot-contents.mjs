@@ -1,5 +1,6 @@
 /**
- * What goes into one orcad node-pty prebuild slot, and the manifest that records it.
+ * What goes into one orcad node-pty prebuild slot (plus a compat slot's own addons), and the
+ * manifest that records it.
  *
  * The manifest is the loader's contract (src/main/orcad/node-pty-prebuilt-slot.ts): per-slot
  * N-API level, libc, the highest glibc symbol version the binaries need, and a sha256 per
@@ -32,6 +33,23 @@ const NODE_API_EXPORTS = new Set(['node_api_module_get_api_version_v1'])
 export const COMPAT_SLOTS = Object.freeze({
   'linux-x64-glibc217': Object.freeze({ platform: 'linux', arch: 'x64', libc: 'glibc' })
 })
+
+/**
+ * Native addons a compat slot builds beside node-pty, by slot-relative path, mapped to where an
+ * orcad slot ships them. A compat target ships no native file without a compat build.
+ */
+export const COMPAT_SLOT_ADDONS = Object.freeze({
+  'parcel-watcher/watcher.node': 'node_modules/@parcel/watcher/watcher.node'
+})
+
+/**
+ * The native files of a compat target with no compat build behind them: each would be the base
+ * target's binary, built for a newer glibc and libstdc++ than the compat host has.
+ * `compatSources` maps orcad slot paths to the compat slot files that fill them.
+ */
+export function findCompatAddonGaps(targetFilenames, compatSources) {
+  return targetFilenames.filter((file) => file.endsWith('.node') && !compatSources.has(file))
+}
 
 export function isCompatSlot(slot) {
   return Object.hasOwn(COMPAT_SLOTS, slot)
@@ -216,6 +234,13 @@ export function findSlotProblems(manifest, prebuildsDir, requiredSlots) {
     if (!entry) {
       problems.push(`${slot}: not built`)
       continue
+    }
+    if (isCompatSlot(slot)) {
+      for (const addon of Object.keys(COMPAT_SLOT_ADDONS)) {
+        if (!Object.hasOwn(entry.files ?? {}, addon)) {
+          problems.push(`${slot}/${addon}: not built`)
+        }
+      }
     }
     for (const [file, expected] of Object.entries(entry.files ?? {})) {
       const path = join(prebuildsDir, slot, ...file.split('/'))

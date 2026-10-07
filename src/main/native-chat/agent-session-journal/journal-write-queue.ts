@@ -12,14 +12,13 @@ export type JournalWriteResult<T> = T extends PromiseLike<unknown> ? never : T
 export type JournalWriteBody<T> = () => JournalWriteResult<T>
 
 /**
- * A write has landed in the fold when its call returns, except during an owed import, when it
- * lands in queue order.
+ * A write has landed in the fold when its call returns, unless it was issued from inside another
+ * write or behind one still waiting in line.
  *
- * A write finds the queue idle unless work is owed, a write is running, or writes wait in line;
- * then it runs before `serialize` returns. Every write body is synchronous (`JournalWriteBody`
- * refuses a promise), so it has committed by then. Otherwise it joins the line: behind the owed
- * import it pays first, or behind the running write it was issued from, never nested inside it.
- * Admission is checked at ENQUEUE and is permanent.
+ * A write finds the queue idle unless a write is running or writes wait in line; then it runs
+ * before `serialize` returns. Every write body is synchronous (`JournalWriteBody` refuses a
+ * promise), so it has committed by then. Otherwise it joins the line behind the writes ahead of
+ * it, never nested inside the running one. Admission is checked at ENQUEUE and is permanent.
  */
 export class JournalWriteQueue {
   /** Settles once every write admitted so far has, whatever its outcome. */
@@ -28,8 +27,6 @@ export class JournalWriteQueue {
   private waiting = 0
   private running = false
   private closed = false
-  /** Runs before the next write, and stays owed until it succeeds. */
-  private owed: (() => Promise<void>) | null = null
 
   constructor(private readonly sessionId: string) {}
 
@@ -41,19 +38,17 @@ export class JournalWriteQueue {
     if (this.closed) {
       return Promise.reject(this.closedError())
     }
-    return this.owed !== null || this.lineBusy
-      ? this.join(run, this.owed !== null)
-      : this.runNow(run)
+    return this.lineBusy ? this.join(run) : this.runNow(run)
   }
 
   /** Runs `read` after every write admitted before it, whatever each one's outcome, and ahead of any
-   *  admitted after: at once when none waits. Owed work is not paid for a read. A closed queue
-   *  refuses it, as it refuses a write: its fold may be replaced. */
+   *  admitted after: at once when none waits. A closed queue refuses it, as it refuses a write: its
+   *  fold may be replaced. */
   readInOrder<T>(read: () => T): Promise<T> {
     if (this.closed) {
       return Promise.reject(this.closedError())
     }
-    return this.lineBusy ? this.join(read, false) : this.runNow(read)
+    return this.lineBusy ? this.join(read) : this.runNow(read)
   }
 
   private get lineBusy(): boolean {
@@ -65,22 +60,6 @@ export class JournalWriteQueue {
       'journal_closed',
       `agent-session journal for ${this.sessionId} is closed`
     )
-  }
-
-  owe(work: () => Promise<void>): void {
-    this.owed = work
-  }
-
-  get owing(): boolean {
-    return this.owed !== null
-  }
-
-  private payOwed = async (): Promise<void> => {
-    const owed = this.owed
-    if (owed) {
-      await owed()
-      this.owed = null
-    }
   }
 
   /** Resolves once every write admitted so far has settled, whatever its outcome. */
@@ -107,8 +86,8 @@ export class JournalWriteQueue {
     return result
   }
 
-  private join<T>(run: () => T, paysOwed: boolean): Promise<T> {
-    const started = paysOwed ? this.writes.then(this.payOwed).then(run) : this.writes.then(run)
+  private join<T>(run: () => T): Promise<T> {
+    const started = this.writes.then(run)
     this.writes = started.catch(() => undefined)
     this.waiting++
     const settle = (): void => {

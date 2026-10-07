@@ -153,6 +153,10 @@ export function isCompatServerTarget(target: string): target is CompatServerTarg
   return COMPAT_SERVER_TARGETS.some((known) => known === target)
 }
 
+export function isNodeRuntimeTarget(target: string): target is NodeRuntimeTarget {
+  return isCompatServerTarget(target) || SERVER_TARGETS.some((known) => known === target)
+}
+
 /** The pinned asset for a known default or compat target. */
 export function pinnedNodeRuntimeAsset(target: NodeRuntimeTarget): NodeRuntimeAsset {
   return isCompatServerTarget(target)

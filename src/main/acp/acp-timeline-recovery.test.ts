@@ -33,24 +33,25 @@ describe('ACP reviewed traffic and recovery', () => {
   })
 
   it.each([undefined, null])(
-    'accepts an empty plan request and replies with the valid approval shape (%s)',
+    'accepts an empty plan request: placeholder plan row, answered at once without approving (%s)',
     async (planContent) => {
       const f = await openAcpFixtureRig()
       for (const method of ['_x.ai/exit_plan_mode', 'x.ai/exit_plan_mode']) {
-        const presentation = f
+        const translated = f
           .lane()
-          .request(
-            method,
-            { sessionId: 'session-1', toolCallId: 'plan', planContent },
-            1
-          ).presentation
-        expect(presentation?.body).toMatchObject({
-          kind: 'approval',
-          subject: { kind: 'plan', text: 'The agent exited plan mode without writing a plan.' }
-        })
-        expect(presentation?.reply({ kind: 'option', optionId: 'approved' })).toEqual({
-          outcome: 'approved'
-        })
+          .request(method, { sessionId: 'session-1', toolCallId: 'plan', planContent }, 1)
+        expect(translated.presentation).toBeUndefined()
+        expect(translated.events).toMatchObject([
+          {
+            type: 'item.update',
+            body: {
+              kind: 'status',
+              presentation: 'plan-document',
+              text: 'The agent exited plan mode without writing a plan.'
+            }
+          }
+        ])
+        expect(translated.settled?.reply).toMatchObject({ outcome: 'abandoned' })
       }
     }
   )

@@ -63,7 +63,8 @@ export async function cancelClaudeStructuredTurn(input: {
   const timeoutMs = Math.min(input.timeoutMs ?? CLAUDE_STOP_GRACE_MS, CLAUDE_STOP_GRACE_MS)
   const session = requireSession(sessions, request.sessionId)
   const acquisitionGeneration = session.acquisitionGeneration
-  // Before startup lands nothing was written, so there is nothing to interrupt.
+  // A CLI still starting answers no interrupt: Stop ends its child next (`stopEndsSession`), and
+  // that end settles every message it was handed and never echoed as stopped.
   if (request.prompt || session.startup.state === 'pending') {
     return { cancelled: false }
   }

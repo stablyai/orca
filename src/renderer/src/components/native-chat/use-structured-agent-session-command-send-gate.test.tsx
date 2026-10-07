@@ -59,7 +59,7 @@ beforeEach(() => {
 })
 
 /** Starts `/compact` and leaves its reply outstanding, then sends a message. */
-function sendDuringCommand(): boolean {
+function sendDuringCommand(): boolean | 'queued' {
   mocks.call.mockImplementation((_target: unknown, method: string) =>
     method === 'agentSession.conversationCommand' ? new Promise(() => {}) : Promise.resolve(null)
   )

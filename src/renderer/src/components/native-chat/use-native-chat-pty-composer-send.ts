@@ -39,6 +39,7 @@ export function useNativeChatPtyComposerSend(args: {
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   onSlashCommand?: (command: string, output?: string) => void
   answerCommandLocally?: NativeChatLocalCommandAnswer
+  onSubmitted?: () => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   terminalTabId: string
   trackPendingSend: NativeChatSendLifecycle['trackPendingSend']
@@ -47,7 +48,7 @@ export function useNativeChatPtyComposerSend(args: {
   setCaret: Dispatch<SetStateAction<number>>
   clearSkillOrigin: () => void
   clearImageAttachments: () => void
-  setNotice: Dispatch<SetStateAction<string | null>>
+  setNotice: (notice: string | null) => void
 }): () => void {
   return useCallback(() => {
     const text = args.draft
@@ -129,6 +130,7 @@ export function useNativeChatPtyComposerSend(args: {
       agent: args.agent,
       runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
     })
+    args.onSubmitted?.()
     args.setHistory((previous) => pushHistory(previous, text))
     args.setDraft('')
     args.setCaret(0)

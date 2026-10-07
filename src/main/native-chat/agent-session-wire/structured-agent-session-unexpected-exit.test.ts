@@ -171,6 +171,7 @@ describe('provider-exit settlement', () => {
       journal: {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
         itemBody: () => null,
+        itemFence: () => undefined,
         snapshot: () => ({ items }),
         appendLifecycleBatch,
         markPendingSubmissionsUnknown: vi.fn(async () => [])
@@ -290,6 +291,7 @@ describe('provider-exit settlement', () => {
         journal: {
           cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
           itemBody: () => null,
+          itemFence: () => undefined,
           snapshot: () => ({ items }),
           appendLifecycleBatch,
           markPendingSubmissionsUnknown: vi.fn(async () => []),
@@ -349,6 +351,7 @@ describe('provider-exit settlement', () => {
       journal: {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
         itemBody: () => null,
+        itemFence: () => undefined,
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
         markPendingSubmissionsUnknown,
@@ -402,6 +405,7 @@ describe('provider-exit settlement', () => {
       journal: {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
         itemBody: () => null,
+        itemFence: () => undefined,
         markPendingSubmissionsUnknown: vi.fn(async () => []),
         rejectPendingSubmissions: vi.fn(async () => []),
         snapshot: () => ({

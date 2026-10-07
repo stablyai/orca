@@ -7,6 +7,7 @@ import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
+import { AgentLaunchPaneNoticePortal } from './AgentLaunchPaneNotice'
 import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
@@ -23,6 +24,8 @@ import {
   TerminalPaneSshReconnectPortals
 } from './TerminalPaneRuntimePortals'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
+import { useAppStore } from '@/store'
+import { isTerminalPaneOnClient } from './terminal-pane-client-host'
 
 export function TerminalPaneSurface({
   controller
@@ -109,9 +112,11 @@ export function TerminalPaneSurface({
     terminalLinkActionRequest,
     titleUsesLightSurface,
     visibleQuickCommandHosts,
+    visibleLaunchRefusal,
     visibleTerminalError,
     worktreeId
   } = controller
+  const paneOnClient = useAppStore((state) => isTerminalPaneOnClient(state, worktreeId))
 
   return (
     <>
@@ -161,12 +166,19 @@ export function TerminalPaneSurface({
         }}
       />
       <TerminalPaneCodexRestartPortals controller={controller} />
+      <AgentLaunchPaneNoticePortal
+        refusal={visibleLaunchRefusal}
+        isActive={isActive}
+        pane={activePane}
+        tabId={tabId}
+      />
       {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
           toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
       {visibleTerminalError && isActive && !showSshReconnectOverlay && activePane
         ? createPortal(
             <TerminalErrorToast
               error={visibleTerminalError}
+              paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
               onRetry={

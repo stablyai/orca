@@ -168,7 +168,7 @@ describe('NativeChatSubagentRun', () => {
     )
 
     const row = screen.getByRole('button')
-    expect(row).toHaveTextContent('no recent update')
+    expect(row).toHaveTextContent('status unavailable')
     // `unverifiable` with no terminal timestamp has no known run length, so the
     // clock would measure to `now` and report the time since we lost sight of
     // the child as how long it ran — on a row that is not even counting.
@@ -189,7 +189,7 @@ describe('NativeChatSubagentRun', () => {
     )
 
     const row = screen.getByRole('button')
-    expect(row).toHaveTextContent('1 with no recent update')
+    expect(row).toHaveTextContent('1 with status unavailable')
     expect(row.textContent).not.toContain('·')
   })
 

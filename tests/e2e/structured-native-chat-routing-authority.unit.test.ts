@@ -43,7 +43,6 @@ const placements = [
 const blockers: StructuredNativeChatBlocker[] = [
   'reused-terminal',
   'agent-without-structured-session',
-  'floating-workspace',
   'custom-start-directory',
   'remote-execution-host',
   'project-runtime',

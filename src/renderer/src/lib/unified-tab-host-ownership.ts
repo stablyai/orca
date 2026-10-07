@@ -11,6 +11,8 @@ import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import { dedupePaletteWorktrees } from './palette-repo-resolution'
+import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 export function getPaletteOwnershipWorktreeIds(
   state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
@@ -40,15 +42,21 @@ export function findAmbiguousWorktreeIds(
 }
 
 export function getActiveExecutionHostIdForWorktree(
-  state: {
+  state: WorktreeRuntimeOwnerState & {
     activeWorktreeId: string | null
     activeWorkspaceExecutionHostId?: ExecutionHostId | null
   },
   worktreeId: string
 ): ExecutionHostId | undefined {
-  return state.activeWorktreeId === worktreeId
-    ? (state.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID)
-    : undefined
+  if (state.activeWorktreeId !== worktreeId) {
+    return undefined
+  }
+  // Why: most activations pass no host; a bare 'local' there stamped SSH worktrees' tabs as local.
+  return (
+    state.activeWorkspaceExecutionHostId ??
+    getResolvedExecutionHostIdForWorktree(state, worktreeId) ??
+    LOCAL_EXECUTION_HOST_ID
+  )
 }
 
 export function isUnifiedTabOwnedByWorktree(
@@ -75,20 +83,23 @@ export function isOpenFileOwnedByWorktree(
   if (file.worktreeId !== worktree.id) {
     return false
   }
+  return isExecutionHostAliasForWorktree(getOpenFileExecutionHostId(file), worktree)
+}
+
+export function getOpenFileExecutionHostId(
+  file: Pick<OpenFile, 'externalSshTargetId' | 'operationProvenance' | 'runtimeEnvironmentId'>
+): ExecutionHostId {
   const operationHost = file.operationProvenance?.generation.route.executionHostId
   if (operationHost) {
-    return isExecutionHostAliasForWorktree(operationHost, worktree)
+    return operationHost
   }
   if (file.externalSshTargetId) {
-    return isExecutionHostAliasForWorktree(toSshExecutionHostId(file.externalSshTargetId), worktree)
+    return toSshExecutionHostId(file.externalSshTargetId)
   }
   if (file.runtimeEnvironmentId) {
-    return isExecutionHostAliasForWorktree(
-      toRuntimeExecutionHostId(file.runtimeEnvironmentId),
-      worktree
-    )
+    return toRuntimeExecutionHostId(file.runtimeEnvironmentId)
   }
-  return isExecutionHostAliasForWorktree(LOCAL_EXECUTION_HOST_ID, worktree)
+  return LOCAL_EXECUTION_HOST_ID
 }
 
 export function hasOpenFileExecutionHostEvidence(

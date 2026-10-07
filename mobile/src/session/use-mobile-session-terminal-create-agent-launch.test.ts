@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch-runtime-capability'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -25,6 +26,7 @@ import { releaseTerminalCreateLock } from './terminal-create-lock'
 import { useMobileSessionTerminalCreateActions } from './use-mobile-session-terminal-create-actions'
 
 vi.mock('../platform/haptics', () => ({ triggerSuccess: vi.fn(), triggerError: vi.fn() }))
+const { triggerError } = await import('../platform/haptics')
 
 const LAUNCH_CAPABILITIES = [
   'agent.launch.v2',
@@ -198,6 +200,39 @@ describe('the + menu', () => {
     expect(state.scheduleDelayedAction).not.toHaveBeenCalled()
   })
 
+  it('asks a host that places tabs to put the new one after the tab the user is on', async () => {
+    const { client, sendRequest } = scriptedClient(
+      launchReply({ kind: 'terminal', handle: 'term_7' })
+    )
+    const state = scope(client, [...LAUNCH_CAPABILITIES, AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY])
+    state.sessionTabsRef.current = [
+      {
+        type: 'terminal',
+        id: 'existing-tab',
+        parentTabId: 'host-tab-1',
+        leafId: 'leaf-1',
+        title: 'Terminal',
+        terminal: 'term_1',
+        isActive: true
+      }
+    ]
+
+    await create_(state, 'claude')
+
+    // A terminal pane is listed under its parent tab; that is the id the host places by.
+    expect(launchParams(sendRequest)).toMatchObject({ placement: { afterTabId: 'host-tab-1' } })
+  })
+
+  it('sends no placement to a host that would not read it', async () => {
+    const { client, sendRequest } = scriptedClient(
+      launchReply({ kind: 'terminal', handle: 'term_7' })
+    )
+
+    await create_(scope(client), 'claude')
+
+    expect(launchParams(sendRequest)).not.toHaveProperty('placement')
+  })
+
   it('waits for a chat by its session id, not a predicted tab id', async () => {
     const { client } = scriptedClient(
       launchReply({ kind: 'structured', sessionId: 'claude_s1', handle: 'h' })
@@ -321,6 +356,19 @@ describe('the + menu', () => {
     await create_(scope(client), 'aider')
 
     expect(methods(sendRequest)).toEqual(['agent.launchReplay', 'session.tabs.createTerminal'])
+  })
+
+  it('says nothing when a user closed the tab the launch opened: the tab going is the answer', async () => {
+    const { client } = scriptedClient(refusal('agent_launch_tab_closed'))
+    const state = scope(client)
+    vi.mocked(triggerError).mockClear()
+
+    await create_(state, 'claude')
+
+    expect(state.showToast).not.toHaveBeenCalled()
+    expect(state.setCreateError).not.toHaveBeenCalledWith(expect.stringMatching(/./))
+    expect(triggerError).not.toHaveBeenCalled()
+    expect(state.pendingSelectionRef.current).toBeNull()
   })
 
   it("shows the host's refusal even when the session already has tabs", async () => {

@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionStatusObserverOptions } from './structured-agent-session-status-observation'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
@@ -51,6 +52,8 @@ export type StructuredAgentSessionProviderChildIdentity = {
 export type StructuredAgentSessionChildClose = {
   /** The first stop's, which the child's end keeps however many asks join it. */
   readonly cause: StructuredAgentSessionStopCause
+  /** Asked for by quit, whose leftovers the next open settles as a crash's. */
+  readonly quit?: true
   readonly reason: string | null
   /** The Stop event that stop wrote, folded before the work it ends is settled, with the settle a
    *  person's close that named no turn opens; a repeated ask reopens it. */
@@ -137,11 +140,15 @@ export type StructuredAgentSessionHostDeps = {
   resolveLaunchEnv?: (
     provider: AgentSessionRecord['provider']
   ) => Promise<Record<string, string> | undefined> | Record<string, string> | undefined
+  /** Execution-host path for a newly founded floating session. */
+  resolveWorkspacePath?: (workspaceId: string) => Promise<string>
   now?: () => number
   /** The idle sweep's period and window. Tests drive these; production takes the defaults. */
   idleSweep?: { intervalMs?: number; idleMs?: number }
   /** Whether an orchestration dispatch still owns this session's worker; absent answers no. */
   hasOpenDispatch?: (record: AgentSessionRecord) => boolean
+  /** A chat tab left the screen: closed, or its workspace removed. Advisory; a throw is logged. */
+  onSessionTabHidden?: (sessionId: string) => void
   /** Where every failure the host carries on past is reported. Required: a host without one would
    *  drop exactly the failures nobody sees in the UI. */
   logger: StructuredAgentSessionLogger
@@ -149,7 +156,7 @@ export type StructuredAgentSessionHostDeps = {
    *  already knew (restore, an arriving subscriber) rather than a fresh journal edge. */
   onSessionStatusChanged?: (
     summary: AgentSessionStatusSummary,
-    options: { replay: boolean }
+    options: StructuredAgentSessionStatusObserverOptions
   ) => void
   /** The agent-status store every held session's projection is written to and, on close,
    *  removed from. Both production hosts pass one — the desktop and headless `orcad`; absent,

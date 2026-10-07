@@ -3,10 +3,6 @@
 
 import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import {
-  readAgentSessionMessageSource,
-  type AgentSessionMessageSource
-} from '../../../shared/agent-session-message-source'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
 
@@ -31,7 +27,6 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
     carried_from: string | null
     queued_epoch: string | null
     queued_sequence: number | null
-    source_json: string | null
   }
   let body: AgentJournalMessageItem
   try {
@@ -70,19 +65,8 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
     queuedAt:
       record.queued_epoch !== null && typeof record.queued_sequence === 'number'
         ? { epoch: record.queued_epoch, sequence: record.queued_sequence }
-        : null,
-    source: storedSource(record.source_json)
+        : null
   }
-}
-
-function storedSource(json: string | null): AgentSessionMessageSource {
-  let stored: unknown = null
-  try {
-    stored = json === null ? null : JSON.parse(json)
-  } catch {
-    // An unreadable value is read as no value; the source reader decides what that means.
-  }
-  return readAgentSessionMessageSource(stored)
 }
 
 function storedRejection(json: string | null): UnreadAgentSessionFailureFact | null {

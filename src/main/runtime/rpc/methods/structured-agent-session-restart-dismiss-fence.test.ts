@@ -1,7 +1,6 @@
 // "Dismiss all" from the desktop prompt, through the context the desktop renderer really dispatches
-// with: a paired runtime client without the registered-agents capability. On a host whose agents it
-// all shows, the dismissal is the unscoped, fenced one; one that cannot show some agent leaves that
-// agent's offers alone.
+// with. On a host whose agents it all shows, the dismissal is the unscoped, fenced one; a desktop
+// from before registered agents, which cannot show some agent, leaves that agent's offers alone.
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -11,6 +10,7 @@ import {
   AgentSessionRecoveryCapsule
 } from '../../agent-session-recovery-capsule'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/claude-structured-agent-definition'
 import { CODEX_STRUCTURED_AGENT } from '../../../codex/codex-structured-agent-definition'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -30,6 +30,12 @@ const DESKTOP = {
   clientKind: 'runtime' as const,
   clientCapabilities: [...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES]
 }
+const OLDER_DESKTOP = {
+  ...DESKTOP,
+  clientCapabilities: DESKTOP.clientCapabilities.filter(
+    (capability) => capability !== STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+  )
+}
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a registry reads only the methods a declaration needs; these declare none.
 const NO_METHODS = {} as StructuredAgentSessionAdapter
@@ -41,7 +47,7 @@ const declaring = (definition: typeof CLAUDE_STRUCTURED_AGENT) => ({
   adapter: NO_METHODS
 })
 
-/** This build's two agents plus one the desktop does not render yet. */
+/** Claude and Codex plus one agent an older desktop does not render. */
 function withPilot(): StructuredAgentRegistry {
   return new StructuredAgentRegistry([
     declaring(CLAUDE_STRUCTURED_AGENT),
@@ -57,8 +63,8 @@ async function storedFence(root: string) {
   return dismissedAt ? { dismissedAt } : {}
 }
 
-async function dismissAllFromDesktop() {
-  return call('agentSession.restartResumableDismiss', {}, DESKTOP)
+async function dismissAllFromDesktop(client = DESKTOP) {
+  return call('agentSession.restartResumableDismiss', {}, client)
 }
 
 it('fences a dismissed offer against a late teardown write when the desktop sees every agent', async () => {
@@ -79,7 +85,7 @@ it('fences a dismissed offer against a late teardown write when the desktop sees
   })
 })
 
-it('leaves offers it was not shown when the host runs an agent the desktop cannot show', async () => {
+it('leaves offers it was not shown when the host runs an agent an older desktop cannot show', async () => {
   const { host, root, marker } = await interruptedRestart(
     undefined,
     undefined,
@@ -92,7 +98,10 @@ it('leaves offers it was not shown when the host runs an agent the desktop canno
   const unreadable = { ...marker!, sessionId: 'unreadable-session' }
   await capsule.record([unreadable], NOW)
 
-  expect(await dismissAllFromDesktop()).toMatchObject({ ok: true, result: { dismissed: 1 } })
+  expect(await dismissAllFromDesktop(OLDER_DESKTOP)).toMatchObject({
+    ok: true,
+    result: { dismissed: 1 }
+  })
 
   expect(await capsule.list(NOW)).toEqual([unreadable])
   // A scoped dismissal writes no fence: nothing it did not clear may be dropped later.

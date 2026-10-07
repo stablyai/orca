@@ -1,4 +1,4 @@
-import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-method-allowlist-agent-session'
+import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
 
 export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.list',
@@ -52,6 +52,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'files.readTerminalArtifactPreview',
   'files.resolveTerminalPath',
   'files.searchPaths',
+  'files.stat',
   'files.writeTerminalArtifact',
   'folderWorkspace.list',
   'git.abortMerge',
@@ -210,7 +211,6 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'session.tabs.list',
   'session.tabs.listAll',
   'session.tabs.move',
-  'session.tabs.setTabProps',
   'session.tabs.subscribe',
   'session.tabs.subscribeAll',
   'session.tabs.unsubscribe',

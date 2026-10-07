@@ -30,12 +30,14 @@ export type NativeChatTurnDiff = {
 export function nativeChatTurnDiffs(
   messages: readonly NativeChatMessage[],
   turnKeys: readonly (string | undefined)[],
-  subagentSectionsOf?: ReadonlyMap<string, readonly string[]>
+  subagentSectionsOf?: ReadonlyMap<string, readonly string[]>,
+  /** A turn only partly loaded, whose totals would read as the whole turn's. */
+  partialTurnKey?: string
 ): Map<string, NativeChatTurnDiff> {
   const turns = new Map<string, Map<string, NativeChatTurnDiffFile>>()
   for (const [index, message] of messages.entries()) {
     const turnKey = turnKeys[index]
-    if (!turnKey) {
+    if (!turnKey || turnKey === partialTurnKey) {
       continue
     }
     const sections = subagentSectionsOf?.get(message.id)

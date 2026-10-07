@@ -48,6 +48,7 @@ export const WORKTREE_HOST_UNRESOLVED_ERROR =
   "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
 
 export type FileContent = {
+  mediaUrl?: string
   csvPreview?: CsvFilePreview
   content: string
   isBinary: boolean

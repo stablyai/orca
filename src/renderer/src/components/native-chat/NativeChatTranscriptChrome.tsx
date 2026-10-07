@@ -15,6 +15,7 @@ import {
   releaseLocalImageSrcByKey
 } from '@/components/editor/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { chatImageAccess } from '@/lib/local-file-access'
 
@@ -119,6 +120,7 @@ function TranscriptImagePreview({
     TRANSCRIPT_IMAGE_ACCESS
   )
   const displaySrc = external && leaseActive ? source : localSrc
+  const copySrc = copyableNativeChatImageSrc(displaySrc)
   const label =
     block.alt?.trim() ||
     (block.path && isNativeChatPastedImagePath(block.path)
@@ -171,6 +173,7 @@ function TranscriptImagePreview({
         type="button"
         aria-label={`${viewImageLabel}: ${label}`}
         title={label}
+        data-native-chat-copy-image-src={copySrc}
         onClick={() => setOpen(true)}
         className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
@@ -183,7 +186,10 @@ function TranscriptImagePreview({
         />
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[90vh] max-w-[90vw] flex-col gap-3 border-border bg-background p-3 sm:max-w-4xl">
+        <DialogContent
+          onInteractOutside={keepPreviewOpenForChatMenu}
+          className="flex max-h-[90vh] max-w-[90vw] flex-col sm:max-w-4xl"
+        >
           <DialogTitle className="truncate text-sm">{label}</DialogTitle>
           <DialogDescription className="sr-only">
             {translate('components.native-chat.composer.imagePreview', 'Full-size image preview')}
@@ -193,6 +199,7 @@ function TranscriptImagePreview({
               <img
                 src={displaySrc}
                 alt={label}
+                data-native-chat-copy-image-src={copySrc}
                 onError={() => setDialogErrorSrc(displaySrc)}
                 className="max-h-[75vh] max-w-full object-contain"
               />

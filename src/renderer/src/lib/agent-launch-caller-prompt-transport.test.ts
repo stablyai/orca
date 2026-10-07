@@ -51,6 +51,20 @@ vi.mock('@/lib/agent-ready-wait', () => ({
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => []
 }))
+// The host starts an AI button's agent in the tab's pane and answers; the window then pastes.
+const callRuntimeRpc = vi.hoisted(() =>
+  vi.fn(async (_target: unknown, _method: string, params: Record<string, unknown>) => ({
+    outcome: { kind: 'terminal', handle: 'term_1', paneKey: params.paneKey },
+    worktreeId: 'wt-1',
+    receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'x' }
+  }))
+)
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc, RuntimeRpcCallError: Error }))
+
+/** What the window's own launch command carries; a launch started by the host queues none. */
+function commandCarries(text: string): boolean {
+  return queuedStartupCommand(store)?.includes(text) ?? false
+}
 
 const PROMPT = 'Explain the failing check and propose a fix.'
 
@@ -147,14 +161,18 @@ describe('agent launch caller prompt transport', () => {
       if (profile.args.prompt === undefined) {
         expect(result?.pasteDraftAfterLaunch).toBe(false)
         expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
-        expect(queuedStartupCommand(store)).not.toContain(PROMPT)
+        expect(commandCarries(PROMPT)).toBe(false)
         return
       }
       // quick-command is the only prompt-carrying call site that names no delivery mode, so its text
       // rides argv; every other one asks for draft or submit-after-ready and pastes.
       const ridesArgv = id === 'quick-command'
       expect(result?.pasteDraftAfterLaunch).toBe(!ridesArgv)
-      expect(queuedStartupCommand(store)?.includes(PROMPT)).toBe(ridesArgv)
+      expect(commandCarries(PROMPT)).toBe(ridesArgv)
+      // The host is never handed the text: the window pastes it, as main does.
+      for (const [, , params] of callRuntimeRpc.mock.calls) {
+        expect(params).not.toHaveProperty('prompt')
+      }
     }
   )
 
@@ -211,12 +229,15 @@ describe('agent launch caller prompt transport', () => {
     })
 
     expect(result?.pasteDraftAfterLaunch).toBe(row.transport === 'paste')
-    expect(queuedStartupCommand(store)?.includes(PROMPT)).toBe(row.transport === 'argv')
+    expect(commandCarries(PROMPT)).toBe(row.transport === 'argv')
     if (row.transport === 'paste') {
-      expect(mockPasteDraftWhenAgentReady.mock.calls[0]?.[0]).toMatchObject({
-        content: PROMPT,
-        submit: row.submits
-      })
+      // Through the host, the paste waits for the agent to be started in the tab.
+      await vi.waitFor(() =>
+        expect(mockPasteDraftWhenAgentReady.mock.calls[0]?.[0]).toMatchObject({
+          content: PROMPT,
+          submit: row.submits
+        })
+      )
     } else {
       expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
     }

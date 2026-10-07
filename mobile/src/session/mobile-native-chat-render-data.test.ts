@@ -133,6 +133,44 @@ describe('buildMobileNativeChatTransientData', () => {
     ])
   })
 
+  it('leaves out an unrecognised provider event with no words, but keeps failures and sentences', () => {
+    const frameRow = (
+      id: string,
+      kind: string,
+      text: string,
+      tone?: string
+    ): NativeChatMessage => ({
+      id,
+      role: 'system',
+      timestamp: 0,
+      source: 'transcript',
+      blocks: [
+        {
+          type: 'text',
+          text,
+          ...(tone ? { tone } : {}),
+          providerFrame: {
+            provider: 'codex',
+            kind,
+            payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+          }
+        }
+      ]
+    })
+    const folded = foldMobileNativeChatMessages([
+      frameRow('wordless', 'notification:future/event', 'codex · notification:future/event'),
+      frameRow(
+        'failure',
+        'notification:future/failure',
+        'codex · notification:future/failure',
+        'error'
+      ),
+      frameRow('sentence', 'notification:warning', 'Sandbox is degraded.'),
+      assistant('a1', 'done')
+    ])
+    expect(folded.map((message) => message.id)).toEqual(['failure', 'sentence', 'a1'])
+  })
+
   it('renders a lone image marker turn (no caption) as an image-ref block', () => {
     const data = build([user('u1', '[Image: source: /tmp/a.png]')], null, [])
     expect(data[0]?.blocks).toEqual([{ type: 'image-ref', path: '/tmp/a.png' }])
@@ -215,6 +253,37 @@ describe('foldMobileNativeChatMessages', () => {
     ])
 
     expect(folded.map((message) => message.id)).toEqual(['a1'])
+  })
+
+  // Mobile draws no task list, so a hidden plan update must not split the run around it.
+  it('keeps one tool run across a Codex plan update it does not draw', () => {
+    const plan: NativeChatMessage = {
+      id: 'plan',
+      role: 'system',
+      timestamp: 0,
+      source: 'transcript',
+      blocks: [
+        {
+          type: 'text',
+          text: 'codex · notification:turn/plan/updated',
+          providerFrame: {
+            provider: 'codex',
+            kind: 'notification:turn/plan/updated',
+            payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+          }
+        }
+      ]
+    }
+    const folded = foldMobileNativeChatMessages([
+      assistant('a1', 'Working.'),
+      toolCall('c1'),
+      toolResult('r1', 'ok'),
+      plan,
+      toolCall('c2'),
+      toolResult('r2', 'ok')
+    ])
+    expect(folded.map((message) => message.id)).toEqual(['a1'])
+    expect(folded[0]?.blocks.filter((block) => block.type === 'tool-call')).toHaveLength(2)
   })
 
   it('still folds a result whose call is inside the window', () => {

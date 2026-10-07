@@ -131,6 +131,42 @@ afterEach(async () => {
 })
 
 describe('ElectronServeBrowserProcess start-up', () => {
+  it('does not launch when startup is already cancelled', async () => {
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    started.push(processHandle)
+    await expect(processHandle.start(AbortSignal.abort())).rejects.toThrow()
+    expect(spawnProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('cancels readiness polling and cleans up the unready sidecar', async () => {
+    await setControl({ capabilities: [['runtime.v1']] })
+    const controller = new AbortController()
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    started.push(processHandle)
+    const starting = processHandle.start(controller.signal)
+    const outcome = starting.then(
+      () => ({ rejected: false }),
+      () => ({ rejected: true })
+    )
+    try {
+      await vi.waitFor(async () => expect(await sidecarRequests()).not.toHaveLength(0), {
+        timeout: 10_000
+      })
+    } finally {
+      controller.abort()
+      await outcome
+    }
+    expect(await outcome).toEqual({ rejected: true })
+    expect(processHandle.isAvailable()).toBe(false)
+    const userDataPath = (spawnSpec().args ?? [])
+      .find((arg) => arg.startsWith('--user-data-dir='))!
+      .slice('--user-data-dir='.length)
+    const metadata = JSON.parse(await readFile(join(userDataPath, 'orca-runtime.json'), 'utf8'))
+    await processHandle.stop()
+    expect(existsSync(userDataPath)).toBe(false)
+    expect(() => process.kill(metadata.pid, 0)).toThrow()
+  })
+
   it('launches the installed app in headless serve mode without orcad browser env', async () => {
     for (const key of AGENT_BROWSER_ENVIRONMENT_KEYS) {
       vi.stubEnv(key, `leaked-${key}`)

@@ -67,6 +67,8 @@ export async function runHeadlessAutomationDispatch(
     runId: run.id,
     status: 'dispatched',
     ...launchRunTarget,
+    // Kept here: a watched run's completion is written without it.
+    ...(precheckResult ? { precheckResult } : {}),
     error: null
   })
   // Observe the launched agent even while persistence is stalled or rejects its acknowledgement.

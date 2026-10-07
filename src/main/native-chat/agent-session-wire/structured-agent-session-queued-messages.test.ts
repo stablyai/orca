@@ -13,6 +13,7 @@ import {
 } from '../../../shared/agent-session-wire'
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
 import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import {
@@ -30,16 +31,16 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
+import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
 
 let rig: QueuedMessageTestRig
 let host: QueuedMessageTestRig['host']
 let store: QueuedMessageTestRig['store']
 let dispatch: QueuedMessageTestRig['dispatch']
-let awaitStarted: QueuedMessageTestRig['awaitStarted']
 
 beforeEach(async () => {
   rig = await createQueuedMessageTestRig()
-  ;({ host, store, dispatch, awaitStarted } = rig)
+  ;({ host, store, dispatch } = rig)
 })
 
 afterEach(() => rig.dispose())
@@ -263,7 +264,7 @@ describe('drain', () => {
 })
 
 describe('held drafts', () => {
-  it('a restart pauses the queue, reason restarted, and it survives a reopen; never auto-sent', async () => {
+  it('a restart holds the queue without ever showing a pause, across a reopen; never auto-sent', async () => {
     const working = await workingSend()
     const queued = await send('written before the restart', 'queue-if-active').result
     if (!queued.ok || !('queued' in queued.value)) {
@@ -272,11 +273,11 @@ describe('held drafts', () => {
     const draftId = queued.value.queued.messageId
     await rig.restartHostProcess()
     await settleAccepted(working, 'a')
-    // The queue is paused, not the card: it carries no hold of its own.
+    // The queue is held, not the card: it carries no hold of its own, and no pause is published.
     expect(await drafts()).toEqual([{ messageId: draftId, state: 'waiting' }])
-    expect(await rig.queuePause()).toEqual({ reason: 'restarted' })
+    expect(await rig.queuePause()).toBeNull()
     await host.close(SESSION, 'evict')
-    expect(await rig.queuePause()).toEqual({ reason: 'restarted' })
+    expect(await rig.queuePause()).toBeNull()
     await new Promise((resolve) => setTimeout(resolve, 250))
     expect(await rig.handoff(draftId)).toBeUndefined()
     expect(await sendNow(draftId)).toMatchObject({
@@ -285,7 +286,7 @@ describe('held drafts', () => {
     })
   })
 
-  it("a restart's pause also lifts when the user's next send starts its turn, exactly like a Stop's", async () => {
+  it("a restart's hold lifts when the user's next send starts its turn, exactly like a Stop's", async () => {
     const working = await workingSend()
     const queued = await send('written before the restart', 'queue-if-active').result
     if (!queued.ok || !('queued' in queued.value)) {
@@ -296,11 +297,11 @@ describe('held drafts', () => {
     await settleAccepted(working, 'a')
     await new Promise((resolve) => setTimeout(resolve, 250))
     expect(await rig.handoff(draftId)).toBeUndefined()
-    expect(await rig.queuePause()).toEqual({ reason: 'restarted' })
+    expect(await rig.queuePause()).toBeNull()
     // The user's send starting its turn lifts it, and adopts the row into this instance.
     const next = send('user starts a new turn')
     await next.result
-    expect(await rig.queuePause()).toEqual({ reason: 'restarted' })
+    expect(await rig.handoff(draftId)).toBeUndefined()
     await settleAccepted(next.id, 'b')
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
   })
@@ -377,29 +378,27 @@ describe('Stop and Delete', () => {
     expect(await drafts()).toHaveLength(2)
   })
 
-  /** A draft consumed into a submission the delivery loop has not handed over:
-   *  the loop is held at the child's start proof until the returned release. */
+  /** A draft consumed into a submission the delivery loop has not handed over: its delivery step
+   *  is held until the returned release, so a step asked for meanwhile runs ahead of the handover. */
   async function consumedButNotHandedOver(): Promise<{ draftId: string; release: () => void }> {
     const working = await workingSend()
     const queued = await send('stopped in flight', 'queue-if-active').result
     if (!queued.ok || !('queued' in queued.value)) {
       throw new Error('expected a queued receipt')
     }
-    let release: () => void = () => undefined
-    awaitStarted.mockImplementationOnce(
-      () => new Promise<undefined>((resolve) => (release = () => resolve(undefined)))
-    )
+    const { release } = holdDelivery()
     await settleAccepted(working, 'a')
     const draftId = queued.value.queued.messageId
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
     expect((await rig.handoff(draftId))?.handedOverAt).toBeUndefined()
-    return { draftId, release: () => release() }
+    return { draftId, release }
   }
 
   it("a Stop between consume and the agent's receipt sends the draft back to waiting, paused like the rest", async () => {
     const { draftId, release } = await consumedButNotHandedOver()
-    const stopped = await stop()
+    const stopping = stop()
     release()
+    const stopped = await stopping
     expect(stopped).toMatchObject({ ok: true })
     expect(await drafts()).toEqual([{ messageId: draftId, state: 'waiting' }])
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
@@ -448,17 +447,18 @@ describe('Stop and Delete', () => {
     await new Promise((resolve) => setTimeout(resolve, 250))
     expect(await rig.handoff(draftId)).toBeUndefined()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    // The host accepting the send is not yet a turn: the pause lifts when the
-    // provider accepts it, and the draft drains after that turn.
+    // The host accepting the send is not yet a turn: the pause lifts when the provider accepts
+    // it, and the draft drains after that turn. Meanwhile no pause is shown: it is on its way.
     const next = send('user starts a new turn')
     await next.result
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    expect(await rig.queuePause()).toBeNull()
+    expect(await rig.handoff(draftId)).toBeUndefined()
     await settleAccepted(next.id, 'b')
     expect(await rig.queuePause()).toBeNull()
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
   })
 
-  it('a host-internal send (orchestration mail, a restart continuation, a host-sent launch prompt) never lifts the pause', async () => {
+  it("a host-internal send (orchestration mail, a restart continuation, a host-sent launch prompt) lifts the pause once accepted, like a person's", async () => {
     const working = await workingSend()
     const queued = await send('paused by stop', 'queue-if-active').result
     if (!queued.ok || !('queued' in queued.value)) {
@@ -468,15 +468,15 @@ describe('Stop and Delete', () => {
     await stop()
     await settleAccepted(working, 'a')
     // All three reach the host as a send the client send RPC did not make.
-    const mail = send('coordinator mail', undefined, { internal: true })
+    const mail = send('coordinator mail')
     expect(await mail.result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
-    // The journal records who asked, which is what the pause reads.
-    expect(await rig.submission(mail.id)).toMatchObject({ origin: 'host' })
-    expect(await rig.submission(working)).toMatchObject({ origin: 'client' })
-    await settleAccepted(mail.id, 'b')
     await new Promise((resolve) => setTimeout(resolve, 250))
+    // Not shown while the mail awaits the agent, and nothing sends yet.
+    expect(await rig.queuePause()).toBeNull()
     expect(await rig.handoff(draftId)).toBeUndefined()
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    await settleAccepted(mail.id, 'b')
+    expect(await rig.queuePause()).toBeNull()
+    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
   })
 
   it("a user send lifts nothing from a 'send_failed' hold — that card waits for its explicit Send", async () => {
@@ -637,16 +637,15 @@ describe('/clear', () => {
     })
   })
 
-  it('carries who each card is from', async () => {
-    const notice = {
-      message: 'mail-notice',
-      mailbox: 'run:r1',
-      dispatchId: null,
-      messages: []
-    } as const
-    const source: AgentMessageSource = { kind: 'agent', senders: [], orchestration: notice }
+  it("carries who each card is from on its body, fingerprinted for the replacement's echo", async () => {
+    const party = { address: 'term_peer', terminalHandle: 'term_peer', orcaSessionId: null }
+    const from: AgentMessageSource = {
+      kind: 'agent',
+      senders: [{ party, name: 'Claude' }],
+      orchestration: { message: 'mail-notice', mailbox: 'run:r1', dispatchId: null, messages: [] }
+    }
     const working = await workingSend()
-    await send('pointer', 'queue-if-active', { internal: true, source }).result
+    await send('pointer', 'queue-if-active', { internal: true, from }).result
     await send('typed', 'queue-if-active').result
     await stop()
     await settleAccepted(working, 'a')
@@ -655,11 +654,13 @@ describe('/clear', () => {
     if (!replacementId) {
       throw new Error('expected a replacement session')
     }
-    const journal = host.collaboratorsForTests().sessions.get(replacementId)?.journal
-    expect(journal?.queuedMessages.list().map((row) => row.source)).toEqual([
-      source,
-      { kind: 'user' }
-    ])
+    const rows =
+      host.collaboratorsForTests().sessions.get(replacementId)?.journal.queuedMessages.list() ?? []
+    expect(rows.map((row) => row.body.from)).toEqual([from, undefined])
+    // The sender is outside the fingerprint, or the provider's echo of the text would not match.
+    expect(rows[0]?.fingerprint).toBe(
+      agentSessionSendBodyFingerprint(replacementId, hostTestMessage('pointer'))
+    )
   })
 
   it("the replacement's 'cleared' pause lifts through Resume exactly like a Stop's", async () => {

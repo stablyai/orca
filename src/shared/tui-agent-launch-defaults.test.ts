@@ -4,6 +4,8 @@ import {
   resolveTuiAgentLaunchArgs,
   tuiAgentArgsBypassPermissions
 } from './tui-agent-launch-defaults'
+import { applyAgentPermissionMode, YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
+import { isTuiAgent } from './tui-agent-config'
 
 describe('tuiAgentArgsBypassPermissions', () => {
   // The Agent Permissions toggle has no storage of its own: Yolo is the presence of the agent's
@@ -25,7 +27,16 @@ describe('tuiAgentArgsBypassPermissions', () => {
     ['codex', '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol', true],
     ['codex', '--model gpt-5.6-sol', false],
     ['codex', '--config "note=--dangerously-bypass-approvals-and-sandbox only as text"', false],
-    ['codex', '-- --dangerously-bypass-approvals-and-sandbox', false]
+    ['codex', '-- --dangerously-bypass-approvals-and-sandbox', false],
+    // Two-token bypass flags match as a token sequence, not one token.
+    ['grok', '--permission-mode bypassPermissions', true],
+    ['grok', '--model grok-4.7 --permission-mode bypassPermissions', true],
+    ['grok', '--permission-mode default', false],
+    ['grok', '--permission-mode', false],
+    ['grok', '--permission-mode "bypassPermissions now"', false],
+    ['grok', '-- --permission-mode bypassPermissions', false],
+    ['devin', '--permission-mode bypass --respect-workspace-trust false', true],
+    ['devin', '--permission-mode bypass', false]
   ] as const)('reads %s args %s as %s', (agent, args, expected) => {
     expect(tuiAgentArgsBypassPermissions(agent, args, 'posix')).toBe(expected)
   })
@@ -80,6 +91,19 @@ describe('tuiAgentArgsBypassPermissions', () => {
 })
 
 describe('resolvedTuiAgentArgsBypassPermissions', () => {
+  // The settings shape the Agent Permissions toggle writes, for every agent it covers.
+  it.each(Object.keys(YOLO_TUI_AGENT_ARGS).filter(isTuiAgent))(
+    "reads the toggle's own Yolo and Manual writes for %s",
+    (agent) => {
+      for (const platform of ['darwin', 'win32'] as const) {
+        const yolo = applyAgentPermissionMode({ mode: 'yolo' })
+        expect(resolvedTuiAgentArgsBypassPermissions(agent, yolo, platform)).toBe(true)
+        const manual = applyAgentPermissionMode({ mode: 'manual' })
+        expect(resolvedTuiAgentArgsBypassPermissions(agent, manual, platform)).toBe(false)
+      }
+    }
+  )
+
   it('fails closed when the configured arguments cannot be tokenized', () => {
     expect(
       resolvedTuiAgentArgsBypassPermissions(

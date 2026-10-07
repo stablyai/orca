@@ -103,6 +103,8 @@ export const ORCAD_VERSION = '0.1.0'
 
 // Equals FOREIGN_SQLITE_READER_ENTRY_FILENAME; that module is not loadable under type stripping.
 export const ORCAD_FOREIGN_SQLITE_READER_ENTRY = 'foreign-sqlite-reader-entry.js'
+/** Worker thread that runs workspace port detection's probe commands off the event loop. */
+export const ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY = 'port-scan-command-worker-entry.js'
 
 // Kept here because build-orcad.mjs imports this manifest directly under Node type stripping.
 export const ORCAD_RIPGREP_ARTIFACTS = [
@@ -158,6 +160,7 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'profile-state-backup-worker-entry.js' },
   // Worker thread that reads other apps' SQLite (the OpenCode binder and history) off the event loop.
   { filename: ORCAD_FOREIGN_SQLITE_READER_ENTRY },
+  { filename: ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY },
   // Target-specific even when the JavaScript bundle is shared across packaged slots.
   { filename: ORCAD_SERVER_TARGET_FILENAME },
   // orcad never depends on a host runtime or host-installed native module.

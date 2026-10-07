@@ -7,9 +7,12 @@ import {
   type NativeChatPickerItem
 } from './native-chat-composer-state'
 import { isMacPlatform } from './native-chat-shortcut'
+import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 
 export type UseNativeChatComposerKeyDownArgs = {
   autocomplete: ComposerAutocomplete
+  mentionFiles: NativeChatMentionFiles
+  completeMention: (path: string) => void
   activeSuggestion: number
   draft: string
   /** Image chips count as composer content, like typed text. */
@@ -32,6 +35,8 @@ export type UseNativeChatComposerKeyDownArgs = {
 
 export function useNativeChatComposerKeyDown({
   autocomplete,
+  mentionFiles,
+  completeMention,
   activeSuggestion,
   draft,
   hasAttachments = false,
@@ -63,8 +68,8 @@ export function useNativeChatComposerKeyDown({
         return
       }
 
-      if (autocomplete.mode === 'slash') {
-        const items = autocomplete.items
+      if (autocomplete.mode !== 'none') {
+        const items = autocomplete.mode === 'slash' ? autocomplete.items : mentionFiles.files
         if (event.key === 'ArrowDown' && items.length > 0) {
           event.preventDefault()
           setActiveSuggestion((index) => (index + 1) % items.length)
@@ -75,9 +80,16 @@ export function useNativeChatComposerKeyDown({
           setActiveSuggestion((index) => (index - 1 + items.length) % items.length)
           return
         }
-        if ((event.key === 'Enter' || event.key === 'Tab') && items.length > 0) {
+        // Shift keeps its own meaning: a newline for Enter, focus back for Tab.
+        const picks = (event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey
+        if (picks && items.length > 0) {
           event.preventDefault()
-          const item = items[activeSuggestion] ?? items[0]
+          if (autocomplete.mode === 'mention') {
+            const { files } = mentionFiles
+            completeMention(files[Math.min(activeSuggestion, files.length - 1)])
+            return
+          }
+          const item = autocomplete.items[activeSuggestion] ?? autocomplete.items[0]
           // A mid-prompt command is part of the sentence being written, so Enter
           // completes the token instead of sending the command on its own.
           if (event.key === 'Enter' && item.kind === 'command' && autocomplete.dispatchable) {
@@ -85,6 +97,11 @@ export function useNativeChatComposerKeyDown({
           } else {
             completePickerItem(item)
           }
+          return
+        }
+        // Why: the files are still on their way, so Enter here is a pick that came early, not a send.
+        if (picks && autocomplete.mode === 'mention' && mentionFiles.loading) {
+          event.preventDefault()
           return
         }
         if (event.key === 'Escape') {
@@ -135,6 +152,7 @@ export function useNativeChatComposerKeyDown({
     [
       activeSuggestion,
       autocomplete,
+      completeMention,
       completePickerItem,
       dismissPicker,
       dispatchPickerCommand,
@@ -143,6 +161,7 @@ export function useNativeChatComposerKeyDown({
       history,
       interrupt,
       isComposing,
+      mentionFiles,
       send,
       steerQueued,
       setActiveSuggestion,

@@ -68,6 +68,8 @@ export type AttachFlowInput = {
   params: AgentSessionAttachParams
   now: () => number
   recordPhase?: AgentSessionCreatePhaseRecorder
+  /** Aborted when a close, or a Stop admitted now, must not wait behind this attach's acquire. */
+  acquireSignal?: AbortSignal
   /** Publishes the journal before clients can send against the new owner. `acquiredOwner` is
    *  true only when this attach spawned the provider child, so a re-attach to a live one is not
    *  mistaken for a cold acquire. */

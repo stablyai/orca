@@ -47,6 +47,27 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('keeps release build staging out of app.asar while preserving runtime output', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    expect(isPacked(join('/app', '.build'), { isDirectory: () => true })).toBe(false)
+    for (const stagingPath of [
+      '.build/release-javascript/release-javascript.tar.gz',
+      '.build/release-javascript/manifest.json',
+      '.build/release-javascript-123/out/main/index.js'
+    ]) {
+      expect(isPacked(join('/app', stagingPath), { isDirectory: () => false })).toBe(false)
+    }
+    for (const runtimePath of [
+      'out/main/index.js',
+      'out/cli/index.js',
+      'out/renderer/index.html'
+    ]) {
+      expect(isPacked(join('/app', runtimePath), { isDirectory: () => false })).toBe(true)
+    }
+  })
+
   it('keeps local agent tooling out of app.asar', () => {
     const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
     matcher.prependPattern('**/*')

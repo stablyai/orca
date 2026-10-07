@@ -18,6 +18,7 @@ import { VisibilityResumeCoordinator } from './visibility-resume-coordinator'
 import type { VisibilityResumeOmission, SessionTabsStreamEvent } from './state'
 import type { MirroredRuntimeEnvironment } from './visibility-resume-types'
 import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './state'
+import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
 
 type Ref<T> = { current: T }
 
@@ -154,7 +155,7 @@ export function installGlobalSessionTabsSubscriptions({
             isCurrent
           })
         }
-        return window.api.runtimeEnvironments.subscribe(
+        return subscribeRuntimeEnvironment(
           {
             selector: environmentId,
             method: 'session.tabs.subscribeAll',

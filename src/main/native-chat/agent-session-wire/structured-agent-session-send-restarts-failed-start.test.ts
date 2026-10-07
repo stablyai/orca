@@ -187,7 +187,7 @@ describe('a send into a published session whose child ended before startup', () 
   it('restarts the child and admits the message against it before it has proven its start', async () => {
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 
-    await send('hello again', releasedFence)
+    const first = await send('hello again', releasedFence)
 
     // Accepted at the lost owner's fence and handed to the child delivery started, once.
     expect(acquire).toHaveBeenCalledTimes(2)
@@ -196,8 +196,14 @@ describe('a send into a published session whose child ended before startup', () 
     const current = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     expect(current).toBeGreaterThan(releasedFence)
 
-    // Once proven, the next send meets a live owner and restarts nothing.
+    // Once proven, the next send meets a live owner and restarts nothing. The child echoes the first
+    // message, as a live one does, so the next is not held behind a turn still opening.
     await proveStarted()
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: first,
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 }
+    })
     await send('and again', current)
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(dispatch).toHaveBeenCalledTimes(2)

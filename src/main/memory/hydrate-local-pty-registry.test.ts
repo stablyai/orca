@@ -60,7 +60,8 @@ function makeStore(
     kind?: Repo['kind']
     path?: string
   }[] = [],
-  worktreeMeta: Record<string, WorktreeMeta> = {}
+  worktreeMeta: Record<string, WorktreeMeta> = {},
+  folderWorkspaces: FolderWorkspace[] = []
 ): Store {
   const built: Repo[] = repos.map((r) => ({
     id: r.id,
@@ -72,15 +73,18 @@ function makeStore(
     executionHostId: r.executionHostId ?? null,
     kind: r.kind
   }))
-  return {
+  const store: Partial<Store> = {
     getRepos: () => built,
-    getFolderWorkspaces: (): FolderWorkspace[] => [],
+    getFolderWorkspaces: () => folderWorkspaces,
+    getProjectGroups: () => [],
     getAllWorktreeMeta: () => worktreeMeta,
     getAllWorktreeMetaForHost: (hostId) =>
       Object.fromEntries(
         Object.entries(worktreeMeta).filter(([, meta]) => !meta.hostId || meta.hostId === hostId)
       )
-  } as Store
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hydration reads only the store members stubbed above.
+  return store as Store
 }
 
 function makeProvider(sessions: SessionInfo[]): Pick<DaemonPtyAdapter, 'listSessions'> {

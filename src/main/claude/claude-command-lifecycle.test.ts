@@ -23,7 +23,8 @@ import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
-  type FakeConnection
+  type FakeConnection,
+  claudeStartupSettled
 } from './claude-structured-session-test-support'
 
 type CapturedEvent =
@@ -195,7 +196,7 @@ async function replayCapture(
       proofDelivered = true
     } else if (event.kind === 'dispatch') {
       if (proofDelivered) {
-        await adapter.awaitStarted('session-1')
+        await claudeStartupSettled(adapter, 'session-1')
       }
       await expect(
         adapter.dispatch({

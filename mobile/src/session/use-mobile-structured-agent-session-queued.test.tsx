@@ -533,7 +533,8 @@ describe('mobile structured queued messages', () => {
           state: 'waiting',
           paused: false,
           needsAttention: false,
-          caption: null
+          caption: null,
+          attribution: null
         }
       ])
       // A frame without the field leaves the list alone; null empties it.
@@ -580,7 +581,8 @@ describe('mobile structured queued messages', () => {
               queuedDraft({ messageId: 'behind', position: 2 })
             ],
             [],
-            { reason: 'restarted' }
+            // This host publishes no restart pause; a Stop's stands in for any queue-wide one.
+            { reason: 'stopped' }
           )
         )
       )
@@ -589,7 +591,7 @@ describe('mobile structured queued messages', () => {
         { messageId: 'behind', caption: null }
       ])
       // The kept card is held on its own, so Resume would send the card behind it.
-      expect(hook!.queued.pause).toEqual({ reason: 'restarted' })
+      expect(hook!.queued.pause).toEqual({ reason: 'stopped' })
     })
   })
 
