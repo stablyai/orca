@@ -29,7 +29,7 @@ export function stripMarkdownCode(content: string): string {
 }
 
 /** Fenced blocks and inline code spans, sorted and non-overlapping. */
-function getMarkdownCodeRanges(content: string): [number, number][] {
+export function getMarkdownCodeRanges(content: string): [number, number][] {
   const fences = getMarkdownFenceRanges(content)
   const spans = createMarkdownCodeSpanScanner(content)
   const ranges: [number, number][] = []

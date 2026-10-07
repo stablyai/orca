@@ -9,6 +9,7 @@ import {
   detailsBodyHtmlToMarkdown,
   escapeDetailsHtml,
   extractDetailsSummaryHtml,
+  findDetailsBlockStart,
   isEditableDetailsHtmlBlock,
   matchDetailsHtmlBlock,
   parseDetailsAttributes,
@@ -230,7 +231,7 @@ const OrcaDetails = Details.extend({
   markdownTokenizer: {
     name: 'details',
     level: 'block',
-    start: registerMarkdownTokenizerStart('<', (source) => source.search(/<details\b/i)),
+    start: registerMarkdownTokenizerStart('<', findDetailsBlockStart),
     tokenize(src, _tokens, lexer) {
       const detailsBlock = matchDetailsHtmlBlock(src, 0)
       if (!detailsBlock || !isEditableDetailsHtmlBlock(detailsBlock)) {
