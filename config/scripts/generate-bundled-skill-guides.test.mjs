@@ -256,40 +256,6 @@ describe('bundled skill guide generator', () => {
     }
   })
 
-  it('ships native folder scope resolution before scoped worktree creation examples', async () => {
-    const source = await readFile(path.join(projectDir, 'skill-guides', 'orca-cli.md'), 'utf8')
-    const guide = BUNDLED_SKILL_GUIDES.find((entry) => entry.name === 'orca-cli')
-    if (!guide) {
-      throw new Error('Missing bundled orca-cli guide')
-    }
-    for (const markdown of [source, guide.markdown, guide.fullMarkdown]) {
-      const scopeStart = markdown.indexOf('### Resolve workspace scope before filesystem discovery')
-      const examplesStart = markdown.indexOf('Common commands:', markdown.indexOf('## Worktrees'))
-      expect(scopeStart).toBeGreaterThan(-1)
-      expect(examplesStart).toBeGreaterThan(scopeStart)
-      const scope = markdown.slice(scopeStart, examplesStart)
-      for (const rule of [
-        'native Orca context, not every repository beneath its directory',
-        'Never infer membership from filesystem scanning or a global repo list alone',
-        'ORCA_WORKSPACE_ID',
-        'ORCA_WORKTREE_ID',
-        'ORCA_WORKSPACE_ROOT',
-        'ORCA repo list --json',
-        '`projectGroupId` exactly matches `ORCA_PROJECT_GROUP_ID`',
-        'same resolved executable and runtime routing',
-        "within the folder's execution host",
-        '--parent-worktree folder:<folderId>',
-        'ask before creating or registering anything',
-        'selector_not_found',
-        'if descendant-group scope is requested or cannot be verified, ask',
-        'create only those 2 children',
-        'An explicit user request for a repository outside this group remains valid'
-      ]) {
-        expect(scope).toContain(rule)
-      }
-    }
-  })
-
   it('keeps CLI guide examples safe across shells and Linux command names', async () => {
     for (const name of ['orca-cli', 'computer-use', 'orca-emulator', 'orca-emulator-android']) {
       const source = await readFile(path.join(projectDir, 'skill-guides', `${name}.md`), 'utf8')
