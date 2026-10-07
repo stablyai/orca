@@ -47,6 +47,10 @@ export type { WorktreeVisibilityDefaults } from './repo-types'
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
+import type { AppThemePresetId } from './app-theme-types'
+
+export type { AppThemePresetId } from './app-theme-types'
+
 export type GlobalSettings = NativeChatGlobalSettings & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
@@ -70,6 +74,10 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
   theme: 'system' | 'dark' | 'light'
+  /** Preset palette applied to the application interface. Defaults to 'default'. */
+  themePreset?: AppThemePresetId
+  /** Automatically synchronize matching terminal themes when the interface theme changes. */
+  syncTerminalThemeWithInterface?: boolean
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string

@@ -1,6 +1,6 @@
 import type React from 'react'
 
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { AppThemePresetId, GlobalSettings } from '../../../../shared/global-settings-types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -14,6 +14,8 @@ import {
   SettingsSegmentedControl,
   SettingsSwitchRow
 } from './SettingsFormControls'
+import { ThemePresetSelector } from './ThemePresetSelector'
+import { getMatchingTerminalTheme, resolveEffectiveThemePreset } from '@/lib/app-theme-presets'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import {
   getLanguageEntries,
@@ -37,10 +39,11 @@ import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  applyTheme: (theme: 'system' | 'dark' | 'light') => void
+  applyTheme: (theme: 'system' | 'dark' | 'light', themePreset?: AppThemePresetId) => void
   fontSuggestions: string[]
   isDesktopMac: boolean
   isDesktopWindows: boolean
+  systemPrefersDark?: boolean
   onRequestFontSuggestions?: () => void
   forceVisiblePrimary?: boolean
 }
@@ -52,6 +55,7 @@ export function AppearanceInterfaceSection({
   fontSuggestions,
   isDesktopMac,
   isDesktopWindows,
+  systemPrefersDark,
   onRequestFontSuggestions,
   forceVisiblePrimary = false
 }: AppearanceInterfaceSectionProps): React.JSX.Element {
@@ -76,6 +80,20 @@ export function AppearanceInterfaceSection({
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
   const languageTitle = translate('settings.appearance.language.title', 'Language')
 
+  const isSystemDark =
+    systemPrefersDark ??
+    (typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const effectiveThemeMode: 'dark' | 'light' =
+    settings.theme === 'dark'
+      ? 'dark'
+      : settings.theme === 'light'
+        ? 'light'
+        : isSystemDark
+          ? 'dark'
+          : 'light'
+
   return (
     <div className="divide-y divide-border/40">
       <SearchableSetting
@@ -84,33 +102,100 @@ export function AppearanceInterfaceSection({
         keywords={themeEntry?.keywords ?? ['dark', 'light', 'system']}
         forceVisible={forceVisiblePrimary}
       >
-        <SettingsRow
-          label={themeLabel}
-          control={
-            <SettingsSegmentedControl
-              ariaLabel={themeLabel}
-              value={settings.theme}
-              onChange={(option) => {
-                updateSettings({ theme: option })
-                applyTheme(option)
-              }}
-              options={[
-                {
-                  value: 'system',
-                  label: translate('auto.components.settings.AppearancePane.fb0e0b4453', 'System')
-                },
-                {
-                  value: 'dark',
-                  label: translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
-                },
-                {
-                  value: 'light',
-                  label: translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
+        <div className="space-y-4 py-1">
+          <SettingsRow
+            label={themeLabel}
+            control={
+              <SettingsSegmentedControl
+                ariaLabel={themeLabel}
+                value={settings.theme}
+                onChange={(option) => {
+                  const updates: Partial<GlobalSettings> = { theme: option }
+                  const newEffectiveMode =
+                    option === 'system' ? (systemPrefersDark ? 'dark' : 'light') : option
+
+                  if (settings.syncTerminalThemeWithInterface ?? true) {
+                    const effectivePreset = resolveEffectiveThemePreset(
+                      option,
+                      settings.themePreset,
+                      systemPrefersDark ?? false
+                    )
+                    const matchingTerminalTheme = getMatchingTerminalTheme(
+                      effectivePreset,
+                      newEffectiveMode
+                    )
+                    if (matchingTerminalTheme) {
+                      if (newEffectiveMode === 'dark') {
+                        updates.terminalThemeDark = matchingTerminalTheme
+                      } else {
+                        updates.terminalThemeLight = matchingTerminalTheme
+                      }
+                    }
+                  }
+
+                  updateSettings(updates)
+                  applyTheme(option, settings.themePreset)
+                }}
+                options={[
+                  {
+                    value: 'system',
+                    label: translate('auto.components.settings.AppearancePane.fb0e0b4453', 'System')
+                  },
+                  {
+                    value: 'dark',
+                    label: translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
+                  },
+                  {
+                    value: 'light',
+                    label: translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
+                  }
+                ]}
+              />
+            }
+          />
+
+          <div className="pt-1">
+            <span className="mb-2 block text-xs font-semibold text-foreground">
+              {translate('settings.appearance.themePresets.title', 'Theme Palette')}
+            </span>
+            <ThemePresetSelector
+              value={settings.themePreset ?? 'default'}
+              effectiveMode={effectiveThemeMode}
+              onChange={(presetId) => {
+                const updates: Partial<GlobalSettings> = { themePreset: presetId }
+                if (settings.syncTerminalThemeWithInterface ?? true) {
+                  const matchingTerminalTheme = getMatchingTerminalTheme(
+                    presetId,
+                    effectiveThemeMode
+                  )
+                  if (matchingTerminalTheme) {
+                    if (effectiveThemeMode === 'dark') {
+                      updates.terminalThemeDark = matchingTerminalTheme
+                    } else {
+                      updates.terminalThemeLight = matchingTerminalTheme
+                    }
+                  }
                 }
-              ]}
+                updateSettings(updates)
+                applyTheme(settings.theme, presetId)
+              }}
             />
-          }
-        />
+          </div>
+
+          <SettingsSwitchRow
+            label={translate('settings.appearance.syncTerminalTheme.label', 'Sync Terminal Theme')}
+            description={translate(
+              'settings.appearance.syncTerminalTheme.description',
+              'Automatically set the matching terminal color scheme when changing the interface theme.'
+            )}
+            checked={settings.syncTerminalThemeWithInterface ?? true}
+            onChange={() =>
+              updateSettings({
+                syncTerminalThemeWithInterface: !(settings.syncTerminalThemeWithInterface ?? true)
+              })
+            }
+          />
+        </div>
       </SearchableSetting>
 
       {SHOW_UI_LANGUAGE_SETTING ? (

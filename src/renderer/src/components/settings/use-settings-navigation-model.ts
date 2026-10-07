@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react'
+import type { AppThemePresetId } from '../../../../shared/global-settings-types'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import type { SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
@@ -36,9 +37,12 @@ export function useSettingsNavigationModel(
     }
   }
 
-  const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
-    applyDocumentTheme(theme)
-  }, [])
+  const applyTheme = useCallback(
+    (theme: 'system' | 'dark' | 'light', themePreset?: AppThemePresetId) => {
+      applyDocumentTheme(theme, { themePreset: themePreset ?? model.settings?.themePreset })
+    },
+    [model.settings?.themePreset]
+  )
 
   const displayedGitUsername = model.repos[0]?.gitUsername ?? ''
   const baseNavSections = useSettingsNavigationMetadata()

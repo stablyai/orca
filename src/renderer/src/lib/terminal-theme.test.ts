@@ -337,3 +337,42 @@ describe('resolveOpaqueTerminalBackground', () => {
     expect(resolveOpaqueTerminalBackground('var(--background)')).toBe(null)
   })
 })
+
+describe('custom design terminal themes', () => {
+  const CUSTOM_TERMINAL_THEMES = [
+    'Material 3 Dark',
+    'Material 3 Light',
+    'iOS 27 Liquid Glass Dark',
+    'iOS 27 Liquid Glass Light',
+    'Dala Dark',
+    'Dala Light',
+    'Discord Dark',
+    'Discord Light',
+    'Dope Security Dark',
+    'Dope Security Light',
+    'Raycast Dark',
+    'Raycast Light',
+    'zkPass Dark',
+    'zkPass Light',
+    'Miranda Ink',
+    'Miranda Paper'
+  ]
+
+  it.each(CUSTOM_TERMINAL_THEMES)('registers "%s" with complete color palette', (themeName) => {
+    const theme = getBuiltinTheme(themeName)
+    expect(theme, `${themeName} should exist in catalog`).not.toBeNull()
+    expect(theme?.background).toBeDefined()
+    expect(theme?.foreground).toBeDefined()
+    expect(theme?.cursor).toBeDefined()
+    expect(theme?.selectionBackground).toBeDefined()
+    expect(theme?.selectionForeground).toBeDefined()
+    expect(theme?.black).toBeDefined()
+    expect(theme?.red).toBeDefined()
+    expect(theme?.green).toBeDefined()
+    expect(theme?.yellow).toBeDefined()
+    expect(theme?.blue).toBeDefined()
+    expect(theme?.magenta).toBeDefined()
+    expect(theme?.cyan).toBeDefined()
+    expect(theme?.white).toBeDefined()
+  })
+})

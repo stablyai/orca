@@ -674,4 +674,36 @@ describe('AppearancePane', () => {
     expect(afterClear?.disabled).toBe(false)
     expect(afterClear?.getAttribute('aria-expanded')).toBe('true')
   })
+
+  it('renders theme presets and updates setting with terminal synchronization', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const onUpdateSettings = vi.fn()
+    const container = await renderAppearancePane(
+      {
+        ...getDefaultSettings('/tmp'),
+        theme: 'dark',
+        themePreset: 'default',
+        syncTerminalThemeWithInterface: true
+      },
+      onUpdateSettings
+    )
+
+    const draculaBtn = Array.from(container.querySelectorAll('button[role="radio"]')).find((b) =>
+      b.textContent?.includes('Dracula')
+    )
+
+    expect(draculaBtn).toBeInstanceOf(HTMLButtonElement)
+    if (draculaBtn instanceof HTMLButtonElement) {
+      await act(async () => {
+        draculaBtn.click()
+      })
+    }
+
+    expect(onUpdateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        themePreset: 'dracula',
+        terminalThemeDark: 'Dracula'
+      })
+    )
+  })
 })

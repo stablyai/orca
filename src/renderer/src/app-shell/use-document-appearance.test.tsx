@@ -69,10 +69,25 @@ describe('useDocumentAppearance', () => {
       })
     })
 
-    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('light')
+    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('light', { themePreset: 'default' })
     expect(mocks.applyDocumentTheme).toHaveBeenCalledTimes(2)
     expect(mocks.buildAppFontFamily).toHaveBeenLastCalledWith('Monaco')
     expect(mocks.buildAppFontFamily).toHaveBeenCalledTimes(2)
+    unmount()
+  })
+
+  it('applies changed themePreset values', () => {
+    const { unmount } = renderHook(() => useDocumentAppearance())
+
+    act(() => {
+      const settings = useAppStore.getState().settings!
+      useAppStore.setState({
+        settings: { ...settings, themePreset: 'dracula' }
+      })
+    })
+
+    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('dark', { themePreset: 'dracula' })
+    expect(mocks.applyDocumentTheme).toHaveBeenCalledTimes(2)
     unmount()
   })
 })

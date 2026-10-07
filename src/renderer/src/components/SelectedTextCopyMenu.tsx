@@ -108,13 +108,13 @@ export function SelectedTextCopyMenu({
       {menu &&
         createPortal(
           <div
-            className="fixed z-[100] min-w-36 rounded-[11px] border border-black/14 bg-popover p-1 text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]"
+            className="fixed z-[100] min-w-36 rounded-[11px] border border-border bg-popover/85 p-1 text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]"
             style={{ left: menu.x, top: menu.y }}
             onPointerDown={(event) => event.stopPropagation()}
           >
             <button
               type="button"
-              className="flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-1 text-left text-[12px] font-[450] leading-5 outline-hidden hover:bg-accent focus:bg-accent"
+              className="flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-1 text-left text-[12px] font-[450] leading-5 outline-hidden hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
               onClick={handleCopy}
             >
               <Copy className="size-3.5 text-muted-foreground" />

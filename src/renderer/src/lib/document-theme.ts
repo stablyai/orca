@@ -1,4 +1,5 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { AppThemePresetId, GlobalSettings } from '../../../shared/global-settings-types'
+import { resolveEffectiveThemePreset } from './app-theme-presets'
 
 export type DocumentThemePreference = GlobalSettings['theme']
 
@@ -14,6 +15,9 @@ type ThemeClassList = {
 
 type ThemeRoot = {
   classList: ThemeClassList
+  dataset?: Record<string, string | undefined>
+  setAttribute?: (qualifiedName: string, value: string) => void
+  removeAttribute?: (qualifiedName: string) => void
 }
 
 type ThemeMediaMatcher = (query: string) => Pick<MediaQueryList, 'matches'>
@@ -22,6 +26,7 @@ type ThemeCancelAnimationFrame = (handle: number) => void
 
 type ApplyDocumentThemeOptions = {
   root?: ThemeRoot
+  themePreset?: AppThemePresetId
   matchMedia?: ThemeMediaMatcher
   requestAnimationFrame?: ThemeAnimationFrame
   cancelAnimationFrame?: ThemeCancelAnimationFrame
@@ -37,12 +42,19 @@ function cancelPendingTransitionDisableFrames(cancelFrame: ThemeCancelAnimationF
   pendingTransitionDisableFrames = []
 }
 
-function systemPrefersDark(
-  matchMedia: ThemeMediaMatcher = window.matchMedia.bind(window)
-): boolean {
-  return matchMedia(DARK_MODE_QUERY).matches
+function systemPrefersDark(matchMedia?: ThemeMediaMatcher): boolean {
+  if (matchMedia) {
+    return matchMedia(DARK_MODE_QUERY).matches
+  }
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    return window.matchMedia(DARK_MODE_QUERY).matches
+  }
+  return false
 }
 
+/**
+ * Determines whether dark mode should be applied based on theme setting and system query.
+ */
 export function resolveDocumentTheme(
   theme: DocumentThemePreference,
   matchMedia?: ThemeMediaMatcher
@@ -56,6 +68,9 @@ export function resolveDocumentTheme(
   return systemPrefersDark(matchMedia)
 }
 
+/**
+ * Applies the resolved theme mode and theme preset dataset attribute to the document root element.
+ */
 export function applyDocumentTheme(
   theme: DocumentThemePreference,
   options: ApplyDocumentThemeOptions = {}
@@ -63,6 +78,8 @@ export function applyDocumentTheme(
   const root = options.root ?? document.documentElement
   const disableTransitions = options.disableTransitions ?? true
   const shouldUseDarkTheme = resolveDocumentTheme(theme, options.matchMedia)
+  const isSystemDark = systemPrefersDark(options.matchMedia)
+  const effectivePreset = resolveEffectiveThemePreset(theme, options.themePreset, isSystemDark)
 
   if (disableTransitions) {
     root.classList.add(THEME_TRANSITION_DISABLED_CLASS)
@@ -72,6 +89,20 @@ export function applyDocumentTheme(
   // Mirror with `light` so consumers can observe the resolved theme
   // symmetrically (Tailwind keys only on `dark`, so this is style-neutral).
   root.classList.toggle('light', !shouldUseDarkTheme)
+
+  if (effectivePreset !== 'default') {
+    if (root.dataset) {
+      root.dataset.theme = effectivePreset
+    } else if (root.setAttribute) {
+      root.setAttribute('data-theme', effectivePreset)
+    }
+  } else {
+    if (root.dataset) {
+      delete root.dataset.theme
+    } else if (root.removeAttribute) {
+      root.removeAttribute('data-theme')
+    }
+  }
 
   if (!disableTransitions) {
     return

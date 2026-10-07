@@ -120,7 +120,7 @@ export function renderFloatingTerminalPanelSurface({
         {({ isTabDragActive, hoveredTabInsertion, setDragRootNode }) => (
           <div
             ref={setDragRootNode}
-            className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14"
+            className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card"
           >
             <div
               className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--card))] active:cursor-grabbing"

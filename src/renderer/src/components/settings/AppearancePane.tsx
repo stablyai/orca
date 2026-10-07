@@ -2,7 +2,7 @@ import type React from 'react'
 import { useLayoutEffect, useState } from 'react'
 import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
 
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { AppThemePresetId, GlobalSettings } from '../../../../shared/global-settings-types'
 
 import { AppearanceSection } from './AppearanceSection'
 import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'
@@ -45,7 +45,7 @@ export { getAppearancePaneSearchEntries }
 type AppearancePaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  applyTheme: (theme: 'system' | 'dark' | 'light') => void
+  applyTheme: (theme: 'system' | 'dark' | 'light', themePreset?: AppThemePresetId) => void
   fontSuggestions: string[]
   terminalFontSuggestions: string[]
   onRequestFontSuggestions?: () => void
@@ -226,6 +226,7 @@ export function AppearancePane({
             onRequestFontSuggestions={onRequestFontSuggestions}
             isDesktopMac={isDesktopMac}
             isDesktopWindows={isDesktopWindows}
+            systemPrefersDark={systemPrefersDark}
             forceVisiblePrimary={interfaceLabelMatches}
           />
         </AppearanceSection>
