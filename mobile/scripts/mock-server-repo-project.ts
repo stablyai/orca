@@ -199,7 +199,19 @@ export function handleMockRepoProjectRequest(
   const destination = String(
     request.params?.destination ?? (connectionId === 'ssh-windows' ? WINDOWS_ROOT : LINUX_ROOT)
   )
-  const name = deriveCloneRepoNameFromUrl(url)
+  let name: string
+  try {
+    name = deriveCloneRepoNameFromUrl(url)
+  } catch (cause) {
+    respond(
+      error(
+        request.id,
+        'invalid_params',
+        cause instanceof Error ? cause.message : 'Invalid repository URL'
+      )
+    )
+    return true
+  }
   const separator = connectionId === 'ssh-windows' ? '\\' : '/'
   const clonePath = `${destination.replace(/[\\/]$/, '')}${separator}${name}`
   respond(
