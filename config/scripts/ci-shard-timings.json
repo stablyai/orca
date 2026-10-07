@@ -7248,7 +7248,6 @@
       "src/renderer/src/components/terminal-pane/terminal-http-link-source-owner.test.ts": 76,
       "src/renderer/src/components/terminal-pane/terminal-http-url-extraction.test.ts": 53,
       "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts": 57,
-      "src/renderer/src/components/terminal-pane/terminal-ime-composer-placeholder-mask.test.ts": 1182,
       "src/renderer/src/components/terminal-pane/terminal-ime-composition-route.test.ts": 281,
       "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts": 479,
       "src/renderer/src/components/terminal-pane/terminal-ime-composition-transaction-ownership.test.ts": 249,

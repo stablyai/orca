@@ -1,20 +1,4 @@
 // @vitest-environment happy-dom
-/**
- * A mid-line composition must not visually swallow the character after the cursor.
- *
- * The preedit overlay (`.composition-view`) is an opaque box anchored to the cursor cell. Nothing
- * reaches the PTY while composing, so the covered cells still hold their characters — the box just
- * hides them for the whole composition (#12545). Composing `가` with the cursor before `하` in
- * `안녕하세요` blanks `하` until the syllable commits.
- *
- * The fix renders the rest of the row's committed text after the preedit inside the overlay, so the
- * composition reads as inserted text pushing the tail right. The overlay also follows xterm's live
- * theme service instead of the stock `#000`/`#FFF`, with any alpha dropped — a see-through mask
- * would re-expose the very cells the rendered tail stands in for.
- *
- * happy-dom performs no layout, so the cell size is supplied and geometry is not asserted; the
- * on-screen geometry arm lives in `tests/e2e/terminal-korean-midline-preedit-occlusion.spec.ts`.
- */
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installTerminalImeCandidateAnchor } from '@/lib/pane-manager/terminal-ime-candidate-anchor'
@@ -43,14 +27,9 @@ type Rig = {
 type RigOptions = {
   cursorWidth?: number
   theme?: { background: string; cursor?: string; foreground: string }
-  /** Installs the production candidate-anchor listener, the other writer of `textarea.style`. */
   withCandidateAnchor?: boolean
 }
 
-/**
- * happy-dom lays nothing out, so both textarea-geometry owners read zeroes and neither can
- * overflow. This gives the preedit span a width and the screen its cols*rows box.
- */
 function stubCompositionLayout(preeditWidth: () => number): void {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement
@@ -98,10 +77,6 @@ function openTerminal(options: RigOptions = {}): Rig {
   const write = (data: string): Promise<void> =>
     new Promise((resolve) => terminal.write(data, resolve))
 
-  // Awaits the repaint the write triggers, so the tail refresh runs through the production
-  // terminal.onRender path rather than a test shortcut. The listener arms only after the write's
-  // parse callback, because a repaint scheduled by an earlier write can fire first and still show
-  // the old row.
   const writeAwaitingRender = async (data: string): Promise<void> => {
     await write(data)
     await new Promise<void>((resolve) => {
@@ -158,16 +133,14 @@ function stripMarks(text: string | null): string {
   return (text ?? '').replaceAll('‎', '')
 }
 
-describe('mid-line composition renders the covered row tail after the preedit', () => {
+describe('composition overlays the grid without copying the row tail', () => {
   beforeEach(() => {
-    // happy-dom has no 2d context, which the DOM renderer's WidthCache requires.
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
       measureText: () => ({ width: 10 })
     } as unknown as CanvasRenderingContext2D)
   })
 
   afterEach(async () => {
-    // updateCompositionElements re-arms on a timer; let the pending one run before dispose.
     await nextEventLoop()
     await nextEventLoop()
     while (openTerminals.length > 0) {
@@ -177,58 +150,59 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     document.body.replaceChildren()
   })
 
-  it('shows the tail from the cursor when composing before committed text (#12545 repro)', async () => {
+  it('leaves committed text in the buffer while composing over its first cells', async () => {
     const rig = openTerminal()
-    // 안녕하세요 then CUB 6: each Hangul syllable is two cells, so the cursor lands on 하 (x=4).
     await rig.write('안녕하세요\x1b[6D')
 
     rig.compose('가')
 
     const { caret, preedit, remainder } = viewParts(rig.compositionView)
-    expect(Array.from(rig.compositionView.children)).toEqual([preedit, caret, remainder])
+    expect(Array.from(rig.compositionView.children)).toEqual([preedit, caret])
+    expect(rig.terminal.buffer.active.getLine(0)?.translateToString(true)).toBe('안녕하세요')
     expect(stripMarks(preedit!.textContent)).toBe('가')
     expect(preedit!.style.textDecoration).toBe('underline')
-    expect(remainder!.textContent).toBe('하세요')
-    // Start-anchored so the preedit stays put and the pushed tail clips at the right edge.
+    expect(remainder).toBeNull()
     expect(rig.compositionView.style.direction).toBe('ltr')
-    expect(rig.compositionView.style.display).toBe('')
-    expect(rig.compositionView.style.justifyContent).toBe('')
+    expect(rig.compositionView.style.display).toBe('flex')
+    expect(rig.compositionView.style.justifyContent).toBe('flex-end')
+    const cursorX = rig.terminal.buffer.active.cursorX
+    const sent: string[] = []
+    const subscription = rig.terminal.onData((data) => sent.push(data))
+    rig.textarea.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, code: 'Escape', key: 'Escape' })
+    )
+    await nextEventLoop()
+    expect(rig.compositionView.classList.contains('active')).toBe(false)
+    expect(rig.compositionView.children).toHaveLength(0)
+    expect(rig.terminal.buffer.active.getLine(0)?.translateToString(true)).toBe('안녕하세요')
+    expect(rig.terminal.buffer.active.cursorX).toBe(cursorX)
+    expect(sent).toEqual([])
+    subscription.dispose()
   })
 
-  it('keeps the tail current as the preedit grows through the composition', async () => {
+  it('does not copy the tail as the preedit grows', async () => {
     const rig = openTerminal()
     await rig.write('안녕하세요\x1b[6D')
 
-    // One composition stays active while the preedit grows through updates,
-    // matching how an IME actually streams ㄱ → 가 → 강.
     rig.composeStart()
     rig.composeUpdate('ㄱ')
     rig.composeUpdate('가')
     rig.composeUpdate('강')
 
     const { caret, preedit, remainder } = viewParts(rig.compositionView)
-    expect(Array.from(rig.compositionView.children)).toEqual([preedit, caret, remainder])
+    expect(Array.from(rig.compositionView.children)).toEqual([preedit, caret])
     expect(stripMarks(preedit!.textContent)).toBe('강')
-    expect(remainder!.textContent).toBe('하세요')
+    expect(remainder).toBeNull()
   })
 
-  // The view is `white-space: nowrap`, which collapses runs of spaces exactly like `normal`.
-  // Without `pre` on the tail, a TUI's padded input row — `> text …spaces… |` — renders its
-  // right border a cell after the preedit while the real border stays put. xterm sets `pre` on its
-  // grid rows for the same reason.
-  it('preserves the tail spacing of a padded row so its trailing glyph stays on the grid', async () => {
+  it('does not copy a padded row or its border into the preedit', async () => {
     const rig = openTerminal()
-    // A TUI input row: text, padding, then a real border glyph the trim cannot drop.
     await rig.write('> hi          |\x1b[13D')
 
     rig.compose('가')
 
     const { remainder } = viewParts(rig.compositionView)
-    expect(remainder!.textContent, 'the tail must keep every padding cell').toBe('hi          |')
-    expect(
-      remainder!.style.whiteSpace,
-      'nowrap collapses the padding, so the border lands left of its grid column'
-    ).toBe('pre')
+    expect(remainder).toBeNull()
   })
 
   it('keeps the plain single-text overlay when composing at the end of the row', async () => {
@@ -280,14 +254,6 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     expect([THEME.cursor, 'rgb(221, 238, 255)']).toContain(caret!.style.backgroundColor)
   })
 
-  // Both writers of `textarea.style.left` run here on purpose. xterm's listener is on the
-  // textarea and the candidate anchor's is on `terminal.element`, so within one event the
-  // anchor writes last; a test that installs only one of them proves nothing about which
-  // position the OS actually reads at composition time.
-  //
-  // Neither writer may produce a different answer, because there is no stable "last" writer:
-  // CoreBrowserTerminal drives `updateCompositionElements` from `onRender` too, so a render can
-  // land after the last composition event this module hears. The render arm is the test below.
   it('keeps the caret and IME candidate anchor visible over committed text in the final cell', async () => {
     const rig = openTerminal({ cursorWidth: 2, withCandidateAnchor: true })
     await rig.write('x'.repeat(80))
@@ -298,8 +264,7 @@ describe('mid-line composition renders the covered row tail after the preedit', 
 
     const { caret, remainder } = viewParts(rig.compositionView)
     expect(rig.terminal.buffer.active.cursorX).toBe(80)
-    expect(remainder!.textContent).toBe('x')
-    expect(remainder!.style.display).toBe('none')
+    expect(remainder).toBeNull()
     expect(rig.compositionView.style.maxWidth).toBe(`${CELL_WIDTH_PX}px`)
     expect(rig.compositionView.style.display).toBe('flex')
     expect(rig.compositionView.style.justifyContent).toBe('flex-end')
@@ -309,18 +274,14 @@ describe('mid-line composition renders the covered row tail after the preedit', 
 
     preeditWidth = CELL_WIDTH_PX / 2
     await rig.writeAwaitingRender('\x1b[0m')
-    expect(remainder!.style.display).toBe('')
-    expect(rig.compositionView.style.display).toBe('')
-    expect(rig.compositionView.style.justifyContent).toBe('')
+    expect(remainder).toBeNull()
+    expect(rig.compositionView.style.display).toBe('flex')
+    expect(rig.compositionView.style.justifyContent).toBe('flex-end')
     expect(rig.textarea.style.left).toBe(`${(rig.terminal.cols - 1) * CELL_WIDTH_PX}px`)
     expect(rig.textarea.style.width).toBe(`${preeditWidth}px`)
   })
 
   it('keeps the candidate anchor inside the screen across a render, not just a composition event', async () => {
-    // The regression this pins: xterm re-runs updateCompositionElements from onRender, so a
-    // repaint with no composition event behind it re-asserts the textarea position on its own.
-    // A clamp that lived only in the composition-event listener is reverted here and stays
-    // reverted, which is what the OS then samples.
     const rig = openTerminal({ cursorWidth: 2, withCandidateAnchor: true })
     await rig.write('x'.repeat(80))
     stubCompositionLayout(() => CELL_WIDTH_PX * 2)
@@ -329,7 +290,6 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     const clamped = `${rig.terminal.cols * CELL_WIDTH_PX - CELL_WIDTH_PX * 2}px`
     expect(rig.textarea.style.left).toBe(clamped)
 
-    // A TUI repaint under the open composition: no composition event, one render.
     await rig.writeAwaitingRender('\x1b[0m')
 
     expect(rig.textarea.style.left).toBe(clamped)
@@ -373,7 +333,7 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     expect(rig.compositionView.style.justifyContent).toBe('')
   })
 
-  it('keeps arbitrary fully dimmed output visible at column zero', async () => {
+  it('does not reproduce arbitrary dimmed output at column zero', async () => {
     const rig = openTerminal()
     const dimmedRow = 'Waiting for input'
     await rig.write(`\x1b[2m${dimmedRow}\x1b[22m\x1b[${dimmedRow.length}D`)
@@ -381,13 +341,12 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     rig.compose('아')
 
     const { caret, preedit, remainder } = viewParts(rig.compositionView)
-    expect(Array.from(rig.compositionView.children)).toEqual([preedit, caret, remainder])
+    expect(Array.from(rig.compositionView.children)).toEqual([preedit, caret])
     expect(stripMarks(preedit!.textContent)).toBe('아')
-    expect(remainder!.textContent).toBe(dimmedRow)
-    expect(remainder!.style.visibility).toBe('')
+    expect(remainder).toBeNull()
   })
 
-  it('keeps a wholly dim mid-line tail visible', async () => {
+  it('does not reproduce a wholly dim mid-line tail', async () => {
     const rig = openTerminal()
     const tail = 'status'
     await rig.write(`> \x1b[2m${tail}\x1b[22m\x1b[${tail.length}D`)
@@ -396,19 +355,17 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     rig.compose('아')
 
     const { remainder } = viewParts(rig.compositionView)
-    expect(remainder!.textContent).toBe(tail)
-    expect(remainder!.style.visibility).toBe('')
+    expect(remainder).toBeNull()
   })
 
-  it('keeps a mixed dim and committed tail visible', async () => {
+  it('does not reproduce a mixed dim and committed tail', async () => {
     const rig = openTerminal()
     await rig.write('\x1b[2mghost\x1b[22m!\x1b[6D')
 
     rig.compose('아')
 
     const { remainder } = viewParts(rig.compositionView)
-    expect(remainder!.textContent).toBe('ghost!')
-    expect(remainder!.style.visibility).toBe('')
+    expect(remainder).toBeNull()
   })
 
   it('themes the overlay from options.theme instead of the stock #000/#FFF', async () => {
@@ -438,8 +395,6 @@ describe('mid-line composition renders the covered row tail after the preedit', 
   })
 
   it('drops the alpha of a translucent theme background so the mask stays opaque', async () => {
-    // terminalBackgroundOpacity composes theme.background down to rgba(); carried through as-is it
-    // would let the covered cells show straight through the tail this renders.
     const rig = openTerminal({
       theme: { background: 'rgba(17, 34, 51, 0.6)', foreground: '#aabbcc' }
     })
@@ -451,19 +406,18 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     expect(rig.compositionView.style.background).not.toMatch(/^rgba/i)
   })
 
-  it('refreshes the tail when the row repaints under an open composition', async () => {
+  it('keeps preedit nodes stable when the underlying row repaints', async () => {
     const rig = openTerminal()
     await rig.write('안녕하세요\x1b[6D')
     rig.compose('가')
     const original = viewParts(rig.compositionView)
     const glyphs = Array.from(original.preedit!.childNodes)
 
-    // A TUI repaint: erase from the cursor, draw a different tail, put the cursor back.
     await rig.writeAwaitingRender('\x1b[K체크\x1b[4D')
 
     const { preedit, remainder } = viewParts(rig.compositionView)
     expect(stripMarks(preedit!.textContent)).toBe('가')
-    expect(remainder!.textContent).toBe('체크')
+    expect(remainder).toBeNull()
     expect(preedit).toBe(original.preedit)
     expect(Array.from(preedit!.childNodes)).toEqual(glyphs)
     expect(viewParts(rig.compositionView).caret).toBe(original.caret)
@@ -473,18 +427,17 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     expect(viewParts(rig.compositionView).preedit).toBe(original.preedit)
   })
 
-  it('starts rendering a tail when text lands after an end-of-row composition began', async () => {
+  it('does not copy streamed output into an open composition', async () => {
     const rig = openTerminal()
     await rig.write('안녕')
     rig.compose('가')
     expect(viewParts(rig.compositionView).remainder).toBeNull()
 
-    // Streamed output arrives to the right of the cursor while the composition is open.
     await rig.writeAwaitingRender('하세요\x1b[6D')
 
     const { preedit, remainder } = viewParts(rig.compositionView)
     expect(stripMarks(preedit!.textContent)).toBe('가')
-    expect(remainder!.textContent).toBe('하세요')
+    expect(remainder).toBeNull()
   })
 
   it('leaves no tail behind for the next composition after one ends', async () => {
@@ -501,5 +454,52 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     expect(rig.compositionView.classList.contains('active')).toBe(false)
     expect(rig.compositionView.children).toHaveLength(0)
     expect(rig.compositionView.textContent).toBe('')
+  })
+  it.each([
+    ['truecolor', '\x1b[48;2;70;80;90m', '#46505a'],
+    ['indexed', '\x1b[48;5;240m', '#585858'],
+    ['inverse truecolor', '\x1b[38;2;70;80;90;7m', '#46505a'],
+    ['inverse default', '\x1b[7m', '#aabbcc']
+  ])('uses the cursor cell background for %s', async (_name, attributes, expected) => {
+    const rig = openTerminal()
+    await rig.write(`${attributes}placeholder\x1b[0m\x1b[11D`)
+    rig.compose('ni')
+    expect(rig.compositionView.style.background).toBe(expected)
+    expect(rig.compositionView.style.color).not.toBe(rig.compositionView.style.background)
+    expect(rig.compositionView.style.width).toBe('max-content')
+    expect(stripMarks(rig.compositionView.textContent)).toBe('ni')
+    expect(rig.terminal.buffer.active.getLine(0)?.translateToString(true)).toBe('placeholder')
+  })
+
+  it('tracks a repainted cell background without touching the preedit or dim tail', async () => {
+    const rig = openTerminal()
+    await rig.write('\x1b[2;48;2;70;80;90mplaceholder\x1b[0m\x1b[11D')
+    rig.compose('ni')
+    const preedit = viewParts(rig.compositionView).preedit
+    await rig.writeAwaitingRender('\x1b[2;48;2;90;80;70mplaceholder\x1b[0m\x1b[11D')
+    expect(rig.compositionView.style.background).toBe('#5a5046')
+    expect(viewParts(rig.compositionView).preedit).toBe(preedit)
+    expect(rig.terminal.buffer.active.getLine(0)?.getCell(4)?.isDim()).toBeTruthy()
+    expect(stripMarks(rig.compositionView.textContent)).toBe('ni')
+  })
+  it('sends only the confirmed Chinese character once and clears the overlay', async () => {
+    const rig = openTerminal()
+    await rig.write('\x1b[2mAsk Codex to do anything\x1b[0m\x1b[23D')
+    const input = vi.fn()
+    rig.terminal.onData(input)
+    rig.compose('ni')
+    expect(input).not.toHaveBeenCalled()
+    expect(stripMarks(rig.compositionView.textContent)).toBe('ni')
+    rig.textarea.value = '你'
+    rig.textarea.dispatchEvent(
+      new CompositionEvent('compositionend', { data: '你', bubbles: true })
+    )
+    await nextEventLoop()
+    await nextEventLoop()
+    expect(input).toHaveBeenCalledExactlyOnceWith('你')
+    expect(rig.compositionView.classList.contains('active')).toBe(false)
+    expect(rig.terminal.buffer.active.getLine(0)?.translateToString(true)).toBe(
+      'Ask Codex to do anything'
+    )
   })
 })
