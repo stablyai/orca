@@ -9,6 +9,10 @@ import {
 } from './agent-session-conversation-command-record'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
 import {
+  annotateAgentSessionOperationInto,
+  type AgentSessionOperationAnnotation
+} from '../../shared/agent-session-operation-create-record'
+import {
   agentSessionOperationKey,
   type AgentSessionOperationClaim,
   type AgentSessionOperationDecision,
@@ -211,18 +215,10 @@ export class AgentSessionRecordStore {
     leaseTtlMs?: number
     options?: Readonly<Record<string, string>>
   }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) => {
-      const proved = proveAgentSessionOwner({
-        record,
-        fence: args.fence,
-        link: args.link,
-        now: args.now,
-        leaseTtlMs: args.leaseTtlMs ?? AGENT_SESSION_LEASE_TTL_MS
-      })
-      return args.options
-        ? replaceAgentSessionRecordOptions(proved, { ...args, options: args.options })
-        : proved
-    })
+    const leaseTtlMs = args.leaseTtlMs ?? AGENT_SESSION_LEASE_TTL_MS
+    return this.mutate(args.sessionId, (record) =>
+      proveAgentSessionOwner({ ...args, record, leaseTtlMs })
+    )
   }
 
   /** Settle the failed attach and its reservation in one durable transaction. */
@@ -310,6 +306,9 @@ export class AgentSessionRecordStore {
   async recordOperationOutcome(args: AgentSessionOperationSettlement): Promise<void> {
     await this.transact((draft) => settleAgentSessionOperationInto(draft, args))
   }
+
+  annotateOperation = (args: AgentSessionOperationAnnotation): Promise<void> =>
+    this.transact((draft) => annotateAgentSessionOperationInto(draft, args))
 
   /** The same settlement, committed by the journal write that makes it true. It changes only the
    *  ledger, so no record listener is owed. */

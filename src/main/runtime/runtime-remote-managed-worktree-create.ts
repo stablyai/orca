@@ -114,7 +114,11 @@ export async function createRuntimeRemoteManagedWorktree(
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
-        ...ownerSurfacing(shouldActivate)
+        ...ownerSurfacing(shouldActivate),
+        // Its spawn request leaving this process is the create asking for its agent.
+        ...(args.onStartupAgentRequested
+          ? { onPtySpawnDispatched: args.onStartupAgentRequested }
+          : {})
       })
       if (args.startupDraftPaste) {
         deps.pasteDraft(terminal.handle, args.startupDraftPaste)
@@ -176,6 +180,8 @@ export async function createRuntimeRemoteManagedWorktree(
         : undefined
     const activationDefaultTabs = runtimeWillProvisionTerminals ? undefined : result.defaultTabs
     if (args.startup && !didSpawnStartup) {
+      // The window starts it, out of this process's sight.
+      args.onStartupAgentRequested?.()
       deps.activate(
         repo.id,
         result.worktree.id,

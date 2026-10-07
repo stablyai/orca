@@ -3,9 +3,10 @@
  *
  * The contract this enforces is three sentences: an operation runs at most once, a replay returns
  * the recorded answer, and an operation whose outcome is unknown is refused. Everything else a lost
- * launch might want — finding the workspace a dead attempt left behind, adopting a half-created
- * session, finishing an interrupted publication — is recovery, and none of it is here. Recovery
- * makes a stranded user whole; this makes a retry harmless, and the two are bought separately.
+ * launch might want — reopening the workspace a dead attempt left behind, adopting a half-created
+ * session, finishing an interrupted publication — is recovery, and none of it is here; the most a
+ * refusal does is name a workspace the create provably made. Recovery makes a stranded user whole;
+ * this makes a retry harmless, and the two are bought separately.
  *
  * The order is the inverse of what the handler did before. Admission comes first, ahead of
  * resolving the caller's worktree selector, because a selector resolution is a live precondition
@@ -18,19 +19,23 @@
 import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch-operation'
 import {
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
+  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
+  AGENT_LAUNCH_WORKSPACE_KEPT_CLIENT_CAPABILITY
 } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_AGENT_NOT_STARTED_CODE } from '../../../../shared/agent-launch-agent-not-started'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch-tab-closed'
 import { isAgentLaunchResult, type AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type {
   AgentSessionOperationOutcome,
   AgentSessionOperationOwnedPane,
-  AgentSessionOperationRefusalCode
+  AgentSessionOperationRefusalCode,
+  AgentSessionOperationRow
 } from '../../../../shared/agent-session-operation-ledger'
 import { resolveAgentSessionReplayOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-replay-outcome'
 import type { RpcContext } from '../core'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import type { AgentLaunchParams } from './agent-launch-schemas'
+import { keptWorkspaceOfUnknownCreate } from './agent-launch-kept-workspace'
 
 /**
  * The ledger namespace of whoever the transport says is calling. A transport that could not name its
@@ -49,7 +54,12 @@ export function agentLaunchOperationCallerKey(context: Pick<RpcContext, 'caller'
  * envelope. An `AgentSessionWireRefusal` still fits, which is how the shared replay resolver's
  * answers pass through unchanged.
  */
-export type AgentLaunchRefusal = { code: string; message: string }
+export type AgentLaunchRefusal = {
+  code: string
+  message: string
+  /** The workspace a create made, for a caller that reads `agent.launch.workspace-kept.v1`. */
+  data?: { worktreeId: string }
+}
 
 export type AgentLaunchAdmission =
   /** This caller owns the operation. It alone runs the effect, and it must settle the row. */
@@ -59,7 +69,10 @@ export type AgentLaunchAdmission =
        *  the running agent instead of refusing an unknown outcome. */
       record: (provisional: AgentLaunchResult) => Promise<void>
       settle: (result: AgentLaunchResult) => Promise<void>
-      fail: (code: string) => Promise<void>
+      /** `keptWorktreeId` names the workspace a create kept, settled with the code in one write. */
+      fail: (code: string, keptWorktreeId?: string) => Promise<void>
+      /** Bookkeeping about a create, written before anything runs in its workspace. */
+      annotate: (annotation: Pick<AgentSessionOperationRow, 'createIntent'>) => Promise<void>
       /** Distinct from the launch id: the inner attach reserves in this same ledger. */
       attachOperationId: string
       callerKey: string
@@ -75,6 +88,19 @@ function answerFromRecordedRow(
   outcome: AgentSessionOperationOutcome
 ): AgentLaunchAdmission | null {
   if (outcome.status === 'failed') {
+    // Only a settled live no-dispatch failure carries this enrichment; validate it at the reader.
+    const keptWorktreeId =
+      (outcome.code === 'agent_session_operation_unknown' ||
+        outcome.code === AGENT_LAUNCH_AGENT_NOT_STARTED_CODE) &&
+      typeof outcome.keptWorktreeId === 'string' &&
+      outcome.keptWorktreeId.trim().length > 0
+        ? outcome.keptWorktreeId
+        : undefined
+    const code = keptWorktreeId
+      ? AGENT_LAUNCH_AGENT_NOT_STARTED_CODE
+      : outcome.code === AGENT_LAUNCH_AGENT_NOT_STARTED_CODE
+        ? 'agent_session_operation_unknown'
+        : outcome.code
     // Replayed verbatim rather than narrowed to the `agentSession.*` vocabulary. A launch fails
     // with its own codes — `worktree_not_found` and the reuse-terminal guards — none of which is on
     // that closed list, so narrowing would answer every one of them with
@@ -84,9 +110,9 @@ function answerFromRecordedRow(
     return {
       decision: 'refuse',
       refusal: {
-        code: outcome.code,
-        message:
-          outcome.message ?? `Launch operation ${operationId} already failed: ${outcome.code}.`
+        code,
+        message: outcome.message ?? `Launch operation ${operationId} already failed: ${code}.`,
+        ...(keptWorktreeId ? { data: { worktreeId: keptWorktreeId } } : {})
       }
     }
   }
@@ -113,6 +139,19 @@ export function readsAgentLaunchTabClosed(
   return (
     context.clientKind === undefined ||
     context.clientCapabilities?.includes(AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY) === true
+  )
+}
+
+/** A create that kept its workspace but could not start its agent answers so only to a caller
+ *  that reads it. A caller with no declared client (the local runtime socket, the SSH CLI bridge)
+ *  ships with this host, as for the unconfirmed prompt; no `orca` command calls `agent.launch`
+ *  today, so in practice only a client advertising the capability reads it. */
+export function readsAgentLaunchWorkspaceKept(
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AGENT_LAUNCH_WORKSPACE_KEPT_CLIENT_CAPABILITY) === true
   )
 }
 
@@ -159,6 +198,11 @@ function presentRecordedAnswer(
   operationId: string,
   answer: AgentLaunchAdmission
 ): AgentLaunchAdmission {
+  if (answer.decision === 'refuse' && answer.refusal.code === AGENT_LAUNCH_AGENT_NOT_STARTED_CODE) {
+    return answer.refusal.data && readsAgentLaunchWorkspaceKept(context)
+      ? answer
+      : refusal(operationId, 'agent_session_operation_unknown', 'created its workspace only')
+  }
   if (
     answer.decision === 'refuse' &&
     answer.refusal.code === AGENT_LAUNCH_TAB_CLOSED_CODE &&
@@ -222,7 +266,11 @@ export async function admitAgentLaunchOperation(
   if (admitted.decision === 'replay') {
     const answer = answerFromRecordedRow(operationId, admitted.row.outcome)
     if (answer) {
-      return presentRecordedAnswer(context, operationId, answer)
+      return nameKeptWorkspace(
+        context,
+        admitted.row,
+        presentRecordedAnswer(context, operationId, answer)
+      )
     }
   }
   // Unreachable with both steps in one transaction; answered as uncertain rather than run twice.
@@ -237,9 +285,13 @@ export async function admitAgentLaunchOperation(
     // The handler joins same-process retries before admission. Reaching a claimed row here means
     // this runtime did not start it, so treating it as restart uncertainty is the safe answer.
     const answer = answerFromRecordedRow(operationId, claim.row.outcome)
-    return answer
-      ? presentRecordedAnswer(context, operationId, answer)
-      : refusal(operationId, 'agent_session_operation_unknown', 'is claimed but unsettled')
+    return nameKeptWorkspace(
+      context,
+      claim.row,
+      answer
+        ? presentRecordedAnswer(context, operationId, answer)
+        : refusal(operationId, 'agent_session_operation_unknown', 'is claimed but unsettled')
+    )
   }
   const succeeded = (result: AgentLaunchResult) =>
     store.recordOperationOutcome({
@@ -259,12 +311,13 @@ export async function admitAgentLaunchOperation(
     // The same row shape twice: a build that predates the first write reads either one.
     record: succeeded,
     settle: succeeded,
-    fail: (code) =>
+    fail: (code, keptWorktreeId) =>
       store.recordOperationOutcome({
         callerKey,
         operationId,
-        outcome: { status: 'failed', code }
-      })
+        outcome: { status: 'failed', code, ...(keptWorktreeId ? { keptWorktreeId } : {}) }
+      }),
+    annotate: (annotation) => store.annotateOperation({ callerKey, operationId, annotation })
   }
 }
 
@@ -277,4 +330,24 @@ function refusal(
     decision: 'refuse',
     refusal: { code, message: `Launch operation ${operationId} ${detail}.` }
   }
+}
+
+/**
+ * An uncertain answer about a create, to a caller that reads it, also names the workspace the create
+ * provably made; the agent stays uncertain. Every other answer, and every other caller, is unchanged.
+ */
+async function nameKeptWorkspace(
+  context: RpcContext,
+  row: AgentSessionOperationRow,
+  answer: AgentLaunchAdmission
+): Promise<AgentLaunchAdmission> {
+  if (
+    answer.decision !== 'refuse' ||
+    answer.refusal.code !== 'agent_session_operation_unknown' ||
+    !readsAgentLaunchWorkspaceKept(context)
+  ) {
+    return answer
+  }
+  const worktreeId = await keptWorkspaceOfUnknownCreate(context.runtime, row)
+  return worktreeId ? { ...answer, refusal: { ...answer.refusal, data: { worktreeId } } } : answer
 }

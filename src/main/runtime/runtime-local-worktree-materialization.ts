@@ -1,5 +1,4 @@
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
-import { randomUUID } from 'node:crypto'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
 import type { GitWorktreeInfo, GitPushTarget, Worktree } from '../../shared/worktree/types'
@@ -31,6 +30,8 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
   store: RuntimeStore
   settings: Parameters<typeof getWorktreeCreationLayout>[1]
   created: GitWorktreeInfo
+  /** Minted before the add; the metadata records it as this worktree's instance. */
+  instanceId: string
   remoteTrackingBase: RemoteTrackingBase | null
   sparseDirectories: string[]
   configuredPushTarget?: GitPushTarget
@@ -52,6 +53,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     store,
     settings,
     created,
+    instanceId,
     remoteTrackingBase,
     sparseDirectories,
     configuredPushTarget,
@@ -77,7 +79,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
   )
   const meta = timing.timeSync('persist_metadata', () =>
     store.setWorktreeMeta(worktreeId, {
-      instanceId: randomUUID(),
+      instanceId,
       ...getProjectHostSetupWorktreeMeta(store.getProjectHostSetups?.() ?? [], repo),
       lastActivityAt: now,
       createdAt: now,

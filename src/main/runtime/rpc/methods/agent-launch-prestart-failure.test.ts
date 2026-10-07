@@ -10,10 +10,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
+import { AGENT_LAUNCH_AGENT_NOT_STARTED_CODE } from '../../../../shared/agent-launch-agent-not-started'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
+import { startRuntimeLocalWorktreeTerminals } from '../../runtime-local-worktree-terminal-startup'
+import type { RuntimeManagedWorktreeCreateArgs } from '../../runtime-managed-worktree-create-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   methodNamed,
   runtimeStub,
@@ -82,19 +86,23 @@ describe('a launch whose terminal fails', () => {
   async function replay(
     runtime: AgentLaunchRuntimeStub,
     launch: Launch,
-    operationId: string = OPERATION_ID
+    operationId: string = OPERATION_ID,
+    caller?: Parameters<RpcDispatcher['dispatch']>[1]
   ) {
     const dispatcher = new RpcDispatcher({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements every runtime method reached by agent.launch and dispatcher metadata.
       runtime: { ...runtime, getRuntimeId: () => 'runtime-1' } as unknown as OrcaRuntimeService,
       methods: AGENT_LAUNCH_METHODS
     })
-    return dispatcher.dispatch({
-      id: 'request-1',
-      authToken: 'token',
-      method: 'agent.launchReplay',
-      params: AGENT_LAUNCH_REPLAY.params.parse({ ...launch, operationId })
-    })
+    return dispatcher.dispatch(
+      {
+        id: 'request-1',
+        authToken: 'token',
+        method: 'agent.launchReplay',
+        params: AGENT_LAUNCH_REPLAY.params.parse({ ...launch, operationId })
+      },
+      caller
+    )
   }
 
   it('reports a failure before the spawn request with its real cause and records it', async () => {
@@ -161,23 +169,104 @@ describe('a launch whose terminal fails', () => {
     expect(outcomeOf(OPERATION_ID)?.status).toBe('unknown')
   })
 
-  it('stays unknown for a launch that created its workspace first', async () => {
-    const runtime = runtimeStub({ settings: {} })
+  // Every caller and method: agent-launch-workspace-kept.test.ts.
+  it('names the kept workspace when no agent was asked for, and answers a retry from the record', async () => {
+    const local = runtimeStub({ settings: {} })
     // No startup terminal came back, so the launch builds its own in the new workspace.
+    local.createManagedWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-new' },
+      startupTerminal: undefined
+    })
+    failingCreate(local, new Error(NO_LAUNCH_COMMAND), false)
+    const response = await replay(local, CREATE_LAUNCH)
+    expect(local.createTerminal).toHaveBeenCalledTimes(1)
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: AGENT_LAUNCH_AGENT_NOT_STARTED_CODE, data: { worktreeId: 'wt-new' } }
+    })
+    expect(outcomeOf(OPERATION_ID)).toMatchObject({
+      status: 'failed',
+      code: 'agent_session_operation_unknown',
+      keptWorktreeId: 'wt-new'
+    })
+
+    // The same id again answers from the one settle, without creating anything.
+    const retry = runtimeStub({ settings: {} })
+    expect(await replay(retry, CREATE_LAUNCH)).toMatchObject({
+      ok: false,
+      error: { code: AGENT_LAUNCH_AGENT_NOT_STARTED_CODE, data: { worktreeId: 'wt-new' } }
+    })
+    expect(retry.createManagedWorktree).not.toHaveBeenCalled()
+  })
+
+  it('stays unknown for a created workspace whose terminal failed after its spawn left', async () => {
+    const runtime = runtimeStub({ settings: {} })
     runtime.createManagedWorktree.mockResolvedValueOnce({
       worktree: { id: 'wt-new' },
       startupTerminal: undefined
     })
-    failingCreate(runtime, new Error(NO_LAUNCH_COMMAND), false)
+    failingCreate(runtime, new Error('reply lost'), true)
+
+    expect(await replay(runtime, CREATE_LAUNCH)).toMatchObject({
+      ok: false,
+      error: { code: 'agent_session_operation_unknown' }
+    })
+    expect(outcomeOf(OPERATION_ID)?.status).toBe('unknown')
+  })
+
+  it('stays unknown when the create asked for its startup agent before its own terminal failed', async () => {
+    // The real startup step runs on the stub's terminals: its spawn request leaves and the reply is
+    // lost, so that agent may run. The launch's second terminal then fails before its request
+    // leaves, which proves nothing about the first.
+    const runtime = runtimeStub({ settings: {} })
+    runtime.createManagedWorktree.mockImplementationOnce(async (args: Record<string, unknown>) => {
+      const started = await startRuntimeLocalWorktreeTerminals({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch's own create args, as `createManagedWorktree` receives them.
+        request: args as unknown as RuntimeManagedWorktreeCreateArgs,
+        repo: { id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: 'blue', addedAt: 1 },
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the startup step reads only the worktree's id and path.
+        worktree: { id: 'wt-new', path: '/worktrees/task' } as Worktree,
+        createdWithAgent: 'claude',
+        startup: { command: 'claude' },
+        ports: {
+          canSpawn: true,
+          createTerminal: async (selector, options) => ({
+            ...(await runtime.createTerminal(selector, options)),
+            worktreeId: 'wt-new',
+            title: null
+          }),
+          pasteDraft: vi.fn(),
+          sendFollowup: vi.fn(),
+          provision: vi.fn(),
+          activate: vi.fn()
+        }
+      })
+      return { worktree: { id: 'wt-new' }, startupTerminal: undefined, warning: started.warning }
+    })
+    runtime.createTerminal
+      .mockImplementationOnce(async (_selector: string, options?: Record<string, unknown>) => {
+        const dispatched = options?.onPtySpawnDispatched
+        if (typeof dispatched === 'function') {
+          dispatched()
+        }
+        throw new Error('reply lost')
+      })
+      .mockImplementationOnce(async () => {
+        throw new Error(NO_LAUNCH_COMMAND)
+      })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const response = await replay(runtime, CREATE_LAUNCH)
+    warn.mockRestore()
 
-    expect(runtime.createTerminal).toHaveBeenCalledTimes(1)
+    expect(runtime.createTerminal).toHaveBeenCalledTimes(2)
     expect(response).toMatchObject({
       ok: false,
       error: { code: 'agent_session_operation_unknown' }
     })
+    expect(outcomeOf(OPERATION_ID)?.status).toBe('unknown')
   })
+
   it.each([
     { ...CREATE_LAUNCH, agent: 'opencode', sessionOptions: { model: 'private-proof/model-b' } },
     {

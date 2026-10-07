@@ -26,6 +26,7 @@ import {
   isAgentSessionConversationCommandResult,
   type AgentSessionConversationCommandResult
 } from './agent-session-conversation-command'
+import type { AgentSessionOperationCreateIntent } from './agent-session-operation-create-record'
 
 export const AGENT_SESSION_DURABLE_OPERATION_PER_CLIENT_LIMIT = 512
 export const AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT = 4_096
@@ -64,6 +65,9 @@ export type AgentSessionOperationOutcome =
       /** Beside the code, so a replay says what the first answer did. Read back against the code,
        *  since the code is a string here; a row written before details carries none. */
       details?: AgentSessionAnyRefusalDetails
+      /** Live no-dispatch proof, settled atomically with the older-host-readable unknown code.
+       *  Validated by the launch reader; malformed enrichment must not discard the row. */
+      keptWorktreeId?: unknown
     }
   /** The effect may or may not have happened; replay this answer instead of spawning again. */
   | { status: 'unknown' }
@@ -86,6 +90,11 @@ export type AgentSessionOperationRow = {
    * malformed value costs that pane its verdict, never the row.
    */
   ownedPane?: AgentSessionOperationOwnedPane
+  /**
+   * The worktree an `agent.launch` create was about to add, written before `git worktree add`, so a
+   * replay can find what it made. Not checked, as `ownedPane` is not.
+   */
+  createIntent?: AgentSessionOperationCreateIntent
 }
 
 /** Unexpired rows naming this pane as theirs. */

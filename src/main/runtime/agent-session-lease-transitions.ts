@@ -18,6 +18,7 @@ import {
 } from '../../shared/agent-session-provider-handle'
 import { agentSessionProviderHandleBelongsTo } from '../../shared/agent-session-provider-handle-encoding'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
+import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
 import type {
   AgentSessionDeathEvidence,
   AgentSessionLease,
@@ -134,6 +135,8 @@ export function proveAgentSessionOwner(args: {
   link: AgentSessionProviderHandleLink
   now: number
   leaseTtlMs: number
+  /** Options the proving start ran with, recorded in the same write. */
+  options?: Readonly<Record<string, string>>
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.fence)
@@ -160,7 +163,7 @@ export function proveAgentSessionOwner(args: {
   if (!head) {
     throw new Error('agent_session_provider_handle_invalid')
   }
-  return {
+  const proved: AgentSessionRecord = {
     ...record,
     providerHandleChain,
     lease: {
@@ -174,6 +177,13 @@ export function proveAgentSessionOwner(args: {
     },
     updatedAt: args.now
   }
+  return args.options
+    ? replaceAgentSessionRecordOptions(proved, {
+        ...args,
+        sessionId: record.sessionId,
+        options: args.options
+      })
+    : proved
 }
 
 /**

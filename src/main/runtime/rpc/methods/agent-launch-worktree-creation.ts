@@ -23,6 +23,7 @@ import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-conte
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import type { AgentLaunchParams } from './agent-launch-schemas'
+import type { AgentSessionOperationCreateIntent } from '../../../../shared/agent-session-operation-create-record'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
 
 type WorktreeCreateParams = Extract<
@@ -32,9 +33,15 @@ type WorktreeCreateParams = Extract<
 
 const STRUCTURED_SETUP_WAIT_TIMEOUT_MS = 60_000
 
+/** What a replay-safe launch records about the workspace it creates, before `git worktree add`. */
+export type AgentLaunchCreateRecords = {
+  createIntent: (intent: AgentSessionOperationCreateIntent) => Promise<void>
+}
+
 export function agentLaunchWorkspaceFactory(
   context: RpcContext,
-  agent: TuiAgent
+  agent: TuiAgent,
+  records?: AgentLaunchCreateRecords
 ): AgentLaunchWorkspaceFactory {
   return {
     createWorktree: async ({
@@ -45,7 +52,8 @@ export function agentLaunchWorkspaceFactory(
       cwd,
       launchSource,
       paneKey,
-      options
+      options,
+      onStartupAgentRequested
     }) => {
       const startupLaunchPreferences = toAgentLaunchPreferences(options)
       let promptRodeLaunchCommand = false
@@ -93,6 +101,13 @@ export function agentLaunchWorkspaceFactory(
           ...(launchSource ? { startupLaunchSource: launchSource } : {}),
           ...(paneKey ? { startupPaneKey: paneKey } : {}),
           ...(startupLaunchPreferences ? { startupLaunchPreferences } : {}),
+          ...(onStartupAgentRequested ? { onStartupAgentRequested } : {}),
+          ...(records
+            ? {
+                onCreateCandidate: (candidate: Omit<AgentSessionOperationCreateIntent, 'repoId'>) =>
+                  records.createIntent({ repoId: repo.id, ...candidate })
+              }
+            : {}),
           // The launch owns the agent whichever surface it settles on, so the workspace records
           // it even when no startup terminal was created for it.
           createdWithAgent: agent,

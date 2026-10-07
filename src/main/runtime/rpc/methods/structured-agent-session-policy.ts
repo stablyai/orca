@@ -44,6 +44,23 @@ export function clientRendersStructuredAgent(
   )
 }
 
+/**
+ * `agent.launch.v2` was defined when Claude and Codex were the only chats, so it vouches for those
+ * two. Any other agent's chat needs the client to say it reads it, by the rule tabs and restart
+ * offers use; a client that does not gets that agent as a terminal.
+ */
+export function callerRendersLaunchedChat(
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>,
+  agent: string
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    agent === 'claude' ||
+    agent === 'codex' ||
+    clientRendersStructuredAgent(context.clientCapabilities, agent)
+  )
+}
+
 /** The agents this client reads rows of, among those registered or saved here; undefined when it
  *  reads every one, so an action for it is exactly the unscoped one (one fence for every offer). */
 export function structuredAgentsReadBy(

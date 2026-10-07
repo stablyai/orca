@@ -26,7 +26,6 @@
  */
 
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
-import { parsePaneKey } from '../../shared/stable-pane-id'
 import type {
   AgentLaunchIntent,
   AgentLaunchResult,
@@ -34,7 +33,6 @@ import type {
 } from '../../shared/agent-launch-intent'
 import { withoutReservedAgentCreateFields } from '../../shared/agent-launch-intent'
 import {
-  argvLaunchPrompt,
   deliverTerminalLaunchPrompt,
   HANDED_TO_TERMINAL,
   launchCommandPrompt,
@@ -42,12 +40,15 @@ import {
   settledAtCreation,
   settleLaunchPromptDisposal
 } from './agent-launch-prompt-delivery'
+import { AgentLaunchTabClosedError } from '../../shared/agent-launch-tab-closed'
+import { AgentLaunchWorkspaceKeptError } from '../../shared/agent-launch-agent-not-started'
+import { AgentLaunchPaneAlreadyLiveError } from '../../shared/agent-launch-pane-already-live'
+import { AgentLaunchSessionAlreadyExistsError } from '../../shared/agent-launch-session-already-exists'
 import {
   workspaceKindForWorktreeId,
   type WorkspaceLaunchKind
 } from '../../shared/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { deriveAgentLaunchTerminalViewMode } from './agent-launch-view-mode'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session-definitive-refusal'
 import {
   decideAgentLaunchMode,
@@ -58,8 +59,13 @@ import {
   DEFAULT_LAUNCH_VOCABULARY
 } from './agent-launch-mode'
 import {
+  createSurface,
+  createTerminalSurface,
+  terminalLaunchInputs,
+  type CreatedSurface
+} from './agent-launch-surface-create'
+import {
   AgentLaunchStructuredSessionRefusedError,
-  type AgentLaunchStructuredSurface,
   type AgentLaunchSurfaceFactory,
   type AgentLaunchWorkspaceFactory
 } from './agent-launch-surface-factories'
@@ -130,7 +136,12 @@ export async function executeAgentLaunch(
     }
   }
 
-  const placed = await resolveWorkspace(execution, preflight)
+  // The create may ask for the agent itself (its startup terminal). Once it has, no later failure
+  // proves the agent never started, whatever happens to the surface built after it.
+  let startupAgentRequested = false
+  const placed = await resolveWorkspace(execution, preflight, () => {
+    startupAgentRequested = true
+  })
   // Agent-first creation already produced the agent, so the pre-flight verdict is final.
   if (placed.startupTerminalHandle) {
     const startup = published(execution, {
@@ -157,33 +168,45 @@ export async function executeAgentLaunch(
     }
   }
 
-  execution.onStage?.('mode_settle')
-  let settled = await resolveAgentLaunchModeOnHost(
-    runtime,
-    preflight,
-    placed.worktreeId,
-    intent.agent,
-    vocabulary
-  )
+  let agentRequested = false
+  const { settled, created } = await keepWorkspaceWhenAgentNeverStarted(
+    intent,
+    placed,
+    (error) =>
+      !startupAgentRequested &&
+      (!agentRequested || execution.surfaces.failedBeforeAgentStart?.(error) === true),
+    async () => {
+      execution.onStage?.('mode_settle')
+      let settled = await resolveAgentLaunchModeOnHost(
+        runtime,
+        preflight,
+        placed.worktreeId,
+        intent.agent,
+        vocabulary
+      )
 
-  execution.onStage?.('surface_create')
-  let created: CreatedSurface
-  try {
-    created = await createSurface(execution, placed, settled)
-  } catch (error) {
-    // The structured create path distinguishes a definitive pre-commit refusal from an unknown
-    // outcome. Only the former is safe to replace with a terminal in the same workspace; retrying
-    // after an unknown attach outcome could create two agents.
-    if (
-      settled.mode !== 'structured' ||
-      !(error instanceof AgentLaunchStructuredSessionRefusedError) ||
-      !isDefinitiveAgentSessionCreateRefusal(error.code)
-    ) {
-      throw error
+      execution.onStage?.('surface_create')
+      agentRequested = true
+      let created: CreatedSurface
+      try {
+        created = await createSurface(execution, placed, settled)
+      } catch (error) {
+        // The structured create path distinguishes a definitive pre-commit refusal from an unknown
+        // outcome. Only the former is safe to replace with a terminal in the same workspace; retrying
+        // after an unknown attach outcome could create two agents.
+        if (
+          settled.mode !== 'structured' ||
+          !(error instanceof AgentLaunchStructuredSessionRefusedError) ||
+          !isDefinitiveAgentSessionCreateRefusal(error.code)
+        ) {
+          throw error
+        }
+        settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary)
+        created = await createTerminalSurface(execution, placed)
+      }
+      return { settled, created }
     }
-    settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary)
-    created = await createTerminalSurface(execution, placed)
-  }
+  )
   // Both CAN be set, so neither may be dropped. The create warns precisely when it produced no
   // startup terminal — `didSpawnStartup` stays false when that spawn throws — and that is the same
   // condition which skips the early return above, so the launch goes on to build a second surface,
@@ -230,7 +253,8 @@ function downgradeAgentLaunchModeForStructuredRefusal(
 
 async function resolveWorkspace(
   execution: AgentLaunchExecution,
-  preflight: AgentLaunchModeReceipt
+  preflight: AgentLaunchModeReceipt,
+  onStartupAgentRequested: () => void
 ): Promise<{
   worktreeId: string
   connectionId: string | null | undefined
@@ -259,7 +283,8 @@ async function resolveWorkspace(
     create: withoutReservedAgentCreateFields(intent.target.create),
     startupAgent: preflight.mode === 'structured' ? undefined : intent.agent,
     ...(startupPrompt ? { startupPrompt } : {}),
-    ...(preflight.mode === 'structured' ? {} : terminalLaunchInputs(intent))
+    ...(preflight.mode === 'structured' ? {} : terminalLaunchInputs(intent)),
+    onStartupAgentRequested
   })
   // Only when a startup terminal actually came back: a create that produced none ran no command,
   // so nothing carried the prompt and the launch still owes it to whatever surface it builds next.
@@ -267,106 +292,6 @@ async function resolveWorkspace(
   return rest.startupTerminalHandle && promptRodeLaunchCommand
     ? { ...rest, promptRodeLaunchCommand: true }
     : rest
-}
-
-/** `structured` is the same surface `outcome` names, kept typed so prompt delivery reads the create's
- *  own fence rather than branching on `outcome.kind` and re-deriving it. */
-export type CreatedSurface = {
-  outcome: AgentLaunchResult['outcome']
-  warning?: string
-  structured?: AgentLaunchStructuredSurface
-  /** True when this create folded the prompt into the agent's launch command. */
-  promptRodeLaunchCommand?: boolean
-}
-
-async function createSurface(
-  execution: AgentLaunchExecution,
-  workspace: { worktreeId: string; connectionId: string | null | undefined },
-  settled: AgentLaunchModeReceipt
-): Promise<CreatedSurface> {
-  const { intent, surfaces } = execution
-  if (settled.mode === 'structured') {
-    // One reservation serves either route: the tab half of the reserved pane is the chat's tab.
-    const reservedTabId = intent.paneKey ? parsePaneKey(intent.paneKey)?.tabId : undefined
-    const session = await surfaces.createStructuredSession({
-      worktreeId: workspace.worktreeId,
-      agent: intent.agent,
-      ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
-      ...(intent.sessionId ? { sessionId: intent.sessionId } : {}),
-      ...(reservedTabId ? { tabId: reservedTabId } : {})
-    })
-    return {
-      outcome: {
-        kind: 'structured',
-        sessionId: session.sessionId,
-        handle: session.handle,
-        ...(session.tabId ? { tabId: session.tabId } : {})
-      },
-      structured: session,
-      ...ignoredStructuredAgentArgsWarning(intent)
-    }
-  }
-  return createTerminalSurface(execution, workspace)
-}
-
-/**
- * Structured chat uses saved Arguments, so a per-call override still needs a truthful warning.
- */
-function ignoredStructuredAgentArgsWarning(
-  intent: AgentLaunchIntent
-): { warning: string } | undefined {
-  return intent.agentArgs === undefined
-    ? undefined
-    : {
-        warning:
-          'Started a structured chat session using saved agent Arguments; the per-launch argument override was ignored.'
-      }
-}
-
-/** What every route that builds a terminal agent passes on, so the startup terminal of a new
- *  workspace and the terminal of an existing one start the same agent. */
-function terminalLaunchInputs(intent: AgentLaunchIntent) {
-  return {
-    ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
-    // `null` is a value the caller meant, so this tests for absence rather than falsiness.
-    ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
-    ...(intent.cwd ? { cwd: intent.cwd } : {}),
-    ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
-    ...(intent.paneKey ? { paneKey: intent.paneKey } : {})
-  }
-}
-
-/**
- * The one place a terminal agent is created, so the structured-refusal downgrade builds the same
- * surface — carrying the same argv prompt — as a launch that chose a terminal outright.
- */
-async function createTerminalSurface(
-  execution: AgentLaunchExecution,
-  workspace: { worktreeId: string; connectionId: string | null | undefined }
-): Promise<CreatedSurface> {
-  const { intent, surfaces } = execution
-  const startupPrompt = argvLaunchPrompt(intent)
-  const terminal = await surfaces.createTerminalAgent({
-    worktreeId: workspace.worktreeId,
-    agent: intent.agent,
-    ...(startupPrompt ? { startupPrompt } : {}),
-    ...terminalLaunchInputs(intent),
-    viewMode: deriveAgentLaunchTerminalViewMode({
-      settings: readAgentLaunchModeSettings(execution.runtime),
-      agent: intent.agent,
-      ...(intent.prompt ? { prompt: intent.prompt } : {}),
-      connectionId: workspace.connectionId
-    })
-  })
-  return {
-    outcome: {
-      kind: 'terminal',
-      handle: terminal.handle,
-      ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
-    },
-    ...(terminal.warning ? { warning: terminal.warning } : {}),
-    ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
-  }
 }
 
 /**
@@ -397,4 +322,33 @@ function existingWorktreeId(target: AgentLaunchTarget): string {
  */
 function launchWorkspaceKind(target: AgentLaunchTarget): WorkspaceLaunchKind {
   return target.kind === 'existing' ? workspaceKindForWorktreeId(target.worktree) : 'git-worktree'
+}
+
+/**
+ * A create whose workspace exists and whose agent provably never started keeps the workspace, and
+ * says so instead of an unknown outcome. A failure after an agent was asked for proves nothing (a
+ * spawn whose reply was lost may still be running), so it propagates as before; a tab the user
+ * closed has its own answer. A live reserved pane or a taken reserved session in the workspace this
+ * launch just made is most likely its own agent, so neither is ever "not started".
+ */
+async function keepWorkspaceWhenAgentNeverStarted<T>(
+  intent: AgentLaunchIntent,
+  placed: { worktreeId: string },
+  neverStarted: (error: unknown) => boolean,
+  start: () => Promise<T>
+): Promise<T> {
+  try {
+    return await start()
+  } catch (error) {
+    if (
+      intent.target.kind !== 'create-worktree' ||
+      error instanceof AgentLaunchTabClosedError ||
+      error instanceof AgentLaunchPaneAlreadyLiveError ||
+      error instanceof AgentLaunchSessionAlreadyExistsError ||
+      !neverStarted(error)
+    ) {
+      throw error
+    }
+    throw new AgentLaunchWorkspaceKeptError(placed.worktreeId, { cause: error })
+  }
 }

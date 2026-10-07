@@ -141,7 +141,11 @@ export async function createRuntimeFolderWorktree(args: {
         ...(args.startup.viewMode ? { viewMode: args.startup.viewMode } : {}),
         startupCommandDelivery: args.startup.startupCommandDelivery,
         telemetry: args.startup.telemetry,
-        ...(shouldActivate ? {} : { surfaceOwner: false })
+        ...(shouldActivate ? {} : { surfaceOwner: false }),
+        // Its spawn request leaving this process is the create asking for its agent.
+        ...(request.onStartupAgentRequested
+          ? { onPtySpawnDispatched: request.onStartupAgentRequested }
+          : {})
       })
       if (args.draftPaste) {
         deps.pasteDraft(terminal.handle, args.draftPaste)
@@ -165,12 +169,12 @@ export async function createRuntimeFolderWorktree(args: {
     }
   }
   if (shouldActivate) {
-    deps.activate(
-      repo.id,
-      worktree.id,
-      undefined,
-      args.startup && !didSpawnStartup ? args.startup : undefined
-    )
+    const handedStartup = args.startup && !didSpawnStartup ? args.startup : undefined
+    if (handedStartup) {
+      // The window starts it, out of this process's sight.
+      request.onStartupAgentRequested?.()
+    }
+    deps.activate(repo.id, worktree.id, undefined, handedStartup)
   }
   if (
     (!shouldActivate || deps.provisionInBackground?.() === true) &&

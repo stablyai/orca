@@ -105,7 +105,11 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
-        ...ownerSurfacing(shouldActivate)
+        ...ownerSurfacing(shouldActivate),
+        // Its spawn request leaving this process is the create asking for its agent.
+        ...(request.onStartupAgentRequested
+          ? { onPtySpawnDispatched: request.onStartupAgentRequested }
+          : {})
       })
       if (args.draftPaste) {
         ports.pasteDraft(terminal.handle, args.draftPaste)
@@ -144,11 +148,16 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
             ...(didSpawnStartup && wrappedSetupCommand ? { command: wrappedSetupCommand } : {})
           }
         : undefined
+    const handedStartup = startup && !didSpawnStartup ? startup : undefined
+    if (handedStartup) {
+      // The window starts it, out of this process's sight.
+      request.onStartupAgentRequested?.()
+    }
     ports.activate(
       repo.id,
       worktree.id,
       activationSetup,
-      startup && !didSpawnStartup ? startup : undefined,
+      handedStartup,
       runtimeWillProvision ? undefined : defaultTabs
     )
   } else if (ports.canSpawn && (setup || defaultTabs || didSpawnStartup)) {

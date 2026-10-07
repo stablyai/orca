@@ -120,6 +120,12 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     // Args are declared so a test can assert what the launch asked for, not merely that it asked.
     createTerminal: vi.fn(async (_selector: string, createOptions?: Record<string, unknown>) => {
       if (options.terminalPaneAlreadyLive && createOptions?.requireFreshPane === true) {
+        // As the runtime orders it: the spawn request leaves, and only the spawn's answer shows
+        // the pane was already live.
+        const dispatched = createOptions.onPtySpawnDispatched
+        if (typeof dispatched === 'function') {
+          dispatched()
+        }
         throw new AgentLaunchPaneAlreadyLiveError()
       }
       reportPromptCarry(options, createOptions?.onStartupPromptCarry, createOptions?.startupPrompt)

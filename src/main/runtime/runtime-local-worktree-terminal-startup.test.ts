@@ -133,3 +133,68 @@ describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
     }
   })
 })
+
+describe('startRuntimeLocalWorktreeTerminals reports when it asks for the startup agent', () => {
+  /** A startup create that fails; `afterDispatch` says whether its spawn request had left. */
+  async function failedStartup(afterDispatch: boolean) {
+    const { createTerminal, ports } = createPorts()
+    createTerminal.mockImplementationOnce(async (_selector, options) => {
+      if (afterDispatch) {
+        options.onPtySpawnDispatched?.()
+      }
+      throw new Error('reply lost')
+    })
+    const onStartupAgentRequested = vi.fn()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const result = await startRuntimeLocalWorktreeTerminals({
+        request: { repoSelector: `id:${repo.id}`, name: 'task', onStartupAgentRequested },
+        repo,
+        worktree,
+        createdWithAgent: 'codex',
+        startup: { command: 'codex' },
+        ports
+      })
+      return { result, onStartupAgentRequested }
+    } finally {
+      warn.mockRestore()
+    }
+  }
+
+  it('reports a startup spawn whose request left, even though it then failed', async () => {
+    const { result, onStartupAgentRequested } = await failedStartup(true)
+    expect(result.didSpawnStartup).toBe(false)
+    expect(onStartupAgentRequested).toHaveBeenCalledOnce()
+  })
+
+  it('reports nothing for a startup spawn that failed before its request left', async () => {
+    const { onStartupAgentRequested } = await failedStartup(false)
+    expect(onStartupAgentRequested).not.toHaveBeenCalled()
+  })
+
+  it('reports a startup handed to the window, which starts it out of sight', async () => {
+    const { ports } = createPorts()
+    const onStartupAgentRequested = vi.fn()
+    await startRuntimeLocalWorktreeTerminals({
+      request: {
+        repoSelector: `id:${repo.id}`,
+        name: 'task',
+        activate: true,
+        onStartupAgentRequested
+      },
+      repo,
+      worktree,
+      createdWithAgent: 'codex',
+      startup: { command: 'codex' },
+      ports: { ...ports, canSpawn: false }
+    })
+    expect(ports.activate).toHaveBeenCalledWith(
+      repo.id,
+      worktree.id,
+      undefined,
+      { command: 'codex' },
+      undefined
+    )
+    expect(onStartupAgentRequested).toHaveBeenCalledOnce()
+  })
+})

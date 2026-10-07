@@ -104,3 +104,34 @@ describe('a remote managed create with a startup agent', () => {
     expect(options).not.toHaveProperty('leafId')
   })
 })
+
+describe('a remote managed create reports when it asks for the startup agent', () => {
+  it.each([
+    [true, 1],
+    [false, 0]
+  ])(
+    'reports a failed startup spawn only once its request left (left=%s)',
+    async (left, reports) => {
+      const { createTerminal, deps } = createDeps()
+      createTerminal.mockImplementationOnce(async (_selector, options) => {
+        if (left) {
+          options.onPtySpawnDispatched?.()
+        }
+        throw new Error('ssh_channel_closed')
+      })
+      const onStartupAgentRequested = vi.fn()
+      const result = await createRuntimeRemoteManagedWorktree(
+        repo,
+        {
+          name: 'task',
+          createdWithAgent: 'codex',
+          startup: { command: 'codex' },
+          onStartupAgentRequested
+        },
+        deps
+      )
+      expect(result.warning).toContain('ssh_channel_closed')
+      expect(onStartupAgentRequested).toHaveBeenCalledTimes(reports)
+    }
+  )
+})

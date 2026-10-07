@@ -9,7 +9,15 @@ import {
   AgentLaunchTabClosedError
 } from '../../../../shared/agent-launch-tab-closed'
 import type { RpcContext } from '../core'
-import { readsAgentLaunchTabClosed } from './agent-launch-replay'
+import {
+  WorktreeCreateCollisionError,
+  WORKTREE_CREATE_COLLISION_CODE
+} from '../../../../shared/new-workspace/worktree-create-collision'
+import { readsAgentLaunchTabClosed, readsAgentLaunchWorkspaceKept } from './agent-launch-replay'
+import {
+  AGENT_LAUNCH_AGENT_NOT_STARTED_CODE,
+  AgentLaunchWorkspaceKeptError
+} from '../../../../shared/agent-launch-agent-not-started'
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 
 export class AgentLaunchExecutionError extends Error {
@@ -41,6 +49,24 @@ export async function withEarlyTab<T>(
   }
 }
 
+/** A create that kept its workspace but could not start its agent: named to a caller that reads it,
+ *  with the reason the agent failed as its message; `otherwise` (the answer it got before) to any
+ *  other. */
+export function agentLaunchWorkspaceKeptAnswer(
+  context: RpcContext,
+  error: AgentLaunchWorkspaceKeptError,
+  otherwise: unknown
+): unknown {
+  const reason =
+    error.cause instanceof Error ? error.cause.message : AGENT_LAUNCH_AGENT_NOT_STARTED_CODE
+  return readsAgentLaunchWorkspaceKept(context)
+    ? Object.assign(new Error(reason), {
+        code: AGENT_LAUNCH_AGENT_NOT_STARTED_CODE,
+        data: { worktreeId: error.worktreeId }
+      })
+    : otherwise
+}
+
 /** What a caller hears for a launch whose tab the user closed: the definite answer when it reads
  *  that word, the uncertain one it always got otherwise. */
 export function agentLaunchTabClosedAnswer(context: RpcContext): Error {
@@ -63,4 +89,25 @@ export async function settleLaunchWhoseTabWasClosed(
   }
   await settleQuietly(admission.fail(AGENT_LAUNCH_TAB_CLOSED_CODE))
   throw new AgentLaunchExecutionError(new AgentLaunchTabClosedError(), true)
+}
+
+/** What `agent.launchReplay` answers for a launch that failed. Nested failures cannot authorize
+ *  another workspace, regardless of their message or code. */
+export function launchReplayExecutionAnswer(
+  context: RpcContext,
+  error: AgentLaunchExecutionError
+): unknown {
+  if (error.cause instanceof WorktreeCreateCollisionError) {
+    return Object.assign(new Error(error.cause.message, { cause: error.cause }), {
+      code: WORKTREE_CREATE_COLLISION_CODE
+    })
+  }
+  if (error.cause instanceof AgentLaunchTabClosedError) {
+    return agentLaunchTabClosedAnswer(context)
+  }
+  const unknown = new Error('agent_session_operation_unknown', { cause: error.cause })
+  if (error.cause instanceof AgentLaunchWorkspaceKeptError) {
+    return agentLaunchWorkspaceKeptAnswer(context, error.cause, unknown)
+  }
+  return error.failedWithoutEffects ? error.cause : unknown
 }

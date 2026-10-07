@@ -185,7 +185,8 @@ export function agentLaunchSurfaceFactory(
         agent,
         freshLaunch,
         text: prompt.text
-      })
+      }),
+    failedBeforeAgentStart: terminalSpawn.failedBeforeDispatch
   }
 }
 

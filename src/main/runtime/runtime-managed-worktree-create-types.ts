@@ -54,6 +54,18 @@ export type RuntimeManagedWorktreeCreateArgs = {
   /** Main-internal: set by a caller that delivers an uncarried `startupPrompt` itself, so the text
    *  rides only a typed line that can carry it; reports whether it did. */
   onStartupPromptCarry?: (carried: boolean) => void
+  /** Main-internal: told when this create asks for its startup agent, either as the startup
+   *  terminal's spawn request leaves this process or as the startup is handed to the window to run.
+   *  From then on a later failure proves nothing about whether that agent runs. */
+  onStartupAgentRequested?: () => void
+  /** Main-internal: told the path, branch and metadata instance id a local git create chose, before
+   *  `git worktree add`, so a launch can record what it may make and later know it as its own.
+   *  Awaited; its failure never fails the create. */
+  onCreateCandidate?: (candidate: {
+    worktreePath: string
+    branchName: string
+    instanceId: string
+  }) => Promise<void>
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null
   startupCwd?: string

@@ -8,6 +8,7 @@
  * workspace exists.
  */
 
+import { AgentLaunchWorkspaceKeptError } from '../../shared/agent-launch-agent-not-started'
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
@@ -25,11 +26,15 @@ function harness(options: {
   createSupport?: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }
   createSupportThrows?: boolean
   structuredCreateError?: Error
+  terminalCreateError?: Error
+  /** What the surface factory says about that error: thrown before any agent was asked for. */
+  terminalFailedBeforeStart?: boolean
   deliveredMessageId?: string | null
   terminalPromptDelivered?: boolean
   /** Whether the surface reports that its typed line took the offered prompt. */
   lineCarriesPrompt?: boolean
   onSurfacePublished?: AgentLaunchExecution['onSurfacePublished']
+  onStage?: AgentLaunchExecution['onStage']
 }) {
   const calls: string[] = []
   const carried = (startupPrompt: string | undefined) =>
@@ -39,6 +44,7 @@ function harness(options: {
       create: Record<string, unknown>
       startupAgent: string | undefined
       startupPrompt?: string
+      onStartupAgentRequested?: () => void
     }) => {
       calls.push(`createWorktree(startupAgent=${String(args.startupAgent)})`)
       return {
@@ -65,6 +71,9 @@ function harness(options: {
   })
   const createTerminalAgent = vi.fn(async (args: { startupPrompt?: string }) => {
     calls.push('createTerminalAgent')
+    if (options.terminalCreateError) {
+      throw options.terminalCreateError
+    }
     return { handle: 'term_1', ...carried(args.startupPrompt) }
   })
   const deliverStructuredPrompt = vi.fn(async () => {
@@ -96,10 +105,13 @@ function harness(options: {
           createStructuredSession,
           createTerminalAgent,
           deliverStructuredPrompt,
-          deliverTerminalPrompt
+          deliverTerminalPrompt,
+          failedBeforeAgentStart: (error) =>
+            options.terminalFailedBeforeStart === true && error === options.terminalCreateError
         },
         workspaces: { createWorktree },
-        ...(options.onSurfacePublished ? { onSurfacePublished: options.onSurfacePublished } : {})
+        ...(options.onSurfacePublished ? { onSurfacePublished: options.onSurfacePublished } : {}),
+        ...(options.onStage ? { onStage: options.onStage } : {})
       })
   }
 }
@@ -189,12 +201,49 @@ describe('a structured launch that creates its own worktree', () => {
       )
     })
 
+    // An agent may exist, so the launch cannot say it never started.
     await expect(h.run(CREATE_INTENT)).rejects.toThrow('unknown')
     expect(h.calls).toEqual([
       'createWorktree(startupAgent=undefined)',
       'createSupport',
       'createStructuredSession'
     ])
+  })
+
+  it('names the kept workspace when its terminal failed before any agent was asked for', async () => {
+    const terminalCreateError = new Error('spawn failed')
+    const h = harness({
+      createSupport: { supported: false, reason: 'wsl' },
+      terminalCreateError,
+      terminalFailedBeforeStart: true
+    })
+
+    const error = await h.run(CREATE_INTENT).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(AgentLaunchWorkspaceKeptError)
+    expect(error).toMatchObject({ worktreeId: 'wt-new', cause: terminalCreateError })
+  })
+
+  it('passes a terminal failure on unchanged once its spawn was asked for', async () => {
+    const terminalCreateError = new Error('spawn failed')
+    const h = harness({ createSupport: { supported: false, reason: 'wsl' }, terminalCreateError })
+
+    await expect(h.run(CREATE_INTENT)).rejects.toBe(terminalCreateError)
+  })
+
+  it('names the kept workspace when the launch failed before it asked for any agent', async () => {
+    const settleError = new Error('settle failed')
+    const h = harness({
+      onStage: (stage) => {
+        if (stage === 'mode_settle') {
+          throw settleError
+        }
+      }
+    })
+
+    const error = await h.run(CREATE_INTENT).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(AgentLaunchWorkspaceKeptError)
+    expect(error).toMatchObject({ worktreeId: 'wt-new', cause: settleError })
+    expect(h.createStructuredSession).not.toHaveBeenCalled()
   })
 
   it('strips a stale startupAgent out of a migrated create payload', async () => {
@@ -705,6 +754,40 @@ describe('the surface is published as the launch stands, before its prompt is de
 })
 
 describe('a new local worktree whose startup terminal did not come up', () => {
+  /** The create made the workspace but returned no startup terminal; `asked` says whether it got
+   *  as far as asking for that terminal's agent (a spawn request that left, or the window's start). */
+  function startupTerminalFailed(asked: boolean, terminalCreateError: Error) {
+    const h = harness({ settings: {}, terminalCreateError, terminalFailedBeforeStart: true })
+    h.createWorktree.mockImplementationOnce(
+      async (args: { onStartupAgentRequested?: () => void }) => {
+        if (asked) {
+          args.onStartupAgentRequested?.()
+        }
+        return { worktreeId: 'wt-new', connectionId: null, startupTerminalHandle: undefined }
+      }
+    )
+    return h
+  }
+
+  it('cannot say its agent never started once the startup terminal asked for one', async () => {
+    // The startup spawn's reply was lost, so that agent may run; the launch's own terminal then
+    // failed before its spawn request left, which proves nothing about the first.
+    const terminalCreateError = new Error('Could not build launch command for claude.')
+    const h = startupTerminalFailed(true, terminalCreateError)
+
+    await expect(h.run(CREATE_INTENT)).rejects.toBe(terminalCreateError)
+    expect(h.createTerminalAgent).toHaveBeenCalledTimes(1)
+  })
+
+  it('names the kept workspace when neither terminal asked for an agent', async () => {
+    const terminalCreateError = new Error('Could not build launch command for claude.')
+    const h = startupTerminalFailed(false, terminalCreateError)
+
+    const error = await h.run(CREATE_INTENT).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(AgentLaunchWorkspaceKeptError)
+    expect(error).toMatchObject({ worktreeId: 'wt-new', cause: terminalCreateError })
+  })
+
   it('opens its agent in the view a local workspace allows, as an existing one would', async () => {
     const h = harness({
       settings: { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }

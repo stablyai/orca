@@ -31,6 +31,7 @@ import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owne
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
 import { WORKTREE_CREATE_COLLISION_CODE } from '../../../shared/new-workspace/worktree-create-collision'
+import { AGENT_LAUNCH_AGENT_NOT_STARTED_CODE } from '../../../shared/agent-launch-agent-not-started'
 import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launch-pane-already-live'
 import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch-session-already-exists'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
@@ -96,6 +97,11 @@ const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(CO
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   WORKTREE_CREATE_COLLISION_CODE,
+  // Both carry `data.worktreeId`, the workspace a create kept, so they take the path that keeps
+  // data. Only `agent.launch` throws the unknown one with a `code` property, always with the code
+  // as its message, so without data it maps exactly as the message passthrough below did.
+  AGENT_LAUNCH_AGENT_NOT_STARTED_CODE,
+  'agent_session_operation_unknown',
   'worktree_id_requires_full_path',
   'run_not_found',
   'run_required',

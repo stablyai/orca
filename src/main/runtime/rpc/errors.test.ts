@@ -391,3 +391,34 @@ describe('thrown agent-session refusals', () => {
     ).toBe(false)
   })
 })
+
+describe('an agent launch refusal that names the workspace its create kept', () => {
+  const unknownCode = 'agent_session_operation_unknown'
+  const meta = { runtimeId: 'runtime-1' }
+
+  it('keeps the workspace in data for a caller it was named to', () => {
+    const failure = mapRuntimeError(
+      'rpc_kept',
+      meta,
+      Object.assign(new Error(unknownCode), { code: unknownCode, data: { worktreeId: 'wt-1' } })
+    )
+
+    expect(failure.error).toEqual({
+      code: unknownCode,
+      message: unknownCode,
+      data: { worktreeId: 'wt-1' }
+    })
+  })
+
+  it('maps one without data exactly as the bare code always mapped', () => {
+    const coded = mapRuntimeError(
+      'rpc_coded',
+      meta,
+      Object.assign(new Error(unknownCode), { code: unknownCode })
+    )
+    const bare = mapRuntimeError('rpc_coded', meta, new Error(unknownCode))
+
+    expect(coded).toEqual(bare)
+    expect(coded.error).toEqual({ code: unknownCode, message: unknownCode })
+  })
+})

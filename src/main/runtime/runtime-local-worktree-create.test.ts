@@ -571,3 +571,44 @@ describe('runtime create setup decision', () => {
     expect(mocks.consume).toHaveBeenCalledOnce()
   })
 })
+
+describe('runtime create candidate bookkeeping', () => {
+  it('tells the launch the chosen path, branch and instance before adding the worktree', async () => {
+    const order: string[] = []
+    mocks.consume.mockImplementation(async () => {
+      order.push('add')
+      return { status: 'hit', result: {}, rearm: mocks.rearm }
+    })
+    let instanceId: string | undefined
+    const onCreateCandidate = vi.fn(
+      async (candidate: { worktreePath: string; branchName: string; instanceId: string }) => {
+        order.push(`candidate:${candidate.branchName}`)
+        expect(candidate.worktreePath).toBe(worktreePath)
+        instanceId = candidate.instanceId
+      }
+    )
+
+    const created = await createWorktree({ onCreateCandidate })
+
+    expect(order).toEqual(['candidate:app', 'add'])
+    // The metadata names the instance the launch recorded, so a replay can tell this worktree
+    // from another later found at the same path.
+    expect(instanceId).toEqual(expect.any(String))
+    expect(created.worktree.instanceId).toBe(instanceId)
+  })
+
+  it('creates the worktree even when that bookkeeping fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await createWorktree({
+        onCreateCandidate: async () => {
+          throw new Error('disk full')
+        }
+      })
+
+      expect(mocks.consume).toHaveBeenCalledOnce()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})
