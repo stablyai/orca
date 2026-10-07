@@ -2340,17 +2340,319 @@ index 0000000000000000000000000000000000000000..4794cd4b4d25007dd284375e1214c8df
 +    for (let col = 0; col < run.count; ++col) visit(line, run.col + col, run.imageId, run.tileId + col);
 +  });
 +}
+diff --git a/src/SixelActiveCheckpoint.ts b/src/SixelActiveCheckpoint.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..3508f0f36ba1d06b78c68824586a4e2d384e0c25
+--- /dev/null
++++ b/src/SixelActiveCheckpoint.ts
+@@ -0,0 +1,83 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++import type { Decoder } from 'sixel/lib/Decoder';
++import { ImageCheckpointResources, type ICheckpointResource } from './ImageCheckpointResources';
++import { checkUploadCheckpointBudget } from './Base64UploadCheckpoint';
++import { checkedSixelProgramOptions, type ISixelProgramOptions } from './SixelStateCheckpoint';
++import { planSixelDecoderCheckpoint, sixelDecoderPalette, sixelCheckpointWords,
++  sixelCheckpointPixels, type ISixelDecoderState } from './SixelDecoderCheckpoint';
++import { ownSixelDecoderState, validateSixelDecoderState, validateSixelBandWidths } from './SixelDecoderCheckpointValidation';
++
++export interface ISixelActiveCheckpointMetadata extends ISixelProgramOptions {
++  readonly aborted: boolean;
++  readonly size: number;
++  readonly decoder?: ISixelDecoderState;
++  readonly byteLength: number;
++  readonly resources: readonly ICheckpointResource[];
++}
++export class SixelActiveCheckpoint extends ImageCheckpointResources<ISixelActiveCheckpointMetadata> {}
++
++export function captureSixelActiveCheckpoint(
++  aborted: boolean, size: number, decoder: Decoder | undefined, palette: Uint32Array,
++  options: ISixelProgramOptions, pixelLimit: number, maxBytes: number
++): SixelActiveCheckpoint {
++  const program = checkedSixelProgramOptions(options);
++  const plan = !aborted && decoder ? planSixelDecoderCheckpoint(decoder) : undefined;
++  if (!aborted && !plan) throw new Error('Missing active SIXEL decoder');
++  const lengths = plan ? validateSixelDecoderState(plan.state, size, pixelLimit) : undefined;
++  const byteLength = 16384 + (lengths ? lengths.canvasByteLength + lengths.bandByteLength + lengths.widthsByteLength : 0);
++  checkUploadCheckpointBudget(maxBytes, byteLength);
++  if (plan && (plan.layout.lastOffset > plan.layout.canvas.length || !lengths)) {
++    throw new Error('Invalid SIXEL completed canvas layout');
++  }
++  if (plan) validateSixelBandWidths(plan.state, plan.layout.bandWidths);
++  const resources = new Map<number, Uint8Array>();
++  resources.set(1, sixelCheckpointWords(decoder ? sixelDecoderPalette(decoder) : palette));
++  if (plan && lengths) {
++    resources.set(2, sixelCheckpointWords(plan.layout.canvas.subarray(0, plan.state.lastOffset)));
++    const band = new Uint32Array(lengths.bandWidth * 6);
++    for (let row = 0; row < 6; row++) {
++      band.set(plan.layout.pixels.subarray(row * 16388, row * 16388 + lengths.bandWidth), row * lengths.bandWidth);
++    }
++    resources.set(3, sixelCheckpointWords(band));
++    resources.set(4, sixelCheckpointWords(plan.layout.bandWidths));
++  }
++  return new SixelActiveCheckpoint(Object.freeze({ ...program, aborted, size, decoder: plan?.state, byteLength,
++    resources: Object.freeze([...resources].map(([id, bytes]) => Object.freeze({ id, byteLength: bytes.byteLength })))
++  }), resources);
++}
++
++export function prepareSixelActiveCheckpoint(checkpoint: SixelActiveCheckpoint, sizeLimit: number, pixelLimit: number) {
++  if (checkpoint.isDisposed) throw new Error('Active SIXEL checkpoint lease is disposed');
++  const supplied = checkpoint.metadata;
++  const options = checkedSixelProgramOptions(supplied);
++  const aborted = supplied.aborted;
++  const size = supplied.size;
++  const state = supplied.decoder ? ownSixelDecoderState(supplied.decoder) : undefined;
++  if (typeof aborted !== 'boolean' || !Number.isSafeInteger(size) || size < 0 || size > 0x7FFFFFFF
++    || aborted === Boolean(state) || (!aborted && size > sizeLimit)) {
++    throw new Error('Invalid active SIXEL decoder ownership or size');
++  }
++  const lengths = state ? validateSixelDecoderState(state, size, pixelLimit) : undefined;
++  const expected = [16384, ...(lengths ? [lengths.canvasByteLength, lengths.bandByteLength, lengths.widthsByteLength] : [])];
++  const byteLength = expected.reduce((sum, n) => sum + n, 0);
++  checkUploadCheckpointBudget(128 * 1024 * 1024, byteLength);
++  if (supplied.byteLength !== byteLength || !Array.isArray(supplied.resources) || supplied.resources.length !== expected.length) {
++    throw new Error('Invalid active SIXEL resource count or lengths');
++  }
++  for (let i = 0; i < expected.length; i++) {
++    if (supplied.resources[i].id !== i + 1 || supplied.resources[i].byteLength !== expected[i]
++      || checkpoint.getResourceByteLength(i + 1) !== expected[i]) throw new Error('Invalid active SIXEL resource descriptor');
++  }
++  const resources = expected.map((length, i) => sixelCheckpointPixels(checkpoint.copyResource(i + 1, length)));
++  const palette = resources[0];
++  if (!state || !lengths) return { aborted, size, options, palette };
++  const widths = Array.from(resources[3]);
++  validateSixelBandWidths(state, widths);
++  const canvas = new Uint32Array(lengths.canvasPixels);
++  canvas.set(resources[1]);
++  return { aborted, size, options, palette, live: { state, canvas, band: resources[2], widths } };
++}
+diff --git a/src/SixelDecoderCheckpoint.ts b/src/SixelDecoderCheckpoint.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..564b4619dc920b74af60a8ff6895f3ce699afcc5
+--- /dev/null
++++ b/src/SixelDecoderCheckpoint.ts
+@@ -0,0 +1,112 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++import { Decoder } from 'sixel/lib/Decoder';
++import { LIMITS } from 'sixel/lib/wasm';
++
++export interface ISixelDecoderState {
++  readonly fillColor: number;
++  readonly width: number;
++  readonly height: number;
++  readonly raster: readonly number[];
++  readonly truncate: number;
++  readonly level: number;
++  readonly mode: number;
++  readonly paletteLimit: number;
++  readonly clearedWidth: number;
++  readonly realWidth: number;
++  readonly bandHeight: number;
++  readonly parserState: number;
++  readonly currentColor: number;
++  readonly cursor: number;
++  readonly params: readonly number[];
++  readonly maxWidth: number;
++  readonly minWidth: number;
++  readonly lastOffset: number;
++  readonly currentHeight: number;
++  readonly bandCount: number;
++}
++
++function decoderLayout(value: unknown) {
++  if (!value || typeof value !== 'object'
++    || !('_states' in value) || !(value._states instanceof Uint32Array) || value._states.length !== 12
++    || !('_palette' in value) || !(value._palette instanceof Uint32Array) || value._palette.length !== 4096
++    || !('_pSrc' in value) || !(value._pSrc instanceof Uint32Array) || value._pSrc.length !== 106196
++    || !('_chunk' in value) || !(value._chunk instanceof Uint8Array) || value._chunk.length !== 16384
++    || !('_PIXEL_OFFSET' in value) || value._PIXEL_OFFSET !== 16388
++    || !('_canvas' in value) || !(value._canvas instanceof Uint32Array)
++    || !('_bandWidths' in value) || !Array.isArray(value._bandWidths)
++    || !('_lastOffset' in value) || typeof value._lastOffset !== 'number'
++    || !('_currentHeight' in value) || typeof value._currentHeight !== 'number'
++    || !('_maxWidth' in value) || typeof value._maxWidth !== 'number'
++    || !('_minWidth' in value) || typeof value._minWidth !== 'number'
++    || value._states.byteOffset !== 1056 || value._palette.byteOffset !== 1168
++    || value._chunk.byteOffset !== 17552 || value._pSrc.byteOffset !== 33968
++    || value._states.buffer.byteLength !== 458752 || value._palette.buffer !== value._states.buffer
++    || value._chunk.buffer !== value._states.buffer || value._pSrc.buffer !== value._states.buffer
++    || LIMITS.PALETTE_SIZE !== 4096 || LIMITS.MAX_WIDTH !== 16384 || LIMITS.CHUNK_SIZE !== 16384) {
++    throw new Error('Unsupported SIXEL decoder checkpoint layout');
++  }
++  const states = new Uint32Array(value._states.buffer, value._states.byteOffset, 28);
++  return { states, palette: value._palette, pixels: value._pSrc, canvas: value._canvas,
++    bandWidths: value._bandWidths, lastOffset: value._lastOffset, currentHeight: value._currentHeight,
++    maxWidth: value._maxWidth, minWidth: value._minWidth,
++    install: (state: ISixelDecoderState, canvas: Uint32Array, widths: number[]) => {
++      value._canvas = canvas;
++      value._bandWidths = widths;
++      value._lastOffset = state.lastOffset;
++      value._currentHeight = state.currentHeight;
++      value._maxWidth = state.maxWidth;
++      value._minWidth = state.minWidth;
++    }
++  };
++}
++
++export function sixelDecoderPalette(decoder: Decoder): Uint32Array { return decoderLayout(decoder).palette; }
++
++export function planSixelDecoderCheckpoint(decoder: Decoder) {
++  const layout = decoderLayout(decoder);
++  const s = layout.states;
++  if (s[0] !== s[1] || s[12] !== 0 || s[19] < 1 || s[19] > 8) throw new Error('Invalid SIXEL decoder checkpoint state');
++  const state: ISixelDecoderState = Object.freeze({ fillColor: s[0], width: s[2], height: s[3],
++    raster: Object.freeze(Array.from(s.subarray(4, 8))), truncate: s[8], level: s[9], mode: s[10],
++    paletteLimit: s[11], clearedWidth: s[10] === 1 ? s[13] : 0, realWidth: s[10] === 1 ? s[14] : 0,
++    bandHeight: s[10] === 1 ? s[15] : 0, parserState: s[16], currentColor: s[17], cursor: s[18],
++    params: Object.freeze(Array.from(s.subarray(20, 20 + s[19]))), maxWidth: layout.maxWidth,
++    minWidth: layout.minWidth, lastOffset: layout.lastOffset, currentHeight: layout.currentHeight,
++    bandCount: layout.bandWidths.length });
++  return { state, layout };
++}
++
++export function sixelCheckpointWords(words: Uint32Array | readonly number[]): Uint8Array {
++  const bytes = new Uint8Array(words.length * 4);
++  const view = new DataView(bytes.buffer);
++  for (let i = 0; i < words.length; i++) view.setUint32(i * 4, words[i], true);
++  return bytes;
++}
++
++export function sixelCheckpointPixels(bytes: Uint8Array): Uint32Array {
++  const words = new Uint32Array(bytes.byteLength / 4);
++  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
++  for (let i = 0; i < words.length; i++) words[i] = view.getUint32(i * 4, true);
++  return words;
++}
++
++export function installSixelDecoderCheckpoint(
++  decoder: Decoder, state: ISixelDecoderState, palette: Uint32Array, canvas: Uint32Array,
++  band: Uint32Array, widths: number[]
++): void {
++  const layout = decoderLayout(decoder);
++  const s = layout.states;
++  s.fill(0);
++  s.set([state.fillColor, state.fillColor, state.width, state.height, ...state.raster, state.truncate,
++    state.level, state.mode, state.paletteLimit, 0, state.clearedWidth, state.realWidth,
++    state.bandHeight, state.parserState, state.currentColor, state.cursor, state.params.length]);
++  s.set(state.params, 20);
++  layout.palette.set(palette);
++  const width = band.length / 6;
++  for (let row = 0; row < 6; row++) layout.pixels.set(band.subarray(row * width, (row + 1) * width), row * 16388);
++  layout.install(state, canvas, widths);
++}
+diff --git a/src/SixelDecoderCheckpointValidation.ts b/src/SixelDecoderCheckpointValidation.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..fba0c029980bc3c4274ce8c2a195eab5a525c4dd
+--- /dev/null
++++ b/src/SixelDecoderCheckpointValidation.ts
+@@ -0,0 +1,87 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++import type { ISixelDecoderState } from './SixelDecoderCheckpoint';
++
++export function ownSixelDecoderState(s: ISixelDecoderState): ISixelDecoderState {
++  if (!s || !Array.isArray(s.raster) || s.raster.length !== 4
++    || !Array.isArray(s.params) || s.params.length < 1 || s.params.length > 8) {
++    throw new Error('Invalid SIXEL decoder checkpoint parameters');
++  }
++  return Object.freeze({ fillColor: s.fillColor, width: s.width, height: s.height,
++    raster: Object.freeze([...s.raster]), truncate: s.truncate, level: s.level, mode: s.mode,
++    paletteLimit: s.paletteLimit, clearedWidth: s.clearedWidth, realWidth: s.realWidth,
++    bandHeight: s.bandHeight, parserState: s.parserState, currentColor: s.currentColor, cursor: s.cursor,
++    params: Object.freeze([...s.params]), maxWidth: s.maxWidth, minWidth: s.minWidth,
++    lastOffset: s.lastOffset, currentHeight: s.currentHeight, bandCount: s.bandCount });
++}
++
++export function validateSixelDecoderState(s: ISixelDecoderState, size: number, pixelLimit: number) {
++  const integers = [s.width, s.height, ...s.raster, s.truncate, s.level, s.mode, s.paletteLimit,
++    s.clearedWidth, s.realWidth, s.bandHeight, s.parserState, s.cursor, ...s.params,
++    s.maxWidth, s.minWidth, s.lastOffset, s.currentHeight, s.bandCount];
++  if (!integers.every(n => Number.isSafeInteger(n) && n >= 0 && n <= 0x7FFFFFFF)
++    || ![s.fillColor, s.currentColor].every(n => Number.isInteger(n) && n >= 0 && n <= 0xFFFFFFFF)
++    || ![0, 1].includes(s.truncate) || s.mode > 2 || s.level > 2 || s.paletteLimit > 4096
++    || s.maxWidth > 16384 || s.minWidth > 16384 || s.bandHeight > 63 || s.bandCount > size
++    || !Number.isSafeInteger(pixelLimit) || pixelLimit < 1
++    || s.lastOffset > pixelLimit || s.currentHeight > size * 6) {
++    throw new RangeError('Invalid SIXEL decoder checkpoint dimensions or counters');
++  }
++  let bandWidth = 0;
++  let canvasPixels = 0;
++  if (s.mode === 0) {
++    if (s.level !== 0 || s.width || s.height || s.raster.some(n => n !== 0) || s.bandCount
++      || s.lastOffset || s.currentHeight || s.maxWidth || s.minWidth !== 16384
++      || s.cursor !== 4 || ![0, 34].includes(s.parserState)) {
++      throw new Error('Invalid undecided SIXEL checkpoint state');
++    }
++  } else if (s.mode === 1) {
++    if (s.width || s.height || s.level !== 1 || !s.truncate || ![0, 33, 35].includes(s.parserState)
++      || s.currentHeight !== s.bandCount * 6 || s.clearedWidth < 4 || s.clearedWidth > 16388
++      || (s.clearedWidth - 4) % 128 !== 0 || s.realWidth < 4 || s.realWidth > 16384 || s.cursor < 4) {
++      throw new Error('Invalid variable-width SIXEL checkpoint state');
++    }
++    bandWidth = s.clearedWidth - 4;
++    canvasPixels = s.lastOffset;
++    const touchedWidth = Math.min(16384, Math.max(s.realWidth, s.cursor)) - 4;
++    if (touchedWidth > bandWidth) throw new Error('Invalid SIXEL current band width');
++    const touchedHeight = s.bandHeight ? 32 - Math.clz32(s.bandHeight) : 0;
++    if (Math.max(s.maxWidth, touchedWidth) * (s.currentHeight + touchedHeight) > pixelLimit) {
++      throw new RangeError('SIXEL checkpoint exceeds pixel budget');
++    }
++  } else {
++    if (s.level !== 2 || s.truncate !== 1 || ![0, 33, 35].includes(s.parserState)
++      || s.width !== Math.min(s.raster[2], 16384) + 4 || s.height !== s.raster[3]
++      || s.maxWidth !== s.width - 4 || s.minWidth !== 16384 || s.bandCount
++      || s.currentHeight > s.height || s.lastOffset !== (s.width - 4) * s.currentHeight
++      || (s.currentHeight !== s.height && s.currentHeight % 6 !== 0) || s.cursor < 4) {
++      throw new Error('Invalid fixed-raster SIXEL checkpoint state');
++    }
++    bandWidth = s.width - 4;
++    canvasPixels = bandWidth * s.height;
++  }
++  if (canvasPixels > pixelLimit) throw new RangeError('SIXEL checkpoint exceeds pixel budget');
++  // Width entries become JS numbers again; admit their live footprint, not only their wire bytes.
++  const memoryBytes = 458752 + canvasPixels * 4 + s.bandCount * 8;
++  if (memoryBytes > pixelLimit * 4 + 458752) throw new RangeError('SIXEL checkpoint exceeds decoder memory budget');
++  return { bandWidth, canvasPixels, canvasByteLength: s.lastOffset * 4,
++    bandByteLength: bandWidth * 6 * 4, widthsByteLength: s.bandCount * 4 };
++}
++
++export function validateSixelBandWidths(s: ISixelDecoderState, widths: readonly number[]): void {
++  let offset = 0;
++  let maximum = 0;
++  let minimum = 16384;
++  for (const width of widths) {
++    if (!Number.isInteger(width) || width < 0 || width > 16380) throw new Error('Invalid SIXEL band width');
++    offset += width * 6;
++    maximum = Math.max(maximum, width);
++    minimum = Math.min(minimum, width);
++  }
++  if (s.mode === 1 && (offset !== s.lastOffset || maximum !== s.maxWidth || minimum !== s.minWidth)) {
++    throw new Error('Invalid SIXEL completed band dimensions');
++  }
++}
 diff --git a/src/SixelHandler.ts b/src/SixelHandler.ts
-index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..b570db72424db2d47caf73929b115f182342b115 100644
+index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..8f049d65e3fcf2f0cdf82883bc93ce19dfd93560 100644
 --- a/src/SixelHandler.ts
 +++ b/src/SixelHandler.ts
-@@ -3,13 +3,18 @@
+@@ -3,13 +3,20 @@
   * @license MIT
   */
  
 +import type { IDisposable } from '@xterm/xterm';
 +import { SixelStateCheckpoint, captureSixelStateCheckpoint, prepareSixelStateCheckpoint } from './SixelStateCheckpoint';
-+import { requireImageParserState } from './ImageParserCheckpoint';
++import { requireImageParserState, startImageCheckpointParser } from './ImageParserCheckpoint';
++import { SixelActiveCheckpoint, captureSixelActiveCheckpoint, prepareSixelActiveCheckpoint } from './SixelActiveCheckpoint';
++import { installSixelDecoderCheckpoint } from './SixelDecoderCheckpoint';
  import { SixelImageStorage } from './SixelImageStorage';
 -import { IDcsHandler, IParams, IImageAddonOptions, ITerminalExt, AttributeData, IResetHandler, ReadonlyColorSet } from './Types';
 +import { IDcsHandler, IParams, IImageAddonOptions, ITerminalExt, AttributeData, IResetHandler } from './Types';
@@ -2365,7 +2667,7 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..b570db72424db2d47caf73929b115f18
  
  // always free decoder ressources after decoding if it exceeds this limit
  const MEM_PERMA_LIMIT = 4194304; // 1024 pixels * 1024 pixels * 4 channels = 4MB
-@@ -18,48 +23,123 @@ const MEM_PERMA_LIMIT = 4194304; // 1024 pixels * 1024 pixels * 4 channels = 4MB
+@@ -18,48 +25,177 @@ const MEM_PERMA_LIMIT = 4194304; // 1024 pixels * 1024 pixels * 4 channels = 4MB
  const DEFAULT_PALETTE = PALETTE_ANSI_256;
  DEFAULT_PALETTE.set(PALETTE_VT340_COLOR);
  
@@ -2375,7 +2677,8 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..b570db72424db2d47caf73929b115f18
 +const MAX_IDLE_DECODERS = 2;
 +const idleDecoders = new Map<number, Decoder[]>();
 +let poolPrimed = false;
-+
+ 
+-export class SixelHandler implements IDcsHandler, IResetHandler {
 +function primeDecoderPool(memoryLimit: number): void {
 +  if (poolPrimed) return;
 +  poolPrimed = true;
@@ -2400,13 +2703,13 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..b570db72424db2d47caf73929b115f18
 +    idleDecoders.set(memoryLimit, idle);
 +  }
 +}
- 
--export class SixelHandler implements IDcsHandler, IResetHandler {
++
 +
 +export class SixelHandler implements IDcsHandler, IResetHandler, IDisposable {
 +  private _generation = 0;
 +  private _disposed = false;
 +  private _escapeActive = false;
++  private _checkpointBootstrap = false;
    private _size = 0;
    private _aborted = false;
    private _dec: Decoder | undefined;
@@ -2468,16 +2771,69 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..b570db72424db2d47caf73929b115f18
 +    if (this._disposed || generation !== this._generation || checkpoint.isDisposed
 +      || scrolling !== this._opts.sixelScrolling || paletteLimit !== this._opts.sixelPaletteLimit) {
 +      throw new Error('SIXEL handler changed during state checkpoint preparation');
-     }
++    }
 +    requireImageParserState(this._coreTerminal, 0);
 +    this._palette.set(prepared.palette);
 +    this._opts.sixelScrolling = prepared.options.sixelScrolling;
 +    this._opts.sixelPaletteLimit = prepared.options.sixelPaletteLimit;
++  }
++
++  public captureActiveCheckpoint(maxBytes: number): SixelActiveCheckpoint | undefined {
++    if (this._disposed) throw new Error('SIXEL handler is disposed');
++    if (!this._escapeActive) return undefined;
++    requireImageParserState(this._coreTerminal, 13);
++    return captureSixelActiveCheckpoint(this._aborted, this._size, this._dec, this._palette,
++      this._opts, this._opts.pixelLimit, maxBytes);
++  }
++
++  public restoreActiveCheckpoint(checkpoint: SixelActiveCheckpoint): void {
++    if (this._disposed) throw new Error('SIXEL handler is disposed');
++    requireImageParserState(this._coreTerminal, 0);
++    const generation = ++this._generation;
++    const scrolling = this._opts.sixelScrolling;
++    const paletteLimit = this._opts.sixelPaletteLimit;
++    const pixelLimit = this._opts.pixelLimit;
++    const sizeLimit = this._opts.sixelSizeLimit;
++    const prepared = prepareSixelActiveCheckpoint(checkpoint, sizeLimit, pixelLimit);
++    let decoder: Decoder | undefined;
++    const memoryLimit = pixelLimit * 4;
++    const check = () => {
++      if (this._disposed || generation !== this._generation || checkpoint.isDisposed
++        || scrolling !== this._opts.sixelScrolling || paletteLimit !== this._opts.sixelPaletteLimit
++        || pixelLimit !== this._opts.pixelLimit || sizeLimit !== this._opts.sixelSizeLimit) {
++        throw new Error('SIXEL handler changed during active checkpoint preparation');
++      }
++      requireImageParserState(this._coreTerminal, 0);
++    };
++    try {
++      check();
++      if (prepared.live) {
++        decoder = acquireDecoder(memoryLimit);
++        installSixelDecoderCheckpoint(decoder, prepared.live.state, prepared.palette,
++          prepared.live.canvas, prepared.live.band, prepared.live.widths);
++      }
++      check();
++      this._checkpointBootstrap = true;
++      try { startImageCheckpointParser(this._coreTerminal, [0x1B, 0x50, 0x71], 13); }
++      finally { this._checkpointBootstrap = false; }
++      this._returnDecoder();
++      this._palette.set(prepared.palette);
++      this._opts.sixelScrolling = prepared.options.sixelScrolling;
++      this._opts.sixelPaletteLimit = prepared.options.sixelPaletteLimit;
++      this._size = prepared.size;
++      this._aborted = prepared.aborted;
++      this._dec = decoder;
++      this._decMemoryLimit = memoryLimit;
++    } catch (error) {
++      if (decoder) { decoder.release(); releaseDecoder(decoder, memoryLimit); }
++      throw error;
+     }
    }
  
    public hook(params: IParams): void {
 +    this._generation++;
 +    this._escapeActive = true;
++    if (this._checkpointBootstrap) return;
      this._size = 0;
      this._aborted = false;
 -    if (this._dec) {
@@ -2511,7 +2867,7 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..b570db72424db2d47caf73929b115f18
    }
  
    public put(data: Uint32Array, start: number, end: number): void {
-@@ -83,6 +163,18 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
+@@ -83,6 +219,18 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
    }
  
    public unhook(success: boolean): boolean | Promise<boolean> {
@@ -2530,7 +2886,7 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..b570db72424db2d47caf73929b115f18
      if (this._aborted || !success || !this._dec) {
        return true;
      }
-@@ -98,12 +190,10 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
+@@ -98,12 +246,10 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
        return true;
      }
  
@@ -2547,7 +2903,7 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..b570db72424db2d47caf73929b115f18
      return true;
    }
  }
-@@ -115,7 +205,7 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
+@@ -115,7 +261,7 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
  
  // get currently active background color from terminal
  // also respect INVERSE setting
@@ -2579,7 +2935,7 @@ index c2376a68ac773c0e657a04e733f04e8db3b7a2b7..350863c264b0876f8ef48e4ec421ee7c
    }
 diff --git a/src/SixelStateCheckpoint.ts b/src/SixelStateCheckpoint.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..27624d8df9615a53a701a8a0287c14d5f011965e
+index 0000000000000000000000000000000000000000..450e2fe376ddaa8052b7b2bed627e5656f8e118b
 --- /dev/null
 +++ b/src/SixelStateCheckpoint.ts
 @@ -0,0 +1,59 @@
@@ -2602,7 +2958,7 @@ index 0000000000000000000000000000000000000000..27624d8df9615a53a701a8a0287c14d5
 +}
 +export class SixelStateCheckpoint extends ImageCheckpointResources<ISixelStateCheckpointMetadata> {}
 +
-+function checkedOptions(options: ISixelProgramOptions): ISixelProgramOptions {
++export function checkedSixelProgramOptions(options: ISixelProgramOptions): ISixelProgramOptions {
 +  const state = Object.freeze({ sixelScrolling: options.sixelScrolling, sixelPaletteLimit: options.sixelPaletteLimit });
 +  if (typeof state.sixelScrolling !== 'boolean' || !Number.isSafeInteger(state.sixelPaletteLimit)
 +    || state.sixelPaletteLimit < 0 || state.sixelPaletteLimit > LIMITS.PALETTE_SIZE) {
@@ -2613,7 +2969,7 @@ index 0000000000000000000000000000000000000000..27624d8df9615a53a701a8a0287c14d5
 +export function captureSixelStateCheckpoint(
 +  palette: Uint32Array, options: ISixelProgramOptions, maxBytes: number
 +): SixelStateCheckpoint {
-+  const state = checkedOptions(options);
++  const state = checkedSixelProgramOptions(options);
 +  const byteLength = LIMITS.PALETTE_SIZE * 4;
 +  checkUploadCheckpointBudget(maxBytes, byteLength);
 +  if (palette.length !== LIMITS.PALETTE_SIZE) throw new Error('Unsupported SIXEL palette layout');
@@ -2629,7 +2985,7 @@ index 0000000000000000000000000000000000000000..27624d8df9615a53a701a8a0287c14d5
 +} {
 +  if (checkpoint.isDisposed) throw new Error('SIXEL state checkpoint lease is disposed');
 +  const supplied = checkpoint.metadata;
-+  const options = checkedOptions(supplied);
++  const options = checkedSixelProgramOptions(supplied);
 +  const byteLength = LIMITS.PALETTE_SIZE * 4;
 +  if (supplied.byteLength !== byteLength || !Array.isArray(supplied.resources) || supplied.resources.length !== 1
 +    || supplied.resources[0].id !== 1 || supplied.resources[0].byteLength !== byteLength
