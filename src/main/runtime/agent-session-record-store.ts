@@ -7,8 +7,7 @@ import {
   commitConversationCommandRecord,
   type AgentSessionConversationClear
 } from './agent-session-conversation-command-record'
-import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
-
+import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
 import {
   agentSessionOperationKey,
   type AgentSessionOperationClaim,
@@ -66,12 +65,22 @@ import {
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
 } from './agent-session-reservation-admission'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
-import { setAgentSessionTabVisibility, showAgentSessionTabs } from './agent-session-tab-table'
+import type { AgentSessionStoreState } from './agent-session-store-state'
+import {
+  agentSessionVisibleTabIndex,
+  listVisibleAgentSessionIds,
+  setAgentSessionTabVisibility,
+  showAgentSessionTabs
+} from './agent-session-tab-table'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+import {
+  compareAndSetAgentSessionRecordName,
+  type CompareAndSetConversationName,
+  setAgentSessionRecordConversationName
+} from './agent-session-record-conversation-name'
 
 type AgentSessionOperationSettlement = Parameters<typeof settleAgentSessionOperationInto>[1]
 
@@ -92,7 +101,7 @@ export class AgentSessionRecordStore {
     journalDatabase: JournalHostDatabase
     hostId: string
   }): AgentSessionRecordStore {
-    const rows = loadAgentSessionStoreRows(args.journalDatabase.db, args.hostId)
+    const rows = loadAgentSessionStoreRows(args.journalDatabase.db)
     const transactions = new AgentSessionStoreTransactions(args.journalDatabase, rows)
     return new AgentSessionRecordStore(transactions, args.hostId)
   }
@@ -114,20 +123,10 @@ export class AgentSessionRecordStore {
   /** Whether this host has recorded a chat, readable or not. Nothing removes a record row. */
   holdsRecords = (): boolean => this.state.records.size > 0 || this.state.unreadableRecords.size > 0
 
-  listVisibleSessionIds = (): string[] =>
-    (this.state.sessionTabs?.sessionIds() ?? []).filter((sessionId) =>
-      this.state.records.has(sessionId)
-    )
+  listVisibleSessionIds = (): string[] => listVisibleAgentSessionIds(this.state)
 
-  /** Unrecorded, `sessionIds` are the tab rows a chat opened while the import was owed left. */
-  getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } => ({
-    present: this.state.sessionTabs !== null,
-    sessionIds: this.state.sessionTabs
-      ? this.listVisibleSessionIds()
-      : (this.state.unrecordedSessionTabs?.sessionIds() ?? []).filter((sessionId) =>
-          this.state.records.has(sessionId)
-        )
-  })
+  getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } =>
+    agentSessionVisibleTabIndex(this.state)
 
   /** The id of the chat tab showing this conversation, if one does. */
   getSessionTabId = (sessionId: string): string | null =>
@@ -173,6 +172,15 @@ export class AgentSessionRecordStore {
       setAgentSessionRecordConversationName(record, name, Date.now())
     )
 
+  compareAndSetConversationName: CompareAndSetConversationName = (sessionId, name, expected) =>
+    compareAndSetAgentSessionRecordName((apply) => this.mutate(sessionId, apply), name, expected)
+
+  /** Unfenced like the name: it records where a launch ran and never contends with the lease. */
+  pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>
+    this.mutate(sessionId, (record) =>
+      pinAgentSessionRecordLaunchDirectory(record, launchDirectory, Date.now())
+    )
+
   /** A record this build cannot validate: readable as present, never grantable as a writer. */
   isSessionUnreadable(sessionId: string): boolean {
     return this.state.unreadableRecords.has(sessionId)
@@ -192,13 +200,8 @@ export class AgentSessionRecordStore {
     )
   }
 
-  async commitProcessIdentity(
-    args: AgentSessionProcessIdentityCommit
-  ): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) =>
-      commitAgentSessionProcessIdentity({ ...args, record })
-    )
-  }
+  commitProcessIdentity = (args: AgentSessionProcessIdentityCommit): Promise<AgentSessionRecord> =>
+    this.mutate(args.sessionId, (record) => commitAgentSessionProcessIdentity({ ...args, record }))
 
   async proveOwner(args: {
     sessionId: string
@@ -300,7 +303,7 @@ export class AgentSessionRecordStore {
 
   /** Admission and, when `claimAfter` allows, the claim: one durable write before the effect. */
   admitAndClaimOperation = (
-    args: AgentSessionOperationAdmission,
+    args: Parameters<typeof admitAndClaimAgentSessionOperationInto>[1],
     claimAfter: ClaimAfterAdmission
   ) => this.transact((draft) => admitAndClaimAgentSessionOperationInto(draft, args, claimAfter))
 

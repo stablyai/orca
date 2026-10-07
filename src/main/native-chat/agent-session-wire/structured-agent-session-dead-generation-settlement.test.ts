@@ -11,11 +11,11 @@ import {
   providerDiagnostic
 } from '../../../shared/agent-session-failure'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
 import {
   captureUnfinishedStructuredAgentSessionWork,
-  settleStructuredAgentSessionDeadGeneration,
   unfinishedStructuredAgentSessionWorkWasInterrupted
-} from './structured-agent-session-dead-generation-settlement'
+} from './structured-agent-session-unfinished-work'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
@@ -248,7 +248,9 @@ describe('dead structured-session generation settlement', () => {
       | 'rejectPendingSubmissions'
       | 'rejectQueuedSubmissions'
       | 'appendLifecycleBatch'
+      | 'itemFence'
     > = {
+      itemFence: () => undefined,
       snapshot: () => ({
         ...settledSnapshot,
         items: [settledItem]

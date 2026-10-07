@@ -20,6 +20,7 @@ import {
 } from './ipc/renderer-kill'
 import { installPtyWriteIpcHandlers } from './ipc/write'
 import { installPtySpawnIpcHandler } from './ipc/spawn'
+import { installPtyLeafMoveIpcHandler } from './ipc/leaf-move'
 import { installPtyRuntimeController } from './runtime/controller'
 import { installPtySnapshotIpcHandlers } from './ipc/snapshot'
 import {
@@ -112,6 +113,7 @@ export function registerPtyHandlers(
 
   // Remove prior handlers so re-registration (e.g. macOS re-activate creating a new window) doesn't double-register.
   ipcMain.removeHandler('pty:spawn')
+  ipcMain.removeHandler('pty:moveLeafToNewTab')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
@@ -255,6 +257,7 @@ export function registerPtyHandlers(
     rememberSyntheticKillExit: session.rememberSyntheticKillExit,
     sendPtyExitToRenderer: session.sendPtyExitToRenderer
   }
+  installPtyLeafMoveIpcHandler({ store, runtime })
   installPtySpawnIpcHandler({
     runtime,
     store,

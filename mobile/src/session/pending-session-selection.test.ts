@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import {
   LAUNCHED_SELECTION_SNAPSHOT_BUDGET,
+  isLaunchedSurfaceListed,
   launchedSelection,
   pendingSelectionHandle,
   pendingSelectionTabId,
@@ -163,5 +164,22 @@ describe('the halves of a pick', () => {
     expect(pendingSelectionWantsHandle(launchedSelection('l1', { sessionId: 's' }), 'term_1')).toBe(
       false
     )
+  })
+})
+
+describe('isLaunchedSurfaceListed', () => {
+  it('reads a listed terminal as a started agent', () => {
+    expect(isLaunchedSurfaceListed([reservedTerminalTab('term_1')], { pane: PANE })).toBe(true)
+  })
+
+  it('does not read a tab the host showed before its agent existed as a start', () => {
+    expect(isLaunchedSurfaceListed([reservedTerminalTab(null)], { pane: PANE })).toBe(false)
+  })
+
+  it('still lands the selection on that tab, so the phone shows it at once', () => {
+    const resolved = resolveLaunchedSelection(launchedSelection('lock', { pane: PANE }, null), [
+      reservedTerminalTab(null)
+    ])
+    expect(resolved.landedTabId).toBe(`${PANE.tabId}::${PANE.leafId}`)
   })
 })

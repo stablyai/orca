@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   parseGlibcVersion,
   parseOrcadLinuxLibc,
-  resolveOrcadDeploymentTarget,
   resolveOrcadDeploymentTargetFacts
 } from './orcad-deployment-target'
 import { SshConnection } from './ssh-connection'
@@ -11,6 +10,12 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn() }))
+
+async function resolveOrcadDeploymentTarget(
+  options: Parameters<typeof resolveOrcadDeploymentTargetFacts>[0]
+): Promise<string> {
+  return (await resolveOrcadDeploymentTargetFacts(options)).target
+}
 beforeEach(() => vi.mocked(execCommand).mockReset())
 
 describe('deployment C library selection', () => {

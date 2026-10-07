@@ -82,7 +82,7 @@ describe('prepareCodexAiVaultSessionResume', () => {
       },
       {
         runtimeHome: {
-          isHostSystemDefaultRealHome: isSystemDefaultRealHome,
+          isHostSystemDefaultRealHomeSelected: isSystemDefaultRealHome,
           resolveSelectedHostAccountCodexHomePathForResume: resolveSelectedHome
         },
         systemCodexHomePath: join(root, 'system-codex-home')

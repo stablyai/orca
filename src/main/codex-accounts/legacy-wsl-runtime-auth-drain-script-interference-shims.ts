@@ -2,6 +2,7 @@
 // interfered with at exact points - a hash read, an install rename, a source removal.
 import { chmodSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { DRAIN_APPLY_INTERRUPTION_JS } from './legacy-wsl-runtime-auth-drain-interruption-source'
 
 export function installDrainInterferenceShims(
   binDir: string,
@@ -39,6 +40,7 @@ export function installDrainInterferenceShims(
       `#!/usr/bin/env node
   const { spawnSync } = require('node:child_process')
   const fs = require('node:fs')
+  ${DRAIN_APPLY_INTERRUPTION_JS}
   const args = process.argv.slice(2)
   const result = spawnSync('/bin/mv', args, { stdio: 'inherit' })
   const from = args.at(-2) ?? ''
@@ -52,7 +54,7 @@ export function installDrainInterferenceShims(
   from.includes('/account/auth.json.orca-drain-snapshot-') &&
   to.endsWith('/account/auth.json')
   if (result.status === 0 && (sourceInstalled || destinationInstalled)) {
-  process.kill(process.ppid, 'SIGKILL')
+  interruptDrainApply(1)
   }
   process.exit(result.status ?? 1)
   `

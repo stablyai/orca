@@ -87,6 +87,16 @@ describe('launchWorktreeBackgroundTerminals', () => {
       state.tabsByWorktree['wt-1'].push(tab)
       return tab
     })
+    // Placement reads the row back from the store, so title and color writes must land there.
+    const patchTab = (tabId: string, patch: { customTitle?: string; color?: string }): void => {
+      state.tabsByWorktree['wt-1'] = state.tabsByWorktree['wt-1'].map((tab) =>
+        tab.id === tabId ? { ...tab, ...patch } : tab
+      )
+    }
+    mockSetTabCustomTitle.mockImplementation((tabId: string, customTitle: string) =>
+      patchTab(tabId, { customTitle })
+    )
+    mockSetTabColor.mockImplementation((tabId: string, color: string) => patchTab(tabId, { color }))
     mockCloseTab.mockImplementation((tabId: string) => {
       state.tabsByWorktree['wt-1'] = state.tabsByWorktree['wt-1'].filter((tab) => tab.id !== tabId)
     })
@@ -136,7 +146,11 @@ describe('launchWorktreeBackgroundTerminals', () => {
         connectionId: null,
         worktreeId: 'wt-1',
         tabId: 'tab-1',
-        leafId: '00000000-0000-4000-8000-000000000001'
+        leafId: '00000000-0000-4000-8000-000000000001',
+        placement: {
+          kind: 'new-tab',
+          row: expect.objectContaining({ customTitle: 'Dev', color: '#f97316' })
+        }
       })
     )
     expect(mockSpawn).toHaveBeenNthCalledWith(
@@ -145,7 +159,8 @@ describe('launchWorktreeBackgroundTerminals', () => {
         command: 'bash /tmp/setup.sh',
         env: expect.objectContaining({ ORCA_WORKTREE_PATH: '/repo/worktree' }),
         tabId: 'tab-2',
-        leafId: '00000000-0000-4000-8000-000000000002'
+        leafId: '00000000-0000-4000-8000-000000000002',
+        placement: { kind: 'new-tab', row: expect.objectContaining({ customTitle: 'Setup' }) }
       })
     )
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-1')
@@ -168,7 +183,8 @@ describe('launchWorktreeBackgroundTerminals', () => {
       1,
       expect.objectContaining({
         tabId: 'tab-1',
-        leafId: '00000000-0000-4000-8000-000000000001'
+        leafId: '00000000-0000-4000-8000-000000000001',
+        placement: { kind: 'new-tab', row: expect.any(Object) }
       })
     )
     expect(mockSpawn.mock.calls[0]?.[0]).not.toHaveProperty('command')
@@ -177,7 +193,18 @@ describe('launchWorktreeBackgroundTerminals', () => {
       expect.objectContaining({
         command: 'bash /tmp/setup.sh',
         tabId: 'tab-1',
-        leafId: '00000000-0000-4000-8000-000000000002'
+        leafId: '00000000-0000-4000-8000-000000000002',
+        placement: {
+          kind: 'split',
+          parentLeafId: '00000000-0000-4000-8000-000000000001',
+          direction: 'horizontal',
+          proposedRoot: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: '00000000-0000-4000-8000-000000000001' },
+            second: { type: 'leaf', leafId: '00000000-0000-4000-8000-000000000002' }
+          }
+        }
       })
     )
     expect(mockSetTabLayout).toHaveBeenLastCalledWith(

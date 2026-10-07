@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { WindowsProcessTableTimeoutError } from './windows-process-table-timeout-error'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -318,12 +319,15 @@ describe('windows process table', () => {
     getAllProcesses.mockImplementation(() => {})
     resetWindowsProcessTableForTests()
     const wedge = readWindowsProcessIdentityTableFresh()
-    const wedgeAssertion = expect(wedge).rejects.toThrow(/timed out/)
+    const wedgeAssertion = expect(wedge).rejects.toBeInstanceOf(WindowsProcessTableTimeoutError)
     await vi.advanceTimersByTimeAsync(3_000)
     await wedgeAssertion
 
     await expect(readWindowsProcessTableFresh()).rejects.toThrow(/wedged/)
-    await expect(readWindowsProcessIdentityTableFresh()).rejects.toThrow(/wedged/)
+    // Both are slowness, which a caller may treat apart from an unreadable table.
+    await expect(readWindowsProcessIdentityTableFresh()).rejects.toBeInstanceOf(
+      WindowsProcessTableTimeoutError
+    )
     expect(getAllProcesses).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })

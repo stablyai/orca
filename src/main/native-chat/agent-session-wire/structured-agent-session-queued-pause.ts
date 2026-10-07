@@ -1,6 +1,6 @@
 // Whether the queue is paused, and why — derived from the journal and the cards
-// (`queued-message-pause.ts`), never stored. A Stop's event and a Resume are journal
-// rows; an explicit Resume lifts any pause.
+// (`queued-message-pause.ts`), never stored. A Stop's event, a Resume and a reopen that found
+// waiting cards are journal rows; an explicit Resume lifts any pause.
 
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -8,15 +8,15 @@ import type { DerivedQueuePause } from '../agent-session-journal/queued-message-
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** A per-process id, minted once per host process like the runtime's own
- *  `runtimeId` (`orca-runtime-runtime-id.ts`); a draft written by another
- *  instance pauses the queue rather than auto-sending after a restart. */
+ *  `runtimeId` (`orca-runtime-runtime-id.ts`), stamped on the cards this process writes or hands
+ *  off. No pause reads it: an older build holds every card another instance wrote. */
 let hostInstance = randomUUID()
 
 export function structuredAgentSessionHostInstance(): string {
   return hostInstance
 }
 
-/** Simulates a host-process restart. Tests only. */
+/** A new stamp, as a new host process mints. Tests only; no pause reads it. */
 export function rotateStructuredAgentSessionHostInstanceForTests(): string {
   hostInstance = randomUUID()
   return hostInstance
@@ -26,38 +26,34 @@ type PauseJournal = Pick<AgentSessionJournal, 'queuedMessages'>
 
 /** The queue's pauses in force, derived; none when the queue sends on its own. */
 export function structuredQueuePauses(journal: PauseJournal): DerivedQueuePause[] {
-  return journal.queuedMessages.pauses(hostInstance)
+  return journal.queuedMessages.pauses()
 }
 
-/**
- * Every journal publish: a restart's rows are adopted into this instance once a person's turn
- * started. The derivation already reads them as lifted; the write keeps that answer when the
- * handle reopens (its "since this conversation opened" moves). Bookkeeping: a failure is reported.
- */
-export async function adoptEndedRestartPause(
+/** The mark of a chat that stopped running with cards waiting — Orca quit or crashed, or the chat
+ *  was closed — so they wait for its next turn (`queued-message-pause.ts`). Every open marks, and
+ *  so does a person's close: the idle sweep never closes a chat with cards waiting, so its
+ *  eviction never reopens one. `since`: where the chat stopped, for a mark written after a send
+ *  that came later, which must still lift it. Bookkeeping, so a failure is reported and never
+ *  thrown; the pause then starts where the mark would have gone, holding no less. */
+export async function markStructuredQueueReopen(
   sessionId: string,
-  journal: PauseJournal,
-  logger: StructuredAgentSessionLogger
+  journal: Pick<AgentSessionJournal, 'markQueueReopen'>,
+  fence: number,
+  logger: StructuredAgentSessionLogger,
+  since?: number
 ): Promise<void> {
   try {
-    const { queuedMessages } = journal
-    const restarted = queuedMessages
-      .list()
-      .some((row) => row.state === 'waiting' && row.hostInstance !== hostInstance)
-    if (restarted && queuedMessages.restartEnded()) {
-      await queuedMessages.adopt(hostInstance)
-    }
+    await journal.markQueueReopen(fence, since)
   } catch (error) {
-    logger.warn("adopting a restart's queued cards after a started turn failed", {
-      scope: 'queue-pause-adoption',
+    logger.warn('marking a reopened queue failed', {
+      scope: 'queue-reopen-mark',
       sessionId,
       error
     })
   }
 }
 
-/** Resume: a journal row that ends a Stop's or a /clear's pause, and adoption of a restart's
- *  rows. Returns whether the queue was paused. */
+/** Resume: a journal row that ends every pause. Returns whether the queue was paused. */
 export async function resumeStructuredQueue(
   journal: Pick<AgentSessionJournal, 'queuedMessages' | 'appendQueueResume'>,
   fence: number
@@ -66,6 +62,5 @@ export async function resumeStructuredQueue(
     return false
   }
   await journal.appendQueueResume(fence)
-  await journal.queuedMessages.adopt(hostInstance)
   return true
 }

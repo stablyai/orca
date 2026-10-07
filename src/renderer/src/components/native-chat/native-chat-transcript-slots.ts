@@ -7,23 +7,25 @@
 // single place that answers "does this message take a slot?", and it answers it
 // with the same derivation the row itself renders from.
 
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
   type NativeChatMessage
 } from '../../../../shared/native-chat-types'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat-turn-status'
-import {
-  isNativeChatRowInLiveWorkingTurn,
-  nativeChatMessagesWaitingBehindLiveTurn
-} from '../../../../shared/native-chat-turn-membership'
+import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat-turn-membership'
+import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../shared/native-chat-messages-waiting-behind-live-turn'
 import { nativeChatTurnBarRows } from '../../../../shared/native-chat-turn-grouping'
 import {
   nativeChatTurnFold,
   type NativeChatTurnFoldRow
 } from '../../../../shared/native-chat-turn-fold'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
+import { isStoppedBeforeStartBlock } from '../../../../shared/native-chat-stopped-before-start'
 import {
   type NativeChatRowTypography,
   estimateNativeChatRowHeight,
@@ -45,6 +47,7 @@ import {
   type NativeChatSubagentSectionSlot
 } from './native-chat-subagent-section-slots'
 import { nativeChatRowRendersProse, nativeChatRowSpeaksOrActs } from './native-chat-trailing-run'
+import { nativeChatTranscriptWorkRuns } from './native-chat-transcript-work-runs'
 
 export type NativeChatTranscriptSlot =
   | NativeChatMessageSlot
@@ -84,6 +87,9 @@ export type NativeChatMessageSlot = {
   depth: number
   /** Height to reserve before the row has ever been measured. */
   estimatedHeight: number
+  /** Set when this row draws an unbroken stretch of tool calls and thoughts as one run:
+   *  every message in it, `message` first. */
+  workRun?: readonly NativeChatMessage[]
 }
 
 export type NativeChatTranscriptSlotsInput = {
@@ -134,10 +140,14 @@ export function buildNativeChatTranscriptSlots(
     turnKey: turnKeys[index],
     role: message.role,
     rendersProse: nativeChatRowRendersProse(message),
+    draws: receipts.has(message.id) || nativeChatRowRendersContent(message.blocks),
     // The raw blocks, not the renderable ones: a childless roster draws no row
     // and its plain-text twin is then the only record the spawn happened.
     outlivesTurn: message.blocks.some(
-      (block) => isSubagentGroupBlock(block) || isBackgroundTaskBlock(block)
+      (block) =>
+        isSubagentGroupBlock(block) ||
+        isBackgroundTaskBlock(block) ||
+        isStoppedBeforeStartBlock(block)
     ),
     reportsFailure: message.blocks.some((block) => block.type === 'text' && block.tone === 'error'),
     reportsCompaction: message.blocks.some(
@@ -240,7 +250,7 @@ export function buildNativeChatTranscriptSlots(
     sectionSlots.openAnchoredAt(message, roster, turnKey)
   }
   sectionSlots.openBefore(pending, undefined, 0)
-  return slots
+  return nativeChatTranscriptWorkRuns(slots, typography)
 }
 
 /** Stable key for a slot: its message id, the agent whose section it heads, or its
@@ -256,8 +266,8 @@ export function nativeChatSlotKey(slot: NativeChatTranscriptSlot): string {
   }
 }
 
-/** Slot index of a message id, or -1. Reveal targets arrive as ids because the
- *  row that owns them may not be mounted to be pointed at. */
+/** Slot index of a message id, or -1, counting a work run's members as its row. Reveal
+ *  targets arrive as ids because the row that owns them may not be mounted to be pointed at. */
 export function nativeChatSlotIndexOf(
   slots: readonly NativeChatTranscriptSlot[],
   messageId: string | undefined
@@ -265,18 +275,27 @@ export function nativeChatSlotIndexOf(
   if (messageId === undefined) {
     return -1
   }
-  return slots.findIndex((slot) => slot.kind === 'message' && slot.message.id === messageId)
+  return slots.findIndex(
+    (slot) =>
+      slot.kind === 'message' &&
+      (slot.message.id === messageId ||
+        slot.workRun?.some((member) => member.id === messageId) === true)
+  )
 }
 
 /** Splits off the slots of messages waiting behind the live turn, and of ones shown as not sent
  *  that the journal holds no place for: they draw after the live activity, not inside it. */
 export function splitNativeChatSlotsWaitingBehindLiveTurn(
   slots: readonly NativeChatTranscriptSlot[],
-  journalItems: readonly AgentJournalRenderItem[] | undefined
+  journalItems: readonly AgentJournalRenderItem[] | undefined,
+  stopping = false,
+  journalSubmissions?: readonly AgentJournalSubmission[]
 ): { slots: NativeChatTranscriptSlot[]; waitingSlots: NativeChatTranscriptSlot[] } {
   const waiting = nativeChatMessagesWaitingBehindLiveTurn(
     slots.flatMap((slot) => (slot.kind === 'message' ? [slot.message] : [])),
-    journalItems
+    journalItems,
+    stopping,
+    journalSubmissions
   )
   const isWaiting = (slot: NativeChatTranscriptSlot): boolean =>
     slot.kind === 'message' &&

@@ -194,7 +194,7 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
     return 'hermes'
   }
   if (agent === 'rovo') {
-    return 'acli'
+    return TUI_AGENT_CONFIG.rovo.launchCmd
   }
   return TUI_AGENT_CONFIG[agent].detectCmd
 }
@@ -208,7 +208,8 @@ function buildAgentResumeInvocation(
     case 'codex':
       return `${baseCommand} resume ${sessionArg}`
     case 'rovo':
-      return `${baseCommand} rovodev run --restore ${sessionArg}`
+      // Why: the base is the full launch command, as a settings override is.
+      return `${baseCommand} --restore ${sessionArg}`
     case 'opencode2':
       return `${baseCommand} --standalone --session ${sessionArg}`
     case 'opencode':

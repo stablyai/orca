@@ -61,11 +61,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const profileIds = collectSavedStructuredAgentSessionIds(
       this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
     )
-    // Unrecorded, the profile's chats join the tabs chats opened while the import was owed left.
-    // First: after a /clear the profile's chat would take their tab id, so seeds hit tabIdTaken.
-    const targets = persistedVisibleIndex.present
-      ? persistedVisibleIndex.sessionIds
-      : [...new Set([...persistedVisibleIndex.sessionIds, ...profileIds])]
+    const targets = persistedVisibleIndex.present ? persistedVisibleIndex.sessionIds : profileIds
     await host?.restoreReadableSessions(targets)
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
@@ -95,12 +91,9 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       this.projectStructuredAgentSessionTab({ ...session, activate: false, notify: false })
     }
     const wasUnverifiable = this.structuredAgentSessionInventoryUnverifiable
-    // No host, or one still owed the records file's chats, means no one can say which chats exist;
-    // with none on disk, empty is the answer.
-    const importOwed =
-      typeof host?.legacyRecordImportOwed === 'function' && host.legacyRecordImportOwed()
+    // No host means no one can say which chats exist; with none on disk, empty is the answer.
     this.structuredAgentSessionInventoryUnverifiable =
-      (!host || importOwed) && this.hasPersistedStructuredAgentSessionStore()
+      !host && this.hasPersistedStructuredAgentSessionStore()
     // This restore published quietly; subscribers still hold the frames that said "cannot tell".
     if (wasUnverifiable && !this.structuredAgentSessionInventoryUnverifiable) {
       this.notifyMobileSessionTabSnapshots()

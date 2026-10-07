@@ -80,7 +80,6 @@ export function reconcileCodexFastModeOption(
     modelFastModeSupport: boolean | undefined
   }
 ): void {
-  session.fastModeTierByModel = input.fastModeTierByModel
   const encoded = session.options.get('fastMode')
   if (encoded !== undefined && decodeCodexFastMode(session.options) === undefined) {
     session.options.delete('fastMode')

@@ -168,7 +168,7 @@ export async function verifyPinnedRelayInstall(context: PinnedInstallContext): P
     host,
     expectPinnedVersion: plan.kind === 'pinned-node'
   })
-  if (context.run && verdict.verdict !== 'unverifiable') {
+  if (context.run) {
     context.run.selfTest = verdict.verdict
   }
   switch (verdict.verdict) {

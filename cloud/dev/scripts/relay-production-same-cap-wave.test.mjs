@@ -136,13 +136,11 @@ test('the wave workflow chains exactly ten serial cell jobs', () => {
   assert.doesNotMatch(dispatch, /\n  cell_11:/)
 })
 
-test('lists the C34 spare as migration-only beside C17 and C18, and C30-C33 as general', () => {
-  assert.deepEqual(
-    SAME_CAP_MIGRATION_ONLY_CELLS,
-    ['production-gce-c17', 'production-gce-c18', 'production-gce-c34']
-  )
+test('lists only C17 and C18 as migration-only now that C34 is promoted, and C30-C34 as general', () => {
+  assert.deepEqual(SAME_CAP_MIGRATION_ONLY_CELLS, ['production-gce-c17', 'production-gce-c18'])
   for (const cellId of [
-    'production-gce-c30', 'production-gce-c31', 'production-gce-c32', 'production-gce-c33'
+    'production-gce-c30', 'production-gce-c31', 'production-gce-c32', 'production-gce-c33',
+    'production-gce-c34'
   ]) {
     assert.equal(SAME_CAP_CELLS.includes(cellId), true, cellId)
   }
@@ -207,6 +205,19 @@ test('rolls the migration-only cells but never mixes the two classes in one wave
     confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${asiaPromoted}`,
     canaryRunId: '42'
   }).cells, ['production-gce-c30', 'production-gce-c31'])
+  // C34 is general once its Asia canary promotes it, so a rollback restores it general.
+  assert.equal(entryAdmission('production-gce-c34'), 'general')
+  assert.equal(selectorWaveDelta('production-gce-c34'), 2)
+  const c34Mixed = 'production-gce-c34,production-gce-c17'
+  assert.throws(() => validateSameCapWave({
+    mode: 'batch-apply',
+    cellIds: c34Mixed,
+    targetDigest,
+    rollbackDigest,
+    drainPaceWindowMs: '300000',
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${c34Mixed}`,
+    canaryRunId: '42'
+  }), /all general or all migration-only/)
   const c31Mixed = 'production-gce-c31,production-gce-c18'
   assert.throws(() => validateSameCapWave({
     mode: 'batch-apply',

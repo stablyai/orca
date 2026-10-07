@@ -1,3 +1,5 @@
+import { MobileFileMediaPreview } from '../files/MobileFileMediaPreview'
+import type { MobileFilePreviewRpcSender } from '../files/mobile-file-preview-operations'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   FlatList,
@@ -34,12 +36,14 @@ import { sendableMobileDiffComments } from './mobile-diff-comments'
 
 export function FileReader({
   doc,
+  client = null,
   title,
   relativePath,
   language,
   diffCommentActions
 }: {
   doc: FileDocState | undefined
+  client?: MobileFilePreviewRpcSender | null
   title: string
   relativePath: string
   language?: string
@@ -255,6 +259,9 @@ export function FileReader({
     )
   }
 
+  if (doc.kind === 'media') {
+    return <MobileFileMediaPreview media={doc.media} client={client} title={title} />
+  }
   if (doc.kind === 'image') {
     return (
       <View style={styles.imagePreviewContainer}>

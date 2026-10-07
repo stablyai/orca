@@ -24,7 +24,8 @@
   unicode-range: U+E000-F8FF, U+F0000-FFFFD, U+100000-10FFFD;
 }
 
-@custom-variant dark (&:is(.dark *));
+/* A matching chat can use a different scheme from the document; portaled menus stay outside it. */
+@custom-variant dark (&:is(.dark *:not(:where([data-native-chat-scheme='light'], [data-native-chat-scheme='light'] *)), [data-native-chat-scheme='dark'], [data-native-chat-scheme='dark'] *));
 
 /* Why: hover-reveal controls (sidebar/row action buttons) hide with `opacity-0`
    and fade in via `group-hover`. Touch devices have no hover, so those controls
@@ -120,6 +121,8 @@
   --color-status-warning: var(--status-warning);
   --color-status-warning-background: var(--status-warning-background);
   --color-status-warning-border: var(--status-warning-border);
+  --color-callout-note: var(--callout-note);
+  --color-callout-important: var(--callout-important);
   --color-workspace-status-done: var(--workspace-status-done);
   --color-workspace-status-review: var(--workspace-status-review);
   --color-workspace-status-progress: var(--workspace-status-progress);
@@ -173,19 +176,20 @@
   --background: #fff;
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
-  --chat-canvas: var(--background);
-  --chat-foreground: color-mix(in srgb, var(--foreground) 82%, var(--chat-canvas));
-  --chat-foreground-strong: color-mix(in srgb, var(--foreground) 92%, var(--chat-canvas));
-  --chat-foreground-faint: var(--muted-foreground);
-  --chat-user-surface: color-mix(in srgb, var(--foreground) 4%, var(--chat-canvas));
-  --chat-user-border: color-mix(in srgb, var(--foreground) 7%, transparent);
-  --chat-code-foreground: color-mix(in srgb, var(--foreground) 85%, var(--chat-canvas));
-  --chat-code-surface: color-mix(in srgb, var(--foreground) 2%, var(--chat-canvas));
-  --chat-code-border: color-mix(in srgb, var(--foreground) 7%, transparent);
-  --chat-inline-code-surface: color-mix(in srgb, var(--foreground) 4%, var(--chat-canvas));
-  --chat-inline-code-border: color-mix(in srgb, var(--foreground) 9%, transparent);
-  --chat-composer-surface: var(--chat-canvas);
-  --chat-composer-border: color-mix(in srgb, var(--foreground) 11%, transparent);
+  --chat-canvas-mix: 0%;
+  --chat-foreground-mix: 82%;
+  --chat-strong-mix: 92%;
+  --chat-faint-mix: 100%;
+  --chat-user-mix: 4%;
+  --chat-user-border-mix: 7%;
+  --chat-code-mix: 2%;
+  --chat-code-base: var(--chat-canvas);
+  --chat-inline-code-mix: 4%;
+  --chat-inline-code-base: var(--chat-canvas);
+  --chat-inline-code-border-mix: 9%;
+  --chat-composer-mix: 0%;
+  --chat-composer-base: var(--chat-canvas);
+  --chat-composer-border-mix: 11%;
   --chat-content-max-width: 46rem;
   --card: #fff;
   --card-foreground: #0a0a0a;
@@ -199,8 +203,6 @@
   --muted-foreground: #737373;
   --accent: #f5f5f5;
   --accent-foreground: #171717;
-  --destructive: #e40014;
-  --destructive-foreground: #fcf3f3;
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
@@ -212,14 +214,6 @@
   --agent-question: var(--color-orange-600);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
-  --status-success: #15803d;
-  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
-  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
-  /* Needs-attention state that is not an error: a resume that did not carry on, an update that
-     failed. Yellow, so it stays apart from destructive red and from the orange working state. */
-  --status-warning: #ca8a04;
-  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
-  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   /* Workspace PR-state tones: same hue in both themes so a status keeps its
      identity when the theme flips. */
   --workspace-status-done: #c7a594;
@@ -258,17 +252,6 @@
   --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
   --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
   --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
-  --git-decoration-added: #587c0c;
-  --git-decoration-modified: #895503;
-  --git-decoration-deleted: #ad0707;
-  --git-decoration-renamed: #007acc;
-  --git-decoration-untracked: #007100;
-  --git-decoration-copied: #007acc;
-  --git-decoration-ignored: #8c8c8c;
-  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 13%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 26%, transparent);
-  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 11%, transparent);
-  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 22%, transparent);
   --git-graph-ref: #007acc;
   --git-graph-remote-ref: #b66dff;
   --git-graph-base-ref: #ea5c00;
@@ -310,19 +293,20 @@
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
   --foreground: #fafafa;
-  --chat-canvas: color-mix(in srgb, var(--foreground) 5%, var(--background));
-  --chat-foreground: color-mix(in srgb, var(--foreground) 78%, var(--chat-canvas));
-  --chat-foreground-strong: color-mix(in srgb, var(--foreground) 90%, var(--chat-canvas));
-  --chat-foreground-faint: color-mix(in srgb, var(--muted-foreground) 83%, var(--chat-canvas));
-  --chat-user-surface: color-mix(in srgb, var(--foreground) 7%, var(--chat-canvas));
-  --chat-user-border: color-mix(in srgb, var(--foreground) 6%, transparent);
-  --chat-code-foreground: color-mix(in srgb, var(--foreground) 85%, var(--chat-canvas));
-  --chat-code-surface: color-mix(in srgb, var(--foreground) 3.5%, transparent);
-  --chat-code-border: color-mix(in srgb, var(--foreground) 7%, transparent);
-  --chat-inline-code-surface: color-mix(in srgb, var(--foreground) 6%, transparent);
-  --chat-inline-code-border: color-mix(in srgb, var(--foreground) 8%, transparent);
-  --chat-composer-surface: color-mix(in srgb, var(--foreground) 4%, transparent);
-  --chat-composer-border: color-mix(in srgb, var(--foreground) 9%, transparent);
+  --chat-canvas-mix: 5%;
+  --chat-foreground-mix: 78%;
+  --chat-strong-mix: 90%;
+  --chat-faint-mix: 83%;
+  --chat-user-mix: 7%;
+  --chat-user-border-mix: 6%;
+  --chat-code-mix: 3.5%;
+  --chat-code-base: transparent;
+  --chat-inline-code-mix: 6%;
+  --chat-inline-code-base: transparent;
+  --chat-inline-code-border-mix: 8%;
+  --chat-composer-mix: 4%;
+  --chat-composer-base: transparent;
+  --chat-composer-border-mix: 9%;
   --chat-content-max-width: 46rem;
   --card: #171717;
   --card-foreground: #fafafa;
@@ -336,8 +320,6 @@
   --muted-foreground: #a1a1a1;
   --accent: #404040;
   --accent-foreground: #fafafa;
-  --destructive: #ff6568;
-  --destructive-foreground: #df2225;
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
@@ -345,12 +327,6 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
-  --status-success: #86efac;
-  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
-  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
-  --status-warning: #eab308;
-  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
-  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -391,17 +367,6 @@
   --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
   --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
   --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
-  --git-decoration-added: #81b88b;
-  --git-decoration-modified: #e2c08d;
-  --git-decoration-deleted: #c74e39;
-  --git-decoration-renamed: #73c991;
-  --git-decoration-untracked: #73c991;
-  --git-decoration-copied: #73c991;
-  --git-decoration-ignored: #6e6e6e;
-  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
-  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
-  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 32%, transparent);
   --git-graph-ref: #3794ff;
   --git-graph-remote-ref: #b66dff;
   --git-graph-base-ref: #ea5c00;
@@ -416,6 +381,59 @@
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
   --tab-group-split-divider-strong: #a1a1aa;
+}
+
+/* Status and diff colors follow the chat scheme without copying the app palette. */
+:root,
+.native-chat-appearance[data-native-chat-scheme='light'] {
+  --destructive: #e40014;
+  --destructive-foreground: #fcf3f3;
+  --status-success: #15803d;
+  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
+  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  /* Needs-attention states use yellow, separate from errors and working states. */
+  --status-warning: #ca8a04;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* GitHub's own hues for the two callout kinds no status token covers. */
+  --callout-note: #0969da;
+  --callout-important: #8250df;
+  --git-decoration-added: #587c0c;
+  --git-decoration-modified: #895503;
+  --git-decoration-deleted: #ad0707;
+  --git-decoration-renamed: #007acc;
+  --git-decoration-untracked: #007100;
+  --git-decoration-copied: #007acc;
+  --git-decoration-ignored: #8c8c8c;
+  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 13%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 26%, transparent);
+  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 11%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 22%, transparent);
+}
+
+.dark,
+.native-chat-appearance[data-native-chat-scheme='dark'] {
+  --destructive: #ff6568;
+  --destructive-foreground: #df2225;
+  --status-success: #86efac;
+  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
+  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  --status-warning: #eab308;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  --callout-note: #4493f8;
+  --callout-important: #ab7df8;
+  --git-decoration-added: #81b88b;
+  --git-decoration-modified: #e2c08d;
+  --git-decoration-deleted: #c74e39;
+  --git-decoration-renamed: #73c991;
+  --git-decoration-untracked: #73c991;
+  --git-decoration-copied: #73c991;
+  --git-decoration-ignored: #6e6e6e;
+  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
+  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 32%, transparent);
 }
 
 .plugin-security-chrome {
@@ -528,6 +546,72 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
 }
 
 /* ── Base Layer ──────────────────────────────────────── */
+
+/* Re-evaluate chat colors where the appearance producer supplies their source colors. */
+:root,
+.dark,
+.native-chat-appearance {
+  --chat-source-background: var(--background);
+  --chat-source-foreground: var(--foreground);
+  --chat-source-muted-foreground: var(--muted-foreground);
+  --chat-canvas: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-canvas-mix),
+    var(--chat-source-background)
+  );
+  --chat-foreground: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-foreground-mix),
+    var(--chat-canvas)
+  );
+  --chat-foreground-strong: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-strong-mix),
+    var(--chat-canvas)
+  );
+  --chat-foreground-faint: color-mix(
+    in srgb,
+    var(--chat-source-muted-foreground) var(--chat-faint-mix),
+    var(--chat-canvas)
+  );
+  --chat-user-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-user-mix),
+    var(--chat-canvas)
+  );
+  --chat-user-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-user-border-mix),
+    transparent
+  );
+  --chat-code-foreground: color-mix(in srgb, var(--chat-source-foreground) 85%, var(--chat-canvas));
+  --chat-code-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-code-mix),
+    var(--chat-code-base)
+  );
+  --chat-code-border: color-mix(in srgb, var(--chat-source-foreground) 7%, transparent);
+  --chat-inline-code-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-inline-code-mix),
+    var(--chat-inline-code-base)
+  );
+  --chat-inline-code-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-inline-code-border-mix),
+    transparent
+  );
+  --chat-composer-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-composer-mix),
+    var(--chat-composer-base)
+  );
+  --chat-composer-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-composer-border-mix),
+    transparent
+  );
+}
 
 @layer base {
   *,

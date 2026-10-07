@@ -13,6 +13,7 @@ function harness() {
   const deliverPrompt = vi.fn(async () => true)
   const createWorktree = vi.fn(async () => ({
     worktreeId: 'wt_new',
+    connectionId: null,
     startupTerminalHandle: 'term_new'
   }))
   return {

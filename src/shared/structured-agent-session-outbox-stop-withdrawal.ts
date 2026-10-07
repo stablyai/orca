@@ -6,7 +6,9 @@ import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand
 /** Whether only the user's Retry sends this entry again: a rejected one, one whose send failed or
  *  was refused, one a Stop outlived, or one in doubt the unconfirmed probe leaves alone.
  *  `NativeChatDeliveryRetry` offers it. */
-function awaitsStructuredAgentSessionRetry(entry: StructuredAgentSessionOutboxEntry): boolean {
+export function awaitsStructuredAgentSessionRetry(
+  entry: StructuredAgentSessionOutboxEntry
+): boolean {
   return (
     entry.state === 'rejected' ||
     structuredAgentSessionEntryHeldForRetry(entry) ||
@@ -50,7 +52,7 @@ function markedOutlivingStop(
 
 /**
  * What a Stop leaves in the outbox: nothing the journal does not already hold may go out after it,
- * so every such entry goes, as a message the host withdraws leaves the chat. The send on its way
+ * so every such entry leaves it, as any send a Stop withdraws does. The send on its way
  * stays: it reaches the host ahead of the Stop, and it comes back from the host's answer, since
  * the agent may already have it. One waiting on Retry keeps it, and so does an issued queue send
  * that has gone out (a queued receipt or hand-off retires it against the published card), and it

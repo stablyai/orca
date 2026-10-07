@@ -1,8 +1,11 @@
-// Which sends a Stop's child end takes back: the same rule decides the withdrawal and whether the
+// Which sends a Stop takes back, at its child's end or once Codex takes it: the same rule decides the withdrawal and whether the
 // Stop writes a row, so a send it must leave alone is left alone by both.
 
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalSubmission,
+  AgentJournalTurnScope
+} from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
   sendStopCanTakeBack,
@@ -32,7 +35,20 @@ function sendBeforeStop(overrides: Partial<Send> = {}): Send {
   }
 }
 
-function journalWith(send: Send) {
+/** A turn that ended at sequence 4, before a handover at 5. */
+const turnEndedBeforeHandover = {
+  itemId: 'turn-0',
+  revision: 1,
+  sequence: 4,
+  observedAt: 4,
+  body: { kind: 'turn' as const, turnId: 'turn-0', state: 'completed' as const }
+}
+
+function journalWith(
+  send: Send,
+  turnScope: AgentJournalTurnScope = { kind: 'thread' },
+  earlier: (typeof turnEndedBeforeHandover)[] = []
+) {
   const resolveDispatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 11 }))
   const journal: UnopenedSendJournal = {
     agent: 'codex',
@@ -41,13 +57,14 @@ function journalWith(send: Send) {
     },
     snapshot: () => ({
       items: [
+        ...earlier,
         {
           itemId: agentJournalSubmissionKey(send.clientMessageId),
           revision: 0,
           sequence: 5,
           observedAt: 5,
           body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'look around' }] },
-          turnScope: { kind: 'thread' }
+          turnScope
         }
       ]
     }),
@@ -76,7 +93,7 @@ describe('a send a Stop can take back', () => {
   })
 })
 
-describe("a Codex child's end under a person's Stop", () => {
+describe("a Codex child's end, or a Stop Codex took, under a person's Stop", () => {
   it('withdraws a send whose answer this process lost', async () => {
     const { journal, resolveDispatch } = journalWith(sendBeforeStop({ dispatchState: 'unknown' }))
 
@@ -91,6 +108,33 @@ describe("a Codex child's end under a person's Stop", () => {
     const { journal, resolveDispatch } = journalWith(
       sendBeforeStop({ dispatchState: 'unknown', recovered: true })
     )
+
+    await withdrawCodexSendsNoTurnOpenedFor(journal, 1)
+
+    expect(resolveDispatch).not.toHaveBeenCalled()
+  })
+
+  // The send could start a turn only once handed over, so a turn that ended before then is not one.
+  it('withdraws a send when a turn record was written between its acceptance and its handover', async () => {
+    const { journal, resolveDispatch } = journalWith(
+      sendBeforeStop({ acceptedSequence: 3 }),
+      { kind: 'thread' },
+      [turnEndedBeforeHandover]
+    )
+
+    await withdrawCodexSendsNoTurnOpenedFor(journal, 1)
+
+    expect(resolveDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ clientMessageId: 'send-1', state: 'rejected' })
+    )
+  })
+
+  // A send that joined a running turn may be in it.
+  it('leaves a send steered into a running turn as it is', async () => {
+    const { journal, resolveDispatch } = journalWith(sendBeforeStop(), {
+      kind: 'turn',
+      turnItemId: 'turn-item-1'
+    })
 
     await withdrawCodexSendsNoTurnOpenedFor(journal, 1)
 

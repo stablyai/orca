@@ -1,5 +1,5 @@
 // Card projection policy: queue order, derived hold labels (the wire carries
-// none), and the presentation-only suppression of a card whose submission
+// holds, not labels), and the presentation-only suppression of a card whose submission
 // already arrived — a queued draft is otherwise never a transcript bubble.
 
 import { describe, expect, it } from 'vitest'
@@ -9,7 +9,9 @@ import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/struc
 import {
   newestSteerableQueuedMessageCard,
   outboxOutsideQueuedCards,
-  projectQueuedMessageCards
+  projectQueuedMessageCards,
+  queuedMessageCardSteers,
+  queuedMessagesQueuePause
 } from './structured-agent-session-queued-cards'
 
 function draft(
@@ -159,13 +161,40 @@ describe('queued message cards', () => {
     ).toBe('awaiting-answer')
   })
 
-  // A kept card is held on its own, like a failed one: the host sends the cards behind it.
-  it('a card behind a kept or a send_failed card is not held by it', () => {
+  it('a paused queue holds every waiting card, in order: an answer does not drain it', () => {
+    const cards = projectQueuedMessageCards([draft('held', 1), draft('typed-after', 2)], [], {
+      hasPendingPrompt: true,
+      queuePaused: true
+    })
+    expect(cards.map((card) => card.hold)).toEqual(['queue-paused', 'queue-paused'])
+    // Still Steer: the header row, not the card, says it waits.
+    expect(cards.map((card) => queuedMessageCardSteers(card))).toEqual([true, true])
+  })
+
+  it("the header names the queue's pause while it holds a card, and none over cards Resume would not send", () => {
+    const stopped = { reason: 'stopped' } as const
+    const project = (messages: AgentSessionQueuedMessage[], queuePaused = true) =>
+      projectQueuedMessageCards(messages, [], { hasPendingPrompt: false, queuePaused })
+    expect(queuedMessagesQueuePause(project([draft('held', 1)]), stopped)).toEqual(stopped)
+    const unsendable = [
+      draft('returned', 1, { state: 'returned', returnedReason: null }),
+      draft('behind', 2),
+      draft('failed', 3, { paused: true, pausedReason: 'send_failed' })
+    ]
+    expect(queuedMessagesQueuePause(project(unsendable), stopped)).toBeNull()
+    // No published pause (an idle chat after a restart): plain cards, no header.
+    const unpaused = project([draft('waiting', 1)], false)
+    expect(unpaused.map((card) => card.hold)).toEqual(['turn'])
+    expect(queuedMessagesQueuePause(unpaused, null)).toBeNull()
+  })
+
+  // A card held on its own (a failed send, or a newer host's hold) holds nothing behind it.
+  it('a card behind a card held on its own is not held by it', () => {
     const cards = projectQueuedMessageCards(
       [
         draft('failed', 1, { paused: true, pausedReason: 'send_failed' }),
         draft('after-failed', 2),
-        draft('kept', 3, { paused: true, pausedReason: 'kept' }),
+        draft('newer-hold', 3, { paused: true }),
         draft('behind', 4)
       ],
       [],
@@ -244,5 +273,27 @@ describe('queued message cards', () => {
       entry('queued', { state: 'dispatching', lastAttemptAt: 2, sentDelivery: 'queue-if-active' })
     ]
     expect(ids(outboxOutsideQueuedCards(sent, [], true, unknown))).toEqual(['plain'])
+  })
+})
+
+describe("another agent's card", () => {
+  it('carries who it is from, read through the shared reader', () => {
+    const from = {
+      kind: 'agent' as const,
+      senders: [
+        {
+          party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+          name: 'Coder'
+        }
+      ],
+      orchestration: null
+    }
+    const agentDraft = draft('a', 1)
+    const cards = projectQueuedMessageCards(
+      [{ ...agentDraft, body: { ...agentDraft.body, from } }, draft('b', 2)],
+      [],
+      { hasPendingPrompt: false }
+    )
+    expect(cards.map((card) => card.from)).toEqual([from, undefined])
   })
 })

@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Tab } from '../../../shared/tab-types'
 import { useAppStore } from '@/store'
@@ -38,7 +38,7 @@ function holdsUnadoptedLaunchDraft(tabId: string): boolean {
  *  sent into and whose composer is untouched. Prefers the group's active tab, else the newest. */
 export function findIdleEmptyStructuredChat(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   executionHostId?: ExecutionHostId,
   groupId?: string
 ): IdleEmptyStructuredChat | undefined {

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
+import { buildOwnedEditorFileId, type OpenFile } from '@/store/slices/editor'
 import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'
 import {
   attachModelLifetimeView,
@@ -35,6 +35,7 @@ function file(id: string, route: WorktreeOperationRoute, filePath = FILE_PATH): 
     ...modelLifetimeFile(id),
     filePath,
     relativePath: 'same-path.txt',
+    runtimeEnvironmentId: route.runtimeEnvironmentId,
     operationProvenance: {
       ownershipProjection: 'explicit',
       generation: {
@@ -249,6 +250,12 @@ describe('same-path models on different execution hosts', () => {
     const { owners, store, attach } = createHostModels()
     const local = owners[0]!
     const runtime = owners[2]!
+    const migratedFile: OpenFile = {
+      ...local.file,
+      id: buildOwnedEditorFileId(FILE_PATH, local.file.worktreeId, 'hub-a'),
+      runtimeEnvironmentId: 'hub-a',
+      operationProvenance: runtime.file.operationProvenance
+    }
     const detach = attachModelLifetimeView(local.model)
     edit(runtime.model, 'runtime independent edit')
     attach()
@@ -257,8 +264,10 @@ describe('same-path models on different execution hosts', () => {
         .getState()
         .openFiles.map((opened) =>
           opened.id === local.file.id
-            ? { ...opened, operationProvenance: runtime.file.operationProvenance }
-            : opened
+            ? migratedFile
+            : opened.id === runtime.file.id
+              ? { ...opened, readOnly: true }
+              : opened
         )
     })
     await Promise.resolve()
@@ -268,8 +277,9 @@ describe('same-path models on different execution hosts', () => {
     expect(local.model.isDisposed()).toBe(true)
     expect(runtime.model.isDisposed()).toBe(false)
     expect(runtime.model.getValue()).toBe('runtime independent edit')
-    store.getState().closeFile(local.file.id)
+    store.getState().closeFile(migratedFile.id)
     await Promise.resolve()
+    expect(store.getState().openFiles.some((opened) => opened.id === runtime.file.id)).toBe(true)
     expect(runtime.model.isDisposed()).toBe(false)
     await runtime.model.undo()
     expect(runtime.model.getValue()).toBe(runtime.initial)

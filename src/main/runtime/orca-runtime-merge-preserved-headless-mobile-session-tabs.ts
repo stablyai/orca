@@ -11,7 +11,7 @@ import {
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
 } from './mobile-session-tab-merge'
-import { terminalLayoutContainsLeaf } from './headless-terminal-split-layout'
+import { terminalLayoutContainsLeaf } from '../../shared/workspace-session-pane-ownership'
 import { getHeadlessMobileSessionGroupId } from './mobile-session-layout-projection'
 
 export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends OrcaRuntimeWithSyncMobileSessionTabs {

@@ -1,6 +1,17 @@
+import {
+  Identifier,
+  JournalCursor,
+  MAX_ID_LENGTH,
+  SessionId
+} from './structured-agent-session-identifiers'
+export {
+  Identifier,
+  JournalCursor,
+  MAX_ID_LENGTH,
+  SessionId
+} from './structured-agent-session-identifiers'
 import { z } from 'zod'
 import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
-import { isAgentSessionId } from '../agent-session-record'
 import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
 import {
@@ -8,13 +19,10 @@ import {
   AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
 } from '../agent-session-question-answer'
 import {
-  AGENT_SESSION_ID_MAX_LENGTH,
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH
 } from '../agent-session-wire'
-
-export const MAX_ID_LENGTH = AGENT_SESSION_ID_MAX_LENGTH
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
@@ -31,25 +39,6 @@ export const MAX_OPTION_LABEL = 512
 
 /** One relaunch cannot offer more chats than a profile plausibly holds. */
 export const MAX_RESTART_RESUME_SESSIONS = 512
-
-export const SessionId = z
-  .string()
-  .max(MAX_ID_LENGTH)
-  .refine(isAgentSessionId, 'Invalid agent session id')
-
-export const Identifier = (message: string, maxLength = MAX_ID_LENGTH) =>
-  z
-    .string()
-    .min(1, message)
-    .max(maxLength, message)
-    .refine((value) => value === value.trim(), message)
-
-export const JournalCursor = z
-  .object({
-    epoch: Identifier('Invalid journal epoch'),
-    sequence: z.number().int().nonnegative()
-  })
-  .strict()
 
 export const MutationEnvelope = z
   .object({
@@ -297,6 +286,7 @@ export const SetOptionParams = z
   .strict()
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const AcknowledgeAttentionParams = OptionsParams.extend({ observedCursor: JournalCursor })
 
 /** `agentSession.agents` takes nothing: the list is the host's, whichever client asks. */
 export const AgentsParams = z.object({}).strict()
@@ -372,6 +362,9 @@ export const HistoryParams = z
 export const SubscribeParams = z
   .object({ sessionId: SessionId, cursor: JournalCursor.optional() })
   .strict()
+
+// Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
+export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })
 
 export const UnsubscribeParams = z
   .object({

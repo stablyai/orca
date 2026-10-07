@@ -37,4 +37,12 @@ describe('claude structured owner identity', () => {
     ).resolves.toMatchObject({ processStartTimeMs: 456 })
     expect(readStartTime).toHaveBeenCalledTimes(3)
   })
+
+  it('records an owner whose start time is unreadable instead of refusing the session', async () => {
+    const readStartTime = vi.fn(async () => null)
+    await expect(
+      claudeProcessIdentity({ identity: IDENTITY, spawnToken: 'spawn-a', pid: 4242 }, readStartTime)
+    ).resolves.toMatchObject({ pid: 4242, processStartTimeMs: null, spawnToken: 'spawn-a' })
+    expect(readStartTime).toHaveBeenCalledTimes(3)
+  })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from './constants'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from './terminal-scrollback-limits'
 import { getUtf8ByteLength } from './utf8-byte-limits'
@@ -147,6 +147,40 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
     })
     expect(result.terminalLayoutsByTabId['runtime-tab'].scrollbackRefsByLeafId).toEqual({
       'pane:1': 'v1-runtime'
+    })
+  })
+
+  it('keeps a dormant tab buffer, which has no live PTY to replay from', () => {
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        'local-repo::/w': [
+          {
+            id: 'dormant-tab',
+            ptyId: null,
+            worktreeId: 'local-repo::/w',
+            title: 'Shell',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'dormant-tab': {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          buffersByLeafId: { 'pane:1': 'dormant output' }
+        }
+      }
+    }
+    const result = pruneLocalTerminalScrollbackBuffers(session, [
+      { id: 'local-repo', connectionId: null }
+    ])
+    expect(result.terminalLayoutsByTabId['dormant-tab'].buffersByLeafId).toEqual({
+      'pane:1': 'dormant output'
     })
   })
 

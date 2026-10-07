@@ -1,6 +1,5 @@
 // A Stop's interrupt never waits on the journal. Its withdrawal and its Stop event are bookkeeping:
-// one that throws is reported and the Stop still interrupts. Its writes may wait behind owed work;
-// they are issued, and the interrupt goes out before they land.
+// one that throws is reported and the Stop still interrupts.
 
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -216,75 +215,4 @@ describe.each([
       await vi.waitFor(() => expectReported(failed))
     }
   )
-
-  // The open pays an import owed before the Stop, so the work falls owed at the Stop's first write:
-  // the one moment the Stop's own writes can wait behind it.
-  it('interrupts before owed work its writes wait behind is paid', async () => {
-    const journal = await runningTurn()
-    const owed = Promise.withResolvers<void>()
-    const withdraw = journal.rejectQueuedSubmissions.bind(journal)
-    vi.spyOn(journal, 'rejectQueuedSubmissions').mockImplementation((...args) => {
-      journal['queue'].owe(() => owed.promise)
-      return withdraw(...args)
-    })
-    let answered = false
-    const stopping = stop(fields).finally(() => {
-      answered = true
-    })
-    try {
-      await vi.waitFor(() => expect(cancelTurn).toHaveBeenCalledOnce())
-      expect(journal.importPending).toBe(true)
-      expect(answered).toBe(false)
-    } finally {
-      owed.resolve()
-    }
-    expect(await stopping).toMatchObject({ ok: true })
-    expect(journal.importPending).toBe(false)
-  })
-
-  // Under owed work the event is issued before the interrupt but lands later, still in queue order:
-  // ahead of the stopped turn's end, which the provider hands over as it takes the interrupt.
-  it('issues its Stop event before the interrupt, and it lands ahead of the turn it ends', async () => {
-    const journal = await runningTurn()
-    const order: string[] = []
-    const owed = Promise.withResolvers<void>()
-    const withdraw = journal.rejectQueuedSubmissions.bind(journal)
-    vi.spyOn(journal, 'rejectQueuedSubmissions').mockImplementation((...args) => {
-      journal['queue'].owe(() => owed.promise)
-      return withdraw(...args)
-    })
-    const appendStopEvent = journal.appendStopEvent.bind(journal)
-    vi.spyOn(journal, 'appendStopEvent').mockImplementation((...args) => {
-      order.push('event issued')
-      return appendStopEvent(...args)
-    })
-    cancelTurn.mockImplementation(async () => {
-      order.push('interrupt')
-      acquire.mock.calls
-        .at(-1)![0]
-        .events!.appendItem(
-          { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 900 },
-          { kind: 'turn', turnId: 'turn-1', state: 'interrupted' },
-          { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-        )
-      return { cancelled: true }
-    })
-
-    const stopping = stop(fields)
-    try {
-      await vi.waitFor(() => expect(cancelTurn).toHaveBeenCalledOnce(), INTERRUPT_WAIT)
-    } finally {
-      owed.resolve()
-    }
-    expect(await stopping).toMatchObject({ ok: true })
-
-    expect(order).toEqual(['event issued', 'interrupt'])
-    const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
-    const rows = since.ok ? since.rows : []
-    const stopRow = rows.find((row) => row.kind === 'tombstone' && row.stopEvent)
-    const turnEnd = rows.find(
-      (row) => row.kind === 'item' && row.body.kind === 'turn' && row.body.state === 'interrupted'
-    )
-    expect(stopRow?.seq).toBeLessThan(turnEnd?.seq ?? 0)
-  })
 })

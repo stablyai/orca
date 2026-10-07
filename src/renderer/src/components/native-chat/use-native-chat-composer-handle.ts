@@ -16,14 +16,13 @@ export function useNativeChatComposerHandle(
   ref: ForwardedRef<NativeChatComposerHandle>,
   args: UseNativeChatComposerHandleArgs
 ): (event: ClipboardEventLike) => void {
-  const { textareaRef, draft, setDraft, setHistory, setActiveSuggestion, ...pasteArgs } = args
+  const { textareaRef, draft, setDraft, setActiveSuggestion, ...pasteArgs } = args
   const { insertTypedText, insertPastedText, focus, contains } = useNativeChatTypedInsertion({
     textareaRef,
     caret: args.caret,
     draft,
     setDraft,
     setCaret: args.setCaret,
-    setHistory,
     setActiveSuggestion
   })
 

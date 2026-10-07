@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { retargetGitHubPrStartPointSelection } from './useComposerState'
+import { retargetGitHubPrStartPointSelection } from './composer-state/composer-decisions'
 
 describe('useComposerState host retarget', () => {
   it('re-resolves a seeded PR after switching its run host', () => {

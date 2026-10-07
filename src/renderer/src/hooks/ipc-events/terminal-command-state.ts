@@ -35,9 +35,18 @@ export function focusTerminalInitiatedTab(
   }
 }
 
-export function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string): void {
+export function activateTerminalInitiatedWorktree(
+  store: AppState,
+  worktreeId: string,
+  // Activate after creating into a requested group: activation prunes a workspace's empty groups.
+  createdTabIds?: readonly string[]
+): void {
   store.setActiveView('terminal')
-  store.setActiveWorktree(worktreeId)
+  if (createdTabIds) {
+    store.setActiveWorktree(worktreeId, undefined, { createdTabIds })
+  } else {
+    store.setActiveWorktree(worktreeId)
+  }
   store.markWorktreeVisited(worktreeId)
   if (!store.isNavigatingHistory) {
     store.recordWorktreeVisit(worktreeId)

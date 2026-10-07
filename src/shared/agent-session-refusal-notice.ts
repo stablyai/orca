@@ -79,6 +79,21 @@ function reasonParts(
   write: AgentSessionWriteKind,
   context: AgentSessionFailureWordsContext
 ): AgentSessionWriteNoticePart[] | undefined {
+  if (
+    failure.code === 'agent_session_operation_invalid' &&
+    failure.details?.argumentProblem &&
+    (write === 'send' || write === 'composer-send')
+  ) {
+    const argumentProblem = failure.details.argumentProblem
+    return [
+      NOT_DONE[write],
+      {
+        failure: { kind: 'startFailed', argumentProblem },
+        surface: 'rejection',
+        context: { ...context, agentName: argumentProblem.agent }
+      }
+    ]
+  }
   const words = agentSessionRefusalReasonWords(failure)
   if (!words || 'words' in words) {
     return undefined

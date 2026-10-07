@@ -167,17 +167,17 @@ export function NotificationsPane({
       <NotificationHostToggles
         mutedNotificationSourceIds={notificationSettings.mutedNotificationSourceIds}
         disabled={!notificationSettings.enabled}
-        onChange={(hostId, muted) =>
+        onChange={(hostIds, muted) =>
           void updateNotificationSettings({
             mutedNotificationSourceIds: muted
               ? [
                   ...new Set([
                     ...notificationSettingsRef.current.mutedNotificationSourceIds,
-                    hostId
+                    ...hostIds
                   ])
                 ]
               : notificationSettingsRef.current.mutedNotificationSourceIds.filter(
-                  (id) => id !== hostId
+                  (id) => !hostIds.includes(id)
                 )
           })
         }

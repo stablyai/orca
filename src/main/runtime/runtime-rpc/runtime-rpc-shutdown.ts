@@ -1,9 +1,24 @@
 import { RuntimeRpcMobilePairing } from './runtime-rpc-mobile-pairing'
 
+export type RuntimeRpcClientActivity = {
+  openConnections: number
+  requestsInFlight: number
+  lastRequestAt: number
+}
+
 export class RuntimeRpcShutdown extends RuntimeRpcMobilePairing {
   /** Why: test-only seam — runs one ownership check instead of waiting out the poll interval. */
   checkRuntimeMetadataOwnership(): Promise<void> {
     return this.metadataOwnershipWatch?.check() ?? Promise.resolve()
+  }
+
+  /** What a host's idle exit reads to know whether any client is still using this server. */
+  readClientActivity(): RuntimeRpcClientActivity {
+    return {
+      openConnections: this.mobileSocketWiring?.connectionCount ?? 0,
+      requestsInFlight: this.clientRequestsInFlight,
+      lastRequestAt: this.lastClientRequestAt
+    }
   }
 
   async stop(): Promise<void> {

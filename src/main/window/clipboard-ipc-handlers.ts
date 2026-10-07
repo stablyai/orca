@@ -39,6 +39,7 @@ import {
   writeRemoteFileToClipboard
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
+import { uploadPastedImageToAgentSessionAttachments } from '../ipc/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
@@ -59,6 +60,15 @@ async function saveClipboardImageBufferForTarget(
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
   const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
+  // A structured chat on a paired server keeps its pasted images in that server's store.
+  if (runtimeEnvironmentId && args?.agentSessionAttachment) {
+    return uploadPastedImageToAgentSessionAttachments(
+      args.agentSessionAttachment,
+      runtimeEnvironmentId,
+      app.getPath('userData'),
+      buffer
+    )
+  }
   // Why (#17679): with a runtime owner, a connectionId names one of the RUNTIME's SSH
   // connections (nested Remote Server -> SSH), not one this process dialed. Looking it up
   // in the local provider registry can only miss, so the runtime must perform the save.

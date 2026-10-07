@@ -16,6 +16,14 @@ describe('web file preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('has no local file path bridge and refuses path preparation without remote calls', async () => {
+    const { api } = await installApi('Linux')
+    expect(Object.hasOwn(api.fs, 'getPathForFile')).toBe(false)
+    await expect(
+      api.fs.prepareDroppedPaths({ paths: ['/files/notes.txt'], consumer: 'agent' })
+    ).rejects.toThrow('Preparing dropped file paths is not supported in the web client')
+  })
+
   it('rejects native save-dialog downloads in paired web clients', async () => {
     const { api } = await installApi('Linux')
 

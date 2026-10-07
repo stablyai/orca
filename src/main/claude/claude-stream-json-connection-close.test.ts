@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => {
     capture: vi.fn(async () => {}),
     refresh: (...args: unknown[]) => refresh(...args),
     reap: vi.fn(async () => 'exited' as const),
-    treeVerdict: 'unverifiable' as const
+    treeVerdict: 'unverifiable' as const,
+    forcedReapAttempted: false
   }
   return { proveClaudeChildExit, refresh, tree }
 })
@@ -26,13 +27,19 @@ vi.mock('./claude-agent-sdk-exit-proof', () => ({
   proveClaudeChildExit: (...args: unknown[]) => mocks.proveClaudeChildExit(...args)
 }))
 
-function fakeChild(): ChildProcessWithoutNullStreams {
+function fakeChild(
+  streams: { stdout: PassThrough; stderr: PassThrough } = {
+    stdout: new PassThrough(),
+    stderr: new PassThrough()
+  }
+): ChildProcessWithoutNullStreams {
   const child = new EventEmitter()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The connection reads only pid, the three pipes and kill, which this fake carries.
   return Object.assign(child, {
     pid: 424242,
     stdin: new PassThrough(),
-    stdout: new PassThrough(),
-    stderr: new PassThrough(),
+    stdout: streams.stdout,
+    stderr: streams.stderr,
     kill: vi.fn()
   }) as unknown as ChildProcessWithoutNullStreams
 }
@@ -131,6 +138,52 @@ describe('Claude stream-json close ordering', () => {
     child.emit('exit', 1, null)
     await vi.waitFor(() => expect(events).toEqual(['exit', 'message:task_notification']))
     await expect(connection.close()).resolves.toBe(true)
+  })
+
+  // Stdout can end before the exit is seen, as when the provider supervisor's own exit closes it.
+  it('reports an exit whose stdout ended first once the exit is seen, with its usual reason', async () => {
+    mocks.refresh.mockReset()
+    mocks.proveClaudeChildExit.mockReset()
+    mocks.refresh.mockResolvedValue(undefined)
+    mocks.proveClaudeChildExit.mockResolvedValue(true)
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const child = fakeChild({ stdout, stderr })
+    // The SDK's stream ends with the child's stdout.
+    const next = vi
+      .fn<() => Promise<IteratorResult<Record<string, unknown>>>>()
+      .mockResolvedValue({ value: undefined, done: true })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This injected query exercises only the async iterator used by the connection.
+    const queryImpl = ((params: Parameters<typeof query>[0]) => {
+      params.options?.spawnClaudeCodeProcess?.({
+        command: 'claude',
+        args: [],
+        env: {},
+        signal: new AbortController().signal
+      })
+      return {
+        [Symbol.asyncIterator]: () => ({ next })
+      }
+    }) as unknown as typeof query
+    const exits: string[] = []
+    const connection = await openClaudeStreamJsonConnection(
+      { pathToClaudeCodeExecutable: 'claude', options: {}, cwd: '/work/repo' },
+      { onExit: (error, exit) => exits.push(`${exit?.expected}: ${error.message}`) },
+      () => child,
+      queryImpl
+    )
+
+    stderr.write('session limit reached\n')
+    stdout.end()
+    await vi.waitFor(() => expect(next).toHaveBeenCalledOnce())
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(exits).toEqual([])
+
+    child.emit('exit', 1, null)
+    await vi.waitFor(() =>
+      expect(exits).toEqual(['false: claude stream-json exited (code 1): session limit reached'])
+    )
+    await connection.close()
   })
 
   it('returns an unproven close without waiting on a live output reader', async () => {

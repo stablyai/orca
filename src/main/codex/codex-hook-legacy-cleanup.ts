@@ -33,7 +33,7 @@ function getLegacyCodexProfileTomlPath(): string {
 }
 
 export function cleanupLegacySystemManagedHooks(): Promise<void> {
-  // Why: shares the real-home lane with ensureRealHomeCodexHookState; both
+  // Why: shares the real-home lane with the ~/.codex reconcile; both
   // write the user's ~/.codex/hooks.json and its trust in config.toml.
   return runExclusivelyForCodexTrustConfig(
     getSystemCodexConfigTomlPath(),

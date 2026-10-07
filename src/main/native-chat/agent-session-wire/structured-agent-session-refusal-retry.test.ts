@@ -32,6 +32,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 const CALLER = { callerKey: 'client-1' }
 const METHODS = ['agentSession.setOption', 'agentSession.send'] as const
@@ -352,12 +353,9 @@ describe('agentSessionRefusalOperationState host oracle', () => {
 
     const unreadable = await createHarness()
     await unreadable.host.close(SESSION, 'evict')
-    // The journal's open asks where the chat's per-chat file lives before it reads anything.
     const unreadableOpen = vi
-      .spyOn(unreadable.host.deps.journalDatabase, 'legacyDirectoryFor')
-      .mockImplementation(() => {
-        throw new Error('journal path unreadable')
-      })
+      .spyOn(AgentSessionJournal.prototype, 'open')
+      .mockRejectedValue(new Error('journal path unreadable'))
     const unreadableSend = { method: 'agentSession.send' as const, operationId: operationId() }
     record(
       await assertHostAgreement(

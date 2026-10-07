@@ -15,6 +15,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { installDrainInterferenceShims } from './legacy-wsl-runtime-auth-drain-script-interference-shims'
+import { DRAIN_APPLY_INTERRUPTION_JS } from './legacy-wsl-runtime-auth-drain-interruption-source'
 import {
   INTRUDER_AUTH,
   NEWER_AUTH,
@@ -69,6 +70,7 @@ export function runApplyScript(options: DrainApplyInterference = {}): DrainApply
       `#!/usr/bin/env node
 const { spawnSync } = require('node:child_process')
 const fs = require('node:fs')
+${DRAIN_APPLY_INTERRUPTION_JS}
 const args = process.argv.slice(2)
 const result = spawnSync('/bin/rm', args, { stdio: 'inherit' })
 const target = args.at(-1) ?? ''
@@ -78,10 +80,7 @@ if (
   target.includes('/account/sessions/') &&
   target.includes('.orca-bridge-')
 ) {
-  const parent = spawnSync('/bin/ps', ['-o', 'ppid=', '-p', String(process.ppid)], {
-    encoding: 'utf8'
-  })
-  process.kill(Number(parent.stdout.trim()), 'SIGKILL')
+  interruptDrainApply(2)
 }
 process.exit(result.status ?? 1)
 `
@@ -103,12 +102,13 @@ process.exit(result.status ?? 1)
       `#!/usr/bin/env node
 const { spawnSync } = require('node:child_process')
 const fs = require('node:fs')
+${DRAIN_APPLY_INTERRUPTION_JS}
 const args = process.argv.slice(2)
 if (
   process.env.KILL_DESTINATION_RECOVERY === '1' &&
   args.at(-1)?.endsWith('.orca-drain-destination')
 ) {
-  process.kill(process.ppid, 'SIGKILL')
+  interruptDrainApply(1)
   process.exit(1)
 }
 if (
@@ -125,10 +125,7 @@ if (
   args.at(-1)?.endsWith('/retired.jsonl')
 ) {
   if (process.env.KILL_SESSION_LINK === '1') {
-    const parent = spawnSync('/bin/ps', ['-o', 'ppid=', '-p', String(process.ppid)], {
-      encoding: 'utf8'
-    })
-    process.kill(Number(parent.stdout.trim()), 'SIGKILL')
+    interruptDrainApply(2)
   } else if (process.env.REWRITE_AFTER_SESSION_LINK === '1') {
     if (process.env.REPLACE_TARGET === '1') {
       const replacement = process.env.REWRITE_SESSION_AUTH + '.replacement'
@@ -154,7 +151,7 @@ process.exit(result.status ?? 1)
       '/bin/sh',
       [
         '-c',
-        _internals.applyLegacyAuthScript,
+        `ORCA_DRAIN_APPLY_PID=$$; export ORCA_DRAIN_APPLY_PID;\n${_internals.applyLegacyAuthScript}`,
         'sh',
         legacyHome,
         join(root, 'absent-active-home'),

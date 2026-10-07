@@ -44,6 +44,7 @@ import {
   journalOpenRefusal
 } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
@@ -86,10 +87,21 @@ function invalid(
   return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
+/** A message naming an attachment this host no longer stores is refused whole, before delivery. */
+export function agentSessionAttachmentExpiredRefusal(): {
+  ok: false
+  refusal: AgentSessionWireRefusal
+} {
+  return invalid(
+    'attachmentExpired',
+    'A chat attachment in this message is no longer stored on the host, so it was not sent.'
+  )
+}
+
 /** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`
- *  rather than as a rejection — unless the child had not proven its start. Such a child has
- *  accepted nothing (input is written only after it initializes), so a dispatch it could not
- *  take is provably unwritten and is rejected with the cause the adapter gave. */
+ *  rather than as a rejection — unless the child had not proven its start. A dispatch to such a
+ *  child throws only when the start failed before the write (a write's own failure is an outcome,
+ *  not a throw), so it is provably unwritten and is rejected with the cause the adapter gave. */
 async function dispatchSafely(
   ctx: AgentSessionHandoverContext,
   clientMessageId: string,
@@ -159,9 +171,12 @@ export async function performSend(
       ctx.operationReceipt
     )
   } catch (error) {
+    if (isAgentSessionAttachmentExpiredError(error)) {
+      return agentSessionAttachmentExpiredRefusal()
+    }
     // Damage SQLite proves is the chat's, and no retry writes past it: say so, as an open does. So
     // does a chat holding a newer Orca's rows, which only an update writes past, and a refusal the
-    // journal already classified (a copy that did not verify).
+    // journal already classified (a failed transaction that will not roll back).
     if (
       isAgentSessionRefusalError(error) ||
       classifyJournalOpenFailure(error) === 'journalCorrupt' ||

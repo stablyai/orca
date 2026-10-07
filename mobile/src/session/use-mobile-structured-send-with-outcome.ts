@@ -4,7 +4,7 @@
 // host advertises the queue and no pending prompt is one this build cannot answer.
 
 import { useCallback } from 'react'
-import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
 import { pendingPromptsAllUnanswerableHere } from '../../../src/shared/agent-session-approval-subject'
 import {
   structuredAgentSessionSendBody,
@@ -21,6 +21,15 @@ import {
   pendingStructuredApproval,
   pendingStructuredQuestion
 } from './mobile-structured-agent-prompts'
+
+/** Whether a send made now asks the host to queue it. The host's queue waits on any pending prompt;
+ *  one this build cannot answer would hold the send forever, so it starts a turn instead. */
+export function mobileStructuredSendQueues(
+  queueCapable: boolean,
+  items: StructuredAgentSessionState['items']
+): boolean {
+  return queueCapable && !pendingPromptsAllUnanswerableHere(items)
+}
 
 export type StructuredMobileSendAttachment = StructuredAgentSessionAttachment & {
   id?: string
@@ -95,7 +104,7 @@ export function useMobileStructuredSendWithOutcome(args: {
           ...controller
         },
         canRun: () =>
-          !activeStructuredAgentSessionTurnId(stateRef.current.items) &&
+          !runningStructuredAgentSessionTurnId(stateRef.current) &&
           !stateRef.current.items.some(
             (item) => pendingStructuredApproval(item) || pendingStructuredQuestion(item)
           ),
@@ -117,9 +126,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         expectedRuntimeFence: currentFence,
         text,
         attachments: sendAttachments,
-        // The host's queue waits on any pending prompt; one this build cannot answer would hold
-        // the send forever, so it starts a turn, whose card cancel then works.
-        ...(queueCapable && !pendingPromptsAllUnanswerableHere(stateRef.current.items)
+        ...(mobileStructuredSendQueues(queueCapable, stateRef.current.items)
           ? { delivery: 'queue-if-active' as const }
           : {}),
         deadline,

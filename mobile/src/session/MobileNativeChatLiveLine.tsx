@@ -10,8 +10,9 @@ import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageAc
 import { MobileNativeChatReasoningBody } from './MobileNativeChatReasoningRow'
 import type { MobileNativeChatLiveLine as LiveLine } from './use-mobile-native-chat-turn-disclosure'
 
-/** The live turn's tail line: a spinner beside what the provider says it is doing, else
- *  "Thinking", else "Working…". The clock stays in the turn bar. While the agent's open reasoning
+/** The live turn's tail line: a spinner beside "Stopping…" once the person's Stop is ending the
+ *  turn, else what the provider says it is doing, else "Thinking", else "Working…". The clock
+ *  stays in the turn bar. While the agent's open reasoning
  *  block has text it is also that block's disclosure, and the block's row draws nothing.
  *  Desktop parity: `NativeChatTurnActivityLine`. */
 export function MobileNativeChatLiveLine({

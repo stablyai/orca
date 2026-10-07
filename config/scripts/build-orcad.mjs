@@ -29,6 +29,7 @@ import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
 import {
   ORCAD_EMOJI_SHORTCODE_DATASET,
   ORCAD_FOREIGN_SQLITE_READER_ENTRY,
+  ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY,
   ORCAD_NODE_PTY_DIR,
   ORCAD_NODE_PTY_JS_ARTIFACTS,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
@@ -62,6 +63,10 @@ const DAEMON_OUT_FILE = join(OUT_DIR, 'daemon-entry.js')
 // start this worker from the module dir, since orcad has no Electron resources tree.
 const FOREIGN_SQLITE_READER_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.foreignSqliteReader)
 const FOREIGN_SQLITE_READER_OUT_FILE = join(OUT_DIR, ORCAD_FOREIGN_SQLITE_READER_ENTRY)
+// Why beside orcad.js: workspace port detection runs its probe commands on this worker thread,
+// and `resolveWorkerEntryPath` looks for it next to the running bundle.
+const PORT_SCAN_WORKER_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.portScanCommandWorker)
+const PORT_SCAN_WORKER_OUT_FILE = join(OUT_DIR, ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY)
 const OUT_FILE = join(OUT_DIR, 'orcad.js')
 const BUILD_TARGET = process.env.ORCAD_BUILD_TARGET
 if (!BUILD_TARGET) {
@@ -212,6 +217,7 @@ const childResults = await Promise.all([
   buildForkedChild(WATCHER_ENTRY, WATCHER_OUT_FILE),
   buildForkedChild(DAEMON_ENTRY, DAEMON_OUT_FILE),
   buildForkedChild(FOREIGN_SQLITE_READER_ENTRY, FOREIGN_SQLITE_READER_OUT_FILE),
+  buildForkedChild(PORT_SCAN_WORKER_ENTRY, PORT_SCAN_WORKER_OUT_FILE),
   ...['writer', 'backup'].map((role) =>
     buildForkedChild(
       join(ROOT, ORCAD_CHILD_ENTRY_POINTS[role]),

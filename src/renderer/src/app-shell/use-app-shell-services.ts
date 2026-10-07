@@ -17,6 +17,7 @@ import { useGitStatusPolling } from '../components/right-sidebar/useGitStatusPol
 import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/osc52-clipboard-default-on-notice'
 import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
+import { useHostStructuredAgentsSync } from '../runtime/host-structured-agents-sync'
 import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-recovery-triggers'
 import { useTerminalViewerColorPublication } from './use-terminal-viewer-color-publication'
 import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/browser-user-agent-migration-notice'
@@ -30,7 +31,7 @@ import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refre
  * the component that consumes its result unmounts (right sidebar, explorer, terminal) or is
  * absent entirely on the landing path.
  */
-export function useAppShellServices(options: { floatingPanelVisible: boolean }): void {
+export function useAppShellServices(): void {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const primarySelectionMiddleClickPaste = useAppStore((s) =>
@@ -41,6 +42,7 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
   useLocalStructuredSessionTabsSync()
+  useHostStructuredAgentsSync()
   // Subscribe to IPC push events
   useIpcEvents()
   useRemoteRuntimeRecoveryTriggers()
@@ -53,7 +55,7 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   // Why: wire file-change watching at App level so the editor keeps hearing FS changes when Explorer unmounts (right-sidebar switches to Source Control/Checks).
   useEditorExternalWatch()
   useGlobalFileDrop()
-  useAutoAckViewedAgent(options.floatingPanelVisible)
+  useAutoAckViewedAgent()
   useAppMenuPaste()
   useAppMenuSelectionActions()
   useLargeTextControlPaste()

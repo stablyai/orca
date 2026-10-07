@@ -13,26 +13,26 @@ import type { StructuredAgentSessionQueuedMessagesController } from './use-struc
  */
 export function NativeChatQueuedMessageList({
   controller,
+  steerHeld = false,
   focusComposer
 }: {
   controller: StructuredAgentSessionQueuedMessagesController
+  /** The chat reads Stopping: no card steers into the turn a Stop is ending. */
+  steerHeld?: boolean
   /** Where focus goes once Steer, Edit or Delete takes the focused card away. */
   focusComposer?: () => void
 }): React.JSX.Element {
   const updateSettings = useAppStore((store) => store.updateSettings)
   const queueRef = useRef<HTMLDivElement>(null)
-  const { cards } = controller
+  const { cards, pause } = controller
   const newest = cards.at(-1)
   // Only a host that queues sends has queueing to turn off; a kept card shows without it.
   const turnOffQueueing = controller.queueCapable
     ? () => void updateSettings({ nativeChatQueueFollowUps: false })
     : undefined
-  // A pause over cards Resume would not send (returned, held on their own, or behind a returned
-  // one) offers nothing to press.
-  const pause = cards.some((card) => card.hold === 'queue-paused') ? controller.pause : null
   // Only when focus was on the queue (a card, or Resume) — never pull it from wherever the user
   // moved on to.
-  const refocusAfter = (action: Promise<void>): void => {
+  const refocusAfter = (action: Promise<unknown>): void => {
     void action.then(() => {
       const active = document.activeElement
       if (!active || active === document.body || queueRef.current?.contains(active)) {
@@ -65,6 +65,7 @@ export function NativeChatQueuedMessageList({
                   key={card.messageId}
                   card={card}
                   showsSteerShortcut={controller.queueCapable && card === newest}
+                  steerHeld={steerHeld}
                   onSteer={() => refocusAfter(controller.steer(card.messageId))}
                   onDelete={() => refocusAfter(controller.remove(card.messageId))}
                   onEdit={() => refocusAfter(controller.edit(card.messageId))}
@@ -86,16 +87,6 @@ function queuePauseText(pause: { reason: string }): string {
       return translate(
         'components.native-chat.queuedMessages.queuePausedStopped',
         'Queue paused because you interrupted'
-      )
-    case 'restarted':
-      return translate(
-        'components.native-chat.queuedMessages.queuePausedRestarted',
-        'Queue paused because Orca restarted'
-      )
-    case 'cleared':
-      return translate(
-        'components.native-chat.queuedMessages.queuePausedCleared',
-        'Queue paused after you cleared the conversation'
       )
     default:
       return translate('components.native-chat.queuedMessages.queuePaused', 'Queue paused')

@@ -116,6 +116,13 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
+// Why: this file pins main's window launch and its paste, which chat-default and paired launches
+// still take; an AI button's host launch reuses that paste and is pinned in its own tests.
+vi.mock('@/lib/launch-agent-new-tab-host-route', () => ({
+  newTabPromptLaunchesThroughHost: () => false,
+  launchNewTabPromptThroughHost: vi.fn()
+}))
+
 vi.mock('@/lib/agent-ready-wait', () => ({
   waitForAgentReady: mockWaitForAgentReady
 }))

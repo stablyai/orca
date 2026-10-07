@@ -12,7 +12,7 @@ import { resolveSafePtyDefaultCwd } from '../../providers/pty-default-cwd'
 import { TerminalAttachCanceledError } from '../daemon-errors'
 import { DaemonProtocolError } from '../types'
 
-const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
+export const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 
 async function loadNodePty(): Promise<typeof pty> {
   return import('node-pty')
@@ -148,6 +148,13 @@ export async function preflightPtySpawn(args: {
   }
 }
 
+export class PtySpawnHealthTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`PTY spawn health check timed out after ${timeoutMs}ms`)
+    this.name = 'PtySpawnHealthTimeoutError'
+  }
+}
+
 export function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string): Error {
   const message = err instanceof Error ? err.message : String(err)
   const formatted = new DaemonProtocolError(
@@ -159,7 +166,9 @@ export function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: s
   return formatted
 }
 
-export async function runPtySpawnHealthProbe(): Promise<void> {
+export async function runPtySpawnHealthProbe(
+  timeoutMs = PTY_SPAWN_HEALTH_TIMEOUT_MS
+): Promise<void> {
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : resolveSafePtyDefaultCwd()
@@ -214,10 +223,8 @@ export async function runPtySpawnHealthProbe(): Promise<void> {
       }
     }
     const timer = setTimeout(() => {
-      finish(new Error(`PTY spawn health check timed out after ${PTY_SPAWN_HEALTH_TIMEOUT_MS}ms`), {
-        kill: true
-      })
-    }, PTY_SPAWN_HEALTH_TIMEOUT_MS)
+      finish(new PtySpawnHealthTimeoutError(timeoutMs), { kill: true })
+    }, timeoutMs)
     exitDisposable = proc.onExit(({ exitCode }) => {
       if (exitCode === 0) {
         finish()

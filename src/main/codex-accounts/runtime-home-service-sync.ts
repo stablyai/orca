@@ -33,11 +33,11 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
       this.lastHostAccountUsedSelfContainedHome = false
       this.lastSyncedAccountId = null
       this.lastWrittenAuthJson = null
-      if (this.isHostSystemDefaultRealHome(launchEnv)) {
+      if (this.isHostSystemDefaultRealHomeSelected(launchEnv)) {
         return
       }
     }
-    if (this.isHostSystemDefaultRealHome(launchEnv)) {
+    if (this.isHostSystemDefaultRealHomeSelected(launchEnv)) {
       // Why: retained daemon panes may own shared auth from a managed launch;
       // compatibility reconciliation runs later with durable provenance.
       if (this.lastSyncedAccountId !== null) {

@@ -26,7 +26,7 @@ const RESUME_KEY = '\u0000resume'
 export type MobileNativeChatQueuedMessagesProps = {
   cards?: MobileQueuedMessageCard[]
   /** Steer for a waiting card, the paused queue's included; plain Send for a card held on its own
-   *  (its send failed, or the host kept it unsent), or a returned one. */
+   *  (its send failed), or a returned one. */
   onSend?: (messageId: string) => Promise<boolean>
   onDelete?: (messageId: string) => Promise<boolean>
   /** Copy the card's text into the composer, then delete the card. */
@@ -34,6 +34,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   /** The whole queue's pause: the box's first row, with Resume. */
   pause?: MobileQueuePause
   onResume?: () => Promise<boolean>
+  /** The chat reads Stopping: no card steers into the turn a Stop is ending. */
+  steerHeld?: boolean
 }
 
 /** The host-held queued drafts, as one box of compact rows between transcript and
@@ -44,7 +46,8 @@ export function MobileNativeChatQueuedMessages({
   onDelete,
   onEdit,
   pause,
-  onResume
+  onResume,
+  steerHeld = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   // One in-flight action per card; a second tap must not double-consume. The ref
   // closes the same-frame double tap the disabled state cannot.
@@ -120,6 +123,11 @@ export function MobileNativeChatQueuedMessages({
                 <ListEnd size={14} color={colors.textMuted} strokeWidth={2} />
               )}
               <View style={styles.textColumn}>
+                {card.attribution ? (
+                  <Text style={styles.caption} numberOfLines={1}>
+                    {card.attribution}
+                  </Text>
+                ) : null}
                 {/* Two lines, not the desktop's one: the phone row has no hover title to read the rest. */}
                 <Text style={styles.body} numberOfLines={2}>
                   {card.text}
@@ -136,7 +144,7 @@ export function MobileNativeChatQueuedMessages({
               </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ disabled: busy }}
+                accessibilityState={{ disabled: busy || steerHeld }}
                 accessibilityLabel={
                   returned
                     ? 'Send this message again'
@@ -147,9 +155,9 @@ export function MobileNativeChatQueuedMessages({
                 style={({ pressed }) => [
                   styles.textAction,
                   pressed && styles.pressed,
-                  busy && styles.disabled
+                  (busy || steerHeld) && styles.disabled
                 ]}
-                disabled={busy}
+                disabled={busy || steerHeld}
                 onPress={() => void run(card.messageId, onSend)}
               >
                 {steers ? (

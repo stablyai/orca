@@ -20,6 +20,10 @@ export const SESSION = 'session-alpha'
 export const WORKSPACE = 'workspace-1'
 export const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 export const NOW = 1_800_000_000_000
+export const ATTENTION_READ = {
+  sessionId: SESSION,
+  observedCursor: { epoch: 'attention-epoch', sequence: 7 }
+} as const
 export const REWIND_METHOD = 'agentSession.rewind'
 export const CONVERSATION_OUTLINE_METHOD = 'agentSession.conversationOutline'
 export const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
@@ -136,6 +140,14 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'revealSession',
     result: { ok: true, sessionId: SESSION, workspaceId: WORKSPACE, agent: 'codex', readable: true }
   },
+  // A chat's visual, read from the host's own record and state directory. A bare addition: an older
+  // host answers `method_not_found` and the client shows the visual as unavailable. The stub host
+  // holds no record, so the typed refusal is the declared answer.
+  {
+    method: 'agentSession.readVisual',
+    hostMethod: null,
+    result: { ok: false, error: 'session_not_found' }
+  },
   // A no-op on a host that starts an agent only for work; it still builds the host.
   { method: 'agentSession.hold', hostMethod: null, result: { held: true } },
   // The restart-resume surface. Bare additions, not capability-negotiated: an RPC method's
@@ -184,6 +196,13 @@ export const STRUCTURED_CALLS: {
   {
     method: TURN_COMPLETION_FEED_METHOD,
     hostMethod: 'subscribeTurnCompletions'
+  },
+  // Reading a chat retires the phone alerts its host pushed, through the runtime's own store, so
+  // its reply is the only signal that the gate opened.
+  {
+    method: 'agentSession.acknowledgeAttention',
+    hostMethod: null,
+    result: { acknowledged: true }
   },
   // Teardown runs through the runtime's subscription registry rather than the
   // host, so its reply is the only signal that the gate opened.
@@ -311,8 +330,12 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case 'agentSession.acknowledgeAttention':
+      return { ...ATTENTION_READ, observedCursor: { ...ATTENTION_READ.observedCursor } }
     case 'agentSession.modelCatalog':
       return { agent: 'codex', sessionId: SESSION }
+    case 'agentSession.readVisual':
+      return { sessionId: SESSION, file: 'usage-chart.html' }
     case 'agentSession.hold':
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }

@@ -14,6 +14,7 @@ import {
   eventually,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 
 let rig: QueuedMessageTestRig
 
@@ -76,15 +77,6 @@ function idleSweep() {
   return rig.host.collaboratorsForTests().lifetime.idleSweep
 }
 
-/** Holds every start until the returned release. */
-function holdStart(): () => void {
-  let release: () => void = () => undefined
-  rig.awaitStarted.mockImplementation(
-    () => new Promise<undefined>((resolve) => (release = () => resolve(undefined)))
-  )
-  return () => release()
-}
-
 describe('every Stop entry writes its event, with its reason, before it ends the child', () => {
   it.each([
     // A person closing this chat: its tab, its launch, or a /clear that replaces it.
@@ -123,7 +115,6 @@ describe('every Stop entry writes its event, with its reason, before it ends the
       restartable: true,
       idleSweep: MANUAL_IDLE_SWEEP
     })
-    holdStart()
     rig.send('work on this')
     await eventually(async () =>
       expect(rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child?.phase).toBe(
@@ -260,7 +251,9 @@ describe('every Stop entry writes its event, with its reason, before it ends the
       await rig.host.close(HOST_TEST_SESSION, 'evict')
 
       expect(atClose.events?.map((event) => event.reason)).toEqual(['user-stop'])
-      expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+      // The close hides the row, as every close of a chat does; the Stop still pauses.
+      expect(await rig.queuePause()).toBeNull()
+      expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toContain('stopped')
     },
     20_000
   )
@@ -389,14 +382,14 @@ describe("a person's Stop pause and the Stop events after it", () => {
     expect(await rig.stop()).toMatchObject({ ok: true })
     await rig.settleAccepted(working, 'stopped')
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    // Orchestration mail starts a turn the host sent, which lifts nothing.
-    await rig.send('mail for the lead', undefined, { internal: true }).result
+    // Orchestration mail's turn runs, but its send is not accepted yet, so it lifts nothing yet.
+    await rig.send('mail for the lead').result
     await journal().appendItem(
       { provider: 'codex', threadId: 'thread-1', turnId: 'turn-mail', ordinal: 999 },
       { kind: 'turn', turnId: 'turn-mail', state: 'running', startedAt: 1 },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual(['stopped'])
     const atClose = stopEventsAtClose()
 
     await rig.host.close(HOST_TEST_SESSION, 'evict')
@@ -418,8 +411,7 @@ describe("a person's Stop pause and the Stop events after it", () => {
     // The agent at rest goes, writing nothing; mail then starts a new child, which never lands.
     await idleSweep().tick()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    holdStart()
-    rig.send('mail for the lead', undefined, { internal: true })
+    rig.send('mail for the lead')
     await eventually(async () =>
       expect(rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child?.phase).toBe(
         'starting'
@@ -430,7 +422,8 @@ describe("a person's Stop pause and the Stop events after it", () => {
     await idleSweep().tick()
 
     expect(atClose.events?.map((event) => event.reason)).toEqual(['user-stop', 'host-stop'])
-    expect(await rig.handoff(held)).toBeUndefined()
     expect(await rig.queuePause()).not.toEqual({ reason: 'stopped' })
+    // The pause ended with the host's stop, so the card goes out to the next start.
+    await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
   })
 })

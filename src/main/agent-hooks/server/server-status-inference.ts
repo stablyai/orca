@@ -19,6 +19,10 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 import { equivalentInterruptAgentType, isValidPaneKey } from './server-status-identity'
 import { AgentHookServerRowOwnership } from './server-row-ownership'
 import { foldMainAgentWithRowChildWork } from './server-row-child-work-fold'
+import {
+  ClaudeTerminalInterruptTracker,
+  type ClaudeTerminalEvidence
+} from '../../../shared/claude-terminal-interrupt'
 
 export abstract class AgentHookServerStatusInference extends AgentHookServerRowOwnership {
   private remoteInterruptListeners = new Set<(command: RemoteAgentInterruptDispatch) => void>()
@@ -30,7 +34,47 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     return () => this.remoteInterruptListeners.delete(listener)
   }
 
+  private readonly claudeTerminalInterrupts = new ClaudeTerminalInterruptTracker(
+    (paneKey) => {
+      const row = this.state.lastStatusByPaneKey.get(paneKey)
+      // Remote evidence is adjudicated by the relay that owns its input and live output.
+      return row?.connectionId ? undefined : row
+    },
+    (row) => {
+      if (
+        !('receivedAt' in row) ||
+        typeof row.receivedAt !== 'number' ||
+        !('stateStartedAt' in row) ||
+        typeof row.stateStartedAt !== 'number'
+      ) {
+        return
+      }
+      this.applyInterruptInference(
+        {
+          paneKey: row.paneKey,
+          intent: 'plain-escape',
+          baselineUpdatedAt: row.receivedAt,
+          baselineStateStartedAt: row.stateStartedAt,
+          baselinePrompt: row.payload.prompt,
+          baselineAgentType: 'claude'
+        },
+        true
+      )
+    }
+  )
+
+  observeClaudeTerminalEvidence(paneKey: string, evidence: ClaudeTerminalEvidence): void {
+    this.claudeTerminalInterrupts.observe(paneKey, evidence)
+  }
+
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {
+    return this.applyInterruptInference(request, false)
+  }
+
+  private applyInterruptInference(
+    request: AgentInterruptInferenceRequest,
+    claudeNativeTitleConfirmed: boolean
+  ): boolean {
     if (!isValidPaneKey(request.paneKey)) {
       return false
     }
@@ -80,7 +124,10 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     }
     // Why: re-checked here, not only in the renderer, so a stale or direct inference request
     // cannot route around the renderer's skip and synthesize a false stopped row.
-    if (isNavigationEscapeIntent(agentType, request.intent)) {
+    if (
+      isNavigationEscapeIntent(agentType, request.intent) &&
+      !(agentType === 'claude' && claudeNativeTitleConfirmed)
+    ) {
       return false
     }
     const childWorkEvidenced =

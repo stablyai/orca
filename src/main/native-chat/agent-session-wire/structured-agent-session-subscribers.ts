@@ -21,6 +21,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
+import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
 export type AgentSessionSubscribeInput = {
@@ -92,6 +93,15 @@ export class AgentSessionSubscribers {
     const hostNow = this.now()
     if (input.cursor) {
       this.deliver(subscriber, input.journal, hostNow, true)
+      refreshDerivedStopNotes(
+        {
+          emit: (target, event) => this.emit(target, event),
+          isActive: (target) => this.isActive(target)
+        },
+        subscriber,
+        input.journal,
+        hostNow
+      )
     } else {
       const page = readAgentSessionHydrationPage(input.journal, input.fence)
       this.emit(subscriber, {

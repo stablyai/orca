@@ -25,6 +25,9 @@ import { noopUnsubscribe } from './web-storage'
 export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
   const searches = new Map<string, AbortController>()
   return {
+    prepareDroppedPaths: async () => {
+      throw new Error('Preparing dropped file paths is not supported in the web client')
+    },
     readFileChunk: async ({ filePath, offset, length }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.readChunk', {
@@ -165,6 +168,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       throw new Error('Uploading local files is not supported in the web client')
     },
     resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
+    uploadPathsToAgentSessionAttachments: async () => ({ uploaded: [], skipped: [], failed: [] }),
     watchWorktree: () => Promise.resolve(),
     unwatchWorktree: () => Promise.resolve(),
     onFsChanged: () => noopUnsubscribe

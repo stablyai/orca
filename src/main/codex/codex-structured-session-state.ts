@@ -86,8 +86,6 @@ export type CodexStructuredSessionAdapterDeps = {
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
   }) => Promise<CodexStructuredLaunch>
-  /** Host capability seam; production uses the native Windows process table. */
-  isWindowsProcessStartTimeAvailable?: () => boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
   /** Where bookkeeping a close or exit does after the child is gone reports a failure. */
   logger?: StructuredAgentSessionLogger
@@ -100,7 +98,7 @@ export type CodexStructuredSessionAdapterDeps = {
       | { providerIdentity: AgentJournalItemIdentity }
       | ({
           state: 'rejected'
-          answeredInTurn: AgentJournalAnsweredTurnIdentity
+          answeredInTurn?: AgentJournalAnsweredTurnIdentity
         } & AgentJournalDispatchRejection)
     )
   ) => void
@@ -132,6 +130,9 @@ export type CodexSession = {
   /** Primary-thread turns Codex reported started and not yet ended, as read off the wire: what
    *  rewind waits out and what a Stop naming no turn interrupts when the journal shows none. */
   activeTurnIds?: Set<string>
+  /** Of those, the turns whose interrupt Codex answered. It answers as the turn aborts, ahead of
+   *  that turn's `turn/completed`, so none of them can take a steer any more. */
+  abortedTurnIds?: Set<string>
   /** Stops waiting for the turn Codex answered a send into to open. */
   turnOpenWaits: CodexTurnOpenWaits
   dispatchPending?: boolean
@@ -143,8 +144,6 @@ export type CodexSession = {
     serviceTier?: string | null
     serviceTierKnown?: true
   }
-  /** Exact provider-advertised Fast request value for each discovered model. */
-  fastModeTierByModel: Map<string, string>
   /** Absent when the adapter runs without a host catalog store (tests). */
   catalogAccess?: CodexSessionCatalogAccess
   /** Sends whose identity is still to be settled by the provider echo. */

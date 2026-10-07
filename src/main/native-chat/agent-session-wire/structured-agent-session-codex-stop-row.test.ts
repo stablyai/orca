@@ -19,6 +19,7 @@ import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -28,7 +29,6 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
-import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 

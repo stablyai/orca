@@ -278,6 +278,7 @@ function productionLikeEntries() {
     ...metricSamples({ cellId: 'production-gce-c29', from: '2026-09-20T20:20:00Z', count: 20 }),
     ...metricSamples({ cellId: 'production-gce-c30', from: '2026-09-20T20:20:00Z', count: 20 }),
     ...metricSamples({ cellId: 'production-gce-c31', from: '2026-09-20T20:20:00Z', count: 20 }),
+    ...metricSamples({ cellId: 'production-gce-c34', from: '2026-09-20T20:20:00Z', count: 20 }),
     // One director instance's samples from ten minutes before the drain to the window's end.
     ...directorSamples({ from: '2026-09-20T19:50:00Z', count: 80, payload: {} })
   ]
@@ -339,10 +340,10 @@ function gcloudSeam(entries = productionLikeEntries()) {
   }
 }
 
-test('reads every promoted asia-east2 cell as fleet pool, C31 included', () => {
+test('reads every promoted asia-east2 cell as fleet pool, C34 included', () => {
   assert.deepEqual(FLEET_POOL_CELL_IDS, [
     'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
-    'production-gce-c31'
+    'production-gce-c31', 'production-gce-c34'
   ])
 })
 
@@ -363,6 +364,7 @@ test('a healthy roll reads as PASS and names the instance it proved serving', as
     'fleetPool:production-gce-c29',
     'fleetPool:production-gce-c30',
     'fleetPool:production-gce-c31',
+    'fleetPool:production-gce-c34',
     'nonDrain503Budget'
   ])
   assert.deepEqual(report.drain, {

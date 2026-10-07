@@ -8,6 +8,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { registerAgentSubjectReadCapture } from '@/attention/agent-subject-read-actions'
 import ActivityPrototypePage from './ActivityPrototypePage'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -161,6 +162,12 @@ describe('Activity auto mark-read loop (React #185)', () => {
   })
 
   it('re-acknowledges when a new turn lands on the still-selected thread', async () => {
+    const intents: string[] = []
+    // An automatic read is a view: it must not claim the edges a click would cover.
+    const stopCapture = registerAgentSubjectReadCapture(PANE_A, (intent) => {
+      intents.push(intent)
+      return null
+    })
     seedThreadStampedAheadOfLocalClock()
     await mountActivityPage()
     const acknowledgeWrites = countAcknowledgeWrites()
@@ -193,9 +200,11 @@ describe('Activity auto mark-read loop (React #185)', () => {
       })
     } finally {
       acknowledgeWrites.stop()
+      stopCapture()
     }
 
     expect(acknowledgeWrites.count()).toBe(2)
+    expect(intents).toEqual(['view', 'view'])
   })
 
   it('still marks a locally stamped thread read on selection', async () => {

@@ -8,6 +8,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyBindingSourceExpectation } from '../persistence'
+import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PtyProviderBufferSnapshot, PtyProcessInfo, PtySpawnResult } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
@@ -71,6 +72,7 @@ export type RuntimePtyController = {
     initiallyHidden?: boolean
     persistHostSessionBinding?: boolean
     expectedSourceBinding?: PtyBindingSourceExpectation
+    placement?: TerminalPanePlacement
     terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     agentSessionEnsure?: {

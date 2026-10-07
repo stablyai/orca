@@ -1,4 +1,3 @@
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -98,7 +97,8 @@ function beginStructuredPlanLaunch(
   hooks: StructuredAgentLaunchHooks,
   target?: AgentSessionLaunchTarget
 ): StructuredAgentLaunchHandle | null {
-  if (verdict.route !== 'structured-native-chat' || !isAgentSessionHandleProvider(verdict.agent)) {
+  // The route already admitted the agent: its host registered it as structured.
+  if (verdict.route !== 'structured-native-chat') {
     return null
   }
   const worktreeId = target?.worktreeId ?? verdict.worktreeId

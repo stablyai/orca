@@ -10,6 +10,10 @@ import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import { remarkMarkdownDocLinks } from './markdown-doc-links'
+import {
+  GITHUB_CALLOUT_SANITIZE_ATTRIBUTE,
+  remarkGitHubCallouts
+} from '@/lib/remark-github-callouts'
 
 const markdownPreviewSanitizeSchema = {
   ...defaultSchema,
@@ -24,6 +28,10 @@ const markdownPreviewSanitizeSchema = {
     ...defaultSchema.attributes,
     '*': [...(defaultSchema.attributes?.['*'] ?? []), 'id'],
     a: [...(defaultSchema.attributes?.a ?? []), 'href', 'title'],
+    blockquote: [
+      ...(defaultSchema.attributes?.blockquote ?? []),
+      GITHUB_CALLOUT_SANITIZE_ATTRIBUTE
+    ],
     code: [
       ...(defaultSchema.attributes?.code ?? []),
       ['className', /^language-[\w-]+$/, 'math-inline', 'math-display']
@@ -54,6 +62,7 @@ type MarkdownPluginList = NonNullable<ReactMarkdownOptions['remarkPlugins']>
 export const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
   remarkGfm,
   remarkCjkFriendly,
+  remarkGitHubCallouts,
   remarkBreaks,
   remarkFrontmatter,
   remarkMath,

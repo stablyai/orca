@@ -533,7 +533,8 @@ describe('mobile structured queued messages', () => {
           state: 'waiting',
           paused: false,
           needsAttention: false,
-          caption: null
+          caption: null,
+          attribution: null
         }
       ])
       // A frame without the field leaves the list alone; null empties it.
@@ -576,20 +577,20 @@ describe('mobile structured queued messages', () => {
         listener?.(
           batchEvent(
             [
-              queuedDraft({ messageId: 'kept-1', paused: true, pausedReason: 'kept' }),
+              queuedDraft({ messageId: 'kept-1' }),
               queuedDraft({ messageId: 'behind', position: 2 })
             ],
             [],
-            { reason: 'restarted' }
+            null
           )
         )
       )
+      // Plain waiting cards: the host holds them until the chat's next turn, and shows no row.
       expect(hook!.queued.cards.map(({ messageId, caption }) => ({ messageId, caption }))).toEqual([
-        { messageId: 'kept-1', caption: 'Not sent yet — tap Send to send it' },
+        { messageId: 'kept-1', caption: null },
         { messageId: 'behind', caption: null }
       ])
-      // The kept card is held on its own, so Resume would send the card behind it.
-      expect(hook!.queued.pause).toEqual({ reason: 'restarted' })
+      expect(hook!.queued.pause).toBeNull()
     })
   })
 

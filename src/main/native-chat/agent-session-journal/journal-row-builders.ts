@@ -337,7 +337,7 @@ export function buildJournalSubmissionRow(input: {
     ...(input.handoverRecorded ? { handoverRecorded: true } : {}),
     ...(input.queuedMessageId !== undefined ? { queuedMessageId: input.queuedMessageId } : {}),
     ...(input.origin !== undefined ? { origin: input.origin } : {}),
-    // The kind only: a caller's full source carries senders that stay host-only.
+    // The kind only; who the senders are is on the message body.
     ...(input.source !== undefined ? { source: { kind: input.source.kind } } : {})
   }
 }

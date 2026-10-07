@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises'
+import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -160,12 +161,8 @@ it('validates recent membership independently of top32, ignores, exclusions and 
   })
   expect(broad.sort()).toEqual(['ignored.ts', 'src/file059.ts'])
   await mkdir(join(root, 'large'))
-  for (let start = 0; start < 20_020; start += 100) {
-    await Promise.all(
-      Array.from({ length: Math.min(100, 20_020 - start) }, (_, offset) =>
-        writeFile(join(root, 'large', `entry${start + offset}.ts`), 'x')
-      )
-    )
+  for (let index = 0; index < 20_020; index += 1) {
+    writeFileSync(join(root, 'large', `entry${index}.ts`), 'x')
   }
   const capped = await listQuickOpenFiles(root, store, undefined, undefined, 20_001)
   expect(capped).toHaveLength(20_001)

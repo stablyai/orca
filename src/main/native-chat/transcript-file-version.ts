@@ -2,6 +2,15 @@ import { readTranscriptSlice, wslGatedStat } from './wsl-transcript-fs-access'
 
 const BOUNDARY_FINGERPRINT_BYTES = 64
 
+export function extendTranscriptBoundary(previous: Buffer, chunk: Buffer): Buffer {
+  const chunkBytes = Math.min(chunk.length, BOUNDARY_FINGERPRINT_BYTES)
+  const previousBytes = Math.min(previous.length, BOUNDARY_FINGERPRINT_BYTES - chunkBytes)
+  const boundary = Buffer.allocUnsafeSlow(previousBytes + chunkBytes)
+  previous.copy(boundary, 0, previous.length - previousBytes)
+  chunk.copy(boundary, previousBytes, chunk.length - chunkBytes)
+  return boundary
+}
+
 export type TranscriptFileVersion = {
   identity: string
   size: number

@@ -20,7 +20,6 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   // A failed row opens the status feed; these cases never drive it.
   subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
 
 const candidates: ResumeCandidate[] = [
   {
@@ -103,8 +102,8 @@ describe('NativeChatResumeStatusSegment', () => {
     expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
   })
 
-  // The offer is spent once acted on, so without this entry a failed resume would leave the bar
-  // empty seconds after the toast went. The two are different facts and stay two entries.
+  // The offer is spent once acted on, so this entry is the one summary a failed resume leaves.
+  // The two are different facts and stay two entries.
   it('keeps a failed resume as its own entry beside any remaining offer', async () => {
     const failed = {
       ...candidates[0]!,

@@ -23,6 +23,11 @@ import {
   setViewport
 } from './floating-terminal-panel-render-probe'
 
+vi.mock('zustand/react/shallow', () => ({
+  // Why: zustand resolves the real react (unmocked in node_modules); the memo wrapper is inert here.
+  useShallow: (selector: unknown) => selector
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
