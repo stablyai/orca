@@ -5,7 +5,7 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../src/shared/github/work-item-types'
-import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
+import { HOSTED_REVIEW_PROVIDERS, type HostedReviewInfo } from '../../../src/shared/hosted-review'
 import {
   CHECK_STATUS,
   MERGEABLE_STATE,
@@ -36,14 +36,6 @@ import {
 // and "no hosted review" are still `null`, because the host really sends `null` for both.
 
 const HOSTED_REVIEW_STATE = ['open', 'closed', 'merged', 'draft'] as const
-const HOSTED_REVIEW_PROVIDER = [
-  'github',
-  'gitlab',
-  'bitbucket',
-  'azure-devops',
-  'gitea',
-  'unsupported'
-] as const
 
 /**
  * Whether the worktree's repo has a GitHub remote, which gates the dedicated PR-view icon.
@@ -71,7 +63,7 @@ export const githubPrRepoSlugSchema = z
  */
 export const hostedReviewForBranchSchema = z
   .looseObject({
-    provider: salvagedOptional('provider', z.enum(HOSTED_REVIEW_PROVIDER)),
+    provider: salvagedOptional('provider', z.enum(HOSTED_REVIEW_PROVIDERS)),
     number: prCount('number'),
     title: prText('title'),
     state: salvagedOptional('state', z.enum(HOSTED_REVIEW_STATE)),

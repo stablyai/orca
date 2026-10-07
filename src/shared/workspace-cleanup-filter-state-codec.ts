@@ -1,5 +1,5 @@
 import { normalizeExecutionHostId, type ExecutionHostId } from './execution-host'
-import type { HostedReviewProvider } from './hosted-review'
+import { HOSTED_REVIEW_PROVIDERS } from './hosted-review'
 import {
   WORKSPACE_CLEANUP_AGENT_STATE_VALUES,
   WORKSPACE_CLEANUP_BLOCKER_MODE_VALUES,
@@ -19,16 +19,6 @@ import {
   type WorkspaceCleanupFilterState,
   type WorkspaceCleanupSortState
 } from './workspace-cleanup-filter-model'
-
-// Provider-general: every hosted-review provider is selectable, never a GitHub special case.
-const REVIEW_PROVIDER_VALUES: HostedReviewProvider[] = [
-  'github',
-  'gitlab',
-  'bitbucket',
-  'azure-devops',
-  'gitea',
-  'unsupported'
-]
 
 /**
  * Tolerant by design: this reads user data written by older (and newer) Orca
@@ -87,7 +77,8 @@ export function normalizeWorkspaceCleanupFilterState(value: unknown): WorkspaceC
     review: {
       presence: asEnum(review.presence, WORKSPACE_CLEANUP_PRESENCE_VALUES, base.review.presence),
       states: asEnumList(review.states, WORKSPACE_CLEANUP_REVIEW_STATE_VALUES),
-      providers: asEnumList(review.providers, REVIEW_PROVIDER_VALUES)
+      // Provider-general: every hosted-review provider is selectable, never a GitHub special case.
+      providers: asEnumList(review.providers, HOSTED_REVIEW_PROVIDERS)
     },
     ticket: {
       presence: asEnum(ticket.presence, WORKSPACE_CLEANUP_PRESENCE_VALUES, base.ticket.presence),

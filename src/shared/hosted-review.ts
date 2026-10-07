@@ -6,13 +6,16 @@ import type {
   PRReviewDecision
 } from './github/pull-request-types'
 
-export type HostedReviewProvider =
-  | 'github'
-  | 'gitlab'
-  | 'bitbucket'
-  | 'azure-devops'
-  | 'gitea'
-  | 'unsupported'
+export const HOSTED_REVIEW_PROVIDERS = [
+  'github',
+  'gitlab',
+  'bitbucket',
+  'azure-devops',
+  'gitea',
+  'unsupported'
+] as const
+
+export type HostedReviewProvider = (typeof HOSTED_REVIEW_PROVIDERS)[number]
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
 

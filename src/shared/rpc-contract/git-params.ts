@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { HOSTED_REVIEW_PROVIDERS } from '../hosted-review'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 import { OptionalTuiAgent } from './worktree-params'
 
@@ -198,9 +199,7 @@ export const GitGeneratePullRequestFields = GitGenerateCommitMessage.extend({
   title: z.string(),
   body: z.string(),
   draft: z.boolean(),
-  provider: z
-    .enum(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea', 'unsupported'])
-    .optional(),
+  provider: z.enum(HOSTED_REVIEW_PROVIDERS).optional(),
   useTemplate: z.boolean().optional()
 })
 

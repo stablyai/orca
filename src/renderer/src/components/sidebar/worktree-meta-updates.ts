@@ -6,10 +6,11 @@ import {
 import { parseIssueLinkInput, type IssueLinkProvider } from '../../../../shared/issue-link-input'
 import type { WorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { HostedReviewProvider } from '../../../../shared/hosted-review'
 import type { WorkspaceLinkedItem } from '../../../../shared/worktree/types'
 import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
 
-export type WorktreeReviewProvider = 'github' | 'gitlab'
+export type WorktreeReviewProvider = Extract<HostedReviewProvider, 'github' | 'gitlab'>
 
 export type WorktreeMetaSavedPayload = {
   worktreeId: string
