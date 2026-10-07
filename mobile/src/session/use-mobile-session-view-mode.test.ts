@@ -388,12 +388,7 @@ describe('useMobileSessionViewMode', () => {
     defaultView: MobileSessionView
     overrides?: Map<string, MobileSessionView>
     hostViews: Map<string, MobileSessionView>
-    writeHostViewMode:
-      | ((
-          tabId: string,
-          view: MobileSessionView
-        ) => Promise<{ publicationEpoch?: string; snapshotVersion?: number } | undefined>)
-      | null
+    writeHostViewMode: MobileSessionTabViewModeBridge['writeHostViewMode']
     hostViewSource?: object
     hostPublication?: { epoch: string | null; version: number }
     onHostViewModeWriteError?: (error: unknown) => void

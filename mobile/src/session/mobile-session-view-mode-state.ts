@@ -41,7 +41,7 @@ export type MobileSessionTabViewModeBridge = {
     | ((
         tabId: string,
         view: MobileSessionView
-      ) => Promise<{ publicationEpoch?: string; snapshotVersion?: number } | undefined>)
+      ) => Promise<{ publicationEpoch?: string; snapshotVersion?: number } | void>)
     | null
   onHostViewModeWriteError?: (error: unknown) => void
 }
