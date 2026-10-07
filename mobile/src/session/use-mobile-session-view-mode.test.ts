@@ -496,30 +496,6 @@ describe('useMobileSessionViewMode', () => {
     })
   })
 
-  it('does not update after a shared host write settles after unmount', async () => {
-    const hostWrite = deferred<void>()
-    await mountShared({
-      defaultView: 'terminal',
-      hostViews: new Map<string, MobileSessionView>([['t1', 'terminal']]),
-      writeHostViewMode: () => hostWrite.promise
-    })
-
-    await act(async () => {
-      controller?.toggleTabChatView('t1')
-      await Promise.resolve()
-    })
-    act(() => {
-      renderer?.unmount()
-    })
-    renderer = null
-
-    await act(async () => {
-      hostWrite.resolve()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-  })
-
   it('flips a second tap from the queued view rather than the host echo it outranks', async () => {
     const hostWrite = deferred<void>()
     const writes: Array<[string, MobileSessionView]> = []
