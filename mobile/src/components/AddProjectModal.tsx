@@ -13,11 +13,12 @@ import { AddProjectFolderView } from './AddProjectFolderView'
 import { AddProjectTargetSelectorView } from './AddProjectTargetSelectorView'
 import { BottomDrawer } from './BottomDrawer'
 import { AddProjectFolderConfirmation } from './AddProjectFolderConfirmation'
-import { AddProjectForm } from './AddProjectForm'
+import { AddProjectForm, addProjectFormHint } from './AddProjectForm'
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 import {
   EMPTY_HOST_CAPABILITIES,
   EMPTY_SSH_TARGETS,
+  createAddProjectScope,
   type AddProjectModalProps,
   type AddedRepo,
   type FolderCandidate
@@ -132,24 +133,27 @@ function AddProjectModalContent({
   const [sshConnectionId, setSshConnectionId] = useState<string | null>(null)
   const confirmingFolderRef = useRef(false)
 
-  const value = view === 'clone' ? cloneUrl : projectName
   const { sshSupported, targetOptions, activeSshConnectionId, selectedTargetAvailable } =
     resolveAddProjectTargetState(hostCapabilities, sshTargets, sshConnectionId)
-  const operationScope = {
+  const operationScope = createAddProjectScope({
     client,
     visible,
     openEpoch,
     selectedTargetId: sshConnectionId,
     sshCapability: sshSupported,
     selectedTargetAvailable
-  }
+  })
   const { busy, busyRef, begin, current, finish, invalidate } =
     useAddProjectOperationScope(operationScope)
   const requestTarget =
     activeSshConnectionId && selectedTargetAvailable
       ? { sshConnectionId: activeSshConnectionId }
       : {}
-  const canSubmit = value.trim().length > 0 && !busy && client != null && selectedTargetAvailable
+  const canSubmit =
+    (view === 'clone' ? cloneUrl : projectName).trim().length > 0 &&
+    !busy &&
+    client != null &&
+    selectedTargetAvailable
   const selectTarget = (id: string | null) => {
     if (id !== activeSshConnectionId) {
       invalidate()
@@ -276,13 +280,6 @@ function AddProjectModalContent({
   const invalidTargetMessage = !selectedTargetAvailable
     ? 'Choose a valid SSH target before submitting.'
     : ''
-  const formHint = activeSshConnectionId
-    ? view === 'clone'
-      ? 'Choose a destination folder on the selected host. Large repositories can take a few minutes.'
-      : 'Choose a parent folder on the selected host for the new project.'
-    : view === 'clone'
-      ? "Cloned into the host's default projects folder. Large repositories can take a few minutes."
-      : "An empty git repository with an initial commit, created in the host's default projects folder."
   const content = (() => {
     if (view === 'start') {
       return (
@@ -404,11 +401,11 @@ function AddProjectModalContent({
         />
         <AddProjectForm
           mode={view}
-          value={value}
+          value={view === 'clone' ? cloneUrl : projectName}
           busy={busy}
           error={error}
           invalidTargetMessage={invalidTargetMessage}
-          hint={formHint}
+          hint={addProjectFormHint(view, Boolean(activeSshConnectionId))}
           onChangeText={view === 'clone' ? setCloneUrl : setProjectName}
           onBack={() => setView('start')}
           onSubmit={submit}

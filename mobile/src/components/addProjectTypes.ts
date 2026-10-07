@@ -31,3 +31,14 @@ export type AddProjectModalProps = {
     connectionStatus?: string
   }[]
 }
+
+export function createAddProjectScope(args: {
+  client: RpcClient | null
+  visible: boolean
+  openEpoch: number
+  selectedTargetId: string | null
+  sshCapability: boolean
+  selectedTargetAvailable: boolean
+}) {
+  return args
+}

@@ -3,6 +3,17 @@ import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { newWorktreeFormStyles as formStyles } from './new-worktree-form-styles'
 
+export function addProjectFormHint(mode: 'clone' | 'create', remote: boolean) {
+  if (remote) {
+    return mode === 'clone'
+      ? 'Choose a destination folder on the selected host. Large repositories can take a few minutes.'
+      : 'Choose a parent folder on the selected host for the new project.'
+  }
+  return mode === 'clone'
+    ? "Cloned into the host's default projects folder. Large repositories can take a few minutes."
+    : "An empty git repository with an initial commit, created in the host's default projects folder."
+}
+
 export function AddProjectForm({
   mode,
   value,
