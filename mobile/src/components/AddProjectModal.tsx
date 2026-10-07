@@ -320,7 +320,6 @@ function AddProjectModalContent({
           sshConnectionId={activeSshConnectionId}
           busy={busy}
           error={error}
-          destinationPath={activeSshConnectionId ? destinationPath : undefined}
           onBack={() =>
             setView(view === 'pickDestination' ? (destinationKind ?? 'start') : 'start')
           }
@@ -384,6 +383,7 @@ function AddProjectModalContent({
           busy={busy}
           error={error}
           invalidTargetMessage={invalidTargetMessage}
+          destinationPath={activeSshConnectionId ? destinationPath : undefined}
           hint={addProjectFormHint(view, Boolean(activeSshConnectionId))}
           onChangeText={view === 'clone' ? setCloneUrl : setProjectName}
           onBack={() => setView('start')}
