@@ -1,5 +1,9 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import {
+  MOBILE_MARKDOWN_TABLE_CELL_MAX_WIDTH,
+  MOBILE_MARKDOWN_TABLE_CELL_MIN_WIDTH
+} from './mobile-markdown-table-columns'
 
 export const styles = StyleSheet.create({
   root: {
@@ -101,8 +105,8 @@ export const styles = StyleSheet.create({
     flexDirection: 'row'
   },
   tableCell: {
-    minWidth: 112,
-    maxWidth: 220,
+    minWidth: MOBILE_MARKDOWN_TABLE_CELL_MIN_WIDTH,
+    maxWidth: MOBILE_MARKDOWN_TABLE_CELL_MAX_WIDTH,
     borderRightWidth: 1,
     borderBottomWidth: 1,
     borderColor: colors.borderSubtle,
