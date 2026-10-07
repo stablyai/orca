@@ -62,8 +62,8 @@ function withCarriedSwapVolume(sample: PreGoneSystemMemorySample): PreGoneSystem
 function commitHostMemorySample(nowMs: number): boolean {
   try {
     const details = getSystemMemoryDetails()
-    // Why not `length === 0`: the signal label is appended unconditionally, so a
-    // reading that resolved no memory field at all still arrives with one key.
+    // Why not `length === 0`: any reading that resolved at least one field also
+    // carries the signal label, so a lone label key means nothing was measured.
     if (!Object.keys(details).some((key) => key !== PRESSURE_SIGNAL_KEY)) {
       return false
     }
