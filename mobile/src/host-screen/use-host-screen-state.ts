@@ -77,7 +77,9 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   )
   const [hostLabelById, setHostLabelById] = useState<Map<ExecutionHostId, string>>(new Map())
   const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
-  const [sshTargetSummaries, setSshTargetSummaries] = useState<readonly { id: string; label: string }[]>([])
+  const [sshTargetSummaries, setSshTargetSummaries] = useState<
+    readonly { id: string; label: string; connected?: boolean; connectionStatus?: string }[]
+  >([])
   const [showSortPicker, setShowSortPicker] = useState(false)
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)

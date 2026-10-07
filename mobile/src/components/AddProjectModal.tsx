@@ -22,7 +22,7 @@ type AddProjectView = 'start' | 'clone' | 'create' | 'addExisting' | 'confirmFol
 
 const NOT_A_GIT_REPOSITORY = 'Not a valid git repository'
 const EMPTY_HOST_CAPABILITIES: readonly string[] = []
-const EMPTY_SSH_TARGETS: readonly { id: string; label: string }[] = []
+const EMPTY_SSH_TARGETS: readonly { id: string; label: string; connected?: boolean; connectionStatus?: string }[] = []
 
 type AddProjectModalProps = {
   visible: boolean
@@ -30,7 +30,7 @@ type AddProjectModalProps = {
   onProjectAdded: (repo: MobileWorkspaceRepo) => void
   onClose: () => void
   hostCapabilities?: readonly string[]
-  sshTargets?: readonly { id: string; label: string }[]
+  sshTargets?: readonly { id: string; label: string; connected?: boolean; connectionStatus?: string }[]
 }
 
 type AddedRepo = {
@@ -110,7 +110,7 @@ function AddProjectModalContent({
   onClose: () => void
   onAfterClose: () => void
   hostCapabilities: readonly string[]
-  sshTargets: readonly { id: string; label: string }[]
+  sshTargets: readonly { id: string; label: string; connected?: boolean; connectionStatus?: string }[]
 }) {
   const [view, setView] = useState<AddProjectView>('start')
   const [cloneUrl, setCloneUrl] = useState('')

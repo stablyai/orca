@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
-export type AddProjectTarget = { id: string | null; label: string }
+export type AddProjectTarget = { id: string | null; label: string; connected?: boolean; connectionStatus?: string }
 
 export function AddProjectTargetSelector(props: {
   busy: boolean
@@ -39,7 +39,9 @@ export function AddProjectTargetSelector(props: {
             accessibilityLabel={`Select ${target.label}`}
             accessibilityState={{ selected: target.id === selectedId, disabled: busy }}
           >
-            <Text style={styles.optionText}>{target.label}</Text>
+            <Text style={styles.optionText}>
+              {target.label}{target.id && target.connected === false ? ' · Not connected' : ''}
+            </Text>
           </Pressable>
         ))}
       </ScrollView> : null}
