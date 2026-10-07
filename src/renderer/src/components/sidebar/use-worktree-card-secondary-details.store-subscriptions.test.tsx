@@ -170,6 +170,34 @@ describe('useWorktreeCardSecondaryDetails store subscriptions', () => {
     expect(cacheTtlMs).toBe(0)
   })
 
+  it('includes the PR link property in new-style card details', () => {
+    let hasDetails = false
+    let reviewNumber: number | null = null
+    function Probe(): null {
+      const details = useWorktreeCardSecondaryDetails({
+        ...secondaryDetailsArgs(makeSettings(300_000)),
+        showPR: true,
+        newCardStyle: true,
+        prDisplay: {
+          provider: 'github',
+          number: 456,
+          title: 'Show review number',
+          state: 'open',
+          status: 'success',
+          url: 'https://github.com/acme/orca/pull/456'
+        }
+      })
+      hasDetails = details.hasDetails
+      reviewNumber = details.metaReview?.number ?? null
+      return null
+    }
+
+    mount(<Probe />)
+
+    expect(hasDetails).toBe(true)
+    expect(reviewNumber).toBe(456)
+  })
+
   it('writes a suppression tombstone when the user unlinks a displayed GitHub PR', async () => {
     const updateWorktreeMeta = vi.fn().mockResolvedValue({ ok: true })
     let unlink: (() => Promise<void>) | null = null
