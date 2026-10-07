@@ -18,6 +18,14 @@ export type EditorDocumentIdentityFields = {
 }
 
 /**
+ * Same document, ignoring the read-only/live-tail surface flags. `openFile`'s reuse rule ignores
+ * both, so a caller that must predict which record an open will land on compares on this key.
+ */
+export function editorDocumentPathOwnerKey(file: EditorDocumentIdentityFields): string {
+  return editorDocumentIdentityKey({ ...file, readOnly: false, liveTail: false })
+}
+
+/**
  * Identity of one edit document: one path, one owner. Persisted records carry no id, so two
  * records sharing this key serialize to indistinguishable rows that restore as one document —
  * the write merges them, a close sweeps all of them, and the restore heal collapses them.

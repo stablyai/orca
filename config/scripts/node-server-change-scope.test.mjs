@@ -135,12 +135,15 @@ it.each([
 ])('fails closed or requests dependencies in an uninstalled checkout: %j', (scenario) => {
   const root = moduleTree(
     Object.fromEntries(
-      ['node-server-change-scope', 'node-server-test-paths', 'node-server-qualification'].map(
-        (name) => [
-          `config/scripts/${name}.mjs`,
-          readFileSync(new URL(`./${name}.mjs`, import.meta.url), 'utf8')
-        ]
-      )
+      [
+        'node-server-change-scope',
+        'node-server-test-paths',
+        'node-server-qualification',
+        'unit-test-file-patterns'
+      ].map((name) => [
+        `config/scripts/${name}.mjs`,
+        readFileSync(new URL(`./${name}.mjs`, import.meta.url), 'utf8')
+      ])
     )
   )
   const changes = join(root, 'changes')
@@ -213,6 +216,14 @@ describe('the actual Bun build and profile-test dependency graph', () => {
   ])('retains the full matrix for a real runtime, worker or test input: %s', async (file) => {
     expect(inputs.has(file)).toBe(true)
     expect((await classifyNodeServerChanges([file], async () => inputs)).shouldRun).toBe(true)
+  })
+
+  it('keeps desktop Electron probes outside the headless server selection', () => {
+    const tests = discoverNodeServerTests()
+    expect(tests).toContain('src/main/persistence/profile-state/profile-state-access.test.ts')
+    expect(tests).not.toContain(
+      'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts'
+    )
   })
 
   it('retains all selected tests and the selectors the Bun runner uses', () => {

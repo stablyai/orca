@@ -12,6 +12,7 @@ import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agen
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildBrowserSessionData } from './workspace-session-browser-tabs'
+import { buildPersistedRecoveredEditorDrafts } from './workspace-session-recovered-editor-drafts'
 
 export { buildActiveConnectionIdsAtShutdown }
 
@@ -55,6 +56,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
 > & {
+  recentlyClosedEditorTabsByWorktree?: AppState['recentlyClosedEditorTabsByWorktree']
   activeWorkspaceExecutionHostId?: AppState['activeWorkspaceExecutionHostId']
   sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
   clientHostedBrowserCloseIntentsByEnvironment?: AppState['clientHostedBrowserCloseIntentsByEnvironment']
@@ -76,6 +78,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'localOnlyScrollbackByTabId',
   'activeTabIdByWorktree',
   'openFiles',
+  'recentlyClosedEditorTabsByWorktree',
   'editorDrafts',
   'markdownFrontmatterVisible',
   'activeFileIdByWorktree',
@@ -284,6 +287,9 @@ export function buildWorkspaceSessionPayload(
     // Why: session:set fully replaces the persisted object, so dropping this silently disables eager terminal reconnect on restart.
     activeWorktreeIdsOnShutdown: terminalSessionData.activeWorktreeIdsOnShutdown,
     activeTabIdByWorktree: snapshot.activeTabIdByWorktree,
+    recoveredEditorDraftsByWorktree: buildPersistedRecoveredEditorDrafts(
+      snapshot.recentlyClosedEditorTabsByWorktree
+    ),
     ...buildEditorSessionData(
       snapshot.openFiles,
       snapshot.editorDrafts,

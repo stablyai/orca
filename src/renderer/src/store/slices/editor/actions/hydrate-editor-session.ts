@@ -5,7 +5,12 @@ import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydrati
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
-import type { OpenFile } from '../types/open-file'
+import type { PersistedOpenFile } from '../../../../../../shared/workspace-session-state-types'
+import type { ClosedEditorTabSnapshot, OpenFile } from '../types/open-file'
+import {
+  parkRecoveredEditorDrafts,
+  type ParkedRecoveredEditorDrafts
+} from './parked-recovered-editor-drafts'
 import { buildValidWorktreeIdsForSessionHydration } from '../../degraded-repo-worktree-validity'
 import { buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
 import { resolveHydratedEditorFileSelection } from '../file-ids/hydrated-editor-file-selection'
@@ -17,9 +22,52 @@ import {
   shouldHydrateWithOwnedEditorFileId
 } from '../file-ids/hydrated-editor-file-ids'
 import {
+  alignHealedEditorTabHosts,
+  planHealedPersistedEditorFiles,
+  resolveHealableWorktreeOwnerRoute,
+  type HealedEditorTabHostTarget
+} from '../file-ids/hydrated-editor-owner-healing'
+import {
   collectHydratedOrphanEditorFileIds,
   isOrphanEditorFile
 } from '../file-ids/orphan-editor-file-ids'
+
+/** A draft with no restorable identity of its own, parked where Mod+Shift+T can bring it back. */
+function buildRecoveredDraftSnapshot(
+  file: PersistedOpenFile,
+  worktreeId: string
+): ClosedEditorTabSnapshot {
+  return {
+    filePath: file.filePath,
+    relativePath: file.relativePath,
+    worktreeId,
+    language: detectLanguage(file.relativePath || file.filePath),
+    runtimeEnvironmentId: file.runtimeEnvironmentId,
+    externalSshTargetId: file.externalSshTargetId,
+    mode: 'edit',
+    dirtyDraftContent: file.dirtyDraftContent,
+    // Carry the baseline so recovery can detect offline disk changes before autosave.
+    lastKnownDiskSignature: file.lastKnownDiskSignature
+  }
+}
+
+function buildRecoveredDraftReopenState(
+  state: ParkedRecoveredEditorDrafts,
+  recoveredByWorktree: Record<string, ClosedEditorTabSnapshot[]>
+): Partial<ParkedRecoveredEditorDrafts> {
+  const worktreeIds = Object.keys(recoveredByWorktree)
+  if (worktreeIds.length === 0) {
+    return {}
+  }
+  let parked: ParkedRecoveredEditorDrafts = {
+    recentlyClosedEditorTabsByWorktree: state.recentlyClosedEditorTabsByWorktree,
+    recentlyClosedTabKindsByWorktree: state.recentlyClosedTabKindsByWorktree
+  }
+  for (const worktreeId of worktreeIds) {
+    parked = parkRecoveredEditorDrafts(parked, worktreeId, recoveredByWorktree[worktreeId])
+  }
+  return parked
+}
 
 export function createHydrateEditorSession(
   set: EditorSet,
@@ -48,13 +96,43 @@ export function createHydrateEditorSession(
         const usedOpenFileIds = new Set<string>()
         const legacyFileIndex = new LegacyHydratedEditorFileIndex()
         const editorFileIdMigrationsByWorktree: Record<string, Map<string, string>> = {}
+        const healedTabHostTargets: Record<string, HealedEditorTabHostTarget> = {}
+        const recoveredDraftTabsByWorktree: Record<string, ClosedEditorTabSnapshot[]> = {}
+        for (const [worktreeId, drafts] of Object.entries(
+          session.recoveredEditorDraftsByWorktree ?? {}
+        )) {
+          recoveredDraftTabsByWorktree[worktreeId] = drafts
+            .filter((file) => file.dirtyDraftContent !== undefined && file.readOnly !== true)
+            .map((file) => buildRecoveredDraftSnapshot(file, worktreeId))
+        }
         for (const [worktreeId, files] of Object.entries(openFilesByWorktree)) {
           if (!validWorktreeIds.has(worktreeId)) {
             continue
           }
-          for (const pf of files) {
+          const route = resolveHealableWorktreeOwnerRoute(s, worktreeId)
+          const healed = planHealedPersistedEditorFiles({
+            files,
+            worktreeId,
+            route,
+            persistedActiveFileId: persistedActiveFileIdByWorktree[worktreeId]
+          })
+          const parkRecoveredDraft = (draftFile: PersistedOpenFile): void => {
+            const parked = (recoveredDraftTabsByWorktree[worktreeId] ??= [])
+            parked.push(buildRecoveredDraftSnapshot(draftFile, worktreeId))
+          }
+          for (const draftFile of healed.recoverableDrafts) {
+            parkRecoveredDraft(draftFile)
+          }
+          const healedFileIds = new Set<string>()
+          for (const { file: pf, supersededIds, ownerNormalized } of healed.files) {
             // Split tabs share one OpenFile; repeated records for the same owner are corruption.
             if (legacyFileIndex.hasOwner(pf, worktreeId)) {
+              // Why: a read-only and a writable row for one path resolve to the same owned id, so
+              // this skip can land on the only copy of an unsaved draft. Read-only rows are exempt —
+              // a reopen snapshot restores writable, which a log tab must never become.
+              if (pf.dirtyDraftContent !== undefined && pf.readOnly !== true) {
+                parkRecoveredDraft(pf)
+              }
               continue
             }
             const legacyId = legacyFileIndex.resolve(pf, worktreeId)
@@ -72,6 +150,17 @@ export function createHydrateEditorSession(
             usedOpenFileIds.add(id)
             // Why: map from the collision-derived legacy id; keying by filePath would collapse same-path local/runtime tabs onto the last owner to hydrate.
             addEditorFileIdMigration(editorFileIdMigrationsByWorktree, worktreeId, legacyId, id)
+            for (const supersededId of supersededIds) {
+              addEditorFileIdMigration(
+                editorFileIdMigrationsByWorktree,
+                worktreeId,
+                supersededId,
+                id
+              )
+            }
+            if (ownerNormalized) {
+              healedFileIds.add(id)
+            }
             legacyFileIndex.add({
               id: legacyId,
               filePath: pf.filePath,
@@ -104,8 +193,29 @@ export function createHydrateEditorSession(
                 pf.lastKnownDiskSignature !== undefined
                   ? true
                   : undefined,
+              externalMutation:
+                !isReadOnly &&
+                pf.dirtyDraftContent !== undefined &&
+                pf.lastKnownDiskSignature === undefined
+                  ? 'changed'
+                  : undefined,
               mode: 'edit'
             })
+          }
+          if (route && healedFileIds.size > 0) {
+            healedTabHostTargets[worktreeId] = { fileIds: healedFileIds, route }
+          }
+          // Why after the loop: drafts parked by the id-collision skip above are only known now.
+          const parkedDraftCount = recoveredDraftTabsByWorktree[worktreeId]?.length ?? 0
+          if (
+            healed.droppedCount > 0 ||
+            healed.ownerRewrittenCount > 0 ||
+            healed.divergentDraftGroupCount > 0 ||
+            parkedDraftCount > 0
+          ) {
+            console.warn(
+              `[editor-hydration] healed persisted editor state for ${worktreeId}: dropped ${healed.droppedCount} duplicate record(s), re-owned ${healed.ownerRewrittenCount}, kept ${healed.divergentDraftGroupCount} divergent-draft group(s) apart, ${parkedDraftCount} draft(s) retained for recovery`
+            )
           }
         }
 
@@ -147,8 +257,10 @@ export function createHydrateEditorSession(
           editorFileIdMigrationsByWorktree
         )
         // `?? {}` because an editor-only store (tests, partial slices) has no tab map at all.
-        const nextTabsByWorktree =
+        const migratedTabs =
           migratedTabsAndGroups.unifiedTabsByWorktree ?? s.unifiedTabsByWorktree ?? {}
+        const healedTabs = alignHealedEditorTabHosts(migratedTabs, healedTabHostTargets)
+        const nextTabsByWorktree = healedTabs ?? migratedTabs
         const orphanFileIdsByWorktree = collectHydratedOrphanEditorFileIds(
           openFiles,
           nextTabsByWorktree,
@@ -162,12 +274,9 @@ export function createHydrateEditorSession(
         // Why by surviving id, not by orphan id: drafts and front-matter keys are keyed by id alone,
         // and an id orphaned in one worktree can still name a live document in another.
         const survivingFileIds = new Set(survivingFiles.map((file) => file.id))
-        const survivingIds = new Set(
-          [...usedOpenFileIds].filter((fileId) => survivingFileIds.has(fileId))
-        )
         const markdownFrontmatterVisible = resolveHydratedEditorFrontmatter(
           persistedMarkdownFrontmatterVisible,
-          survivingIds,
+          survivingFileIds,
           editorFileIdMigrationsByWorktree
         )
 
@@ -184,7 +293,9 @@ export function createHydrateEditorSession(
           activeFileIdByWorktree: filteredActiveFileIdByWorktree,
           activeTabType: nextActiveTabType,
           activeTabTypeByWorktree: filteredActiveTabTypeByWorktree,
-          ...migratedTabsAndGroups
+          ...migratedTabsAndGroups,
+          ...(healedTabs ? { unifiedTabsByWorktree: healedTabs } : {}),
+          ...buildRecoveredDraftReopenState(s, recoveredDraftTabsByWorktree)
         }
       })
     }

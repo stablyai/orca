@@ -30,6 +30,7 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   localOnlyScrollbackByTabId: 'none',
   activeWorktreeIdsOnShutdown: 'worktree-id-array',
   openFilesByWorktree: 'owner-keyed-row-arrays',
+  recoveredEditorDraftsByWorktree: 'none',
   activeFileIdByWorktree: 'owner-keyed',
   markdownFrontmatterVisible: 'none',
   browserTabsByWorktree: 'owner-keyed-browser-row-arrays',

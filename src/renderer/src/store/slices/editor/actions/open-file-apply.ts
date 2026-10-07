@@ -1,14 +1,10 @@
+import { retainClosedEditorSnapshots } from './parked-recovered-editor-drafts'
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
 import type { AppState } from '../../../types'
-import {
-  type ClosedEditorTabSnapshot,
-  type EditorTabSelection,
-  MAX_RECENT_CLOSED_EDITOR_TABS,
-  type OpenFile
-} from '../types/open-file'
+import type { ClosedEditorTabSnapshot, EditorTabSelection, OpenFile } from '../types/open-file'
 import {
   canReuseLocalWslAlias,
   getReusableOpenFileModes,
@@ -231,14 +227,14 @@ export function applyOpenFileToState(
         const position = getRecentlyClosedTabPosition(s, worktreeId, replacedPreview.id)
         nextRecentlyClosed = {
           ...s.recentlyClosedEditorTabsByWorktree,
-          [worktreeId]: [
+          [worktreeId]: retainClosedEditorSnapshots([
             {
               ...(snap as ClosedEditorTabSnapshot),
               reopenId: replacedPreview.id,
               ...(position ? { position } : {})
             },
             ...stack
-          ].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
+          ])
         }
         nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
           s.recentlyClosedTabKindsByWorktree,

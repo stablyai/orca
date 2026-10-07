@@ -32,7 +32,7 @@ import {
 } from './workspace-session-browser-schema'
 import { clientHostedBrowserCloseIntentSchema } from './client-hosted-browser-close-intent'
 import { persistedClientHostedBrowserPageSchema } from './client-hosted-browser-page-record'
-import { persistedOpenFileSchema } from './workspace-session-editor-schema'
+import { persistedEditorSessionFields } from './workspace-session-editor-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
 import {
   tabContentTypeSchema,
@@ -232,10 +232,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'activeWorktreeIdsOnShutdown',
     salvagingArray(worktreeIdSchema)
   ),
-  openFilesByWorktree: salvagedOptional(
-    'openFilesByWorktree',
-    salvagingRecord(worktreeIdSchema, salvagingArray(persistedOpenFileSchema))
-  ),
+  ...persistedEditorSessionFields,
   activeFileIdByWorktree: salvagedOptional(
     'activeFileIdByWorktree',
     salvagingRecord(worktreeIdSchema, z.string().nullable())

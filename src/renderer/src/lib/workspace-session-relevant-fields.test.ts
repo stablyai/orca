@@ -16,6 +16,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     localOnlyScrollbackByTabId: true,
     activeTabIdByWorktree: true,
     openFiles: true,
+    recentlyClosedEditorTabsByWorktree: true,
     editorDrafts: true,
     markdownFrontmatterVisible: true,
     activeFileIdByWorktree: true,

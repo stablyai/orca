@@ -31,6 +31,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   localOnlyScrollbackByTabId: true,
   activeWorktreeIdsOnShutdown: true,
   openFilesByWorktree: true,
+  recoveredEditorDraftsByWorktree: true,
   activeFileIdByWorktree: true,
   markdownFrontmatterVisible: true,
   browserTabsByWorktree: true,

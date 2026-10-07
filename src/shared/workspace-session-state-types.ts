@@ -72,6 +72,8 @@ export type WorkspaceSessionState = {
    *  Only edit-mode files are persisted — diffs and conflict views are
    *  transient and not restored. */
   openFilesByWorktree?: Record<string, PersistedOpenFile[]>
+  /** Client-local recovery copies of divergent unsaved editor buffers. */
+  recoveredEditorDraftsByWorktree?: Record<string, PersistedOpenFile[]>
   /** Per-worktree active editor file ID (filePath) at shutdown. */
   activeFileIdByWorktree?: Record<string, string | null>
   /** Per-file markdown preview front-matter visibility. Absent entry means hidden. */

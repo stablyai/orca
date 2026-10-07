@@ -1,7 +1,7 @@
-import { appendFileSync, globSync, readFileSync } from 'node:fs'
+import { appendFileSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { nodeServerTestPaths } from './node-server-test-paths.mjs'
+import { nodeServerTestFiles, nodeServerTestPaths } from './node-server-test-paths.mjs'
 import { nodeServerQualification } from './node-server-qualification.mjs'
 
 const ROOT = resolve(import.meta.dirname, '../..')
@@ -54,14 +54,7 @@ const ALWAYS_PREFIXES = [
 ]
 
 export function discoverNodeServerTests(root = ROOT) {
-  const selectors = nodeServerTestPaths({ artifact: true, crossRuntime: true })
-  return globSync(
-    ['src/**/*.test.{ts,tsx}', 'config/scripts/**/*.test.{ts,mjs}', 'tests/e2e/**/*.unit.test.ts'],
-    { cwd: root }
-  )
-    .map((file) => file.replaceAll('\\', '/'))
-    .filter((file) => selectors.some((selector) => file.includes(selector)))
-    .sort()
+  return nodeServerTestFiles({ root, artifact: true, crossRuntime: true })
 }
 
 export async function collectNodeServerInputs({ root = ROOT, entryPoints } = {}) {

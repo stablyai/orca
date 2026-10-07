@@ -1,3 +1,7 @@
+import { globSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { UNIT_INCLUDE } from './unit-test-file-patterns.mjs'
+
 /** Mirrors ORCA_REQUIRED_TEST_INPUTS_ENV in src/main/orcad/orcad-node-slot-fixture.ts. */
 export const REQUIRED_TEST_INPUTS_ENV = 'ORCA_REQUIRED_TEST_INPUTS'
 
@@ -39,4 +43,21 @@ export function nodeServerTestPaths({ artifact = false, crossRuntime = false } =
       : []),
     ...(crossRuntime ? CROSS_RUNTIME_TEST_PATHS : [])
   ]
+}
+
+export function nodeServerTestFiles({
+  root = resolve(import.meta.dirname, '../..'),
+  artifact = false,
+  crossRuntime = false
+} = {}) {
+  const selectors = nodeServerTestPaths({ artifact, crossRuntime })
+  return globSync(UNIT_INCLUDE, { cwd: root })
+    .map((file) => file.replaceAll('\\', '/'))
+    .filter(
+      (file) =>
+        !file.endsWith('.electron.test.ts') &&
+        (crossRuntime || !CROSS_RUNTIME_TEST_PATHS.includes(file)) &&
+        selectors.some((selector) => file.includes(selector))
+    )
+    .sort()
 }

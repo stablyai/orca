@@ -1,8 +1,9 @@
+import { retainClosedEditorSnapshots } from './parked-recovered-editor-drafts'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
-import { MAX_RECENT_CLOSED_EDITOR_TABS, type OpenFile } from '../types/open-file'
+import type { OpenFile } from '../types/open-file'
 import { removeMarkdownVisibilityKeys } from '../tabs/workspace-editor-item'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import {
@@ -246,14 +247,14 @@ export function createCloseFileAction(
           const position = getRecentlyClosedTabPosition(s, wtRecent, fileId)
           nextRecentlyClosed = {
             ...s.recentlyClosedEditorTabsByWorktree,
-            [wtRecent]: [
+            [wtRecent]: retainClosedEditorSnapshots([
               {
                 ...snap,
                 reopenId: fileId,
                 ...(position ? { position } : {})
               },
               ...stack
-            ].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
+            ])
           }
           nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
             s.recentlyClosedTabKindsByWorktree,

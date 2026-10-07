@@ -65,6 +65,8 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onTransfer: 'copiedByBespokeRule'
   },
   openFilesByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByBespokeRule' },
+  // Recovery copies stay in the source profile even if its workspace is removed or transferred.
+  recoveredEditorDraftsByWorktree: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   activeFileIdByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByOwnerKey' },
   markdownFrontmatterVisible: {
     onRepoRemoval: 'prunedByBespokeRule',

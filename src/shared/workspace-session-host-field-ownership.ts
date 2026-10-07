@@ -27,6 +27,7 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   clientHostedBrowserCloseIntentsByEnvironment: 'global',
   tabsByWorktree: 'worktreeKeyed',
   openFilesByWorktree: 'worktreeKeyed',
+  recoveredEditorDraftsByWorktree: 'global',
   activeFileIdByWorktree: 'worktreeKeyed',
   activeBrowserTabIdByWorktree: 'worktreeKeyed',
   activeTabTypeByWorktree: 'worktreeKeyed',
@@ -102,7 +103,8 @@ export const GLOBAL_WORKSPACE_SESSION_FIELDS = (
  */
 export const HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS = [
   'browserUrlHistory',
-  'workspaceDocHistory'
+  'workspaceDocHistory',
+  'recoveredEditorDraftsByWorktree'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
 /** Serialize-side sweep over every non-local partition. The load path re-seeds these fields at

@@ -2,6 +2,7 @@
  * workspace-session-schema.ts to keep that file inside its line budget, the
  * same way the browser slice already is; the schema itself is unchanged. */
 import { z } from 'zod'
+import { salvagedOptional, salvagingArray, salvagingRecord } from './zod-salvage'
 
 export const persistedOpenFileSchema = z.object({
   filePath: z.string(),
@@ -16,3 +17,18 @@ export const persistedOpenFileSchema = z.object({
   readOnly: z.boolean().optional(),
   liveTail: z.boolean().optional()
 })
+
+const persistedEditorFilesByWorktreeSchema = salvagingRecord(
+  z.string(),
+  salvagingArray(persistedOpenFileSchema)
+)
+export const persistedEditorSessionFields = {
+  openFilesByWorktree: salvagedOptional(
+    'openFilesByWorktree',
+    persistedEditorFilesByWorktreeSchema
+  ),
+  recoveredEditorDraftsByWorktree: salvagedOptional(
+    'recoveredEditorDraftsByWorktree',
+    persistedEditorFilesByWorktreeSchema
+  )
+}

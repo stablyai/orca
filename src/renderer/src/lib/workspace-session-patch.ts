@@ -21,6 +21,8 @@ import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
 
+import { buildPersistedRecoveredEditorDrafts } from './workspace-session-recovered-editor-drafts'
+
 type SessionRelevantField = keyof WorkspaceSessionSnapshot
 
 function hasAnyChangedField(
@@ -149,6 +151,11 @@ export function buildWorkspaceSessionPatch(
         snapshot.activeFileIdByWorktree,
         snapshot.activeTabTypeByWorktree
       )
+    )
+  }
+  if (changed.has('recentlyClosedEditorTabsByWorktree')) {
+    patch.recoveredEditorDraftsByWorktree = buildPersistedRecoveredEditorDrafts(
+      snapshot.recentlyClosedEditorTabsByWorktree
     )
   }
   // Why: withoutStagedBrowserTabs hides rows based on the handle map, so clearing a staged flag
