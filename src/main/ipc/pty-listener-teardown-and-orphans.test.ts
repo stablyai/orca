@@ -313,11 +313,15 @@ describe('registerPtyHandlers', () => {
     }
 
     registerPtyHandlers(firstWindow as never)
-    // Two listeners on the first (LocalPtyProvider) window: the renderer-gate reset and the orphan cleanup.
+    // Local PTYs add orphan cleanup alongside delivery reset and checkpoint lease retirement.
     const firstWindowLoadHandlers = firstWindow.webContents.on.mock.calls.filter(
       ([eventName]) => eventName === 'did-finish-load'
     )
-    expect(firstWindowLoadHandlers).toHaveLength(2)
+    expect(firstWindowLoadHandlers).toHaveLength(3)
+    const firstWindowLifecycleHandlers = [...firstWindow.webContents.on.mock.calls]
+    expect(firstWindowLifecycleHandlers.map(([eventName]) => eventName)).toEqual(
+      expect.arrayContaining(['did-start-navigation', 'render-process-gone', 'destroyed'])
+    )
 
     setLocalPtyProvider({
       spawn: vi.fn(),
@@ -332,19 +336,15 @@ describe('registerPtyHandlers', () => {
     } as never)
     registerPtyHandlers(secondWindow as never)
 
-    // Every first-window load listener was detached from its webContents.
-    for (const [, handler] of firstWindowLoadHandlers) {
-      expect(firstWindow.webContents.removeListener).toHaveBeenCalledWith(
-        'did-finish-load',
-        handler
-      )
+    for (const [eventName, handler] of firstWindowLifecycleHandlers) {
+      expect(firstWindow.webContents.removeListener).toHaveBeenCalledWith(eventName, handler)
     }
-    // The non-Local provider keeps orphan cleanup off the second window — only the renderer-gate reset listener remains.
+    // Daemon PTYs retain delivery reset and checkpoint lease retirement without orphan cleanup.
     expect(
       secondWindow.webContents.on.mock.calls.filter(
         ([eventName]) => eventName === 'did-finish-load'
       )
-    ).toHaveLength(1)
+    ).toHaveLength(2)
   })
   // Why (#5787): a recovery reload re-fires did-finish-load; suppress the orphan sweep so live LOCAL PTYs survive until session restore re-adopts them.
   it('does not sweep local PTYs during a recovery reload', async () => {

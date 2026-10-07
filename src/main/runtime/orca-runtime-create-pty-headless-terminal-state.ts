@@ -99,7 +99,8 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
 
   captureHeadlessTerminalModelCheckpoint(
     ptyId: string,
-    maxBytes: number
+    maxBytes: number,
+    expectedIncarnationId?: string
   ): Promise<RuntimeHeadlessModelCapture | null> {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
@@ -107,6 +108,9 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const incarnation = this.ptysById.get(ptyId)?.incarnationId
+    if (expectedIncarnationId !== undefined && incarnation !== expectedIncarnationId) {
+      return Promise.resolve(null)
+    }
     const viewAttributes = getTerminalViewAttributes()
     return captureRuntimeHeadlessModel(
       state,

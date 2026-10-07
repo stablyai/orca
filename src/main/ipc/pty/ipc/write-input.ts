@@ -12,20 +12,8 @@ import { tryGetProviderForPty } from '../provider/registry'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
 import { isSettledWrite, type WriteSettlement } from '../../../../shared/pty-write-settlement'
-
-export function isMainWindowPtyIpcEvent(
-  event: IpcMainEvent | IpcMainInvokeEvent,
-  mainWindow: PtyRendererDelivery | undefined
-): boolean {
-  const mainWebContents = mainWindow?.webContents
-  return (
-    !!mainWindow &&
-    !!mainWebContents &&
-    event.sender === mainWebContents &&
-    !mainWindow.isDestroyed() &&
-    !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
-  )
-}
+import { isMainWindowPtyIpcEvent } from './renderer-ipc-authority'
+export { isMainWindowPtyIpcEvent } from './renderer-ipc-authority'
 
 export type PtyWritePayload = {
   id: string

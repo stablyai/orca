@@ -246,7 +246,7 @@ export function registerPtyHandlers(
     syncPtyBackgroundedDelivery: session.syncPtyBackgroundedDelivery
   })
 
-  installPtySnapshotIpcHandlers({ runtime, pendingData: session.pendingData })
+  installPtySnapshotIpcHandlers({ runtime, pendingData: session.pendingData, mainWindow })
   const killDeps: PtyKillIpcDeps = {
     store,
     runtime,

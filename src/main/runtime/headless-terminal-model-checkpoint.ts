@@ -42,14 +42,20 @@ export class RuntimeHeadlessModelCapture {
     return this.currentOwner().queueBoundary
   }
 
-  checkCurrent(): void {
+  checkSourceCurrent(): void {
     const owner = this.currentOwner()
     if (
       !owner.ownsSource() ||
       owner.source.modelOperationFailed === true ||
-      owner.source.emulator !== owner.emulator ||
-      owner.source.outputSequence !== this.outputSequence
+      owner.source.emulator !== owner.emulator
     ) {
+      throw new Error('Terminal model changed after capture')
+    }
+  }
+
+  checkCurrent(): void {
+    this.checkSourceCurrent()
+    if (this.currentOwner().source.outputSequence !== this.outputSequence) {
       throw new Error('Terminal model changed after capture')
     }
   }

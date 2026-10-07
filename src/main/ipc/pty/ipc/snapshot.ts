@@ -3,6 +3,8 @@ import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { tryGetProviderForPty } from '../provider/registry'
 import { providerSnapshotRequiredPtys } from '../delivery/visibility-state'
 import type { PtyPendingDataDrainQueue } from '../../pty-pending-data-drain-queue'
+import type { PtyRendererDelivery } from '../session'
+import { installPtyModelCheckpointIpc } from './model-checkpoint'
 import {
   getPtyRendererDeliveryDebugSnapshot,
   installPowerSignalBreadcrumbs,
@@ -20,9 +22,11 @@ function normalizeSnapshotScrollbackRows(value: unknown): number | undefined {
 export function installPtySnapshotIpcHandlers(deps: {
   runtime?: OrcaRuntimeService
   pendingData: PtyPendingDataDrainQueue
+  mainWindow?: PtyRendererDelivery
 }): void {
   const ipcMain = getPtyIpc()
   const { runtime, pendingData } = deps
+  installPtyModelCheckpointIpc(deps)
 
   ipcMain.handle(
     'pty:getMainBufferSnapshot',

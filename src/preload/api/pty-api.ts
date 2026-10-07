@@ -20,8 +20,9 @@ import type { PtyManagementApi } from './pty-management-api'
 import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
 import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'
 import type { TerminalImageCellSize } from '../../shared/terminal-image-cell-size'
+import type { TerminalModelCheckpointTransport } from '../../shared/terminal-model-checkpoint-lease'
 
-export type PtyApi = {
+export type PtyApi = Partial<TerminalModelCheckpointTransport> & {
   spawn: (opts: {
     cols: number
     rows: number
