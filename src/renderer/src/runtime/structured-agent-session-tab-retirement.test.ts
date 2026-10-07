@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   callRuntime:
     vi.fn<(target: RuntimeClientTarget, method: string, params?: unknown) => Promise<unknown>>(),
   discardOutbox: vi.fn<(sessionId: string) => void>(),
+  stopSends: vi.fn<(sessionId: string) => void>(),
   hasTombstone: vi.fn<(worktreeId: string, sessionId: string) => boolean>(),
   markCancelled:
     vi.fn<(worktreeId: string, sessionId: string, executionHostId: string) => boolean>()
@@ -17,8 +18,11 @@ vi.mock('@/lib/structured-agent-session-launch-registry', () => ({
   hasStructuredAgentSessionLaunchCancellationTombstone: mocks.hasTombstone,
   markStructuredAgentSessionLaunchCancelled: mocks.markCancelled
 }))
-vi.mock('@/components/native-chat/structured-agent-session-outbox-storage', () => ({
-  discardStructuredAgentSessionLaunchOutbox: mocks.discardOutbox
+vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+  discardStructuredAgentSessionChatSends: mocks.discardOutbox
+}))
+vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
+  stopStructuredAgentSessionSends: mocks.stopSends
 }))
 vi.mock('./structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeSession
@@ -90,8 +94,22 @@ describe('structured agent session tab retirement', () => {
     })
     expect(mocks.markCancelled).toHaveBeenCalledWith('wt-1', 'session-1', 'local')
     expect(mocks.discardOutbox).toHaveBeenCalledWith('session-1')
+    expect(mocks.stopSends).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
     expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1')
+  })
+
+  // Withdrawn, as a Stop does: nothing more goes out, and nothing is dropped.
+  it("never drops a published chat's sends when its tab closes", async () => {
+    beginStructuredAgentSessionTabClose({
+      target,
+      worktreeId: 'wt-1',
+      sessionId: 'session-1',
+      provisional: false
+    })
+    expect(mocks.discardOutbox).not.toHaveBeenCalled()
+    expect(mocks.stopSends).toHaveBeenCalledWith('session-1')
+    await vi.waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1'))
   })
 
   it('suppresses and retires a late cancelled publication', async () => {

@@ -256,6 +256,16 @@ function downgraded(
   }
 }
 
+/** One main-log line when a launch the user's default asked to be a chat opened a terminal. */
+export function warnStructuredLaunchDowngrade(
+  agent: string,
+  receipt: AgentLaunchModeReceipt
+): void {
+  if (receipt.mode === 'terminal' && receipt.preferred === 'structured') {
+    console.warn(`[agent-launch] ${agent} opened a terminal: ${receipt.reason}`)
+  }
+}
+
 /** The store can be missing on a runtime that never opened one; that reads as no preference. */
 export function readAgentLaunchModeSettings(
   runtime: Pick<OrcaRuntimeService, 'getClientSettings'>

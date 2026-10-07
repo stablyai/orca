@@ -46,7 +46,6 @@ function TestField({
   const imeEnterGesture = useImeEnterGestureOwnership()
   return (
     <NativeChatComposerField
-      dropScopeKey="pane-test"
       draftScopeKey="pane-test"
       textareaRef={createRef<HTMLTextAreaElement>()}
       draft={draft}

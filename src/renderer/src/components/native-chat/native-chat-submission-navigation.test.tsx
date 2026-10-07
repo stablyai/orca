@@ -394,7 +394,6 @@ it('reveals a structured prompt answer at the press, before the host accepts it'
     const submits = useStructuredNativeChatSubmitReveal(
       {
         respond: async () => host.promise,
-        retry: vi.fn(),
         queuedMessages: {
           queueCapable: true,
           cards: [],

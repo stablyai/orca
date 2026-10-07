@@ -19,6 +19,7 @@ import type { AcpDialect } from './acp-dialects/acp-dialect'
 import type { ToolCallUpdate } from './generated/acp-protocol.generated'
 
 const rawStreamsSchema = z.object({ stdout: z.string().optional(), stderr: z.string().optional() })
+const rawExitCodeSchema = z.looseObject({ exitCode: z.number().int().safe() })
 
 function outputText(update: ToolCallUpdate): string | undefined {
   const text = update.content?.flatMap((block) =>
@@ -89,12 +90,14 @@ export class AcpToolTimeline {
   })
 
   translate(
-    update: ToolCallUpdate,
+    raw: ToolCallUpdate,
     dialect: AcpDialect,
     join: ProviderTimelineJoin
   ): ProviderTimelineEvent[] {
+    const update = dialect.normalizeToolUpdate?.(raw) ?? raw
     const previous = this.tools.get(update.toolCallId)
     const output = outputText(update)
+    const exitCode = rawExitCodeSchema.safeParse(update.rawOutput).data?.exitCode
     const state =
       update.status === 'completed'
         ? 'completed'
@@ -118,6 +121,7 @@ export class AcpToolTimeline {
           ? (previous?.body.input ?? null)
           : boundToolInput(update.rawInput, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
       state,
+      ...(exitCode === undefined ? {} : { exitCode }),
       ...(output === undefined
         ? previous?.body.output
           ? { output: previous.body.output }

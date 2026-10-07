@@ -17750,11 +17750,6 @@
       },
       "native": {
         "chat": {
-          "NativeChatStructuredSession": {
-            "1f772bb5d0": "Message delivery is unconfirmed.",
-            "93ef441197": "Message was not sent.",
-            "a5e7f14068": "Retry"
-          },
           "NativeChatLaunchRetry": {
             "failed": "Chat could not be started.",
             "unknown": "Chat connection could not be confirmed.",
@@ -18126,7 +18121,11 @@
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "stoppedBeforeStart": "Stopped before the agent started",
         "dismiss": "Dismiss",
-        "copyError": "Copy error"
+        "copyError": "Copy error",
+        "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
+        "orcaStopQuit": "Orca on {{machine}} was closed while this response was in progress.",
+        "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
+        "orcaStopCanContinue": "You can continue in this conversation."
       },
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",
@@ -18579,6 +18578,11 @@
         "offline": "{{hostName}} is offline",
         "reconnecting": "{{hostName}} is reconnecting…",
         "reconnect": "Reconnect"
+      },
+      "interruptedContinue": {
+        "continue": "Continue",
+        "failed": "Couldn't continue this chat. Try again, or send a message.",
+        "explanation": "Continue, and the agent first checks whether its last step finished."
       }
     },
     "tab": {

@@ -35,7 +35,7 @@ import type { AgentJournalSubmission } from '../../../src/shared/agent-session-j
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
 import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
 import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
-import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-send-disposition'
+import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-rejection-words'
 import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'

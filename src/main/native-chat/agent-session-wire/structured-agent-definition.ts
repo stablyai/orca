@@ -21,3 +21,8 @@ export type StructuredAgentDefinition = AgentSessionStoredAgent & {
     effortDefaultsToModel: boolean
   }
 }
+
+/** An agent whose account is one config directory, as Claude's and Codex's are. */
+export type DirectoryAccountAgentDefinition = StructuredAgentDefinition & {
+  accountHomeVariable: string
+}

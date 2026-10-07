@@ -4,7 +4,7 @@ import { isStructuredAgentSessionMainAgentWorking } from '../../../../shared/str
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
 import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat-turn-activity'
-import { structuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
+import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
 import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing'
 
 const NO_JOURNAL_ITEMS: StructuredAgentSessionState['items'] = []

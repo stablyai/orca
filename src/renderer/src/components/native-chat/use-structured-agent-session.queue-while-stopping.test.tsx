@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-// A message sent while the chat reads Stopping, through the chat's own send and its real outbox:
+// A message sent while the chat reads Stopping, through the chat's own send and its real sender:
 // where the host does not queue sends, it goes out plain, for the host to hold until the stop lands,
 // and is marked as sent while stopping, so it draws after the Stopping line.
 
@@ -32,6 +32,7 @@ import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../../
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
 import { useStructuredAgentSession } from './use-structured-agent-session'
+import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
 
 const RUNNING_TURN: AgentJournalRenderItem = {
   itemId: 'turn-1',
@@ -59,6 +60,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  // The sender is module-wide: a send still out would refuse the next test's.
+  resetStructuredAgentSessionSendsForTests()
   setLocalRuntimeCapabilitiesForTests(null)
   mocks.call.mockReset()
 })

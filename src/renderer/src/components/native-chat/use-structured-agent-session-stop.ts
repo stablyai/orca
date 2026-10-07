@@ -23,7 +23,7 @@ export function useStructuredAgentSessionStop(input: {
   /** A host that takes a Stop naming no turn gets Stop from the send until the work settles; every
    *  Stop before a turn opens needs that form. An older host can stop only a turn it has opened. */
   stopsConversation: boolean
-  stop: (turnId: string | null, withdrawUnsent: () => void) => Promise<unknown>
+  stop: (turnId: string | null, stopSends: () => void) => Promise<unknown>
 } {
   const { sessionId, target, transportState, hostStopping, mutate } = input
   const press = useStructuredAgentSessionStopPress(sessionId)
@@ -38,17 +38,18 @@ export function useStructuredAgentSessionStop(input: {
       }) === 'stopping',
     pressed: press.pressed,
     stopsConversation,
-    stop: (turnId, withdrawUnsent) => {
+    stop: (turnId, stopSends) => {
+      // The chat's own send goes no further if it has not gone out yet. Host-held cards are
+      // never withdrawn by a Stop: the host pauses them, visible on every device, until acted on.
       if (stopsConversation) {
-        // Unsent text this client still owns goes back to an empty composer — a local move.
-        // Host-held drafts are never withdrawn by a Stop: the host pauses them and
-        // they stay visible as cards, on every device, until the user acts on one.
-        withdrawUnsent()
+        stopSends()
         return press.track(() => mutate('agentSession.cancel', 'agentSession.cancel', {}))
       }
-      return turnId
-        ? press.track(() => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }))
-        : Promise.resolve(null)
+      if (!turnId) {
+        return Promise.resolve(null)
+      }
+      stopSends()
+      return press.track(() => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }))
     }
   }
 }

@@ -3,6 +3,7 @@ import type {
   AgentSessionAccountHome,
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
+import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogFingerprintForRecord
@@ -102,7 +103,10 @@ export function createAgentModelCatalogService(
       if (scoped) {
         fingerprint = agentModelCatalogFingerprintForRecord(scoped)
         // Probes spawn natively; a WSL-pinned record has no host-side lister.
-        accountHomePath = scoped.location.wslDistro === null ? scoped.accountHome.path : null
+        accountHomePath =
+          scoped.location.wslDistro === null && isLegacyAgentSessionAccountHome(scoped.accountHome)
+            ? scoped.accountHome.path
+            : null
       } else {
         let resolved: AgentSessionAccountHome
         try {
@@ -112,11 +116,10 @@ export function createAgentModelCatalogService(
         }
         fingerprint = agentModelCatalogFingerprint({
           agent: params.agent,
-          accountHomeVariable: resolved.variable,
-          accountHomePath: resolved.path,
+          accountHome: resolved,
           wslDistro: null
         })
-        accountHomePath = resolved.path
+        accountHomePath = isLegacyAgentSessionAccountHome(resolved) ? resolved.path : null
       }
       let entry = deps.store.get(fingerprint)
       const probe = deps.probes?.[params.agent]

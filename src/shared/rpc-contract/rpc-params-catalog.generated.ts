@@ -487,6 +487,7 @@ import {
   SpeechModelAction
 } from './speech-params'
 import { SshTarget } from './ssh-params'
+import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
 import {
   AcknowledgeAttentionParams,
   AgentsParams,
@@ -609,6 +610,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.cancel': CancelParams,
   'agentSession.close': OptionsParams,
   'agentSession.commands': OptionsParams,
+  'agentSession.continueInterrupted': ContinueInterruptedParams,
   'agentSession.conversationCommand': ConversationCommandParams,
   'agentSession.conversationOutline': OptionsParams,
   'agentSession.create': CreateParams,

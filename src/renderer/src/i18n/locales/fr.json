@@ -17510,11 +17510,6 @@
       },
       "native": {
         "chat": {
-          "NativeChatStructuredSession": {
-            "1f772bb5d0": "La livraison du message n'est pas confirmée.",
-            "93ef441197": "Le message n'a pas été envoyé.",
-            "a5e7f14068": "Réessayer"
-          },
           "NativeChatLaunchRetry": {
             "failed": "Le chat n'a pas pu démarrer.",
             "unknown": "La connexion au chat n'a pas pu être confirmée.",
@@ -18080,7 +18075,11 @@
         "historyItemTooLarge": "Cette partie du chat était trop volumineuse pour être affichée.",
         "stoppedBeforeStart": "Arrêté avant le démarrage de l'agent",
         "dismiss": "Ignorer",
-        "copyError": "Copier l'erreur"
+        "copyError": "Copier l'erreur",
+        "orcaStopUpdate": "Orca sur {{machine}} a redémarré pour une mise à jour pendant que cette réponse était en cours.",
+        "orcaStopQuit": "Orca sur {{machine}} a été fermé pendant que cette réponse était en cours.",
+        "orcaStopCrash": "Orca sur {{machine}} s'est arrêté de manière inattendue pendant que cette réponse était en cours.",
+        "orcaStopCanContinue": "Vous pouvez continuer dans cette conversation."
       },
       "providerFrame": {
         "byteLength": "{{value0}} octets"
@@ -18247,6 +18246,11 @@
         "offline": "{{hostName}} est hors ligne",
         "reconnecting": "{{hostName}} se reconnecte…",
         "reconnect": "Reconnecter"
+      },
+      "interruptedContinue": {
+        "continue": "Continuer",
+        "failed": "Impossible de poursuivre cette conversation. Réessayez ou envoyez un message.",
+        "explanation": "Continuez, et l'agent vérifiera d'abord si sa dernière étape s'est terminée."
       }
     },
     "tab": {

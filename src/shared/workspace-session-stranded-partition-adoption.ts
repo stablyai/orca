@@ -51,7 +51,10 @@ import {
  * that anything was closed (`mergeDirectSshRemoteWorkspaceSession` argues this at length, and
  * docs/reference/ssh-execution-boundary.md makes it general — "we could not see it" is
  * `unverifiable`, never proof of absence). Treating it as the truth is what published an empty tab
- * list and let `replace-session` delete the host's copy (#12721).
+ * list and let `replace-session` delete the host's copy (#12721). Nor is a copy of a workspace the
+ * repo catalog places on this host while the host holds its tabs: the base's rows there are residue
+ * that dropped the host's agent-resume records on the first save (#23390, #25616), so they are
+ * dropped before adoption — except unsaved drafts, which nothing else holds.
  */
 
 type KeyedRecord = Record<string, unknown>
@@ -126,39 +129,17 @@ function collectWorkspaceIds(
       collected.add(workspaceId)
     }
   }
+  // Tab-, pane- and file-keyed rows resolve to nothing here: the worktree-keyed rows they hang
+  // off already name their workspaces.
+  const none = new Map<string, string>()
   for (const field of SESSION_FIELDS) {
-    const ownership: WorkspaceSessionFieldOwnership = WORKSPACE_SESSION_FIELD_OWNERSHIP[field]
-    const value = host[field]
-    switch (ownership) {
-      case 'global':
-      case 'hostPrivate':
-      case 'tabKeyed':
-      case 'paneKeyed':
-      case 'fileKeyed':
-        // Keyed by something the workspaces below already account for.
-        break
-      case 'worktreeKeyed':
-        for (const key of Object.keys(asRecord(value) ?? {})) {
-          consider(key)
-        }
-        break
-      case 'worktreeArray':
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktreeArray fields hold worktree ids; the ownership table is what says so, not the value's static type.
-        for (const id of Array.isArray(value) ? (value as string[]) : []) {
-          consider(id)
-        }
-        break
-      case 'sleepingAgentKeyed':
-      case 'surfaceTombstoneKeyed':
-        for (const entry of Object.values(asRecord(value) ?? {})) {
-          consider(recordWorkspaceId(entry))
-        }
-        break
-      case 'browserWorkspaceKeyed':
-        for (const entry of Object.values(asRecord(value) ?? {})) {
-          consider(browserPagesWorkspaceId(entry))
-        }
-        break
+    const workspaceOf = entryWorkspaceResolver(field, none, none)
+    const value: unknown = host[field]
+    const entries = Array.isArray(value)
+      ? value.map((id: unknown) => [id, id] as const)
+      : Object.entries(asRecord(value) ?? {})
+    for (const [key, entry] of entries) {
+      consider(typeof key === 'string' ? workspaceOf?.(key, entry) : null)
     }
   }
   return collected
@@ -250,6 +231,83 @@ export function partitionRowsTheWriteWontReturn(
   return parked as WorkspaceSessionState | null
 }
 
+/** Which workspace an entry of a scoped field belongs to; null for global and host-private fields. */
+function entryWorkspaceResolver(
+  field: keyof WorkspaceSessionState,
+  worktreeIdByTabId: Map<string, string>,
+  worktreeIdByFileId: Map<string, string>
+): ((key: string, entry: unknown) => string | null | undefined) | null {
+  const ownership: WorkspaceSessionFieldOwnership = WORKSPACE_SESSION_FIELD_OWNERSHIP[field]
+  switch (ownership) {
+    case 'global':
+    case 'hostPrivate':
+      return null
+    case 'worktreeKeyed':
+    case 'worktreeArray':
+      return (key) => key
+    case 'tabKeyed':
+      return (key) => worktreeIdByTabId.get(key)
+    case 'paneKeyed':
+      return (key) => worktreeIdForPaneKey(worktreeIdByTabId, key)
+    case 'sleepingAgentKeyed':
+    case 'surfaceTombstoneKeyed':
+      // Keyed opaquely, but each record names its own workspace — the only routing left once the
+      // tab or pane it describes is gone, and the same one `splitWorkspaceSessionByHost` uses.
+      return (_key, entry) => recordWorkspaceId(entry)
+    case 'browserWorkspaceKeyed':
+      return (_key, entry) => browserPagesWorkspaceId(entry)
+    case 'fileKeyed':
+      // Routed by the open file's workspace, through the same index the split routed it by.
+      return (key) => worktreeIdByFileId.get(key)
+  }
+}
+
+/** The base without any rows for these workspaces, routed by the same indexes the split uses. */
+function withoutWorkspaces(
+  base: WorkspaceSessionState,
+  workspaceIds: ReadonlySet<string>
+): WorkspaceSessionState {
+  const worktreeIdByTabId = buildWorktreeIdByTabId(base)
+  const worktreeIdByFileId = buildWorktreeIdByFileId(base)
+  const next: KeyedRecord = { ...base }
+  for (const field of SESSION_FIELDS) {
+    const workspaceOf = entryWorkspaceResolver(field, worktreeIdByTabId, worktreeIdByFileId)
+    const keeps = (key: string, entry: unknown): boolean =>
+      !workspaceIds.has(normalizeWorkspaceSessionKeyToWorkspaceId(workspaceOf?.(key, entry) ?? ''))
+    const value: unknown = base[field]
+    if (!workspaceOf || !value) {
+      continue
+    }
+    next[field] = Array.isArray(value)
+      ? value.filter((id: string) => keeps(id, id))
+      : Object.fromEntries(Object.entries(value).filter(([key, entry]) => keeps(key, entry)))
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field is the base's own value or a filtered copy of it.
+  return next as WorkspaceSessionState
+}
+
+/** Unsaved drafts the base held that the adopted rows lack: no other channel holds one. */
+function keepUnsavedDrafts(next: WorkspaceSessionState, base: WorkspaceSessionState): void {
+  for (const [key, baseFiles] of Object.entries(base.openFilesByWorktree ?? {})) {
+    const files = next.openFilesByWorktree?.[key] ?? []
+    const drafts = new Map(
+      baseFiles.filter((file) => file.dirtyDraftContent !== undefined).map((f) => [f.filePath, f])
+    )
+    if (files === baseFiles || drafts.size === 0) {
+      continue
+    }
+    // A host entry with its own draft wins; a clean one yields to the base's draft for that path.
+    const held = new Set(files.map((file) => file.filePath))
+    const merged = [
+      ...files.map(
+        (file) => (file.dirtyDraftContent === undefined && drafts.get(file.filePath)) || file
+      ),
+      ...[...drafts.values()].filter((file) => !held.has(file.filePath))
+    ]
+    next.openFilesByWorktree = { ...next.openFilesByWorktree, [key]: merged }
+  }
+}
+
 export type StrandedPartitionAdoptionOptions = {
   /** Session keys the read found claimed by more than one partition. */
   contestedSessionKeys?: ReadonlySet<string>
@@ -260,6 +318,8 @@ export type StrandedPartitionAdoptionOptions = {
    * rows stay where they are, which is the leak direction the boundary doc asks for.
    */
   foreignSessionKeys?: ReadonlySet<string>
+  /** Keys the repo catalog attributes to this host. */
+  ownedSessionKeys?: ReadonlySet<string>
 }
 
 export type StrandedPartitionAdoption = {
@@ -271,23 +331,32 @@ export type StrandedPartitionAdoption = {
 const NOTHING_ADOPTED: ReadonlySet<string> = new Set<string>()
 
 export function adoptStrandedHostPartitionSession(
-  base: WorkspaceSessionState,
+  originalBase: WorkspaceSessionState,
   host: WorkspaceSessionState | null | undefined,
   options: StrandedPartitionAdoptionOptions = {}
 ): StrandedPartitionAdoption {
   if (!host) {
-    return { session: base, adoptedWorkspaceIds: NOTHING_ADOPTED }
+    return { session: originalBase, adoptedWorkspaceIds: NOTHING_ADOPTED }
   }
+  const contested = new Set<string>()
+  for (const key of options.contestedSessionKeys ?? []) {
+    contested.add(normalizeWorkspaceSessionKeyToWorkspaceId(key))
+  }
+  // Owned, uncontested and holding tabs: the host's copy is the live one. No tabs is not a close.
+  const superseded = new Set<string>()
+  for (const [key, tabs] of Object.entries(host.tabsByWorktree ?? {})) {
+    const id = normalizeWorkspaceSessionKeyToWorkspaceId(key)
+    if (!hostHasNothingFor(tabs) && !contested.has(id) && options.ownedSessionKeys?.has(id)) {
+      superseded.add(id)
+    }
+  }
+  const base = superseded.size > 0 ? withoutWorkspaces(originalBase, superseded) : originalBase
   const adoptable = adoptableWorkspaceIds(base, host)
   for (const key of options.foreignSessionKeys ?? []) {
     adoptable.delete(normalizeWorkspaceSessionKeyToWorkspaceId(key))
   }
   if (adoptable.size === 0) {
     return { session: base, adoptedWorkspaceIds: NOTHING_ADOPTED }
-  }
-  const contested = new Set<string>()
-  for (const key of options.contestedSessionKeys ?? []) {
-    contested.add(normalizeWorkspaceSessionKeyToWorkspaceId(key))
   }
   const adopts = (key: string): boolean =>
     adoptable.has(normalizeWorkspaceSessionKeyToWorkspaceId(key))
@@ -314,9 +383,6 @@ export function adoptStrandedHostPartitionSession(
   // the keyed fields do not depend on the ownership table's declaration order.
   const worktreeIdByTabId = buildWorktreeIdByTabId(host)
   const worktreeIdByFileId = buildWorktreeIdByFileId(host)
-  const adoptsResolved = (worktreeId: string | undefined): boolean =>
-    worktreeId !== undefined && adopts(worktreeId)
-
   for (const field of SESSION_FIELDS) {
     const ownership: WorkspaceSessionFieldOwnership = WORKSPACE_SESSION_FIELD_OWNERSHIP[field]
     switch (ownership) {
@@ -357,34 +423,18 @@ export function adoptStrandedHostPartitionSession(
         break
       }
       case 'tabKeyed':
-        adoptRecord(next, host, field, (key) => adoptsResolved(worktreeIdByTabId.get(key)))
-        break
       case 'paneKeyed':
-        adoptRecord(next, host, field, (key) =>
-          adoptsResolved(worktreeIdForPaneKey(worktreeIdByTabId, key))
-        )
-        break
       case 'sleepingAgentKeyed':
       case 'surfaceTombstoneKeyed':
-        // Keyed opaquely, but each record names its own workspace — the only routing left once the
-        // tab or pane it describes is gone, and the same one `splitWorkspaceSessionByHost` uses.
-        adoptRecord(next, host, field, (_key, entry) => {
-          const workspaceId = recordWorkspaceId(entry)
-          return workspaceId !== null && adopts(workspaceId)
-        })
-        break
       case 'browserWorkspaceKeyed':
-        adoptRecord(next, host, field, (_key, entry) => {
-          const workspaceId = browserPagesWorkspaceId(entry)
-          return workspaceId !== null && adopts(workspaceId)
-        })
+      case 'fileKeyed': {
+        const workspaceOf = entryWorkspaceResolver(field, worktreeIdByTabId, worktreeIdByFileId)
+        adoptRecord(next, host, field, (key, entry) => adopts(workspaceOf?.(key, entry) ?? ''))
         break
-      case 'fileKeyed':
-        // Routed by the open file's workspace, through the same index the split routed it by.
-        adoptRecord(next, host, field, (key) => adoptsResolved(worktreeIdByFileId.get(key)))
-        break
+      }
     }
   }
+  keepUnsavedDrafts(next, originalBase)
   // Why contested ids are withheld: the write path would route the whole bare id here, carrying the
   // co-claimant's rows into this host's partition — the loss the gap-fill above exists to prevent.
   const adoptedWorkspaceIds = new Set(

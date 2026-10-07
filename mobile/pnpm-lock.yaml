@@ -172,7 +172,7 @@ overrides:
 patchedDependencies:
   expo-notifications@55.0.27: ce20843a3daad4185d7e8571788fa323ba4d11984936188790858650a61749c0
   query-string@9.5.1: 8624f1beedd0705bfdaf287519ed6363662a0c96f01fd594508b34583bf30d8b
-  react-native-webview@13.16.2: de6761dfa76a5491a23e49f1262566a8831cab26736a336fdffc5d4e7d05ff27
+  react-native-webview@13.16.2: 55b7bce35c78ee1a50c4b99ad65b52982f3cfa73da6f61d0853c4d03219eec06
   react-native@0.83.10: 44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d
 
 importers:
@@ -313,7 +313,7 @@ importers:
         version: 0.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react-native-webview:
         specifier: 13.16.2
-        version: 13.16.2(patch_hash=de6761dfa76a5491a23e49f1262566a8831cab26736a336fdffc5d4e7d05ff27)(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
+        version: 13.16.2(patch_hash=55b7bce35c78ee1a50c4b99ad65b52982f3cfa73da6f61d0853c4d03219eec06)(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
       react-native-worklets:
         specifier: ^0.8.3
         version: 0.8.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
@@ -12249,7 +12249,7 @@ snapshots:
     optionalDependencies:
       '@expo/dom-webview': 55.0.6(expo@55.0.31)(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
       '@expo/metro-runtime': 55.0.12(@expo/dom-webview@55.0.6)(expo@55.0.31)(react-dom@19.2.8(react@19.2.8))(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
-      react-native-webview: 13.16.2(patch_hash=de6761dfa76a5491a23e49f1262566a8831cab26736a336fdffc5d4e7d05ff27)(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
+      react-native-webview: 13.16.2(patch_hash=55b7bce35c78ee1a50c4b99ad65b52982f3cfa73da6f61d0853c4d03219eec06)(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
     transitivePeerDependencies:
       - '@babel/core'
       - bufferutil
@@ -14364,7 +14364,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  react-native-webview@13.16.2(patch_hash=de6761dfa76a5491a23e49f1262566a8831cab26736a336fdffc5d4e7d05ff27)(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8))(react@19.2.8):
+  react-native-webview@13.16.2(patch_hash=55b7bce35c78ee1a50c4b99ad65b52982f3cfa73da6f61d0853c4d03219eec06)(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8))(react@19.2.8):
     dependencies:
       '@typescript/native-preview': 7.0.0-dev.20260707.2
       escape-string-regexp: 4.0.0

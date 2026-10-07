@@ -16,15 +16,15 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
   return {
     agent: spec.agent,
     handleTransport: ACP_HANDLE_TRANSPORT,
-    accountHomeVariable: spec.accountHomeVariable,
+    ...spec.account.pin,
     capabilities: {
       // ACP has no stable rewind, compact or goal method; a command arrives through `/` instead.
       rewind: false,
       compact: false,
       threadGoal: false,
       contextUsage: true,
-      // Off: Orca sends text prompts only until ACP image prompts have a path.
-      imagePrompts: false,
+      // An agent that does not also advertise images at its start has a message with one refused.
+      imagePrompts: spec.imagePrompts === true,
       steering: 'queue',
       // Orca answers every permission request the agent sends; the agent decides when it asks.
       approvalEnforcement: 'orca'

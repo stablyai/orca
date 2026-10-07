@@ -181,6 +181,19 @@ export function agentSessionWriteNoticeParts(
   return [notDone]
 }
 
+/** A send nobody can confirm: the host's own reason first when it gave one, never "not sent". */
+export function agentSessionUnconfirmedSendParts(
+  thrownRefusal: AgentSessionWriteFailure | null | undefined
+): AgentSessionWriteNoticePart[] {
+  const cause = thrownRefusal
+    ? agentSessionWriteNoticeParts(thrownRefusal, 'composer-send').filter(
+        (part) =>
+          part !== 'notDoneSend' && part !== 'tryAgainComposerSend' && part !== 'outcomeUnknown'
+      )
+    : []
+  return [...cause, 'sendOutcomeLost']
+}
+
 export function agentSessionWriteNoticeEnglish(
   parts: readonly AgentSessionWriteNoticePart[]
 ): string {

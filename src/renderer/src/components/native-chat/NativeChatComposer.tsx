@@ -13,11 +13,10 @@ import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { nativeChatImageSendBlock } from './native-chat-image-reattach'
 import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
-import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
+import { useNativeChatFileDrops } from './use-native-chat-file-drops'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import { useNativeChatSessionOptions } from './use-native-chat-session-options'
-import { useNativeChatFileAttachmentActions } from './use-native-chat-file-attachment-actions'
 import { useNativeChatDictation } from './use-native-chat-dictation'
 import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
@@ -31,7 +30,6 @@ import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-sen
 import { useNativeChatHeldQueueComposerSend } from './use-native-chat-held-queue-composer-send'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
-import { useNativeChatWorkspaceFileDrop } from './use-native-chat-workspace-file-drop'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
 
 export type {
@@ -187,11 +185,16 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     })
     const imageBlock = nativeChatImageSendBlock(imageAttachments)
+    const sendHeld = disabled || structuredTransport?.sendOut === true || imageBlock.holdsSend
     const sendButtonDisabled = isWorking
       ? !hasPty || !onStop
-      : disabled || imageBlock.holdsSend || (draft.trim() === '' && imageAttachments.length === 0)
+      : sendHeld || (draft.trim() === '' && imageAttachments.length === 0)
 
-    const { attachExternalPaths, resolveAttachmentOwner } = useNativeChatExternalAttachments({
+    const { pickAttachments, resolveAttachmentOwner } = useNativeChatFileDrops({
+      paneKey,
+      draftScopeKey,
+      targetPtyId,
+      structuredTransport,
       terminalTabId,
       structuredWorktreeId: structuredTransport?.worktreeId,
       structuredSession: structuredTransport,
@@ -227,7 +230,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     })
 
-    const { pickAttachments } = useNativeChatFileAttachmentActions(paneKey, attachExternalPaths)
     const dictation = useNativeChatDictation(textareaRef)
     const { dispatch: dispatchSessionOptionCommand, isDispatching: isDispatchingSessionOption } =
       useNativeChatSessionOptionCommand({
@@ -357,7 +359,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     return (
       <NativeChatComposerField
-        dropScopeKey={paneKey}
         draftScopeKey={draftScopeKey}
         textareaRef={textareaRef}
         draft={draft}

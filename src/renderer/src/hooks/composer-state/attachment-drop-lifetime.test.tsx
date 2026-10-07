@@ -3,7 +3,6 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { createRef, StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeFileDropPayload } from '../../../../shared/native-file-drop'
 import { useAttachmentDropState } from './attachment-drop-state'
 
 const mocks = vi.hoisted(() => ({ toastError: vi.fn() }))
@@ -11,7 +10,6 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 vi.mock('@/runtime/runtime-file-client', () => ({ importExternalPathsToRuntime: vi.fn() }))
 
-const listeners = new Set<(data: NativeFileDropPayload) => void>()
 const stat = vi.fn(async (_input: { filePath: string }) => ({ isDirectory: false }))
 let originalApi: PropertyDescriptor | undefined
 
@@ -36,12 +34,6 @@ function renderDrop(strict = false) {
   return { ...hook, attach, prompt }
 }
 
-function nativeDrop(paths: string[]): void {
-  for (const listener of listeners) {
-    listener({ target: 'composer', paths })
-  }
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
   stat.mockReset().mockResolvedValue({ isDirectory: false })
@@ -49,20 +41,13 @@ beforeEach(() => {
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
-      fs: { stat },
-      ui: {
-        onFileDrop: (listener: (data: NativeFileDropPayload) => void) => {
-          listeners.add(listener)
-          return () => listeners.delete(listener)
-        }
-      }
+      fs: { stat }
     }
   })
 })
 
 afterEach(() => {
   cleanup()
-  expect(listeners.size).toBe(0)
   if (originalApi) {
     Object.defineProperty(window, 'api', originalApi)
   } else {
@@ -149,72 +134,41 @@ describe('local composer drop lifetime', () => {
   })
 })
 
-describe('native composer ownership during a local drop', () => {
-  it.each([false, true])(
-    'stops after actual listener cleanup (Strict Mode: %s)',
-    async (strict) => {
-      const gate = Promise.withResolvers<void>()
-      holdStat(gate.promise)
-      const hook = renderDrop(strict)
-      act(() => nativeDrop(['/drop/one', '/drop/two']))
-      await vi.waitFor(() => expect(stat).toHaveBeenCalledOnce())
-      hook.unmount()
-      expect(listeners.size).toBe(0)
-      await act(async () => gate.resolve())
-
-      expect(stat).toHaveBeenCalledOnce()
-      expect(hook.attach).not.toHaveBeenCalled()
-    }
-  )
-
-  it('continues while temporarily covered and applies if ownership returns', async () => {
-    const first = Promise.withResolvers<void>()
-    const second = Promise.withResolvers<void>()
-    holdStat(first.promise)
-    holdStat(second.promise)
-    const older = renderDrop()
-    act(() => nativeDrop(['/drop/one', '/drop/two']))
+describe('native composer destination lifetime', () => {
+  it.each([false, true])('stops after unmount (Strict Mode: %s)', async (strict) => {
+    const gate = Promise.withResolvers<void>()
+    holdStat(gate.promise)
+    const hook = renderDrop(strict)
+    const pending = hook.result.current.applyNativeDrop(['/drop/one', '/drop/two'], () => true)
     await vi.waitFor(() => expect(stat).toHaveBeenCalledOnce())
-    const newer = renderDrop()
-    await act(async () => first.resolve())
-    expect(stat).toHaveBeenCalledTimes(2)
-    expect(older.attach).not.toHaveBeenCalled()
-    newer.unmount()
-    await act(async () => second.resolve())
-
-    expect(older.attach).toHaveBeenCalledOnce()
-    expect(newer.attach).not.toHaveBeenCalled()
+    hook.unmount()
+    await act(async () => gate.resolve())
+    await pending
+    expect(stat).toHaveBeenCalledOnce()
+    expect(hook.attach).not.toHaveBeenCalled()
   })
-
-  it('withholds a completed drop while a newer owner remains mounted', async () => {
+  it('keeps the original destination when a newer composer mounts', async () => {
     const gate = Promise.withResolvers<void>()
     holdStat(gate.promise)
     const older = renderDrop()
-    act(() => nativeDrop(['/drop/one', '/drop/two']))
+    const pending = older.result.current.applyNativeDrop(['/drop/one'], () => true)
     await vi.waitFor(() => expect(stat).toHaveBeenCalledOnce())
     const newer = renderDrop()
     await act(async () => gate.resolve())
-
-    expect(stat).toHaveBeenCalledTimes(2)
-    expect(older.attach).not.toHaveBeenCalled()
+    await pending
+    expect(older.attach).toHaveBeenCalledOnce()
     expect(newer.attach).not.toHaveBeenCalled()
   })
-
-  it('does not revive an old batch when another composer mounts', async () => {
+  it('withholds a completed drop when its destination changes', async () => {
     const gate = Promise.withResolvers<void>()
     holdStat(gate.promise)
-    const older = renderDrop()
-    act(() => nativeDrop(['/drop/old-one', '/drop/old-two']))
+    const hook = renderDrop()
+    let current = true
+    const pending = hook.result.current.applyNativeDrop(['/drop/one'], () => current)
     await vi.waitFor(() => expect(stat).toHaveBeenCalledOnce())
-    older.unmount()
-    const newer = renderDrop()
-    await act(async () => {
-      nativeDrop(['/drop/new'])
-      gate.resolve()
-    })
-
-    expect(stat.mock.calls.map(([input]) => input.filePath)).toEqual(['/drop/old-one', '/drop/new'])
-    expect(older.attach).not.toHaveBeenCalled()
-    expect(newer.attach).toHaveBeenCalledOnce()
+    current = false
+    await act(async () => gate.resolve())
+    await pending
+    expect(hook.attach).not.toHaveBeenCalled()
   })
 })

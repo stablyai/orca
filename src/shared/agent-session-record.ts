@@ -28,7 +28,11 @@ import {
   isAgentSessionProviderHandleInNamespace,
   isStructuredAgentId
 } from './agent-session-provider-handle-encoding'
-import type { AgentSessionAccountHome } from './agent-session-account-home'
+import {
+  isAgentSessionAccountHome,
+  MAX_PATH_LENGTH,
+  type AgentSessionAccountHome
+} from './agent-session-account-home'
 
 export type { AgentSessionAccountHome } from './agent-session-account-home'
 
@@ -71,6 +75,9 @@ export type AgentSessionProcessIdentity = {
   pid: number
   processStartTimeMs: number | null
   spawnToken: string
+  /** The Orca runtime that started this process and holds its transport, stamped when the owner is
+   *  recorded; absent on owners older builds recorded. */
+  runtime?: string
 }
 
 export type AgentSessionJournalCheckpoint = { epoch: number; sequence: number }
@@ -93,6 +100,11 @@ export type AgentSessionDeathEvidence = {
    *  proved it alive. Only a probe's proof records it: absent on a surface-release exit, a failed
    *  start, and evidence older builds wrote. */
   lastProvenAliveAt?: number
+  /** How the Orca runtime that held the owner ended, when the owner died with it: the quit or
+   *  update it had begun, else 'crash'. Absent when a provider died on its own while Orca ran, and
+   *  whenever that cannot be told. A string, since a newer build may write a cause this one does
+   *  not know; read it with `isAgentSessionOrcaStopCause`. */
+  runtimeEnd?: string
 }
 
 export type AgentSessionLease = {
@@ -163,7 +175,6 @@ export type AgentSessionOptionsReplacement = {
 const MAX_ID_LENGTH = 512
 /** A death evidence's `detail` past this fails a load, so whoever writes one cuts it here. */
 export const MAX_AGENT_SESSION_DEATH_DETAIL_CHARS = MAX_ID_LENGTH
-const MAX_PATH_LENGTH = 4096
 const MAX_LAUNCH_ENV_ENTRIES = 256
 const MAX_LAUNCH_ENV_VALUE_LENGTH = 65_536
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
@@ -228,23 +239,8 @@ export function isAgentSessionProcessIdentity(
     (identity.processStartTimeMs === null ||
       (Number.isSafeInteger(identity.processStartTimeMs) &&
         (identity.processStartTimeMs as number) >= 0)) &&
-    isBoundedString(identity.spawnToken, MAX_ID_LENGTH)
-  )
-}
-
-const ENVIRONMENT_VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/
-
-/** Shape only: whether the variable is the one the record's agent pins is a launch-time question
- *  (`agentDrivesSession`), so an agent that renames its variable never hides its chats. */
-function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccountHome {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const home = value as Partial<AgentSessionAccountHome>
-  return (
-    typeof home.variable === 'string' &&
-    ENVIRONMENT_VARIABLE_NAME.test(home.variable) &&
-    isBoundedString(home.path, MAX_PATH_LENGTH)
+    isBoundedString(identity.spawnToken, MAX_ID_LENGTH) &&
+    (identity.runtime === undefined || isBoundedString(identity.runtime, MAX_ID_LENGTH))
   )
 }
 
@@ -296,7 +292,7 @@ function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeath
     return false
   }
   const evidence = value as Partial<AgentSessionDeathEvidence>
-  const { observedAt, lastProvenAliveAt, ownerFence } = evidence
+  const { observedAt, lastProvenAliveAt, ownerFence, runtimeEnd } = evidence
   return (
     (evidence.kind === 'exit-observed' ||
       evidence.kind === 'pid-absent' ||
@@ -309,7 +305,8 @@ function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeath
     (lastProvenAliveAt === undefined ||
       (Number.isSafeInteger(lastProvenAliveAt) &&
         lastProvenAliveAt >= 0 &&
-        lastProvenAliveAt <= observedAt))
+        lastProvenAliveAt <= observedAt)) &&
+    (runtimeEnd === undefined || isBoundedString(runtimeEnd, MAX_ID_LENGTH))
   )
 }
 

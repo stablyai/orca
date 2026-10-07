@@ -17416,11 +17416,6 @@
       },
       "native": {
         "chat": {
-          "NativeChatStructuredSession": {
-            "1f772bb5d0": "消息传递未经确认。",
-            "93ef441197": "消息未发送。",
-            "a5e7f14068": "重试"
-          },
           "NativeChatLaunchRetry": {
             "failed": "无法开始聊天。",
             "unknown": "无法确认聊天连接。",
@@ -17979,7 +17974,11 @@
         "historyItemTooLarge": "聊天的这一部分过大，无法显示。",
         "stoppedBeforeStart": "在智能体开始前已停止",
         "dismiss": "关闭",
-        "copyError": "复制错误"
+        "copyError": "复制错误",
+        "orcaStopUpdate": "此回复进行期间，{{machine}} 上的 Orca 为更新而重新启动。",
+        "orcaStopQuit": "此回复进行期间，{{machine}} 上的 Orca 已关闭。",
+        "orcaStopCrash": "此回复进行期间，{{machine}} 上的 Orca 意外停止。",
+        "orcaStopCanContinue": "你可以在此对话中继续。"
       },
       "providerFrame": {
         "byteLength": "{{value0}} 字节"
@@ -18146,6 +18145,11 @@
         "offline": "{{hostName}} 已离线",
         "reconnecting": "正在重新连接 {{hostName}}…",
         "reconnect": "重新连接"
+      },
+      "interruptedContinue": {
+        "continue": "继续",
+        "failed": "无法继续此聊天。请重试，或发送一条消息。",
+        "explanation": "继续后，代理会先检查其上一步是否已完成。"
       }
     },
     "tab": {

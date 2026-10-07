@@ -13,7 +13,14 @@ import type { StructuredAgentSessionQueuedMessagesController } from './use-struc
 export function useNativeChatStructuredComposerTransport(args: {
   props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'target'>
   controller: ReturnType<typeof useStructuredAgentSession>
-  sendThroughRelaunch: (send: () => boolean) => boolean
+  /** Sends now, restarts a failed start with the message, or refuses while the chat starts. */
+  sendThroughLaunch: (
+    text: string,
+    withImages: boolean,
+    send: () => boolean | 'queued'
+  ) => boolean | 'queued'
+  /** The chat is starting: it takes no send yet. */
+  starting: boolean
   worktreeId: string | undefined
   optionPickerRequest: NativeChatOptionPickerRequest | null
   setOptionPickerRequest: Dispatch<SetStateAction<NativeChatOptionPickerRequest | null>>
@@ -21,7 +28,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   onSubmitted: () => void
   queuedMessages: Pick<StructuredAgentSessionQueuedMessagesController, 'queueHold' | 'queueResume'>
 }): NativeChatStructuredComposerTransport {
-  const { props, controller, sendThroughRelaunch, worktreeId, optionPickerRequest } = args
+  const { props, controller, sendThroughLaunch, starting, worktreeId, optionPickerRequest } = args
   const { setOptionPickerRequest, onError, onSubmitted, queuedMessages } = args
   const acceptsImages = useStructuredAgentAcceptsImages(props.target, props.agent)
   return useMemo((): NativeChatStructuredComposerTransport => {
@@ -30,20 +37,17 @@ export function useNativeChatStructuredComposerTransport(args: {
       ? (objective: string) => threadGoal.change({ kind: 'set', objective })
       : null
     return {
-      send: (text, attachments) => {
-        let admission: boolean | 'queued' = false
-        const accepted = sendThroughRelaunch(() => {
-          admission = controller.send(
+      send: (text, attachments) =>
+        sendThroughLaunch(text, attachments.length > 0, () =>
+          controller.send(
             text,
-            attachments.map((attachment) => ({
-              path: attachment.path,
-              previewUri: attachment.path
+            attachments.map(({ path, connectionId }) => ({
+              path,
+              previewUri: path,
+              ...(connectionId ? { connectionId } : {})
             }))
           )
-          return admission !== false
-        })
-        return accepted ? admission : false
-      },
+        ),
       dispatchCommand: (text: string) =>
         dispatchStructuredAgentSessionComposerCommand(text, {
           agent: props.agent,
@@ -58,6 +62,7 @@ export function useNativeChatStructuredComposerTransport(args: {
           ...(setThreadGoalObjective ? { setThreadGoalObjective } : {})
         }),
       ...(setThreadGoalObjective ? { threadGoal: { setObjective: setThreadGoalObjective } } : {}),
+      sendOut: controller.sendOut || starting,
       optionsSurface: controller.optionSurface,
       conversationCommands: controller.conversationCommands,
       optionSnapshot: controller.optionSnapshot,
@@ -86,7 +91,8 @@ export function useNativeChatStructuredComposerTransport(args: {
     props.sessionId,
     props.target,
     queuedMessages,
-    sendThroughRelaunch,
-    setOptionPickerRequest
+    sendThroughLaunch,
+    setOptionPickerRequest,
+    starting
   ])
 }

@@ -84,7 +84,7 @@ describe('rewind target after send acceptance', () => {
       expect(hook.result.current.send('Just sent', [])).toBe(true)
     })
     await waitFor(() => expect(hook.result.current.messages).toHaveLength(1))
-    const entry = hook.result.current.outbox[0]!
+    const entry = hook.result.current.pending[0]!
     const optimisticId = agentJournalSubmissionKey(entry.clientMessageId)
     const confirm = mocks.confirm.mockResolvedValue(true)
     const row = () => (
@@ -129,7 +129,7 @@ describe('rewind target after send acceptance', () => {
     }
     hook.rerender()
     await waitFor(() => expect(hook.result.current.rewind.disabledReason).toBeNull())
-    expect(hook.result.current.outbox).toEqual([])
+    expect(hook.result.current.pending).toEqual([])
     expect(hook.result.current.messages.map((message) => message.id)).toEqual([itemId])
     if (keySource === 'provider') {
       await act(() => hook.result.current.rewind.request(optimisticId, confirm))

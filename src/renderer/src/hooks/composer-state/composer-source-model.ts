@@ -15,6 +15,7 @@ export type ComposerSourceModel = {
     item: GitHubWorkItem,
     options?: { preserveBranchNameOverride?: boolean | undefined }
   ) => void
+  applyNativeDrop: (paths: string[], isCurrentOwner: () => boolean) => Promise<void>
   applyLocalComposerDrop: (paths: string[], canApply?: () => boolean) => Promise<void>
   canPrefetchSelectedRepoWorkItems: boolean
   folderCreateDisabled: boolean

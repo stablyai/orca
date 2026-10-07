@@ -23,6 +23,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.unsubscribe',
   // Every session's status on one stream: the phone's chat reads the host's "Stopping…" from it.
   'agentSession.subscribeStatus',
+  // One visual from the chat's own visuals folder, for the transcript's `::orca-visual` lines.
+  'agentSession.readVisual',
   // No-ops on a current host; kept until MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION passes the
   // mobile builds that still call them.
   'agentSession.hold',

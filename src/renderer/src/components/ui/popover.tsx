@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Popover as PopoverPrimitive } from 'radix-ui'
+import * as PopoverPrimitive from 'radix-ui/popover'
 
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'

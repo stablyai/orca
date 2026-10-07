@@ -74,10 +74,12 @@ export async function loadEmptyWorkspaceDefaultChatDetection(worktreeId: string)
 
 /**
  * When the user's new agent tabs open as chat, an empty workspace opens their default agent as a
- * chat instead of a bare shell. Null means nothing opened and the caller seeds the shell.
+ * chat instead of a bare shell. Null means nothing opened and the caller seeds the shell; so does
+ * `seedShell` when the host declines the chat, since nobody asked for the agent's terminal.
  */
 export function openDefaultAgentChatInEmptyWorkspace(
-  worktreeId: string
+  worktreeId: string,
+  seedShell: () => boolean
 ): { primaryTabId: string | null } | null {
   const state = useAppStore.getState()
   const target = defaultChatDetectionTarget(state, worktreeId)
@@ -107,7 +109,8 @@ export function openDefaultAgentChatInEmptyWorkspace(
     worktreeId,
     launchSource: 'unknown',
     agentSessionLaunchPlan,
-    pendingActivationSpawn: true
+    pendingActivationSpawn: true,
+    onStructuredHostDeclined: () => ({ opened: seedShell() })
   })
   if (!result) {
     return null

@@ -1,6 +1,6 @@
 import type { Store } from '../persistence'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
-import { getOtherProfileWorktreeIdsForHistoryGc } from './history-gc-profile-worktree-ids'
+import { getOtherProfileWorktreeIdsForHistoryGc } from '../orca-profiles/other-profile-workspace-catalog'
 
 /**
  * Every workspace key that owns shell history, for the history GC's live set.

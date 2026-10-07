@@ -1,5 +1,6 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
+import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 
 type LaunchEnvResolver = (
   provider: AgentSessionRecord['provider']
@@ -19,7 +20,9 @@ export async function pinnedAgentSessionLaunchEnv(
   return {
     launchEnv: {
       ...(await resolver(params.provider)),
-      [params.accountHome.variable]: params.accountHome.path
+      ...(isLegacyAgentSessionAccountHome(params.accountHome)
+        ? { [params.accountHome.variable]: params.accountHome.path }
+        : {})
     }
   }
 }

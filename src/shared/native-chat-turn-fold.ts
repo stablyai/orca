@@ -27,9 +27,10 @@ export type NativeChatTurnFoldRow = {
   /** Whether a system row reports a failure. It competes with prose to be the
    *  turn's answer, so a turn that failed shows the error as its end. */
   reportsFailure: boolean
-  /** Whether the row reports a compaction's result. It never folds: hiding it
-   *  would leave the turn's status as the only trace the context was rewritten. */
-  reportsCompaction: boolean
+  /** Whether the row explains what became of the turn: a compaction's result, or
+   *  that the response was interrupted. It never folds: hiding it would leave the
+   *  turn's status as the only trace of it. */
+  explainsTurn: boolean
 }
 
 export type NativeChatTurnFold = {
@@ -87,13 +88,14 @@ export function nativeChatTurnFold({
   for (const [index, row] of rows.entries()) {
     const { turnKey } = row
     // Outside the fold by construction: the reader's own message anchors the
-    // turn, a roster or background-task row outlives it, and a compaction report explains it.
+    // turn, a roster or background-task row outlives it, and a compaction report or interruption
+    // notice explains it.
     if (
       turnKey === undefined ||
       row.role === 'user' ||
       !row.draws ||
       row.outlivesTurn ||
-      row.reportsCompaction ||
+      row.explainsTurn ||
       !settledTurnKeys.has(turnKey)
     ) {
       continue

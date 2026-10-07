@@ -5,7 +5,7 @@ import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   type NativeChatLineDecoder
 } from './transcript-tail-reader'
-import { openTranscriptReadStream, wslGatedStat } from './wsl-transcript-fs-access'
+import { openTranscriptReadStream, transcriptFileStat } from './wsl-transcript-fs-access'
 
 const APPEND_BATCH_MESSAGE_LIMIT = 40
 
@@ -47,7 +47,7 @@ export async function readIncrementalTranscriptMessages(
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
   signal?: AbortSignal
 ): Promise<NativeChatMessage[]> {
-  const end = (await wslGatedStat(filePath, 'exact', signal)).size
+  const end = (await transcriptFileStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
     return []
   }
