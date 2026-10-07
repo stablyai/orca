@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Github, Gitlab } from 'lucide-react'
+import { Github, Gitlab, PanelsTopLeft } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import {
@@ -89,6 +89,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  hamteamboard: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.hamteamboardLabel', 'HamTeamBoard')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.hamteamboardDescription',
+        'Use HamTeamBoard projects, tasks, dependencies, and agent execution state.'
+      )
+    },
+    Icon: ({ className }) => <PanelsTopLeft className={className} />
   }
 }
 
@@ -208,7 +220,14 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                 defaultExpanded={autoExpandedProvider === provider}
                 onToggleVisible={() => toggleProvider(provider)}
               >
-                {provider === 'linear' ? (
+                {provider === 'hamteamboard' ? (
+                  <p className="text-xs text-muted-foreground">
+                    {translate(
+                      'auto.components.settings.TasksPane.hamteamboardBootstrapNotice',
+                      'The native connection adapter is not available in this build yet.'
+                    )}
+                  </p>
+                ) : provider === 'linear' ? (
                   <TaskSourceLinearSetup
                     connected={readiness.connected}
                     checking={readiness.checking}
