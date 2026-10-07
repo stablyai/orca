@@ -113,6 +113,7 @@ void (true satisfies [_MissingSessionField] extends [never] ? true : never)
 
 /** Build the editor-file portion of the workspace session for persistence.
  *  Only edit-mode files are saved — diffs and conflict views are transient. */
+/** Builds the persisted editor slice while retaining each file's stable identity. */
 export function buildEditorSessionData(
   openFiles: OpenFile[],
   editorDrafts: Record<string, string>,
