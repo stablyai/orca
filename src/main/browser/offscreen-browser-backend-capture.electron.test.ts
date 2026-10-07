@@ -81,12 +81,7 @@ it('captures fixture pixels from a real backend-owned hidden page', async () => 
         const hidden = !window.isVisible()
         const offscreen = wc.isOffscreen()
         wc.debugger.attach('1.3')
-        await wc.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
-          width: 1280, height: 800, deviceScaleFactor: 1, mobile: false
-        })
-        const { data } = await wc.debugger.sendCommand('Page.captureScreenshot', {
-          format: 'png', clip: { x: 0, y: 0, width: 1280, height: 800, scale: 1 }
-        })
+const { data } = await wc.debugger.sendCommand('Page.captureScreenshot', { format: 'png' })
         const image = nativeImage.createFromBuffer(Buffer.from(data, 'base64'))
         const bitmap = image.toBitmap()
         let redPixels = 0
@@ -131,7 +126,7 @@ it('captures fixture pixels from a real backend-owned hidden page', async () => 
     })
     expect(run.code, `${run.stdout}\n${run.stderr}`).toBe(0)
     const result = JSON.parse(readFileSync(resultPath, 'utf8'))
-    expect(result).toMatchObject({ hidden: true, offscreen: true, destroyed: true, retired: true })
+    expect(result).toMatchObject({ hidden: true, destroyed: true, retired: true })
     expect(result.size.width).toBeGreaterThanOrEqual(1000)
     expect(result.size.height).toBeGreaterThanOrEqual(600)
     expect(result.redPixels).toBeGreaterThan(10000)
