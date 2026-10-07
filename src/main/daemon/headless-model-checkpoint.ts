@@ -17,6 +17,7 @@ import {
 import { buildInlineImageAddonOptions } from '../../shared/terminal-inline-image-options'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
 import type { TerminalSnapshot } from './terminal-snapshot'
+import type { TerminalViewAttributeResponder } from './terminal-view-attribute-responder'
 
 export type HeadlessInlineImageConfiguration = {
   cellSize: { width: number; height: number }
@@ -227,11 +228,12 @@ export function captureHeadlessModelCheckpoint(
   snapshot: TerminalSnapshot,
   addon: ImageAddon,
   maxBytes: number,
-  colorOverridesAnsi = ''
+  viewAttributes?: TerminalViewAttributeResponder
 ): HeadlessModelCheckpoint {
   snapshot = {
     ...snapshot,
-    rehydrateSequences: colorOverridesAnsi + snapshot.rehydrateSequences
+    rehydrateSequences:
+      (viewAttributes?.serializeColorOverrides() ?? '') + snapshot.rehydrateSequences
   }
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0 || maxBytes > CHECKPOINT_LEASE_BYTES) {
     throw new RangeError('Invalid complete terminal checkpoint budget')
@@ -243,6 +245,9 @@ export function captureHeadlessModelCheckpoint(
     images: configuration.images
       ? {
           ...configuration.images,
+          colors:
+            viewAttributes?.readImageColors(configuration.images.colors, false) ??
+            configuration.images.colors,
           options: {
             ...configuration.images.options,
             storageLimit: addon.storageLimit,

@@ -9,6 +9,7 @@
  * so seeded/replayed bytes and delivered chunks never produce a reply.
  */
 import type { Terminal } from '@xterm/headless'
+import type { IImageColors } from '@xterm/addon-image/src/ImageRasterBackend'
 import {
   formatXColorRgbSpec,
   parseXColorSpec,
@@ -36,6 +37,7 @@ export type TerminalViewAttributeResponder = {
    *  process) are filtered in main's store and never reach this. */
   clearColorOverrides: () => void
   serializeColorOverrides: () => string
+  readImageColors: (fallback: IImageColors, includeOverrides?: boolean) => IImageColors
 }
 
 type SpecialColorSlot = 'foreground' | 'background' | 'cursor'
@@ -51,6 +53,10 @@ const SPECIAL_COLOR_IDENTS: Record<SpecialColorSlot, string> = {
 
 function isValidColorIndex(value: number): boolean {
   return value >= 0 && value < TERMINAL_VIEW_ANSI_COLOR_COUNT
+}
+
+function imageColor(rgb: TerminalViewRgb): { rgba: number } {
+  return { rgba: rgb[0] * 0x1000000 + rgb[1] * 0x10000 + rgb[2] * 0x100 + 255 }
 }
 
 // Mirror of xterm's rgb.relativeLuminance2 (common/Color.ts, WCAG formula) —
@@ -184,6 +190,22 @@ export function installTerminalViewAttributeResponder(
   })
 
   return {
+    readImageColors: (fallback, includeOverrides = true) => {
+      const base = deps.getBaseAttributes()
+      const foreground =
+        (includeOverrides ? specialOverrides.get('foreground') : undefined) ?? base?.foreground
+      const background =
+        (includeOverrides ? specialOverrides.get('background') : undefined) ?? base?.background
+      const ansi = base ? base.ansi.map(imageColor) : fallback.ansi
+      return {
+        foreground: foreground ? imageColor(foreground) : fallback.foreground,
+        background: background ? imageColor(background) : fallback.background,
+        ansi: ansi.map((color, index) => {
+          const rgb = includeOverrides ? ansiOverrides.get(index) : undefined
+          return rgb ? imageColor(rgb) : color
+        })
+      }
+    },
     clearColorOverrides: () => {
       ansiOverrides.clear()
       specialOverrides.clear()

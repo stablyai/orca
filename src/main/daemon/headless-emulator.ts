@@ -68,6 +68,7 @@ export class HeadlessEmulator {
   private onQueryReply: ((reply: string) => void) | null
   private conptyDa1OverrideInstalled = false
   private viewAttributeResponder: TerminalViewAttributeResponder | null = null
+  private getBaseViewAttributes: () => TerminalViewAttributes | null = () => null
   // Why: replies must be scoped to the exact write that carried the query, so seeds/snapshots and unsolicited emissions never leak to the PTY.
   private queryReplyForwardingDepth = 0
   // Why: a mid-escape chunk tail lives in xterm's parser, not the buffer, so serialize() drops it and it renders literal after restore (Bug E).
@@ -98,7 +99,8 @@ export class HeadlessEmulator {
     activateOrcaTerminalUnicodeProvider(this.terminal)
 
     if (this.configuration.images) {
-      this.imageAddon = createHeadlessImageAddon(this.configuration.images)
+      const colors = this.installViewAttributeResponder(() => null)
+      this.imageAddon = createHeadlessImageAddon(this.configuration.images, colors)
       this.terminal.loadAddon(this.imageAddon)
     }
 
@@ -129,17 +131,18 @@ export class HeadlessEmulator {
     return this.terminal.parser
   }
 
-  /** Headless core has no theme service, so OSC 4/10/11/12 and DSR ?996n answer from the renderer's pushed attributes; daemon Session must never call this. */
-  installViewAttributeResponder(getBaseAttributes: () => TerminalViewAttributes | null): void {
-    if (this.viewAttributeResponder) {
-      return
-    }
-    this.viewAttributeResponder = installTerminalViewAttributeResponder({
+  /** Query replies require authoritative view attributes; configured rasters also track color mutations. */
+  installViewAttributeResponder(
+    getBaseAttributes: () => TerminalViewAttributes | null
+  ): TerminalViewAttributeResponder {
+    this.getBaseViewAttributes = getBaseAttributes
+    this.viewAttributeResponder ??= installTerminalViewAttributeResponder({
       parser: this.terminal.parser,
-      getBaseAttributes,
+      getBaseAttributes: () => this.getBaseViewAttributes(),
       // emitQueryReply keeps replies in the per-chunk forwarding window, so seeded/replayed queries answer no one.
       emitReply: (reply) => this.emitQueryReply(reply)
     })
+    return this.viewAttributeResponder
   }
 
   /** Sets cursor options so xterm answers DECSCUSR / DECRQM 12 renderer-true; per-PTY color overrides are dropped (a theme apply overwrites them anyway). */
@@ -276,7 +279,7 @@ export class HeadlessEmulator {
       this.getSnapshot(),
       addon,
       maxBytes,
-      this.viewAttributeResponder?.serializeColorOverrides() ?? ''
+      this.viewAttributeResponder ?? undefined
     )
   }
 
