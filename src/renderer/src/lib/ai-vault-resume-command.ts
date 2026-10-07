@@ -23,13 +23,10 @@ import { parseWslUncPath } from '../../../shared/wsl-paths'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
 import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import {
-  getAiVaultResumeWorkspacePath,
+  getAiVaultResumePlatform,
   resolveAiVaultResumeStartupShell
 } from '@/lib/ai-vault-resume-shell'
 
@@ -131,7 +128,6 @@ function buildAiVaultResumeForWorktree(
   clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
   assertAntigravityReferenceTarget(args)
-  const providerSession = getAiVaultAgentProviderSession(args.session)
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
@@ -141,10 +137,11 @@ function buildAiVaultResumeForWorktree(
     !(args.session.agent === 'codex' && args.session.codexHome === null) &&
     !args.commandOverride?.trim()
   ) {
+    const remoteProviderSession = getAiVaultAgentProviderSession(args.session)
     return {
       command: args.session.resumeCommand,
       ...realHomeCodexResumeEnvDeletion(args.session),
-      ...(providerSession ? { providerSession } : {})
+      ...(remoteProviderSession ? { providerSession: remoteProviderSession } : {})
     }
   }
   const platform =
@@ -157,6 +154,11 @@ function buildAiVaultResumeForWorktree(
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
+  // Why: a WSL-stored transcript is found under its UNC path, but Pi runs inside WSL and only knows the Linux one.
+  const providerSession = getAiVaultAgentProviderSession({
+    ...args.session,
+    filePath: resumeFilePath
+  })
   // Why: local shell settings do not describe a remote Windows host, whose
   // queued resume command uses the remote default PowerShell syntax.
   const liveShell: AgentStartupShell | undefined =
@@ -291,6 +293,21 @@ export function getAiVaultAgentProviderSession(
   return { key: 'session_id', id: session.sessionId }
 }
 
+/** Provider-session metadata spelled for the target workspace's runtime (local sessions only). */
+export function getAiVaultAgentProviderSessionForWorktree(args: {
+  state: AiVaultResumeWorktreeArgs['state']
+  worktreeId: string
+  session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string }
+}): AgentProviderSessionMetadata | null {
+  return getAiVaultAgentProviderSession({
+    ...args.session,
+    filePath: normalizeAiVaultResumeFilePath(
+      args.session.filePath,
+      getAiVaultResumePlatform(args.state, args.worktreeId)
+    )
+  })
+}
+
 function getAiVaultResumeCodexHome(
   codexHome: string | null,
   platform: NodeJS.Platform
@@ -301,36 +318,4 @@ function getAiVaultResumeCodexHome(
     return codexHome
   }
   return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
-}
-
-function getAiVaultResumePlatform(
-  state: Pick<
-    AppState,
-    | 'activeRepoId'
-    | 'activeWorktreeId'
-    | 'folderWorkspaces'
-    | 'projectGroups'
-    | 'projects'
-    | 'repos'
-    | 'settings'
-    | 'worktreesByRepo'
-  >,
-  worktreeId?: string | null
-): NodeJS.Platform {
-  const targetWorktreeId = worktreeId ?? state.activeWorktreeId
-  const executionHost = parseExecutionHostId(getExecutionHostIdForWorktree(state, targetWorktreeId))
-  if (executionHost?.kind === 'ssh' || executionHost?.kind === 'runtime') {
-    return 'linux'
-  }
-
-  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, CLIENT_PLATFORM)
-  if (projectRuntime?.status === 'repair-required') {
-    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
-  }
-  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-    return 'linux'
-  }
-
-  const workspacePath = getAiVaultResumeWorkspacePath(state, targetWorktreeId)
-  return workspacePath && parseWslUncPath(workspacePath) ? 'linux' : CLIENT_PLATFORM
 }

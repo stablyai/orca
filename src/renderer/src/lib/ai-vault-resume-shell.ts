@@ -2,7 +2,8 @@ import type { AppState } from '@/store/types'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
 import { getAiVaultResumeWorkspaceExecutionHostId } from './ai-vault-resume-target'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../shared/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
@@ -123,4 +124,36 @@ export function getAiVaultResumeWorkspaceWslDistro(
     return runtime.runtime.kind === 'wsl' ? runtime.runtime.distro : null
   }
   return workspacePath ? (parseWslUncPath(workspacePath)?.distro ?? null) : null
+}
+
+export function getAiVaultResumePlatform(
+  state: Pick<
+    AppState,
+    | 'activeRepoId'
+    | 'activeWorktreeId'
+    | 'folderWorkspaces'
+    | 'projectGroups'
+    | 'projects'
+    | 'repos'
+    | 'settings'
+    | 'worktreesByRepo'
+  >,
+  worktreeId?: string | null
+): NodeJS.Platform {
+  const targetWorktreeId = worktreeId ?? state.activeWorktreeId
+  const executionHost = parseExecutionHostId(getExecutionHostIdForWorktree(state, targetWorktreeId))
+  if (executionHost?.kind === 'ssh' || executionHost?.kind === 'runtime') {
+    return 'linux'
+  }
+
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, CLIENT_PLATFORM)
+  if (projectRuntime?.status === 'repair-required') {
+    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
+  }
+  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+    return 'linux'
+  }
+
+  const workspacePath = getAiVaultResumeWorkspacePath(state, targetWorktreeId)
+  return workspacePath && parseWslUncPath(workspacePath) ? 'linux' : CLIENT_PLATFORM
 }
