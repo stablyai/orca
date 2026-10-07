@@ -17,6 +17,7 @@ import {
   hasRemoteRuntimeOwner
 } from './runtime-file-routing'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { readRemoteFilePreview } from './runtime-chunked-binary-preview'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 
 const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
@@ -41,7 +42,8 @@ export async function readRuntimeFileContent({
   connectionId,
   expectedExternalSshTargetId,
   includeLocalLogMetadata,
-  access
+  access,
+  pageOversizedBinary
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
   assertExternalSshReadOwnership(settings, connectionId, expectedExternalSshTargetId)
   const target = getActiveRuntimeTarget(settings)
@@ -71,11 +73,10 @@ export async function readRuntimeFileContent({
     // back to the base64 preview RPC so PDFs/images render like local/SSH paths.
     // Match the exact typed error so an unrelated failure can't spoof the fallback.
     if (err instanceof RuntimeRpcCallError && err.message === 'binary_file') {
-      return callRuntimeRpc<RuntimeFilePreviewResult>(
-        target,
-        'files.readPreview',
-        { worktree, relativePath },
-        { timeoutMs: 15_000 }
+      // Why: baseline checks call this too and discard binary content, so paging is opt-in.
+      return readRemoteFilePreview(
+        { target, worktree, relativePath },
+        { pageOversizedBinary: pageOversizedBinary === true }
       )
     }
     throw err
@@ -109,11 +110,13 @@ export async function readRuntimeFilePreview(
       ...localAccess(context.connectionId, access)
     })
   }
-  return callRuntimeRpc<RuntimeFilePreviewResult>(
-    remoteArgs.target,
-    'files.readPreview',
-    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
-    { timeoutMs: 15_000 }
+  return readRemoteFilePreview(
+    {
+      target: remoteArgs.target,
+      worktree: remoteArgs.worktreeSelector,
+      relativePath: remoteArgs.relativePath
+    },
+    { pageOversizedBinary: true }
   )
 }
 

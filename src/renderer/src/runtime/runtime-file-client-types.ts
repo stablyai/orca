@@ -20,6 +20,8 @@ export type RuntimeFileReadArgs = {
   includeLocalLogMetadata?: boolean
   /** File access of the local fallback read; remote reads stay root-relative. */
   access?: LocalFileAccess
+  /** Set by readers that render the bytes: page a remote PDF/image too large for one reply. */
+  pageOversizedBinary?: boolean
 }
 
 export type RuntimeFileOperationArgs = {

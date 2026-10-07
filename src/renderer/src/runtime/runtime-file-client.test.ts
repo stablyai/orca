@@ -320,7 +320,7 @@ describe('runtime file client', () => {
       return Promise.resolve({
         id: 'rpc-preview',
         ok: false,
-        error: { code: 'runtime_error', message: 'file_too_large' },
+        error: { code: 'runtime_error', message: 'permission_denied' },
         _meta: { runtimeId: 'remote-runtime' }
       })
     })
@@ -328,11 +328,11 @@ describe('runtime file client', () => {
     await expect(
       readRuntimeFileContent({
         settings: { activeRuntimeEnvironmentId: 'env-1' },
-        filePath: '/remote/repo/huge.pdf',
-        relativePath: 'huge.pdf',
+        filePath: '/remote/repo/locked.pdf',
+        relativePath: 'locked.pdf',
         worktreeId: 'wt-1'
       })
-    ).rejects.toThrow('file_too_large')
+    ).rejects.toThrow('permission_denied')
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'files.readPreview' })

@@ -232,7 +232,9 @@ describe('useEditorPanelContentState', () => {
         relativePath: '/tmp/ssh-preview.png',
         worktreeId: 'repo-ssh::/home/user/project',
         connectionId: 'ssh-1',
-        expectedExternalSshTargetId: 'ssh-1'
+        expectedExternalSshTargetId: 'ssh-1',
+        // The tab renders the bytes, so it is the reader that pages an oversized remote binary.
+        pageOversizedBinary: true
       })
     )
   })
