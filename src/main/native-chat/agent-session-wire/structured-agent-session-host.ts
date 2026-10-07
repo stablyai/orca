@@ -50,8 +50,7 @@ import {
   type StructuredAgentSessionRestartResume
 } from './structured-agent-session-restart-resume-host'
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
-import { createStructuredAgentSessionConversationDelivery } from './structured-agent-session-host-delivery'
-import type * as conversation from './structured-agent-session-host-delivery'
+import * as conversation from './structured-agent-session-host-delivery'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
@@ -117,7 +116,7 @@ export class StructuredAgentSessionHost {
       ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
       now: () => this.now()
     })
-    this.conversationDelivery = createStructuredAgentSessionConversationDelivery({
+    this.conversationDelivery = conversation.createStructuredAgentSessionConversationDelivery({
       deps,
       sessions: this.sessions,
       serialize: (sessionId, task) => this.serialize(sessionId, task),
