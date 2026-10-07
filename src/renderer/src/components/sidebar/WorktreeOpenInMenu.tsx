@@ -311,10 +311,11 @@ export function WorktreeOpenInMenuItems({
     getLocalOpenRuntimeOwnerForWorktree(s, worktreeId, executionHostId)
   )
   // Why: a folder workspace's synthetic repo has no connectionId, so the caller's prop misses SSH;
-  // the runtime owner's route names the host for both dimensions.
+  // the runtime owner's route names the host for both dimensions. The prop is host-blind, so it
+  // only fills in when the caller named no host.
   const ownerConnectionId =
     useAppStore((s) => getLocalOpenSshOwnerForWorktree(s, worktreeId, executionHostId)) ??
-    connectionId
+    (executionHostId ? null : connectionId)
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )

@@ -363,6 +363,35 @@ describe('WorktreeOpenInMenu', () => {
     })
   })
 
+  it('trusts a host-qualified local route over a host-blind SSH repo prop', () => {
+    // Why: a repo id shared with an SSH host must not turn this host's local workspace remote.
+    mockState.settings = {
+      activeRuntimeEnvironmentId: null,
+      openInApplications: [{ id: 'vscode', label: 'VS Code', command: 'code' }]
+    }
+    const props = {
+      worktreeId: 'repo-1::/tmp/workspace',
+      worktreePath: '/tmp/workspace',
+      connectionId: 'ssh-1'
+    }
+
+    const [vsCode, fileManager] = WorktreeOpenInMenuItems({
+      ...props,
+      executionHostId: 'local'
+    }).props.children
+
+    expect(fileManager.props.disabled).toBe(false)
+    vsCode.props.onSelect()
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/tmp/workspace',
+      command: 'code',
+      connectionId: null,
+      runtimeEnvironmentId: null
+    })
+    // Why: callers that name no host, like the File Explorer toolbar, still rely on the prop.
+    expect(WorktreeOpenInMenuItems(props).props.children[1].props.disabled).toBe(true)
+  })
+
   it('blocks SSH local-only launchers before IPC with actionable copy', async () => {
     await openWorktreePath({
       target: 'external-editor',
