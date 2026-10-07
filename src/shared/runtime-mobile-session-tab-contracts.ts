@@ -10,6 +10,8 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  /** Persisted manual rename from workspaceSession; absent on old hosts (wire compatible). */
+  customTitle?: string | null
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string

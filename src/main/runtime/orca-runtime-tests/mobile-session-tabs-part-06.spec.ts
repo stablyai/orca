@@ -315,6 +315,46 @@ describe('OrcaRuntimeService', () => {
     expect(surface?.type === 'terminal' && surface.isPinned).toBe(true)
   })
 
+  it('persists a headless rename sent over setTabProps title and surfaces it through a cold rehydrate', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab',
+      title: 'Deploy shell'
+    })
+
+    const persisted = getSession().tabsByWorktree[TEST_WORKTREE_ID]!.find(
+      (tab) => tab.id === 'host-tab'
+    )!
+    expect(persisted.customTitle).toBe('Deploy shell')
+
+    const live = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const liveSurface = live.tabs.find(
+      (tab) => tab.type === 'terminal' && tab.parentTabId === 'host-tab'
+    )
+    expect(liveSurface?.type === 'terminal' && liveSurface.customTitle).toBe('Deploy shell')
+    expect(liveSurface?.title).toBe('Deploy shell')
+
+    runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
+    runtime['hydrateHeadlessMobileSessionTabsFromWorkspaceSession'](TEST_WORKTREE_ID)
+    const rehydrated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const surface = rehydrated.tabs.find(
+      (tab) => tab.type === 'terminal' && tab.parentTabId === 'host-tab'
+    )
+    expect(surface?.title).toBe('Deploy shell')
+
+    await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab',
+      title: null
+    })
+    expect(
+      getSession().tabsByWorktree[TEST_WORKTREE_ID]!.find((tab) => tab.id === 'host-tab')!
+        .customTitle
+    ).toBeNull()
+  })
+
   it('persists headless browser tab color + pin and surfaces them through a cold rehydrate', async () => {
     const browserTab: Tab = {
       id: 'browser-page-1',

@@ -4,6 +4,7 @@ import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contrac
 import { findTabAndWorktree, patchTab, updateGroup, dedupeTabOrder } from '../tab-group-state'
 import { applyTabOrderSortValues, partitionPinnedTabOrder } from './tabs-tab-order'
 import {
+  mirrorTabCustomTitleToHost,
   mirrorTabPinnedToHost,
   mirrorTabViewModeToHost,
   patchTerminalTabRow
@@ -122,6 +123,7 @@ export function createTabsLabelActions(
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
+      mirrorTabCustomTitleToHost(get(), tabId, label)
     },
 
     setUnifiedTabColor: (tabId, color) => {

@@ -227,6 +227,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       color?: string | null
       isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
+      title?: string | null
     }
   ): Promise<{ updated: true }> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)

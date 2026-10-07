@@ -43,6 +43,27 @@ export function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: 
   )
 }
 
+// Why: a rename reverts on the next host snapshot for remote-server tabs (only
+// color/pin/viewMode had a write path); persist it like the others (#19582).
+export function mirrorTabCustomTitleToHost(
+  state: AppState,
+  tabId: string,
+  title: string | null
+): void {
+  const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+  if (
+    !found ||
+    found.tab.contentType !== 'terminal' ||
+    !getRuntimeEnvironmentIdForWorktree(state, found.worktreeId)
+  ) {
+    return
+  }
+  const worktreeId = found.worktreeId
+  void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+    setWebRuntimeTabProps({ worktreeId, tabId, title })
+  )
+}
+
 // Why: viewMode is host-tracked like color/pin, so mirror local sets or they're lost on reconnect and to paired clients.
 // Only the action path mirrors (never reconcile applying a host value), so the echoed snapshot can't re-trigger an outbound RPC.
 export function mirrorTabViewModeToHost(

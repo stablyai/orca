@@ -15,7 +15,12 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
   protected persistHeadlessSessionTabProps(
     worktreeId: string,
     tabId: string,
-    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
+    props: {
+      color?: string | null
+      isPinned?: boolean
+      viewMode?: 'terminal' | 'chat'
+      title?: string | null
+    }
   ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
@@ -34,7 +39,8 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
                 ...tab,
                 ...(props.color !== undefined ? { color: props.color } : {}),
                 ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
-                ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
+                ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {}),
+                ...(props.title !== undefined ? { customTitle: props.title } : {})
               }
             : tab
         )
@@ -51,7 +57,8 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
             ? {
                 ...tab,
                 ...(props.color !== undefined ? { color: props.color } : {}),
-                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {})
+                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
+                ...(props.title !== undefined ? { customLabel: props.title } : {})
               }
             : tab
         )
@@ -67,24 +74,39 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
   protected applyHeadlessSessionTabPropsToSnapshot(
     worktreeId: string,
     tabId: string,
-    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
+    props: {
+      color?: string | null
+      isPinned?: boolean
+      viewMode?: 'terminal' | 'chat'
+      title?: string | null
+    }
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
       return
     }
     let changed = false
+    const sharedProps = {
+      ...(props.color !== undefined ? { color: props.color } : {}),
+      ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
+      ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
+    }
     const tabs = snapshot.tabs.map((tab) => {
       if (this.getMobileSessionTopLevelTabId(tab) !== tabId) {
         return tab
       }
       changed = true
-      return {
-        ...tab,
-        ...(props.color !== undefined ? { color: props.color } : {}),
-        ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
-        ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
-      }
+      // The snapshot title field is required, so clear+restores wait for the
+      // next projection to recompute the auto label; customTitle only exists
+      // on terminal entries.
+      return tab.type === 'terminal'
+        ? {
+            ...tab,
+            ...sharedProps,
+            ...(props.title !== undefined ? { customTitle: props.title } : {}),
+            ...(props.title ? { title: props.title } : {})
+          }
+        : { ...tab, ...sharedProps, ...(props.title ? { title: props.title } : {}) }
     })
     if (!changed) {
       return

@@ -136,7 +136,9 @@ export const SetTabProps = WorktreeTabSelector.extend({
   color: z.string().max(64).nullable().optional(),
   isPinned: z.boolean().optional(),
   // undefined = leave unchanged; no "clear" semantic (absence means default 'terminal').
-  viewMode: z.enum(['terminal', 'chat']).optional()
+  viewMode: z.enum(['terminal', 'chat']).optional(),
+  // undefined = leave unchanged; null = clear the manual rename back to the auto title.
+  title: z.string().max(200).nullable().optional()
 })
 
 export const CreateTerminalTab = WorktreeTabSelector.extend({
