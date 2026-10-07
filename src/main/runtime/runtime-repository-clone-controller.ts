@@ -21,6 +21,7 @@ import { getRepoName } from '../git/repo'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
+import { cloneRemoteRepo } from '../ipc/repos/remote-repo-clone'
 
 type RuntimeRepositoryCloneDependencies = {
   getStore: () => RuntimeStore | null
@@ -37,8 +38,16 @@ export class RuntimeRepositoryCloneController {
   async clone(
     url: string,
     destination: string | undefined,
-    executionHostId?: ExecutionHostId | null
+    executionHostId?: ExecutionHostId | null,
+    sshConnectionId?: string
   ): Promise<Repo> {
+    if (sshConnectionId) {
+      return await cloneRemoteRepo(this.requireStore(), null, {
+        connectionId: sshConnectionId,
+        url,
+        destination: destination ?? ''
+      })
+    }
     const store = this.deps.getStore()
     if (!store) {
       throw new Error('runtime_unavailable')
@@ -74,6 +83,14 @@ export class RuntimeRepositoryCloneController {
         this.inFlightByPath.delete(clonePathKey)
       }
     }
+  }
+
+  private requireStore(): RuntimeStore {
+    const store = this.deps.getStore()
+    if (!store) {
+      throw new Error('runtime_unavailable')
+    }
+    return store
   }
 
   // Why: mobile callers cannot type host paths; an absent destination resolves to

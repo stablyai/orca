@@ -1,7 +1,6 @@
-import { ipcMain } from 'electron'
-import type { SshConnectionManager } from '../ssh/ssh-connection-manager'
-import type { SshExecOptions } from '../ssh/ssh-connection-utils'
-import { powerShellCommand, powerShellLiteral } from '../ssh/ssh-remote-powershell'
+import type { SshConnectionManager } from './ssh-connection-manager'
+import type { SshExecOptions } from './ssh-connection-utils'
+import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 
@@ -10,7 +9,7 @@ export type RemoteDirEntry = {
   isDirectory: boolean
 }
 
-type RemoteBrowseResult = {
+export type RemoteBrowseResult = {
   entries: RemoteDirEntry[]
   resolvedPath: string
   pathFlavor: FilesystemPathFlavor
@@ -32,40 +31,24 @@ class RemoteBrowseError extends Error {
   }
 }
 
-// Why: relay fs.readDir needs workspace-root ACLs that don't exist until a repo is added, so browse over raw SSH exec.
-export function registerSshBrowseHandler(
-  getConnectionManager: () => SshConnectionManager | null
-): void {
-  ipcMain.removeHandler('ssh:browseDir')
-
-  ipcMain.handle(
-    'ssh:browseDir',
-    async (_event, args: { targetId: string; dirPath: string }): Promise<RemoteBrowseResult> => {
-      const mgr = getConnectionManager()
-      if (!mgr) {
-        throw new Error('SSH connection manager not initialized')
-      }
-      const conn = mgr.getConnection(args.targetId)
-      if (!conn) {
-        throw new Error(`SSH connection "${args.targetId}" not found`)
-      }
-
-      try {
-        return await browseWithPosixShell(conn, args.dirPath)
-      } catch (posixError) {
-        // Why: only a RemoteBrowseError (ran, non-zero exit) signals a Windows shell; don't retry transport errors/timeouts as Windows.
-        if (!(posixError instanceof RemoteBrowseError)) {
-          throw posixError
-        }
-        try {
-          return await browseWithWindowsPowerShell(conn, args.dirPath)
-        } catch (fallbackError) {
-          // Why: exit 127 (no powershell.exe) → host isn't Windows, surface the original POSIX failure; otherwise PowerShell's own error is the real cause.
-          throw isPosixCommandNotFound(fallbackError) ? posixError : fallbackError
-        }
-      }
+/** Raw SSH directory browse shared by IPC and headless runtime RPC callers. */
+export async function browseSshDirectory(
+  conn: SshBrowseConnection,
+  dirPath: string
+): Promise<RemoteBrowseResult> {
+  const requestedPath = dirPath.trim() || '~'
+  try {
+    return await browseWithPosixShell(conn, requestedPath)
+  } catch (posixError) {
+    if (!(posixError instanceof RemoteBrowseError)) {
+      throw posixError
     }
-  )
+    try {
+      return await browseWithWindowsPowerShell(conn, requestedPath)
+    } catch (fallbackError) {
+      throw isPosixCommandNotFound(fallbackError) ? posixError : fallbackError
+    }
+  }
 }
 
 type SshBrowseConnection = NonNullable<ReturnType<SshConnectionManager['getConnection']>>

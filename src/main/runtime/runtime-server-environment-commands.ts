@@ -6,6 +6,8 @@ import { sortDirEntries } from '../../shared/file-name-sort'
 import { probeGitAvailability } from '../git/git-availability'
 import { gitExecFileAsync } from '../git/runner'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
+import { getSshConnectionManager } from '../ssh/ssh-target-registry'
+import { browseSshDirectory } from '../ssh/ssh-directory-browse'
 
 function resolveServerBrowsePath(pathValue: string): string {
   const trimmed = pathValue.trim() || '~'
@@ -25,11 +27,23 @@ function resolveServerBrowsePath(pathValue: string): string {
 }
 
 export class RuntimeServerEnvironmentCommands {
-  async browseDirectory(pathValue: string): Promise<{
+  async browseDirectory(pathValue: string, sshConnectionId?: string): Promise<{
     resolvedPath: string
     entries: DirEntry[]
     pathFlavor: FilesystemPathFlavor
   }> {
+    if (sshConnectionId) {
+      const manager = getSshConnectionManager()
+      const connection = manager?.getConnection(sshConnectionId)
+      if (!connection) {
+        throw new Error('SSH connection not found or not connected')
+      }
+      const result = await browseSshDirectory(connection, pathValue.trim() || '~')
+      return {
+        ...result,
+        entries: result.entries.map((entry) => ({ ...entry, isSymlink: false }))
+      }
+    }
     if (isServerDriveListRequest(pathValue)) {
       return listWindowsDrives()
     }

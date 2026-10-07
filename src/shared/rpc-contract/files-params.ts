@@ -72,7 +72,8 @@ export const ServerDirectoryBrowse = z.object({
   path: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string())
+    .pipe(z.string()),
+  sshConnectionId: z.string().trim().min(1).optional()
 })
 
 export const FileReadChunk = FileOpen.extend({

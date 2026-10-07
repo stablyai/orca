@@ -141,7 +141,7 @@ export const FILE_METHODS = [
   defineMethod({
     name: 'files.browseServerDir',
     params: ServerDirectoryBrowse,
-    handler: async (params, { runtime }) => runtime.browseServerDir(params.path)
+    handler: async (params, { runtime }) => runtime.browseServerDir(params.path, params.sshConnectionId)
   }),
   ...FILE_MUTATION_METHODS,
   defineMethod({

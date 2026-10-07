@@ -6,18 +6,21 @@ import { RepoSelector } from './github-repo-target-params'
 export const RepoPath = z.object({
   path: requiredString('Missing repo path'),
   kind: z.enum(['git', 'folder']).optional(),
-  displayName: OptionalString
+  displayName: OptionalString,
+  sshConnectionId: OptionalString
 })
 
 export const RepoCreate = z.object({
   parentPath: OptionalString,
   name: requiredString('Missing repo name'),
-  kind: z.enum(['git', 'folder']).optional()
+  kind: z.enum(['git', 'folder']).optional(),
+  sshConnectionId: OptionalString
 })
 
 export const RepoClone = z.object({
   url: requiredString('Missing clone URL'),
-  destination: OptionalString
+  destination: OptionalString,
+  sshConnectionId: OptionalString
 })
 
 export const RepoSetBaseRef = z.object({

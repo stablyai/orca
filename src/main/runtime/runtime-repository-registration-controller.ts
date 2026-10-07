@@ -18,6 +18,8 @@ import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
 import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
+import { addRemoteRepoFromPath } from '../ipc/repos/remote-repo-registration'
+import { createRemoteRepo } from '../ipc/repos/remote-repo-creation'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -33,8 +35,22 @@ export class RuntimeRepositoryRegistrationController {
     path: string,
     kind: 'git' | 'folder' = 'git',
     executionHostId?: ExecutionHostId | null,
-    displayName?: string
+    displayName?: string,
+    sshConnectionId?: string
   ): Promise<Repo> {
+    if (sshConnectionId) {
+      const result = await addRemoteRepoFromPath(this.requireStore(), {
+        connectionId: sshConnectionId,
+        remotePath: path,
+        ...(displayName ? { displayName } : {}),
+        ...(kind ? { kind } : {})
+      })
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      this.invalidate(result.repo.id)
+      return result.repo
+    }
     const store = this.requireStore()
     if (!isAbsolute(path)) {
       throw new Error('Project path must be an absolute path')
@@ -91,8 +107,22 @@ export class RuntimeRepositoryRegistrationController {
   async create(
     parentPath: string | undefined,
     name: string,
-    kind: 'git' | 'folder' = 'git'
+    kind: 'git' | 'folder' = 'git',
+    sshConnectionId?: string
   ): Promise<{ repo: Repo } | { error: string }> {
+    if (sshConnectionId) {
+      const result = await createRemoteRepo(this.requireStore(), {
+        connectionId: sshConnectionId,
+        parentPath: parentPath ?? '',
+        name,
+        kind
+      })
+      if ('error' in result) {
+        return result
+      }
+      this.invalidate(result.repo.id)
+      return result
+    }
     const store = this.requireStore()
     const trimmedName = name.trim()
     const repoKind: 'git' | 'folder' = kind === 'folder' ? 'folder' : 'git'

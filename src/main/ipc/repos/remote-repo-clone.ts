@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { Store } from '../../persistence'
+import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import {
@@ -27,8 +27,8 @@ let activeRemoteClone: ActiveRemoteCloneMetadata | null = null
 const remoteCloneInFlightByPath = new Set<string>()
 
 export async function cloneRemoteRepo(
-  store: Store,
-  mainWindow: BrowserWindow,
+  store: RuntimeStore,
+  mainWindow: BrowserWindow | null,
   args: {
     connectionId: string
     url: string
@@ -91,7 +91,7 @@ export async function cloneRemoteRepo(
         signal: controller.signal,
         timeoutMs: 10 * 60_000,
         onProgress: (progress) => {
-          if (!mainWindow.isDestroyed()) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('repos:clone-progress', progress)
           }
         }
