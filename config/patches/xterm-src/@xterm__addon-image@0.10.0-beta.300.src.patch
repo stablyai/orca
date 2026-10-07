@@ -2684,10 +2684,10 @@ index 0000000000000000000000000000000000000000..77b3ef63e3238ecc86c12279edb86309
 +}
 diff --git a/src/ImageStorageCheckpointCapture.ts b/src/ImageStorageCheckpointCapture.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..28f1850b13e1b134fedb53276b64459861d9ed49
+index 0000000000000000000000000000000000000000..4abb68956b1b045af39bff6b5146996ac9c0260c
 --- /dev/null
 +++ b/src/ImageStorageCheckpointCapture.ts
-@@ -0,0 +1,114 @@
+@@ -0,0 +1,113 @@
 +/**
 + * Copyright (c) 2026 The xterm.js authors. All rights reserved.
 + * @license MIT
@@ -2703,7 +2703,7 @@ index 0000000000000000000000000000000000000000..28f1850b13e1b134fedb53276b644598
 +  type ICheckpointImage, type ICheckpointTileRun
 +} from './ImageStorageCheckpoint';
 +
-+function visitBufferTiles(buffer: IBuffer, bufferType: IImageSpec['bufferType'], images: ReadonlyMap<number, IImageSpec>, visit: (run: ICheckpointTileRun) => void): void {
++function visitBufferTiles(buffer: IBuffer, bufferType: IImageSpec['bufferType'], lastId: number, visit: (run: ICheckpointTileRun) => void): void {
 +  const cell = buffer.getNullCell();
 +  for (let row = 0; row < buffer.lines.length; ++row) {
 +    const line = buffer.lines.get(row);
@@ -2719,9 +2719,8 @@ index 0000000000000000000000000000000000000000..28f1850b13e1b134fedb53276b644598
 +          tileId = attrs.tileId;
 +        }
 +      }
-+      if (!images.has(imageId)) { imageId = -1; tileId = -1; }
 +      if (imageId !== -1 && tileId !== -1) {
-+        if (!Number.isSafeInteger(imageId) || imageId <= 0 || !Number.isSafeInteger(tileId) || tileId < 0) {
++        if (!Number.isSafeInteger(imageId) || imageId <= 0 || imageId > lastId || !Number.isSafeInteger(tileId) || tileId < 0) {
 +          throw new RangeError('Invalid image checkpoint tile');
 +        }
 +        if (run && run.imageId === imageId && run.tileId + run.count === tileId) {
@@ -2745,8 +2744,8 @@ index 0000000000000000000000000000000000000000..28f1850b13e1b134fedb53276b644598
 +  if (!Number.isSafeInteger(lastId) || lastId < 0 || images.size > 4096) throw new RangeError('Invalid image checkpoint IDs');
 +  const { normal, alt } = terminal._core.buffers;
 +  const visitTiles = (visit: (run: ICheckpointTileRun) => void): void => {
-+    visitBufferTiles(normal, 'normal', images, visit);
-+    visitBufferTiles(alt, 'alternate', images, visit);
++    visitBufferTiles(normal, 'normal', lastId, visit);
++    visitBufferTiles(alt, 'alternate', lastId, visit);
 +  };
 +  let byteLength = 0;
 +  for (const [id, spec] of images) {
@@ -2870,10 +2869,10 @@ index 0000000000000000000000000000000000000000..d13896efa1d824687ca26098f64938a5
 +}
 diff --git a/src/ImageStorageCheckpointValidation.ts b/src/ImageStorageCheckpointValidation.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..4f32a7601b95196d6ca46364e01fefac91657b2a
+index 0000000000000000000000000000000000000000..cadb16f8170f9039b3a893f8ee188121a0ef6944
 --- /dev/null
 +++ b/src/ImageStorageCheckpointValidation.ts
-@@ -0,0 +1,101 @@
+@@ -0,0 +1,103 @@
 +/**
 + * Copyright (c) 2026 The xterm.js authors. All rights reserved.
 + * @license MIT
@@ -2965,9 +2964,11 @@ index 0000000000000000000000000000000000000000..4f32a7601b95196d6ca46364e01fefac
 +    priorBuffer = bufferIndex; priorRow = run.row; priorEndCol = run.col + run.count;
 +    const image = images.get(run.imageId);
 +    const length = run.bufferType === 'normal' ? metadata.normalLength : metadata.alternateLength;
-+    if (!image || image.bufferType !== run.bufferType || !uint(run.tileId) || run.row >= length || run.col >= metadata.cols
++    if (!uint(run.imageId, 1) || run.imageId > metadata.lastId || !uint(run.tileId) || !uint(run.tileId + run.count)
++      || run.row >= length || run.col >= metadata.cols
 +      || run.count < 1 || run.col + run.count > metadata.cols
-+      || run.tileId + run.count > Math.ceil(image.width / image.origCellSize.width) * Math.ceil(image.height / image.origCellSize.height)) {
++      || (image && (image.bufferType !== run.bufferType
++        || run.tileId + run.count > Math.ceil(image.width / image.origCellSize.width) * Math.ceil(image.height / image.origCellSize.height)))) {
 +      throw new Error('Invalid decoded image tile reference');
 +    }
 +  });

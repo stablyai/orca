@@ -263,15 +263,17 @@ describe('decoded checkpoint admission before staging allocation', () => {
     }
   })
 
-  it('does not revive ignored tile attributes for an evicted image', async () => {
+  it('does not revive tile attributes hidden by a text overwrite after image eviction', async () => {
     const source = terminal(),
       target = terminal()
     let checkpoint
     try {
       write(source, `\x1b_Ga=T,f=32,s=2,v=2,i=7,q=2;${rgba.toString('base64')}\x1b\\`)
       source.storage.deleteImage(1)
+      write(source, '\x1b[Hreplacement')
       const before = source.core._core.buffers.normal.lines.get(0)._extendedAttrs[0]
       expect(before.imageId).toBe(1)
+      expect(source.core._core.buffers.normal.lines.get(0).getBg(0) & 0x10000000).toBe(0)
       checkpoint = source.storage.captureCheckpoint(1024)
       expect(checkpoint.getResourceByteLength(checkpoint.metadata.tilesResourceId)).toBe(0)
       await target.storage.restoreCheckpoint(checkpoint)
