@@ -132,6 +132,7 @@ export async function buildPtyIpcSpawnOptions(
     claudeAuth: ctx.claudeAuth,
     wslDistro: ctx.expectedWslDistro,
     connectionId: args.connectionId ?? null,
+    codexHome: ctx.selectedCodexHomePath,
     spawnOptions: ctx.spawnOptions
   })
   if (trustWrite) {

@@ -45,10 +45,7 @@ describe('ACP agents in the runtime registrations', () => {
       workspaceTrustSettings: unused
     }
     const resolve = (launchEnv: NodeJS.ProcessEnv) =>
-      resolveAccountHomePath(
-        { launchEnv, location: null, purpose: 'read', workspacePath: null },
-        services
-      )
+      resolveAccountHomePath({ launchEnv, location: null, purpose: 'read' }, services)
     await expect(resolve({ GROK_HOME: '/data/grok' })).resolves.toBe('/data/grok')
     await expect(resolve({ GROK_HOME: 'relative/grok' })).resolves.toMatch(/\.grok$/)
   })

@@ -24,6 +24,7 @@ function spawnArgs(overrides: Partial<Parameters<typeof applyAgentWorkspaceTrust
     claudeAuth: null,
     wslDistro: null,
     connectionId: null,
+    codexHome: '/orca/codex-home',
     spawnOptions: {},
     ...overrides
   }
@@ -72,7 +73,8 @@ describe('applyAgentWorkspaceTrustToSpawn', () => {
         env: { CLAUDE_CONFIG_DIR: '/cfg' },
         claudeAuth: null,
         wslDistro: null,
-        connectionId: null
+        connectionId: null,
+        codexHome: '/orca/codex-home'
       })
     })
 

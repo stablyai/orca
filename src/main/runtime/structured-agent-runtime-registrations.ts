@@ -64,8 +64,13 @@ export type StructuredAgentAccountHomeRequest = {
   location: AgentSessionExecutionLocation | null
   /** A `read` has no side effects: it syncs no home, starts no bridge, clears no selection. */
   purpose: 'launch' | 'read'
-  /** The launch's workspace directory on this host; a read has none. */
-  workspacePath: (() => Promise<string>) | null
+}
+
+/** A launch whose account home is final: the selected one, or the one a resume adopted. */
+export type StructuredAgentPinnedAccountHome = {
+  accountHomePath: string
+  /** The launch's workspace directory on this host. */
+  workspacePath: () => Promise<string>
 }
 
 /** What resolving an account may ask of the runtime around it. */
@@ -87,6 +92,11 @@ export type StructuredAgentRuntimeRegistration = {
     request: StructuredAgentAccountHomeRequest,
     services: StructuredAgentAccountHomeServices
   ) => Promise<string>
+  /** Runs once the account home a launch will run on is final; never for a read. */
+  afterAccountHomePinned?: (
+    launch: StructuredAgentPinnedAccountHome,
+    services: StructuredAgentAccountHomeServices
+  ) => Promise<void>
 }
 
 function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
@@ -195,14 +205,7 @@ async function resolveCodexAccountHomePath(
   request: StructuredAgentAccountHomeRequest,
   services: StructuredAgentAccountHomeServices
 ): Promise<string> {
-  const { launchEnv, purpose, workspacePath } = request
-  if (purpose === 'launch' && workspacePath) {
-    await applyStructuredCodexWorkspaceTrust({
-      workspacePath: await workspacePath(),
-      launchEnv,
-      settings: services.workspaceTrustSettings()
-    })
-  }
+  const { launchEnv, purpose } = request
   return resolveStructuredCodexAccountHomePath({
     launchEnv,
     resolveLaunchHome:
@@ -216,7 +219,14 @@ export const STRUCTURED_AGENT_RUNTIME_REGISTRATIONS: readonly StructuredAgentRun
       definition: CODEX_STRUCTURED_AGENT,
       createAdapter: createCodexAdapter,
       supportsLocation: (location) => supportsCodexStructuredLocation(location),
-      resolveAccountHomePath: resolveCodexAccountHomePath
+      resolveAccountHomePath: resolveCodexAccountHomePath,
+      // Why after pinning: trust goes into the home this chat's Codex runs on, which a resume repins.
+      afterAccountHomePinned: async ({ accountHomePath, workspacePath }, services) =>
+        applyStructuredCodexWorkspaceTrust({
+          workspacePath: await workspacePath(),
+          accountHomePath,
+          settings: services.workspaceTrustSettings()
+        })
     },
     {
       definition: CLAUDE_STRUCTURED_AGENT,

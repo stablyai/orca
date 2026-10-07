@@ -57,34 +57,47 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   protected structuredAgentAccountHomePathResolver(
     agent: StructuredAgentId,
     worktree: string,
-    purpose: 'launch' | 'read',
-    hostLaunchDirectory?: string
+    purpose: 'launch' | 'read'
   ) {
     const registration = structuredAgentRuntimeRegistration(agent)
     if (!registration) {
       return null
     }
-    const services = {
+    return async ({ launchEnv, location }) =>
+      registration.resolveAccountHomePath(
+        { launchEnv, location: location ?? null, purpose },
+        this.structuredAgentAccountHomeServices()
+      )
+  }
+
+  /** The registration's step for a launch whose account home is final; undefined when it has none. */
+  protected structuredAgentAccountHomePinnedHook(
+    agent: StructuredAgentId,
+    worktree: string,
+    hostLaunchDirectory?: string
+  ) {
+    const afterAccountHomePinned = structuredAgentRuntimeRegistration(agent)?.afterAccountHomePinned
+    if (!afterAccountHomePinned) {
+      return undefined
+    }
+    return (accountHomePath: string) =>
+      afterAccountHomePinned(
+        {
+          accountHomePath,
+          workspacePath: async () =>
+            hostLaunchDirectory ?? (await this.resolveRuntimeFileTarget(worktree)).worktree.path
+        },
+        this.structuredAgentAccountHomeServices()
+      )
+  }
+
+  protected structuredAgentAccountHomeServices() {
+    return {
       getClaudeConfigDirectory: (target) => this.accounts.getClaudeConfigDirectory(target),
       prepareCodexLaunchHome: this.prepareCodexStructuredLaunchFn,
       readCodexLaunchHome: this.resolveCodexStructuredLaunchHomeFn,
       workspaceTrustSettings: () => this.requireStore().getSettings()
     }
-    return async ({ launchEnv, location }) =>
-      registration.resolveAccountHomePath(
-        {
-          launchEnv,
-          location: location ?? null,
-          purpose,
-          workspacePath:
-            purpose === 'launch'
-              ? async () =>
-                  hostLaunchDirectory ??
-                  (await this.resolveRuntimeFileTarget(worktree)).worktree.path
-              : null
-        },
-        services
-      )
   }
 
   /** The definition this runtime registers for `agent`: what its account home pins. Read from the
@@ -163,15 +176,18 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     const resolveAccountHomePath = this.structuredAgentAccountHomePathResolver(
       input.agent,
       input.worktree,
-      'launch',
-      hostLaunchDirectory
+      'launch'
     )
     if (!resolveAccountHomePath) {
       throw agentSessionRefusalError('structured_agent_session_unsupported', {
         reason: 'hostUnsupported'
       })
     }
-    const resolved = await this.resolveStructuredAgentSessionIntent(input, resolveAccountHomePath)
+    const resolved = await this.resolveStructuredAgentSessionIntent(
+      input,
+      resolveAccountHomePath,
+      this.structuredAgentAccountHomePinnedHook(input.agent, input.worktree, hostLaunchDirectory)
+    )
     return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
   }
 
@@ -213,7 +229,9 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
         workspaceId: string
         workspaceKind: 'folder' | 'git-worktree'
       }
-    }) => string | Promise<string>
+    }) => string | Promise<string>,
+    /** Runs once the account home this chat will run on is final, before the intent returns. */
+    afterAccountHomePinned?: (accountHomePath: string) => Promise<void>
   ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
     // Adopting a conversation reads the agent's own transcript, which only Claude and Codex have
@@ -253,6 +271,8 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
           selectedAccountHomePath
         })
       : null
+    const accountHomePath = adoption ? adoption.accountHomePath : selectedAccountHomePath
+    await afterAccountHomePinned?.(accountHomePath)
     return {
       envelope: {
         sessionId: input.envelope.sessionId,
@@ -263,10 +283,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
       location,
       provider: input.agent,
       agent: input.agent,
-      accountHome: agentSessionAccountHome(
-        definition,
-        adoption ? adoption.accountHomePath : selectedAccountHomePath
-      ),
+      accountHome: agentSessionAccountHome(definition, accountHomePath),
       ...(options ? { options } : {}),
       ...(input.resumeFrom && adoption
         ? {

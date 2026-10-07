@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   copilot: vi.fn<(path: string, home: string) => void>(),
   antigravity: vi.fn<(path: string, home: string) => void>(),
   qoder: vi.fn<(path: string, home: string) => void>(),
-  codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
+  codexConfigFiles: vi.fn<(launchedConfigFile: string) => string[]>(() => CODEX_CONFIG_FILES),
   claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>()
 }))
 
@@ -52,7 +52,8 @@ const local: AgentTrustLaunchContext = {
   env: {},
   claudeAuth: null,
   wslDistro: null,
-  connectionId: null
+  connectionId: null,
+  codexHome: null
 }
 
 function pending(): { promise: Promise<void>; release: () => void } {
@@ -89,13 +90,31 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
 
   it('writes per-user trust under the home the launch env names, where the agent reads it', async () => {
     const context = { ...local, env: { HOME: '/home/agent', USERPROFILE: '/home/agent' } }
-    for (const preset of ['codex', 'cursor', 'copilot', 'qoder', 'antigravity'] as const) {
+    for (const preset of ['cursor', 'copilot', 'qoder', 'antigravity'] as const) {
       await applyAgentWorkspaceTrust(preset, WORKSPACE, context)
     }
-    expect(mocks.codexConfigFiles).toHaveBeenCalledWith('/home/agent')
     for (const writer of [mocks.cursor, mocks.copilot, mocks.qoder, mocks.antigravity]) {
       expect(writer).toHaveBeenCalledWith(WORKSPACE, '/home/agent')
     }
+  })
+
+  it.each([
+    // Why: an explicit CODEX_HOME wins over whatever HOME the launch env names.
+    ['the CODEX_HOME Orca gives the launch', '/orca/accounts/a/home', '/orca/accounts/a/home'],
+    ['.codex under the launch env home without one', null, join('/home/agent', '.codex')]
+  ])('writes Codex trust into %s', async (_label, codexHome, expectedHome) => {
+    const context = {
+      ...local,
+      env: { HOME: '/home/agent', USERPROFILE: '/home/agent' },
+      codexHome
+    }
+    await applyAgentWorkspaceTrust('codex', WORKSPACE, context)
+    expect(mocks.codexConfigFiles).toHaveBeenCalledWith(join(expectedHome, 'config.toml'))
+  })
+
+  it('falls back to the home folder when the launch env names no home', async () => {
+    await applyAgentWorkspaceTrust('codex', WORKSPACE, local)
+    expect(mocks.codexConfigFiles).toHaveBeenCalledWith(join(homedir(), '.codex', 'config.toml'))
   })
 
   it('contains a rejected or throwing write so the launch proceeds', async () => {

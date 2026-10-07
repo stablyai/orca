@@ -60,7 +60,8 @@ export function applyAgentWorkspaceTrustToSpawn(
     env: args.env,
     claudeAuth: args.claudeAuth,
     wslDistro: args.wslDistro,
-    connectionId: args.connectionId
+    connectionId: args.connectionId,
+    codexHome: args.codexHome
   }).then((fields) => {
     if (fields.agentWorkspaceTrust) {
       args.spawnOptions.agentWorkspaceTrust = fields.agentWorkspaceTrust
@@ -74,16 +75,18 @@ export function applyAgentWorkspaceTrustToSpawn(
  */
 export async function applyStructuredCodexWorkspaceTrust(args: {
   workspacePath: string
-  launchEnv: Record<string, string | undefined>
+  /** The account home the chat's Codex runs on as its CODEX_HOME. */
+  accountHomePath: string
   settings: AgentWorkspaceTrustSetting
 }): Promise<void> {
   if (!isAgentWorkspaceTrustOn(args.settings)) {
     return
   }
   await applyAgentWorkspaceTrust('codex', args.workspacePath, {
-    env: args.launchEnv,
+    env: undefined,
     claudeAuth: null,
     wslDistro: null,
-    connectionId: null
+    connectionId: null,
+    codexHome: args.accountHomePath
   })
 }

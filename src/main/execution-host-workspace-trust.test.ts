@@ -24,6 +24,7 @@ vi.mock('node:os', async (importOriginal) => {
 import {
   AGENT_TRUST_INHERITS_FROM_A_HOME,
   applyWorkspaceTrustOnThisHost,
+  launchedCodexConfigFile,
   type WorkspaceTrustHost
 } from './execution-host-workspace-trust'
 
@@ -197,5 +198,24 @@ describe('applyWorkspaceTrustOnThisHost', () => {
     ).resolves.toBeUndefined()
     expect(warn).toHaveBeenCalledTimes(2)
     warn.mockRestore()
+  })
+})
+
+describe('launchedCodexConfigFile', () => {
+  it("is the config.toml in the launch's CODEX_HOME", () => {
+    expect(launchedCodexConfigFile(join(root, 'account'), state.home)).toBe(
+      join(root, 'account', 'config.toml')
+    )
+  })
+
+  it.each([
+    ['unset', undefined],
+    ['null', null],
+    // Why: Codex treats an empty CODEX_HOME as unset.
+    ['empty', '']
+  ])('falls back to .codex under the home when CODEX_HOME is %s', (_label, codexHome) => {
+    expect(launchedCodexConfigFile(codexHome, state.home)).toBe(
+      join(state.home, '.codex', 'config.toml')
+    )
   })
 })

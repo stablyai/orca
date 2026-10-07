@@ -18,6 +18,7 @@ import {
   targetIsOwnedFallbackCopy
 } from './codex-managed-home-resource-copy-marker'
 import { observe, observeResolvedPathEntry } from './codex-path-observation'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
@@ -47,12 +48,16 @@ export function getOrcaManagedCodexHomePath(): string {
   return managedHomePath
 }
 
-/** Config files an Orca-launched local Codex reads trust from, in the hook installer's lock order. */
-export function getLocalCodexTrustConfigFiles(agentHome: string): string[] {
-  return [
-    join(getOrcaManagedCodexHomePath(), 'config.toml'),
-    join(agentHome, '.codex', 'config.toml')
-  ]
+/**
+ * Where a local Codex launch's trust goes, in the hook installer's lock order: Orca's shared
+ * mirror, then `launchedConfigFile`, the one config the launched Codex reads.
+ */
+export function getLocalCodexTrustConfigFiles(launchedConfigFile: string): string[] {
+  const mirrorConfigFile = join(getOrcaManagedCodexHomePath(), 'config.toml')
+  return normalizeRuntimePathForComparison(launchedConfigFile) ===
+    normalizeRuntimePathForComparison(mirrorConfigFile)
+    ? [mirrorConfigFile]
+    : [mirrorConfigFile, launchedConfigFile]
 }
 
 export function getCodexSessionBackfillStateDirPath(): string {

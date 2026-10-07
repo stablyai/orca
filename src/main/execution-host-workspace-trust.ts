@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { markQoderWorkspaceTrusted } from './qoder/workspace-trust'
 import {
   type AgentTrustPreset,
@@ -27,7 +27,7 @@ export type WorkspaceTrustHost = {
   agentHome: string
   /** The config Claude reads on this host, or null when this host cannot tell. */
   claudeConfig: () => ClaudeTrustConfigTarget | null
-  /** Every config.toml the launched Codex may read, in the hook installer's lock order. */
+  /** Every config.toml Codex trust is written to, in the hook installer's lock order. */
   codexConfigFiles: () => readonly string[]
   deadlineMs: number
 }
@@ -37,6 +37,14 @@ export function launchedAgentHome(
   launchEnv: Record<string, string | undefined> | undefined
 ): string {
   return (process.platform === 'win32' ? launchEnv?.USERPROFILE : launchEnv?.HOME) || homedir()
+}
+
+/** The config.toml a Codex launch reads: its CODEX_HOME, else `.codex` under the home it resolves `~` to. */
+export function launchedCodexConfigFile(
+  codexHome: string | null | undefined,
+  home: string
+): string {
+  return join(codexHome || join(home, '.codex'), 'config.toml')
 }
 
 /**

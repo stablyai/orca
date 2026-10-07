@@ -25,7 +25,8 @@ describe('applyAgentWorkspaceTrust when the breadth guard fails', () => {
         env: {},
         claudeAuth: null,
         wslDistro: null,
-        connectionId: null
+        connectionId: null,
+        codexHome: null
       })
     ).resolves.toEqual({})
     expect(mocks.copilot).not.toHaveBeenCalled()

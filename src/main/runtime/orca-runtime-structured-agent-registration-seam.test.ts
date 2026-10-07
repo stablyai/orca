@@ -71,7 +71,7 @@ describe('the structured agent registration list', () => {
       path: '/accounts/claude'
     })
     expect(claude.resolveAccountHomePath).toHaveBeenCalledWith(
-      expect.objectContaining({ purpose: 'read', location: null, workspacePath: null }),
+      expect.objectContaining({ purpose: 'read', location: null }),
       expect.anything()
     )
     expect(installHost).not.toHaveBeenCalled()

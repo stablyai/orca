@@ -269,7 +269,7 @@ describe('markCodexProjectTrusted', () => {
       const held = runExclusivelyForCodexTrustConfig(configPath, () => grantHoldingTheFile)
       const marked = markCodexProjectTrusted(
         workspace,
-        getLocalCodexTrustConfigFiles(testState.fakeHomeDir)
+        getLocalCodexTrustConfigFiles(join(testState.fakeHomeDir, '.codex', 'config.toml'))
       )
       await Promise.resolve()
       expect(existsSync(configPath)).toBe(false)
@@ -316,7 +316,10 @@ describe('markCodexProjectTrusted', () => {
     }
 
     async function expectWorkspaceTrusted(workspace: string): Promise<void> {
-      await markCodexProjectTrusted(workspace, getLocalCodexTrustConfigFiles(testState.fakeHomeDir))
+      await markCodexProjectTrusted(
+        workspace,
+        getLocalCodexTrustConfigFiles(join(testState.fakeHomeDir, '.codex', 'config.toml'))
+      )
       const runtimeHome = join(testState.userDataDir, 'codex-runtime-home', 'home')
       const [system, runtime] = [
         join(testState.fakeHomeDir, '.codex', 'config.toml'),
@@ -410,7 +413,10 @@ describe('markCodexProjectTrusted', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     try {
       const realpath = realpathSync.native(workspace)
-      await markCodexProjectTrusted(workspace, getLocalCodexTrustConfigFiles(testState.fakeHomeDir))
+      await markCodexProjectTrusted(
+        workspace,
+        getLocalCodexTrustConfigFiles(join(testState.fakeHomeDir, '.codex', 'config.toml'))
+      )
       const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
       const runtimeConfigPath = join(
         testState.userDataDir,
@@ -464,7 +470,10 @@ describe('markCodexProjectTrusted', () => {
         'utf-8'
       )
 
-      await markCodexProjectTrusted(workspace, getLocalCodexTrustConfigFiles(testState.fakeHomeDir))
+      await markCodexProjectTrusted(
+        workspace,
+        getLocalCodexTrustConfigFiles(join(testState.fakeHomeDir, '.codex', 'config.toml'))
+      )
 
       const written = readFileSync(join(codexDir, 'config.toml'), 'utf-8')
       const runtimeWritten = readFileSync(join(runtimeCodexDir, 'config.toml'), 'utf-8')

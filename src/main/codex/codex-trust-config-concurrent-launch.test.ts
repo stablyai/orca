@@ -211,7 +211,10 @@ describe('two Codex pane launches against one config.toml', () => {
       await tick()
       await tick()
       // Why: the grant holds no lane across its session, so a launch's write lands at once.
-      await markCodexProjectTrusted(workspace, getLocalCodexTrustConfigFiles(testState.fakeHomeDir))
+      await markCodexProjectTrusted(
+        workspace,
+        getLocalCodexTrustConfigFiles(join(testState.fakeHomeDir, '.codex', 'config.toml'))
+      )
       expect(readFileSync(tomlPath, 'utf-8')).toContain('trust_level = "trusted"')
 
       releaseSession()
@@ -399,7 +402,7 @@ describe('reentrancy under concurrency', () => {
         runExclusivelyForCodexTrustConfig(systemToml, async () => {
           await markCodexProjectTrusted(
             workspace,
-            getLocalCodexTrustConfigFiles(testState.fakeHomeDir)
+            getLocalCodexTrustConfigFiles(join(testState.fakeHomeDir, '.codex', 'config.toml'))
           )
           return grantManagedCodexHookTrust(buildPlan(entries))
         })

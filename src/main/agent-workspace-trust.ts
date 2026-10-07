@@ -8,7 +8,11 @@ import { resolveLocalClaudeTrustConfig } from './claude/claude-folder-trust-file
 import type { ClaudeRuntimeAuthPreparation } from './claude-accounts/runtime-auth/runtime-auth-types'
 import type { AgentWorkspaceTrustSpawnRequest } from '../shared/agent-workspace-trust-spawn-request'
 import { parseWslUncPath } from '../shared/wsl-paths'
-import { applyWorkspaceTrustOnThisHost, launchedAgentHome } from './execution-host-workspace-trust'
+import {
+  applyWorkspaceTrustOnThisHost,
+  launchedAgentHome,
+  launchedCodexConfigFile
+} from './execution-host-workspace-trust'
 import { getLocalCodexTrustConfigFiles } from './codex/codex-home-paths'
 import { getCachedWslHome } from './wsl-home-cache'
 
@@ -21,6 +25,8 @@ export type AgentTrustLaunchContext = {
   wslDistro: string | null
   /** SSH connection that runs the agent; null means this machine. */
   connectionId: string | null
+  /** The CODEX_HOME Orca gives this launch's Codex; null means Codex's default home. */
+  codexHome: string | null
 }
 
 /** Spawn fields the dispatcher asks the caller to forward to the process owner. */
@@ -74,7 +80,9 @@ export async function applyAgentWorkspaceTrust(
           claudeAuth: context.claudeAuth,
           wslDistro: context.wslDistro
         }),
-      codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome),
+      // Why agentHome: with no CODEX_HOME, Codex reads `.codex` under the home it resolves `~` to.
+      codexConfigFiles: () =>
+        getLocalCodexTrustConfigFiles(launchedCodexConfigFile(context.codexHome, agentHome)),
       // Why: Codex queues behind a config lane it shares with Orca's hook installs.
       deadlineMs:
         preset === 'codex' ? AGENT_TRUST_WRITE_DEADLINE_MS : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS

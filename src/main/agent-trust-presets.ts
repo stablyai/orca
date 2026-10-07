@@ -162,8 +162,8 @@ export function markAntigravityWorkspaceTrusted(workspacePath: string, home: str
  * Verified against codex-rs/tui/src/onboarding/trust_directory.rs and
  * codex-rs/core/src/config/config_tests.rs in the Codex CLI source.
  *
- * `configFiles` names every config.toml the launched Codex may read, in the
- * hook installer's lock order (an Orca-owned CODEX_HOME before the system one).
+ * `configFiles` is Orca's shared home config plus the one config.toml the launch
+ * reads, in the hook installer's lock order.
  */
 export function markCodexProjectTrusted(
   workspacePath: string,
