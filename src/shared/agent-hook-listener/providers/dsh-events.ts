@@ -55,6 +55,16 @@ export function normalizeDshEvent(
       stateName = isAskUserQuestionTool(toolName) ? 'waiting' : 'working'
       break
     case 'SessionStart':
+      // Compaction recreates an agent mid-turn; only idle sources may reset the pane.
+      if (
+        hookPayload.source !== 'startup' &&
+        hookPayload.source !== 'resume' &&
+        hookPayload.source !== 'clear'
+      ) {
+        return null
+      }
+      stateName = 'done'
+      break
     case 'Stop':
       stateName = 'done'
       break
@@ -79,6 +89,7 @@ export function normalizeDshEvent(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    sessionBoundary: eventName === 'SessionStart' ? true : undefined
   })
 }
