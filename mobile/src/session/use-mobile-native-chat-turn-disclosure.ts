@@ -89,6 +89,7 @@ export function useMobileNativeChatTurnDisclosure({
   thinking = false,
   activityText = null,
   lineYields = false,
+  toolsExpanded = false,
   scopeKey
 }: {
   messages: readonly NativeChatMessage[]
@@ -105,6 +106,8 @@ export function useMobileNativeChatTurnDisclosure({
   activityText?: string | null
   /** A prompt the reader must answer replaces the live activity line. */
   lineYields?: boolean
+  /** Show tool rows even when their surrounding turn is folded. */
+  toolsExpanded?: boolean
   /** Host/worktree/tab identity for timing and disclosure isolation. */
   scopeKey: string
 }): {
@@ -180,6 +183,7 @@ export function useMobileNativeChatTurnDisclosure({
       Object.entries(turnStatuses.completedByTurn)
         .filter(([, status]) => status.workedSeconds != null)
         .map(([turnKey]) => turnKey)
+        .filter((turnKey) => !(isWorking && turnKey === liveTurnKey))
     )
     const { foldedRows: folded } = nativeChatTurnFold({
       rows: foldRows,
@@ -187,6 +191,16 @@ export function useMobileNativeChatTurnDisclosure({
       expandedTurnKeys: expandedTurnIds
     })
     const foldedRows = new Set(folded)
+    if (toolsExpanded) {
+      for (const [index, message] of rows.entries()) {
+        if (
+          foldedRows.has(index) &&
+          message.blocks.some((block) => block.type === 'tool-call' || block.type === 'tool-result')
+        ) {
+          foldedRows.delete(index)
+        }
+      }
+    }
     const carrierRows = new Set<number>()
     // A provider-opened/history turn can have no user row in the loaded window. Keep a
     // first-row carrier for its settled status; settled tool content is hidden by the message
@@ -245,7 +259,17 @@ export function useMobileNativeChatTurnDisclosure({
       foldedRows,
       bars
     }
-  }, [enabled, rows, turnJournal, turnKeys, turnStatuses.completedByTurn, expandedTurnIds])
+  }, [
+    enabled,
+    isWorking,
+    liveTurnKey,
+    rows,
+    toolsExpanded,
+    turnJournal,
+    turnKeys,
+    turnStatuses.completedByTurn,
+    expandedTurnIds
+  ])
 
   const { active, activeTurnKey, completedByTurn } = turnStatuses
   const inLiveWorkingTurn = useCallback(

@@ -46,15 +46,19 @@ function Harness({
   messages,
   turnJournal,
   settledKey = 'u1',
+  settledKeys,
   isWorking = false,
   thinking = false,
+  toolsExpanded = false,
   scopeKey = 'host\0worktree\0tab-a'
 }: {
   messages: readonly NativeChatMessage[]
   turnJournal: NativeChatTurnJournal
   settledKey?: string
+  settledKeys?: string[]
   isWorking?: boolean
   thinking?: boolean
+  toolsExpanded?: boolean
   scopeKey?: string
 }): React.JSX.Element {
   const disclosure = useMobileNativeChatTurnDisclosure({
@@ -62,7 +66,10 @@ function Harness({
     enabled: true,
     isWorking,
     thinking,
-    settledTurns: new Map([[settledKey, { startedAt: 1, workedSeconds: 2 }]]),
+    toolsExpanded,
+    settledTurns: new Map(
+      (settledKeys ?? [settledKey]).map((key) => [key, { startedAt: 1, workedSeconds: 2 }])
+    ),
     turnJournal,
     scopeKey
   })
@@ -140,7 +147,13 @@ describe('useMobileNativeChatTurnDisclosure settled folding', () => {
     ])
     act(() => {
       renderer = create(
-        createElement(Harness, { messages, turnJournal, isWorking: true, thinking: true })
+        createElement(Harness, {
+          messages,
+          turnJournal,
+          settledKeys: ['u1', 't2'],
+          isWorking: true,
+          thinking: true
+        })
       )
     })
     let disclosure = renderer!.root.findByType(Host).props.disclosure
@@ -224,6 +237,13 @@ describe('useMobileNativeChatTurnDisclosure settled folding', () => {
     const disclosure = renderer!.root.findByType(Host).props.disclosure
     expect(disclosure.listMessages.map((item: NativeChatMessage) => item.id)).toEqual(['u1'])
     expect(disclosure.listMessages[0].blocks).toEqual(messages[0].blocks)
+
+    act(() => {
+      renderer!.update(createElement(Harness, { messages, turnJournal, toolsExpanded: true }))
+    })
+    expect(renderer!.root.findByType(Host).props.disclosure.listMessages.map(
+      (item: NativeChatMessage) => item.id
+    )).toEqual(['u1', 'tool'])
   })
 
   it('keeps a hidden carrier and caret for a settled history turn without its user row', () => {
