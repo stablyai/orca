@@ -107,6 +107,11 @@ text is tested on something no pane ever sees.
 whose readiness is read off the live screen gets its suite from
 `src/main/runtime/screen-ruled-agent-transcript-suite.ts`.
 
+The `*-ime-*.txt` captures (cursor-agent, Claude Code, Codex, Grok) are replayed into xterm
+itself by the terminal IME anchor tests, because that rule reads cell attributes and the cursor,
+not text. They were driven with `--send` (committed Hangul syllables, Latin, Backspace,
+Left/Right) and stopped with `--duration` before anything was submitted.
+
 ## Worked example: the Antigravity captures
 
 The six committed `antigravity-*.txt` fixtures were recorded this way on macOS against

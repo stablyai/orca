@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-26T14:57:08.086Z",
+  "platform": "darwin",
+  "command": ["grok"],
+  "cols": 100,
+  "rows": 30,
+  "note": "grok 1.0.41 stable, macOS; committed Korean syllables, Latin, Backspace, Left/Right; stopped before any submit",
+  "exitCode": 0
+}

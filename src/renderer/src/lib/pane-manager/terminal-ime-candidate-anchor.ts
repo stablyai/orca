@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { resolveCursorAgentImeAnchor, type TerminalImeAnchor } from './terminal-ime-anchor'
+import { resolveAppDrawnImeCaret, type TerminalImeAnchor } from './terminal-ime-anchor'
 
 type ImeAnchorCellMetrics = {
   cellWidth: number
@@ -43,7 +43,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
   const textarea = terminal.textarea
   let metrics: ImeAnchorCellMetrics | null = null
   let deferredApply: number | null = null
-  let cursorAgentSeen = false
+  let lastCaret: TerminalImeAnchor | null = null
 
   const measureCells = (): ImeAnchorCellMetrics | null => {
     if (!screenElement) {
@@ -91,13 +91,13 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     row: number,
     column: number,
     cells: ImeAnchorCellMetrics,
-    isCursorAgent: boolean
+    isRelocated: boolean
   ): void => {
     const top = `${row * cells.cellHeight}px`
     const left = `${column * cells.cellWidth}px`
     writeStyle(textarea, 'top', top)
     writeStyle(textarea, 'left', `${anchorLeft(column, cells)}px`)
-    if (isCursorAgent && compositionView) {
+    if (isRelocated && compositionView) {
       const height = `${cells.cellHeight}px`
       writeStyle(compositionView, 'top', top)
       writeStyle(compositionView, 'left', left)
@@ -106,25 +106,26 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
   }
 
-  const resolveAnchor = (): { anchor: TerminalImeAnchor; isCursorAgent: boolean } => {
+  const resolveAnchor = (event?: Event): { anchor: TerminalImeAnchor; isRelocated: boolean } => {
     const buf = terminal.buffer.active
-    // Why: Cursor Agent draws its prompt UI while leaving xterm's public cursor
-    // on a blank row, so the OS IME anchor needs the rendered prompt row instead.
-    const cursorAgentAnchor = resolveCursorAgentImeAnchor({
+    const cursorVisible = terminal.modes.showCursor
+    // Why: an app that hides the cursor draws its own caret and parks the real one elsewhere.
+    const caret = resolveAppDrawnImeCaret({
       buffer: buf,
       rows: terminal.rows,
       cols: terminal.cols,
-      cursorX: buf.cursorX,
-      cursorY: buf.cursorY,
-      knownCursorAgent: cursorAgentSeen
+      cursorVisible
     })
-    cursorAgentSeen ||= cursorAgentAnchor !== null
+    // Why: a repaint split across writes can leave no caret on screen for a moment; within one
+    // composition the last one found is still where the app takes input.
+    const carry = !cursorVisible && event?.type !== 'compositionstart' ? lastCaret : null
+    lastCaret = caret ?? carry
     return {
-      anchor: cursorAgentAnchor ?? {
+      anchor: lastCaret ?? {
         row: buf.cursorY,
         column: Math.min(buf.cursorX, terminal.cols - 1)
       },
-      isCursorAgent: cursorAgentAnchor !== null
+      isRelocated: lastCaret !== null
     }
   }
 
@@ -143,12 +144,12 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     if (!cells) {
       return
     }
-    const { anchor, isCursorAgent } = resolveAnchor()
-    applyAnchor(anchor.row, anchor.column, cells, isCursorAgent)
+    const { anchor, isRelocated } = resolveAnchor(event)
+    applyAnchor(anchor.row, anchor.column, cells, isRelocated)
     // Why: xterm re-positions the textarea from a setTimeout(0) of its own after
     // each compositionupdate, so the correction has to land after that timer —
     // one pending timer per burst, re-reading the anchor when it fires.
-    if (!isCursorAgent) {
+    if (!isRelocated) {
       if (deferredApply !== null) {
         window.clearTimeout(deferredApply)
         deferredApply = null
@@ -169,7 +170,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       }
       if (metrics) {
         const current = resolveAnchor()
-        applyAnchor(current.anchor.row, current.anchor.column, metrics, current.isCursorAgent)
+        applyAnchor(current.anchor.row, current.anchor.column, metrics, current.isRelocated)
       }
     }, 0)
   }

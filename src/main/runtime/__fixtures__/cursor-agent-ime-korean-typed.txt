@@ -1,0 +1,69 @@
+[>1u]11;?[2K[G
+
+  Cursor Agent
+  [2mv2026.09.26-dd393fe[22m
+  [2mTip: Try Cursor Grok 4.6 via /model, frontier intelligence at a fraction of the cost.[22m
+
+
+
+ [48;5;233m                                                                                                  [49m
+ [48;5;233m [2m→ [22m[7mP[27m[2mlan, search, build anything[22m                                                                   [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[?25l[?2004h]0;Cursor Agent[?2031h[?1004h[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G [48;5;233m → 안[7m [27m                                                                                            [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G [48;5;233m → 안녕 [7m [27m                                                                                         [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G [48;5;233m → 안녕 하[7m [27m                                                                                       [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G [48;5;233m → 안녕 하세[7m [27m                                                                                     [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G [48;5;233m → 안녕 하세요[7m [27m                                                                                   [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G [48;5;233m → 안녕 하세요abc[7m [27m                                                                                [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G [48;5;233m → 안녕 하세요ab[7m [27m                                                                                 [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G [48;5;233m → 안녕 하세요a[7mb[27m                                                                                  [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G [48;5;233m → 안녕 하세요[7ma[27mb                                                                                  [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G [48;5;233m → 안녕 하세요a[7mb[27m                                                                                  [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G [48;5;233m → 안녕 하세요a한[7mb[27m                                                                                [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
