@@ -15,8 +15,8 @@ describe('file RPC SSH browse methods', () => {
       getRuntimeId: () => 'test-runtime',
       browseServerDir: vi.fn().mockResolvedValue({ resolvedPath: '/srv', entries: [] })
     } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'browseServerDir'>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements only the methods exercised by files.browseServerDir.
     const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements only the methods exercised by files.browseServerDir.
       runtime: runtime as OrcaRuntimeService,
       methods: FILE_METHODS
     })

@@ -18,8 +18,8 @@ describe('repo RPC SSH routing', () => {
       createRepo: vi.fn().mockResolvedValue({ repo }),
       cloneRepo: vi.fn().mockResolvedValue(repo)
     } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'addRepo' | 'createRepo' | 'cloneRepo'>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements only the repository methods exercised below.
     const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements only the repository methods exercised below.
       runtime: runtime as OrcaRuntimeService,
       methods: REPO_METHODS
     })
