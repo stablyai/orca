@@ -22,7 +22,9 @@ import {
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { DefaultProjectIconSetting } from './DefaultProjectIconSetting'
 import {
+  getDefaultProjectIconEntry,
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
   getWorkspaceCardLayoutEntry
@@ -77,6 +79,7 @@ export function AppearanceWindowSidebarSection({
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
+  const defaultProjectIconEntry = getDefaultProjectIconEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
@@ -125,6 +128,16 @@ export function AppearanceWindowSidebarSection({
           forceVisible={forceVisiblePrimary}
         >
           <LeftSidebarAppearanceSetting settings={settings} updateSettings={updateSettings} />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={defaultProjectIconEntry.title}
+          description={defaultProjectIconEntry.description}
+          keywords={defaultProjectIconEntry.keywords}
+          className="space-y-2"
+          forceVisible={forceVisiblePrimary}
+        >
+          <DefaultProjectIconSetting settings={settings} updateSettings={updateSettings} />
         </SearchableSetting>
 
         <SearchableSetting

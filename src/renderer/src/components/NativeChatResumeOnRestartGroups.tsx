@@ -1,5 +1,5 @@
 import { Folder, FolderTree, GitBranch } from 'lucide-react'
-import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { ProjectIconGlyph } from '@/components/repo/project-icon-glyph'
 import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostContextBadge'
 import { getHostContextLabel } from '../../../shared/worktree/host-context-labels'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
@@ -22,7 +22,7 @@ export type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
 /**
  * The offered chats in the sidebar's three tiers: repo/project, then workspace, then agent sessions.
  *
- * Reused from the sidebar rather than rebuilt: `RepoIconGlyph` for a repo's own glyph, `FolderTree`
+ * Reused from the sidebar rather than rebuilt: `ProjectIconGlyph` for a repo's own glyph, `FolderTree`
  * from the sidebar's `PROJECT_GROUP_META` for a project group, and `WorktreeHostContextBadge` —
  * extracted from the sidebar card's meta row so both surfaces render one chip. The label inside it
  * comes from `getHostContextLabel`, which is the sidebar's own source for "Local Mac".
@@ -106,7 +106,11 @@ function RepoHeader({ repoId }: { repoId: string | null }): React.JSX.Element {
       {header.kind === 'project' ? (
         <FolderTree className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       ) : (
-        <RepoIconGlyph repoIcon={header.repoIcon} className="size-3.5" iconClassName="size-3.5" />
+        <ProjectIconGlyph
+          repoIcon={header.repoIcon}
+          className="size-3.5"
+          iconClassName="size-3.5"
+        />
       )}
       <span className="min-w-0 flex-1 truncate text-xs font-semibold">{header.name}</span>
     </div>
