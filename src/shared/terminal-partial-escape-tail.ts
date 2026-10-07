@@ -146,6 +146,10 @@ export function extractPartialEscapeTail(stream: string): string {
         break
     }
   }
+  // ESC already ends a string in xterm; replay only its pending escape state.
+  if (state === 'oscEsc' || state === 'stringEsc') {
+    return '\x1b'
+  }
   return state === 'ground' ? '' : stream.slice(start)
 }
 

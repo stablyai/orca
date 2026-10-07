@@ -24,18 +24,18 @@ describe('partial escape scanning between sequences', () => {
   })
 
   it.each([
-    ['\x1b[38;5;', '196m'],
-    ['\x1b]2;building', '\x07'],
-    ['\x1b]2;building\x1b', '\\'],
-    ['\x1bPqpayload', '\x1b\\'],
-    ['\x1bPqpayload\x1b', '\\'],
-    ['\x1b(', 'B']
-  ])('preserves %j through every split after ordinary text', (pending, completion) => {
+    ['\x1b[38;5;', '196m', '\x1b[38;5;'],
+    ['\x1b]2;building', '\x07', '\x1b]2;building'],
+    ['\x1b]2;building\x1b', '\\', '\x1b'],
+    ['\x1bPqpayload', '\x1b\\', '\x1bPqpayload'],
+    ['\x1bPqpayload\x1b', '\\', '\x1b'],
+    ['\x1b(', 'B', '\x1b(']
+  ])('preserves %j through every split after ordinary text', (pending, completion, expected) => {
     const prefix = `\x1b[32m${'build output '.repeat(128)}\x1b[0m`
     for (let split = 0; split <= pending.length; split += 1) {
       const first = advancePartialEscapeTail('', prefix + pending.slice(0, split))
       const continued = advancePartialEscapeTail(first, pending.slice(split))
-      expect(continued).toBe(pending)
+      expect(continued).toBe(expected)
       expect(advancePartialEscapeTail(continued, `${completion}ready`)).toBe('')
     }
   })

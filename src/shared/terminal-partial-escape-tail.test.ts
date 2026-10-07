@@ -28,6 +28,15 @@ describe('extractPartialEscapeTail', () => {
     expect(extractPartialEscapeTail('\x1b]0;title\x1b\\after')).toBe('')
   })
 
+  it.each(['\x1b]0;title', '\x1b_Ga=q;', '\x1bPq', '\x1bX', '\x1b^'])(
+    'keeps only the pending ESC after a string has ended: %j',
+    (prefix) => {
+      expect(extractPartialEscapeTail(`${prefix}\x1b`)).toBe('\x1b')
+      expect(extractPartialEscapeTail(`${prefix}\x1b\\`)).toBe('')
+      expect(extractPartialEscapeTail(`${prefix}\x1b[3`)).toBe('\x1b[3')
+    }
+  )
+
   it('treats a fresh ESC as aborting a pending CSI', () => {
     // The second ESC starts a new (complete) sequence.
     expect(extractPartialEscapeTail('\x1b[3\x1b[0m')).toBe('')
@@ -108,6 +117,17 @@ describe('advancePartialEscapeTail', () => {
     const huge = `\x1b]0;${'x'.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH + 10)}`
     expect(advancePartialEscapeTail('', huge)).toBe('')
   })
+
+  it.each(['\x1b]1337;File=', '\x1b_G', '\x1bPq'])(
+    'keeps the pending ESC after a large completed string: %j',
+    (prefix) => {
+      const huge = `${prefix}${'x'.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH + 10)}`
+      expect(advancePartialEscapeTail('', `${huge}\x1b`)).toBe('\x1b')
+      expect(advancePartialEscapeTail('', huge)).toBe('')
+      expect(advancePartialEscapeTail(advancePartialEscapeTail('', huge), '\x1b')).toBe('\x1b')
+      expect(advancePartialEscapeTail('\x1b', '\\AFTER')).toBe('')
+    }
+  )
 })
 
 describe('advancePartialEscapeTail ESC-free fast path', () => {
