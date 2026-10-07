@@ -25,11 +25,7 @@ import {
   searchRuntimeFilePaths
 } from '@/runtime/runtime-file-client'
 import { debounceRuntimeFileRequest } from '@/runtime/runtime-file-request-debounce'
-import { splitFileNameFilterTokens } from '../../../shared/file-name-filter-tokens'
-import {
-  nextCappedLocalListing,
-  type CappedLocalListing
-} from '@/components/quick-open-capped-local-listing'
+import { useCappedLocalListing } from '@/components/quick-open-capped-local-listing'
 import { useAppStore } from '@/store'
 import { useWorktreesForRepo } from '@/store/selectors'
 import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
@@ -68,6 +64,7 @@ export function useRuntimeFileListForWorktree({
   worktreeId,
   query,
   hostFilterWhenCapped = false,
+  keepCappedListing = false,
   recentPaths
 }: {
   enabled: boolean
@@ -76,6 +73,8 @@ export function useRuntimeFileListForWorktree({
   recentPaths?: readonly string[]
   /** When a local listing hits its cap, re-list with `query` applied as the Explorer name filter on the host. */
   hostFilterWhenCapped?: boolean
+  /** With `hostFilterWhenCapped`, merge host matches into the capped listing instead of replacing it. */
+  keepCappedListing?: boolean
 }): RuntimeFileListState {
   const worktree = useAppStore((state) =>
     // Why: folder workspaces live behind getKnownWorktreeById, not worktreesByRepo.
@@ -86,7 +85,6 @@ export function useRuntimeFileListForWorktree({
   const [listing, setListing] = useState(NO_LISTING)
   const [loadingRequest, setLoadingRequest] = useState({ requestKey: '', loading: false })
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [cappedLocalListing, setCappedLocalListing] = useState<CappedLocalListing | null>(null)
   const [listedOperationOwner, setListedOperationOwner] = useState<FileExplorerOperationOwner>({
     kind: 'unresolved'
   })
@@ -134,15 +132,12 @@ export function useRuntimeFileListForWorktree({
   const followSymlinks = useAppStore((state) => state.settings?.followSymlinkedDirectories ?? false)
   const recentKey = JSON.stringify(recentPaths ?? [])
   const listingKey = `${worktreePath ?? ''}\n${operationOwnerKey}\n${excludeRequest.key}\n${includeIgnored}\n${followSymlinks}\n${activeTargetStatus ?? ''}`
-  // Why: a capped listing can omit matches, so only then pay for a host scan per query.
-  const hostNameFilter =
-    hostFilterWhenCapped &&
-    runtimeEnvironmentId === null &&
-    connectionId === undefined &&
-    cappedLocalListing?.key === listingKey &&
-    !cappedLocalListing.hostFilterFailed
-      ? splitFileNameFilterTokens(query ?? '').join(' ')
-      : ''
+  const { hostNameFilter, actions: cappedListing } = useCappedLocalListing({
+    listingKey,
+    eligible: hostFilterWhenCapped && runtimeEnvironmentId === null && connectionId === undefined,
+    query,
+    keepCappedFiles: keepCappedListing
+  })
   const eligibilityKey = `${listingKey}\n${recentKey}`
   const eligibleRecentCache = useQuickOpenRecentCache(enabled, eligibilityKey)
   const requestKey = `${listingKey}\n${recentKey}${usesRuntimePathSearch ? `\n${remoteQuery}` : ''}${hostNameFilter ? `\nname-filter\n${hostNameFilter}` : ''}`
@@ -160,7 +155,7 @@ export function useRuntimeFileListForWorktree({
 
   useEffect(() => {
     if (!enabled) {
-      setCappedLocalListing(null)
+      cappedListing.reset()
       setLoadingRequest({ requestKey, loading: false })
       setListedOperationOwner({ kind: 'unresolved' })
       return
@@ -231,7 +226,9 @@ export function useRuntimeFileListForWorktree({
           )
         : hostNameFilter
           ? debounceRuntimeFileRequest(120, requestAbortController.signal, () =>
-              listFiles(hostNameFilter)
+              listFiles(hostNameFilter).then((filtered) =>
+                cappedListing.mergeInto(filtered, listingKey)
+              )
             )
           : listFiles()
 
@@ -249,9 +246,7 @@ export function useRuntimeFileListForWorktree({
         publish(result)
         setLoadingRequest({ requestKey, loading: false })
         if (!usesRuntimePathSearch && !hostNameFilter) {
-          setCappedLocalListing((current) =>
-            nextCappedLocalListing(current, listingKey, result.truncated)
-          )
+          cappedListing.record(listingKey, result.files, result.truncated)
         }
         return mergeQuickOpenRecentCandidates({
           result,
@@ -282,8 +277,7 @@ export function useRuntimeFileListForWorktree({
           setLoadingRequest({ requestKey, loading: false })
         }
         if (!cancelled && hostNameFilter) {
-          // Why: a failed host scan falls back to filtering the capped listing, not an error.
-          setCappedLocalListing((current) => current && { ...current, hostFilterFailed: true })
+          cappedListing.markHostFilterFailed()
         } else if (!cancelled) {
           setListing(NO_LISTING)
           setLoadError(cleanRuntimeFileListError(error))
@@ -313,6 +307,7 @@ export function useRuntimeFileListForWorktree({
     operationRouteAvailable,
     requestKey,
     hostNameFilter,
+    cappedListing,
     listingKey,
     runtimeEnvironmentId,
     target.canList,

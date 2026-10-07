@@ -73,7 +73,10 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
     enabled: visible && !absoluteQuery,
     worktreeId: activeWorktreeId,
     query: parsedTarget.pathQuery,
-    recentPaths: history
+    recentPaths: history,
+    // #26142: a capped listing can omit an exact match, so search the host for it too.
+    hostFilterWhenCapped: true,
+    keepCappedListing: true
   })
 
   // Why: Radix's onCloseAutoFocus restore is suppressed below, so dismissing
