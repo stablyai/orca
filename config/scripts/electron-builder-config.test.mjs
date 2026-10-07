@@ -582,7 +582,11 @@ describe('arch-aware packaging guard', () => {
   })
 
   const packHost = (arch) =>
-    electronBuilderConfig.beforePack({ electronPlatformName: process.platform, arch }, bundleDir)
+    electronBuilderConfig.beforePack(
+      { electronPlatformName: process.platform, arch },
+      bundleDir,
+      () => undefined
+    )
 
   it('allows packaging the host platform and architecture', () => {
     expect(() => packHost(HOST_ARCH)).not.toThrow()

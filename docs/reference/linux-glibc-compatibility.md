@@ -14,6 +14,10 @@ Fedora/RHEL, or `rpm` through Homebrew on macOS, then verify it with
 `rpmbuild --version` before packaging. Cross-host builds have the same
 requirement.
 
+The bundled [Wayland clipboard helper](../../native/wayland-clipboard/README.md)
+also requires Docker for its first build. Packaging builds the target slice in
+Ubuntu 20.04 and reuses it while the source/toolchain fingerprint matches.
+
 ## Why this needs attention
 
 A native module (`.node`) links against the glibc of the machine that compiled

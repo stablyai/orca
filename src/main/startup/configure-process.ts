@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { isLinuxWaylandSession } from '../../shared/linux-wayland-session'
 import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -324,17 +325,12 @@ export function enableMainProcessGpuFeatures(): void {
   app.commandLine.appendSwitch('max-active-webgl-contexts', '128')
 
   const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
-  const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
-  const isLinuxX11Override =
-    ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
-  const isLinuxWaylandSession =
-    process.platform === 'linux' &&
-    !isLinuxX11Override &&
-    (Boolean(process.env.WAYLAND_DISPLAY) ||
-      process.env.XDG_SESSION_TYPE === 'wayland' ||
-      ozonePlatformHint === 'wayland' ||
-      ozonePlatform === 'wayland')
-  if (isLinuxWaylandSession) {
+  const waylandSession = isLinuxWaylandSession({
+    platform: process.platform,
+    env: process.env,
+    ozonePlatform
+  })
+  if (waylandSession) {
     // Why: #5319 — Wayland loses the eager GPU channel; drop the GPU sandbox so Chromium opens it lazily.
     app.commandLine.appendSwitch('disable-gpu-sandbox')
   }
@@ -342,7 +338,7 @@ export function enableMainProcessGpuFeatures(): void {
   const existingFeatures = app.commandLine.getSwitchValue('enable-features')
   const features = [
     // Why: mirror VS Code's conservative GPU-channel flags instead of global Vulkan/SkiaGraphite/WebGPU; terminal accel is xterm WebGL.
-    ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
+    ...(waylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
     existingFeatures
   ]
     .filter(Boolean)

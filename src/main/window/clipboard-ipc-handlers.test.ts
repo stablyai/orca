@@ -99,6 +99,7 @@ vi.mock('node:crypto', () => ({
 
 vi.mock('electron', () => ({
   app: {
+    commandLine: { getSwitchValue: vi.fn(() => 'x11') },
     getPath: vi.fn(() => '/tmp')
   },
   clipboard: {

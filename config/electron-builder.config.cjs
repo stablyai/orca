@@ -13,6 +13,10 @@ const {
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
+const {
+  ensureBundledWaylandClipboard,
+  finalizePackagedWaylandClipboard
+} = require('./wayland-clipboard-resources.cjs')
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
 const {
   MOBILE_WEB_BUNDLE_DIR,
@@ -332,13 +336,20 @@ module.exports = {
   },
   // electron-builder calls this with the context alone. The second parameter is the bundle root,
   // so a test can point the guard at a scratch bundle instead of needing the repo's out/ built.
-  beforePack: (context, mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR) => {
+  beforePack: (
+    context,
+    mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
+    prepareWaylandClipboard = ensureBundledWaylandClipboard
+  ) => {
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
     assertOrcadTemplateBuilt()
     assertMobileWebBundleBuilt(mobileWebBundleDir)
+    if (context.electronPlatformName === 'linux') {
+      prepareWaylandClipboard(context.arch)
+    }
   },
-  afterPack: async (context) => {
+  afterPack: async (context, finalizeClipboard = finalizePackagedWaylandClipboard) => {
     const resourcesDir =
       context.electronPlatformName === 'darwin'
         ? join(
@@ -383,6 +394,7 @@ module.exports = {
     // so an arm64 slice can still carry the x64 @parcel/watcher until
     // prunePackagedRuntimeNodeModules drops it.
     if (context.electronPlatformName === 'linux') {
+      finalizeClipboard(resourcesDir)
       // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
       // so a cross-built slice could ship the host's pty.node and only fail at runtime.
       verifyLinuxGlibcFloor(context.appOutDir, {
@@ -642,6 +654,10 @@ module.exports = {
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('linux'),
       linuxSpeechNativeResource,
+      {
+        from: 'native/wayland-clipboard/.build/${arch}/orca-wayland-clipboard',
+        to: 'bin/orca-wayland-clipboard'
+      },
       {
         from: 'resources/linux/bin/orca-ide',
         to: 'bin/orca-ide'

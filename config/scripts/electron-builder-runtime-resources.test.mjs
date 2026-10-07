@@ -449,12 +449,15 @@ describe('packaged runtime resources', () => {
         process.env.PATH = `${stubBinDir}${delimiter}${previousPath ?? ''}`
 
         await expect(
-          electronBuilderConfig.afterPack({
-            appOutDir,
-            electronPlatformName: 'linux',
-            arch: target.electronArch,
-            packager: { appInfo: { version: '9.9.9' } }
-          })
+          electronBuilderConfig.afterPack(
+            {
+              appOutDir,
+              electronPlatformName: 'linux',
+              arch: target.electronArch,
+              packager: { appInfo: { version: '9.9.9' } }
+            },
+            () => undefined
+          )
         ).resolves.toBeUndefined()
         await expect(stat(wrongArchPackage)).rejects.toMatchObject({ code: 'ENOENT' })
       } finally {
@@ -508,12 +511,15 @@ describe('packaged runtime resources', () => {
         )
         await writeFile(launcherPath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o644 })
 
-        await electronBuilderConfig.afterPack({
-          appOutDir: join(root, 'linux-unpacked'),
-          electronPlatformName: 'linux',
-          arch: 1,
-          packager: { appInfo: { version: '9.9.9' } }
-        })
+        await electronBuilderConfig.afterPack(
+          {
+            appOutDir: join(root, 'linux-unpacked'),
+            electronPlatformName: 'linux',
+            arch: 1,
+            packager: { appInfo: { version: '9.9.9' } }
+          },
+          () => undefined
+        )
 
         expect((await stat(launcherPath)).mode & 0o111).not.toBe(0)
         await expect(

@@ -8,6 +8,11 @@ if (process.platform === 'win32') {
   process.exit(0)
 }
 
+if (process.platform === 'linux') {
+  runNodeScript('config/scripts/build-wayland-clipboard.mjs')
+  process.exit(0)
+}
+
 if (process.platform !== 'darwin') {
   console.log(`[native-build] no macOS native computer build required on ${process.platform}`)
   process.exit(0)
