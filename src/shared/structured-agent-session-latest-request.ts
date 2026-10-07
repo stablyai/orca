@@ -39,6 +39,19 @@ export type StructuredAgentSessionLatestRequest = {
   settledAt: number | undefined
 }
 
+/** A root row that is no request of its own: a conversation command or a row its turn produced, or
+ *  a send its handover placed inside a running turn (a steer), which that turn answers for. */
+export function isStructuredAgentSessionNonRequestRow(
+  item: Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'turnScope'>,
+  commandTurnItemIds: ReadonlySet<string>
+): boolean {
+  return (
+    commandTurnItemIds.has(item.itemId) ||
+    isStructuredAgentSessionCommandRow(item, commandTurnItemIds) ||
+    (item.body.kind === 'message' && item.body.role === 'user' && item.turnScope?.kind === 'turn')
+  )
+}
+
 /** Null when the journal holds no request with a verdict to give. Accepted and unanswered sends
  *  are passed over — the session is working until their turn records — and so are sends that
  *  failed nobody (withdrawn, or left undelivered by a restart or a close). */
@@ -54,8 +67,7 @@ export function latestStructuredAgentSessionRequest(
     if (
       !item ||
       !isRootAgentJournalItem(item) ||
-      commandTurns.has(item.itemId) ||
-      isStructuredAgentSessionCommandEntry(item.body)
+      isStructuredAgentSessionNonRequestRow(item, commandTurns)
     ) {
       continue
     }
@@ -70,12 +82,7 @@ export function latestStructuredAgentSessionRequest(
       }
     }
     const submission = rejected.get(item.itemId)
-    if (
-      submission &&
-      classifyDispatchRejection(submission).verdict === 'failure' &&
-      // Handed into a running turn (a steer): that turn answers for it.
-      item.turnScope?.kind !== 'turn'
-    ) {
+    if (submission && classifyDispatchRejection(submission).verdict === 'failure') {
       return {
         kind: 'refused-send',
         id: item.itemId,

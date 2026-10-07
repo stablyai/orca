@@ -1,4 +1,5 @@
 import { CLAUDE_AUTH_ENV_VARS, applyClaudeEnvPatch } from '../claude-accounts/environment'
+import { NATIVE_CHAT_VISUALS_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
 
 const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
   'CLAUDE_CODE_CHILD_SESSION',
@@ -16,11 +17,12 @@ function cloneProcessEnv(source: NodeJS.ProcessEnv): Record<string, string> {
   return env
 }
 
-function stripClaudeChildSessionStamps(
+function stripEnvKeys(
   env: Record<string, string>,
+  keys: readonly string[],
   platform: NodeJS.Platform
 ): Record<string, string> {
-  for (const key of CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS) {
+  for (const key of keys) {
     for (const envKey of Object.keys(env)) {
       if (envKey === key || (platform === 'win32' && envKey.toUpperCase() === key)) {
         delete env[envKey]
@@ -28,6 +30,13 @@ function stripClaudeChildSessionStamps(
     }
   }
   return env
+}
+
+function stripClaudeChildSessionStamps(
+  env: Record<string, string>,
+  platform: NodeJS.Platform
+): Record<string, string> {
+  return stripEnvKeys(env, CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS, platform)
 }
 
 export function buildClaudeChildProcessEnv(
@@ -61,6 +70,8 @@ export function buildClaudeChildProcessEnv(
       }
     }
   }
+  // Only the launch names a chat's visuals folder: an inherited one belongs to another chat.
+  stripEnvKeys(env, [NATIVE_CHAT_VISUALS_DIR_ENV], platform)
   if (options.scrubConfiguredChildSessionStamps) {
     return stripClaudeChildSessionStamps({ ...env, ...configuredEnv }, platform)
   }

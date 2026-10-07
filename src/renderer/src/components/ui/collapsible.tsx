@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
-import { Collapsible as CollapsiblePrimitive } from 'radix-ui'
+import * as CollapsiblePrimitive from 'radix-ui/collapsible'
 
 function Collapsible({
   ...props

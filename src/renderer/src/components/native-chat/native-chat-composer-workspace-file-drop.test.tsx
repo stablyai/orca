@@ -52,6 +52,7 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 // users actually read, and a newly added export cannot go missing from the mock.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
+  resolveNativeChatAttachmentHost: () => testState.executionHostId,
   resolveNativeChatAttachmentOwnerForWorktree: () =>
     testState.ownerKind === 'ssh'
       ? {
@@ -151,7 +152,6 @@ function ComposerProbe({
     terminalTabId: 'terminal-tab-1',
     structuredWorktreeId: structured ? (structuredWorkspaceId ?? workspaceId) : undefined,
     disabled,
-    paneKey: `pane:${workspaceId}`,
     attachResolvedPaths: attachments.attachResolvedPaths,
     setNotice
   })
@@ -165,7 +165,6 @@ function ComposerProbe({
           on a bare wrapper so the drop logic is exercised on its own. */}
       <div {...workspaceFileDropHandlers}>
         <NativeChatComposerField
-          dropScopeKey={`pane:${workspaceId}`}
           draftScopeKey={`pane:${workspaceId}`}
           textareaRef={inputRef}
           draft={draft}

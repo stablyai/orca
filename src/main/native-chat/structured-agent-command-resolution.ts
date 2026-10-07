@@ -10,7 +10,10 @@ import {
 } from '../../shared/tui-agent-launch-command-override'
 import { AgentSessionPreSpawnError } from './agent-session-wire/structured-agent-session-adapter'
 
-type CommandSettings = Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>>
+export type StructuredAgentCommandSettings = Partial<
+  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>
+>
+type CommandSettings = StructuredAgentCommandSettings
 type CommandOptions = NonNullable<Parameters<typeof resolveExecutableCommand>[1]>
 
 function resolveOverride(
@@ -35,14 +38,16 @@ function spawnableOn(platform: NodeJS.Platform, command: string): boolean {
 }
 
 /** Re-read the existing setting for every session acquisition and catalog probe. A set Command
- *  that names no runnable program refuses the start rather than quietly running the stock CLI. */
+ *  that names no runnable program refuses the start rather than quietly running the stock CLI.
+ *  Without one, `stock` names the agent's own binary (the agent id by default). */
 export function resolveStructuredAgentCommand(
-  agent: 'claude' | 'codex',
+  agent: TuiAgent,
   settings: CommandSettings,
-  options: CommandOptions = {}
+  options: CommandOptions = {},
+  stock: { command?: string; resolve?: typeof resolveCliCommand } = {}
 ): string {
   if (!hasExplicitTuiLaunchCommand(settings, agent)) {
-    return resolveCliCommand(agent, options)
+    return (stock.resolve ?? resolveCliCommand)(stock.command ?? agent, options)
   }
   const command = resolveOverride(agent, settings, options)
   if (!command || !spawnableOn(options.platform ?? process.platform, command)) {

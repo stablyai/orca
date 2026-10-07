@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { MERMAID_DIAGRAM_CONFIG } from './mermaid-diagram-config'
 import { MERMAID_ENGINE_JS } from './mermaid-webview-engine.generated'
+import { encodeJsonForScript } from '../inline-script-json'
 
 export type MermaidDiagramProps = {
   source: string
@@ -76,19 +77,6 @@ function MermaidFallback({ source, base }: MermaidDiagramProps) {
         <Text style={[styles.fallbackText, { fontSize: base - 1 }]}>{source}</Text>
       </ScrollView>
     </View>
-  )
-}
-
-// JSON.stringify escapes quotes and control chars but leaves `<`, `>`, `&`, and
-// the U+2028/U+2029 line separators raw — so a value containing `</script>` would
-// close the inline <script> this is spliced into and let the rest execute as
-// markup. These characters only ever appear inside JSON string literals, so
-// escaping them to \uXXXX is always valid and always parses back to the exact
-// original text inside the WebView.
-function encodeJsonForScript(json: string): string {
-  return json.replace(
-    /[<>&\u2028\u2029]/g,
-    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`
   )
 }
 

@@ -30,7 +30,8 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: blacksmith-2vcpu-ubuntu-2204
     # The pre-drain sample adds 3-8 min (20 at most); a timeout cancels the job and skips the failsafe.
-    timeout-minutes: 90
+    # A 1200000 drain step alone may take 50 min.
+    timeout-minutes: 120
     environment: production
     env:
       GCP_PROJECT_ID: onorca-cloud
@@ -53,8 +54,9 @@ jobs:
       # /v1/assign at hosts / window and is re-placed through the director's drain-return
       # lane. The wave validator admits only its closed set, and anything below the 300000
       # default only on US general cells: Asia drains are bound by their targets' accept
-      # rate. The transition wait below is the 15-min migration lease plus this window. A
-      # cell on an older image drains at once.
+      # rate. The transition wait below is the 15-min migration lease plus this window, plus
+      # its excess over 300000, since restart-safe waits a window of quiet after the drain. A
+      # cell on an older image drains at once, or refuses a window above 300000.
       DRAIN_PACE_WINDOW_MS: ${{ inputs.drain-pace-window-ms }}
     steps:
       - name: Require exact reusable-workflow configuration
@@ -499,8 +501,8 @@ jobs:
         if: ${{ inputs.mode == 'verify' }}
         run: echo 'Exact same-cap rollback point verified.'
 
-      # The sample can age the first one-hour token by up to 20 min; the drain's 20-min
-      # restart-safe wait gets a fresh one.
+      # The sample can age the first one-hour token by up to 20 min; the drain's restart-safe
+      # wait (20 min at the default pace, 50 at the slowest) gets a fresh one.
       - id: drain-auth
         if: ${{ inputs.mode != 'verify' && env.ROLLBACK_RESUME != 'true' }}
         uses: google-github-actions/auth@v2
@@ -517,6 +519,11 @@ jobs:
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.drain-auth.outputs.id_token }}
         run: |
+          # Before any mutation: a cell whose image caps the pace below this one stops untouched.
+          node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode pace-check \
+            --pace-window-ms "${DRAIN_PACE_WINDOW_MS}"
           # Opens the window the report-only shadow health gate below judges this cell over.
           echo "drain-started-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
           echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
@@ -555,7 +562,7 @@ jobs:
             --heartbeat either --admission migration-only --draining required \
             --activity restart-safe --expected-image-digests "${PREDECESSOR_IMAGE_DIGEST}" \
             --pace-window-ms "${DRAIN_PACE_WINDOW_MS}" \
-            --timeout-ms "$((900000 + DRAIN_PACE_WINDOW_MS))"
+            --timeout-ms "$((900000 + DRAIN_PACE_WINDOW_MS + (DRAIN_PACE_WINDOW_MS > 300000 ? DRAIN_PACE_WINDOW_MS - 300000 : 0)))"
           echo "drain-settled-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
 
       - id: capacity-auth
@@ -824,8 +831,8 @@ jobs:
         # read cost its full retry budget and can push the job past timeout-minutes, and a
         # cancelled job takes the whole wave with it. A healthy gate is already minutes of
         # serial reads, so both bounds sit above that: the script settles at seven minutes and
-        # reaching this eight is the pathological case. Eight on top of a ~14-minute cell still
-        # leaves the job's 90 minutes intact.
+        # reaching this eight is the pathological case. Eight on top of a cell of ~14 minutes
+        # (~45 at the slowest pace) still leaves the job's 120 minutes intact.
         timeout-minutes: 8
         env:
           DRAIN_STARTED_AT: ${{ steps.drain.outputs.drain-started-at }}

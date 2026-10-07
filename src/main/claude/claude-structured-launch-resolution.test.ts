@@ -17,6 +17,7 @@ import {
   type ClaudeStructuredLaunchResolverDeps
 } from './claude-structured-launch-resolution'
 import { claudeStructuredPermissionModeForSettings } from './claude-structured-permission-mode'
+import { CLAUDE_THINKING_DISPLAY_FLAG, type ClaudeCliFlag } from './claude-cli-flag-support'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from '../claude-accounts/live-pty-gate'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
@@ -638,7 +639,7 @@ describe('claude structured launch resolution', () => {
 
 describe('readable Claude thinking', () => {
   const launchWith = (
-    thinkingDisplay?: ClaudeStructuredLaunchResolverDeps['thinkingDisplay'],
+    cliFlags?: ClaudeStructuredLaunchResolverDeps['cliFlags'],
     authSwitchSettleTimeoutMs?: number,
     command = '/usr/local/bin/claude',
     launchArgs: string[] = []
@@ -651,7 +652,7 @@ describe('readable Claude thinking', () => {
       resolveAuthPolicy: () => ({ stripAuthEnv: false }),
       resolveEnv: () => ({ PROJECT_SHIM: '1', ANTHROPIC_API_KEY: 'sk-user' }),
       hasTranscript: async () => false,
-      ...(thinkingDisplay ? { thinkingDisplay } : {}),
+      ...(cliFlags ? { cliFlags } : {}),
       ...(authSwitchSettleTimeoutMs === undefined ? {} : { authSwitchSettleTimeoutMs })
     })({ identity: IDENTITY })
 
@@ -663,10 +664,11 @@ describe('readable Claude thinking', () => {
   ])(
     'probes the CLI the launch runs, on its PATH and shims, without its credentials (%s)',
     async (_, sibling) => {
-      const argsFor = vi.fn(
-        async (_launch: { command: string; cwd: string; env: Record<string, string> }) => ({
-          'thinking-display': 'summarized'
-        })
+      const supports = vi.fn(
+        async (
+          _flag: ClaudeCliFlag,
+          _launch: { command: string; cwd: string; env: Record<string, string> }
+        ) => true
       )
       const binDir = join(mkdtempSync(join(tmpdir(), 'orca-claude-probe-')), 'bin')
       const command = join(binDir, process.platform === 'win32' ? 'claude.cmd' : 'claude')
@@ -674,8 +676,8 @@ describe('readable Claude thinking', () => {
       if (sibling) {
         makeExecutable(join(binDir, process.platform === 'win32' ? 'node.cmd' : 'node'))
       }
-      const launch = await launchWith({ argsFor }, undefined, command)
-      const asked = argsFor.mock.calls[0]?.[0]
+      const launch = await launchWith({ supports }, undefined, command)
+      const asked = supports.mock.calls[0]?.[1]
       expect(asked).toMatchObject({ command, cwd: '/repos/workspace-1' })
       const segments = (env: Record<string, string> | undefined) =>
         (env?.PATH ?? env?.Path ?? '').split(delimiter)
@@ -697,14 +699,14 @@ describe('readable Claude thinking', () => {
   )
 
   it('passes nothing when the CLI is not known to take the flag, or nothing can say', async () => {
-    const launch = await launchWith({ argsFor: async () => ({}) })
+    const launch = await launchWith({ supports: async () => false })
     expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
     expect((await launchWith()).options.extraArgs).toEqual({ 'replay-user-messages': null })
   })
 
   it('keeps saved Arguments beside readable thinking, with the display left to Orca', async () => {
     const launch = await launchWith(
-      { argsFor: async () => ({ 'thinking-display': 'summarized' }) },
+      { supports: async (flag) => flag === CLAUDE_THINKING_DISPLAY_FLAG },
       undefined,
       undefined,
       ['--effort', 'high', '--thinking-display', 'omitted']
@@ -720,9 +722,9 @@ describe('readable Claude thinking', () => {
     try {
       const launch = launchWith(
         {
-          argsFor: async () => {
+          supports: async () => {
             beginClaudeAuthSwitch()
-            return {}
+            return false
           }
         },
         10

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useCallback, useMemo } from 'react'
 import {
   isBackgroundTaskBlock,
@@ -29,12 +30,10 @@ import type {
   MobileNativeChatLiveLine,
   MobileNativeChatTurnRow
 } from './mobile-native-chat-turn-disclosure-types'
-
 export type {
   MobileNativeChatLiveLine,
   MobileNativeChatTurnRow
 } from './mobile-native-chat-turn-disclosure-types'
-
 const NO_TURN_KEYS: readonly undefined[] = []
 export function useMobileNativeChatTurnDisclosure({
   messages,
@@ -95,6 +94,7 @@ export function useMobileNativeChatTurnDisclosure({
   })
   const [expandedTurnIds, toggleExpandedTurn] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [expandedReasoning, toggleReasoning] = useMobileNativeChatScopedOpenKeys(scopeKey)
+  const [openSubagentGroups, toggleSubagentGroup] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const waiting = useMemo(() => {
     if (!enabled) {
       return {
@@ -224,7 +224,6 @@ export function useMobileNativeChatTurnDisclosure({
     turnStatuses.completedByTurn,
     expandedTurnIds
   ])
-
   const { active, activeTurnKey, completedByTurn } = turnStatuses
   const inLiveWorkingTurn = useCallback(
     (index: number) =>
@@ -255,6 +254,10 @@ export function useMobileNativeChatTurnDisclosure({
       },
     [expandedReasoning, line]
   )
+  const latestAssistantId = useMemo(
+    () => waiting.listMessages.findLast((row) => row.role === 'assistant')?.id ?? null,
+    [waiting.listMessages]
+  )
   const resolveRow = useCallback(
     (listIndex: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
       const index = waiting.indexById.get(message.id) ?? listIndex
@@ -272,11 +275,16 @@ export function useMobileNativeChatTurnDisclosure({
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
         turnKey: turnKey && turnStatus?.workedSeconds != null ? turnKey : undefined,
         activeTurnIsWorking: inLiveWorkingTurn(index),
+        mayStillGrow: !lineYields && message.id === latestAssistantId,
         reasoningIsLive: message.id === liveReasoningId,
         reasoningExpanded:
           message.role === 'reasoning' &&
           expandedReasoning.has(nativeChatReasoningDisclosureKey(message.id)),
-        onToggleReasoning: toggleReasoning
+        onToggleReasoning: toggleReasoning,
+        ...(message.blocks.some(isSubagentGroupBlock)
+          ? { subagentGroupsOpen: openSubagentGroups }
+          : {}),
+        onToggleSubagentGroup: toggleSubagentGroup
       }
     },
     [
@@ -288,12 +296,15 @@ export function useMobileNativeChatTurnDisclosure({
       completedByTurn,
       expandedTurnIds,
       inLiveWorkingTurn,
+      latestAssistantId,
+      lineYields,
       liveReasoningId,
       expandedReasoning,
-      toggleReasoning
+      toggleReasoning,
+      openSubagentGroups,
+      toggleSubagentGroup
     ]
   )
-
   return {
     active,
     activeActivityText,

@@ -1,5 +1,8 @@
 import { isDeepStrictEqual } from 'node:util'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionProcessIdentity,
+  AgentSessionRecord
+} from '../../../shared/agent-session-record'
 import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError,
@@ -10,6 +13,17 @@ import { journalIdentityFor } from './structured-agent-session-attach'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
+
+/** The same process, whatever Orca runtime the store stamped on its record (`runtime`): that stamp
+ *  is about who holds the process, not which process it is. */
+function sameOwnerProcess(
+  stored: AgentSessionProcessIdentity,
+  acquired: AgentSessionProcessIdentity
+): boolean {
+  const { runtime: _storedRuntime, ...storedProcess } = stored
+  const { runtime: _acquiredRuntime, ...acquiredProcess } = acquired
+  return isDeepStrictEqual(storedProcess, acquiredProcess)
+}
 
 /** A reservation with no process behind it is only a promise to spawn; the
  * adapter makes it real and the store then grants the writer. */
@@ -79,7 +93,7 @@ export async function acquireOwner(
         process: acquired.process,
         now: input.now()
       })
-    } else if (!isDeepStrictEqual(record.lease.ownerProcess, acquired.process)) {
+    } else if (!sameOwnerProcess(record.lease.ownerProcess, acquired.process)) {
       throw new Error('agent_session_ownership_unknown')
     }
     const proved = await input.store.proveOwner({

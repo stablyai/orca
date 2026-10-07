@@ -193,7 +193,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // fingerprint the host's ledger and journal re-derive.
   'src/shared/structured-agent-session-mutation.ts',
   'src/shared/structured-agent-session-send-mutation.ts',
-  'src/shared/structured-agent-session-outbox.ts',
   'src/shared/agent-session-record',
   'src/shared/agent-session-provider-handle',
   'src/shared/agent-session-journal-',

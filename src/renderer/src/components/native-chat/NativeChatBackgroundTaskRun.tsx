@@ -7,10 +7,10 @@ import {
   normalizeBackgroundTaskState
 } from '../../../../shared/native-chat-background-task-row'
 import type { NativeChatBackgroundTaskBlock } from '../../../../shared/native-chat-types'
+import { formatBackgroundTaskTokens } from '../../../../shared/background-task-roster'
 import {
   backgroundTaskStateReason,
   backgroundTaskStateWord,
-  formatBackgroundTaskTokens,
   resolveBackgroundTaskName
 } from './background-task-roster'
 import { KIND_ICONS } from './NativeChatBackgroundTasksStatus'

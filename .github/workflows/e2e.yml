@@ -123,7 +123,8 @@ jobs:
           ORCA_E2E_APT_PACKAGES: build-essential python3
         run: &install_e2e_tools |
           read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
-          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+          # Why apt-mirrors.txt: runner images resolve mirror+file: sources through it, so editing the lists alone leaves Azure in use.
+          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
             if [ -f "$source" ]; then
               sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
             fi
@@ -134,7 +135,7 @@ jobs:
           Acquire::Retries "1";
           APTCONF
           timeout 120 sudo apt-get update
-          timeout 300 sudo apt-get install -y "${packages[@]}"
+          timeout 300 sudo apt-get install -y "${packages[@]}" || timeout 300 sudo apt-get install -y --fix-missing "${packages[@]}"
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -333,6 +334,7 @@ jobs:
               . != "tests/e2e/ssh-restart-tab-accumulation.spec.ts" and
               . != "tests/e2e/ssh-skill-installation.spec.ts" and
               . != "tests/e2e/ssh-stale-resume-execution-host-scope.spec.ts" and
+              . != "tests/e2e/ssh-startup-local-shadow.spec.ts" and
               . != "tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts" and
               . != "tests/e2e/terminal-inline-images-ssh.spec.ts" and
               . != "tests/e2e/ssh-docker-watcher-isolation.spec.ts" and

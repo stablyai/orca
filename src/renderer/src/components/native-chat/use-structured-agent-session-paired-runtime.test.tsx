@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   callRuntimeRpc: mocks.call,
+  // The sender checks compatibility itself before its send goes out.
+  ensureRuntimeEnvironmentCompatible: async () => undefined,
   runtimeEnvironmentSupportsCapability: async (environmentId: string, capability: string) =>
     mocks.hostCapabilities.get(environmentId)?.includes(capability) === true
 }))
@@ -38,7 +40,6 @@ import {
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
-import { resetUndeliveredStructuredAgentSessionOutboxForTests } from './structured-agent-session-outbox-storage'
 import {
   useStructuredAgentSession,
   type StructuredPromptItem
@@ -127,7 +128,6 @@ describe('a structured chat on a paired server', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetStructuredAgentSessionReadOwnersForTests()
-    resetUndeliveredStructuredAgentSessionOutboxForTests()
     localStorage.clear()
     olderHistoryUnloaded = false
     mocks.hostCapabilities.clear()

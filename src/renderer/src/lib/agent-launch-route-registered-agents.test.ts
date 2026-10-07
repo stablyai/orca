@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
@@ -68,8 +69,11 @@ function pairedStatus(runtimeId: string): RuntimeEnvironmentStatus {
   }
 }
 
+type RouteSettings = Partial<typeof SETTINGS> &
+  Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>>
+
 function store(
-  overrides: { settings?: Partial<typeof SETTINGS>; runtimeId?: string } = {}
+  overrides: { settings?: RouteSettings; runtimeId?: string } = {}
 ): AgentLaunchRouteStore {
   const state = {
     settings: { ...SETTINGS, ...overrides.settings },
@@ -131,6 +135,61 @@ describe('structured launch of a host-registered agent', () => {
     expect(routeFor(store(), 'grok', PAIRED)).toBe('structured-native-chat')
     expect(routeFor(store({ runtimeId: 'rt-2' }), 'grok', PAIRED)).not.toBe(
       'structured-native-chat'
+    )
+  })
+})
+
+describe('OpenCode with its Command and environment set (live QA run 5)', () => {
+  const LISTS_OPENCODE = {
+    agents: [...LISTS_GROK.agents, { agent: 'opencode', capabilities: {} }]
+  }
+  // The rig's settings: a private binary named twice, which must not decide the surface.
+  const withOverrides = (): AgentLaunchRouteStore =>
+    store({
+      settings: {
+        agentCmdOverrides: { opencode: '/rig/oc-prefix/bin/opencode' },
+        agentDefaultEnv: { opencode: { PATH: '/rig/oc-prefix/bin:/usr/bin:/bin' } }
+      }
+    })
+  let warn: MockInstance<typeof console.warn>
+  beforeEach(() => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    warn.mockRestore()
+  })
+
+  it('opens a chat once the local host listed OpenCode', async () => {
+    mocks.callRuntimeRpc.mockResolvedValue(LISTS_OPENCODE)
+    await loadHostStructuredAgents('local', REGISTERED, null)
+
+    expect(routeFor(withOverrides(), 'opencode')).toBe('structured-native-chat')
+  })
+
+  it('says why it opened the terminal chat and asks the host again after a failed startup read', async () => {
+    mocks.callRuntimeRpc.mockRejectedValueOnce(new Error('host not ready'))
+    await loadHostStructuredAgents('local', REGISTERED, null)
+    mocks.callRuntimeRpc.mockResolvedValue(LISTS_OPENCODE)
+
+    // What run 5 saw: the terminal-backed "OpenCode" chat, and no version check on the host.
+    expect(routeFor(withOverrides(), 'opencode')).toBe('legacy-native-chat')
+    expect(warn).toHaveBeenCalledWith(
+      '[agent-launch-route] opencode opens legacy-native-chat: agent-without-structured-session ' +
+        '(host local, host agents not learned, host capabilities known)'
+    )
+    await vi.waitFor(() => expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(2))
+    // The next launch reads the list the re-ask learned.
+    await vi.waitFor(() =>
+      expect(routeFor(withOverrides(), 'opencode')).toBe('structured-native-chat')
+    )
+  })
+
+  it('names the settings default when new agent tabs do not open as chats', () => {
+    expect(routeFor(store({ settings: { openAgentTabsInChatByDefault: false } }), 'opencode')).toBe(
+      'terminal-tui'
+    )
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('opencode opens terminal-tui: new-tabs-default-to-terminal')
     )
   })
 })

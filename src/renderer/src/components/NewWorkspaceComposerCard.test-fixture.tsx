@@ -1,8 +1,15 @@
 import React, { act } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import NewWorkspaceComposerCard from './NewWorkspaceComposerCard'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
+
+const cardRoots = new WeakMap<HTMLDivElement, Root>()
+export function unmountCard(container: HTMLDivElement): void {
+  act(() => cardRoots.get(container)?.unmount())
+  cardRoots.delete(container)
+  container.remove()
+}
 
 export const projectOptions: NewWorkspaceProjectOption[] = [
   {
@@ -47,6 +54,7 @@ export async function renderCard(
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
+  cardRoots.set(container, root)
   act(() => {
     root.render(
       <NewWorkspaceComposerCard

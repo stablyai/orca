@@ -326,6 +326,9 @@ type AgentJournalStatusItemFields = {
   }
   /** Present on thread-goal transitions; absent on rows from older hosts. */
   threadGoal?: AgentJournalThreadGoalState
+  /** On the row about a reply Orca's own stop cut off: why Orca stopped. Its cause is open (a newer
+   *  host may name one this build does not know), so read it with `readAgentSessionOrcaStop`. */
+  orcaStop?: { cause: string }
 }
 
 /** A status row that reports no failure; its text is its writer's own. */

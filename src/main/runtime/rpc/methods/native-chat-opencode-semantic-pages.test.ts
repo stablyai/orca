@@ -70,8 +70,12 @@ function fixture() {
 }
 
 function context(): RpcContext {
-  const runtime = { registerSubscriptionCleanup: vi.fn(), cleanupSubscription: vi.fn() }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These handlers only register or invoke subscription cleanup on the runtime.
+  const runtime = {
+    getAgentProviderSessionRows: () => [],
+    registerSubscriptionCleanup: vi.fn(),
+    cleanupSubscription: vi.fn()
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These handlers only read hook rows and register or invoke subscription cleanup on the runtime.
   return { runtime: runtime as unknown as RpcContext['runtime'], clientKind: 'mobile' }
 }
 

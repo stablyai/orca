@@ -140,6 +140,12 @@ export const ORCAD_RIPGREP_LICENSE_ARTIFACTS = [
   'ripgrep/licenses/UNLICENSE'
 ] as const
 
+/** The skill plugin native-chat agents load by path; mirrors resources/native-chat-visuals. */
+export const ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS = [
+  'native-chat-visuals/.claude-plugin/plugin.json',
+  'native-chat-visuals/skills/orca-chat-visuals/SKILL.md'
+] as const
+
 export type OrcadArtifact = {
   filename: string
   /**
@@ -169,7 +175,8 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: ORCAD_PARCEL_WATCHER_NATIVE },
   { filename: ORCAD_EMOJI_SHORTCODE_DATASET },
   ...ORCAD_NODE_PTY_JS_ARTIFACTS.map((filename) => ({ filename })),
-  ...ORCAD_RIPGREP_LICENSE_ARTIFACTS.map((filename) => ({ filename }))
+  ...ORCAD_RIPGREP_LICENSE_ARTIFACTS.map((filename) => ({ filename })),
+  ...ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS.map((filename) => ({ filename }))
 ]
 
 /** Written after the artifacts, so it is never an input to its own hash. */

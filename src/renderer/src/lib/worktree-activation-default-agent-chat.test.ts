@@ -113,9 +113,32 @@ describe('empty workspace seeding with a default agent chat', () => {
       { seedUserDefaultSurface: true }
     )
 
-    expect(defaultChat.open).toHaveBeenCalledWith('wt-1')
+    expect(defaultChat.open).toHaveBeenCalledWith('wt-1', expect.any(Function))
     expect(primaryTabId).toBe('chat-tab')
     expect(createTab).not.toHaveBeenCalled()
+  })
+
+  // A host's "no" to the chat seeds the shell this workspace would have had, not the agent's TUI.
+  it('seeds the plain shell when the host declines the default chat', () => {
+    defaultChat.open.mockImplementation((_worktreeId: string, seedShell: () => boolean) => {
+      seedShell()
+      return { primaryTabId: null }
+    })
+    const createTab = vi.fn(() => ({ id: 'shell-tab' }))
+    const store = createMockStore({ createTab })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, undefined, undefined, {
+      seedUserDefaultSurface: true
+    })
+
+    expect(defaultChat.open).toHaveBeenCalledOnce()
+    expect(createTab).toHaveBeenCalledOnce()
+    expect(createTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.not.objectContaining({ launchAgent: expect.anything() })
+    )
   })
 
   it('falls back to a shell when no chat can open', () => {
@@ -156,7 +179,7 @@ describe('empty workspace seeding with a default agent chat', () => {
 
     activateAndRevealWorktree(worktree.id, { ...USER_OPEN, notifyHostRuntime: false })
 
-    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id)
+    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id, expect.any(Function))
   })
 
   it('back/forward navigation asks for the default surface', () => {
@@ -170,7 +193,7 @@ describe('empty workspace seeding with a default agent chat', () => {
 
     useAppStore.getState().goBackWorktree()
 
-    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id)
+    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id, expect.any(Function))
   })
 
   // Why: CLI/phone creates, fallbacks after a failed agent launch, and the move after a delete
@@ -203,7 +226,7 @@ describe('the gated reseed that seeds an empty workspace in Electron', () => {
     expect(result === false ? 'failed' : result.primaryTabId).toBeNull()
     await gate.mock.results[0]?.value
 
-    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id)
+    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id, expect.any(Function))
     expect(tabCount(worktree.id)).toBe(0)
   })
 
@@ -227,7 +250,7 @@ describe('the gated reseed that seeds an empty workspace in Electron', () => {
     activateAndRevealFolderWorkspace(FOLDER_ID, { ...USER_OPEN, executionHostId: 'local' })
     await gate.mock.results[0]?.value
 
-    expect(defaultChat.open).toHaveBeenCalledWith(FOLDER_KEY)
+    expect(defaultChat.open).toHaveBeenCalledWith(FOLDER_KEY, expect.any(Function))
     expect(tabCount(FOLDER_KEY)).toBe(0)
   })
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
@@ -53,10 +54,10 @@ function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
 }
 
 function state(overrides: Partial<AppState> = {}): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every store slice read by the attachment owner resolver.
   return {
+    detectedWorktreesByRepo: {},
     folderWorkspaces: [],
-    getKnownWorktreeById: (worktreeId: string) =>
-      worktreeId === 'wt-1' ? ({ id: 'wt-1', path: '/repo/worktree' } as never) : undefined,
     projectGroups: [],
     repos: [{ id: 'repo', connectionId: null }],
     settings: { activeRuntimeEnvironmentId: null },
@@ -65,7 +66,18 @@ function state(overrides: Partial<AppState> = {}): AppState {
       'wt-1': [terminalTab()]
     },
     worktreesByRepo: {
-      repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo/worktree' } as never]
+      repo: [
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owner resolver reads only the catalog identity, path and host fields supplied here.
+        {
+          id: 'wt-1',
+          repoId: 'repo',
+          path: '/repo/worktree',
+          hostId:
+            overrides.repos?.length === 0
+              ? undefined
+              : getRepoExecutionHostId(overrides.repos?.[0] ?? { connectionId: null })
+        } as never
+      ]
     },
     ...overrides
   } as AppState
@@ -128,13 +140,13 @@ describe('resolveNativeChatAttachmentOwner', () => {
     ).toEqual({ kind: 'runtime' })
   })
 
-  it('routes unowned repos to the focused runtime host, matching terminal drops', () => {
+  it('keeps a recorded local workspace local when a runtime is focused', () => {
     expect(
       resolveNativeChatAttachmentOwner(
         state({ settings: { activeRuntimeEnvironmentId: 'env-9' } as AppState['settings'] }),
         'tab-1'
       )
-    ).toEqual({ kind: 'runtime' })
+    ).toEqual({ kind: 'local' })
   })
 
   it('reports not-ready when the tab has no worktree owner', () => {

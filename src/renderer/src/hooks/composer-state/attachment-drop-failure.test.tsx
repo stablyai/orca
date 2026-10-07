@@ -14,7 +14,6 @@ vi.mock('@/store', () => ({
 vi.mock('@/runtime/runtime-file-client', () => ({
   importExternalPathsToRuntime: (...args: unknown[]) => mocks.importExternalPaths(...args)
 }))
-vi.mock('./composer-drop-listener', () => ({ useComposerDropListener: vi.fn() }))
 
 import { useAttachmentDropState } from './attachment-drop-state'
 

@@ -11,7 +11,11 @@ import {
   requireStructuredHost,
   structuredCallerFor
 } from './structured-agent-session-gate'
-import { RestartResumableParams, RestartResumeParams } from './structured-agent-session-schemas'
+import {
+  ContinueInterruptedParams,
+  RestartResumableParams,
+  RestartResumeParams
+} from './structured-agent-session-schemas'
 import { structuredAgentsReadBy } from './structured-agent-session-policy'
 
 export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
@@ -66,6 +70,18 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
         structuredCallerFor(ctx).callerKey,
         structuredAgentsReadBy(ctx, host.knownAgentIds())
       )
+    }
+  }),
+  defineMethod({
+    // Continue on a reply an Orca stop cut off: the same continuation, bound to the cut turn
+    // instead of an offer. Clients gate it on AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY.
+    // It names one chat the client shows, as a send does, so no agent audience applies.
+    name: 'agentSession.continueInterrupted',
+    params: ContinueInterruptedParams,
+    handler: async (params, ctx) => {
+      await ensureStructuredHostInstalled(ctx)
+      const host = requireStructuredHost(ctx)
+      return host.restartResume.continueInterrupted(params.sessionId, params.turnItemId)
     }
   }),
   defineMethod({

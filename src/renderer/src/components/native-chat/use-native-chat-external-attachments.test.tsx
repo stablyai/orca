@@ -595,6 +595,68 @@ describe('useNativeChatExternalAttachments', () => {
       expect(mocks.stat).not.toHaveBeenCalled()
     })
 
+    it('refuses a captured drop if its destination changed before preparation finished', async () => {
+      const chips = trackingChips()
+      const probe = await renderProbe({
+        structuredWorktreeId: 'worktree-1',
+        structuredSession: session,
+        attachResolvedPaths: vi.fn(),
+        pendingChips: chips
+      })
+      let current = true
+      const deliver = probe.latest().captureExternalDrop(() => current)
+      current = false
+      await act(async () => deliver(['/Users/me/notes.md']))
+      expect(chips.begun).toEqual([])
+      expect(mocks.prepareNativeChatSessionAttachmentUpload).not.toHaveBeenCalled()
+    })
+
+    it('discards uploaded files if the captured drop destination changed during upload', async () => {
+      const upload = deferred<AgentSessionAttachmentPathUploadResult>()
+      mocks.uploadNativeChatSessionAttachmentPaths.mockReturnValueOnce(upload.promise)
+      const chips = trackingChips()
+      const probe = await renderProbe({
+        structuredWorktreeId: 'worktree-1',
+        structuredSession: session,
+        attachResolvedPaths: vi.fn(),
+        pendingChips: chips
+      })
+      let current = true
+      const deliver = probe.latest().captureExternalDrop(() => current)
+      act(() => void deliver(['/Users/me/notes.md']))
+      current = false
+      await act(async () =>
+        upload.resolve(
+          uploaded([['/Users/me/notes.md', '/srv/agent-session-attachments/u1/notes.md']])
+        )
+      )
+      expect(chips.drop).toHaveBeenCalledExactlyOnceWith('chip-1')
+      expect(chips.attachReferences).not.toHaveBeenCalled()
+    })
+
+    it('settles an upload into its captured chips while a prompt card unmounts the composer', async () => {
+      const upload = deferred<AgentSessionAttachmentPathUploadResult>()
+      mocks.uploadNativeChatSessionAttachmentPaths.mockReturnValueOnce(upload.promise)
+      const chips = trackingChips()
+      const probe = await renderProbe({
+        structuredWorktreeId: 'worktree-1',
+        structuredSession: session,
+        attachResolvedPaths: vi.fn(),
+        pendingChips: chips
+      })
+      act(() => void probe.latest().captureExternalDrop(() => true)(['/Users/me/notes.md']))
+      act(() => root?.unmount())
+      root = null
+      await act(async () =>
+        upload.resolve(
+          uploaded([['/Users/me/notes.md', '/srv/agent-session-attachments/u1/notes.md']])
+        )
+      )
+      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
+        '/srv/agent-session-attachments/u1/notes.md'
+      ])
+    })
+
     it('does not insert a file whose chip the user removed while it uploaded', async () => {
       const upload = deferred<AgentSessionAttachmentPathUploadResult>()
       mocks.uploadNativeChatSessionAttachmentPaths.mockReturnValueOnce(upload.promise)

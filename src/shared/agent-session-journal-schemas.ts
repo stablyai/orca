@@ -246,7 +246,8 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     turnLifecycle: z.object(TurnLifecycleFields).optional(),
     providerFrame: ProviderFrame.optional(),
     threadGoal: AgentJournalThreadGoalStateSchema.optional(),
-    failure: AgentSessionFailureFactSchema.optional()
+    failure: AgentSessionFailureFactSchema.optional(),
+    orcaStop: z.object({ cause: z.string().min(1) }).optional()
   }),
   z.object({
     kind: z.literal('turn'),

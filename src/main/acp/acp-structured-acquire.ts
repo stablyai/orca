@@ -124,7 +124,7 @@ export async function acquireAcpStructuredSession(input: {
         ...structuredSessionChildIdentityEnv(sessionId, launch.env),
         [PROVIDER_SPAWN_TOKEN_ENV]: acquire.spawnToken
       },
-      envToDelete: ACP_CHILD_ENV_TO_DELETE
+      envToDelete: [...ACP_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
     },
     {
       clientInfo: { name: 'orca', version: '1' },

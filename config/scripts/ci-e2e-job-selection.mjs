@@ -26,6 +26,7 @@ export const DOCKER_SSH_E2E_SPECS = [
   'tests/e2e/ssh-restart-tab-accumulation.spec.ts',
   'tests/e2e/ssh-skill-installation.spec.ts',
   'tests/e2e/ssh-stale-resume-execution-host-scope.spec.ts',
+  'tests/e2e/ssh-startup-local-shadow.spec.ts',
   'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts',
   'tests/e2e/terminal-inline-images-ssh.spec.ts',
   'tests/e2e/ssh-docker-watcher-isolation.spec.ts',
