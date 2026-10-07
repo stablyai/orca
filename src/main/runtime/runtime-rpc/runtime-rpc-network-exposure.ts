@@ -52,8 +52,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
       await current.stop()
       widened = await this.startWebSocketTransport({
         host: WS_BIND_HOST_ALL_INTERFACES,
-        port: previousPort,
-        preferPinnedPort: true
+        port: previousPort
       })
     } catch (error) {
       // Why: the wide bind failed after the loopback listener was already stopped. Restore a serving
@@ -97,8 +96,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     try {
       restored = await this.startWebSocketTransport({
         host: WS_BIND_HOST_LOOPBACK,
-        port: previousPort,
-        preferPinnedPort: true
+        port: previousPort
       })
     } catch (recoveryError) {
       // Why: even the loopback restore failed — drop the dead WebSocket transport so we never advertise an
