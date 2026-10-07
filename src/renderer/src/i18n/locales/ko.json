@@ -5617,7 +5617,10 @@
           "e888362def": "상태: 폐쇄됨",
           "f394b3e86e": "상태: 병합됨",
           "af2b07bda5": "상태: {{value0}}",
-          "29df45afa2": "MR"
+          "29df45afa2": "MR",
+          "reviewApproved": "리뷰: 승인됨",
+          "reviewChangesRequested": "리뷰: 변경 요청됨",
+          "reviewRequired": "리뷰: 필요"
         },
         "WorktreeCardPorts": {
           "34f733dda2": "작업 트리로 이동",
@@ -6162,6 +6165,10 @@
           "searchPlaceholder": "워크트리 검색...",
           "empty": "일치하는 적격 워크트리가 없습니다.",
           "setParentFor": "다음 워크트리의 상위 설정"
+        },
+        "WorktreeReviewDecision": {
+          "approved": "승인됨",
+          "changesRequested": "변경 요청됨"
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "브랜치",

@@ -14,9 +14,18 @@ import {
   WorktreeCardDetailSectionContent
 } from './WorktreeCardDetailSection'
 import { DetailHeader, MetadataActionIcon } from './WorktreeCardMetadataControls'
-import { ReviewChecksBadge, ReviewStateBadge } from './WorktreeCardMetadataStatusBadges'
+import {
+  ReviewChecksBadge,
+  ReviewDecisionBadge,
+  ReviewStateBadge
+} from './WorktreeCardMetadataStatusBadges'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { getProviderName, getReviewLabel, ReviewIcon } from './worktree-review-helpers'
+import {
+  getActiveReviewDecision,
+  getProviderName,
+  getReviewLabel,
+  ReviewIcon
+} from './worktree-review-helpers'
 import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
 
 type WorktreeCardReviewDetailSectionProps = {
@@ -73,7 +82,7 @@ export function WorktreeCardReviewDetailSection({
   return (
     <WorktreeCardDetailSection>
       <DetailHeader
-        icon={<ReviewIcon review={review} className="size-3" />}
+        icon={<ReviewIcon review={review} className="size-3" showDecisionDot={false} />}
         label={translate(
           'auto.components.sidebar.WorktreeCardReviewDetailSection.reviewHeader',
           '{{value0}} #{{value1}}',
@@ -170,10 +179,13 @@ export function WorktreeCardReviewDetailSection({
         <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
           {review.title}
         </div>
-        {(review.state || (review.status && review.status !== 'neutral')) && (
+        {(review.state ||
+          (review.status && review.status !== 'neutral') ||
+          getActiveReviewDecision(review)) && (
           <div className="flex flex-wrap gap-1">
             <ReviewStateBadge state={review.state} label={reviewLabel} />
             <ReviewChecksBadge status={review.status} />
+            <ReviewDecisionBadge review={review} />
           </div>
         )}
       </WorktreeCardDetailSectionContent>

@@ -5617,7 +5617,10 @@
           "e888362def": "状态： 关闭",
           "f394b3e86e": "状态：合并",
           "af2b07bda5": "状态：{{value0}}",
-          "29df45afa2": "MR"
+          "29df45afa2": "MR",
+          "reviewApproved": "审查：已批准",
+          "reviewChangesRequested": "审查：请求更改",
+          "reviewRequired": "审查：需要审查"
         },
         "WorktreeCardPorts": {
           "34f733dda2": "转到工作树",
@@ -6162,6 +6165,10 @@
           "searchPlaceholder": "搜索工作树...",
           "empty": "没有匹配的可用工作树。",
           "setParentFor": "为以下工作树设置父级"
+        },
+        "WorktreeReviewDecision": {
+          "approved": "已批准",
+          "changesRequested": "请求更改"
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "分支",

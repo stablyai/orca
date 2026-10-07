@@ -5617,7 +5617,10 @@
           "e888362def": "状態: クローズ",
           "f394b3e86e": "状態: マージ済み",
           "af2b07bda5": "状態: {{value0}}",
-          "29df45afa2": "MR"
+          "29df45afa2": "MR",
+          "reviewApproved": "レビュー: 承認済み",
+          "reviewChangesRequested": "レビュー: 変更リクエスト",
+          "reviewRequired": "レビュー: 必須"
         },
         "WorktreeCardPorts": {
           "34f733dda2": "ワークツリーに移動",
@@ -6162,6 +6165,10 @@
           "searchPlaceholder": "ワークツリーを検索…",
           "empty": "一致する対象ワークツリーがありません。",
           "setParentFor": "次のワークツリーの親を設定"
+        },
+        "WorktreeReviewDecision": {
+          "approved": "承認済み",
+          "changesRequested": "変更リクエスト"
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "ブランチ",
