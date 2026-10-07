@@ -38,3 +38,30 @@ describe('provider-neutral check status', () => {
     expect(derivePRCheckStatusFromRollup([{ status: 'COMPLETED', conclusion }])).toBe('failure')
   })
 })
+
+describe('cancelled aggregates', () => {
+  // Why: a deliberate cancellation blocks merging exactly like a failure, but presenting it as
+  // one made the sidebar call a stopped run "Failed" (#15847). The aggregate must carry its own
+  // verdict down to PR metadata instead of collapsing into `failure`.
+  it('derives a cancelled-only set as cancelled, not failure', () => {
+    expect(derivePRCheckStatus([check('completed', 'cancelled')])).toBe('cancelled')
+    expect(derivePRCheckStatusFromRollup([{ status: 'COMPLETED', conclusion: 'CANCELLED' }])).toBe(
+      'cancelled'
+    )
+  })
+
+  it('lets a real failure win over cancellations in a mixed set', () => {
+    const status = derivePRCheckStatus([check('completed', 'cancelled'), check('completed', 'failure')])
+    expect(status).toBe('failure')
+  })
+
+  it('keeps a set with a still-running check pending until it settles', () => {
+    const status = derivePRCheckStatus([check('completed', 'cancelled'), check('in_progress', null)])
+    expect(status).toBe('pending')
+  })
+
+  it('does not let a cancelled check turn the rollup green', () => {
+    const status = derivePRCheckStatus([check('completed', 'success'), check('completed', 'cancelled')])
+    expect(status).toBe('cancelled')
+  })
+})
