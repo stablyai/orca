@@ -20,6 +20,7 @@ const appStoreMocks = vi.hoisted(() => ({
 }))
 
 const renameFileOnDiskMock = vi.hoisted(() => vi.fn())
+const buildGitHubFileUrlMock = vi.hoisted(() => vi.fn())
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -178,6 +179,10 @@ vi.mock('@/components/editor/editor-labels', () => ({
 
 vi.mock('@/lib/rename-file', () => ({
   renameFileOnDisk: renameFileOnDiskMock
+}))
+
+vi.mock('@/lib/github-file-url', () => ({
+  buildGitHubFileUrl: buildGitHubFileUrlMock
 }))
 
 vi.mock('@/lib/file-type-icons', () => ({
@@ -393,6 +398,14 @@ describe('EditorFileTab rename menu', () => {
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
+  })
+
+  it('does not build a GitHub URL for virtual check-details tabs', async () => {
+    const file = baseFile({ mode: 'check-details' })
+
+    await renderEditorFileTab(file)
+
+    expect(buildGitHubFileUrlMock).not.toHaveBeenCalled()
   })
 
   it('turns the tab filename into an inline input from the Rename context-menu item', async () => {

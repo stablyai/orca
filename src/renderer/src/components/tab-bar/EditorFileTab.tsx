@@ -76,11 +76,14 @@ export default function EditorFileTab({
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
-  const githubFileUrl = buildGitHubFileUrl({
-    originRemoteUrl: repo?.gitRemoteIdentity?.originRemoteUrl,
-    branch: worktree?.branch,
-    filePath: file.relativePath
-  })
+  const githubFileUrl =
+    file.mode === 'check-details'
+      ? null
+      : buildGitHubFileUrl({
+          originRemoteUrl: repo?.gitRemoteIdentity?.originRemoteUrl,
+          branch: worktree?.branch,
+          filePath: file.relativePath
+        })
   // Why: no transform/transition/isDragging styling — the drag design is
   // that tabs stay visually anchored; only the blue insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
