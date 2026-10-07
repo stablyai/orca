@@ -26,6 +26,7 @@ import { useAppShellServices } from './app-shell/use-app-shell-services'
 import { useAppStartupHydration } from './app-shell/use-app-startup-hydration'
 import { startNativeChatDraftLoad } from './app-shell/native-chat-draft-startup'
 import { useDocumentAppearance } from './app-shell/use-document-appearance'
+import { useDocumentTitle } from './app-shell/use-document-title'
 import { useFloatingWorkspacePanel } from './app-shell/use-floating-workspace-panel'
 import { useGlobalKeybindings } from './app-shell/use-global-keybindings'
 import { useOnboardingAndFeatureTips } from './app-shell/use-onboarding-and-feature-tips'
@@ -47,6 +48,7 @@ function App(): React.JSX.Element {
   useRuntimeGraphSync()
   usePersistedUIWriter()
   useDocumentAppearance()
+  useDocumentTitle()
   useWindowVisibilityEffects()
   useGlobalKeybindings({ layout, floatingWorkspace })
 
