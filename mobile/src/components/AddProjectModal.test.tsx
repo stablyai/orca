@@ -185,7 +185,11 @@ describe('AddProjectModal', () => {
     )
     act(() => button(tree, 'Run on This host').props.onPress())
     act(() => button(tree, 'Select Build VM').props.onPress())
-    act(() => startActions(tree).find((a) => a.label === 'Browse folder')!.onPress())
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Browse folder')!
+        .onPress()
+    )
     await flushUpdates()
     expect(sendRequest).toHaveBeenNthCalledWith(1, 'files.browseServerDir', {
       path: '~',
@@ -193,7 +197,11 @@ describe('AddProjectModal', () => {
     })
 
     act(() => button(tree, 'Back to Add project').props.onPress())
-    act(() => startActions(tree).find((a) => a.label === 'Clone from URL')!.onPress())
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Clone from URL')!
+        .onPress()
+    )
     await flushUpdates()
     act(() => button(tree, 'Select folder').props.onPress())
     act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/repo.git'))
@@ -202,7 +210,11 @@ describe('AddProjectModal', () => {
     await flushUpdates()
     expect(sendRequest).toHaveBeenLastCalledWith(
       'repo.clone',
-      { url: 'https://example.com/repo.git', destination: '/home/remote', sshConnectionId: 'ssh-vm' },
+      {
+        url: 'https://example.com/repo.git',
+        destination: '/home/remote',
+        sshConnectionId: 'ssh-vm'
+      },
       { timeoutMs: REPO_CLONE_TIMEOUT_MS }
     )
   })
@@ -284,8 +296,7 @@ describe('AddProjectModal', () => {
       renderer.update(
         createElement(AddProjectModal, {
           visible: false,
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the re-render reuses the same partial client; only sendRequest is read before the drawer closes.
-          client: { sendRequest } as unknown as RpcClient,
+          client: tree.root.findByType(AddProjectModal).props.client,
           onProjectAdded,
           onClose
         })

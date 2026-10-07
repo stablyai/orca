@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Why: the add-project sheet keeps its native drawer lifecycle, target selection, folder confirmation, and repository forms in one stateful flow. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ChevronLeft, FolderOpen, Globe, Plus } from 'lucide-react-native'
@@ -18,11 +19,22 @@ import { ConfirmContent } from './ConfirmModal'
 import { newWorktreeFormStyles as formStyles } from './new-worktree-form-styles'
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 
-type AddProjectView = 'start' | 'clone' | 'create' | 'addExisting' | 'confirmFolder' | 'pickDestination'
+type AddProjectView =
+  | 'start'
+  | 'clone'
+  | 'create'
+  | 'addExisting'
+  | 'confirmFolder'
+  | 'pickDestination'
 
 const NOT_A_GIT_REPOSITORY = 'Not a valid git repository'
 const EMPTY_HOST_CAPABILITIES: readonly string[] = []
-const EMPTY_SSH_TARGETS: readonly { id: string; label: string; connected?: boolean; connectionStatus?: string }[] = []
+const EMPTY_SSH_TARGETS: readonly {
+  id: string
+  label: string
+  connected?: boolean
+  connectionStatus?: string
+}[] = []
 
 type AddProjectModalProps = {
   visible: boolean
@@ -30,7 +42,12 @@ type AddProjectModalProps = {
   onProjectAdded: (repo: MobileWorkspaceRepo) => void
   onClose: () => void
   hostCapabilities?: readonly string[]
-  sshTargets?: readonly { id: string; label: string; connected?: boolean; connectionStatus?: string }[]
+  sshTargets?: readonly {
+    id: string
+    label: string
+    connected?: boolean
+    connectionStatus?: string
+  }[]
 }
 
 type AddedRepo = {
@@ -69,14 +86,27 @@ export function AddProjectModal({
     })
   }
 
-  const handoffRef = useRef<MobileWorkspaceRepo | null>(null)
-  const fireHandoff = useCallback(() => {
-    const repo = handoffRef.current
+  const handoffRef = useRef<{
+    repo: MobileWorkspaceRepo
+    client: RpcClient | null
+    openEpoch: number
+  } | null>(null)
+  const latestClientRef = useRef(client)
+  if (latestClientRef.current !== client) {
+    latestClientRef.current = client
     handoffRef.current = null
-    if (repo) {
-      onProjectAdded(repo)
+  }
+  const fireHandoff = useCallback(() => {
+    const handoff = handoffRef.current
+    handoffRef.current = null
+    if (
+      handoff &&
+      handoff.openEpoch === session.openEpoch &&
+      handoff.client === latestClientRef.current
+    ) {
+      onProjectAdded(handoff.repo)
     }
-  }, [onProjectAdded])
+  }, [onProjectAdded, session.openEpoch])
 
   return (
     <AddProjectModalContent
@@ -88,7 +118,7 @@ export function AddProjectModal({
       hostCapabilities={hostCapabilities}
       sshTargets={sshTargets}
       onAdded={(repo) => {
-        handoffRef.current = repo
+        handoffRef.current = { repo, client, openEpoch: session.openEpoch }
         onClose()
       }}
     />
@@ -110,7 +140,12 @@ function AddProjectModalContent({
   onClose: () => void
   onAfterClose: () => void
   hostCapabilities: readonly string[]
-  sshTargets: readonly { id: string; label: string; connected?: boolean; connectionStatus?: string }[]
+  sshTargets: readonly {
+    id: string
+    label: string
+    connected?: boolean
+    connectionStatus?: string
+  }[]
 }) {
   const [view, setView] = useState<AddProjectView>('start')
   const [cloneUrl, setCloneUrl] = useState('')
@@ -128,20 +163,44 @@ function AddProjectModalContent({
   const [sshConnectionId, setSshConnectionId] = useState<string | null>(null)
   const confirmingFolderRef = useRef(false)
 
+  const invalidateOperations = useCallback(() => {
+    operationGenerationRef.current += 1
+    busyRef.current = false
+    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- SAFETY: invalidating an in-flight RPC must clear the visible busy state when its client or target scope changes.
+    setBusy(false)
+  }, [])
+
+  useEffect(() => {
+    invalidateOperations()
+  }, [client, invalidateOperations, visible, hostCapabilities, sshTargets])
+
   const value = view === 'clone' ? cloneUrl : projectName
   const canSubmit = value.trim().length > 0 && !busy && client != null
   const sshSupported = hostCapabilities.includes(REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY)
-  const targetOptions: AddProjectTarget[] = hostCapabilities.includes(REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY)
+  const targetOptions: AddProjectTarget[] = hostCapabilities.includes(
+    REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY
+  )
     ? [{ id: null, label: 'This host' }, ...sshTargets]
     : []
-  const activeSshConnectionId = sshSupported && targetOptions.some((target) => target.id === sshConnectionId) ? sshConnectionId : null
+  const activeSshConnectionId =
+    sshSupported && targetOptions.some((target) => target.id === sshConnectionId)
+      ? sshConnectionId
+      : null
   const requestTarget = activeSshConnectionId ? { sshConnectionId: activeSshConnectionId } : {}
   const selectTarget = (id: string | null) => {
-    if (id !== activeSshConnectionId) { setDestinationPath('') }
+    if (id !== activeSshConnectionId) {
+      invalidateOperations()
+      setDestinationPath('')
+    }
     setSshConnectionId(id)
   }
 
-  useEffect(() => () => { mountedRef.current = false }, [])
+  useEffect(
+    () => () => {
+      mountedRef.current = false
+    },
+    []
+  )
 
   const submit = useCallback(() => {
     if (!canSubmit || !client || busyRef.current) {
@@ -157,7 +216,11 @@ function AddProjectModalContent({
         const reply = repoCloneRun.interpret(
           await repoCloneRun.request(
             client,
-            { url: cloneUrl.trim(), ...(destinationPath ? { destination: destinationPath } : {}), ...requestTarget },
+            {
+              url: cloneUrl.trim(),
+              ...(destinationPath ? { destination: destinationPath } : {}),
+              ...requestTarget
+            },
             {
               timeoutMs: REPO_CLONE_TIMEOUT_MS
             }
@@ -181,13 +244,28 @@ function AddProjectModalContent({
       }
       throw new Error('Unsupported add project step')
     }
-    const current = () => mountedRef.current && operationGenerationRef.current === operationGeneration && latestClientRef.current === client
+    const current = () =>
+      mountedRef.current &&
+      visible &&
+      operationGenerationRef.current === operationGeneration &&
+      latestClientRef.current === client
     run()
-      .then((repo) => { if (current()) { onAdded(repo) } })
-      .catch((cause: unknown) => {
-        if (current()) { setError(cause instanceof Error ? cause.message : String(cause)) }
+      .then((repo) => {
+        if (current()) {
+          onAdded(repo)
+        }
       })
-      .finally(() => { if (current()) { busyRef.current = false; setBusy(false) } })
+      .catch((cause: unknown) => {
+        if (current()) {
+          setError(cause instanceof Error ? cause.message : String(cause))
+        }
+      })
+      .finally(() => {
+        if (current()) {
+          busyRef.current = false
+          setBusy(false)
+        }
+      })
   }, [canSubmit, client, cloneUrl, onAdded, projectName, requestTarget, view])
 
   const addFolder = useCallback(
@@ -204,12 +282,21 @@ function AddProjectModalContent({
         const reply = repoAddExistingRun.interpret(
           await repoAddExistingRun.request(client, { path, kind, ...requestTarget })
         )
-        if (mountedRef.current && operationGenerationRef.current === operationGeneration && latestClientRef.current === client) {
+        if (
+          mountedRef.current &&
+          visible &&
+          operationGenerationRef.current === operationGeneration &&
+          latestClientRef.current === client
+        ) {
           onAdded(toMobileRepo(reply.repo))
         }
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause)
-        const current = mountedRef.current && operationGenerationRef.current === operationGeneration && latestClientRef.current === client
+        const current =
+          mountedRef.current &&
+          visible &&
+          operationGenerationRef.current === operationGeneration &&
+          latestClientRef.current === client
         if (current && kind === 'git' && message.includes(NOT_A_GIT_REPOSITORY)) {
           setFolderCandidate({ path, sshConnectionId: activeSshConnectionId, client })
           setView('confirmFolder')
@@ -218,13 +305,18 @@ function AddProjectModalContent({
           setView('addExisting')
         }
       } finally {
-        if (mountedRef.current && operationGenerationRef.current === operationGeneration) {
+        if (
+          mountedRef.current &&
+          visible &&
+          operationGenerationRef.current === operationGeneration &&
+          latestClientRef.current === client
+        ) {
           busyRef.current = false
           setBusy(false)
         }
       }
     },
-    [busy, client, onAdded, requestTarget]
+    [busy, client, onAdded, requestTarget, visible]
   )
 
   const targetSelector = (
@@ -242,33 +334,37 @@ function AddProjectModalContent({
         <View>
           {targetSelector}
           <ActionSheetContent
-          title="Add project"
-          actions={[
-            {
-              label: 'Browse folder',
-              icon: FolderOpen,
-              hint: 'Existing Git repository or folder on this host',
-              onPress: () => setView('addExisting')
-            },
-            {
-              label: 'Clone from URL',
-              icon: Globe,
-              hint: 'Clone a remote Git repository',
-              onPress: () => {
-                if (activeSshConnectionId) { setDestinationKind('clone') }
-                setView(activeSshConnectionId ? 'pickDestination' : 'clone')
+            title="Add project"
+            actions={[
+              {
+                label: 'Browse folder',
+                icon: FolderOpen,
+                hint: 'Existing Git repository or folder on this host',
+                onPress: () => setView('addExisting')
+              },
+              {
+                label: 'Clone from URL',
+                icon: Globe,
+                hint: 'Clone a remote Git repository',
+                onPress: () => {
+                  if (activeSshConnectionId) {
+                    setDestinationKind('clone')
+                  }
+                  setView(activeSshConnectionId ? 'pickDestination' : 'clone')
+                }
+              },
+              {
+                label: 'Create new project',
+                icon: Plus,
+                hint: 'Start from an empty folder',
+                onPress: () => {
+                  if (activeSshConnectionId) {
+                    setDestinationKind('create')
+                  }
+                  setView(activeSshConnectionId ? 'pickDestination' : 'create')
+                }
               }
-            },
-            {
-              label: 'Create new project',
-              icon: Plus,
-              hint: 'Start from an empty folder',
-              onPress: () => {
-                if (activeSshConnectionId) { setDestinationKind('create') }
-                setView(activeSshConnectionId ? 'pickDestination' : 'create')
-              }
-            }
-          ]}
+            ]}
           />
         </View>
       )
@@ -300,7 +396,10 @@ function AddProjectModalContent({
             error={error}
             pickLabel="Select folder"
             onBack={() => setView(destinationKind ?? 'start')}
-            onPick={(path) => { setDestinationPath(path); setView(destinationKind ?? 'start') }}
+            onPick={(path) => {
+              setDestinationPath(path)
+              setView(destinationKind ?? 'start')
+            }}
           />
         </View>
       )
@@ -314,7 +413,11 @@ function AddProjectModalContent({
           confirmLabel="Add folder"
           onConfirm={() => {
             confirmingFolderRef.current = true
-            if (!folderCandidate || folderCandidate.client !== client || folderCandidate.sshConnectionId !== activeSshConnectionId) {
+            if (
+              !folderCandidate ||
+              folderCandidate.client !== client ||
+              folderCandidate.sshConnectionId !== activeSshConnectionId
+            ) {
               setError('The host or SSH target changed. Choose the folder again.')
               setView('addExisting')
               confirmingFolderRef.current = false
@@ -419,7 +522,12 @@ function AddProjectModalContent({
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.md
+  },
   backButton: {
     marginLeft: -spacing.xs,
     paddingVertical: spacing.xs,
