@@ -15,6 +15,7 @@ import {
   normalizeGrokPromptId
 } from './agent-hook-listener/listener-limits'
 import type { HookListenerState } from './agent-hook-listener/listener-state'
+import { hasLivePiStatusOwner } from './agent-hook-listener/pi-status-owner-liveness'
 import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
@@ -63,6 +64,10 @@ export function normalizeHookPayload(
     worktreeId: stampedWorktreeId,
     launchToken: stampedLaunchToken
   } = envelope
+  // Why (#22011): Pi already reports a Devin it runs; Windows hooks leave this liveness check to us.
+  if (source === 'devin' && hasLivePiStatusOwner(record)) {
+    return null
+  }
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }
