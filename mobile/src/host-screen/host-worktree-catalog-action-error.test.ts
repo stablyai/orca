@@ -221,6 +221,55 @@ describe('the fetch a handoff awaits', () => {
     expect(catalogCalls).toEqual([0, 1])
   })
 
+  it('drops an old handoff after a host and client switch while its poll is pending', async () => {
+    const releasers: Array<() => void> = []
+    const catalogCalls: number[] = []
+    const catalogFetch = () =>
+      new Promise((resolve) => {
+        catalogCalls.push(catalogCalls.length)
+        releasers.push(() =>
+          resolve({ kind: 'response', pending: { admission: { kind: 'valid' } } })
+        )
+      })
+    const actionErrors: string[] = []
+    const catalogErrors: (string | null)[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reachable surface as fetchWith above.
+    const args = catalogHook(
+      { kind: 'response', pending: { admission: { kind: 'valid' } } },
+      actionErrors,
+      catalogErrors,
+      catalogFetch
+    ) as unknown as Parameters<typeof useHostWorktreeCatalog>[0]
+    const held: {
+      fetchWorktrees: ((options?: { allowDuringModal?: boolean }) => Promise<unknown>) | null
+    } = { fetchWorktrees: null }
+    function Probe(): null {
+      held.fetchWorktrees = useHostWorktreeCatalog(args).fetchWorktrees
+      return null
+    }
+    let renderer: ReturnType<typeof create> | null = null
+    await act(async () => {
+      renderer = create(createElement(Probe))
+    })
+    const oldPoll = held.fetchWorktrees?.()
+    const oldHandoff = held.fetchWorktrees?.({ allowDuringModal: true })
+    expect(releasers).toHaveLength(1)
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test only needs a distinct client identity; RPC methods are never called after the switch.
+    const newClient = {} as NonNullable<Parameters<typeof useHostWorktreeCatalog>[0]['client']>
+    args.client = newClient
+    args.state.clientRef.current = newClient
+    args.hostId = 'host-2'
+    await act(async () => {
+      renderer?.update(createElement(Probe))
+    })
+    releasers[0]?.()
+
+    await expect(oldPoll).resolves.toBeUndefined()
+    await expect(oldHandoff).resolves.toBeUndefined()
+    expect(catalogCalls).toEqual([0])
+  })
+
   it('keeps ordinary concurrent polls joined to the existing request', async () => {
     const releaser: { release: (() => void) | null } = { release: null }
     const catalogCalls: number[] = []

@@ -73,10 +73,15 @@ export function useHostWorktreeCatalog(args: {
         if (!options.allowDuringModal) {
           return inFlight
         }
+        const handoffClient = client
+        const handoffHostId = hostId
         // A post-mutation handoff must observe a request that started after the mutation. Wait for
         // the pre-mutation poll, then continue through this callback so its latest client/host and
         // modal guards are applied to the fresh request.
         await inFlight
+        if (clientRef.current !== handoffClient || hostIdRef.current !== handoffHostId) {
+          return undefined
+        }
         if (fetchWorktreesInFlightRef.current === inFlight) {
           fetchWorktreesInFlightRef.current = null
         }
