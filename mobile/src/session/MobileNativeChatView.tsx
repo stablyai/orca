@@ -141,7 +141,6 @@ type Props = MobileQueuedSlotProps & {
    *  owns keyboard tracking (the app uses manual lift, not KeyboardAvoidingView). */
   keyboardInset?: number
 }
-
 export function MobileNativeChatView({
   messages,
   folded,
@@ -308,7 +307,6 @@ export function MobileNativeChatView({
       onOpenFile={onOpenFile}
     />
   ) : null
-
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
 
@@ -320,8 +318,7 @@ export function MobileNativeChatView({
     </View>
   ) : null
 
-  // Whatever was already on screen: nothing here can act on a chat that cannot load, and its words
-  // say why once, as a fresh open's do.
+  // Whatever was already on screen: nothing here can act on a chat that cannot load.
   if (readFailedFinally && emptyStateView) {
     return <View style={[styles.root, { paddingBottom: bottomPad }]}>{emptyStateView}</View>
   }
@@ -336,6 +333,7 @@ export function MobileNativeChatView({
         <GestureHandlerRootView style={styles.listWrap}>
           <GestureDetector gesture={pinchGesture}>
             <FlatList
+              key={sendSurfaceId}
               ref={listRef}
               data={turns.listMessages}
               keyExtractor={(item) => item.id}
