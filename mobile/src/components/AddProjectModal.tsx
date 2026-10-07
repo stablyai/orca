@@ -20,18 +20,12 @@ import {
   EMPTY_SSH_TARGETS,
   createAddProjectScope,
   type AddProjectModalProps,
+  type AddProjectView,
   type FolderCandidate
 } from './addProjectTypes'
 import { toMobileRepo } from './addProjectTypes'
 import { useAddProjectOperationScope } from './useAddProjectOperationScope'
 import { resolveAddProjectTargetState, selectAddProjectTarget } from './addProjectTargetState'
-type AddProjectView =
-  | 'start'
-  | 'clone'
-  | 'create'
-  | 'addExisting'
-  | 'confirmFolder'
-  | 'pickDestination'
 export function AddProjectModal({
   visible,
   client,
