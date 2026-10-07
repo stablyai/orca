@@ -1,14 +1,18 @@
 import type { ClaudeAccountService } from '../claude-accounts/service'
+import { hasAppEnvironment } from '../../shared/app-environment'
+import { getManagedDataAccountService } from '../managed-data-accounts/service'
+import type {
+  ClaudeRateLimitAccountsState,
+  CodexRateLimitAccountsState,
+  ManagedDataAccountProvider,
+  ManagedDataAccountsState
+} from '../../shared/managed-account-types'
 import type {
   CodexAccountService,
   CodexResetCreditRejectedBeforeProviderReason
 } from '../codex-accounts/service'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { RateLimitService } from '../rate-limits/service'
-import type {
-  ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState
-} from '../../shared/managed-account-types'
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
@@ -21,6 +25,8 @@ export type RuntimeAccountServices = {
 }
 
 export type AccountsSnapshot = {
+  opencode?: ManagedDataAccountsState
+  devin?: ManagedDataAccountsState
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
   rateLimits: RateLimitState
@@ -61,10 +67,41 @@ export class RuntimeAccountController {
   getSnapshot(): AccountsSnapshot {
     const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
     return {
+      ...this.dataAccountsSnapshot(),
       claude: claudeAccounts.listAccounts(),
       codex: codexAccounts.listAccounts(),
       rateLimits: rateLimits.getState()
     }
+  }
+
+  dataAccountsSnapshot(): Pick<AccountsSnapshot, 'opencode' | 'devin'> {
+    if (!hasAppEnvironment()) {
+      return {}
+    }
+    const service = getManagedDataAccountService()
+    return { opencode: service.list('opencode'), devin: service.list('devin') }
+  }
+
+  addDataFromHome(
+    provider: ManagedDataAccountProvider,
+    sourceDataHome: string,
+    label: string
+  ): Promise<ManagedDataAccountsState> {
+    return getManagedDataAccountService().add(provider, sourceDataHome, label)
+  }
+
+  selectData(
+    provider: ManagedDataAccountProvider,
+    accountId: string | null
+  ): Promise<ManagedDataAccountsState> {
+    return getManagedDataAccountService().select(provider, accountId)
+  }
+
+  removeData(
+    provider: ManagedDataAccountProvider,
+    accountId: string
+  ): Promise<ManagedDataAccountsState> {
+    return getManagedDataAccountService().remove(provider, accountId)
   }
 
   async refreshForMobile(): Promise<void> {
@@ -151,13 +188,21 @@ export class RuntimeAccountController {
 
   onChanged(listener: (snapshot: AccountsSnapshot) => void): () => void {
     const services = this.requireServices()
-    return services.rateLimits.onStateChange((rateLimits) => {
+    const unsubscribeData = hasAppEnvironment()
+      ? getManagedDataAccountService().onChanged(() => listener(this.getSnapshot()))
+      : () => {}
+    const unsubscribeUsage = services.rateLimits.onStateChange((rateLimits) => {
       listener({
+        ...this.dataAccountsSnapshot(),
         claude: services.claudeAccounts.listAccounts(),
         codex: services.codexAccounts.listAccounts(),
         rateLimits
       })
     })
+    return () => {
+      unsubscribeData()
+      unsubscribeUsage()
+    }
   }
 
   private requireServices(): RuntimeAccountServices {

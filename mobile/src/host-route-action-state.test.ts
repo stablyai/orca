@@ -19,6 +19,30 @@ describe('host route action state', () => {
     )
   })
 
+  // Why: the host reports a create that succeeded with a failed startup terminal via `warning`;
+  // dropping it here is what lands the phone on an unexplained empty session.
+  it('carries a host create warning into the session route', () => {
+    expect(
+      hostNewWorktreeSessionRoute(
+        'local',
+        'wt-1',
+        'Hammerhead',
+        'Failed to create the startup terminal'
+      )
+    ).toBe(
+      '/h/local/session/wt-1?name=Hammerhead&created=1&warning=Failed+to+create+the+startup+terminal'
+    )
+  })
+
+  it('omits an absent or blank create warning', () => {
+    expect(hostNewWorktreeSessionRoute('local', 'wt-1', 'Hammerhead', '   ')).toBe(
+      '/h/local/session/wt-1?name=Hammerhead&created=1'
+    )
+    expect(hostNewWorktreeSessionRoute('local', 'wt-1', 'Hammerhead')).toBe(
+      '/h/local/session/wt-1?name=Hammerhead&created=1'
+    )
+  })
+
   it('opens new worktree modal on an initial newWorktree action', () => {
     expect(createInitialHostRouteActionState('newWorktree')).toEqual({
       routeAction: 'newWorktree',

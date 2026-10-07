@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Republishing an epoch is ONE transaction.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -8,29 +9,49 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { openJournalDatabase, type OpenJournalDatabase } from './journal-database'
+import type { JournalHostDatabase } from './journal-host-database'
 import { replaceJournalEpoch } from './journal-epoch-replacement'
 import type { JournalLoad } from './journal-open'
-import { journalDatabaseFile } from './journal-paths'
-import { readJournalEpochRows, readJournalSessionEpoch } from './journal-row-table'
-import { createTrackedJournalOpener } from './journal-store-test-open'
+import type { AgentSessionJournal } from './journal-store'
+import { readJournalSessionEpoch } from './journal-row-table'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase,
+  readTestJournalRows
+} from './journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
+}
+
+const PEER: AgentSessionJournalIdentity = {
+  ...IDENTITY,
+  sessionId: 'session-peer',
+  providerHandle: codexProviderHandle('thread-peer')
 }
 
 let root: string
 let clock = 1_000
-let database: OpenJournalDatabase
+let database: JournalHostDatabase
 const journals = createTrackedJournalOpener()
 
 function now(): number {
   clock += 1
   return clock
+}
+
+/** Rows stored under the chat and epoch, whatever the chat's pointer names. */
+function storedRows(sessionId: string, epoch: string): number {
+  return Number(
+    database.db
+      .prepare('SELECT count(*) AS total FROM journal_rows WHERE session_id = ? AND epoch = ?')
+      .get(sessionId, epoch)?.total
+  )
 }
 
 function item(ordinal: number): AgentJournalItemIdentity {
@@ -42,11 +63,12 @@ function replace(input: {
   onPublished?: (loaded: JournalLoad) => void
 }): void {
   replaceJournalEpoch({
-    db: database.db,
+    database,
     identity: IDENTITY,
     reason: 'legacy_import',
     fence: 1,
     items: input.items,
+    queuePause: { lifted: false, liveStop: null, reopened: false },
     now,
     mintEpoch: () => `epoch-${clock}`,
     onPublished: input.onPublished ?? (() => undefined)
@@ -56,12 +78,12 @@ function replace(input: {
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-replace-'))
   clock = 1_000
-  database = openJournalDatabase(journalDatabaseFile(root))
+  database = openTestJournalHostDatabase(root)
 })
 
 afterEach(async () => {
   try {
-    database.db.close()
+    database.close()
   } catch {
     // Already closed by the case.
   }
@@ -81,23 +103,33 @@ describe('journal epoch replacement', () => {
     expect(published).toHaveLength(1)
     const epoch = readJournalSessionEpoch(database.db, IDENTITY.sessionId)
     expect(epoch).toBe(published[0]?.state.epoch)
-    expect(readJournalEpochRows(database.db, IDENTITY.sessionId, epoch ?? '')).toHaveLength(2)
+    expect(readTestJournalRows(database.db, IDENTITY.sessionId, epoch ?? '')).toHaveLength(2)
   })
 
-  it('discards every superseded row in the same transaction', async () => {
-    const journal = await journals.open({ identity: IDENTITY, journalDir: root })
-    await journal.appendItem(item(1), { kind: 'status', text: 'old' }, { fence: 1 })
-    await journal.appendItem(item(2), { kind: 'status', text: 'older' }, { fence: 1 })
+  // Keyed by identity: a retired epoch's rows go by (chat, epoch), and no other chat's go with them.
+  it.each([
+    [
+      'a replace',
+      (journal: AgentSessionJournal) =>
+        journal.replaceEpochItems('legacy_import', 1, [
+          { identity: item(9), body: { kind: 'status', text: 'republished' } }
+        ])
+    ],
+    ['a rollover', (journal: AgentSessionJournal) => journal.rollEpoch('handle_forked', 1)]
+  ])('discards every superseded row in the same transaction as %s', async (_name, retire) => {
+    const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
+    const peer = await journals.open({ identity: PEER, stateDirectory: root })
+    const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    await journal.appendItem(item(1), { kind: 'status', text: 'old' }, scope)
+    await journal.appendItem(item(2), { kind: 'status', text: 'older' }, scope)
+    await peer.appendItem(item(1), { kind: 'status', text: 'peer' }, scope)
     const before = journal.epoch
 
-    await journal.replaceEpochItems('legacy_import', 1, [
-      { identity: item(9), body: { kind: 'status', text: 'republished' } }
-    ])
+    await retire(journal)
 
     expect(journal.epoch).not.toBe(before)
-    expect(readJournalEpochRows(database.db, IDENTITY.sessionId, before)).toHaveLength(0)
-    expect(journal.snapshot().items.map((entry) => entry.body)).toEqual([
-      { kind: 'status', text: 'republished' }
-    ])
+    expect(storedRows(IDENTITY.sessionId, before)).toBe(0)
+    expect(storedRows(IDENTITY.sessionId, journal.epoch)).toBe(journal.cursor().sequence)
+    expect(storedRows(PEER.sessionId, peer.epoch)).toBe(2)
   })
 })

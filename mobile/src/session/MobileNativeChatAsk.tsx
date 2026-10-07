@@ -3,6 +3,8 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { Check } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
 
 type Props = {
   prompt: AskPrompt
@@ -11,6 +13,8 @@ type Props = {
    *  option's stable number instead of pasted label text (STA-1860). */
   onAnswer: (selections: AskAnswerSelection[]) => Promise<boolean>
   onCancel?: () => Promise<boolean>
+  /** Fold the card to a strip and free Send, writing nothing. */
+  onCollapse?: () => void
 }
 
 // Sentinel index for the free-text "Other…" row (never a real option index).
@@ -20,7 +24,12 @@ const OTHER = -1
  *  question per step with tabs across the top, a Next button that advances (Send
  *  on the last step), and a Cancel that dismisses the prompt. Neutral styling
  *  with a subtle green accent on the active choice to match the rest of the app. */
-export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): React.JSX.Element {
+export function MobileNativeChatAsk({
+  prompt,
+  onAnswer,
+  onCancel,
+  onCollapse
+}: Props): React.JSX.Element {
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
@@ -126,7 +135,10 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
       ) : null}
 
       <ScrollView style={styles.scroll} keyboardShouldPersistTaps="always">
-        <Text style={styles.questionText}>{q.question}</Text>
+        <View style={styles.questionRow}>
+          <Text style={styles.questionText}>{q.question}</Text>
+          <MobileNativeChatCardHeaderAction onCollapse={onCollapse} disabled={submitting} />
+        </View>
         {q.options.map((opt, optIndex) => (
           <OptionRow
             key={`${optIndex}:${opt.label}`}
@@ -274,7 +286,9 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: spacing.md
   },
+  questionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   questionText: {
+    flex: 1,
     color: colors.textPrimary,
     fontSize: typography.bodySize + 1,
     fontWeight: '600',
@@ -331,7 +345,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSubtle,
     borderRadius: radii.card,
     color: colors.textPrimary,
-    fontSize: typography.bodySize,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     padding: spacing.sm,
     minHeight: 44,
     marginBottom: spacing.xs

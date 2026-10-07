@@ -5,23 +5,38 @@ import type {
   AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type {
+  TranscriptMessageSink,
+  TranscriptSessionIdentity
+} from './session-transcript-consumers'
+import type { SessionSidecarObservation } from './session-sidecar-stat'
+import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
+  /** Account `projects` folders the System default does not link; resolved by the host process. */
+  claudeProfileProjectsDirs?: readonly string[]
+  codebuddyProjectsDir?: string
+  qoderProjectsDir?: string
   codexSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
   // Why: tests inject a sandbox "real ~/.codex" so real-home attribution
   // (codexHome null → unprefixed resume) is testable without the user's home.
   defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
+  wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
   geminiSessionsDir?: string
   antigravityBrainDir?: string
+  antigravityAppHome?: string
+  includeAntigravityIdeSessions?: boolean
   copilotSessionsDir?: string
   cursorProjectsDir?: string
   opencodeStorageDir?: string
   // Why: OpenCode 1.17.x stores sessions in SQLite; tests inject a temp DB
   // here so they don't depend on the real ~/.local/share/opencode.
   opencodeDbPaths?: readonly string[]
+  /** Test override for the ZCode CLI's OpenCode-shaped SQLite database. */
+  zcodeDbPath?: string
   grokSessionsDir?: string
   devinTranscriptsDir?: string
   hermesSessionsDir?: string
@@ -35,11 +50,13 @@ export type AiVaultScanOptions = {
   droidProjectsDir?: string
   clineSessionsDir?: string
   kimiSessionsDir?: string
+  museSessionsDir?: string
+  jcodeSessionsDir?: string
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of
-  // the recency cap (see discoverInScopeClaudeFiles).
+  // the recency cap (see discoverInScopeCwdBucketFiles).
   scopePaths?: readonly string[]
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
@@ -49,13 +66,19 @@ export type AiVaultScanOptions = {
 }
 
 export type FileWithMtime = {
+  /** Antigravity alias observation, separate from the actual file stat/cache key. */
+  aliasMtimeMs?: number
   path: string
   mtimeMs: number
   modifiedAt: string
   // Present when discovery statted the file; lets the parse cache detect
   // unchanged/truncated files without a second stat. Synthetic candidates
-  // such as OpenCode SQLite rows omit it.
+  // such as OpenCode SQLite rows omit it. The transcript's own length: a byte
+  // offset into it may be compared against this directly.
   sizeBytes?: number
+  // What discovery saw of the agent's sibling file, tracked apart from the
+  // transcript's own stat (see session-sidecar-stat.ts).
+  sidecar?: SessionSidecarObservation
   // Present when discovery can prove filesystem identity. Codex dual-root
   // scans use a multi-link inode to collapse only actual hardlink aliases.
   dev?: number
@@ -97,6 +120,9 @@ export type ResumableSessionParseState = {
   consumeLineBytes?(line: Buffer): void
   // Lets a parser terminate an excluded transcript without draining the file.
   shouldStop?(): boolean
+  // What the fold knows about the session right now, for a consumer that has to
+  // commit before the read ends (see TranscriptSessionIdentity).
+  identity?(): TranscriptSessionIdentity | null
   clone(): ResumableSessionParseState
   // Refresh per-scan file metadata (mtime display string) without re-parsing.
   touchFile(file: FileWithMtime): void
@@ -108,6 +134,9 @@ export type ResumableSessionParseState = {
 
 export type SessionAccumulator = {
   agent: AiVaultAgent
+  // Every decoded message this fold sees also goes here, for the reader's
+  // consumers. Shared by clones on purpose: one read, one message stream.
+  messages: TranscriptMessageSink
   sessionId: string
   title: string | null
   fallbackTitle: string | null
@@ -124,11 +153,13 @@ export type SessionAccumulator = {
   // True once an older message fell out of the newest-N preview window, so the
   // earliest preview turn is no longer the session's opening ask.
   previewMessagesTruncated: boolean
+  antigravityOpeningPrompt?: AiVaultSession['antigravityOpeningPrompt'] | null
   firstUserPrompt: string | null
   lastUserPrompt: string | null
   // Recoverable signal for a zero-turn transcript (see AiVaultSession).
   queuedMessageCount: number
   subagentTranscriptCount: number
+  earliestTimestampMs: number
   latestTimestampMs: number
 }
 

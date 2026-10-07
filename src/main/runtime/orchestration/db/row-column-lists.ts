@@ -1,3 +1,4 @@
+import type { AttemptObservationStorageRow } from './attempt-observation-store'
 import type { DispatchContextRow, RunRow, TaskRow } from '../types'
 
 // Why: `SyncDatabase` refuses to cache any `SELECT *` (node:sqlite can build the first row after a
@@ -12,6 +13,8 @@ export const RUN_COLUMNS = [
   'home_database',
   'coordinator_handle',
   'coordinator_pane_key',
+  'coordinator_orca_session_id',
+  'coordinator_orca_session_id_generation',
   'consumer_generation',
   'legacy',
   'created_at',
@@ -44,19 +47,42 @@ export const DISPATCH_CONTEXT_COLUMNS = [
   'launch_token_hash',
   'assignee_handle',
   'assignee_pane_key',
+  'assignee_orca_session_id',
   'capability_hash',
   'process_incarnation',
   'capability_revoked_at',
+  'retry_of_dispatch_id',
+  'creator_dispatch_id',
+  'creator_handle',
+  'creator_pane_key',
+  'creator_orca_session_id',
+  'host_scope',
   'status',
   'failure_count',
   'last_failure',
   'termination_reason',
   'depth',
+  'consumer_generation',
   'dispatched_at',
   'completed_at',
   'created_at',
   'last_heartbeat_at'
 ] as const satisfies readonly (keyof DispatchContextRow)[]
+
+export const ATTEMPT_OBSERVATION_FACT_COLUMNS = [
+  'id',
+  'dispatch_id',
+  'task_id',
+  'sequence',
+  'authority_id',
+  'authority_clock',
+  'facet',
+  'payload',
+  'source_observed_at',
+  'execution_received_at',
+  'home_received_at',
+  'created_at'
+] as const satisfies readonly (keyof AttemptObservationStorageRow)[]
 
 // Compile check: a row field added without its column here would silently vanish from the
 // projection that used to be `SELECT *`, so the missing key must fail the build.
@@ -66,11 +92,16 @@ type UnprojectedDispatchContextColumn = Exclude<
   keyof DispatchContextRow,
   (typeof DISPATCH_CONTEXT_COLUMNS)[number]
 >
+type UnprojectedAttemptObservationColumn = Exclude<
+  keyof AttemptObservationStorageRow,
+  (typeof ATTEMPT_OBSERVATION_FACT_COLUMNS)[number]
+>
 const assertEveryRowColumnProjected: [
   UnprojectedRunColumn extends never ? true : never,
   UnprojectedTaskColumn extends never ? true : never,
-  UnprojectedDispatchContextColumn extends never ? true : never
-] = [true, true, true]
+  UnprojectedDispatchContextColumn extends never ? true : never,
+  UnprojectedAttemptObservationColumn extends never ? true : never
+] = [true, true, true, true]
 void assertEveryRowColumnProjected
 
 /** Projection list for a `SELECT`; `alias` qualifies each name for a joined table (`t.id, …`). */
@@ -80,3 +111,4 @@ export function selectColumns(columns: readonly string[], alias?: string): strin
 
 export const RUN_COLUMN_LIST = selectColumns(RUN_COLUMNS)
 export const DISPATCH_CONTEXT_COLUMN_LIST = selectColumns(DISPATCH_CONTEXT_COLUMNS)
+export const ATTEMPT_OBSERVATION_FACT_COLUMN_LIST = selectColumns(ATTEMPT_OBSERVATION_FACT_COLUMNS)

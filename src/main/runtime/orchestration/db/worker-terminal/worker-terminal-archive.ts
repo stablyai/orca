@@ -1,4 +1,5 @@
 import type {
+  WorkerTerminalArchiveKind,
   WorkerTerminalResourceRow,
   WorkerTerminalArchiveRow,
   WorkerTerminalArchiveStatus,
@@ -12,7 +13,7 @@ export function storeWorkerTerminalArchive(
   params: {
     dispatchId: string
     resourceId: string
-    kind: 'transcript_pin' | 'terminal_tail'
+    kind: WorkerTerminalArchiveKind
     content: string
   }
 ): void {
@@ -31,7 +32,7 @@ export function commitWorkerTerminalArchiveForRelease(
   params: {
     dispatchId: string
     resourceId: string
-    kind?: 'transcript_pin' | 'terminal_tail'
+    kind?: WorkerTerminalArchiveKind
     content?: string
     archiveSource: 'transcript' | 'terminal'
     archiveStatus: Extract<WorkerTerminalArchiveStatus, 'captured' | 'empty'>
@@ -140,6 +141,31 @@ export function revertWorkerTerminalReleaseToRetained(
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
+/**
+ * The one retain rule; the caller holds the transaction. A committed release (releasing, unknown)
+ * may already have closed the tab, so it keeps its state and the archive that preserved the output.
+ */
+export function retainTerminalResourceInTransaction(
+  database: OrchestrationDb,
+  resourceId: string,
+  dispatchId: string
+): boolean {
+  const { changes } = database.db
+    .prepare(
+      `UPDATE worker_terminal_resources
+       SET release_state = 'retained', retained_reason = 'user_requested',
+           updated_at = datetime('now')
+       WHERE id = ? AND release_state IN ('not_requested', 'retained', 'requested')`
+    )
+    .run(resourceId)
+  if (changes > 0) {
+    database.db
+      .prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?')
+      .run(dispatchId)
+  }
+  return changes > 0
+}
+
 export function retainWorkerTerminalResource(
   this: OrchestrationDb,
   dispatchId: string
@@ -170,20 +196,12 @@ export function retainWorkerTerminalResource(
       this.db.exec('COMMIT')
       return { disposition: 'already_released', resource }
     }
-    this.db
-      .prepare(
-        `UPDATE worker_terminal_resources
-         SET release_state = 'retained', retained_reason = 'user_requested',
-             updated_at = datetime('now')
-         WHERE id = ? AND release_state IN ('not_requested', 'retained', 'requested')`
-      )
-      .run(resource.id)
+    const retained = retainTerminalResourceInTransaction(this, resource.id, dispatchId)
     const updated = this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
-    if (updated.release_state !== 'retained') {
+    if (!retained) {
       this.db.exec('COMMIT')
       return { disposition: 'release_committed', resource: updated }
     }
-    this.db.prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?').run(dispatchId)
     this.db.exec('COMMIT')
     return { disposition: 'retained', resource: updated }
   } catch (error) {

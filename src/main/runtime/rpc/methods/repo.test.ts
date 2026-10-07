@@ -1,9 +1,16 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import { OrcaRuntimeService } from '../../orca-runtime'
 import { REPO_METHODS } from './repo'
-import { WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
+  RUNTIME_CAPABILITIES,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
 import { REPO_SEARCH_REFS_MAX_LIMIT } from '../../../../shared/repo-search-limits'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
@@ -11,6 +18,16 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('repo RPC methods', () => {
+  it('advertises qualified-ref support from hosts and native remote clients', () => {
+    expect(RUNTIME_CAPABILITIES).toContain(REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY)
+    expect(NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES).toContain(
+      REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY
+    )
+    expect(remoteRuntimeClientCapabilities()).toContain(
+      REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY
+    )
+  })
+
   it('passes oversized safe ref-search limits to the runtime clamp', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -30,8 +47,56 @@ describe('repo RPC methods', () => {
     expect(runtime.searchRepoRefs).toHaveBeenCalledWith(
       'id:repo-1',
       'main',
-      REPO_SEARCH_REFS_MAX_LIMIT + 1
+      REPO_SEARCH_REFS_MAX_LIMIT + 1,
+      true
     )
+  })
+
+  it('only exposes namespace-qualified ref selectors to capable clients', async () => {
+    const result = {
+      refs: ['refs/heads/feature/local', 'refs/remotes/origin/feature/remote', 'main'],
+      refDetails: [
+        { refName: 'refs/heads/feature/local', localBranchName: 'feature/local' },
+        {
+          refName: 'refs/remotes/origin/feature/remote',
+          localBranchName: 'feature/remote'
+        },
+        { refName: 'main', localBranchName: 'main' }
+      ],
+      truncated: false
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.searchRefs only calls the fixture methods defined below.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      searchRepoRefs: vi.fn().mockResolvedValue(result)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+    const legacyReplies: string[] = []
+    const capableReplies: string[] = []
+    const inProcessResponse = await dispatcher.dispatch(
+      makeRequest('repo.searchRefs', { repo: 'id:repo-1', query: 'feature', limit: 20 })
+    )
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('repo.searchRefs', { repo: 'id:repo-1', query: 'feature', limit: 20 }),
+      (reply) => legacyReplies.push(reply),
+      { clientCapabilities: [] }
+    )
+    await dispatcher.dispatchStreaming(
+      makeRequest('repo.searchRefs', { repo: 'id:repo-1', query: 'feature', limit: 20 }),
+      (reply) => capableReplies.push(reply),
+      { clientCapabilities: [REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY] }
+    )
+
+    expect(runtime.searchRepoRefs).toHaveBeenNthCalledWith(2, 'id:repo-1', 'feature', 20, false)
+    expect(runtime.searchRepoRefs).toHaveBeenNthCalledWith(3, 'id:repo-1', 'feature', 20, true)
+    expect(JSON.parse(legacyReplies[0]!).result).toEqual({
+      refs: ['main'],
+      refDetails: [{ refName: 'main', localBranchName: 'main' }],
+      truncated: false
+    })
+    expect(JSON.parse(capableReplies[0]!).result).toEqual(result)
+    expect(inProcessResponse).toMatchObject({ ok: true, result })
   })
 
   it('projects inherited visibility for old clients but preserves inheritance for capable clients', async () => {
@@ -387,6 +452,43 @@ describe('repo RPC methods', () => {
       ok: true,
       result: { repo: { id: 'repo-1', forkSyncMode: 'safe-auto' } }
     })
+  })
+
+  it('persists normalized ghAccount bindings and clear sentinels', async () => {
+    const runtime = new OrcaRuntimeService(null)
+    vi.spyOn(runtime, 'updateRepo').mockResolvedValue({
+      id: 'repo-1',
+      path: '/srv/repo',
+      displayName: 'repo',
+      badgeColor: '#000000',
+      addedAt: 0,
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: { host: ' GitHub.COM ', user: ' Alice ' } }
+      }),
+      { clientCapabilities: [WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY] }
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', ghAccount: { host: 'github.com', user: 'Alice' } } }
+    })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: null }
+      })
+    )
+    expect(runtime.updateRepo).toHaveBeenLastCalledWith('repo-1', { ghAccount: null })
   })
 
   it('persists agent worktree visibility updates', async () => {

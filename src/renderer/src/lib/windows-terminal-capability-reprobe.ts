@@ -35,9 +35,13 @@ function capabilitySignature(capabilities: WindowsTerminalCapabilities): string 
   ].join('|')
 }
 
-/** The answer #11295 waits for: a usable WSL. Nothing further to watch for. */
+/** A usable WSL is settled once the host's platform is known. */
 function isSettled(capabilities: WindowsTerminalCapabilities): boolean {
-  return capabilities.wslAvailable && capabilities.wslDistros.length > 0
+  if (!capabilities.wslAvailable || capabilities.wslDistros.length === 0) {
+    return false
+  }
+  // A missing platform means the status probe may have failed; keep checking until it recovers.
+  return capabilities.hostPlatform !== null
 }
 
 function clearRunnerTimer(runner: CapabilityReprobeRunner): void {

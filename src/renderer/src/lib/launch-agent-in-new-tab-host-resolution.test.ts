@@ -92,7 +92,12 @@ function worktreeOn(hostId: string, path: string): StoreWorktree {
 
 async function launchOnLinux(): Promise<void> {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  launchAgentInNewTab({ agent: 'claude-agent-teams', worktreeId: 'wt-1', launchPlatform: 'linux' })
+  launchAgentInNewTab({
+    requestId: 'request-1',
+    agent: 'claude-agent-teams',
+    worktreeId: 'wt-1',
+    launchPlatform: 'linux'
+  })
 }
 
 function queuedCommand(): string {

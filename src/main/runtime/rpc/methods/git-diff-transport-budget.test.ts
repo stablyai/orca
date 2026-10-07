@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 // Why: git.diff, git.branchDiff and git.commitDiff all return a GitDiffResult, so capping only the
 // first would leave the other two able to kill a remote socket.
 import { describe, expect, it, vi } from 'vitest'

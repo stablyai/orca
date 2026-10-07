@@ -57,10 +57,10 @@ import {
 } from './agent-browser-bridge'
 import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
-  CLIPBOARD_TEXT_WRITE_MAX_BYTES,
   CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
 } from '../../shared/clipboard-text'
 import {
+  createFakeAgentBrowserChild,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -81,9 +81,9 @@ function succeedForContentEditable(data: unknown = { ok: true }): void {
           ? { value: 'true' }
           : data
       cb(null, JSON.stringify({ success: true, data: result }), '')
-      return {
+      return createFakeAgentBrowserChild({
         stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
-      }
+      })
     }
   )
 }
@@ -247,17 +247,6 @@ describe('AgentBrowserBridge', () => {
     bridge.setActiveTab(100)
   })
 
-  it('rejects oversized browser clipboard writes before spawning agent-browser', async () => {
-    const secret = 'browser-clipboard-secret'
-    succeedWith({ ok: true })
-
-    await expect(
-      bridge.clipboardWrite(secret + 'x'.repeat(CLIPBOARD_TEXT_WRITE_MAX_BYTES + 1))
-    ).rejects.toThrow(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
-
-    expect(execFileMock).not.toHaveBeenCalled()
-  })
-
   it('rejects browser clipboard writes that exceed the safe agent-browser argument size', async () => {
     succeedWith({ ok: true })
 
@@ -266,20 +255,6 @@ describe('AgentBrowserBridge', () => {
     ).rejects.toThrow(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
 
     expect(execFileMock).not.toHaveBeenCalled()
-  })
-
-  it('builds valid fill eval JavaScript for multiline values', async () => {
-    succeedWith({ ok: true })
-
-    await bridge.fill('@textarea', "line one\nline two with 'quote' and \\ slash")
-
-    const evalCall = execFileMock.mock.calls.find((call: unknown[]) =>
-      (call[1] as string[]).includes('eval')
-    )
-    expect(evalCall).toBeDefined()
-    const args = evalCall![1] as string[]
-    const expression = args[args.indexOf('eval') + 1]
-    expect(() => new Function(expression)).not.toThrow()
   })
 
   it('replaces contenteditable text through the browser editing pipeline', async () => {
@@ -359,12 +334,7 @@ describe('AgentBrowserBridge', () => {
 
     await bridge.fill('@spinbutton', '200')
 
-    const expressions = execFileMock.mock.calls
-      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
-      .map((call: unknown[]) => {
-        const args = call[1] as string[]
-        return args[args.indexOf('eval') + 1]
-      })
+    const expressions = stdinWrites
 
     const input = createFillEvalNode({ tagName: 'INPUT' })
     const wrapper = createFillEvalNode({
@@ -389,12 +359,7 @@ describe('AgentBrowserBridge', () => {
 
     await bridge.fill('@spinbutton', '200')
 
-    const expressions = execFileMock.mock.calls
-      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
-      .map((call: unknown[]) => {
-        const args = call[1] as string[]
-        return args[args.indexOf('eval') + 1]
-      })
+    const expressions = stdinWrites
 
     const input = createFillEvalNode({ tagName: 'INPUT' })
     const wrapper = createFillEvalNode({
@@ -419,12 +384,7 @@ describe('AgentBrowserBridge', () => {
 
     await bridge.fill('@spinbutton', '200')
 
-    const expressions = execFileMock.mock.calls
-      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
-      .map((call: unknown[]) => {
-        const args = call[1] as string[]
-        return args[args.indexOf('eval') + 1]
-      })
+    const expressions = stdinWrites
 
     const input = createFillEvalNode({ tagName: 'INPUT' })
     const controlled = createFillEvalNode({ tagName: 'DIV', descendant: input.node })
@@ -452,12 +412,7 @@ describe('AgentBrowserBridge', () => {
 
     await bridge.fill('@spinbutton', '200')
 
-    const expressions = execFileMock.mock.calls
-      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
-      .map((call: unknown[]) => {
-        const args = call[1] as string[]
-        return args[args.indexOf('eval') + 1]
-      })
+    const expressions = stdinWrites
 
     const hiddenInput = createFillEvalNode({ tagName: 'INPUT', type: 'hidden' })
     const numberInput = createFillEvalNode({ tagName: 'INPUT', type: 'number' })
@@ -485,12 +440,7 @@ describe('AgentBrowserBridge', () => {
 
     await bridge.fill('@input', '200')
 
-    const expressions = execFileMock.mock.calls
-      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
-      .map((call: unknown[]) => {
-        const args = call[1] as string[]
-        return args[args.indexOf('eval') + 1]
-      })
+    const expressions = stdinWrites
 
     const input = createFillEvalNode({ tagName: 'INPUT' })
 
@@ -503,8 +453,8 @@ describe('AgentBrowserBridge', () => {
     expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
   })
 
-  it('chunks large agent-browser fill values before eval transport', async () => {
-    const text = ['x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'tail'].join('')
+  it('fills large plain fields with one stdin edit and one event pair', async () => {
+    const text = `${'é\n'.repeat(512 * 1024)}tail'\\`
     succeedWith({ ok: true })
 
     await bridge.fill('@textarea', text)
@@ -512,15 +462,17 @@ describe('AgentBrowserBridge', () => {
     const evalCalls = execFileMock.mock.calls.filter((call: unknown[]) =>
       (call[1] as string[]).includes('eval')
     )
-    const appendExpressions = evalCalls.slice(1, -1).map((call: unknown[]) => {
-      const args = call[1] as string[]
-      return args[args.indexOf('eval') + 1]
+    expect(evalCalls).toHaveLength(1)
+    expect(evalCalls[0][1]).toContain('--stdin')
+    expect(stdinWrites).toHaveLength(1)
+    expect((evalCalls[0][1] as string[]).join('')).not.toContain(text)
+    const input = createFillEvalNode({ tagName: 'TEXTAREA' })
+    runFillEvalExpressions(stdinWrites, {
+      activeElement: input.node,
+      getElementById: () => null
     })
-
-    expect(appendExpressions).toHaveLength(2)
-    expect(appendExpressions.some((expression) => expression.includes(text))).toBe(false)
-    expect(appendExpressions[0]).toContain('x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES))
-    expect(appendExpressions[1]).toContain('tail')
+    expect(input.value).toBe(text)
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
   })
 
   it.each([

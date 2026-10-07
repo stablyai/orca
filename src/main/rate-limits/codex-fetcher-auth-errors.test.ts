@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
@@ -9,6 +9,11 @@ const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() 
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+// The recovery's supervised stop imports the process-table reader, which needs the real execFile.
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  startCodexStateDbBackfillRecoveryInBackground: vi.fn()
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -25,10 +30,6 @@ vi.mock('./codex-auth-presence', () => ({
 }))
 
 import { fetchCodexRateLimits } from './codex-fetcher'
-
-function makeDisposable() {
-  return { dispose: vi.fn() }
-}
 
 function makeRpcChild() {
   const child = new EventEmitter() as EventEmitter & {
@@ -60,9 +61,14 @@ describe('fetchCodexRateLimits auth errors', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
+    vi.stubGlobal('fetch', vi.fn())
   })
 
-  it('returns Codex RPC auth refresh errors without masking them behind PTY fallback', async () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns Codex RPC auth refresh errors without masking them behind a fallback', async () => {
     const rpcChild = makeRpcChild()
     const authError =
       'Your access token could not be refreshed because your refresh token was already used. Please log out and sign in again.'
@@ -105,10 +111,11 @@ describe('fetchCodexRateLimits auth errors', () => {
       status: 'error',
       error: authError
     })
+    expect(fetch).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
-  it('returns the app-server chatgpt-auth-required error without spawning the PTY probe', async () => {
+  it('returns the app-server chatgpt-auth-required error without falling back', async () => {
     const rpcChild = makeRpcChild()
     const authError = 'chatgpt authentication required to read rate limits'
 
@@ -150,75 +157,7 @@ describe('fetchCodexRateLimits auth errors', () => {
       status: 'error',
       error: authError
     })
+    expect(fetch).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
-  })
-
-  it('preserves Codex PTY auth errors when the CLI exits before status is available', async () => {
-    const ptyHandlers: { onData?: (data: string) => void; onExit?: () => void } = {}
-    const authError =
-      'Error loading configuration: Your authentication session could not be refreshed automatically.'
-
-    childSpawnMock.mockImplementation(() => {
-      throw new Error('rpc unavailable')
-    })
-    ptySpawnMock.mockReturnValue({
-      onData: vi.fn((callback) => {
-        ptyHandlers.onData = callback
-        return makeDisposable()
-      }),
-      onExit: vi.fn((callback) => {
-        ptyHandlers.onExit = callback
-        return makeDisposable()
-      }),
-      write: vi.fn(),
-      kill: vi.fn()
-    })
-
-    const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(0)
-
-    ptyHandlers.onData?.(`${authError}\n`)
-    ptyHandlers.onExit?.()
-
-    await expect(resultPromise).resolves.toMatchObject({
-      provider: 'codex',
-      session: null,
-      weekly: null,
-      status: 'error',
-      error: authError
-    })
-  })
-
-  it('stops a PTY probe when Codex renders its sign-in screen', async () => {
-    const ptyHandlers: { onData?: (data: string) => void } = {}
-    const ptyWrite = vi.fn()
-    const ptyKill = vi.fn()
-
-    childSpawnMock.mockImplementation(() => {
-      throw new Error('rpc unavailable')
-    })
-    ptySpawnMock.mockReturnValue({
-      onData: vi.fn((callback) => {
-        ptyHandlers.onData = callback
-        return makeDisposable()
-      }),
-      onExit: vi.fn(() => makeDisposable()),
-      write: ptyWrite,
-      kill: ptyKill
-    })
-
-    const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(0)
-    ptyHandlers.onData?.('\u001b[2JSign in with ChatGPT\r\n')
-
-    await expect(resultPromise).resolves.toMatchObject({
-      provider: 'codex',
-      session: null,
-      weekly: null,
-      status: 'error',
-      error: 'Sign in with ChatGPT'
-    })
-    expect(ptyWrite).not.toHaveBeenCalled()
-    expect(ptyKill).toHaveBeenCalledOnce()
   })
 })

@@ -9,6 +9,7 @@ import type { SourceControlAiOperation } from '../../shared/source-control-ai-ty
 import type { CommitMessageAgentRuntimeTarget } from '../text-generation/commit-message-agent-environment'
 import type { CommitMessageGenerationTarget } from '../text-generation/commit-message-text-generation'
 import type { PullRequestLinkedIssueMeta } from '../source-control/pull-request-linked-issue'
+import { execSshReviewDraft } from '../providers/ssh-review-draft-context'
 import {
   localGitOptionsForTarget,
   type RuntimeGitCommandHost,
@@ -28,12 +29,7 @@ export function pullRequestDraftGitExec(
     if (!provider) {
       throw new Error('ssh_git_provider_unavailable')
     }
-    return (argv, options) => {
-      const timeoutMs = options?.timeoutMs ?? options?.timeout
-      return timeoutMs === undefined
-        ? provider.exec(argv, target.worktree.path)
-        : provider.exec(argv, target.worktree.path, { timeoutMs })
-    }
+    return (argv, options) => execSshReviewDraft(provider, argv, target.worktree.path, options)
   }
   return (argv, options) =>
     gitExecFileAsync(argv, {
@@ -48,7 +44,10 @@ export function pullRequestDraftGitExec(
 }
 
 export type RuntimeCommitMessageSettingsOverride = Partial<
-  Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>
+  Pick<
+    GlobalSettings,
+    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'defaultTuiAgent'
+  >
 > & {
   commitMessageDiscoveryHostKey?: string
   sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams

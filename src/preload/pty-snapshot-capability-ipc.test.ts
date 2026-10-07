@@ -21,8 +21,6 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: vi.fn(() => '') }
 }))
 
-vi.mock('@electron-toolkit/preload', () => ({ electronAPI: {} }))
-
 describe('PTY snapshot capability preload IPC', () => {
   const originalContextIsolated = Object.getOwnPropertyDescriptor(process, 'contextIsolated')
 

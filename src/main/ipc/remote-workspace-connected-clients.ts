@@ -1,6 +1,10 @@
 import type { RemoteWorkspaceConnectedClient } from '../../shared/remote-workspace-types'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
-import { CLIENT_ID, CLIENT_NAME } from './remote-workspace-client-identity'
+import {
+  CLIENT_ID,
+  readClientName,
+  type RemoteWorkspaceClientNameSource
+} from './remote-workspace-client-identity'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 
 function normalizeConnectedClients(
@@ -34,9 +38,10 @@ function normalizeConnectedClients(
     .filter((entry): entry is RemoteWorkspaceConnectedClient => entry !== null)
 }
 
-export async function listRemoteWorkspaceConnectedClients(args?: {
-  targetIds?: string[]
-}): Promise<{ targetId: string; clients: RemoteWorkspaceConnectedClient[] }[]> {
+export async function listRemoteWorkspaceConnectedClients(
+  args: { targetIds?: string[] } | undefined,
+  clientNameSource: RemoteWorkspaceClientNameSource
+): Promise<{ targetId: string; clients: RemoteWorkspaceConnectedClient[] }[]> {
   const requestedTargetIds = Array.isArray(args?.targetIds) ? new Set(args.targetIds) : null
   const targets =
     getSshConnectionStore()
@@ -57,7 +62,7 @@ export async function listRemoteWorkspaceConnectedClients(args?: {
       const raw = await mux.request('workspace.presence', {
         namespace,
         clientId: CLIENT_ID,
-        clientName: CLIENT_NAME
+        clientName: readClientName(clientNameSource)
       })
       results.push({
         targetId: target.id,

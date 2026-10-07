@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 // A lost mutation response must be answerable without mutating again: these cover
 // `orchestration.requestShow` reading the same durable receipt --retry-request replays.
 import { describe, expect, it, vi } from 'vitest'
@@ -22,7 +23,7 @@ function createHarness() {
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
   const effect = vi.fn((subject: string) =>
-    db.insertMessage({ from: 'caller', to: 'recipient', subject })
+    db.insertMessage({ runId: 'run_legacy_local', from: 'caller', to: 'recipient', subject })
   )
   const dispatcher = new RpcDispatcher({
     runtime,

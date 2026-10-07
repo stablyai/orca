@@ -52,9 +52,11 @@ function createPreservedDaemonHandle(
   return handle
 }
 
+export type DaemonLaunchPolicy = { macosLoginSessionWatch?: boolean; startupTimeoutMs?: number }
+
 export function createOutOfProcessLauncher(
   runtimeDir: string,
-  macosLoginSessionWatch = false
+  { macosLoginSessionWatch = false, startupTimeoutMs }: DaemonLaunchPolicy = {}
 ): DaemonLauncher {
   return async (socketPath, tokenPath, suppliedPidPath, suppliedLaunchNonce) => {
     const entryPath = getDaemonEntryPath()
@@ -109,7 +111,8 @@ export function createOutOfProcessLauncher(
         recoveryDeadlineMs,
         attributedReason,
         releaseAdoptionClient,
-        preserveDaemon
+        preserveDaemon,
+        launchNonce
       })
       if (preservedHandle) {
         return preservedHandle
@@ -131,7 +134,8 @@ export function createOutOfProcessLauncher(
           tokenPath,
           pidPath,
           launchNonce,
-          macosLoginSessionWatch
+          macosLoginSessionWatch,
+          startupTimeoutMs
         })
       } catch (error) {
         if (!(error instanceof DaemonEndpointUnavailableError) || error.reason !== 'occupied') {
@@ -171,7 +175,7 @@ export function createOutOfProcessLauncher(
       } catch (error) {
         if (error instanceof DaemonEndpointOwnershipError) {
           await terminateLaunchedDaemonChild(launched.child)
-          unlinkOwnedDaemonPidFile(pidPath, launched.child.pid as number, launchNonce)
+          unlinkOwnedDaemonPidFile(pidPath, launched.identity.pid, launchNonce)
           throw error
         }
         // Why: another client may have adopted this live process; keep its pid record until exit, but remove one published after an early exit.
@@ -181,7 +185,7 @@ export function createOutOfProcessLauncher(
             return
           }
           pidRecordRemoved = true
-          unlinkOwnedDaemonPidFile(pidPath, launched.child.pid as number, launchNonce)
+          unlinkOwnedDaemonPidFile(pidPath, launched.identity.pid, launchNonce)
         }
         launched.child.once('exit', removeExitedPidRecord)
         if (

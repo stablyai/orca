@@ -8,7 +8,7 @@ import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-co
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { removeWorkspaceSessionOwner } from './session-owner-removal'
+import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
@@ -215,10 +215,7 @@ export class FolderWorkspacePersistenceOperations {
     if ((this.state.folderWorkspaces?.length ?? 0) === before) {
       return false
     }
-    this.state.workspaceSession = removeWorkspaceSessionOwner(
-      this.state.workspaceSession,
-      folderWorkspaceKey(id)
-    )!
+    removeWorkspaceSessionOwnerEverywhere(this.state, folderWorkspaceKey(id))
     this.removeWorkspaceLineageForFolderParent(id)
     this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
     this.scheduleSave()

@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 
 type TerminalSelectionCopyOptions = {
   terminal: Pick<Terminal, 'getSelection' | 'clearSelection'>
@@ -11,7 +12,7 @@ export async function copyTerminalSelection({
   writeClipboardText,
   clearSelectionOnSuccess = false
 }: TerminalSelectionCopyOptions): Promise<boolean> {
-  const selection = terminal.getSelection()
+  const selection = readTerminalClipboardSelection(terminal)
   if (!selection) {
     return false
   }

@@ -4,7 +4,6 @@ import {
   queueBrowserFocusRequest
 } from '@/components/browser-pane/host-guest/browser-focus'
 import { captureCmdJActiveGroupSnapshot } from '@/components/cmd-j/quick-action-context'
-import { EMPTY_PALETTE_FILTER } from '@/components/cmd-j/palette-filter'
 import { resolvePaletteFocusRestoreTarget } from '@/components/cmd-j/palette-focus-restore-target'
 import {
   CREATE_WORKTREE_ITEM_ID,
@@ -56,7 +55,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   latestQueryRef,
   setQuery,
   setSelectedItemId,
-  setRawFilter,
+  setExpandedSectionCaps,
   selectionMovedByUserRef,
   taskSourceUrl,
   listRef,
@@ -81,10 +80,8 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     if (visible && !wasVisibleRef.current) {
       recordFeatureInteraction('cmd-j')
       createLookupGuard.invalidate()
-      activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(
-        useAppStore.getState(),
-        activeWorktreeId
-      )
+      const appState = useAppStore.getState()
+      activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(appState, activeWorktreeId)
       previousWorktreeIdRef.current = activeWorktreeId
       previousActiveTabTypeRef.current = activeTabType
       previousBrowserPageIdRef.current =
@@ -107,11 +104,12 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
       latestQueryRef.current = ''
       setQuery('')
       setSelectedItemId('')
+      setExpandedSectionCaps({})
       selectionMovedByUserRef.current = false
-      setRawFilter(EMPTY_PALETTE_FILTER)
       listRef.current?.scrollTo(0, 0)
     }
     if (!visible && wasVisibleRef.current) {
+      setExpandedSectionCaps({})
       if (preserveCreateLookupOnCloseRef.current) {
         preserveCreateLookupOnCloseRef.current = false
       } else {
@@ -171,6 +169,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
       latestQueryRef.current = nextQuery
       setQuery(nextQuery)
       setSelectedItemId('')
+      setExpandedSectionCaps({})
       listRef.current?.scrollTo(0, 0)
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.

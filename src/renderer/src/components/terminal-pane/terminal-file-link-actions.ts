@@ -13,6 +13,12 @@ import {
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { translate } from '@/i18n/i18n'
+import {
+  getRevealInFileManagerLabel,
+  isRevealInFileManagerBlocked,
+  revealInFileManager
+} from '@/lib/reveal-in-file-manager'
+import { useAppStore } from '@/store'
 
 export type TerminalFileLinkActionDeps = {
   worktreeId: string
@@ -92,6 +98,23 @@ export function handleTerminalFileLink(
             ),
             run: () => downloadAndOpenRemoteTerminalFile(fileContext, mappedPath)
           }
+  // Why omit, not disable: the popover has no disabled rows. The OS file manager can only show a
+  // file on this machine, and the main process refuses every reveal while a remote runtime is focused.
+  const canReveal =
+    !worktreeRoot &&
+    canOpenWithSystemDefault &&
+    actionContext?.sourceOwner?.kind === 'local' &&
+    !isRevealInFileManagerBlocked(useAppStore.getState().settings, {
+      runtimeEnvironmentId: deps.runtimeEnvironmentId
+    })
+  // Why the shared reveal: it selects a folder (or a macOS .app bundle) in its parent, never opens it.
+  const revealRow = canReveal
+    ? {
+        external: true,
+        label: getRevealInFileManagerLabel(),
+        run: () => revealInFileManager(mappedPath)
+      }
+    : null
   return requestTerminalLinkAction(event, actionContext, {
     destination: actionDestination ?? mappedPath,
     kind: worktreeRoot ? 'workspace' : 'file',
@@ -107,6 +130,7 @@ export function handleTerminalFileLink(
           ),
       run: () => openDetectedFilePath(filePath, line, column, deps)
     },
-    ...(systemDefaultRow ? { alternate: systemDefaultRow } : {})
+    ...(systemDefaultRow ? { alternate: systemDefaultRow } : {}),
+    ...(revealRow ? { secondaryActions: [revealRow] } : {})
   })
 }

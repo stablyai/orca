@@ -4,12 +4,7 @@ import type { PersistedOpenFile } from '../../../../../../shared/workspace-sessi
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
-import {
-  buildOwnedEditorFileId,
-  isEditorFileIdOccupiedByOtherOwner,
-  isSameEditorOwner,
-  runtimeOwnerKey
-} from './editor-file-ids'
+import { buildOwnedEditorFileId, runtimeOwnerKey } from './editor-file-ids'
 
 export function shouldHydrateWithOwnedEditorFileId(
   worktreeId: string,
@@ -39,29 +34,58 @@ export type LegacyHydratedEditorFile = Pick<
   'id' | 'filePath' | 'worktreeId' | 'runtimeEnvironmentId' | 'markdownPreviewSourceFileId'
 >
 
-export function resolveLegacyHydratedEditorFileId(
-  files: readonly LegacyHydratedEditorFile[],
-  persistedFile: PersistedOpenFile,
-  worktreeId: string
-): string {
-  const existing = files.find(
-    (file) =>
-      file.filePath === persistedFile.filePath &&
-      isSameEditorOwner(file, worktreeId, persistedFile.runtimeEnvironmentId)
-  )
-  if (existing) {
-    return existing.id
+export class LegacyHydratedEditorFileIndex {
+  private readonly filesByPath = new Map<string, Map<string, string>>()
+  private readonly ownersById = new Map<string, Set<string>>()
+
+  private ownerKey(worktreeId: string, runtimeEnvironmentId: string | null | undefined): string {
+    return JSON.stringify([worktreeId, runtimeOwnerKey(runtimeEnvironmentId)])
   }
-  return files.some((file) =>
-    isEditorFileIdOccupiedByOtherOwner(
-      file,
-      persistedFile.filePath,
-      worktreeId,
-      persistedFile.runtimeEnvironmentId
+
+  hasOwner(file: PersistedOpenFile, worktreeId: string): boolean {
+    return (
+      this.filesByPath
+        .get(file.filePath)
+        ?.has(this.ownerKey(worktreeId, file.runtimeEnvironmentId)) ?? false
     )
-  )
-    ? buildOwnedEditorFileId(persistedFile.filePath, worktreeId, persistedFile.runtimeEnvironmentId)
-    : persistedFile.filePath
+  }
+
+  resolve(file: PersistedOpenFile, worktreeId: string): string {
+    const owner = this.ownerKey(worktreeId, file.runtimeEnvironmentId)
+    const existing = this.filesByPath.get(file.filePath)?.get(owner)
+    if (existing !== undefined) {
+      return existing
+    }
+    const occupied = this.ownersById.get(file.filePath)
+    return occupied && (occupied.size > 1 || !occupied.has(owner))
+      ? buildOwnedEditorFileId(file.filePath, worktreeId, file.runtimeEnvironmentId)
+      : file.filePath
+  }
+
+  add(file: LegacyHydratedEditorFile): void {
+    const owner = this.ownerKey(file.worktreeId, file.runtimeEnvironmentId)
+    let files = this.filesByPath.get(file.filePath)
+    if (!files) {
+      files = new Map()
+      this.filesByPath.set(file.filePath, files)
+    }
+    if (!files.has(owner)) {
+      files.set(owner, file.id)
+    }
+    this.addIdOwner(file.id, owner)
+    if (file.markdownPreviewSourceFileId !== undefined) {
+      this.addIdOwner(file.markdownPreviewSourceFileId, owner)
+    }
+  }
+
+  private addIdOwner(id: string, owner: string): void {
+    let owners = this.ownersById.get(id)
+    if (!owners) {
+      owners = new Set()
+      this.ownersById.set(id, owners)
+    }
+    owners.add(owner)
+  }
 }
 
 export function migrateEditorFileId(

@@ -1,3 +1,6 @@
+import type { RpcClient } from '../transport/rpc-client'
+import { useMobileOmpModelDiscovery } from './use-mobile-omp-model-discovery'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import { useCallback, useMemo } from 'react'
 import type {
   SessionOptionDescriptor,
@@ -12,6 +15,7 @@ import {
 } from './use-mobile-native-chat-session-options'
 
 export function useMobileNativeChatSessionOptionController(args: {
+  client?: RpcClient | null
   activeChatStructured: boolean
   activeSessionTabId: string | null
   agent: string | null
@@ -20,7 +24,10 @@ export function useMobileNativeChatSessionOptionController(args: {
   isTabChatView: (tabId: string) => boolean
   isWorking: boolean
   reportedModel: string | null
+  modelSwitchCommand?: string
   structured: {
+    conversationCommands?: readonly AgentSessionConversationCommand[]
+    optionPickerRequest?: { id: string; sequence: number } | null
     snapshot: SessionOptionDescriptor[]
     pendingId: string | null
     setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
@@ -58,7 +65,15 @@ export function useMobileNativeChatSessionOptionController(args: {
     }
   }, [activeSessionTabId, isTabChatView, toggleTabChatView])
 
+  const discoveredModels = useMobileOmpModelDiscovery({
+    client: args.client ?? null,
+    hostId,
+    worktreeId,
+    enabled: !activeChatStructured && agent === 'omp' && activeSessionTabId !== null
+  })
   const sessionOptions = useMobileNativeChatSessionOptions({
+    discoveredModels,
+    modelSwitchCommand: args.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,
@@ -70,6 +85,8 @@ export function useMobileNativeChatSessionOptionController(args: {
       activeChatStructured && structuredSnapshot.length > 0
         ? {
             snapshot: structuredSnapshot,
+            optionPickerRequest: structured.optionPickerRequest,
+            conversationCommands: structured.conversationCommands,
             pendingId: structuredPendingId,
             setOption: setStructuredOption,
             invokeAction: invokeStructuredAction,
@@ -81,7 +98,9 @@ export function useMobileNativeChatSessionOptionController(args: {
       invokeStructuredAction,
       setStructuredOption,
       structuredPendingId,
-      structuredSnapshot
+      structuredSnapshot,
+      structured.conversationCommands,
+      structured.optionPickerRequest
     ]
   )
   const nativeChatSessionOptions = useMemo<MobileNativeChatSessionOptionPickersProps | null>(

@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 
 import type { AgentKind } from '../../../shared/telemetry-events'
-import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {
   getAgentResumeArgv,
   type AgentProviderSessionMetadata
@@ -9,7 +8,7 @@ import {
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentStatusIpcPayload, AgentType } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
-import { AGENT_PROMPT_SENT_AGENT_KINDS, TOOL_PROGRESS_HOOK_EVENTS } from './server-constants'
+import { AGENT_PROMPT_SENT_AGENT_KINDS } from './server-constants'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
 
 export function agentTypeToPromptSentAgentKind(agentType: AgentType | undefined): AgentKind {
@@ -59,26 +58,23 @@ export function toAgentStatusIpcPayload(
     worktreeId: entry.worktreeId,
     connectionId: entry.connectionId,
     receivedAt: entry.receivedAt,
+    ...(entry.evidenceObservedAt !== undefined
+      ? { evidenceObservedAt: entry.evidenceObservedAt }
+      : {}),
     stateStartedAt: entry.stateStartedAt,
+    ...(entry.turnStartedAt !== undefined ? { turnStartedAt: entry.turnStartedAt } : {}),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
     ...(entry.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     ...(entry.observation ? { observation: entry.observation } : {}),
+    ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
+    ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
     ...entry.payload
   }
 }
 
-export function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload): boolean {
-  if (next.payload.state !== 'working') {
-    return false
-  }
-  if (next.payload.agentType !== 'claude' && next.payload.agentType !== 'codex') {
-    return false
-  }
-  // Why: a same-prompt retry is another UserPromptSubmit, while late post-Ctrl+C progress arrives as tool lifecycle work.
-  return next.hookEventName !== undefined && TOOL_PROGRESS_HOOK_EVENTS.has(next.hookEventName)
-}
+export { isToolProgressWorkingAfterInterrupt } from '../../../shared/agent-hook-cancel-verdict-latch'
 
 export function paneCacheKeyTabId(key: string): string | null {
   const paneKey = key.split('\0', 1)[0] ?? key

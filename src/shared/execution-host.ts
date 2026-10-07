@@ -155,9 +155,12 @@ export function normalizeExecutionHostOrder(
   return normalized ?? []
 }
 
-export function getRepoExecutionHostId(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
-): ExecutionHostId {
+// Why the loose member types: a reply reader hands these through as the strings they are on the
+// wire, and this function is already the thing that decides what an unparseable spelling means.
+export function getRepoExecutionHostId(repo: {
+  connectionId?: string | null
+  executionHostId?: string | null
+}): ExecutionHostId {
   const executionHostId = normalizeExecutionHostId(repo.executionHostId)
   if (executionHostId) {
     return executionHostId

@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { isRuntimeScopeForbiddenError } from '../../../../runtime/runtime-rpc-client'
+import { isRuntimeScopeForbiddenError } from '../../../../runtime/runtime-rpc-result'
 import { RUNTIME_SCOPE_FORBIDDEN_TOAST_ID } from './worktree-slice-constants'
 
 export function notifyRuntimeScopeForbiddenIfNeeded(error: unknown): boolean {

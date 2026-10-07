@@ -1,0 +1,130 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "transport.capability-probe",
+  "family": "transport.capability-probe",
+  "namedDeltas": [],
+  "values": {
+    "20578a5e9a12": {
+      "name": "status.get#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 1000,
+        "settledAt": 1000,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": ["push.v1"]
+          }
+        }
+      }
+    },
+    "2c76473bef66": {
+      "published": []
+    },
+    "905661513589": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "status_unavailable",
+            "message": "no status"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "9d1bfe4d6810": {
+      "published": [["push.v1"]]
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f1834177e593": {
+      "name": "status.get#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    }
+  },
+  "recording": {
+    "scenario": "transport-capability-probe-refused-backs-off",
+    "checkpoints": [
+      {
+        "id": "backing-off",
+        "observation": {
+          "sender": ["905661513589"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "2c76473bef66",
+          "effects": []
+        }
+      },
+      {
+        "id": "published-after-backoff",
+        "observation": {
+          "sender": ["905661513589", "20578a5e9a12"],
+          "payloads": ["d08f74d65ee6", "f1834177e593"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "9d1bfe4d6810",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

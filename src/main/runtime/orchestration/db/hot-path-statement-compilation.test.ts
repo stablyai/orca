@@ -101,7 +101,8 @@ function buildProjection(db: OrchestrationDb): RuntimeAgentOrchestrationProjecti
             paneKey: COORDINATOR_PANE,
             processIncarnation: 'inc_1'
           } as OrchestrationCompatibilityTerminalAuthority)
-        : null
+        : null,
+    getAgentStatusSnapshot: () => []
   })
 }
 

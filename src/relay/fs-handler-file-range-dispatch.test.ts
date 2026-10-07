@@ -149,8 +149,8 @@ describe('fs.getCapabilities', () => {
   // is additive. Dropping the pre-existing key would strand an older desktop's
   // quick-open probe on a host that still serves it.
   it('advertises ranged reads without dropping the existing capability', async () => {
-    await expect(underTest.call('fs.getCapabilities', {})).resolves.toEqual({
-      quickOpenSearchVersion: 1,
+    await expect(underTest.call('fs.getCapabilities', {})).resolves.toMatchObject({
+      quickOpenSearchVersion: 3,
       rangedReadVersion: 1
     })
   })

@@ -19,7 +19,7 @@ vi.mock('../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn
 
 import { getBranchConflictKind } from './repo-branch-conflict'
 import { pendingWslDirectGitReadEnvironment } from './command-runner/git-command-resolution'
-import { gitExecFileAsync, gitSpawn, gitStreamStdout } from './runner'
+import { gitExecFileAsync, gitExecFileAsyncBuffer, gitSpawn, gitStreamStdout } from './runner'
 import {
   GitAdmissionScheduler,
   _resetGitAdmissionForTests,
@@ -28,6 +28,7 @@ import {
 import {
   disableWslGitReadEnvironment,
   getWslGitReadEnvironment,
+  peekWslGitReadEnvironment,
   resetWslGitReadEnvironmentForTests,
   seedWslGitReadEnvironmentForTests,
   WSL_GIT_READ_ENVIRONMENT_WAIT_MS
@@ -165,6 +166,14 @@ describe('WSL direct Git reads', () => {
     } finally {
       nowSpy.mockRestore()
     }
+  })
+
+  it('bounds settled environment entries during distro churn', () => {
+    for (let index = 0; index < 132; index += 1) {
+      seedWslGitReadEnvironmentForTests(`distro-${index}`, LOGIN_ENVIRONMENT)
+    }
+    expect(peekWslGitReadEnvironment('distro-0')).toBeUndefined()
+    expect(peekWslGitReadEnvironment('distro-131')).toEqual(LOGIN_ENVIRONMENT)
   })
 
   it('runs an opted-in read directly with translated cwd and arguments', async () => {
@@ -607,7 +616,7 @@ describe('WSL direct Git reads', () => {
       await expect(
         getBranchConflictKind(String.raw`\\wsl.localhost\Ubuntu\repo`, 'new-feature')
       ).resolves.toBeNull()
-      expect(execFileMock).toHaveBeenCalledTimes(2)
+      expect(execFileMock).toHaveBeenCalledTimes(3)
       expect(execFileMock.mock.calls[0]?.[1]).toContain('--quiet')
     })
   })
@@ -816,38 +825,41 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  it('aborts an async Git call while linked-worktree discovery remains pending', async () => {
-    await withPlatform('win32', async () => {
-      let releaseStat: (() => void) | undefined
-      const delayedStat = new Promise<void>((resolve) => {
-        releaseStat = resolve
-      })
-      const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
-        stat: vi.fn(async () => {
-          await delayedStat
-          return { isDirectory: () => false, isFile: () => true }
-        }),
-        readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
-      }
-      const discovery = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, DISTRO, {
-        platform: 'win32',
-        fileSystem
-      })
-      const controller = new AbortController()
+  it.each([gitExecFileAsync, gitExecFileAsyncBuffer])(
+    'aborts an async Git read while linked-worktree discovery remains pending (%s)',
+    async (readGit) => {
+      await withPlatform('win32', async () => {
+        let releaseStat: (() => void) | undefined
+        const delayedStat = new Promise<void>((resolve) => {
+          releaseStat = resolve
+        })
+        const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
+          stat: vi.fn(async () => {
+            await delayedStat
+            return { isDirectory: () => false, isFile: () => true }
+          }),
+          readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
+        }
+        const discovery = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, DISTRO, {
+          platform: 'win32',
+          fileSystem
+        })
+        const controller = new AbortController()
 
-      const command = gitExecFileAsync(['status', '--short'], {
-        cwd: String.raw`C:\repo`,
-        wslDistro: DISTRO,
-        signal: controller.signal
-      })
-      controller.abort()
+        const command = readGit(['show', 'HEAD:file'], {
+          cwd: String.raw`C:\repo`,
+          wslDistro: DISTRO,
+          signal: controller.signal
+        })
+        controller.abort()
 
-      await expect(command).rejects.toMatchObject({ name: 'AbortError' })
-      expect(execFileMock).not.toHaveBeenCalled()
-      releaseStat?.()
-      await expect(discovery).resolves.toBe(true)
-    })
-  })
+        await expect(command).rejects.toMatchObject({ name: 'AbortError' })
+        expect(execFileMock).not.toHaveBeenCalled()
+        releaseStat?.()
+        await expect(discovery).resolves.toBe(true)
+      })
+    }
+  )
 
   it('keeps gitSpawn cache-only when a linked-worktree route expires', async () => {
     await withPlatform('win32', async () => {

@@ -165,7 +165,7 @@ export async function syncRuntimeGraph(): Promise<void> {
           leafIds: liveLeaves.map(([leafId]) => leafId),
           onSynthesize: (leafCount) =>
             console.warn(
-              `[sync-runtime-graph] synthesized layout for ${leafCount} unmounted leaves with no saved tree`
+              `[sync-runtime-graph] synthesized a split direction for ${leafCount} unmounted leaves no saved tree placed`
             )
         })
       })
@@ -177,6 +177,7 @@ export async function syncRuntimeGraph(): Promise<void> {
           leafId,
           paneRuntimeId: parkedPaneId ?? index + 1,
           ptyId,
+          parked: true,
           paneTitle: (parkedPaneId === undefined ? null : parkedPaneTitles[parkedPaneId]) ?? null,
           title
         })

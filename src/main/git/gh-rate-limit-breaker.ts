@@ -131,6 +131,11 @@ export function isGhRateLimitProbe(args: readonly string[]): boolean {
   return endpoint === 'rate_limit' || endpoint === '/rate_limit'
 }
 
+/** `gh auth token …` is a local keyring read that never reaches the API, so a tripped breaker must not gate it. */
+export function isGhLocalOnlyCommand(args: readonly string[]): boolean {
+  return args[0] === 'auth' && args[1] === 'token'
+}
+
 /**
  * Primary rate-limit detection. Secondary limits ("secondary rate limit")
  * carry Retry-After and are handled by the runner's transient retry logic.

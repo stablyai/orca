@@ -3,6 +3,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import {
@@ -50,9 +51,6 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
         const shouldActivate = terminalPresentation === 'focused'
         const shouldSurfaceOwner =
           terminalPresentation !== 'background' && data.surfaceOwner !== false
-        if (shouldActivate) {
-          activateTerminalInitiatedWorktree(store, worktreeId)
-        }
         // Why: the paired launch client already resolved the mode, so its choice wins over the host renderer's local default.
         const tabOptions = data.launchAgent
           ? {
@@ -77,40 +75,23 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 recordInteraction: false,
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
-        const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
+        const tab = store.createTab(worktreeId, data.targetGroupId, data.shellOverride, tabOptions)
         if (!shouldActivate) {
           // Why: renderer-backed Codex startup must mount its new TerminalPane without switching UI or connecting every saved tab.
           requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
         }
         if (data.afterTabId) {
-          const createdUnifiedTab = useAppStore
+          const createdUnifiedTabId = useAppStore
             .getState()
-            .unifiedTabsByWorktree[worktreeId]?.find((item) => item.entityId === tab.id)
-          const anchorUnifiedTab = useAppStore
-            .getState()
-            .unifiedTabsByWorktree[worktreeId]?.find((item) => item.id === data.afterTabId)
-          if (
-            createdUnifiedTab &&
-            anchorUnifiedTab &&
-            createdUnifiedTab.groupId === anchorUnifiedTab.groupId
-          ) {
-            const group = useAppStore
-              .getState()
-              .groupsByWorktree[worktreeId]?.find((item) => item.id === createdUnifiedTab.groupId)
-            const order = (group?.tabOrder ?? []).filter((id) => id !== createdUnifiedTab.id)
-            const anchorIndex = order.indexOf(anchorUnifiedTab.id)
-            order.splice(
-              anchorIndex === -1 ? order.length : anchorIndex + 1,
-              0,
-              createdUnifiedTab.id
-            )
-            useAppStore.getState().reorderUnifiedTabs(createdUnifiedTab.groupId, order, {
-              recordInteraction: false
-            })
+            .unifiedTabsByWorktree[worktreeId]?.find((item) => item.entityId === tab.id)?.id
+          if (createdUnifiedTabId) {
+            insertUnifiedTabAfterAnchor(worktreeId, createdUnifiedTabId, data.afterTabId)
           }
         }
         if (shouldActivate) {
-          store.setActiveTabType('terminal')
+          // After the tab lands: activating prunes the workspace's empty groups, the requested one too.
+          activateTerminalInitiatedWorktree(store, worktreeId, [tab.id])
+          store.setActiveTabType('terminal', worktreeId)
           store.setActiveTab(tab.id)
         }
         if (shouldSurfaceOwner) {

@@ -9,6 +9,8 @@ const RESTRICTED_ENV_KEYS = new Set([
   'HOMEPATH',
   'CODEX_HOME',
   'ORCA_CODEX_HOME',
+  // Why: Orca's spawn hook writes Claude folder trust into the config this names.
+  'CLAUDE_CONFIG_DIR',
   'ORCA_E2E_USER_DATA_DIR',
   'ORCA_E2E_HOME_DIR',
   'ZDOTDIR',
@@ -74,6 +76,12 @@ export function createElectronHomeIsolation({
   // short names). Git canonicalizes worktree paths, so a non-canonical HOME
   // makes freshly created worktrees invisible to Orca's listing comparisons.
   const isolatedHome = realpathSync.native(requestedIsolatedHome)
+  // Why: Windows resolves roaming AppData under USERPROFILE, and Electron 43 crashes natively
+  // (0xFFFF7003) when that lookup fails before userData is pinned.
+  if (process.platform === 'win32') {
+    mkdirSync(path.join(isolatedHome, 'AppData', 'Roaming'), { recursive: true })
+    mkdirSync(path.join(isolatedHome, 'AppData', 'Local'), { recursive: true })
+  }
   // Why: a bad fixture path must fail before Electron can resolve a real Codex
   // home; userData isolation alone does not change app.getPath('home').
   if (areSameHomePath(isolatedHome, realHome)) {

@@ -87,20 +87,25 @@ export class ExternalChromiumBrowserSession {
     this.profilePath = join(statePath, `browser-${launch.provider}`)
   }
 
-  async start(): Promise<string> {
+  async start(signal?: AbortSignal): Promise<string> {
+    signal?.throwIfAborted()
     await mkdir(this.profilePath, { recursive: true })
+    signal?.throwIfAborted()
     // Why: the session name is stable across runs, so a daemon an earlier orcad left behind is
     // still driving the user's Chromium. Unlike the pane bridge this session never passes --cdp,
     // so nothing binds it to the old process — a surviving one is reusable as-is, and closing it
     // would take the remote user's browser and every tab with it (#16367).
-    const reusable = await this.readActiveTabId()
+    const reusable = await this.readActiveTabId(signal)
+    signal?.throwIfAborted()
     if (reusable) {
       return reusable
     }
     // Nothing answered, so anything under this name is wedged or half-dead; reclaim it.
     await this.stop()
-    await this.run(['open', 'about:blank'])
-    const opened = await this.readActiveTabId()
+    signal?.throwIfAborted()
+    await this.run(['open', 'about:blank'], COMMAND_TIMEOUT_MS, signal)
+    const opened = await this.readActiveTabId(signal)
+    signal?.throwIfAborted()
     if (!opened) {
       throw new BrowserError(
         BROWSER_UNAVAILABLE_ERROR_CODE,
@@ -110,11 +115,12 @@ export class ExternalChromiumBrowserSession {
     return opened
   }
 
-  private async readActiveTabId(): Promise<string | null> {
+  private async readActiveTabId(signal?: AbortSignal): Promise<string | null> {
     try {
-      const tabs = await this.readTabs()
+      const tabs = await this.readTabs(signal)
       return (tabs.find((tab) => tab.active) ?? tabs[0])?.tabId ?? null
     } catch {
+      signal?.throwIfAborted()
       return null
     }
   }
@@ -131,8 +137,10 @@ export class ExternalChromiumBrowserSession {
     await this.run(['tab', agentPageId])
   }
 
-  async readTabs(): Promise<AgentBrowserTab[]> {
-    return AgentBrowserTabsResult.parse(await this.run(['tab'])).tabs ?? []
+  async readTabs(signal?: AbortSignal): Promise<AgentBrowserTab[]> {
+    return (
+      AgentBrowserTabsResult.parse(await this.run(['tab'], COMMAND_TIMEOUT_MS, signal)).tabs ?? []
+    )
   }
 
   async screenshot(params: Record<string, unknown>, full: boolean): Promise<unknown> {
@@ -152,7 +160,12 @@ export class ExternalChromiumBrowserSession {
     return { data }
   }
 
-  async run(command: readonly string[], timeoutMs = COMMAND_TIMEOUT_MS): Promise<unknown> {
+  async run(
+    command: readonly string[],
+    timeoutMs = COMMAND_TIMEOUT_MS,
+    signal?: AbortSignal
+  ): Promise<unknown> {
+    signal?.throwIfAborted()
     const args = ['--session', this.sessionName, '--profile', this.profilePath]
     if (this.launch.browserArgs?.length) {
       args.push('--args', this.launch.browserArgs.join('\n'))
@@ -170,8 +183,10 @@ export class ExternalChromiumBrowserSession {
       args,
       env,
       timeoutMs,
+      signal,
       maxOutputBytes: MAX_OUTPUT_BYTES
     })
+    signal?.throwIfAborted()
     if (result.timedOut) {
       throw new BrowserError('browser_timeout', 'Browser command timed out.')
     }

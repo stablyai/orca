@@ -1,4 +1,11 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { OrchestrationStructuredMailboxPointerDelivery } from './orchestration/structured-mailbox-pointer-delivery'
+import { createStructuredMailboxPointerHost } from './orchestration/structured-mailbox-pointer-host'
+import { localOrchestrationCliCommand } from './orchestration/cli-command'
+import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-names'
+import { isStructuredWorkerHandle } from './structured-worker-identity'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/orca-session-address'
+import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { OrcaRuntimeWithRuntimeId } from './orca-runtime-runtime-id'
 import { RuntimeTerminalAgentPresence } from './runtime-terminal-agent-presence'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
@@ -19,6 +26,9 @@ import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestrati
 import { RuntimeTerminalList } from './runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
 import { RuntimePtyForegroundAgent } from './runtime-pty-foreground-agent'
+import { OpenCodeRunLifetimeStatus } from './opencode-run-lifetime-status'
+import { readLocalPtyForegroundCommandLine } from './local-pty-foreground-command-line'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import { RuntimeTerminalAgentStatusQuery } from './runtime-terminal-agent-status-query'
 import type { OrchestrationDb } from './orchestration/db'
 import { OrchestrationMailboxOwner } from './orchestration/mailbox-owner'
@@ -37,12 +47,15 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
 
   protected readonly terminalAgentPresence = new RuntimeTerminalAgentPresence({
+    isLiveStructuredAgent: (handle) =>
+      Boolean(resolveStructuredWorkerAuthority(handle, this._orchestrationDb)),
     getLivePty: (handle) => this.getLivePtyForHandle(handle)?.pty ?? null,
     getLiveLeaf: (handle) => this.getLiveLeafForHandle(handle).leaf,
     getPrimaryLeaf: (ptyId) => this.getLeavesForPty(ptyId)[0] ?? null,
     getTrackedPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title?.trim() || null,
-    getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null
+    getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
+    getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId)
   })
 
   protected notifier: RuntimeNotifier | null = null
@@ -101,10 +114,11 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     issueLeafHandle: (leaf) => this.issueHandle(leaf),
     issuePtyHandle: (pty) => this.issuePtyHandle(pty),
     makePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
-    getWorktreeId: (handle) => this.getWorktreeIdForTerminalHandle(handle),
+    getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle),
     getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
     getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
-    getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle)
+    getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
+    getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot()
   })
 
   protected readonly terminalList = new RuntimeTerminalList({
@@ -136,7 +150,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     listResolved: () => this.listResolvedWorktrees(),
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     selectRepos: (selector) => this.selectReposBySelector(selector),
-    scanRepo: (repo) => this.listRepoWorktreesForResolution(repo),
+    scanRepo: (repo) => this.listRepoWorktreesForListing(repo),
     listKnownHostIds: () => this.listKnownExecutionHostIds()
   })
 
@@ -154,6 +168,33 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     }
   })
 
+  protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
+    isObservablePty: (ptyId) => {
+      const pty = this.ptysById.get(ptyId)
+      // Why: SSH and WSL foregrounds live on another host or in the guest.
+      return !!pty && !pty.connectionId && !pty.wslDistro && !this.wslDistroByPtyId.has(ptyId)
+    },
+    isStatusEnabled: (agent) =>
+      isAgentStatusHooksEnabledForAgent(this.store?.getSettings?.(), agent),
+    readForegroundProcessName: async (ptyId) => {
+      const read = await this.ptyForegroundAgent.read(ptyId)
+      return read?.available ? read.process : null
+    },
+    readForegroundCommandLine: (ptyId, foregroundProcess) =>
+      readLocalPtyForegroundCommandLine(ptyId, foregroundProcess),
+    // Why after the chunk's facts: the renderer drops an exited agent's row on command-finished
+    // unless the row changed after it, so the run's Done must arrive after that fact.
+    publish: (ptyId, payload, yieldsToHookSince) =>
+      this.runAfterPendingTerminalSideEffectFacts(ptyId, () =>
+        this.emitTerminalAgentStatusEvents(
+          ptyId,
+          { payloads: [payload] },
+          { origin: 'process', yieldsToHookSince }
+        )
+      ),
+    now: () => Date.now()
+  })
+
   protected readonly terminalAgentStatus = new RuntimeTerminalAgentStatusQuery({
     getController: () => this.ptyController,
     getLivePty: (handle) => this.getLivePtyForHandle(handle),
@@ -162,7 +203,8 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
     getExplicitStatus: (handle) => this.getFreshExplicitAgentStatusForHandle(handle),
     getLifecycleStatus: (ptyId) => this.agentPromptLifecycleByPtyId.get(ptyId),
-    isRunning: (handle) => this.isTerminalRunningAgent(handle)
+    isRunning: (handle) => this.isTerminalRunningAgent(handle),
+    getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId)
   })
 
   protected _orchestrationDb: OrchestrationDb | null = null
@@ -183,6 +225,8 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getDb: () => this._orchestrationDb,
     getTerminalHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
     hasTerminalHandle: (handle) => this.handles.has(handle),
+    isStructuredSessionOwner: (handle) =>
+      isStructuredWorkerHandle(handle) || handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX),
     canProbePtyLiveness: () => Boolean(this.ptyController?.probePtyLiveness),
     controllerKnowsPtyIsLive: (ptyId) => this.controllerKnowsPtyIsLive(ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId)
@@ -195,19 +239,44 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getLeaf: (leafKey) => this.leaves.get(leafKey),
     getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
     getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
+    isAgentSettledForDelivery: (leaf) => this.checkDeliverySettledAndArmRecheck(leaf),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title,
+    getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
     getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
+    resolveSubmitTarget: (leaf, ptyId) => this.resolveOrchestrationPointerSubmitTarget(leaf, ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
       this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
     writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)
   })
 
+  protected readonly orchestrationStructuredMailboxPointerDelivery =
+    new OrchestrationStructuredMailboxPointerDelivery<RuntimeMessageWaiter>({
+      getDb: () => this._orchestrationDb,
+      getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
+      resolveStructuredTarget: (mailboxHandle) =>
+        this.resolveStructuredMailboxTarget(mailboxHandle),
+      getCliCommand: localOrchestrationCliCommand,
+      senderName: (party, reportedDispatchId) =>
+        this.orchestrationSenderNames.nameOf(party, reportedDispatchId),
+      host: createStructuredMailboxPointerHost()
+    })
+
+  /** What Orca calls an agent that sends through it; public for every such send site. */
+  readonly orchestrationSenderNames = new RuntimeOrchestrationSenderNames({
+    getDb: () => this._orchestrationDb,
+    getHandleRecord: (handle) => this.handles.get(handle),
+    getPtyAgents: (ptyId) => this.ptysById.get(ptyId),
+    getTerminalPaneKey: (handle) => this.getTerminalPaneKey(handle),
+    getWorkspaceSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId)
+  })
+
   protected readonly orchestrationMailboxNotifications =
     new OrchestrationMailboxNotificationCoordinator<RuntimeMessageWaiter>({
       mailboxOwner: this.orchestrationMailboxOwner,
       pointerDelivery: this.orchestrationMailboxPointerDelivery,
+      structuredPointerDelivery: this.orchestrationStructuredMailboxPointerDelivery,
       getDb: () => this._orchestrationDb,
       getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
       getPaneKeyForHandle: (handle) => {

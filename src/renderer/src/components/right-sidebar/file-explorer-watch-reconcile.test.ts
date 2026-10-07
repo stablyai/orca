@@ -75,6 +75,89 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     expect(Object.keys(cache)).toEqual(['C:\\Repo\\Keep', '/srv/repo/old/keep'])
   })
 
+  it('purges every Windows cache key even when the normalized path index collapses aliases', () => {
+    const root = 'C:\\Repo'
+    let cache: Record<string, DirCache> = {
+      [root]: cacheWithChildren([]),
+      'C:\\Repo\\Old': cacheWithChildren([]),
+      'c:\\repo\\OLD': cacheWithChildren([]),
+      'C:\\Repo\\New': cacheWithChildren([]),
+      'c:\\repo\\NEW': cacheWithChildren([]),
+      'C:\\Repo\\Keep': cacheWithChildren([])
+    }
+    type DirCacheUpdate = Parameters<Parameters<typeof purgeDirCacheSubtrees>[0]>[0]
+    processFileExplorerFsPayload({
+      payload: {
+        worktreePath: root,
+        events: [
+          {
+            kind: 'rename',
+            oldAbsolutePath: 'c:\\repo\\old',
+            absolutePath: 'c:\\repo\\new',
+            isDirectory: true
+          }
+        ]
+      },
+      currentWorktreePath: root,
+      worktreeId: 'wt-1',
+      cache,
+      expanded: new Set(),
+      setDirCache: (update: DirCacheUpdate) => {
+        cache = typeof update === 'function' ? update(cache) : update
+      },
+      setSelectedPath: vi.fn(),
+      refreshDir: vi.fn(),
+      refreshTree: vi.fn()
+    })
+    expect(Object.keys(cache)).toEqual([root, 'C:\\Repo\\Keep'])
+  })
+
+  it('uses the newer cache when the functional purge runs after another update', () => {
+    const root = '/repo'
+    const cache: Record<string, DirCache> = {
+      [root]: cacheWithChildren([]),
+      '/repo/old': cacheWithChildren([]),
+      '/repo/new': cacheWithChildren([])
+    }
+    type DirCacheUpdate = Parameters<Parameters<typeof purgeDirCacheSubtrees>[0]>[0]
+    let pending: DirCacheUpdate | undefined
+    processFileExplorerFsPayload({
+      payload: {
+        worktreePath: root,
+        events: [
+          {
+            kind: 'rename',
+            oldAbsolutePath: '/repo/old',
+            absolutePath: '/repo/new',
+            isDirectory: true
+          }
+        ]
+      },
+      currentWorktreePath: root,
+      worktreeId: 'wt-1',
+      cache,
+      expanded: new Set(),
+      setDirCache: (update) => {
+        pending = update
+      },
+      setSelectedPath: vi.fn(),
+      refreshDir: vi.fn(),
+      refreshTree: vi.fn()
+    })
+    expect(typeof pending).toBe('function')
+    const newer = {
+      ...cache,
+      '/repo/added': cacheWithChildren([]),
+      '/repo/old/added-child': cacheWithChildren([])
+    }
+    if (typeof pending !== 'function') {
+      throw new Error('Expected a queued functional cache purge')
+    }
+    const result = pending(newer)
+    expect(Object.keys(result)).toEqual([root, '/repo/added'])
+    expect(result['/repo/added']).toBe(newer['/repo/added'])
+  })
+
   it('refreshes a cached parent when Windows reports a new file as update', () => {
     const root = 'C:\\Repo'
     const refreshDir = processUpdate({
@@ -365,7 +448,7 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     expect(refreshDir).toHaveBeenCalledTimes(2)
   })
 
-  it('purges distinct cached directory renames with one bounded cache scan', () => {
+  it('purges distinct cached directory renames with bounded batch cache scans', () => {
     const root = '/repo'
     const worktreeId = 'watch-reconcile-perf'
     const entries: Record<string, DirCache> = { [root]: cacheWithChildren([]) }
@@ -431,8 +514,7 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     }
 
     expect(setDirCache).toHaveBeenCalledOnce()
-    // One scan, in purgeDirCacheSubtrees. The casing-fallback index stays unbuilt because every
-    // lookup here hits `dirPath in cache` directly.
+    // The alias index and purge share one unchanged-cache key snapshot.
     expect(keyVisits).toBe(entryCount)
     expect(expandedPathReads).toBe(expandedPaths.length)
     expect(remainingExpanded).toEqual(new Set())

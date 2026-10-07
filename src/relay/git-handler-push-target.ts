@@ -1,4 +1,4 @@
-import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
+import { assertValidGitPushTarget } from '../shared/git-push-target-validation'
 import {
   resolveConfiguredGitPushTarget,
   type ResolvedGitPushTarget
@@ -15,7 +15,7 @@ export async function resolveRelayPushTarget(
   if (pushTarget === undefined) {
     return resolveConfiguredGitPushTarget((args) => git(args, worktreePath))
   }
-  assertGitPushTargetShape(pushTarget)
+  assertValidGitPushTarget(pushTarget)
   const explicitTarget: GitPushTarget = pushTarget
   // Why here and not in the shared resolver: an explicit target arrives over the wire,
   // so the host re-validates its shape and asks Git to vet the branch name itself.

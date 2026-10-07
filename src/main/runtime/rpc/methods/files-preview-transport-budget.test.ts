@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { remoteRpcContentBudget } from '../../../../shared/remote-rpc-content-budget'
 import type { OrcaRuntimeService } from '../../orca-runtime'

@@ -1,12 +1,14 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 import { registerBrowserOverlaySlotViewport } from '../host-guest/browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store'
 import type { BrowserTab as BrowserTabState } from '../../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import BrowserPane from './browser-workspace-pane'
+import { DeferredBrowserContent } from './DeferredBrowserContent'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { tabGroupBodyAnchorName } from '../../tab-group/tab-group-body-anchor'
+import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import { useBrowserGuestPaintRetention } from '../host-guest/browser-guest-paint-retention'
 import {
   isClientHostedBrowserRowSelectionLive,
@@ -14,6 +16,7 @@ import {
   useClientHostedBrowserRows
 } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { ClientHostedBrowserHostRowPane } from '../client-hosted-browser-host-row-pane'
+import { useAnyBrowserPageMountAdmission } from '../host-guest/browser-page-mount-admission'
 
 // Why: Electron <webview> destroys its guest on DOM reparent, so BrowserPanes render at worktree level and moving a tab between groups only swaps the overlay's CSS position-anchor.
 
@@ -28,23 +31,23 @@ const EMPTY_GROUPS: readonly TabGroup[] = []
 
 type BrowserOverlaySlotProps = {
   browserTab: BrowserTabState
+  isWorktreeActive: boolean
   // Why: undefined = orphan tab (in browserTabs but not referenced by any group's unified-tab list); the fallback branch keeps these hidden.
   groupId: string | undefined
   isActive: boolean
   chromeShortcutScope: BrowserChromeShortcutScope
   // Why: overlay is a sibling of the group layout, so pane focus doesn't bubble to TabGroupPanel; re-sync it here or split-view clicks leave activeGroupIdByWorktree stale.
   onFocusOwningGroup: ((groupId: string) => void) | undefined
-  isWorktreeActive: boolean
 }
 
 // Why: memoize each slot so unrelated worktree mutations don't cascade a re-render into every BrowserPane subtree.
 const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   browserTab,
+  isWorktreeActive,
   groupId,
   isActive,
   chromeShortcutScope,
-  onFocusOwningGroup,
-  isWorktreeActive
+  onFocusOwningGroup
 }: BrowserOverlaySlotProps): React.JSX.Element {
   // Why: persistent page viewports (webview guests) live under this root so they survive BrowserPane chrome unmounts without reparenting.
   const setSlotViewportRef = useCallback(
@@ -59,9 +62,8 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
       ? browserTab.pageIds
       : [browserTab.activePageId ?? browserTab.id]
   const needsGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
-  const isPaintable = isActive || needsGuestPaint
-  // Why: hidden worktrees keep lightweight overlay slots, but park their webviews unless a remote controller or viewer needs the guest.
-  const shouldMountPane = isWorktreeActive || needsGuestPaint
+  const isMountAdmitted = useAnyBrowserPageMountAdmission(browserPageIds)
+  const isPaintable = isActive || needsGuestPaint || isMountAdmitted
   // Why: CSS anchor positioning pins the overlay to its owning group's body — a tab move only swaps positionAnchor, no measurement/state.
   // Orphan branch (no anchorName) stays display:none until the tab is reassigned or destroyed.
   const style: React.CSSProperties = useMemo(
@@ -104,14 +106,14 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
       onFocusCapture={handleFocus}
     >
       <div ref={setSlotViewportRef} className="absolute inset-0 flex min-h-0 flex-col" />
-      {/* Why: hidden worktrees park the heavy pane subtree; visible ones keep stable slots so reparenting can't destroy the webview guest. */}
-      {shouldMountPane ? (
+      <DeferredBrowserContent mountEligible={isPaintable} retainMounted={isWorktreeActive}>
         <BrowserPane
           browserTab={browserTab}
+          isWorktreeActive={isWorktreeActive}
           isActive={isActive}
           chromeShortcutScope={chromeShortcutScope}
         />
-      ) : null}
+      </DeferredBrowserContent>
     </div>
   )
 })
@@ -134,6 +136,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     }))
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
+  const isFloatingWorkspace = isFloatingWorkspaceId(worktreeId)
   const knownFocusedGroupId = useMemo(
     () =>
       focusedGroupId !== undefined && groups.some((group) => group.id === focusedGroupId)
@@ -179,7 +182,8 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
         const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
         const chromeShortcutScope: BrowserChromeShortcutScope = !isActive
           ? 'inactive'
-          : knownFocusedGroupId === undefined
+          : // Why: 'focused' means the main window's focused split, so a floating browser answers only its own chords.
+            isFloatingWorkspace || knownFocusedGroupId === undefined
             ? 'owned-target'
             : assignment?.groupId === knownFocusedGroupId
               ? 'focused'
@@ -188,11 +192,11 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
           <BrowserOverlaySlot
             key={browserTab.id}
             browserTab={browserTab}
+            isWorktreeActive={isWorktreeActive}
             groupId={assignment?.groupId}
             isActive={isActive}
             chromeShortcutScope={chromeShortcutScope}
             onFocusOwningGroup={focusOwningGroup}
-            isWorktreeActive={isWorktreeActive}
           />
         )
       })}
@@ -265,17 +269,11 @@ export const RetainedBrowserPaneOverlayLayer = memo(function RetainedBrowserPane
   isWorktreeActive: boolean
   mountEligible: boolean
 }): React.JSX.Element | null {
-  const [hasCommittedMount, setHasCommittedMount] = useState(false)
-  // Why: commit the latch with the persistent slot DOM so discarded renders cannot retain a guest host.
-  useLayoutEffect(() => {
-    if (mountEligible && !hasCommittedMount) {
-      setHasCommittedMount(true)
-    }
-  }, [hasCommittedMount, mountEligible])
-  if (!mountEligible && !hasCommittedMount) {
-    return null
-  }
-  return <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isWorktreeActive} />
+  return (
+    <DeferredBrowserContent mountEligible={mountEligible}>
+      <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isWorktreeActive} />
+    </DeferredBrowserContent>
+  )
 })
 
 export default BrowserPaneOverlayLayer

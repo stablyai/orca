@@ -5,9 +5,11 @@ import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
 import { paneKeyMatchSuffix } from '../pane-key-match'
 import { claimDispatchContextRow } from '../dispatch-row-writer'
-import type { DispatchCreator } from '../dispatch-depth'
+import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import type { OrchestrationDb } from '../orchestration-db'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
+import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
 
 export function createDispatchContext(
   this: OrchestrationDb,
@@ -55,6 +57,7 @@ export function createDispatchContext(
   const paneSuffix =
     assigneePaneKey && parsePaneKey(assigneePaneKey) ? paneKeyMatchSuffix(assigneePaneKey) : null
   const id = generateId('ctx')
+  const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)
   this.db.exec('SAVEPOINT create_dispatch_context')
   try {
     const inserted = claimDispatchContextRow(this.db, {
@@ -63,7 +66,13 @@ export function createDispatchContext(
       launchTokenHash: launchTokenHash ?? null,
       assigneeHandle,
       assigneePaneKey: assigneePaneKey ?? null,
+      assigneeOrcaSessionId: dispatchAssigneeOrcaSessionId({
+        handle: assigneeHandle,
+        processIncarnation
+      }),
       processIncarnation: processIncarnation ?? null,
+      creatorDispatchId,
+      ...recordedCreatorIdentity(params.creator),
       priorFailures,
       depth,
       taskId,
@@ -84,7 +93,12 @@ export function createDispatchContext(
         ? taskNotStartableError(this, message, current)
         : taskNotFoundError(message, { taskId })
     }
-    this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
+    transitionLifecycleWithDb(this.db, {
+      entity: 'task',
+      id: taskId,
+      from: 'ready',
+      to: 'dispatched'
+    })
     const dispatch = this.db
       .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
       .get(id) as DispatchContextRow

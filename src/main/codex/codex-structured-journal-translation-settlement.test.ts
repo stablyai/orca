@@ -25,6 +25,8 @@ import {
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -104,7 +106,8 @@ function deferredTarget(
 ): StructuredAgentSessionEventTarget {
   return {
     fence: 7,
-    journal: {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a double for the journal members this path calls; the helper adds the in-order ones.
+    journal: withJournalQueueMembers({
       appendItem: vi.fn(async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
         log.push(body)
         return { cursor: { epoch: 'e', sequence: log.length } }
@@ -120,7 +123,7 @@ function deferredTarget(
           return { epoch: 'e', sequence: log.length }
         }
       )
-    } as unknown as StructuredAgentSessionEventTarget['journal'],
+    }) as unknown as StructuredAgentSessionEventTarget['journal'],
     publish: vi.fn(() => {
       publishes.push('publish')
     })
@@ -129,6 +132,7 @@ function deferredTarget(
 
 function hardWatermarkDeferred() {
   return createDeferredStructuredAgentSessionEventSink({
+    ...testEventSinkLogging(),
     watermarks: {
       pauseQueuedBytes: 1,
       maxQueuedBytes: 1,
@@ -212,20 +216,18 @@ describe('codex journal translation', () => {
     expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
       accepted: true
     })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 4, backpressured: true })
+    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
 
     expect(bodies).toEqual([
-      expect.objectContaining({
-        kind: 'status',
-        turnLifecycle: { turnId: TURN_ID, state: 'running' }
-      }),
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' }),
       expect.objectContaining({ kind: 'tool-call', state: 'running' }),
-      expect.objectContaining({ kind: 'tool-call', state: 'failed' })
+      expect.objectContaining({ kind: 'tool-call', state: 'failed' }),
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'completed' })
     ])
-    expect(publishes).toHaveLength(1)
+    expect(publishes).toHaveLength(2)
   })
 
   it('admits terminal session settlement publication across the hard watermark', async () => {
@@ -257,16 +259,13 @@ describe('codex journal translation', () => {
         acquisitionGeneration: 'generation-1'
       })
     ).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 4, backpressured: true })
+    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
 
     expect(bodies).toEqual([
-      expect.objectContaining({
-        kind: 'status',
-        turnLifecycle: { turnId: TURN_ID, state: 'running' }
-      }),
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' }),
       expect.objectContaining({
         kind: 'approval',
         resolution: expect.objectContaining({ state: 'pending' })
@@ -275,9 +274,9 @@ describe('codex journal translation', () => {
         kind: 'approval',
         resolution: expect.objectContaining({ state: 'cancelled' })
       }),
-      { kind: 'status', text: 'Provider exited: lost child' }
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
     ])
-    expect(publishes).toHaveLength(1)
+    expect(publishes).toHaveLength(2)
   })
 
   it('retries a rejected terminal admission without losing tool, prompt, turn, or session truth', () => {
@@ -337,8 +336,13 @@ describe('codex journal translation', () => {
     const mutations = batches.at(-1)?.mutations ?? []
     expect(mutations).toEqual(
       expect.arrayContaining([
+        // The host saw the child go, so the call it was running was cut short.
         expect.objectContaining({
-          body: expect.objectContaining({ kind: 'tool-call', state: 'failed' })
+          body: expect.objectContaining({
+            kind: 'tool-call',
+            state: 'failed',
+            endedAs: 'interrupted'
+          })
         }),
         expect.objectContaining({
           body: expect.objectContaining({
@@ -347,9 +351,9 @@ describe('codex journal translation', () => {
           })
         }),
         expect.objectContaining({
-          body: { kind: 'status', text: 'Provider exited: lost child' }
-        }),
-        expect.objectContaining({ kind: 'tombstone' })
+          kind: 'item',
+          body: expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
+        })
       ])
     )
   })
@@ -417,12 +421,11 @@ describe('codex journal translation', () => {
           `provider-exit:${SESSION_ID}:7:generation-1:${index + 1}/${batches.length}`
       )
     )
-    expect(flattened).toHaveLength(122)
-    expect(flattened.at(-2)).toMatchObject({
+    expect(flattened).toHaveLength(121)
+    expect(flattened.at(-1)).toMatchObject({
       kind: 'item',
-      body: { kind: 'status', text: 'Provider exited: lost child' }
+      body: { kind: 'turn', state: 'interrupted' }
     })
-    expect(flattened.at(-1)).toMatchObject({ kind: 'tombstone' })
     expectLifecycleBatchBounds(batches)
   })
 
@@ -542,17 +545,57 @@ describe('codex journal translation', () => {
               output: expect.objectContaining({ head: 'partial' })
             })
           }),
-          expect.objectContaining({
-            kind: 'tombstone',
+          {
+            kind: 'item',
             identity: {
               provider: 'legacy',
               agent: 'codex',
               sessionId: SESSION_ID,
               recordId: `turn-lifecycle:${TURN_ID}`
-            }
-          })
+            },
+            body: {
+              kind: 'turn',
+              turnId: TURN_ID,
+              state: 'completed',
+              userItemId: `codex:${THREAD_ID}:${TURN_ID}:0`,
+              startedAt: expect.any(Number),
+              completedAt: expect.any(Number)
+            },
+            turnScope: { kind: 'thread' }
+          }
         ]
       }
+    ])
+    // A completed turn proves no interruption.
+    expect(batches[0]?.mutations[0]).not.toHaveProperty('body.endedAs')
+  })
+
+  it('cuts short an active tool when Codex reports its turn interrupted', () => {
+    const tap = recorder()
+    const bodies: unknown[] = []
+    tap.sink.appendLifecycleBatch = (_settlementId, mutations) => {
+      bodies.push(
+        ...mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : []))
+      )
+    }
+    const translator = createCodexJournalTranslator({
+      sink: tap.sink,
+      primaryThreadId: () => THREAD_ID
+    })
+
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('item/started', {
+        item: { type: 'commandExecution', id: 'exec-active', command: 'run', status: 'inProgress' }
+      })
+    )
+    translator.handle(
+      notification('turn/completed', { turn: { id: TURN_ID, status: 'interrupted' } })
+    )
+
+    expect(bodies).toEqual([
+      expect.objectContaining({ kind: 'tool-call', state: 'failed', endedAs: 'interrupted' }),
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
     ])
   })
 
@@ -652,7 +695,7 @@ describe('codex journal translation', () => {
 
     translator.handle(TURN_STARTED)
     translator.handle(
-      notification('item/completed', { item: { type: 'userMessage', id: 'item-0', text: 'one' } })
+      notification('item/completed', { item: { type: 'agentMessage', id: 'item-0', text: 'one' } })
     )
     translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
     translator.handle(
@@ -662,7 +705,7 @@ describe('codex journal translation', () => {
     )
     translator.handle(notification('turn/started', { turn: { id: 'turn-2' } }))
     translator.handle(
-      notification('item/completed', { item: { type: 'userMessage', id: 'item-2', text: 'two' } })
+      notification('item/completed', { item: { type: 'agentMessage', id: 'item-2', text: 'two' } })
     )
 
     expect(tap.rows.map((row) => row.key)).toEqual([
@@ -679,7 +722,7 @@ describe('codex journal translation', () => {
     translator.handle(
       notification('item/completed', {
         turnId: 'turn-9',
-        item: { type: 'userMessage', id: 'item-0', text: 'late' }
+        item: { type: 'agentMessage', id: 'item-0', text: 'late' }
       })
     )
 
@@ -789,8 +832,10 @@ describe('codex journal translation', () => {
 
     const reduced = new Map(tap.rows.map((row) => [row.key, row.body]))
     expect(reduced.get('orca:codex-item%3Athread-abc%3Ar-1')).toEqual({
-      kind: 'status',
-      text: 'thinking'
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'thinking' }],
+      state: 'running'
     })
     expect(reduced.get('orca:codex-item%3Athread-abc%3Apatch-1')).toMatchObject({
       kind: 'diff',

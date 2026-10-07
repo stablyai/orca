@@ -1,3 +1,4 @@
+import { toolExecutionMetadata, toolWebSearchResults } from '../../shared/native-chat-tool-identity'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
 import {
@@ -6,7 +7,13 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
+import { codexImageItemBody } from './codex-image-item-translation'
 import { commandActionFacts } from './codex-command-action-class'
+import {
+  codexCollabAgentToolCallBody,
+  type CodexHelperName
+} from './codex-collab-agent-item-translation'
+import { codexItemRunState } from './codex-item-run-state'
 import {
   readFirstString,
   readRecord,
@@ -25,6 +32,7 @@ export {
   MAX_CODEX_TURN_ORDINAL_BYTES,
   MAX_CODEX_TURN_ORDINAL_ENTRIES
 } from './codex-turn-ordinals'
+import { journalReasoningBody } from '../native-chat/agent-session-journal/journal-reasoning-row'
 
 // Codex thread items → journal item bodies.
 
@@ -64,20 +72,6 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
   return blocks
 }
 
-/** Codex reports `inProgress` then a terminal status; a zero exit code is the
- *  only thing that makes a finished command a success. */
-function commandState(item: CodexThreadItem): 'running' | 'completed' | 'failed' {
-  const status = readString(item, 'status')
-  if (status === null || status === 'inProgress') {
-    return 'running'
-  }
-  if (status !== 'completed') {
-    return 'failed'
-  }
-  const exitCode = item.exitCode
-  return typeof exitCode === 'number' && exitCode !== 0 ? 'failed' : 'completed'
-}
-
 export type CodexJournalItem = {
   body: AgentJournalItemBody | null
   handled: boolean
@@ -91,12 +85,14 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
     body: {
       kind: 'tool-call',
       name: parsed?.name ?? 'shell',
+      callId: item.id,
       // Raw command and cwd stay so the expanded view still shows what ran.
       input: boundToolInput(
         { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
         DEFAULT_JOURNAL_PAYLOAD_LIMITS
       ),
-      state: commandState(item),
+      state: codexItemRunState(item),
+      ...toolExecutionMetadata(item),
       ...(bounded === null ? {} : { output: bounded.bounded })
     },
     handled: true
@@ -117,8 +113,9 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
       body: {
         kind: 'tool-call',
         name: 'apply_patch',
+        callId: item.id,
         input: boundToolInput({ changes: item.changes ?? null }, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
-        state: commandState(item)
+        state: codexItemRunState(item)
       },
       handled: true
     }
@@ -159,6 +156,8 @@ function mcpToolArguments(value: unknown): unknown {
 }
 
 function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
+  const server = readString(item, 'server')
+  const tool = readString(item, 'tool')
   const failure = readString(readRecord(item.error), 'message')
   const text = failure ?? readTextContent(readRecord(item.result), 'content')
   const bounded = text === null ? null : boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
@@ -166,8 +165,10 @@ function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
     body: {
       kind: 'tool-call',
       name: mcpToolCallName(item),
+      callId: item.id,
+      ...(server && tool ? { mcpIdentity: { server, tool } } : {}),
       input: boundToolInput(mcpToolArguments(item.arguments), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
-      state: failure === null ? commandState(item) : 'failed',
+      state: failure === null ? codexItemRunState(item) : 'failed',
       ...(bounded === null ? {} : { output: bounded.bounded })
     },
     handled: true
@@ -200,12 +201,15 @@ function webSearchInput(item: CodexThreadItem): Record<string, unknown> | null {
  *  completed item's own `query` is routinely still empty. The hits arrive on
  *  `results` and are the call's output. */
 function webSearchItem(item: CodexThreadItem): CodexJournalItem {
+  const results = toolWebSearchResults(item.results)
   const hits = Array.isArray(item.results) && item.results.length > 0 ? item.results : null
   const bounded = hits && boundInlineText(JSON.stringify(hits), DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   return {
     body: {
       kind: 'tool-call',
       name: 'web_search',
+      callId: item.id,
+      ...(results.length > 0 ? { webSearchResults: results } : {}),
       input: boundToolInput(webSearchInput(item), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
       state: item.action === null || item.action === undefined ? 'running' : 'completed',
       ...(bounded === null ? {} : { output: bounded.bounded })
@@ -218,9 +222,14 @@ function webSearchItem(item: CodexThreadItem): CodexJournalItem {
  * Journal body for a Codex item, or null for one with nothing to render.
  *
  * Known empty items wait for later deltas. Unknown types become bounded status
- * rows so a provider release cannot make new activity invisible.
+ * rows so a provider release cannot make new activity invisible. `started` is a
+ * finished item's own started revision, when the caller still holds it.
  */
-export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
+export function codexJournalItem(
+  item: CodexThreadItem,
+  helperName?: CodexHelperName,
+  started?: CodexThreadItem
+): CodexJournalItem {
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
     const blocks = codexMessageBlocks(item)
     return {
@@ -243,18 +252,33 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
   if (item.type === 'webSearch') {
     return webSearchItem(item)
   }
-  if (item.type === 'reasoning' || item.type === 'plan') {
-    const text =
-      readTextContent(item, 'text') ??
-      readTextContent(item, 'summary') ??
-      readTextContent(item, 'content')
+  if (item.type === 'imageView' || item.type === 'imageGeneration') {
+    return { body: codexImageItemBody(item), handled: true }
+  }
+  const collab = codexCollabAgentToolCallBody(item, helperName, started)
+  if (collab) {
+    return { body: collab, handled: true }
+  }
+  if (item.type === 'plan') {
+    const text = readTextContent(item, 'text')
     return {
       body:
         text === null
           ? null
-          : { kind: 'status', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text },
+          : {
+              kind: 'status',
+              text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
+              presentation: 'plan-document'
+            },
       handled: true
     }
+  }
+  if (item.type === 'reasoning') {
+    const text =
+      readTextContent(item, 'text') ??
+      readTextContent(item, 'summary') ??
+      readTextContent(item, 'content')
+    return { body: journalReasoningBody(text), handled: true }
   }
   const unhandled = unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item)
   return unhandled ? { body: unhandled.body, handled: false } : { body: null, handled: true }
@@ -278,6 +302,9 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
   if (item.type === 'agentMessage') {
     return { body: codexStreamingMessageBody(text), handled: true }
   }
+  if (item.type === 'reasoning') {
+    return { body: journalReasoningBody(text), handled: true }
+  }
   if (item.type === 'commandExecution') {
     return commandItem({ ...item, aggregatedOutput: text })
   }
@@ -291,6 +318,18 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
       handled: true
     }
   }
-  const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
-  return { body: { kind: 'status', text: bounded.text }, handled: true }
+  if (item.type === 'plan') {
+    return {
+      body: {
+        kind: 'status',
+        text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
+        presentation: 'plan-document'
+      },
+      handled: true
+    }
+  }
+  return {
+    body: { kind: 'status', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text },
+    handled: true
+  }
 }

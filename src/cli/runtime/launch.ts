@@ -1,16 +1,11 @@
 import { spawn as spawnProcess, type SpawnOptions } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { StringDecoder } from 'node:string_decoder'
 import { runProcessSync } from '../../shared/child-process/run-process'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath
 } from '../../shared/serve-update-handoff'
-import {
-  getEphemeralVmRecipeResultConnection,
-  parseEphemeralVmRecipeResult
-} from '../../shared/ephemeral-vm-recipes'
 import { getDefaultUserDataPath } from './metadata'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
 import {
@@ -19,8 +14,14 @@ import {
   superviseForegroundServe
 } from './serve-update-supervisor'
 import { RuntimeClientError } from './types'
+import { SERVE_RUNTIME_ELECTRON, SERVE_RUNTIME_ENV } from '../../shared/orcad-local-serve-selection'
+import {
+  resolveLocalServeRuntime,
+  serveWithOrcad,
+  type ServeOrcaAppArgs
+} from './serve-orcad-launch'
+import { waitForRecipeJson } from './serve-recipe-json'
 
-const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 const USER_NAMESPACE_PROBE_TIMEOUT_MS = 2_000
 
 export function launchOrcaApp(): void {
@@ -77,18 +78,44 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
   child.unref()
 }
 
-export function serveOrcaApp(
-  args: {
-    json?: boolean
-    port?: string | null
-    pairingAddress?: string | null
-    noPairing?: boolean
-    mobilePairing?: boolean
-    recipeJson?: boolean
-    projectRoot?: string | null
-  } = {}
-): Promise<number> {
+export function serveOrcaApp(args: ServeOrcaAppArgs = {}): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
+  if (args.recipeJson && !args.projectRoot) {
+    throw new RuntimeClientError('invalid_argument', 'Recipe JSON output requires --project-root.')
+  }
+  // Why synchronous on the opt-out: it must spawn Electron exactly as before, without asking.
+  if (process.env[SERVE_RUNTIME_ENV] === SERVE_RUNTIME_ELECTRON) {
+    return serveWithElectron(executable, args)
+  }
+  return serveWithSelectedRuntime(executable, args)
+}
+
+async function serveWithSelectedRuntime(
+  executable: string,
+  args: ServeOrcaAppArgs
+): Promise<number> {
+  const selection = await resolveLocalServeRuntime({
+    executable,
+    appRoot: resolveAppRoot(),
+    userDataPath: getDefaultUserDataPath(),
+    usesMacUpdateHandoff: args.recipeJson !== true && getMacAppBundlePath(executable) !== null
+  })
+  if (selection.kind === 'orcad') {
+    process.stderr.write(`[serve] running on orcad ${selection.version}\n`)
+    return serveWithOrcad(
+      selection,
+      args,
+      getDefaultUserDataPath(),
+      stripElectronRunAsNode(process.env)
+    )
+  }
+  if (selection.reason) {
+    process.stderr.write(`[serve] using Electron serve: ${selection.reason}\n`)
+  }
+  return serveWithElectron(executable, args)
+}
+
+function serveWithElectron(executable: string, args: ServeOrcaAppArgs): Promise<number> {
   const childArgs = [...getExecutableAppArgs(executable)]
   childArgs.push('--serve')
   if (args.json) {
@@ -106,13 +133,7 @@ export function serveOrcaApp(
   if (args.mobilePairing) {
     childArgs.push('--serve-mobile-pairing')
   }
-  if (args.recipeJson) {
-    if (!args.projectRoot) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Recipe JSON output requires --project-root.'
-      )
-    }
+  if (args.recipeJson && args.projectRoot) {
     childArgs.push('--serve-recipe-json', '--serve-project-root', args.projectRoot)
   }
 
@@ -164,98 +185,7 @@ export function serveOrcaApp(
   })
 }
 
-function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<number> {
-  return new Promise((resolve, reject) => {
-    let output = ''
-    let settled = false
-    const timeout = setTimeout(() => {
-      finish(new RuntimeClientError('runtime_serve_failed', 'Timed out waiting for recipe JSON.'))
-      child.kill('SIGTERM')
-    }, 60000)
-    const finish = (error?: Error): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timeout)
-      child.stdout?.off('data', onData)
-      child.off('error', onError)
-      child.off('close', onClose)
-      if (error) {
-        reject(error)
-        return
-      }
-      child.stdout?.destroy?.()
-      child.unref()
-      resolve(0)
-    }
-    const writeIgnoredRecipeStdout = (): void => {
-      // Why: non-readiness child stdout is untrusted and cannot be safely
-      // redacted, including schema-valid results with arbitrary user data.
-      process.stderr.write(`${IGNORED_NON_RECIPE_STDOUT}\n`)
-    }
-    const processRecipeOutputLine = (line: string): void => {
-      const normalizedLine = line.endsWith('\r') ? line.slice(0, -1) : line
-      if (!normalizedLine.trim()) {
-        return
-      }
-      const parsed = parseEphemeralVmRecipeResult(normalizedLine)
-      if (!parsed.ok) {
-        writeIgnoredRecipeStdout()
-        return
-      }
-      if (getEphemeralVmRecipeResultConnection(parsed.result).type !== 'orca-server') {
-        writeIgnoredRecipeStdout()
-        return
-      }
-      process.stdout.write(`${normalizedLine.trim()}\n`)
-      finish()
-    }
-    const stdoutDecoder = new StringDecoder('utf8')
-    const onData = (chunk: Buffer | string): void => {
-      output += typeof chunk === 'string' ? chunk : stdoutDecoder.write(chunk)
-      while (!settled) {
-        const newlineIndex = output.indexOf('\n')
-        if (newlineIndex === -1) {
-          return
-        }
-        const line = output.slice(0, newlineIndex)
-        output = output.slice(newlineIndex + 1)
-        processRecipeOutputLine(line)
-      }
-    }
-    const onError = (error: Error): void => {
-      finish(error)
-    }
-    const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
-      if (settled) {
-        return
-      }
-      output += stdoutDecoder.end()
-      if (output.trim()) {
-        processRecipeOutputLine(output)
-      }
-      if (settled) {
-        return
-      }
-      finish(
-        new RuntimeClientError(
-          'runtime_serve_failed',
-          typeof code === 'number'
-            ? `Orca serve exited before printing valid recipe JSON with code ${code}.`
-            : `Orca serve exited before printing valid recipe JSON via ${signal}.`
-        )
-      )
-    }
-    child.stdout?.on('data', onData)
-    child.once('error', onError)
-    // Why: `exit` can precede the final piped stdout data. `close` waits until
-    // stdio closes so a last recipe chunk is not mistaken for missing output.
-    child.once('close', onClose)
-  })
-}
-
-function getExecutableAppArgs(executable: string): string[] {
+export function getExecutableAppArgs(executable: string): string[] {
   const args = process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
   if (shouldDisableExtractedAppImageSandbox(executable)) {
     args.push('--no-sandbox')
@@ -289,14 +219,14 @@ function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shel
   return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable) ? { shell: true } : {}
 }
 
-function resolveAppRoot(): string {
+export function resolveAppRoot(): string {
   // Why: dev-mode resource resolution in the Electron child may consult
   // process.cwd(). Pin it to the app root so `orca serve` behaves the same
   // regardless of the shell directory it was launched from.
   return resolve(__dirname, '../../..')
 }
 
-function resolveForegroundOrcaExecutable(): string {
+export function resolveForegroundOrcaExecutable(): string {
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
     return overrideExecutable

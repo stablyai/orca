@@ -2,6 +2,29 @@ import { describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration, planAgentBinary } from './commit-message-plan'
 
 describe('planCommitMessageGeneration', () => {
+  it('keeps extension-provided Pi models available in generated Git text plans', () => {
+    const result = planCommitMessageGeneration(
+      { agentId: 'pi', model: 'local-extension/model' },
+      'Write a commit message'
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.plan.args).not.toContain('--no-extensions')
+    expect(result.plan.args).toEqual(
+      expect.arrayContaining([
+        '--no-session',
+        '--no-tools',
+        '--no-skills',
+        '--no-context-files',
+        '--model',
+        'local-extension/model'
+      ])
+    )
+    expect(result.plan.stdinPayload).toBe('Write a commit message')
+  })
+
   it('plans Claude non-interactive generation with the prompt on stdin only', () => {
     const result = planCommitMessageGeneration(
       {
@@ -54,12 +77,13 @@ describe('planCommitMessageGeneration', () => {
           '--agent',
           'build',
           '--format',
-          'default',
+          'json',
           '--variant',
           'high'
         ],
         stdinPayload: 'PROMPT',
-        label: 'OpenCode'
+        label: 'OpenCode',
+        outputFormat: 'opencode-json'
       }
     })
   })
@@ -86,10 +110,11 @@ describe('planCommitMessageGeneration', () => {
           '--agent',
           'build',
           '--format',
-          'default'
+          'json'
         ],
         stdinPayload: 'PROMPT',
-        label: 'OpenCode'
+        label: 'OpenCode',
+        outputFormat: 'opencode-json'
       }
     })
   })
@@ -120,6 +145,37 @@ describe('planCommitMessageGeneration', () => {
         ],
         stdinPayload: 'PROMPT',
         label: 'Amp'
+      }
+    })
+  })
+
+  it('plans Jcode run generation with an argv prompt', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'jcode',
+        model: 'default'
+      },
+      'name this branch'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'jcode',
+        // --tool-profile none: the prompt is a staged patch, and jcode's default
+        // profile would expose shell/read/write/MCP to it.
+        args: [
+          '--no-update',
+          '--quiet',
+          '--no-selfdev',
+          '--tool-profile',
+          'none',
+          'run',
+          '--json',
+          'name this branch'
+        ],
+        stdinPayload: null,
+        label: 'Jcode'
       }
     })
   })
@@ -155,6 +211,115 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans Antigravity generation with the prompt attached to --print, not stdin (#19539, #14059)', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'antigravity',
+        model: 'Gemini 3.5 Flash (Medium)'
+      },
+      'real commit prompt'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'agy',
+        args: ['--print=real commit prompt', '--sandbox', '--model', 'Gemini 3.5 Flash (Medium)'],
+        stdinPayload: null,
+        label: 'Antigravity'
+      }
+    })
+  })
+
+  it('keeps a leading-dash Antigravity prompt bound to --print instead of parsing as an option', () => {
+    const result = planCommitMessageGeneration(
+      { agentId: 'antigravity', model: 'Gemini 3.5 Flash (Medium)' },
+      '-fix: something'
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.plan.args.slice(0, 2)).toEqual([
+      '--print=-fix: something',
+      '--sandbox'
+    ])
+  })
+
+  // Why: pins argv construction only. Real agy 1.2.1 separately rejects a --print value
+  // that exactly matches a registered flag name (its own heuristic, independent of this
+  // fix) — verified `agy --print=--sandbox` still errors there. Real prompts are never
+  // literally a bare flag name, so this doesn't affect actual generation.
+  it('still glues an Antigravity prompt that collides with a flag name onto --print', () => {
+    const result = planCommitMessageGeneration(
+      { agentId: 'antigravity', model: 'Gemini 3.5 Flash (Medium)' },
+      '--sandbox'
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.plan.args.slice(0, 2)).toEqual(['--print=--sandbox', '--sandbox'])
+  })
+
+  // Why: agy has no documented stdin mode for --print (#19539's body: "--print ... is
+  // not a boolean flag that automatically reads from stdin; it expects the prompt
+  // string as its option argument"), so a large staged patch now rides on argv. This
+  // is the same unguarded argv delivery cursor/kimi/copilot already use (see the
+  // parity assertion below) — pinned here as a known property, not a regression.
+  it('puts a large Antigravity prompt on argv with no size guard, same as other argv-delivery agents', () => {
+    const bigPrompt = 'y'.repeat(70_000)
+    const result = planCommitMessageGeneration(
+      { agentId: 'antigravity', model: 'Gemini 3.5 Flash (Medium)' },
+      bigPrompt
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.plan.args[0]).toBe(`--print=${bigPrompt}`)
+    expect(result.ok && result.plan.stdinPayload).toBeNull()
+
+    const cursorResult = planCommitMessageGeneration(
+      { agentId: 'cursor', model: 'auto' },
+      bigPrompt
+    )
+    expect(cursorResult.ok).toBe(true)
+    expect(cursorResult.ok && cursorResult.plan.args.at(-1)).toBe(bigPrompt)
+    expect(cursorResult.ok && cursorResult.plan.stdinPayload).toBeNull()
+  })
+
+  // Why: real #14059 reproduction config — CLI arguments field repeats --model and adds
+  // --add-dir/--effort/--dangerously-skip-permissions. Confirms none of it gets swallowed
+  // into the --print operand and the duplicate --model is deduped the same way every
+  // other spec's recipe args already are (DEFAULT_SINGLETON_OPTIONS, unaffected by
+  // argument order).
+  it('keeps #14059-style recipe CLI arguments intact and deduped around the print operand', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'antigravity',
+        model: 'Gemini 3.5 Flash (Medium)',
+        agentArgs:
+          '--add-dir . --model gemini-3.6-flash --effort low --dangerously-skip-permissions'
+      },
+      'Generate a concise git commit message for the currently staged changes.'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'agy',
+        args: [
+          '--print=Generate a concise git commit message for the currently staged changes.',
+          '--sandbox',
+          '--model',
+          'gemini-3.6-flash',
+          '--add-dir',
+          '.',
+          '--effort',
+          'low',
+          '--dangerously-skip-permissions'
+        ],
+        stdinPayload: null,
+        label: 'Antigravity'
+      }
+    })
+  })
+
   it('plans Codex exec as non-interactive read-only generation with the prompt on stdin only', () => {
     const result = planCommitMessageGeneration(
       {
@@ -182,6 +347,31 @@ describe('planCommitMessageGeneration', () => {
         ],
         stdinPayload: 'PROMPT',
         label: 'Codex'
+      }
+    })
+  })
+
+  it('plans Muse exec with a positional prompt and no workspace side effects', () => {
+    const result = planCommitMessageGeneration({ agentId: 'muse', model: 'default' }, 'PROMPT')
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'muse',
+        args: [
+          'exec',
+          '--no-session-log',
+          '--approval-mode',
+          'never',
+          '--disable-sandbox',
+          '--disable-shell',
+          '--disable-write',
+          '--disable-web-tools',
+          '--',
+          'PROMPT'
+        ],
+        stdinPayload: null,
+        label: 'Muse'
       }
     })
   })
@@ -324,7 +514,7 @@ describe('planCommitMessageGeneration', () => {
     expect(result).toMatchObject({
       ok: true,
       plan: {
-        args: ['run', '--model', 'opencode/gpt-5.5', '--agent', 'build', '--format', 'default'],
+        args: ['run', '--model', 'opencode/gpt-5.5', '--agent', 'build', '--format', 'json'],
         stdinPayload: 'PROMPT'
       }
     })
@@ -339,7 +529,7 @@ describe('planCommitMessageGeneration', () => {
     expect(result).toMatchObject({
       ok: true,
       plan: {
-        args: ['run', '-m', 'opencode/gpt-5.5', '--agent', 'build', '--format', 'default']
+        args: ['run', '-m', 'opencode/gpt-5.5', '--agent', 'build', '--format', 'json']
       }
     })
   })
@@ -389,7 +579,7 @@ describe('planCommitMessageGeneration', () => {
           '--agent',
           'build',
           '--format',
-          'default',
+          'json',
           '--share'
         ],
         stdinPayload: 'PROMPT'
@@ -410,7 +600,7 @@ describe('planCommitMessageGeneration', () => {
     expect(result).toMatchObject({
       ok: true,
       plan: {
-        args: ['run', '--model', 'opencode/first', '--agent', 'build', '--format', 'default']
+        args: ['run', '--model', 'opencode/first', '--agent', 'build', '--format', 'json']
       }
     })
   })
@@ -453,7 +643,7 @@ describe('planCommitMessageGeneration', () => {
           '--agent',
           'build',
           '--format',
-          'default'
+          'json'
         ]
       }
     })
@@ -484,7 +674,7 @@ describe('planCommitMessageGeneration', () => {
           '--agent',
           'build',
           '--format',
-          'default'
+          'json'
         ]
       }
     })
@@ -505,7 +695,7 @@ describe('planCommitMessageGeneration', () => {
       ok: true,
       plan: {
         binary: 'opencode',
-        args: ['run', '--model', 'opencode/from-recipe', '--agent', 'build', '--format', 'default']
+        args: ['run', '--model', 'opencode/from-recipe', '--agent', 'build', '--format', 'json']
       }
     })
   })
@@ -626,5 +816,59 @@ describe('backslash mode reaches every command the user can type (#11375)', () =
     )
 
     expect(plan.ok && plan.plan.args).toContain('/my dir')
+  })
+})
+
+describe('OpenCode format metadata respects option terminators', () => {
+  it.each(['opencode', 'opencode2'] as const)(
+    'ignores literal recipe format values for %s',
+    (agentId) => {
+      const result = planCommitMessageGeneration(
+        {
+          agentId,
+          model: 'opencode/gpt-5.4-mini',
+          agentArgs: '--format default -- --format json'
+        },
+        'PROMPT'
+      )
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        throw new Error(result.error)
+      }
+      expect(result.plan.args).toContain('--')
+      expect(result.plan.outputFormat).toBeUndefined()
+    }
+  )
+
+  it('ignores literal equals-form flags after a command override terminator', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode',
+        model: 'opencode/gpt-5.4-mini',
+        agentCommandOverride: 'opencode --format default -- --format=json'
+      },
+      'PROMPT'
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.plan.outputFormat).toBeUndefined()
+  })
+
+  it('retains JSON metadata for the active option before a literal default value', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode',
+        model: 'opencode/gpt-5.4-mini',
+        agentArgs: '--format=json -- --format default'
+      },
+      'PROMPT'
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.plan.outputFormat).toBe('opencode-json')
   })
 })

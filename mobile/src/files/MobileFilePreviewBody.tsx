@@ -1,3 +1,5 @@
+import { MobileFileMediaPreview } from './MobileFileMediaPreview'
+import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import type { MobileFilePreviewResult } from './mobile-file-preview-request'
@@ -9,6 +11,7 @@ import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
 type Props = {
   preview: MobileFilePreviewResult
+  client?: MobileFilePreviewRpcSender | null
   relativePath: string
   title: string
   editable: boolean
@@ -19,7 +22,8 @@ type Props = {
   imageHeight: number
   onDraftChange: (content: string) => void
   onImageError: () => void
-  onRetry: () => void
+  /** Null where the only retry is a re-dial this document cannot make. */
+  onRetry: (() => void) | null
 }
 
 export function MobileFilePreviewBody({ preview, ...options }: Props) {
@@ -35,9 +39,11 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
     return (
       <View style={styles.state}>
         <Text style={styles.errorText}>{preview.message}</Text>
-        <Pressable style={styles.retryButton} onPress={options.onRetry}>
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
+        {options.onRetry ? (
+          <Pressable style={styles.retryButton} onPress={options.onRetry}>
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        ) : null}
       </View>
     )
   }
@@ -48,6 +54,15 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       <View style={styles.state}>
         <Text style={styles.stateText}>Empty file</Text>
       </View>
+    )
+  }
+  if (preview.kind === 'media') {
+    return (
+      <MobileFileMediaPreview
+        media={preview.media}
+        client={options.client ?? null}
+        title={options.title}
+      />
     )
   }
   if (preview.kind === 'image') {

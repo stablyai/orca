@@ -1,0 +1,79 @@
+name: Release JavaScript bundle
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+    outputs:
+      supported:
+        value: ${{ jobs.bundle.outputs.supported }}
+      source_sha:
+        value: ${{ jobs.bundle.outputs.source_sha }}
+    secrets:
+      ORCA_POSTHOG_WRITE_KEY:
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      supported: ${{ steps.source.outputs.supported }}
+      source_sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      # Older release refs retain their original per-platform build commands.
+      - name: Resolve bundle source and support
+        id: source
+        shell: bash
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          node -e 'const p = require("./package.json"); console.log("supported=" + Boolean(p.scripts["build:release:javascript"] && p.scripts["build:release:host"]))' >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/install-node-dependencies
+        if: steps.source.outputs.supported == 'true'
+        with:
+          native-runtime: node
+
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: steps.source.outputs.supported == 'true'
+
+      - name: Resolve release build identity
+        id: identity
+        if: steps.source.outputs.supported == 'true'
+        run: |
+          RELEASE_TAG="v$(node -p 'require("./package.json").version')"
+          export RELEASE_TAG
+          echo "value=$(node config/scripts/release-javascript-artifact.mjs identity)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and archive release JavaScript
+        if: steps.source.outputs.supported == 'true'
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          ORCA_BUILD_IDENTITY: ${{ steps.identity.outputs.value }}
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+        run: |
+          pnpm run build:release:javascript
+          node config/scripts/release-javascript-artifact.mjs pack
+
+      - uses: actions/upload-artifact@v7
+        if: steps.source.outputs.supported == 'true'
+        with:
+          name: release-javascript
+          path: .build/release-javascript/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error

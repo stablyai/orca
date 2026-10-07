@@ -9,6 +9,9 @@ const { getStateMock } = vi.hoisted(() => ({ getStateMock: vi.fn() }))
 
 vi.mock('../store', () => ({ useAppStore: { getState: getStateMock } }))
 
+import { createTabsFocusActions } from '../store/slices/tabs/tabs-focus-actions'
+import type { TabsSliceGet, TabsSliceSet } from '../store/slices/tabs/tabs-slice-contract'
+
 import {
   handleSwitchTab,
   handleSwitchTabAcrossAllTypes,
@@ -39,7 +42,7 @@ function stateWithGroupOrder(tabOrder: string[]) {
     terminalTab('tab-2', 'term-2', 1),
     terminalTab('tab-3', 'term-3', 2)
   ]
-  return {
+  const store = {
     activeWorktreeId: WT,
     activeTabType: 'terminal' as const,
     activeTabId: 'term-1',
@@ -58,8 +61,16 @@ function stateWithGroupOrder(tabOrder: string[]) {
     setActiveFile: vi.fn(),
     setActiveBrowserTab: vi.fn(),
     setActiveTabType: vi.fn(),
-    activateTab: vi.fn()
+    activateTab: vi.fn(),
+    getActiveTab: (_worktreeId: string): unknown => null
   }
+  // Why the real resolver: a hand-written stub would decide the group-scoped answer the code
+  // under test is meant to exercise.
+  store.getActiveTab = createTabsFocusActions(
+    (() => {}) as unknown as TabsSliceSet,
+    (() => store) as unknown as TabsSliceGet
+  ).getActiveTab
+  return store
 }
 
 describe('tab-cycle chord against a group whose tabOrder is still hydrating', () => {

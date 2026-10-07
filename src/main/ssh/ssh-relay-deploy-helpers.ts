@@ -2,7 +2,7 @@ import type { ClientChannel } from 'ssh2'
 import { createSshOperationAbortError } from './ssh-connection-utils'
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
-import { buildRelayVersionMismatchError } from './ssh-relay-handshake-mismatch'
+import { buildRelayHandshakeRefusalError } from './ssh-relay-handshake-mismatch'
 
 export { uploadFile, uploadDirectory, mkdirSftp } from './sftp-upload'
 export { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
@@ -143,9 +143,9 @@ export function waitForSentinel(
           // condition and skip backoff. The check still wins over a fired
           // timeout because the timeout handler defers settling for a small
           // grace window so the close handler can deliver the exit code.
-          const versionMismatchError = buildRelayVersionMismatchError(lastExitCode, stderrOutput)
-          if (versionMismatchError) {
-            rejectStartup(versionMismatchError)
+          const refusal = buildRelayHandshakeRefusalError(lastExitCode, stderrOutput)
+          if (refusal) {
+            rejectStartup(refusal)
             return
           }
           const timeoutSuffix = timeoutFired

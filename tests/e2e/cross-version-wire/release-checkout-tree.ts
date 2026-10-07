@@ -1,12 +1,27 @@
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
+import {
+  collectPackageImports,
+  installMissingPackageStandIns,
+  type PackageImports
+} from './release-missing-packages.ts'
 
 const CHECKOUT_PROCESS_TIMEOUT_MS = 45_000
 const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
 
 // Why: the wire endpoints only need the runtime RPC host, the renderer client, and
-// the shared codec. Skipping cli/relay keeps a cold CI extraction a few seconds.
-const ARCHIVE_PATHS = ['src/main', 'src/shared', 'src/preload', 'src/renderer', 'src/types']
+// the shared codec, plus the relay an app update leaves running. Skipping cli keeps a cold CI
+// extraction a few seconds.
+// The phone's `worktree ps` row reader is one self-contained file, so it rides along alone.
+const ARCHIVE_PATHS = [
+  'src/main',
+  'src/shared',
+  'src/preload',
+  'src/relay',
+  'src/renderer',
+  'src/types',
+  'mobile/src/worktree/agent-row-display.ts'
+]
 
 const ALIAS_SPECIFIER =
   /(\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)(['"])@(renderer)?\/([^'"]+)\2/g
@@ -20,10 +35,13 @@ function isTestSource(name: string): boolean {
 }
 
 /** Keep renderer aliases inside the extracted release rather than the working tree. */
-async function rewriteRendererAliases(file: string, rendererRoot: string): Promise<boolean> {
-  const source = await readFile(file, 'utf8')
+async function rewriteRendererAliases(
+  file: string,
+  source: string,
+  rendererRoot: string
+): Promise<string> {
   if (!source.includes("'@/") && !source.includes('"@/') && !source.includes('@renderer/')) {
-    return false
+    return source
   }
   const rewritten = source.replace(
     ALIAS_SPECIFIER,
@@ -36,14 +54,13 @@ async function rewriteRendererAliases(file: string, rendererRoot: string): Promi
       return `${keyword}${quote}${relativePath}${quote}`
     }
   )
-  if (rewritten === source) {
-    return false
+  if (rewritten !== source) {
+    await writeFile(file, rewritten)
   }
-  await writeFile(file, rewritten)
-  return true
+  return rewritten
 }
 
-async function prepareExtractedTree(root: string): Promise<void> {
+async function prepareExtractedTree(root: string, packageImports: PackageImports): Promise<void> {
   const rendererRoot = join(root, 'src', 'renderer', 'src')
   const walk = async (directory: string): Promise<void> => {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -61,7 +78,11 @@ async function prepareExtractedTree(root: string): Promise<void> {
         continue
       }
       if (isRewritableSource(entry.name)) {
-        await rewriteRendererAliases(full, rendererRoot)
+        const source = await readFile(full, 'utf8')
+        collectPackageImports(
+          await rewriteRendererAliases(full, source, rendererRoot),
+          packageImports
+        )
       }
     }
   }
@@ -124,7 +145,14 @@ export async function extractReleaseCheckoutTree(
   } finally {
     await rm(archive, { force: true })
   }
-  await prepareExtractedTree(staging)
+  const packageImports: PackageImports = new Map()
+  await prepareExtractedTree(staging, packageImports)
+  await installMissingPackageStandIns(
+    staging,
+    commit,
+    packageImports,
+    JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8'))
+  )
 }
 
 export async function scavengeReleaseCheckoutStaging(

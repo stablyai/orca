@@ -122,6 +122,11 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
       { cols: snapshot.cols, rows: snapshot.rows },
       { cwd: snapshot.cwd, oscLinks: snapshot.oscLinks }
     )
+    // Why: a hidden pane answers at its own size; later bytes paint the PTY grid.
+    const ptyGrid = this.getTerminalSize(ptyId)
+    if (ptyGrid) {
+      this.resizeHeadlessTerminal(ptyId, ptyGrid.cols, ptyGrid.rows)
+    }
     for (const chunk of trailingOutput) {
       this.trackHeadlessTerminalData(ptyId, chunk.data, chunk.seq)
     }
@@ -142,16 +147,6 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
   }
 
   // Why: a leaf exists before its PTY spawns; a handle issued while ptyId is null gets invalidated on the next sync, so wait for a connected PTY.
-  protected countLeavesInTab(tabId: string): number {
-    let count = 0
-    for (const leaf of this.leaves.values()) {
-      if (leaf.tabId === tabId) {
-        count++
-      }
-    }
-    return count
-  }
-
   protected resolveHandleForTab(tabId: string): string | null {
     for (const leaf of this.leaves.values()) {
       if (leaf.tabId === tabId && leaf.ptyId !== null) {

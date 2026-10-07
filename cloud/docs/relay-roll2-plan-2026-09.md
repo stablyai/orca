@@ -133,6 +133,11 @@ Record every gate and wave in the findings doc as in Roll 1.
   dropped.
 - **Monitor residuals** already in the checklist: `probeEndpointHealth` retry decision still uses the
   flat 2 000 ms bar; operator protocol unbound for Asia; `probe-relay-rehome-trust` regex.
+- **Same-cap job residuals found in Roll 2** (three of eleven mutating runs needed the resume path):
+  the post-apply `admin_post target-runtime` read has no transient-5xx tolerance and failed twice on a
+  one-request 503 `unconditional drop overload` from the edge ~80 s after readiness (c26, c21); and
+  `probe-relay-rehome-trust` prints only the status on a 409, so the transient c13 failure left no
+  reason on record. Retry both once and print the error body.
 - Update the checklist status header; tick 2.3, 4.1, 4.3 relay-side as deployed.
 
 ## Deferred, owner decision required

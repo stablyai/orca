@@ -69,7 +69,7 @@ export function parseArgs(argv) {
 
 function validate(opts, exePathFlagPresent, argv) {
   const errors = []
-  errors.push(...validateArgShape(argv))
+  errors.push(...validateArgSyntax(argv))
   if (!opts.expect) {
     errors.push('Missing --expect <survival|orphaned>')
   } else if (!VALID_PROFILES.has(opts.expect)) {
@@ -94,7 +94,7 @@ function validate(opts, exePathFlagPresent, argv) {
   return errors
 }
 
-function validateArgShape(argv) {
+function validateArgSyntax(argv) {
   const errors = []
   const seen = new Set()
   for (let index = 0; index < argv.length; index++) {

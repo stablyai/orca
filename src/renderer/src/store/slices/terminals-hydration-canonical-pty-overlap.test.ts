@@ -1,7 +1,6 @@
-// Keep this bare import first: its vi.mock calls run at module eval, and vitest only hoists vi.mock
-// inside the test file itself — reordering it below the store imports breaks hydration here.
+// Keep this bare import first: it installs the preload-API stub the store imports read at eval time.
 import './terminal-hydration-store-test-bootstrap'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { hydrateWorkspaceTerminalRows } from './terminal-session-row-hydration'
 import { getOrphanTerminalIds } from './terminal-orphan-helpers'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
@@ -11,6 +10,15 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
+
+vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/runtime/sync-runtime-graph', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
+vi.mock('@/components/terminal-pane/pty-transport', () => ({
+  registerEagerPtyBuffer: vi.fn(),
+  ensurePtyDispatcher: vi.fn()
+}))
 
 const WORKTREE_ID = 'repo1::/wt-1'
 

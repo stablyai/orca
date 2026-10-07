@@ -24,6 +24,7 @@ import { translate } from '@/i18n/i18n'
 import { checklistItemsFromVersion } from './skill-package-checklist-items'
 import { summarizeSkillInstallRisk } from './skill-package-install-risk'
 import { retryableSkillIds } from './skill-bundle-retry-selection'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 type BundleVersion = SkillCloudVersion & {
   manifest: Extract<SkillCloudVersion['manifest'], { skills: unknown }>
@@ -169,7 +170,7 @@ export function SkillBundleInstallFlow(props: {
           return
         }
       }
-      const operationId = crypto.randomUUID()
+      const operationId = createBrowserUuid()
       installProgress.begin(operationId)
       const operation = await window.api.skills.installBundleShare({
         shareId: props.shareId,

@@ -39,7 +39,9 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       run: { id: string; objective: string } | null
     }>('orchestration.runCurrent', { from })
     printResult(result, json, (r) =>
-      r.run ? `${r.run.id} ${r.run.objective}` : 'No Run is bound to this terminal.'
+      r.run
+        ? `${r.run.id} ${r.run.objective}`
+        : `No Run is bound to this ${from === undefined ? 'session' : 'terminal'}.`
     )
   },
 

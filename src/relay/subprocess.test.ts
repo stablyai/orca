@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  statSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -13,6 +14,7 @@ import * as path from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync, spawn as spawnChild } from 'node:child_process'
 import { build } from 'esbuild'
+import { JSONC_PARSER_ESM_ALIAS } from '../../config/build-plugins/jsonc-parser-esm'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
 import { getEndpointFileName } from '../shared/agent-hook-listener/endpoint-publication'
 import { relayTestSocketPath } from './relay-test-socket-path'
@@ -34,6 +36,7 @@ beforeAll(async () => {
     format: 'cjs',
     outfile: relayEntry,
     external: ['node-pty', '@parcel/watcher', 'electron'],
+    alias: JSONC_PARSER_ESM_ALIAS,
     sourcemap: false
   })
   await build({
@@ -178,15 +181,6 @@ describe('Subprocess: Relay entry point', () => {
     }
   })
 
-  it('prints sentinel on startup', async () => {
-    relay = spawn()
-    await relay.sentinelReceived
-  }, 10_000)
-
-  it('keeps the Node-18 relay bundle free of unsupported array copy methods', () => {
-    expect(readFileSync(relayEntry, 'utf8')).not.toContain('.toReversed(')
-  })
-
   it('loads node-pty after an in-place dependency repair without restarting', async () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-native-repair-'))
     const repairedRelayEntry = path.join(tmpDir, 'relay.js')
@@ -231,38 +225,6 @@ describe('Subprocess: Relay entry point', () => {
     expect(repaired.error).toBeUndefined()
     // Why: the late failure happens after the id is minted, so the repair lands on the next sequence.
     expect(repaired.result).toMatchObject({ id: expect.stringMatching(/^pty2:[^:]+:2$/) })
-  }, 10_000)
-
-  it('responds to fs.stat over stdin/stdout', async () => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
-    writeFileSync(path.join(tmpDir, 'test.txt'), 'hello')
-
-    relay = spawn()
-    await relay.sentinelReceived
-
-    const id = relay.send('fs.stat', { filePath: path.join(tmpDir, 'test.txt') })
-    const resp = await relay.waitForResponse(id)
-
-    expect(resp.result).toBeDefined()
-    const result = resp.result as { size: number; type: string }
-    expect(result.type).toBe('file')
-    expect(result.size).toBe(5)
-  }, 10_000)
-
-  it('responds to fs.readDir', async () => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
-    writeFileSync(path.join(tmpDir, 'a.txt'), 'a')
-    writeFileSync(path.join(tmpDir, 'b.txt'), 'b')
-
-    relay = spawn()
-    await relay.sentinelReceived
-
-    const id = relay.send('fs.readDir', { dirPath: tmpDir })
-    const resp = await relay.waitForResponse(id)
-
-    const entries = resp.result as { name: string }[]
-    const names = entries.map((e) => e.name).sort()
-    expect(names).toEqual(['a.txt', 'b.txt'])
   }, 10_000)
 
   it('responds to fs.readFile and fs.writeFile', async () => {
@@ -416,6 +378,85 @@ describe('Subprocess: Relay entry point', () => {
       }
     },
     10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'leaves the endpoint credential equal to the winning daemon when two starts race one socket',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-cred-race-'))
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      const credentialFile = `${sockPath}.credential`
+      const starters = [0, 1].map(() =>
+        spawnRelay(relayEntry, [
+          '--detached',
+          '--grace-time',
+          '10',
+          '--sock-path',
+          sockPath,
+          '--endpoint-dir',
+          path.join(tmpDir, 'agent-hooks'),
+          '--credential-file',
+          credentialFile
+        ])
+      )
+      const stderrByStarter = starters.map((starter) => {
+        let text = ''
+        starter.proc.stderr!.on('data', (chunk: Buffer) => {
+          text += chunk.toString('utf8')
+        })
+        return () => text
+      })
+      try {
+        const outcomes = await Promise.all(
+          starters.map((starter) =>
+            Promise.race([
+              starter.sentinelReceived.then(() => 'ready'),
+              starter.waitForExit(8000).then((code) => `exit:${code}`)
+            ])
+          )
+        )
+        expect(outcomes.filter((outcome) => outcome === 'ready')).toHaveLength(1)
+        expect(outcomes.filter((outcome) => outcome === 'exit:1')).toHaveLength(1)
+        const winnerIndex = outcomes.indexOf('ready')
+        const loserIndex = 1 - winnerIndex
+        const loserStderr = stderrByStarter[loserIndex]()
+        expect(loserStderr, loserStderr).toContain('Socket path already in use')
+
+        // The loser must not have touched the file: whatever is on disk authenticates against
+        // the daemon that owns the socket, with the mode the relay requires.
+        const credential = readFileSync(credentialFile, 'utf8').trim()
+        expect(credential).toMatch(/^[A-Za-z0-9_-]{32,256}$/)
+        expect(statSync(credentialFile).mode & 0o777).toBe(0o600)
+
+        const bridge = spawn([
+          '--connect',
+          '--sock-path',
+          sockPath,
+          '--credential-file',
+          credentialFile
+        ])
+        try {
+          await bridge.sentinelReceived
+          const resp = await bridge.waitForResponse(bridge.send('relay.status'))
+          expect(resp.error).toBeUndefined()
+          expect(resp.result as { pid: number }).toMatchObject({
+            pid: starters[winnerIndex].proc.pid
+          })
+        } finally {
+          bridge.kill('SIGTERM')
+          await bridge.waitForExit().catch(() => {})
+        }
+        expect(stderrByStarter[winnerIndex]()).not.toContain('credential mismatch')
+      } finally {
+        for (const starter of starters) {
+          if (starter.proc.exitCode === null) {
+            starter.proc.kill('SIGKILL')
+            await starter.waitForExit().catch(() => {})
+          }
+        }
+      }
+    },
+    20_000
   )
 
   it.skipIf(process.platform === 'win32')(

@@ -1,0 +1,90 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.markdown-save",
+  "family": "session.markdown-save",
+  "namedDeltas": [],
+  "values": {
+    "48e7060a8031": {
+      "name": "markdown.saveTab#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.saveTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\",\"baseVersion\":\"v1\",\"content\":\"# b\"}}"
+    },
+    "52c1632d410d": {
+      "name": "markdown.saveTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "version_conflict",
+            "message": "Document changed on disk"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "aa5c91b36a35": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": true,
+          "localContent": "# b",
+          "saveError": "Document changed on disk",
+          "saving": false,
+          "status": "ready"
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-markdown-save-conflict",
+    "checkpoints": [
+      {
+        "id": "conflicted",
+        "observation": {
+          "sender": ["52c1632d410d"],
+          "payloads": ["48e7060a8031"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "aa5c91b36a35",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

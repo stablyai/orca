@@ -6,6 +6,7 @@ export type MockSshClient = {
   setNoDelay: ReturnType<typeof vi.fn>
   _sock: Socket | undefined
   lastExecCommand?: string
+  lastShellWindow?: unknown
   lastConnectConfig?: unknown
   on: (event: string, handler: (...args: unknown[]) => void) => void
   off: (event: string, handler: (...args: unknown[]) => void) => void
@@ -38,18 +39,32 @@ export const VALID_ED25519_HOST_KEY = Buffer.from(
 )
 
 // Knobs tests assign to; grouped because imported bindings cannot be reassigned.
-export const ssh2Mock = {
-  presentedHostKey: undefined as Buffer | undefined,
+export const ssh2Mock: {
+  presentedHostKey: Buffer | undefined
+  lastHostKeyAccepted: boolean | undefined
+  connectBehavior: 'ready' | 'error' | 'pending'
+  connectErrorMessage: string
+  connectErrorCode: string
+  destroyErrorMessage: string
+  connectSequence: ('ready' | 'silent' | Error)[]
+  execBehavior: 'callback' | 'pending'
+  sftpBehavior: 'callback' | 'pending'
+  notifyClientCreated: (() => void) | undefined
+} = {
+  presentedHostKey: undefined,
   /** What the verifier decided about the presented key on the most recent connect. */
-  lastHostKeyAccepted: undefined as boolean | undefined,
-  connectBehavior: 'ready' as 'ready' | 'error' | 'pending',
+  lastHostKeyAccepted: undefined,
+  connectBehavior: 'ready',
   connectErrorMessage: '',
   connectErrorCode: '',
   destroyErrorMessage: '',
-  connectSequence: [] as ('ready' | Error)[],
-  execBehavior: 'callback' as 'callback' | 'pending',
-  sftpBehavior: 'callback' as 'callback' | 'pending',
-  notifyClientCreated: undefined as (() => void) | undefined
+  // Why 'silent': leaves the connect attempt pending (no ready/error emitted)
+  // so a test can drive auth events (e.g. keyboard-interactive prompts)
+  // through emitSshEvent itself.
+  connectSequence: [],
+  execBehavior: 'callback',
+  sftpBehavior: 'callback',
+  notifyClientCreated: undefined
 }
 
 export const emitSshEvent = (event: string, ...args: unknown[]): void =>
@@ -137,6 +152,9 @@ export function createSsh2Module(): Ssh2ModuleMock {
           this.emit('ready')
           return
         }
+        if (next === 'silent') {
+          return
+        }
         if (ssh2Mock.connectBehavior === 'pending') {
           const configValue = this.lastConnectConfig
           const readyTimeout =
@@ -186,6 +204,15 @@ export function createSsh2Module(): Ssh2ModuleMock {
         pendingExecCallback = cb
         return
       }
+      cb(undefined, { close: vi.fn() })
+    }
+    lastShellWindow?: unknown
+    shell(
+      window: unknown,
+      _options: unknown,
+      cb: (err: Error | undefined, channel: unknown) => void
+    ) {
+      this.lastShellWindow = window
       cb(undefined, { close: vi.fn() })
     }
     sftp(cb: (err: Error | undefined, channel: unknown) => void) {

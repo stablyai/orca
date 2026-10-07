@@ -58,6 +58,11 @@ on:
         description: Version to package, without the leading v
         required: true
         type: string
+      orcad_template:
+        description: Ship the orcad-template artifact the calling run built (adhoc does; hourly and daily do not yet)
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       channel:
@@ -203,6 +208,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       # Caches the Electron binary and electron-builder's tool downloads (nsis,
       # winCodeSign). Same key shape as release-cut's Windows leg.
@@ -219,6 +227,8 @@ jobs:
       # Why retried: pnpm install triggers electron's postinstall, which pulls the
       # Electron binary from GitHub release assets, and that CDN returns transient
       # 504s often enough to lose a build to it.
+      # Why host-only: this job packages only for its own runner OS and
+      # architecture, so the default host-scoped install is deliberate.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:
@@ -226,6 +236,10 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       # Why the packaging check runs before the 20-minute build: it only needs
       # node_modules, and a stale config should cost seconds rather than a build.
@@ -254,6 +268,14 @@ jobs:
           # 'stable' or 'rc', so leaving it unset keeps dev builds silent — which
           # is correct for unvetted artifacts. Same as the mac dev channels.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+
+      # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
+      - name: Download the orcad deployment template
+        if: inputs.orcad_template
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
 
       # Why the token is minted here and not at the top: installation tokens live
       # one hour and nothing before this point writes anything.
@@ -292,6 +314,8 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           ORCA_BUILD_COMMIT: ${{ inputs.ref }}
+          # beforePack and afterPack fail the package when the template is absent.
+          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ inputs.orcad_template && '1' || '' }}
           # Why: electron-publish refuses to upload into a release published more
           # than two hours ago (gitHubPublisher.getOrCreateRelease). The mac leg
           # publishes the draft live as soon as *it* finishes, so a slow notary

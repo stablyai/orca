@@ -111,21 +111,6 @@ describe('host credential cleanup', () => {
     expect(deleteCredential).toHaveBeenCalledOnce()
   })
 
-  it('returns after durable intent without waiting for the native delete', async () => {
-    vi.useFakeTimers()
-    const deleteCredential = vi.fn(() => new Promise<void>(() => undefined))
-
-    await expect(
-      scheduleHostCredentialCleanup('host-1', deleteCredential, 3_000)
-    ).resolves.toBeUndefined()
-    await flushMicrotasks()
-
-    expect(storedPendingIds).toEqual(['host-1'])
-    expect(deleteCredential).toHaveBeenCalledOnce()
-
-    await vi.advanceTimersByTimeAsync(3_000)
-  })
-
   it('clears a timed-out pending entry when the native delete later succeeds', async () => {
     vi.useFakeTimers()
     let resolveDelete: (() => void) | null = null

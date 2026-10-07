@@ -1,4 +1,5 @@
 import type { KeybindingOverrides } from '../../shared/keybindings'
+import type { LowCommitOomVerdict } from '../crash-reporting/low-commit-oom-recovery-gate'
 import type {
   RecoveryExhaustionCause,
   RecoveryReloadMilestone,
@@ -31,6 +32,8 @@ export type CreateMainWindowOptions = {
     webContentsId: number
     recentRecoveryCount: number
     cause?: RecoveryExhaustionCause
+    /** Set with cause 'low-commit': the Windows commit reading that stopped the auto-reload. */
+    lowCommit?: LowCommitOomVerdict
     /** Watched manual retry for the recovery prompt; an unwatched one cannot re-raise the prompt when it stalls too. */
     retry?: () => void
   }) => void

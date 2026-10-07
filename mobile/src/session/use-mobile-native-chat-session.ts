@@ -7,10 +7,12 @@ import { createNativeChatMerger, replaceList } from '../../../src/shared/native-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
+import { nativeChatSessionPageRead } from './mobile-session-read-operations'
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
+import { structuredSessionRandomUuid } from './structured-session-operation-id'
 
 export type MobileNativeChatStatus =
   | 'idle'
@@ -33,6 +35,9 @@ export type MobileNativeChatSession = {
    *  wait for this to clear. */
   transcriptLoading: boolean
   error?: string
+  /** The read failed for good (damage, or a newer Orca's chat): the error says why, once, and
+   *  there is nothing to send into. */
+  readFailedFinally?: boolean
   /** True when an older page may exist (the last read filled the window). */
   hasMore: boolean
   /** Whether an older-history page is currently loading. */
@@ -153,7 +158,12 @@ export function useMobileNativeChatSession(args: {
         agent,
         sessionId,
         limit: limitRef.current,
-        subscriptionId: buildNativeChatSubscriptionId(agent, sessionId),
+        // Why: a token of its own, so another screen on this chat never evicts this feed on the host.
+        subscriptionId: buildNativeChatSubscriptionId(
+          agent,
+          sessionId,
+          structuredSessionRandomUuid()
+        ),
         capabilities: { transcriptPending: 1 },
         ...(transcriptPath ? { transcriptPath } : {})
       },
@@ -239,17 +249,25 @@ export function useMobileNativeChatSession(args: {
     setLoadingEarlier(true)
     void (async () => {
       try {
-        const response = await client.sendRequest('nativeChat.readSession', {
+        const response = await nativeChatSessionPageRead.request(client, {
           agent,
           sessionId,
           limit: beforeOffset === null ? nextLimit : pageLimit,
           ...(beforeOffset === null ? {} : { beforeOffset }),
           ...(transcriptPath ? { transcriptPath } : {})
         })
-        if (!response.ok) {
+        const accepted = nativeChatSessionPageRead.interpret(response)
+        if (!accepted.accepted) {
           return
         }
-        const result = response.result as ReadSessionResult
+        // The read is `z.unknown()` because the reply is a union, so an accepted success can still
+        // carry no result at all, or null; `'error' in` throws on either.
+        const payload = accepted.value
+        if (payload === null || typeof payload !== 'object') {
+          return
+        }
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main cast this payload unread; the reader hands back the same result.
+        const result = payload as ReadSessionResult
         if ('error' in result) {
           return
         }
@@ -272,6 +290,11 @@ export function useMobileNativeChatSession(args: {
           setList(result.messages)
           setHasMore(result.messages.length >= nextLimit)
         }
+      } catch {
+        // Nothing awaits this page, so a rejected request — a transport drop, or the client
+        // abandoning it at teardown — would otherwise reach the document as an unhandled
+        // rejection. Swallowed to match the operation's own skip policy: a page that never
+        // arrives leaves the window the subscription already delivered.
       } finally {
         // A late page from a prior tab must not unlock the current tab's request.
         if (

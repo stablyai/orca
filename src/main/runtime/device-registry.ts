@@ -11,10 +11,15 @@ import {
   writeSecureJsonFile
 } from '../../shared/secure-file'
 import type { DeviceScope } from '../../shared/runtime-types'
+import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
+import {
+  parseMobilePushRegistration,
+  type MobilePushRegistration
+} from '../../shared/mobile-push-contract'
 
 export type { DeviceScope }
 
@@ -30,6 +35,9 @@ export type DeviceEntry = {
   // Why: STA-2370 — a grant minted for "This computer only" proves nothing about off-host reach when its
   // client connects, so the bind decision must be able to tell it apart from a LAN/phone grant.
   pairingReach?: RuntimePairingReach
+  // Why: survives a desktop restart so the host can keep pushing without the phone
+  // re-registering. Absent on every registry written before background push existed.
+  pushRegistration?: MobilePushRegistration
 }
 
 function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
@@ -54,6 +62,7 @@ function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding
 // Why: a lastSeen refresh is pure bookkeeping, so coalesce reconnect bursts into one write instead of
 // paying a secure-file rewrite (two synchronous PowerShell ACL spawns on Windows) per connection.
 const LAST_SEEN_FLUSH_DELAY_MS = 250
+const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 export class DeviceRegistry {
   private readonly registryPath: string
@@ -64,6 +73,10 @@ export class DeviceRegistry {
 
   constructor(userDataPath: string) {
     this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
+    // Why: a write killed between writeFile and rename (e.g. a hung icacls, #20497) orphans its temp forever.
+    void removeStaleDurableWriteTempFiles(this.registryPath, {
+      minimumAgeMs: STALE_WRITE_TEMP_AGE_MS
+    })
     this.load()
   }
 
@@ -174,6 +187,26 @@ export class DeviceRegistry {
     const nextDevices = this.devices.map((device, candidateIndex) =>
       candidateIndex === index ? { ...device, relayBinding: binding } : device
     )
+    this.save(nextDevices)
+    this.devices = nextDevices
+    return true
+  }
+
+  /** Passing null clears the registration (unregister, or a token the gateway reported dead). */
+  setPushRegistration(deviceId: string, registration: MobilePushRegistration | null): boolean {
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+    if (index === -1 || this.devices[index]?.scope !== 'mobile') {
+      return false
+    }
+    const nextDevices = this.devices.map((device, candidateIndex) => {
+      if (candidateIndex !== index) {
+        return device
+      }
+      const { pushRegistration: _dropped, ...rest } = device
+      return registration ? { ...rest, pushRegistration: registration } : rest
+    })
+    // Why: persist before the memory swap so a failed write cannot leave the dispatcher
+    // pushing to a registration disk says is gone (or vice versa on reload).
     this.save(nextDevices)
     this.devices = nextDevices
     return true
@@ -297,7 +330,10 @@ export class DeviceRegistry {
           device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic',
         // Why: registries written before this field existed only ever held network-reach grants (phones and
         // LAN links), so a missing value must keep binding every interface on reconnect.
-        pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network'
+        pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network',
+        // Why: a malformed row must degrade to "no background push", never fail the load
+        // and strand every paired device.
+        pushRegistration: parseMobilePushRegistration(device.pushRegistration)
       }))
       this.registryUnreadable = false
     } catch (error) {

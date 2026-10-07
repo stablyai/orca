@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef } from 'react'
-import { useAppStore } from '@/store'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import MermaidBlock from './MermaidBlock'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 type MermaidViewerProps = {
   content: string
@@ -17,10 +17,7 @@ export default function MermaidViewer({
   filePath
 }: MermaidViewerProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
-  const settings = useAppStore((s) => s.settings)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const isDark = useDocumentDarkTheme()
 
   // Why: Each viewing mode (source vs diagram) produces different DOM heights.
   // Mode-scoped keys prevent restoring a source-mode scroll position in diagram

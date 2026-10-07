@@ -1,10 +1,14 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type {
+  AgentSessionMutationEnvelope,
+  AgentSessionStatusEvent
+} from '../../../shared/agent-session-wire'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { AgentSessionOptionRejectedError } from './structured-agent-session-option-error'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -16,10 +20,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import type {
-  StructuredAgentSessionHandoffTransport,
-  StructuredTuiOwner
-} from './structured-agent-session-handoff-types'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const DEFAULT_MODEL = 'gpt-default'
@@ -33,14 +37,10 @@ let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let closeNativeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>>
 let activeModel: string
 let activeEffort: string | null
-let transcriptPath: string
 let optionFailure: Error | null
-let tuiLaunchFailure: Error | null
 /** What the adapter's closeSession reports about the child's exit. */
 let closeSessionExit = true
 const dispatchedModels: string[] = []
-const launchedOptions: (Readonly<Record<string, string>> | undefined)[] = []
-const closedTuiOwners: StructuredTuiOwner[] = []
 
 function envelope(method: string, fields: Record<string, unknown>): AgentSessionMutationEnvelope {
   return {
@@ -52,55 +52,6 @@ function envelope(method: string, fields: Record<string, unknown>): AgentSession
       sessionId: SESSION,
       fields
     })
-  }
-}
-
-function tuiOwner(fence: number, spawnToken: string): StructuredTuiOwner {
-  return {
-    terminal: { handle: 'term-tui', tabId: 'tab-tui', paneKey: 'pane-tui', ptyId: 'pty-tui' },
-    process: {
-      hostId: 'local',
-      pid: 5200,
-      processStartTimeMs: NOW,
-      spawnToken
-    },
-    link: {
-      linkId: `tui-link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
-      origin: 'resumed',
-      mintedAtFence: fence,
-      observedAt: NOW
-    },
-    transcriptPath
-  }
-}
-
-function handoffTransport(): StructuredAgentSessionHandoffTransport {
-  return {
-    hostLabel: 'Test host',
-    launchTui: async ({ record, fence, spawnToken }) => {
-      if (tuiLaunchFailure) {
-        const error = tuiLaunchFailure
-        tuiLaunchFailure = null
-        throw error
-      }
-      launchedOptions.push(record.options)
-      return tuiOwner(fence, spawnToken)
-    },
-    reproveTuiOwner: async ({ owner }) => owner,
-    recoverTuiOwner: async (record) =>
-      tuiOwner(
-        record.lease.runtimeFence,
-        record.lease.ownerProcess?.spawnToken ?? record.lease.reservedSpawnToken ?? 'recovered'
-      ),
-    stopRecoveredOwner: async () => undefined,
-    closeTuiOwner: async (owner) => {
-      closedTuiOwners.push(owner)
-      return { transcriptPath: owner.transcriptPath }
-    },
-    waitForTuiExit: async (owner) => ({ transcriptPath: owner.transcriptPath }),
-    waitForTuiIdleOrExit: async () => 'idle',
-    tuiStatus: () => 'idle'
   }
 }
 
@@ -117,7 +68,7 @@ function adapter(): StructuredAgentSessionAdapter {
       },
       link: {
         linkId: `native-link-${fence}`,
-        handle: { provider: 'codex', threadId: THREAD },
+        handle: codexProviderHandle(THREAD),
         origin: acquire.mock.calls.length === 1 ? 'created' : 'resumed',
         mintedAtFence: fence,
         observedAt: NOW
@@ -165,38 +116,24 @@ function adapter(): StructuredAgentSessionAdapter {
 }
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-handoff-options-'))
+  root = await mkdtemp(join(tmpdir(), 'orca-option-settlement-'))
   resetHostTestOperationIds()
   activeModel = DEFAULT_MODEL
   activeEffort = null
   optionFailure = null
-  tuiLaunchFailure = null
   closeSessionExit = true
   dispatchedModels.length = 0
-  launchedOptions.length = 0
-  closedTuiOwners.length = 0
   const accountHome = join(root, 'codex-home')
-  const sessionsDir = join(accountHome, 'sessions', '2026', '08', '12')
-  transcriptPath = join(sessionsDir, `rollout-2026-08-12T10-00-00-${THREAD}.jsonl`)
-  await mkdir(sessionsDir, { recursive: true })
-  await writeFile(
-    transcriptPath,
-    `${JSON.stringify({
-      type: 'session_meta',
-      timestamp: '2026-08-12T10:00:00.000Z',
-      payload: { id: THREAD, session_id: THREAD }
-    })}\n`,
-    'utf8'
-  )
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   router = adapter()
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: router,
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-native',
-    handoffTransport: handoffTransport(),
     now: () => NOW
   })
   const attached = await host.attach(
@@ -212,6 +149,44 @@ afterEach(async () => {
 })
 
 describe('structured session options and close', () => {
+  it('publishes an acknowledged model without waiting for journal traffic', async () => {
+    const body = {
+      kind: 'message' as const,
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: 'first task' }]
+    }
+    await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body }),
+      body
+    })
+    // Accepted, then handed over by the delivery loop; the status is read once it answered.
+    await vi.waitFor(() => expect(dispatchedModels).toEqual([DEFAULT_MODEL]))
+    await vi.waitFor(async () =>
+      expect((await host.journalSnapshot(SESSION)).submissions[0]?.dispatchState).toBe('accepted')
+    )
+    const events: AgentSessionStatusEvent[] = []
+    host.subscribeStatus({ id: 'session-list', emit: (event) => events.push(event) })
+    expect(events).toEqual([
+      {
+        type: 'snapshot',
+        sessions: [expect.objectContaining({ status: 'idle', model: DEFAULT_MODEL })]
+      }
+    ])
+    const fields = { key: 'model', value: PICKED_MODEL }
+
+    await host.setOption(CALLER, {
+      envelope: envelope('agentSession.setOption', fields),
+      ...fields
+    })
+
+    expect(events.slice(1)).toEqual([
+      {
+        type: 'status',
+        session: expect.objectContaining({ sessionId: SESSION, model: PICKED_MODEL })
+      }
+    ])
+  })
+
   it('settles a pre-mutation rejection so a fresh retry can succeed', async () => {
     optionFailure = new AgentSessionOptionRejectedError('model list unavailable')
     const fields = { key: 'model', value: PICKED_MODEL }
@@ -242,7 +217,7 @@ describe('structured session options and close', () => {
   it('stops the provider child and forgets the session when the chat closes', async () => {
     expect(host.hasSession(SESSION)).toBe(true)
 
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
 
     expect(closeNativeSession).toHaveBeenCalledWith(SESSION)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -252,15 +227,15 @@ describe('structured session options and close', () => {
     })
     expect(host.hasSession(SESSION)).toBe(false)
 
-    await expect(host.close(SESSION)).resolves.toBeUndefined()
+    await expect(host.close(SESSION, 'evict')).resolves.toBeUndefined()
     expect(closeNativeSession).toHaveBeenCalledOnce()
   })
 
   it('is a no-op for a session it does not hold', async () => {
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     closeNativeSession.mockClear()
 
-    await expect(host.close(SESSION)).resolves.toBeUndefined()
+    await expect(host.close(SESSION, 'evict')).resolves.toBeUndefined()
     expect(closeNativeSession).not.toHaveBeenCalled()
   })
 })

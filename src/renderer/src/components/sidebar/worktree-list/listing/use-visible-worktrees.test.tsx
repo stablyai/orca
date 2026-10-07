@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -158,5 +158,40 @@ describe('useVisibleSidebarWorktrees', () => {
     // A write that does move it still recomputes.
     rerender(Object.assign({}, withSettings(nextSettings), { defaultHostId: 'runtime:other' }))
     expect(computeVisibleWorktreesCalls.count).toBe(callsAfterFirstRender + 1)
+  })
+
+  it('does not rescan visible worktrees for chat-tab writes when sleeping workspaces are shown', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree('alpha', 'Alpha workspace')
+    useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } })
+    computeVisibleWorktreesCalls.count = 0
+
+    renderHook(() =>
+      useVisibleSidebarWorktrees({
+        filterState: {
+          showSleepingWorkspaces: true,
+          filterRepoIds: [],
+          hideDefaultBranchWorkspace: false,
+          hideAutomationGeneratedWorkspaces: false,
+          hideCliCreatedWorkspaces: false,
+          hideDetachedHeadWorkspaces: false,
+          hideWorkspacesFromOtherDevices: false,
+          alwaysShowDefaultBranchWorkspace: true,
+          visibleWorkspaceHostIds: null,
+          workspaceHostScope: 'all'
+        },
+        sortBy: 'recent',
+        sortedIds: [worktree.id],
+        repoMap: new Map([[repo.id, repo]]),
+        worktreeLineageById: {},
+        defaultHostId: LOCAL_EXECUTION_HOST_ID,
+        agentSendTargetWorktreeId: null
+      })
+    )
+    const callsAfterFirstRender = computeVisibleWorktreesCalls.count
+
+    act(() => useAppStore.setState({ unifiedTabsByWorktree: { [worktree.id]: [] } }))
+
+    expect(computeVisibleWorktreesCalls.count).toBe(callsAfterFirstRender)
   })
 })

@@ -6,17 +6,17 @@ on:
       - '.github/workflows/computer-e2e.yml'
       - 'config/electron-builder.config.cjs'
       - 'config/scripts/build-computer-macos.mjs'
+      - 'config/scripts/build-native-for-platform.mjs'
+      - 'config/scripts/build-native-for-platform.test.mjs'
+      - 'config/scripts/pnpm-cli-invocation.mjs'
       - 'config/scripts/build-windows-cli-launcher.mjs'
       - 'config/scripts/build-windows-cli-launcher.test.mjs'
-      - 'config/scripts/computer-e2e-workflow.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-metrics.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-processes.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-processes.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mjs'
-      - 'config/scripts/computer-use-modifier-safety.test.mjs'
-      - 'config/scripts/computer-use-skill-guidance.test.mjs'
       - 'config/scripts/computer-use-smoke.mjs'
       - 'config/scripts/computer-use-smoke.test.mjs'
       - 'config/scripts/daemon-boot-smoke.mjs'
@@ -85,11 +85,8 @@ jobs:
       - run: >-
           pnpm vitest run --config config/vitest.config.ts
           src/main/ssh/ssh-remote-cli-launcher.test.ts
-          config/scripts/computer-e2e-workflow.test.mjs
           config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
           config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
-          config/scripts/computer-use-modifier-safety.test.mjs
-          config/scripts/computer-use-skill-guidance.test.mjs
           config/scripts/computer-use-smoke.test.mjs
           src/main/computer/computer-provider-lifecycle.test.ts
           src/main/computer/computer-provider-unavailable-message.test.ts
@@ -112,7 +109,6 @@ jobs:
           src/cli/handlers/computer-action-routing.test.ts
           src/cli/handlers/computer-action-validation.test.ts
           src/cli/handlers/computer-state-formatting.test.ts
-          src/cli/specs/computer.test.ts
           src/cli/index.test.ts
           src/main/runtime/rpc/dispatcher-computer-errors.test.ts
           src/main/runtime/rpc/errors.test.ts
@@ -157,6 +153,12 @@ jobs:
           pnpm vitest run
           config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
           config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
+      # Why: the parallel launcher's cancellation tests are darwin-only and no
+      # other PR job runs on macOS.
+      - name: Parallel native build launcher cancellation
+        run: >-
+          pnpm vitest run --config config/vitest.config.ts
+          config/scripts/build-native-for-platform.test.mjs
       - name: Authenticated helper owner-loss smoke
         run: pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1
       - name: Swift tests and signed universal helper verification

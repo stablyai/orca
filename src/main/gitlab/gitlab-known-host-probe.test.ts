@@ -5,8 +5,10 @@ const { glabExecFileAsyncMock } = vi.hoisted(() => ({ glabExecFileAsyncMock: vi.
 vi.mock('../git/runner', () => ({ glabExecFileAsync: glabExecFileAsyncMock }))
 
 import {
+  _getKnownHostsCacheSize,
   _resetKnownHostsCache,
   getGlabKnownHosts,
+  KNOWN_HOSTS_CACHE_MAX_ENTRIES,
   rememberGlabKnownHost,
   rememberGlabKnownHosts
 } from './gitlab-known-host-probe'
@@ -194,6 +196,14 @@ describe('getGlabKnownHosts', () => {
       'ssh-a.test'
     ])
     expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('bounds execution-context cache keys across SSH reconnect churn', () => {
+    for (let index = 0; index < KNOWN_HOSTS_CACHE_MAX_ENTRIES + 20; index += 1) {
+      rememberGlabKnownHost(`host-${index}.example`, `connection-${index}`)
+    }
+
+    expect(_getKnownHostsCacheSize()).toBe(KNOWN_HOSTS_CACHE_MAX_ENTRIES)
   })
 
   it('recognizes a self-hosted host on a non-default port', async () => {

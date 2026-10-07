@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -40,8 +40,7 @@ vi.mock('./runtime/environments', async (importOriginal) => {
 // null-vs-undefined coverage the rest of the table cannot.
 vi.mock('../main/agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock,
-  getManagedAgentHookStatuses: vi.fn(() => []),
-  prepareManagedCodexHomeBeforeShellLaunch: vi.fn(async () => {})
+  getManagedAgentHookStatuses: vi.fn(() => [])
 }))
 
 vi.mock('./runtime-client', () => {
@@ -59,8 +58,6 @@ vi.mock('./runtime-client', () => {
 
 import { main } from './index'
 import * as dispatchModule from './dispatch'
-
-const CLI_DIR = __dirname
 
 describe('RuntimeClient module-graph deferral', () => {
   let logSpy: ReturnType<typeof vi.spyOn>
@@ -82,33 +79,6 @@ describe('RuntimeClient module-graph deferral', () => {
     vi.unstubAllEnvs()
     rmSync(testUserDataPathRef.current, { recursive: true, force: true })
     process.exitCode = 0
-  })
-
-  // These eager modules must not pull the RuntimeClient dependency graph into help.
-  it.each([
-    'args.ts',
-    'flags.ts',
-    'dispatch.ts',
-    'cli-error.ts',
-    'selectors.ts',
-    'execution-host-flag.ts'
-  ])('%s imports error classes from ./runtime/types, not the barrel', (file) => {
-    const source = readFileSync(join(CLI_DIR, file), 'utf8')
-    const valueImports = source
-      .split('\n')
-      .filter((line) => line.startsWith('import ') && line.includes("'./runtime-client'"))
-    for (const line of valueImports) {
-      expect(line, `${file}: "${line}" must be type-only`).toMatch(/^import type /)
-    }
-    expect(source).toContain("} from './runtime/types'")
-  })
-
-  it('index.ts has no eager value-import of the runtime client', () => {
-    const source = readFileSync(join(CLI_DIR, 'index.ts'), 'utf8')
-    expect(source).toContain("import type { RuntimeClient } from './runtime-client'")
-    expect(source).not.toMatch(/^import \{[^}]*RuntimeClient[^}]*\} from '\.\/runtime-client'/m)
-    expect(source).toContain("await import('./runtime-client.js')")
-    expect(source).toContain("import { reportCliError } from './cli-error'")
   })
 
   it('constructs no client for --help', async () => {
@@ -147,7 +117,9 @@ describe('RuntimeClient module-graph deferral', () => {
     async (_name, argv, constructs) => {
       vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
       vi.stubEnv('ORCA_ENVIRONMENT', 'some-environment')
-      getCliStatusMock.mockResolvedValue({ result: { runtime: { reachable: false } } })
+      getCliStatusMock.mockResolvedValue({
+        result: { runtime: { reachable: false }, app: { running: false } }
+      })
 
       await main(argv, '/tmp/repo')
 

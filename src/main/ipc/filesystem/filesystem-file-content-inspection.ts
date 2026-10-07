@@ -1,6 +1,11 @@
-import { open } from 'node:fs/promises'
-import type { FileHandle } from 'node:fs/promises'
+import { extname } from 'node:path'
 import { localLogFileIdentity } from '../../ai-vault/local-log-tail-reader'
+import {
+  fileTooLargeError,
+  openLocalRegularFile,
+  readLocalFileBounded,
+  readLocalFilePrefix
+} from './local-regular-file-read'
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
 export const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
@@ -9,6 +14,7 @@ export const BINARY_PROBE_BYTES = 8192
 export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
 export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
+  '.avif': 'image/avif',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
@@ -19,25 +25,58 @@ export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.pdf': 'application/pdf'
 }
 
-export async function readLocalLogSnapshot(filePath: string): Promise<{
+export type LocalFileContent = {
+  mediaUrl?: string
   content: string
   isBinary: boolean
+  isImage?: boolean
+  mimeType?: string
   fileIdentity?: string
-}> {
-  const handle = await open(filePath, 'r')
+}
+
+/** One open, one handle: the size check, binary probe and read all see the same regular file. */
+export async function readLocalFileContent(filePath: string): Promise<LocalFileContent> {
+  const { handle, stats } = await openLocalRegularFile(filePath)
   try {
-    const stats = await handle.stat()
+    const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
+    const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+    if (stats.size > sizeLimit) {
+      throw fileTooLargeError(stats.size, sizeLimit)
+    }
+    if (mimeType) {
+      const buffer = await readLocalFileBounded(handle, sizeLimit, stats.size)
+      return {
+        content: buffer.toString('base64'),
+        isBinary: true,
+        // Why: the renderer keys previewable-binary rendering off `isImage`, so set it for PDFs too to stay compatible.
+        isImage: true,
+        mimeType
+      }
+    }
+    // Why: probe large unknown files first so archives aren't fully buffered only to discover they aren't editable text.
+    if (
+      stats.size > BINARY_PROBE_BYTES &&
+      isBinaryBuffer(await readLocalFilePrefix(handle, BINARY_PROBE_BYTES))
+    ) {
+      return { content: '', isBinary: true }
+    }
+    const buffer = await readLocalFileBounded(handle, sizeLimit, stats.size)
+    if (isBinaryBuffer(buffer)) {
+      return { content: '', isBinary: true }
+    }
+    return { content: buffer.toString('utf-8'), isBinary: false }
+  } finally {
+    await handle.close()
+  }
+}
+
+export async function readLocalLogSnapshot(filePath: string): Promise<LocalFileContent> {
+  const { handle, stats } = await openLocalRegularFile(filePath)
+  try {
     if (stats.size > MAX_TEXT_FILE_SIZE) {
-      throw new Error(
-        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
-      )
+      throw fileTooLargeError(stats.size, MAX_TEXT_FILE_SIZE)
     }
-    const buffer = await handle.readFile()
-    if (buffer.byteLength > MAX_TEXT_FILE_SIZE) {
-      throw new Error(
-        `File too large: ${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
-      )
-    }
+    const buffer = await readLocalFileBounded(handle, MAX_TEXT_FILE_SIZE, stats.size)
     if (isBinaryBuffer(buffer)) {
       return { content: '', isBinary: true }
     }
@@ -60,17 +99,6 @@ export function isBinaryBuffer(buffer: Buffer): boolean {
     }
   }
   return false
-}
-
-export async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
-  const handle: FileHandle = await open(filePath, 'r')
-  try {
-    const probe = Buffer.alloc(BINARY_PROBE_BYTES)
-    const { bytesRead } = await handle.read(probe, 0, probe.length, 0)
-    return isBinaryBuffer(probe.subarray(0, bytesRead))
-  } finally {
-    await handle.close()
-  }
 }
 
 export function isDirectoryEntry(entry: {

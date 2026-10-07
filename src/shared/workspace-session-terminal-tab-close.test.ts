@@ -230,4 +230,118 @@ describe('closeTerminalTabInWorkspaceSession', () => {
     expect(current.tabsByWorktree[WORKTREE_ID]).toEqual([])
     expect(current.terminalLayoutsByTabId).toEqual({})
   })
+  it('selects the previous neighbor in linear work when closing the last of many tabs', () => {
+    let reads = 0
+    const ids = Array.from({ length: 1000 }, (_, i) => `tab-${i}`)
+    const tabOrder = [...ids, 'terminal-1']
+    for (let i = 0; i < tabOrder.length; i++) {
+      const value = tabOrder[i]
+      Object.defineProperty(tabOrder, i, {
+        get: () => {
+          reads++
+          return value
+        }
+      })
+    }
+    const initial = session()
+    initial.tabGroups![WORKTREE_ID][0].tabOrder = tabOrder
+    initial.tabGroups![WORKTREE_ID][0].recentTabIds = []
+    const result = closeTerminalTabInWorkspaceSession(initial, WORKTREE_ID, 'terminal-1')
+    expect(result.session.tabGroups![WORKTREE_ID][0].activeTabId).toBe('tab-999')
+    expect(result.session.tabGroups![WORKTREE_ID][0].tabOrder).toEqual(ids)
+    expect(reads).toBeLessThan(6000)
+  })
+
+  it('preserves first-occurrence neighbor semantics for duplicate legacy order entries', () => {
+    const initial = session()
+    initial.tabGroups![WORKTREE_ID][0].tabOrder = ['a', 'terminal-1', 'a', 'b']
+    initial.tabGroups![WORKTREE_ID][0].recentTabIds = ['absent', 'terminal-1']
+    const result = closeTerminalTabInWorkspaceSession(initial, WORKTREE_ID, 'terminal-1')
+    expect(result.session.tabGroups![WORKTREE_ID][0].activeTabId).toBe('b')
+    expect(result.session.tabGroups![WORKTREE_ID][0].tabOrder).toEqual(['a', 'a', 'b'])
+    expect(result.session.tabGroups![WORKTREE_ID][0].recentTabIds).toEqual([])
+  })
+  // Preserve the pre-index selection as an independent oracle: which tab takes focus after a
+  // close is directly user-visible, so the indexed form must agree on every shape.
+  it('matches the pre-index next-active selection across random orders, duplicates and MRU stacks', () => {
+    function referenceNextActive(
+      tabOrder: readonly string[],
+      recentTabIds: readonly string[],
+      closingId: string
+    ): string | null {
+      const remaining = tabOrder.filter((id) => id !== closingId)
+      for (let index = recentTabIds.length - 1; index >= 0; index -= 1) {
+        const id = recentTabIds[index]!
+        if (remaining.includes(id)) {
+          return id
+        }
+      }
+      const closingIndex = tabOrder.indexOf(closingId)
+      return remaining.find((id) => tabOrder.indexOf(id) > closingIndex) ?? remaining.at(-1) ?? null
+    }
+
+    let seed = 987654
+    const random = (limit: number): number => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+      return seed % limit
+    }
+    const pool = ['a', 'b', 'c', 'd', 'terminal-1']
+    for (let sample = 0; sample < 500; sample++) {
+      const tabOrder = Array.from({ length: 1 + random(6) }, () => pool[random(pool.length)]!)
+      // Keep the closed tab present and at least one survivor, or the group is dropped entirely.
+      tabOrder.splice(random(tabOrder.length + 1), 0, 'terminal-1')
+      if (!tabOrder.some((id) => id !== 'terminal-1')) {
+        tabOrder.push('a')
+      }
+      const recentTabIds = Array.from({ length: random(5) }, () => pool[random(pool.length)]!)
+
+      const initial = session()
+      initial.tabGroups![WORKTREE_ID]![0]!.tabOrder = [...tabOrder]
+      initial.tabGroups![WORKTREE_ID]![0]!.recentTabIds = [...recentTabIds]
+      initial.tabGroups![WORKTREE_ID]![0]!.activeTabId = 'terminal-1'
+      const result = closeTerminalTabInWorkspaceSession(initial, WORKTREE_ID, 'terminal-1')
+
+      expect({
+        tabOrder,
+        recentTabIds,
+        activeTabId: result.session.tabGroups![WORKTREE_ID]![0]!.activeTabId
+      }).toEqual({
+        tabOrder,
+        recentTabIds,
+        activeTabId: referenceNextActive(tabOrder, recentTabIds, 'terminal-1')
+      })
+    }
+  })
+
+  it.each([
+    { name: 'first of three', order: ['terminal-1', 'b', 'c'], expected: 'b' },
+    { name: 'middle of three', order: ['a', 'terminal-1', 'c'], expected: 'c' },
+    { name: 'last of three', order: ['a', 'b', 'terminal-1'], expected: 'b' }
+  ])(
+    'picks the documented neighbor with no MRU history when closing the $name',
+    ({ order, expected }) => {
+      const initial = session()
+      initial.tabGroups![WORKTREE_ID]![0]!.tabOrder = order
+      initial.tabGroups![WORKTREE_ID]![0]!.recentTabIds = []
+      const result = closeTerminalTabInWorkspaceSession(initial, WORKTREE_ID, 'terminal-1')
+      expect(result.session.tabGroups![WORKTREE_ID]![0]!.activeTabId).toBe(expected)
+    }
+  )
+
+  it('prefers the most recent surviving tab over the order neighbor', () => {
+    const initial = session()
+    initial.tabGroups![WORKTREE_ID]![0]!.tabOrder = ['a', 'terminal-1', 'c']
+    initial.tabGroups![WORKTREE_ID]![0]!.recentTabIds = ['c', 'a']
+    const result = closeTerminalTabInWorkspaceSession(initial, WORKTREE_ID, 'terminal-1')
+    expect(result.session.tabGroups![WORKTREE_ID]![0]!.activeTabId).toBe('a')
+  })
+
+  it('leaves the active tab alone when a background tab closes', () => {
+    const initial = session()
+    initial.tabGroups![WORKTREE_ID]![0]!.tabOrder = ['a', 'terminal-1', 'c']
+    initial.tabGroups![WORKTREE_ID]![0]!.activeTabId = 'c'
+    initial.tabGroups![WORKTREE_ID]![0]!.recentTabIds = ['a']
+    const result = closeTerminalTabInWorkspaceSession(initial, WORKTREE_ID, 'terminal-1')
+    expect(result.session.tabGroups![WORKTREE_ID]![0]!.activeTabId).toBe('c')
+  })
 })

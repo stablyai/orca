@@ -11,6 +11,7 @@ const contracts = [
   'src/renderer/src/components/editor/rich-markdown-lowlight-cache.test.ts',
   'src/renderer/src/components/terminal-pane/agent-completion-coordinator-queued-inspection-disposal.test.ts',
   'src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-queue-retention.test.ts',
+  'src/renderer/src/store/store-identity-churn-probe.test.ts',
   'config/scripts/app-store-performance-plugin.test.mjs',
   'config/scripts/quadratic-buffer-concat-plugin.test.mjs',
   'config/scripts/sort-comparator-performance-plugin.test.mjs'

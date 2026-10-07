@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AppState } from '../types'
+import { resolveGeneratedFields } from './pull-request-generation-auto-submit'
 
 export type PullRequestFieldName = 'base' | 'title' | 'body' | 'draft'
 export type PullRequestFieldRevisions = Record<PullRequestFieldName, number>
@@ -38,6 +39,7 @@ export type PullRequestGenerationRecord = {
   result: PullRequestGenerationFields | null
   error: string | null
   hydrated: boolean
+  autoSubmit?: boolean
 }
 
 export type PullRequestGenerationRecords = Record<string, PullRequestGenerationRecord>
@@ -135,7 +137,8 @@ export function getPullRequestGenerationSeedRestoreKey({
 export function createRunningPullRequestGenerationRecord(
   context: PullRequestGenerationContext,
   seed: PullRequestGenerationFields,
-  seedFieldRevisions: PullRequestFieldRevisions
+  seedFieldRevisions: PullRequestFieldRevisions,
+  autoSubmit = false
 ): PullRequestGenerationRecord {
   return {
     context,
@@ -145,7 +148,8 @@ export function createRunningPullRequestGenerationRecord(
     status: 'running',
     result: null,
     error: null,
-    hydrated: false
+    hydrated: false,
+    autoSubmit
   }
 }
 
@@ -164,7 +168,7 @@ export function resolvePullRequestGenerationSuccess({
   return {
     ...record,
     status: 'succeeded',
-    result,
+    result: resolveGeneratedFields(record, result),
     error: null,
     hydrated: false
   }
@@ -288,7 +292,7 @@ export const createPullRequestGenerationSlice: StateCreator<
     set((state) => {
       const nextRecord = updater(state.pullRequestGenerationRecords[key] ?? null)
       if (!nextRecord) {
-        return {}
+        return state
       }
       return {
         pullRequestGenerationRecords: {
@@ -312,6 +316,6 @@ export const createPullRequestGenerationSlice: StateCreator<
           changed = true
         }
       }
-      return changed ? { pullRequestGenerationRecords: nextRecords } : {}
+      return changed ? { pullRequestGenerationRecords: nextRecords } : state
     })
 })

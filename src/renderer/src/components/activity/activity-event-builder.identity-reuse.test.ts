@@ -170,8 +170,55 @@ describe('activity build identity reuse', () => {
       threadCache
     )
     expect(decayed.liveAgentByPaneKey[PANE_B]).toBeUndefined()
+    expect(decayed.events.some((event) => event.state === 'working')).toBe(false)
     // PANE_A had no live snapshot; its thread survives untouched.
     expect(threadByPane(decayed.threads, PANE_A)).toBe(threadByPane(first.threads, PANE_A))
+  })
+
+  it('uses the same read receipt for working activity, heartbeats, and the next turn', () => {
+    const eventCache = createActivityEventBuildCache()
+    const threadCache = createAgentPaneThreadReuseCache()
+    const args = makeArgs({
+      agentStatusByPaneKey: {
+        [PANE_B]: entry(PANE_B, {
+          state: 'working',
+          stateStartedAt: NOW - 1_000,
+          updatedAt: NOW,
+          stateHistory: []
+        })
+      }
+    })
+    const first = buildBoth(args, eventCache, threadCache)
+    expect(first.events[0]).toMatchObject({ state: 'working', unread: true })
+    expect(first.threads[0].unread).toBe(true)
+
+    const readArgs = { ...args, acknowledgedAgentsByPaneKey: { [PANE_B]: NOW } }
+    expect(buildBoth(readArgs, eventCache, threadCache).threads[0].unread).toBe(false)
+
+    const heartbeatArgs = {
+      ...readArgs,
+      agentStatusByPaneKey: {
+        [PANE_B]: { ...args.agentStatusByPaneKey[PANE_B], updatedAt: NOW + 1_000 }
+      },
+      now: NOW + 1_000
+    }
+    const heartbeat = buildBoth(heartbeatArgs, eventCache, threadCache)
+    expect(heartbeat.events).toHaveLength(1)
+    expect(heartbeat.events[0].id).toBe(first.events[0].id)
+    expect(heartbeat.threads[0].unread).toBe(false)
+
+    const next = buildBoth(
+      {
+        ...heartbeatArgs,
+        agentStatusByPaneKey: {
+          [PANE_B]: { ...heartbeatArgs.agentStatusByPaneKey[PANE_B], stateStartedAt: NOW + 1_000 }
+        }
+      },
+      eventCache,
+      threadCache
+    )
+    expect(next.events[0].id).not.toBe(first.events[0].id)
+    expect(next.threads[0].unread).toBe(true)
   })
 
   it('cached builds always equal a cold uncached build (no drift)', () => {

@@ -57,7 +57,28 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dist/win-unpacked
-          key: win-unpacked-${{ hashFiles('src/**', 'config/**', 'package.json', 'pnpm-lock.yaml') }}
+          # mobile/ is in the key because beforePack requires out/mobile-web, whose bytes are the
+          # page built from the mobile install and the page trees below; a mobile-only change must
+          # miss this cache, not reuse a stale installer. config/** already covers the builder, the
+          # verifier and the manifest writer.
+          key: >-
+            win-unpacked-${{ hashFiles(
+              'src/**',
+              'config/**',
+              'package.json',
+              'pnpm-lock.yaml',
+              'mobile/package.json',
+              'mobile/pnpm-lock.yaml',
+              'mobile/app/**',
+              'mobile/src/**',
+              'mobile/web-entry/**'
+            ) }}
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules. Gated with the
+      # build it feeds, so a cache hit does not pay for an install nothing consumes.
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: steps.cache-unpacked.outputs.cache-hit != 'true'
 
       - name: Build unpacked app
         if: steps.cache-unpacked.outputs.cache-hit != 'true'

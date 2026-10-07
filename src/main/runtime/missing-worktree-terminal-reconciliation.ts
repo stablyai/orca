@@ -24,6 +24,7 @@ function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
         // receiver, a provider whose own method called `this.listProcesses()`
         // would silently read this sweep's cached snapshot instead of the live
         // host — the batching must not leak past the calls it was built for.
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
         const member: unknown = Reflect.get(target, property)
         return typeof member === 'function' ? member.bind(target) : member
       }

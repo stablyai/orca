@@ -20,6 +20,7 @@ const SETTINGS_NAV_TARGETS = [
   'git',
   'tasks',
   'appearance',
+  'chat',
   'input',
   'floating-workspace',
   'terminal',
@@ -39,6 +40,7 @@ const SETTINGS_NAV_TARGETS = [
   'agents',
   'orchestration',
   'artifacts',
+  'session-history',
   'share-skills',
   'automations',
   'orca-account',
@@ -64,6 +66,9 @@ export const FULL_DISK_ACCESS_SETTINGS_TARGET_ID = 'developer-permissions-full-d
 export const BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID = 'browser-terminal-link-actions'
 export const BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID = 'browser-client-hosted-remote'
 export const BROWSER_SSH_WORKSPACE_ROUTING_SETTINGS_TARGET_ID = 'browser-ssh-workspace-routing'
+export const BROWSER_USER_AGENT_SETTINGS_TARGET_ID = 'browser-user-agent'
+export const CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID =
+  'agents-codex-terminal-server-isolation'
 export const GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID = 'general-global-worktree-visibility'
 
 export type SettingsNavigationTarget = {

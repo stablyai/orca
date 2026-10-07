@@ -120,6 +120,44 @@ describe('expandDraggedWorktreeIdsForVisibleLineage', () => {
       )
     ).toEqual(['parent', 'child', 'z'])
   })
+
+  // Single-pass coverage must not end early when a descendant is also selected.
+  it('keeps ancestor coverage when a nested descendant is selected too', () => {
+    expect(
+      expandDraggedWorktreeIdsForVisibleLineage(
+        [
+          { worktreeId: 'parent', depth: 0 },
+          { worktreeId: 'child', depth: 2 },
+          { worktreeId: 'uncleish', depth: 1 },
+          { worktreeId: 'sibling', depth: 0 }
+        ],
+        ['parent', 'child']
+      )
+    ).toEqual(['parent', 'child', 'uncleish'])
+  })
+
+  it('restarts coverage for a later selected sibling after the previous run ends', () => {
+    expect(
+      expandDraggedWorktreeIdsForVisibleLineage(
+        [
+          { worktreeId: 'first', depth: 0 },
+          { worktreeId: 'first-child', depth: 1 },
+          { worktreeId: 'second', depth: 0 },
+          { worktreeId: 'second-child', depth: 1 }
+        ],
+        ['first', 'second']
+      )
+    ).toEqual(['first', 'first-child', 'second', 'second-child'])
+  })
+
+  it('emits each absent selected id once', () => {
+    expect(
+      expandDraggedWorktreeIdsForVisibleLineage(
+        [{ worktreeId: 'row', depth: 0 }],
+        ['gone', 'row', 'gone']
+      )
+    ).toEqual(['row', 'gone'])
+  })
 })
 
 describe('moveWorktreeIdsWithinGroup', () => {

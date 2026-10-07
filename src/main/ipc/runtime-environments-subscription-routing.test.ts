@@ -1,11 +1,10 @@
+import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
-} from '../../shared/protocol-version'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 
 const {
   handleMock,
@@ -40,6 +39,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: getPathMock },
   ipcMain: {
     handle: handleMock,
@@ -54,18 +54,23 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
-vi.mock('./runtime-environment-request-connections', () => ({
-  sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
-  sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
-  subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
-  getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
-  reconnectRemoteRuntimeSharedControlConnection: reconnectRemoteRuntimeSharedControlConnectionMock,
-  retryRemoteRuntimeSharedControlConnectionsNow: retryRemoteRuntimeSharedControlConnectionsNowMock,
-  retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
-  ensureRemoteRuntimeSharedControlConnection: vi.fn(),
-  pauseRemoteRuntimeSharedControlRetry: vi.fn(),
-  closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
-}))
+vi.mock('./runtime-environment-request-connections', async () => {
+  const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+  return withRuntimeStatusOwners({
+    sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
+    sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
+    subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
+    getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
+    reconnectRemoteRuntimeSharedControlConnection:
+      reconnectRemoteRuntimeSharedControlConnectionMock,
+    retryRemoteRuntimeSharedControlConnectionsNow:
+      retryRemoteRuntimeSharedControlConnectionsNowMock,
+    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
+    ensureRemoteRuntimeSharedControlConnection: vi.fn(),
+    pauseRemoteRuntimeSharedControlRetry: vi.fn(),
+    closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
+  })
+})
 
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
 import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
@@ -108,6 +113,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   afterEach(() => {
+    resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -170,7 +176,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { pageId: 'page-1' },
       15_000,
       expect.any(Object),
-      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
+      {
+        clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+        signal: expect.any(AbortSignal)
+      }
     )
     expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalledWith(
       expect.any(Object),
@@ -178,7 +187,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { client: { id: 'client-1' } },
       15_000,
       expect.any(Object),
-      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
+      {
+        clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+        signal: expect.any(AbortSignal)
+      }
     )
     expect(subscribeRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })
@@ -231,7 +243,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'session.tabs.subscribeAll',
       undefined,
       15_000,
-      expect.any(Object)
+      expect.any(Object),
+      expect.any(AbortSignal)
     )
     expect(subscribeRemoteRuntimeRequestMock).not.toHaveBeenCalled()
   })
@@ -360,7 +373,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       undefined,
       15_000,
       expect.any(Object),
-      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
+      {
+        clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+        signal: expect.any(AbortSignal)
+      }
     )
     expect(subscribeRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })

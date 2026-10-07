@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner } from './orca-runtime-structured-agent-session-recover-tui-owner'
+import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
+import { OrcaRuntimeWithStartTuiIdleVisibleReadProbe } from './orca-runtime-start-tui-idle-visible-read-probe'
 import { DEFAULT_WORKTREE_PS_LIMIT } from './orca-runtime-postlude'
 import type { RuntimeWorktreePsResult } from '../../shared/runtime-types'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
@@ -8,29 +9,44 @@ import {
   applyRuntimeWorktreePsSessionActivity,
   applyRuntimeWorktreePsTerminalActivity
 } from './runtime-worktree-ps-activity'
+import { applyRuntimeWorktreePsUnverifiableTerminals } from './runtime-worktree-ps-unverifiable-terminals'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { Repo } from '../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from './structured-agent-session-runtime'
+import {
+  createStructuredAttentionMobileDelivery,
+  readStructuredAttentionWorkspaceLabels
+} from './structured-agent-session-mobile-attention'
+import {
+  createStructuredAgentSessionLogger,
+  neverThrowingStructuredAgentSessionLogger
+} from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../agent-hooks/first-work-structured-session-rename'
+import { firstWorkRenameDeps } from '../agent-hooks/first-work-rename-runtime'
+import { createStructuredChatNamingHandler } from '../native-chat/structured-chat-naming'
+import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { buildWorktreeListingPage } from './worktree-listing-host-scope'
+import { structuredWorkerOwesWork } from './structured-worker-custody'
 import {
-  resolveTuiAgentLaunchArgs,
+  resolvedTuiAgentArgsBypassPermissions,
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
-import { resolveStartupShell, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
-import { resolveCodexStructuredAppServerArgs } from '../codex/codex-structured-app-server-args'
-import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
-import { hostname } from 'node:os'
+import { isTuiAgent } from '../../shared/tui-agent-config'
+import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
+import { claudeStructuredPermissionModeForSettings } from '../claude/claude-structured-permission-mode'
+import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-structured-permission-policy'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
-import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
+import { structuredAgentConfiguredArgs } from '../native-chat/structured-agent-configured-args'
+import { claudeThinkingDisplaySupport } from '../claude/claude-thinking-display-support'
 
-export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner {
+export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true
@@ -71,16 +87,30 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
     )
     const missingRuntimeWorktreeIds = new Set<string>()
     const session = this.store?.getWorkspaceSession?.()
+    const countedPtyIds = new Set<string>()
     const workingTerminalEvidenceByWorktreeId = applyRuntimeWorktreePsTerminalActivity({
       summaries,
       pathIndex: runtimeWorktreeSummaryPathIndex,
       missingIds: missingRuntimeWorktreeIds,
       freshPtyLiveness,
+      countedPtyIds,
       leaves: this.leaves.values(),
       ptysById: this.ptysById,
       tabs: this.tabs,
       session,
       getPaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
+      getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
+      getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
+        this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
+    })
+    applyRuntimeWorktreePsUnverifiableTerminals({
+      summaries,
+      pathIndex: runtimeWorktreeSummaryPathIndex,
+      missingIds: missingRuntimeWorktreeIds,
+      countedPtyIds,
+      leaves: this.leaves.values(),
+      ptysById: this.ptysById,
+      getLivenessVerdict: (ptyId) => this.getPtyLivenessVerdict(ptyId),
       getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
         this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
     })
@@ -93,6 +123,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         missingIds: missingRuntimeWorktreeIds,
         ptysById: this.ptysById,
         tabs: this.tabs,
+        getTerminalHandlesForPty: (ptyId) => this.getExistingTerminalHandlesForPtyId(ptyId),
         getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
           this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
       })
@@ -100,11 +131,13 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       summaries,
       pathIndex: runtimeWorktreeSummaryPathIndex,
       missingWorktreeIds: missingRuntimeWorktreeIds,
-      mirroredWorktreeIdByTabId,
-      connectedPtyEvidence,
       workingTerminalEvidenceByWorktreeId,
-      retainedSnapshots: this.agentRows.values(),
-      hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
+      rowSources: collectRuntimeWorktreeAgentSources({
+        mirroredWorktreeIdByTabId,
+        connectedPtyEvidence,
+        // Structured sessions are in here too: the host publishes them into the same store.
+        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? []
+      }),
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
         this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
@@ -132,118 +165,115 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
     })
   }
 
+  /** The durable record store alone, without the chat host: launch admission needs only its
+   *  ledger. A host installed later is built on this same store. */
+  async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
+    const { store } = await openAgentSessionRecordStoreOnce({
+      stateDirectory: getProfileUserDataPath(),
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
+    })
+    return store
+  }
+
   /**
    * Installs the structured agent-session host on first use. Lazy for the same
    * reason the orchestration DB is: the profile's user-data path is not final
-   * until the app is ready, and a runtime nobody drives a chat session on
-   * should never open the record store.
+   * until the app is ready, and a runtime nobody drives a chat session on never
+   * builds the chat host. The record store it sits on may already be open, from
+   * a launch's admission.
    */
   async ensureStructuredAgentSessionHost(): Promise<void> {
+    const logger = createStructuredAgentSessionLogger()
+    const nameChat = createStructuredChatNamingHandler(
+      structuredChatNamingDeps(
+        () => this.requireStore(),
+        {
+          resolveWorkspace: async (workspaceId) => {
+            const target = await this.resolveRuntimeFileTarget(`id:${workspaceId}`)
+            return { path: target.worktree.path, executionHostId: target.executionHostId }
+          },
+          getAgentEnvResolvers: () => this.getCommitMessageAgentEnvironmentResolvers(),
+          hasOpenDispatch: (record) =>
+            structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record),
+          retitleOpenTab: (workspaceId, sessionId) =>
+            this.refreshStructuredConversationTabTitle(workspaceId, sessionId)
+        },
+        logger
+      )
+    )
     await installStructuredAgentSessionHost({
       stateDirectory: getProfileUserDataPath(),
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,
+      // The host's local trace file (the desktop's or orcad's own), plus the console.
+      logger,
       // Resolves folder workspaces as well as git worktrees, so a chat session
       // in a plain folder lands in the folder rather than failing to resolve.
       resolveWorkspacePath: async (workspaceId) =>
         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
-      resolveLaunchArgs: (provider) => this.resolveConfiguredStructuredLaunchArgs(provider),
+      resolveClaudeCommand: () =>
+        resolveStructuredAgentCommand('claude', this.requireStore().getSettings()),
+      resolveCodexCommand: (options) =>
+        resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
+      resolveLaunchArgs: (agent) =>
+        structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
       resolveLaunchEnvOverlay: () =>
         resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings().agentDefaultEnv),
       resolveClaudeLaunchEnv: () =>
         resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv),
+      // Wired only here, so a test runtime never runs a real `claude --version`.
+      claudeThinkingDisplay: claudeThinkingDisplaySupport,
+      resolveShellEnvironmentPolicy: () =>
+        nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
       resolveClaudeAuthPolicy: () =>
         claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
+      // Re-read per acquisition, like the auth policy above it: the Agent Permissions setting is
+      // the one copy of this fact, even when Arguments contain permission flags.
+      resolveClaudePermissionMode: () =>
+        claudeStructuredPermissionModeForSettings(this.requireStore().getSettings()),
+      resolveCodexPermissionPolicy: () =>
+        codexStructuredPermissionPolicyForSettings(this.requireStore().getSettings()),
+      resolveAgentFullAccess: (agent) =>
+        isTuiAgent(agent) &&
+        resolvedTuiAgentArgsBypassPermissions(
+          agent,
+          this.requireStore().getSettings(),
+          process.platform
+        ),
+      resolveAgentLaunchEnv: (agent) =>
+        isTuiAgent(agent)
+          ? resolveTuiAgentLaunchEnv(agent, this.requireStore().getSettings().agentDefaultEnv)
+          : {},
       // Same gate and same settings as agentSession.createSupport, re-read on every acquisition.
       getClaudeManagedAccountGateSettings: () => this.requireStore().getSettings(),
-      handoffTransport: this.createStructuredAgentSessionHandoffTransport()
+      resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent),
+      // Structured chat has no agent CLI hooks, so this projection is what the first-work
+      // workspace rename listens to instead of `agentStatus:set`.
+      onSessionStatusChanged: (summary, options) => {
+        this.onStructuredSessionStatusForMail(summary)
+        nameChat(summary, options)
+        void maybeAutoRenameWorkspaceOnFirstStructuredTurn(
+          summary,
+          options,
+          firstWorkRenameDeps(this.requireStore(), this)
+        )
+      },
+      ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
+      // A closed chat settles the Dispatch it was working, as a closed terminal does.
+      onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
+      attentionDelivery: createStructuredAttentionMobileDelivery({
+        readNotificationSettings: () => this.requireStore().getSettings().notifications,
+        readWorkspaceLabels: (scope) =>
+          readStructuredAttentionWorkspaceLabels(this.requireStore(), scope),
+        dispatch: (event) => this.mobileNotifications.dispatch(event),
+        reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
+        now: () => Date.now()
+      }),
+      // Read per sweep tick from the orchestration database: a worker whose dispatch is open keeps
+      // its agent running. No database answers no.
+      hasOpenDispatch: (record) =>
+        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
     })
-  }
-
-  // Why the provider is honoured rather than assumed: Codex app-server flags are not
-  // Claude CLI flags, and prepending them to `claude` makes it exit on an unknown option.
-  protected resolveConfiguredStructuredLaunchArgs(
-    provider: AgentSessionRecord['provider']
-  ): string[] {
-    if (provider === 'claude') {
-      return this.resolveConfiguredClaudeStructuredArgs()
-    }
-    return this.resolveConfiguredCodexStructuredArgs()
-  }
-
-  protected resolveConfiguredClaudeStructuredArgs(): string[] {
-    const settings = this.requireStore().getSettings()
-    const shell = resolveStartupShell(
-      process.platform,
-      resolveLocalWindowsAgentStartupShell({
-        platform: process.platform,
-        isRemote: false,
-        terminalWindowsShell: settings.terminalWindowsShell
-      })
-    )
-    const tokenized = tokenizeStartupCommand(
-      resolveTuiAgentLaunchArgs('claude', settings.agentDefaultArgs),
-      shell
-    )
-    return tokenized.ok ? tokenized.tokens : []
-  }
-
-  protected resolveConfiguredCodexStructuredArgs(): string[] {
-    const settings = this.requireStore().getSettings()
-    const shell = resolveLocalWindowsAgentStartupShell({
-      platform: process.platform,
-      isRemote: false,
-      terminalWindowsShell: settings.terminalWindowsShell
-    })
-    return resolveCodexStructuredAppServerArgs(
-      resolveTuiAgentLaunchArgs('codex', settings.agentDefaultArgs),
-      shell ?? 'posix'
-    )
-  }
-
-  protected createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport {
-    return {
-      hostLabel: hostname(),
-      launchTui: this.createStructuredAgentSessionLaunchTuiCallback(),
-      waitForTuiExit: async (owner) => {
-        await this.waitForStructuredTuiOwnerExit(owner)
-        return owner.transcriptPath ? { transcriptPath: owner.transcriptPath } : {}
-      },
-      waitForTuiIdleOrExit: async (owner, signal) => {
-        return this.waitForStructuredTuiIdleOrExit(owner, signal)
-      },
-      reproveTuiOwner: this.createStructuredAgentSessionReproveTuiOwnerCallback(),
-      recoverTuiOwner: this.createStructuredAgentSessionRecoverTuiOwnerCallback(),
-      probeRecoveredOwner: async (record) => {
-        const identity = record.lease.ownerProcess
-        if (!identity) {
-          return 'dead'
-        }
-        const proof = await probeAgentSessionProcessIdentity({ identity })
-        if (proof.outcome === 'identity-matched' && proof.matchedOn.length > 0) {
-          return 'live'
-        }
-        if (proof.outcome === 'pid-absent' || proof.outcome === 'identity-mismatch') {
-          return 'dead'
-        }
-        return 'unknown'
-      },
-      stopRecoveredOwner: (record) => this.stopStructuredSessionProcess(record),
-      tuiStatus: (owner) => this.structuredTuiStatus(owner),
-      closeTuiOwner: (owner) => this.closeStructuredTuiOwner(owner),
-      revealNativeSession: async ({ workspaceId, sessionId, agent = 'codex', adoptedTerminal }) => {
-        if (adoptedTerminal || (agent !== 'codex' && agent !== 'claude')) {
-          return
-        }
-        await this.publishStructuredAgentSessionTab({
-          workspaceId,
-          sessionId,
-          agent,
-          activate: false
-        })
-        this.notifier?.focusEditorTab?.(structuredAgentSessionTabId(sessionId), workspaceId)
-      },
-      stopFailedTuiLaunch: async (owner) => void (await this.closeStructuredTuiOwner(owner))
-    }
   }
 }

@@ -11,7 +11,7 @@ import {
   utimesSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 import {
@@ -20,19 +20,23 @@ import {
   tryStealInstallLockCommand
 } from './ssh-relay-install-lock-commands'
 import {
-  commandInRemoteDirectory,
   commandWithNodePath,
   listRelayBaseDirsCommand,
   MAX_RELAY_GC_LISTING_ENTRIES,
   makeRemoteDirectoryCommand,
   moveRemoteTreeCommand,
-  promoteRemoteTreeContentsCommand,
   probeDirectoryExistsCommand,
   probeRelayInstalledCommand,
   readRemoteHomeCommand,
   relayLivenessProbeCommand
 } from './ssh-remote-commands'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import {
+  createRelayGcListingFixture,
+  readUncappedRelayGcPaths,
+  runCappedRelayGcShellCommand,
+  SSH_EXEC_OUTPUT_CAP_CHARS
+} from './ssh-relay-gc-listing.test-fixture'
 import {
   RELAY_INSTALL_COMPLETE_FILENAME,
   relayArtifactFilenames
@@ -201,6 +205,37 @@ describe('ssh remote command builders', () => {
     expect(decodePowerShellCommand(probe)).toContain('relay-ai-vault-service.js')
   })
 
+  it('writes a holder token inside the lock in the same command that creates it', () => {
+    const owner = { fileName: '.orca-wake-owner', token: 'tok-1' }
+    const posixLock = tryCreateInstallLockCommand(
+      posix,
+      '/home/u/.orca-remote/t/.install-lock',
+      owner
+    )
+    expect(posixLock).toMatch(
+      /^if mkdir .*; then .*printf %s 'tok-1' > '\/home\/u\/\.orca-remote\/t\/\.install-lock\/\.orca-wake-owner'; echo OK;/u
+    )
+    expect(tryCreateInstallLockCommand(posix, '/l')).not.toContain('orca-wake-owner')
+    const windowsLock = decodePowerShellCommand(
+      tryCreateInstallLockCommand(windows, 'C:/Users/me/.orca-remote/t/.install-lock', owner)
+    )
+    expect(windowsLock).toContain(
+      "[System.IO.File]::WriteAllText((Join-Path $lock '.orca-wake-owner'), 'tok-1'); 'OK'"
+    )
+  })
+
+  it('writes the new holder token when a stale lock is taken over', () => {
+    const owner = { fileName: '.orca-fence-owner', token: 'gen-2' }
+    expect(tryStealInstallLockCommand(posix, '/home/u/t/.install-lock', 1200, owner)).toContain(
+      "printf %s 'gen-2' > '/home/u/t/.install-lock/.orca-fence-owner';"
+    )
+    expect(
+      decodePowerShellCommand(
+        tryStealInstallLockCommand(windows, 'C:/Users/me/t/.install-lock', 1200, owner)
+      )
+    ).toContain("[System.IO.File]::WriteAllText((Join-Path $lock '.orca-fence-owner'), 'gen-2');")
+  })
+
   it('uses a legacy-visible Windows lock directory with an exclusive owner file', () => {
     const mkdirScript = decodePowerShellCommand(
       makeRemoteDirectoryCommand(windows, 'C:/Users/me/.orca-remote')
@@ -227,29 +262,6 @@ describe('ssh remote command builders', () => {
     expect(windowsScript).toContain('Move-Item -LiteralPath')
     expect(windowsScript).toContain("-Destination 'C:/Users/me/relay/old.gc-tombstone'")
     expect(windowsScript).toContain("'MOVED'")
-  })
-
-  it('enumerates Windows staging children before copying', () => {
-    const script = decodePowerShellCommand(
-      promoteRemoteTreeContentsCommand(windows, 'C:/Users/me/relay.upload-123', 'C:/Users/me/relay')
-    )
-    expect(script).toContain('Get-ChildItem -LiteralPath')
-    expect(script).toContain(' -Force -ErrorAction Stop | Copy-Item -Destination')
-    expect(script).not.toContain('Copy-Item -LiteralPath')
-    expect(script).toContain('Remove-Item -LiteralPath')
-    expect(script).toContain("$ErrorActionPreference = 'Stop'")
-    expect(script).toContain('Copy-Item -Destination')
-  })
-
-  it('removes POSIX staging only after the copy succeeds', () => {
-    const command = promoteRemoteTreeContentsCommand(
-      posix,
-      '/home/u/relay.upload-123',
-      '/home/u/relay'
-    )
-    expect(command).toContain("cp -a '/home/u/relay.upload-123'/. '/home/u/relay'/")
-    expect(command).toContain("&& rm -rf '/home/u/relay.upload-123'")
-    expect(command.indexOf('cp -a')).toBeLessThan(command.indexOf('rm -rf'))
   })
 
   it('emits an explicit POSIX liveness result so GC can fail closed', () => {
@@ -281,22 +293,43 @@ describe('ssh remote command builders', () => {
   it.runIf(process.platform !== 'win32')(
     'bounds real POSIX GC output with more than the exec-cap stage population',
     async () => {
-      const root = mkdtempSync(join(tmpdir(), 'orca-relay-gc-scale-'))
+      const fixture = createRelayGcListingFixture()
       try {
-        for (let index = 0; index < 15_197; index += 1) {
-          mkdirSync(join(root, `relay-0.1.0+abc.upload-${String(index).padStart(12, '0')}`))
+        const paths = await readUncappedRelayGcPaths(fixture.findCommand)
+        expect(paths.join('\n').length).toBeGreaterThan(SSH_EXEC_OUTPUT_CAP_CHARS)
+        const cappedRaw = await runCappedRelayGcShellCommand(
+          `${fixture.findCommand} | LC_ALL=C sort`
+        )
+        expect(cappedRaw.length).toBe(SSH_EXEC_OUTPUT_CAP_CHARS)
+        for (const name of fixture.validNames) {
+          expect(cappedRaw).not.toContain(join(fixture.root, name))
         }
-        mkdirSync(join(root, 'relay-0.1.0+aaa'))
-        mkdirSync(join(root, 'relay-0.1.0+bbb'))
 
-        const output = await runShellCommand(listRelayBaseDirsCommand(posix, root))
+        const output = await runCappedRelayGcShellCommand(
+          listRelayBaseDirsCommand(posix, fixture.root)
+        )
         const entries = output.trim().split('\n')
 
         expect(entries).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
         expect(Buffer.byteLength(output)).toBeLessThan(1_024)
         expect(entries.length).toBeLessThanOrEqual(MAX_RELAY_GC_LISTING_ENTRIES)
+
+        fixture.fillValidEntryBoundary()
+        const validNames = new Set(fixture.validNames)
+        const unboundedEntries = (await readUncappedRelayGcPaths(fixture.findCommand))
+          .map((path) => basename(path))
+          .filter((name) => validNames.has(name))
+        expect(unboundedEntries).toHaveLength(65)
+        const boundedOutput = await runCappedRelayGcShellCommand(
+          listRelayBaseDirsCommand(posix, fixture.root)
+        )
+        const boundedEntries = boundedOutput.trim().split('\n')
+        expect(boundedEntries).toEqual(unboundedEntries.slice(0, 64))
+        expect(boundedEntries).toHaveLength(64)
+        expect(new Set(boundedEntries).size).toBe(64)
+        expect(Buffer.byteLength(boundedOutput)).toBeLessThan(1_024)
       } finally {
-        rmSync(root, { recursive: true, force: true })
+        fixture.dispose()
       }
     },
     30_000
@@ -659,9 +692,6 @@ describe('ssh remote command builders', () => {
   )
 
   it('makes Windows remote directory changes fail before running scoped commands', () => {
-    const scopedCommand = decodePowerShellCommand(
-      commandInRemoteDirectory(windows, 'C:/Users/me/.orca-remote/relay-0.1.0', "'READY'")
-    )
     const nodeScopedCommand = decodePowerShellCommand(
       commandWithNodePath(
         windows,
@@ -671,9 +701,6 @@ describe('ssh remote command builders', () => {
       )
     )
 
-    expect(scopedCommand).toContain(
-      "Set-Location -ErrorAction Stop -LiteralPath 'C:/Users/me/.orca-remote/relay-0.1.0'"
-    )
     expect(nodeScopedCommand).toContain(
       "Set-Location -ErrorAction Stop -LiteralPath 'C:/Users/me/.orca-remote/relay-0.1.0'"
     )

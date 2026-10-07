@@ -20,6 +20,7 @@ export type SharedControlTestServer = {
 }
 
 type ServerOptions = {
+  resultForRequest?: (method: string) => unknown
   delaySubscriptionReady?: boolean
   sendKeepaliveBeforeResponse?: boolean
   keepaliveDelayMs?: number
@@ -174,7 +175,7 @@ function handleRequest(
   const streaming = isStreamingMethod(request.method)
   const result = streaming
     ? { type: 'ready', subscriptionId: `${request.method}:subscription` }
-    : { method: request.method }
+    : (options.resultForRequest?.(request.method) ?? { method: request.method })
   const sendResponse = (): void => {
     if (options.sendUnknownResponseBeforeResponse) {
       sendEncrypted(ws, sharedKey, {

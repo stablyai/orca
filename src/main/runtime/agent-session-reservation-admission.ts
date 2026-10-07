@@ -2,24 +2,30 @@
  * Reservation admission: what a reserve request means against the persisted state.
  *
  * Pure over a store snapshot so the compare-and-swap, the idempotency replay, and the
- * location-immutability check can be reasoned about without touching the disk. The store applies
- * the result inside one transaction; nothing here mutates.
+ * location-immutability check can be reasoned about without touching the disk.
+ *
+ * `commitAgentSessionReservation` is the one exception and the only writer here: it sequences
+ * those decisions and applies the winning one to the state it was handed. The store calls it
+ * inside a transaction, which is what makes the record and its operation row land together.
  */
 
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
+  agentSessionOperationKey,
   evaluateAgentSessionOperation,
+  pendingAgentSessionOperationRow,
   pruneAgentSessionOperationRows,
   type AgentSessionOperationDecision,
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
+  agentSessionLeaseIsReleased,
+  agentSessionLeaseOwnerVerdict,
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
 } from '../../shared/agent-session-lease-adjudication'
 import {
-  AGENT_SESSION_RECORD_SCHEMA_VERSION,
   agentSessionExecutionLocationsEqual,
-  isAgentSessionLaunchArgs,
   isAgentSessionLaunchEnv,
   isAgentSessionOptions,
   type AgentSessionAccountHome,
@@ -28,17 +34,26 @@ import {
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
-import type { AgentSessionHandleProvider } from '../../shared/agent-session-provider-handle'
+import { isAgentSessionLaunchArgs } from '../../shared/agent-session-launch-args'
+import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
+import {
+  agentSessionProviderHandleRoot,
+  type StructuredAgentId,
+  type AgentSessionProviderHandleLink
+} from '../../shared/agent-session-provider-handle'
 import {
   reserveAgentSessionOwner,
   type AgentSessionReservation
 } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
+import { agentSessionRecordIdentityFields } from './agent-session-record-founding'
 
 export type AgentSessionReserveRequest = {
+  /** Host-resolved floating directory committed with the first owner reservation. */
+  launchDirectory?: string
   sessionId: string
   location: AgentSessionExecutionLocation
-  provider: AgentSessionHandleProvider
+  provider: StructuredAgentId
   accountHome: AgentSessionAccountHome
   /** Arguments pinned on first reservation so owner replacement repeats the same launch. */
   launchArgs?: AgentSessionLaunchArgs
@@ -46,7 +61,12 @@ export type AgentSessionReserveRequest = {
   launchEnv?: AgentSessionLaunchEnv
   /** Initial provider options persisted before the first process is acquired. */
   options?: Readonly<Record<string, string>>
-  runtimeKind: AgentSessionReservation['runtimeKind']
+  /** The tab id a create reserved for this conversation, taken when its tab is published. An id
+   *  another session's tab holds is refused here, before anything is spawned. */
+  surfaceTabId?: string
+  /** Set only when this create adopts an existing provider conversation. Seeds the handle chain so
+   *  the adapter resumes; without it a new record has never proved a thread and starts a fresh one. */
+  adoptedHandleLink?: AgentSessionProviderHandleLink
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
   expectedFence: number | null
   /** A supplier is invoked only when this operation wins a new reservation. */
@@ -95,7 +115,7 @@ export function requireAgentSessionRecordForReplay(
   if (!record) {
     // Why: the recorded effect is no longer reconstructable, and re-running it would be a second
     // spawn rather than a replay.
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'recordMissing' })
   }
   return record
 }
@@ -111,11 +131,13 @@ export function admitPendingAgentSessionReservationReplay(
     probe: request.probe
   })
   if (decision.decision === 'refused') {
-    throw new Error(decision.code)
+    throw agentSessionRefusalError(decision.code, decision.details)
   }
   if (decision.decision !== 'retry-reservation') {
-    // A replay may continue only its still-present reservation; recovery requires a fresh intent.
-    throw new Error('agent_session_ownership_unknown')
+    // A replay may continue only its still-present reservation.
+    throw agentSessionRefusalError('agent_session_ownership_unknown', {
+      reason: 'replaySuperseded'
+    })
   }
   return record
 }
@@ -138,7 +160,6 @@ export function applyAgentSessionReservation(
     throw new Error('agent_session_options_invalid')
   }
   const reservation: AgentSessionReservation = {
-    runtimeKind: request.runtimeKind,
     spawnToken:
       typeof request.spawnToken === 'function' ? request.spawnToken() : request.spawnToken,
     claimKeyId: request.claimKeyId,
@@ -146,14 +167,20 @@ export function applyAgentSessionReservation(
     leaseTtlMs: request.leaseTtlMs ?? leaseTtlMs,
     now: request.now
   }
+  // Inside the transaction, not only in the RPC resolver: two concurrent adoptions of one
+  // conversation mint different session ids, so the compare-and-swap never collides and a
+  // pre-commit check passes for both. Codex would then hold one thread from two app-servers, which
+  // it permits silently and which corrupts the conversation rather than erroring.
+  assertAdoptedConversationUnowned(state, request)
   const existing = state.records.get(request.sessionId)
   if (!existing) {
     if (state.unreadableRecords.has(request.sessionId)) {
-      throw new Error('execution_owner_reconciling')
+      throw agentSessionRefusalError('execution_owner_reconciling', { reason: 'recordUnreadable' })
     }
     if (request.expectedFence !== null) {
-      throw new Error('agent_session_checkpoint_stale')
+      throw agentSessionRefusalError('agent_session_checkpoint_stale', { reason: 'recordMissing' })
     }
+    assertReservedTabUnheld(state, request)
     return { record: createAgentSessionRecord(request, reservation), disposition: 'created' }
   }
   if (
@@ -163,11 +190,18 @@ export function applyAgentSessionReservation(
     existing.accountHome.path !== request.accountHome.path
   ) {
     // Why: location, provider, and account are the session identity; changing one is a fork.
-    throw new Error('agent_session_conflict')
+    throw agentSessionRefusalError('agent_session_conflict', { reason: 'identityMismatch' })
   }
-  if (request.expectedFence === null) {
-    throw new Error('agent_session_conflict')
+  // A create may take over only a record that never bound a conversation and whose last
+  // attempt is proven gone: that is the same as creating it fresh, under a fresh provider id.
+  const recreatable =
+    existing.providerHandleChain.length === 0 &&
+    !request.adoptedHandleLink &&
+    agentSessionLeaseOwnerVerdict(existing.lease) === 'exited'
+  if (request.expectedFence === null && !recreatable) {
+    throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
+  assertReservedTabUnheld(state, request)
   const pinned = {
     ...existing,
     ...(!existing.launchArgs && request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
@@ -175,10 +209,70 @@ export function applyAgentSessionReservation(
   }
   return reserveAgentSessionOwner({
     record: pinned,
-    expectedFence: request.expectedFence,
+    expectedFence: request.expectedFence ?? existing.lease.runtimeFence,
     probe: request.probe,
     reservation
   })
+}
+
+/**
+ * Refuse an adoption whose conversation ANOTHER record already holds.
+ *
+ * The self-exemption is part of that definition, not a replay mechanism: replay is settled earlier
+ * by the operation ledger, and an adoption always arrives with a null expected fence, so a request
+ * naming an existing session id is refused a few lines below regardless. Keeping the scan scoped to
+ * other records is what makes this guard mean what its name says.
+ *
+ * It runs inside the store transaction because the pre-commit check in the RPC resolver cannot be
+ * the guard: two concurrent adoptions of one conversation mint different session ids, so the
+ * compare-and-swap never collides and both would pass. Codex permits two app-servers on one thread
+ * silently, so the cost of missing this is a corrupted conversation rather than an error.
+ */
+function assertAdoptedConversationUnowned(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest
+): void {
+  const adopted = request.adoptedHandleLink
+  if (!adopted) {
+    return
+  }
+  const root = agentSessionProviderHandleRoot(adopted.handle)
+  for (const record of state.records.values()) {
+    if (record.sessionId === request.sessionId) {
+      continue
+    }
+    const holdsSameConversation = record.providerHandleChain.some(
+      (link) => agentSessionProviderHandleRoot(link.handle) === root
+    )
+    if (holdsSameConversation) {
+      throw agentSessionRefusalError('agent_session_conflict', {
+        reason: 'conversationHeldElsewhere'
+      })
+    }
+  }
+}
+
+/**
+ * A tab id names one conversation, so a reserved id another session's tab holds is a conflict.
+ * Checked, not claimed: the id is taken when the chat's tab is published, so a create that never
+ * gets that far leaves nothing in the table to restore or release.
+ */
+function assertReservedTabUnheld(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest
+): void {
+  if (request.surfaceTabId === undefined) {
+    return
+  }
+  if (!isAgentSessionSurfaceTabId(request.surfaceTabId)) {
+    throw agentSessionRefusalError('agent_session_operation_invalid', {
+      reason: 'requestMalformed'
+    })
+  }
+  const holder = state.sessionTabs?.sessionIdFor(request.surfaceTabId)
+  if (holder !== undefined && holder !== request.sessionId) {
+    throw agentSessionRefusalError('agent_session_conflict', { reason: 'tabIdTaken' })
+  }
 }
 
 function createAgentSessionRecord(
@@ -186,19 +280,13 @@ function createAgentSessionRecord(
   reservation: AgentSessionReservation
 ): AgentSessionRecord {
   return {
-    schemaVersion: AGENT_SESSION_RECORD_SCHEMA_VERSION,
-    sessionId: request.sessionId,
-    location: request.location,
-    provider: request.provider,
-    providerHandleChain: [],
-    accountHome: request.accountHome,
-    ...(request.options ? { options: { ...request.options } } : {}),
-    ...(request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
-    createdAt: request.now,
-    updatedAt: request.now,
+    ...agentSessionRecordIdentityFields(request, request.now),
+    // Fence 1 below is this record's first, and the owner probe requires the head link to carry the
+    // record's current fence — so an adopted link must be minted at that same fence.
+    providerHandleChain: request.adoptedHandleLink ? [request.adoptedHandleLink] : [],
     lease: {
       sessionId: request.sessionId,
-      runtimeKind: reservation.runtimeKind,
+      runtimeKind: 'native',
       // Why: fence 1 is the first reservation; 0 is reserved for "no owner has ever existed".
       runtimeFence: 1,
       handoffStage: 'new-owner-proving',
@@ -215,4 +303,55 @@ function createAgentSessionRecord(
       deathEvidence: null
     }
   }
+}
+
+/**
+ * Compare-and-swap reservation plus its client-operation row, committed together. A replayed
+ * operation returns the recorded outcome and never reaches the reservation.
+ */
+export function commitAgentSessionReservation(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest,
+  leaseTtlMs: number
+): AgentSessionReserveResult {
+  const decision = evaluateAgentSessionReserveOperation(state, request)
+  const existing = state.records.get(request.sessionId)
+  // An unfinished operation whose reservation recovery released continues under its own id at the
+  // next fence, as a resume does under a new id; the fence move stops the old spawn committing.
+  const continued =
+    existing && agentSessionLeaseIsReleased(existing.lease)
+      ? { ...request, expectedFence: existing.lease.runtimeFence }
+      : null
+  if (decision.decision === 'refused') {
+    // An aged-out row proves nothing more: a released reservation runs no effect.
+    if (decision.code !== 'agent_session_operation_expired' || !continued) {
+      throw agentSessionRefusalError(decision.code, decision.details)
+    }
+    const row = pendingAgentSessionOperationRow({ ...request.operation, now: request.now })
+    return reserveWithOperationRow(state, continued, row, leaseTtlMs)
+  }
+  if (decision.decision === 'replay') {
+    const record = requireAgentSessionRecordForReplay(state, decision.row, request.sessionId)
+    if (decision.row.outcome.status !== 'pending' || request.handoffOperationId === null) {
+      return { record, disposition: 'replayed', operationRow: decision.row }
+    }
+    if (continued) {
+      return reserveWithOperationRow(state, continued, decision.row, leaseTtlMs)
+    }
+    const retried = admitPendingAgentSessionReservationReplay(record, request)
+    return { record: retried, disposition: 'replayed', operationRow: decision.row }
+  }
+  return reserveWithOperationRow(state, request, decision.row, leaseTtlMs)
+}
+
+function reserveWithOperationRow(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest,
+  row: AgentSessionOperationRow,
+  leaseTtlMs: number
+): AgentSessionReserveResult {
+  const result = applyAgentSessionReservation(state, request, leaseTtlMs)
+  state.operations.set(agentSessionOperationKey(row.callerKey, row.operationId), row)
+  state.records.set(result.record.sessionId, result.record)
+  return { ...result, operationRow: row }
 }

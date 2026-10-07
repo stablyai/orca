@@ -1,12 +1,14 @@
 import type {
   StructuredAgentSessionAppendOptions,
   StructuredAgentSessionEventTarget,
+  StructuredAgentSessionLinkageJournal,
   StructuredAgentSessionReadingControl,
   StructuredAgentSessionSinkAdmission,
   StructuredAgentSessionSinkBarrier,
   StructuredAgentSessionSinkState,
   StructuredAgentSessionSinkWatermarks
 } from './structured-agent-session-event-sink'
+import type { StructuredAgentSessionTransitionJournal } from './structured-agent-session-transition'
 
 export type StructuredAgentSessionSinkOperation = {
   sequence: number
@@ -14,21 +16,35 @@ export type StructuredAgentSessionSinkOperation = {
   /** Lifecycle rows use their own bounded reservation budget. */
   lifecycleBytes?: number
   lifecycle?: boolean
-  coalescingKey?: string
+  /** Marks a publication, which writes no row: it runs at handover, or at its place in the
+   *  journal's queue while writes wait there, and one still waiting with the same key is replaced
+   *  by the next. Journal writes never coalesce:
+   *  replacing one would move it behind whatever was issued after it. */
+  publicationKey?: string
+  /** Called at handover, so a journal write it issues takes its place in the chat's one write queue
+   *  in the same tick it was submitted. */
   run: (target: StructuredAgentSessionEventTarget) => Promise<unknown> | void
 }
+
+type Admitted = StructuredAgentSessionSinkOperation & { superseded?: boolean }
 
 export type StructuredAgentSessionDrainWaiter = {
   through: number
   resolve: (result: StructuredAgentSessionSinkBarrier) => void
 }
 
+/**
+ * Admission and backpressure for one provider stream's writes. It holds nothing once bound: each
+ * operation is handed to the journal as it is submitted, so a streamed row and a host write are
+ * ordered by when they were issued, in the journal's one queue. Only while no journal is bound do
+ * operations wait here, in arrival order, and bind hands them over before it returns. Pressure
+ * counts what was admitted and has not yet settled, wherever it waits.
+ */
 export class StructuredAgentSessionSinkQueue {
   private readingControl: StructuredAgentSessionReadingControl | undefined
   private target: StructuredAgentSessionEventTarget | null = null
   private closed = false
   private failure: { error: unknown } | null = null
-  private running = false
   private queuedBytes = 0
   private queuedOperations = 0
   private lifecycleQueuedBytes = 0
@@ -36,13 +52,19 @@ export class StructuredAgentSessionSinkQueue {
   private backpressured = false
   private acceptedSequence = 0
   private settledSequence = 0
-  private readonly queue: StructuredAgentSessionSinkOperation[] = []
+  /** The newest operation handed to the journal; a close drops the buffered rest unwritten. */
+  private handedOverSequence = 0
+  /** Settles once every operation handed over so far has, in handover order. */
+  private handedOverSettled: Promise<void> = Promise.resolve()
+  private readonly buffered: Admitted[] = []
+  private readonly waitingPublications = new Map<string, Admitted>()
   private readonly waiters: StructuredAgentSessionDrainWaiter[] = []
 
   constructor(
     private readonly deps: {
       watermarks: StructuredAgentSessionSinkWatermarks
-      onError?: (error: unknown) => void
+      /** The queue just failed for good; it accepts and runs nothing more. */
+      onFailed?: (error: unknown) => void
       readingControl?: StructuredAgentSessionReadingControl
       onBackpressureChange?: (
         backpressured: boolean,
@@ -60,6 +82,15 @@ export class StructuredAgentSessionSinkQueue {
     failed: this.failure !== null
   })
 
+  journalEpoch = (): string | null => this.target?.journal.epoch ?? null
+
+  journalLinkage = (): StructuredAgentSessionLinkageJournal | null => this.target?.journal ?? null
+
+  journalItems = (): StructuredAgentSessionTransitionJournal | null => this.target?.journal ?? null
+
+  journalStopDecidesTurn = (turnId: string, endedAt: number): boolean =>
+    this.target?.journal.stopMarks.personStopDecides(turnId, endedAt) ?? false
+
   bindReadingControl(control: StructuredAgentSessionReadingControl): () => void {
     this.readingControl = control
     if (this.backpressured) {
@@ -73,9 +104,12 @@ export class StructuredAgentSessionSinkQueue {
   }
 
   bind(target: StructuredAgentSessionEventTarget): void {
-    if (!this.closed) {
-      this.target = target
-      this.pump()
+    if (this.closed) {
+      return
+    }
+    this.target = target
+    for (const operation of this.buffered.splice(0)) {
+      this.handOver(operation, target)
     }
   }
 
@@ -83,26 +117,28 @@ export class StructuredAgentSessionSinkQueue {
     this.target = null
   }
 
+  /** Operations already handed over are the journal's and still land; only buffered ones drop. */
   close(): void {
     this.closed = true
-    this.queue.length = 0
-    this.queuedBytes = 0
-    this.queuedOperations = 0
-    this.lifecycleQueuedBytes = 0
-    this.lifecycleQueuedOperations = 0
-    this.settledSequence = this.acceptedSequence
+    this.dropBuffered()
     this.updateBackpressure()
-    this.settleWaiters()
   }
 
   barrier = (): Promise<StructuredAgentSessionSinkBarrier> => {
     const through = this.acceptedSequence
     if (this.settledSequence >= through) {
-      return Promise.resolve(
-        this.failure === null ? { ok: true } : { ok: false, error: this.failure.error }
-      )
+      return Promise.resolve(this.barrierResult())
     }
     return new Promise((resolve) => this.waiters.push({ through, resolve }))
+  }
+
+  /** Like `barrier`, but a close that dropped writes admitted so far reads as not landed. */
+  written = async (): Promise<StructuredAgentSessionSinkBarrier> => {
+    const through = this.acceptedSequence
+    const settled = await this.barrier()
+    return settled.ok && this.handedOverSequence < through
+      ? { ok: false, error: new Error('the sink closed before its writes landed') }
+      : settled
   }
 
   submit(
@@ -115,18 +151,21 @@ export class StructuredAgentSessionSinkQueue {
     if (this.failure !== null) {
       return { accepted: false, reason: 'failed' }
     }
-    const sequence = ++this.acceptedSequence
-    const key = options.coalescingKey ?? operation.coalescingKey
-    const replaceAt = key ? this.queue.findIndex((queued) => queued.coalescingKey === key) : -1
-    const replaced = replaceAt >= 0 ? this.queue[replaceAt] : undefined
+    const key = operation.publicationKey
+    const replaceAt =
+      key === undefined ? -1 : this.buffered.findIndex((queued) => queued.publicationKey === key)
+    const replaced =
+      replaceAt >= 0
+        ? this.buffered[replaceAt]
+        : key === undefined
+          ? undefined
+          : this.waitingPublications.get(key)
     const lifecycle = operation.lifecycle ?? options.lifecycle === true
     const lifecycleBytes = lifecycle ? (operation.lifecycleBytes ?? operation.bytes) : 0
     const nextBytes = this.queuedBytes - (replaced?.bytes ?? 0) + operation.bytes
     const nextOperations = this.queuedOperations + (replaced ? 0 : 1)
     const nextLifecycleBytes =
-      this.lifecycleQueuedBytes -
-      (replaced?.lifecycle ? (replaced.lifecycleBytes ?? replaced.bytes) : 0) +
-      lifecycleBytes
+      this.lifecycleQueuedBytes - (replaced ? lifecycleCost(replaced) : 0) + lifecycleBytes
     const nextLifecycleOperations =
       this.lifecycleQueuedOperations - (replaced?.lifecycle ? 1 : 0) + (lifecycle ? 1 : 0)
     const exceedsOrdinary =
@@ -138,28 +177,94 @@ export class StructuredAgentSessionSinkQueue {
       (nextLifecycleBytes > this.deps.watermarks.maxLifecycleQueuedBytes ||
         nextLifecycleOperations > this.deps.watermarks.maxLifecycleQueuedOperations)
     if (exceedsOrdinary || exceedsLifecycle) {
-      this.acceptedSequence -= 1
       this.setBackpressure(true)
       return { accepted: false, reason: 'backpressure' }
     }
-    const accepted = {
+    const accepted: Admitted = {
       ...operation,
-      sequence,
+      sequence: ++this.acceptedSequence,
       lifecycle,
-      lifecycleBytes,
-      ...(key ? { coalescingKey: key } : {})
+      lifecycleBytes
     }
-    if (replaced) {
-      this.queue.splice(replaceAt, 1)
+    if (replaceAt >= 0) {
+      this.buffered.splice(replaceAt, 1)
+    } else if (replaced) {
+      // Its turn still comes, and settles as nothing: the publication after it covers it.
+      replaced.superseded = true
     }
-    this.queue.push(accepted)
     this.queuedBytes = nextBytes
     this.queuedOperations = nextOperations
     this.lifecycleQueuedBytes = nextLifecycleBytes
     this.lifecycleQueuedOperations = nextLifecycleOperations
+    if (this.target) {
+      this.handOver(accepted, this.target)
+    } else {
+      this.buffered.push(accepted)
+    }
     this.updateBackpressure()
-    this.pump()
     return { accepted: true }
+  }
+
+  private handOver(operation: Admitted, bound: StructuredAgentSessionEventTarget): void {
+    const earlier = this.handedOverSettled
+    this.handedOverSequence = operation.sequence
+    const key = operation.publicationKey
+    let outcome: Promise<unknown>
+    if (key === undefined) {
+      outcome = runNow(() => operation.run(bound))
+    } else {
+      this.waitingPublications.set(key, operation)
+      // At handover, unless a write is running or writes wait in line; then at its place in it, so
+      // it never announces ahead of the writes issued before it.
+      outcome = runNow(() =>
+        bound.journal.readInOrder(() => {
+          if (this.waitingPublications.get(key) === operation) {
+            this.waitingPublications.delete(key)
+          }
+          // A publication writes no row, so a closed or failed sink has nothing left to announce.
+          return operation.superseded || this.closed || this.failure !== null
+            ? undefined
+            : operation.run(bound)
+        })
+      )
+    }
+    // Handled at once: a write can fail while an earlier one is still landing.
+    const landed = outcome.then(() => undefined, this.fail)
+    this.handedOverSettled = Promise.all([earlier, landed]).then(() => this.settle(operation))
+  }
+
+  private settle(operation: Admitted): void {
+    if (!operation.superseded) {
+      this.release(operation)
+    }
+    this.settledSequence = Math.max(this.settledSequence, operation.sequence)
+    this.updateBackpressure()
+    this.settleWaiters()
+  }
+
+  private release(operation: Admitted): void {
+    this.queuedBytes = Math.max(0, this.queuedBytes - operation.bytes)
+    this.queuedOperations = Math.max(0, this.queuedOperations - 1)
+    if (operation.lifecycle) {
+      this.lifecycleQueuedBytes = Math.max(0, this.lifecycleQueuedBytes - lifecycleCost(operation))
+      this.lifecycleQueuedOperations = Math.max(0, this.lifecycleQueuedOperations - 1)
+    }
+  }
+
+  /** Buffered operations never reached a journal. They count as settled once everything handed
+   *  over before them has, so a barrier never resolves ahead of a write still landing. */
+  private dropBuffered(): void {
+    const dropped = this.buffered.splice(0)
+    for (const operation of dropped) {
+      this.release(operation)
+    }
+    const last = dropped.at(-1)
+    if (last) {
+      this.handedOverSettled = this.handedOverSettled.then(() => {
+        this.settledSequence = Math.max(this.settledSequence, last.sequence)
+        this.settleWaiters()
+      })
+    }
   }
 
   private setBackpressure(next: boolean): void {
@@ -187,60 +292,40 @@ export class StructuredAgentSessionSinkQueue {
     this.setBackpressure(next)
   }
 
+  private barrierResult(): StructuredAgentSessionSinkBarrier {
+    return this.failure === null ? { ok: true } : { ok: false, error: this.failure.error }
+  }
+
   private settleWaiters(): void {
     for (let index = this.waiters.length - 1; index >= 0; index -= 1) {
       const waiter = this.waiters[index]
       if (waiter && waiter.through <= this.settledSequence) {
         this.waiters.splice(index, 1)
-        waiter.resolve(
-          this.failure === null ? { ok: true } : { ok: false, error: this.failure.error }
-        )
+        waiter.resolve(this.barrierResult())
       }
     }
   }
 
+  /** Writes handed over before this runs still land; nothing submitted after it is admitted. */
   private fail = (error: unknown): void => {
     if (this.failure === null) {
       this.failure = { error }
-      this.deps.onError?.(error)
+      this.deps.onFailed?.(error)
     }
-    this.queue.length = 0
-    this.queuedBytes = 0
-    this.queuedOperations = 0
-    this.lifecycleQueuedBytes = 0
-    this.lifecycleQueuedOperations = 0
-    this.settledSequence = this.acceptedSequence
+    this.dropBuffered()
     this.updateBackpressure()
-    this.settleWaiters()
   }
+}
 
-  private pump(): void {
-    if (this.running || !this.target || this.closed || this.failure !== null) {
-      return
-    }
-    const operation = this.queue.shift()
-    if (!operation) {
-      return
-    }
-    this.running = true
-    const bound = this.target
-    void Promise.resolve(operation.run(bound))
-      .catch(this.fail)
-      .finally(() => {
-        this.running = false
-        this.queuedBytes = Math.max(0, this.queuedBytes - operation.bytes)
-        this.queuedOperations = Math.max(0, this.queuedOperations - 1)
-        if (operation.lifecycle) {
-          this.lifecycleQueuedBytes = Math.max(
-            0,
-            this.lifecycleQueuedBytes - (operation.lifecycleBytes ?? operation.bytes)
-          )
-          this.lifecycleQueuedOperations = Math.max(0, this.lifecycleQueuedOperations - 1)
-        }
-        this.settledSequence = Math.max(this.settledSequence, operation.sequence)
-        this.updateBackpressure()
-        this.settleWaiters()
-        this.pump()
-      })
+function lifecycleCost(operation: StructuredAgentSessionSinkOperation): number {
+  return operation.lifecycle ? (operation.lifecycleBytes ?? operation.bytes) : 0
+}
+
+/** A synchronous throw settles as a rejection, like any other failed write. */
+function runNow(run: () => Promise<unknown> | void): Promise<unknown> {
+  try {
+    return Promise.resolve(run())
+  } catch (error) {
+    return Promise.reject(error)
   }
 }

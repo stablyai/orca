@@ -16,7 +16,7 @@ export const NATIVE_FILE_DROP_TARGET = {
 export type NativeDropResolution =
   | { target: typeof NATIVE_FILE_DROP_TARGET.editor }
   | { target: typeof NATIVE_FILE_DROP_TARGET.terminal; tabId?: string; paneLeafId?: string }
-  | { target: typeof NATIVE_FILE_DROP_TARGET.composer }
+  | { target: typeof NATIVE_FILE_DROP_TARGET.composer; scopeKey?: string }
   | { target: typeof NATIVE_FILE_DROP_TARGET.fileExplorer; destinationDir: string }
   | { target: typeof NATIVE_FILE_DROP_TARGET.projectSidebar }
   | { target: 'rejected' }
@@ -29,7 +29,7 @@ export type NativeFileDropPayload =
       tabId?: string
       paneLeafId?: string
     }
-  | { paths: string[]; target: typeof NATIVE_FILE_DROP_TARGET.composer }
+  | { paths: string[]; target: typeof NATIVE_FILE_DROP_TARGET.composer; scopeKey?: string }
   | {
       paths: string[]
       target: typeof NATIVE_FILE_DROP_TARGET.fileExplorer
@@ -41,13 +41,45 @@ export type NativeFileDropPayload =
 export type NativeFileDropRejectedPayload = {
   byteLength: number
   pathCount: number
-  reason: 'paths-too-large' | 'too-many-paths'
+  reason: NativeFileDropRejectionReason
   target: 'rejected'
+  /** Why every file in a `temp-copy-failed` drop went uncopied, when they share one reason. */
+  commonReason?: NativeFileDropCopyFailureReason
 }
+
+// Why tokens: the renderer owns the localized copy; main never sends display text.
+export const NATIVE_FILE_DROP_COPY_FAILURE_REASONS = [
+  'missing',
+  'permission-denied',
+  'changed',
+  'out-of-space',
+  'storage-unavailable',
+  'storage-not-private',
+  'copy-failed',
+  'timed-out',
+  'busy',
+  // Too big to copy, so agents in terminals and composers can't be given it.
+  'too-large',
+  'storage-full'
+] as const
+
+export type NativeFileDropCopyFailureReason = (typeof NATIVE_FILE_DROP_COPY_FAILURE_REASONS)[number]
+
+/** What path validation alone can reject a drop for. */
+export type NativeFileDropSizeRejectionReason = 'paths-too-large' | 'too-many-paths'
+
+/** `unresolved-paths`: the OS handed us file items no path could be read from
+ *  (promised/virtual files), which used to be swallowed with no feedback.
+ *  `temp-copy-failed`: main could not copy a macOS drag-temp file; only main sends it. */
+export type NativeFileDropRejectionReason =
+  | NativeFileDropSizeRejectionReason
+  | 'unresolved-paths'
+  | 'temp-copy-failed'
 
 export type NativeFileDropPathEntry = {
   nativeFileDropTarget?: string
   nativeFileDropDir?: string
+  composerScopeKey?: string
   terminalTabId?: string
   terminalPaneLeafId?: string
 }
@@ -57,14 +89,25 @@ export type NativeFileDropPathValidation =
   | {
       byteLength: number
       pathCount: number
-      reason: NativeFileDropRejectedPayload['reason']
+      reason: NativeFileDropSizeRejectionReason
       status: 'rejected'
     }
 
 function isNativeFileDropRejectedReason(
   reason: unknown
 ): reason is NativeFileDropRejectedPayload['reason'] {
-  return reason === 'paths-too-large' || reason === 'too-many-paths'
+  return (
+    reason === 'paths-too-large' ||
+    reason === 'too-many-paths' ||
+    reason === 'unresolved-paths' ||
+    reason === 'temp-copy-failed'
+  )
+}
+
+function isNativeFileDropCopyFailureReason(
+  reason: unknown
+): reason is NativeFileDropCopyFailureReason {
+  return NATIVE_FILE_DROP_COPY_FAILURE_REASONS.some((known) => known === reason)
 }
 
 function isNativeFileDropTarget(target: unknown): target is NativeFileDropPayload['target'] {
@@ -102,14 +145,21 @@ export function resolveNativeFileDropPath(
   let foundExplorer = false
   let destinationDir: string | undefined
   let terminalPaneLeafId: string | undefined
+  let composerScopeKey: string | undefined
 
   for (const entry of path) {
     terminalPaneLeafId ??= entry.terminalPaneLeafId
+    composerScopeKey ??= entry.composerScopeKey
     const target = entry.nativeFileDropTarget
     if (target === NATIVE_FILE_DROP_TARGET.terminal) {
       return { target, tabId: entry.terminalTabId, paneLeafId: terminalPaneLeafId }
     }
-    if (target === NATIVE_FILE_DROP_TARGET.editor || target === NATIVE_FILE_DROP_TARGET.composer) {
+    if (target === NATIVE_FILE_DROP_TARGET.composer) {
+      // Composer drops fan out window-wide, so carry the receiving composer's
+      // scope key the way a terminal drop carries its pane leaf id.
+      return { target, ...(composerScopeKey ? { scopeKey: composerScopeKey } : {}) }
+    }
+    if (target === NATIVE_FILE_DROP_TARGET.editor) {
       return { target }
     }
     if (target === NATIVE_FILE_DROP_TARGET.projectSidebar) {
@@ -205,6 +255,14 @@ export function createNativeFileDropPayload(
     }
   }
 
+  if (resolution?.target === NATIVE_FILE_DROP_TARGET.composer) {
+    return {
+      paths: [...paths],
+      target: resolution.target,
+      ...(resolution.scopeKey ? { scopeKey: resolution.scopeKey } : {})
+    }
+  }
+
   const target = resolution?.target ?? NATIVE_FILE_DROP_TARGET.editor
   if (resolution?.target === NATIVE_FILE_DROP_TARGET.terminal) {
     return {
@@ -232,7 +290,9 @@ export function isNativeFileDropPayload(value: unknown): value is NativeFileDrop
     return (
       isNonNegativeFiniteNumber(payload.byteLength) &&
       isNonNegativeFiniteNumber(payload.pathCount) &&
-      isNativeFileDropRejectedReason(payload.reason)
+      isNativeFileDropRejectedReason(payload.reason) &&
+      (payload.commonReason === undefined ||
+        isNativeFileDropCopyFailureReason(payload.commonReason))
     )
   }
 
@@ -252,10 +312,11 @@ export function isNativeFileDropPayload(value: unknown): value is NativeFileDrop
   if (target === NATIVE_FILE_DROP_TARGET.fileExplorer) {
     return typeof payload.destinationDir === 'string'
   }
+  if (target === NATIVE_FILE_DROP_TARGET.composer) {
+    return isOptionalNativeFileDropString(payload.scopeKey)
+  }
 
   return (
-    target === NATIVE_FILE_DROP_TARGET.editor ||
-    target === NATIVE_FILE_DROP_TARGET.composer ||
-    target === NATIVE_FILE_DROP_TARGET.projectSidebar
+    target === NATIVE_FILE_DROP_TARGET.editor || target === NATIVE_FILE_DROP_TARGET.projectSidebar
   )
 }

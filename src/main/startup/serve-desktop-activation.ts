@@ -27,6 +27,21 @@ export function settleServeDesktopActivation(
   gate.markReady()
 }
 
+/**
+ * Wraps the desktop startup-window opener so activations queued since preflight are let through
+ * only once that window exists: they then focus it, where earlier they would open a duplicate.
+ */
+export function releaseDesktopActivationAfter<TArgs extends unknown[], TResult>(
+  gate: ServeDesktopActivationGate | null,
+  open: (...args: TArgs) => TResult
+): (...args: TArgs) => TResult {
+  return (...args) => {
+    const result = open(...args)
+    gate?.markReady()
+    return result
+  }
+}
+
 export function createServeDesktopActivationGate(options: {
   initialState: 'initializing' | 'ready'
   activateWindow: () => void

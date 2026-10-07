@@ -29,7 +29,8 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
 vi.mock('../ipc/registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: vi.fn()
+  invalidateAuthorizedRootsCache: vi.fn(),
+  invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
@@ -43,6 +44,12 @@ vi.mock('../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
   return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
+
+class TestOrcaRuntimeService extends OrcaRuntimeService {
+  getLayoutQueues() {
+    return this.layoutQueues
+  }
+}
 
 const store = {
   getRepo: () => ({
@@ -74,7 +81,7 @@ const store = {
 }
 
 function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
-  const runtime = new OrcaRuntimeService({
+  const runtime = new TestOrcaRuntimeService({
     ...store,
     getSettings: () => ({ ...store.getSettings(), mobileAutoRestoreFitMs })
   })
@@ -119,6 +126,7 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
   })
   return {
     runtime,
+    ptySizes,
     driverEvents,
     fitOverrideEvents,
     resizeCalls,
@@ -144,6 +152,16 @@ describe('remote desktop viewer width driver', () => {
     // its cross-layer driver-change notifications stay untouched.
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
     expect(driverEvents).toHaveLength(0)
+  })
+
+  it('keeps a wide desktop viewport through resize', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 500, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 500, rows: 40 })
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 800, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 800, rows: 40 })
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 2000, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 1024, rows: 40 })
   })
 
   it('sizes the PTY to the latest active desktop viewer', async () => {
@@ -253,6 +271,21 @@ describe('remote desktop viewer width driver', () => {
     expect(fitOverrideEvents).toHaveLength(0)
   })
 
+  it('repairs host-side drift when the current viewer reasserts an unchanged grid', async () => {
+    const { runtime, ptySizes, resizeCalls } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
+    ptySizes.set('pty-1', { cols: 80, rows: 24 })
+    resizeCalls.splice(0)
+
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
+
+    expect(resizeCalls).toEqual([{ ptyId: 'pty-1', cols: 100, rows: 30 }])
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 30 })
+
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
+    expect(resizeCalls).toHaveLength(1)
+  })
+
   it('reclaims the host width when the last viewer detaches', async () => {
     const { runtime } = createRuntime()
     // The viewer drives the source PTY to its own 80-wide viewport.
@@ -340,17 +373,18 @@ describe('remote desktop viewer width driver', () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 80, 24, false)
-    const layoutQueues = Reflect.get(runtime, 'layoutQueues') as Map<
-      string,
-      { running: Promise<unknown>; pending: { target: { ownerSubscriptionKey?: string } }[] }
-    >
+    const layoutQueues = runtime.getLayoutQueues()
     layoutQueues.set('pty-1', { running: new Promise(() => {}), pending: [] })
 
     void runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 90, 28)
     void runtime.claimRemoteDesktopViewer('pty-1', 'sub-B')
 
     expect(
-      layoutQueues.get('pty-1')?.pending.map(({ target }) => target.ownerSubscriptionKey)
+      layoutQueues
+        .get('pty-1')
+        ?.pending.map(({ target }) =>
+          target.kind === 'remote-desktop' ? target.ownerSubscriptionKey : null
+        )
     ).toEqual(['sub-A', 'sub-B'])
     layoutQueues.delete('pty-1')
   })
@@ -358,10 +392,7 @@ describe('remote desktop viewer width driver', () => {
   it('makes a host claim join a pending disconnect reclaim', async () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 24)
-    const layoutQueues = Reflect.get(runtime, 'layoutQueues') as Map<
-      string,
-      { running: Promise<unknown>; pending: { waiters: unknown[] }[] }
-    >
+    const layoutQueues = runtime.getLayoutQueues()
     layoutQueues.set('pty-1', { running: new Promise(() => {}), pending: [] })
 
     void runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')

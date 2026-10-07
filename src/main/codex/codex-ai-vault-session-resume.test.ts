@@ -5,6 +5,17 @@ import { dirname, join } from 'node:path'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 import { prepareCodexAiVaultSessionResume } from './codex-ai-vault-session-resume'
 
+// Why: session backfill resolves Orca's managed Codex home from userData, which otherwise resolves to the live one.
+let userDataRoot: string
+beforeEach(() => {
+  userDataRoot = mkdtempSync(join(tmpdir(), 'orca-codex-resume-user-data-'))
+  vi.stubEnv('ORCA_USER_DATA_PATH', userDataRoot)
+})
+afterEach(() => {
+  vi.unstubAllEnvs()
+  rmSync(userDataRoot, { recursive: true, force: true })
+})
+
 describe('prepareCodexAiVaultSessionResume', () => {
   let root: string
   let peerHome: string
@@ -71,7 +82,7 @@ describe('prepareCodexAiVaultSessionResume', () => {
       },
       {
         runtimeHome: {
-          isHostSystemDefaultRealHome: isSystemDefaultRealHome,
+          isHostSystemDefaultRealHomeSelected: isSystemDefaultRealHome,
           resolveSelectedHostAccountCodexHomePathForResume: resolveSelectedHome
         },
         systemCodexHomePath: join(root, 'system-codex-home')

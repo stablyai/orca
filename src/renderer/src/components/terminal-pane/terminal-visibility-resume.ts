@@ -31,6 +31,7 @@ export type TerminalHiddenReason = 'surface' | 'tab'
 type ResumeTerminalVisibilityArgs = {
   manager: PaneManager
   isActive: boolean
+  isChatViewMode: boolean
   wasVisible: boolean
   shouldUseLightTabResume: boolean
   captureViewportPositions: (useRememberedSnapshots: boolean) => Map<number, ScrollState>
@@ -54,12 +55,14 @@ type HideTerminalVisibilityResult = {
 type RecoverVisibleTerminalWindowWakeArgs = {
   manager: PaneManager
   isActive: boolean
+  isChatViewMode: boolean
   clearGlyphAtlases: boolean
 }
 
 export function resumeTerminalVisibility({
   manager,
   isActive,
+  isChatViewMode,
   wasVisible,
   shouldUseLightTabResume,
   captureViewportPositions,
@@ -100,13 +103,13 @@ export function resumeTerminalVisibility({
         // cell size — refit so cols/rows match before the overlay settles.
         manager.fitAllRevealedPanes()
       }
-      if (isActive) {
+      if (isActive && !isChatViewMode) {
         focusActivePane(manager)
       }
     } else {
       // fitAllRevealedPanes flushes after WebGL reattaches, avoiding a redundant
       // full refresh in the suspended DOM renderer while preserving first paint.
-      repairedDpr = resumeTerminalVisibilityHeavy(manager, isActive)
+      repairedDpr = resumeTerminalVisibilityHeavy(manager, isActive && !isChatViewMode)
     }
     enforceTerminalViewportIntents(manager)
     if (!shouldUseLightTabResume) {
@@ -174,6 +177,7 @@ export function hideTerminalVisibility({
 export function recoverVisibleTerminalWindowWake({
   manager,
   isActive,
+  isChatViewMode,
   clearGlyphAtlases
 }: RecoverVisibleTerminalWindowWakeArgs): void {
   // Why: macOS screensaver/display wake can leave xterm visible but with a
@@ -201,7 +205,7 @@ export function recoverVisibleTerminalWindowWake({
   manager.resumeRendering()
   // Why: wake re-attaches WebGL — same transient cell-metric wobble guard as the heavy resume.
   manager.fitAllRevealedPanes()
-  if (isActive) {
+  if (isActive && !isChatViewMode) {
     focusActivePane(manager)
   }
   enforceTerminalViewportIntents(manager)
@@ -226,7 +230,7 @@ function requestLightTabBacklogRecovery(manager: PaneManager): void {
   }
 }
 
-function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean): boolean {
+function resumeTerminalVisibilityHeavy(manager: PaneManager, shouldFocus: boolean): boolean {
   // Why: hidden panes can accumulate large PTY bursts while Chromium is
   // occluded. Drain a bounded slice before fitting; the scheduler keeps
   // ordering and continues the rest asynchronously so return-to-app does
@@ -254,7 +258,7 @@ function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean):
   // from the DOM renderer's; a raw fit here reflows on a transient one-column-off
   // grid and garbles diff-painting inline TUIs (grok minimize→restore).
   manager.fitAllRevealedPanes()
-  if (isActive) {
+  if (shouldFocus) {
     focusActivePane(manager)
   }
   return repairedDpr

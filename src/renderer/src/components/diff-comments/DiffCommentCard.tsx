@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
@@ -281,7 +282,7 @@ export function DiffCommentCard({
         {/* Body or Edit Mode */}
         {editing ? (
           <div className="flex flex-col gap-2 mt-1">
-            <textarea
+            <ImeTextarea
               ref={textareaRef}
               className="orca-diff-comment-popover-textarea"
               value={draft}

@@ -21,6 +21,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type * as React from 'react'
+import type { registerAgentStatusStartupSnapshot } from '@/hooks/ipc-events/agent-status-startup-snapshot'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   fishRequirementViolation,
@@ -340,15 +341,21 @@ describe('terminal query responder', () => {
 
 describe('fish never receives a color-scheme report it did not query (#9993)', () => {
   let configHome: string | null = null
+  let statusSnapshot: ReturnType<typeof registerAgentStatusStartupSnapshot> | undefined
 
   // Always runs, so the CI lane cannot report green with the regression below skipped.
   it('has the fish this suite needs when CI requires one', () => {
     expect(fishRequirementViolation(FISH)).toBeNull()
   })
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
+    const { registerAgentStatusStartupSnapshot: registerSnapshot } =
+      await import('@/hooks/ipc-events/agent-status-startup-snapshot')
+    // A restored pane waits for the initial status replay before connecting.
+    statusSnapshot = registerSnapshot()
+    statusSnapshot.settle()
     transportFactoryQueue = []
     storeSubscribers = []
     mockStoreState = {
@@ -393,7 +400,6 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       suppressedPtyExitIds: {},
       agentLaunchConfigByPaneKey: {},
       getAgentLaunchConfigForStatusEntry: vi.fn(),
-      getAgentLaunchConfigForStatusMetadata: vi.fn(),
       clearSleepingAgentSession: vi.fn(),
       registerAgentLaunchConfig: vi.fn(),
       clearAgentLaunchConfig: vi.fn(),
@@ -430,6 +436,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
           setPtyDeliveryInterest: vi.fn(),
           ackColdRestore: vi.fn(),
           onClearBufferRequest: vi.fn(() => vi.fn()),
+          onResetInputModesRequest: vi.fn(() => vi.fn()),
           onSerializeBufferRequest: vi.fn(() => vi.fn()),
           sendSerializedBuffer: vi.fn(),
           declarePendingPaneSerializer: vi.fn().mockResolvedValue(1),
@@ -457,6 +464,8 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
   })
 
   afterEach(() => {
+    statusSnapshot?.dispose()
+    statusSnapshot = undefined
     delete (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame
     delete (globalThis as { cancelAnimationFrame?: unknown }).cancelAnimationFrame
     delete (globalThis as { window?: unknown }).window

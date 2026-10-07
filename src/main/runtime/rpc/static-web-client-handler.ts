@@ -4,7 +4,7 @@ import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http
 import { extname, isAbsolute, posix, relative, resolve } from 'node:path'
 
 const STATIC_WEB_ALLOWED_PATHS = new Set(['/web-index.html'])
-const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/']
+const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/', '/cmaps/', '/standard_fonts/', '/wasm/']
 const STATIC_WEB_CONTENT_TYPES = new Map([
   ['.css', 'text/css; charset=utf-8'],
   ['.html', 'text/html; charset=utf-8'],
@@ -29,6 +29,9 @@ async function handleStaticRequest(
   request: IncomingMessage,
   response: ServerResponse
 ): Promise<void> {
+  if (response.destroyed) {
+    return
+  }
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     response.setHeader('Allow', 'GET, HEAD')
     writeHttpStatus(response, 405)
@@ -59,6 +62,9 @@ async function handleStaticRequest(
     writeHttpStatus(response, 404)
     return
   }
+  if (response.destroyed) {
+    return
+  }
   if (!fileStat.isFile()) {
     writeHttpStatus(response, 404)
     return
@@ -80,8 +86,22 @@ async function handleStaticRequest(
   }
 
   const stream = createReadStream(absolutePath)
+  const stopReading = (): void => {
+    stream.destroy()
+  }
+  response.once('close', stopReading)
+  response.once('error', stopReading)
+  stream.once('close', () => {
+    response.off('close', stopReading)
+    response.off('error', stopReading)
+  })
   stream.on('error', () => {
+    if (response.destroyed) {
+      return
+    }
     if (!response.headersSent) {
+      response.setHeader('Content-Length', 0)
+      response.setHeader('Cache-Control', 'no-store')
       writeHttpStatus(response, 500)
       return
     }
@@ -116,12 +136,14 @@ function mapProxyPrefixedStaticPathname(pathname: string): string {
   if (pathname === '/web-index.html' || pathname.endsWith('/web-index.html')) {
     return '/web-index.html'
   }
-  const assetMarker = '/assets/'
-  const assetIndex = pathname.indexOf(assetMarker)
-  if (assetIndex !== -1) {
+  const prefixIndex = STATIC_WEB_ALLOWED_PREFIXES.reduce(
+    (deepest, prefix) => Math.max(deepest, pathname.indexOf(prefix)),
+    -1
+  )
+  if (prefixIndex !== -1) {
     // Why: reverse proxies may forward the external path prefix through to
     // Orca. Only the bundled /assets subtree is served after the prefix.
-    return pathname.slice(assetIndex)
+    return pathname.slice(prefixIndex)
   }
   return pathname
 }
@@ -134,6 +156,9 @@ function isAllowedStaticWebPath(pathname: string): boolean {
 }
 
 function writeHttpStatus(response: ServerResponse, statusCode: number): void {
+  if (response.destroyed) {
+    return
+  }
   response.statusCode = statusCode
   response.end()
 }

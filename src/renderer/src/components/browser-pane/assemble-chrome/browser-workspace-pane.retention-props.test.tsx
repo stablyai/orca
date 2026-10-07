@@ -149,14 +149,28 @@ describe('browser workspace pane retention props', () => {
     hydrateBrowserRemoteViewerPages([])
   })
 
+  it('defers unopened pages out of 200 and retains opened pages until unmount', () => {
+    const pages = Array.from({ length: 200 }, (_, index) => createPage(`page-${index}`))
+    mocks.state!.browserPagesByWorkspace[WORKSPACE_ID] = pages
+    const workspace = { ...createWorkspace(), activePageId: pages[0].id }
+    const view = render(<BrowserPane browserTab={workspace} isActive />)
+    const renderedIds = (): (string | null)[] =>
+      [...view.container.querySelectorAll('[data-browser-page-id]')].map((node) =>
+        node.getAttribute('data-browser-page-id')
+      )
+    expect(renderedIds()).toEqual(['page-0'])
+
+    view.rerender(<BrowserPane browserTab={{ ...workspace, activePageId: 'page-199' }} isActive />)
+    expect(renderedIds()).toEqual(['page-0', 'page-199'])
+    view.rerender(<BrowserPane browserTab={workspace} isActive={false} />)
+    expect(renderedIds()).toEqual(['page-0', 'page-199'])
+    view.rerender(<BrowserPane key="restored" browserTab={workspace} isActive />)
+    expect(renderedIds()).toEqual(['page-0'])
+  })
+
   it('threads all three retention terms to the page that owns them', () => {
     renderWorkspacePane()
-    expect(propsFor('page-b')).toEqual({
-      id: 'page-b',
-      isAutomationVisible: false,
-      isMobileDriven: false,
-      isRemotelyViewed: false
-    })
+    expect(mocks.pageProps.some((props) => props.id === 'page-b')).toBe(false)
 
     cleanup()
     const token = acquireBrowserAutomationVisibility('page-b')

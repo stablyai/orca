@@ -11,7 +11,6 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveFolderWorkspaceHost } from '../../shared/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -61,7 +60,8 @@ function makeStore(
     kind?: Repo['kind']
     path?: string
   }[] = [],
-  worktreeMeta: Record<string, WorktreeMeta> = {}
+  worktreeMeta: Record<string, WorktreeMeta> = {},
+  folderWorkspaces: FolderWorkspace[] = []
 ): Store {
   const built: Repo[] = repos.map((r) => ({
     id: r.id,
@@ -73,14 +73,18 @@ function makeStore(
     executionHostId: r.executionHostId ?? null,
     kind: r.kind
   }))
-  return {
+  const store: Partial<Store> = {
     getRepos: () => built,
+    getFolderWorkspaces: () => folderWorkspaces,
+    getProjectGroups: () => [],
     getAllWorktreeMeta: () => worktreeMeta,
     getAllWorktreeMetaForHost: (hostId) =>
       Object.fromEntries(
         Object.entries(worktreeMeta).filter(([, meta]) => !meta.hostId || meta.hostId === hostId)
       )
-  } as Store
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hydration reads only the store members stubbed above.
+  return store as Store
 }
 
 function makeProvider(sessions: SessionInfo[]): Pick<DaemonPtyAdapter, 'listSessions'> {
@@ -765,34 +769,48 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     expect(listRegisteredPtys()).toEqual([expect.objectContaining({ ptyId })])
   })
 
-  it('keeps true folder workspace PTY ids as an accepted hydration gap', async () => {
-    const { hydrate, listRegisteredPtys } = await loadFresh()
-    const workspace = {
-      id: 'folder-workspace-1',
-      executionHostId: 'local'
-    } as FolderWorkspace
-    getDaemonProviderMock.mockReturnValue(
-      makeProvider([
-        {
-          sessionId: 'folder:folder-workspace-1@@cafebabe',
-          pid: 4242,
-          cwd: '/workspace/folder'
-        } as unknown as SessionInfo
-      ])
-    )
-
-    expect(
-      resolveFolderWorkspaceHost(
-        { folderWorkspaces: [workspace], projectGroups: [], repos: [] },
-        workspace.id
+  it.each([
+    ['local', { executionHostId: 'local' }, true],
+    ['ssh:box', { executionHostId: 'ssh:box' }, false],
+    ['runtime:paired', { executionHostId: 'runtime:paired' }, false],
+    ['duplicate', { executionHostId: 'local' }, false],
+    ['persisted local', { connectionId: null }, true],
+    ['persisted SSH', { connectionId: 'box' }, false]
+  ] as const)(
+    'hydrates only an unambiguous local folder workspace (%s)',
+    async (host, ownership, expected) => {
+      const { hydrate, listRegisteredPtys } = await loadFresh()
+      const workspace = {
+        id: 'folder-workspace-1',
+        ...ownership
+      } as FolderWorkspace
+      getDaemonProviderMock.mockReturnValue(
+        makeProvider([
+          {
+            sessionId: 'folder:folder-workspace-1@@cafebabe',
+            pid: 4242,
+            cwd: '/workspace/folder'
+          } as unknown as SessionInfo
+        ])
       )
-    ).toEqual({ kind: 'local' })
 
-    await hydrate(makeStore())
+      const store = makeStore()
+      store.getFolderWorkspaces = () =>
+        host === 'duplicate'
+          ? [workspace, { ...workspace, executionHostId: 'runtime:paired' }]
+          : [workspace]
+      await hydrate(store)
 
-    expect(listRegisteredPtys()).toHaveLength(0)
-    expect(listLocalRepoWorktreesStrictMock).not.toHaveBeenCalled()
-  })
+      expect(listRegisteredPtys()).toHaveLength(expected ? 1 : 0)
+      if (expected) {
+        expect(listRegisteredPtys()[0]).toMatchObject({
+          worktreeId: 'folder:folder-workspace-1',
+          pid: 4242
+        })
+      }
+      expect(listLocalRepoWorktreesStrictMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not register a daemon session whose worktree was removed', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()

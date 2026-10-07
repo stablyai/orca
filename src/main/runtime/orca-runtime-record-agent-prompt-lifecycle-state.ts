@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector } from './orca-runtime-create-terminal-side-effect-command-code-detector'
 import type { AgentStatus } from '../../shared/agent-detection'
+import { getDisplayPromptLifecycle } from './runtime-worktree-status-projection'
 import { findLastCompleteOscTitleRange } from './orca-runtime-core'
 import { extractLastOscTitle } from '../../shared/osc-title-extraction'
 import { detectAgentStatusFromTitle } from '../../shared/agent-detection'
@@ -13,6 +14,12 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
       this.recordAgentPromptPermissionObservation(ptyId)
     }
     const current = this.agentPromptLifecycleByPtyId.get(ptyId)
+    // Why projected: main recorded a stale-working clear here, so the next working status after
+    // one starts a new turn for prompt verification, as it did there.
+    const previousStatus = getDisplayPromptLifecycle(
+      current,
+      this.getPtyTitleDisplayClear(ptyId)
+    )?.status
     const updatedAt = Date.now()
     if (!current) {
       this.agentPromptLifecycleByPtyId.set(ptyId, {
@@ -25,7 +32,7 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     this.agentPromptLifecycleByPtyId.set(ptyId, {
       status,
       workingSequence:
-        current.workingSequence + (status === 'working' && current.status !== 'working' ? 1 : 0),
+        current.workingSequence + (status === 'working' && previousStatus !== 'working' ? 1 : 0),
       updatedAt
     })
   }
@@ -82,6 +89,7 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
 
   protected advancePtyLifecycleGeneration(ptyId: string): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    this.clearAgentPromptCorrelationForPty(ptyId)
     // A stop intent belongs to one process incarnation; never let it label a
     // replacement process when the provider reports a generation reset.
     this.stopRequestedPtyIds.delete(ptyId)

@@ -1,5 +1,5 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
@@ -22,10 +22,13 @@ import type { useFileExplorerSelection } from './useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
 
 type UseFileExplorerTreePaneStateParams = {
+  onRevealOutsideRoot?: () => void
   activeWorktreeId: string | null
   activeRepo: Repo | null
   worktreePath: string | null
   visibleFilesWorktreePath: string | null
+  displayRootPath: string | null
+  effectiveExpanded: Set<string>
   expanded: Set<string>
   activeFileId: string | null
   openFiles: OpenFile[]
@@ -64,10 +67,13 @@ type UseFileExplorerTreePaneStateResult = {
  * whole directory cache — when the same workspace comes back.
  */
 export function useFileExplorerTreePaneState({
+  onRevealOutsideRoot,
   activeWorktreeId,
   activeRepo,
   worktreePath,
   visibleFilesWorktreePath,
+  displayRootPath,
+  effectiveExpanded,
   expanded,
   activeFileId,
   openFiles,
@@ -103,6 +109,13 @@ export function useFileExplorerTreePaneState({
     moveSelection,
     selectedPaths
   } = selection
+
+  const pendingReveal = useAppStore((s) => s.pendingExplorerReveal)
+  useEffect(() => {
+    if (pendingReveal?.worktreeId === activeWorktreeId && hasNameFilter) {
+      setNameFilterQuery('')
+    }
+  }, [pendingReveal, activeWorktreeId, hasNameFilter, setNameFilterQuery])
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const canOpenWorkspaceFileBrowserForPath =
@@ -154,6 +167,7 @@ export function useFileExplorerTreePaneState({
 
   const dragDrop = useFileExplorerDragDrop({
     worktreePath,
+    displayRootPath,
     activeWorktreeId,
     expanded,
     toggleDir,
@@ -164,12 +178,15 @@ export function useFileExplorerTreePaneState({
 
   useFileExplorerTreeLoadEffects({
     visibleFilesWorktreePath,
-    expanded,
+    displayRootPath,
+    expanded: effectiveExpanded,
     dirCache,
     loadingDirPaths,
-    rootError,
+    rootError:
+      rootError ?? (displayRootPath ? tree.dirCache[displayRootPath]?.error : null) ?? null,
     isDirStale,
     loadDir,
+    refreshTree,
     resetAndLoad,
     resetSelection,
     setNameFilterQuery
@@ -177,6 +194,7 @@ export function useFileExplorerTreePaneState({
 
   const inlineInputState = useFileExplorerInlineInput({
     activeWorktreeId,
+    displayRootPath,
     worktreePath: visibleFilesWorktreePath,
     expanded,
     rowProjection,
@@ -189,7 +207,7 @@ export function useFileExplorerTreePaneState({
     activeWorktreeId,
     dirCache,
     setDirCache,
-    expanded,
+    expanded: effectiveExpanded,
     setSelectedPath: setSingleSelectedPath,
     refreshDir,
     refreshTree,
@@ -200,6 +218,7 @@ export function useFileExplorerTreePaneState({
   })
 
   useFileExplorerImport({
+    displayRootPath,
     worktreePath: visibleFilesWorktreePath,
     activeWorktreeId,
     refreshDir,
@@ -209,6 +228,8 @@ export function useFileExplorerTreePaneState({
   })
 
   const rowScrolling = useFileExplorerRowScrolling({
+    onRevealOutsideRoot,
+    displayRootPath,
     visibleRowCount,
     inlineInputIndex: inlineInputState.inlineInputIndex,
     rowProjection,
@@ -233,7 +254,6 @@ export function useFileExplorerTreePaneState({
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
     loadDir,
     statPath,
-    authorizeExternalPath: window.api.fs.authorizeExternalPath,
     markPathAsDirectory,
     setSelectedPath: setSingleSelectedPath,
     scrollRef
@@ -256,7 +276,6 @@ export function useFileExplorerTreePaneState({
     requestDeleteAll: deletion.requestDeleteAll,
     refreshDir,
     handleClick: handlers.handleClick,
-    cancelPendingDirToggle: handlers.cancelPendingDirToggle,
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
     scrollToIndex: rowScrolling.scrollToIndex
   })

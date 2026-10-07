@@ -9,14 +9,8 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
-const {
-  storeState,
-  deps,
-  authorizeExternalPathMock,
-  openFileMock,
-  openFilePathMock,
-  setPendingEditorRevealMock
-} = doubles
+const { storeState, deps, openFileMock, openFilePathMock, setPendingEditorRevealMock, statMock } =
+  doubles
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -49,7 +43,6 @@ describe('handleOscLink', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -65,7 +58,7 @@ describe('handleOscLink', () => {
     // before asserting on positive behavior.
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' }),
       { forceContentReload: true }
@@ -88,9 +81,9 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: 'C:/repo/src/index.ts'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: 'C:/repo/src/index.ts' }),
       { forceContentReload: true }
@@ -118,9 +111,9 @@ describe('handleOscLink', () => {
     )
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '//server/share/repo/test.txt'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '//server/share/repo/test.txt' })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '//server/share/repo/test.txt' }),
       { forceContentReload: true }
@@ -140,7 +133,6 @@ describe('handleOscLink', () => {
     )
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
   })
 
@@ -151,7 +143,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' }),
@@ -177,7 +169,7 @@ describe('handleOscLink', () => {
     )
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
     expect(openFilePathMock).toHaveBeenCalledWith('/tmp/test.txt')
     expect(openFileMock).not.toHaveBeenCalled()
     expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
@@ -195,7 +187,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' }),
       { forceContentReload: true }
@@ -224,9 +216,9 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '//server/Share/Repo/src/app.ts'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '//server/Share/Repo/src/app.ts' })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '//server/Share/Repo/src/app.ts',
@@ -258,9 +250,9 @@ describe('handleOscLink', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '/tmp/project/docs/README.md'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/project/docs/README.md' })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/tmp/project/docs/README.md',
@@ -287,9 +279,11 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
+      })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
@@ -320,9 +314,11 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
+      })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
@@ -353,9 +349,9 @@ describe('handleOscLink', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '/home/alice/file.ts'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/home/alice/file.ts' })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/home/alice/file.ts'

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -214,7 +215,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           [folderKey]: 'runtime:env-1'
         }
       }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledWith(expect.objectContaining({ tabsByWorktree: {} }))
     expect(patch).toHaveBeenCalledWith(
@@ -258,7 +259,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           [folderKey]: 'runtime:stale-env'
         }
       }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledTimes(1)
     expect(patch.mock.calls[0][0]).toEqual(
@@ -305,7 +306,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           'remote-repo': [{ id: worktreeId, repoId: 'remote-repo' }]
         }
       }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledWith(expect.objectContaining({ tabsByWorktree: {} }))
     expect(patch).toHaveBeenCalledWith(
@@ -373,7 +374,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           ]
         }
       }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -478,6 +479,135 @@ describe('fetchWorkspaceSessionFromHosts', () => {
 
     expect(setSync.mock.calls).toEqual(
       snapshots.map((snapshot) => [snapshot.state, snapshot.hostId])
+    )
+  })
+})
+
+describe('patchWorkspaceSessionByHost write outcome', () => {
+  it('rejects `written` when a host partition fails, while the local write still resolves', async () => {
+    const folderKey = folderWorkspaceKey('folder-1')
+    const patch = vi.fn(async (_slice: unknown, hostId?: string) => {
+      if (hostId) {
+        throw new Error('runtime down')
+      }
+    })
+    const result = patchWorkspaceSessionByHost(
+      { get: vi.fn(), patch, setSync: vi.fn() },
+      { activeWorktreeId: folderKey, tabsByWorktree: { [folderKey]: [] } },
+      {
+        repos: [],
+        worktreesByRepo: {},
+        restoredRuntimeHostIdByWorkspaceSessionKey: { [folderKey]: 'runtime:env-1' }
+      }
+    )
+    await expect(result.localWrite).resolves.toBeUndefined()
+    await expect(result.written).rejects.toThrow('runtime down')
+    expect(patch).toHaveBeenCalledWith(expect.anything(), 'runtime:env-1')
+  })
+})
+
+describe('patchWorkspaceSessionByHost tab-keyed routing', () => {
+  const remoteWorktreeId = 'remote-repo::/srv/remote'
+  const localWorktreeId = 'local-repo::/home/me/local'
+  const remoteTab = {
+    id: 'remote-tab',
+    ptyId: null,
+    worktreeId: remoteWorktreeId,
+    title: 'Remote',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
+  }
+  const parkedLayout: TerminalLayoutSnapshot = {
+    root: { type: 'leaf', leafId: 'leaf-1' },
+    activeLeafId: 'leaf-1',
+    expandedLeafId: null,
+    buffersByLeafId: { 'leaf-1': 'scrollback captured at park' }
+  }
+  const catalog = {
+    repos: [
+      { id: 'local-repo', connectionId: null, executionHostId: 'local' },
+      { id: 'remote-repo', connectionId: null, executionHostId: 'runtime:env-1' }
+    ],
+    worktreesByRepo: {
+      'local-repo': [{ id: localWorktreeId, repoId: 'local-repo' }],
+      'remote-repo': [{ id: remoteWorktreeId, repoId: 'remote-repo', hostId: 'runtime:env-1' }]
+    }
+  } satisfies HostPersistenceState
+
+  it('routes a layouts-only patch to the partition of the tab the live catalog names', async () => {
+    // A park capture changes only terminalLayoutsByTabId, so the patch carries no tab rows. Routed
+    // by the payload alone it fell into 'local', where main strips scrollback it cannot attribute
+    // to a remote worktree — the runtime partition never received the capture (#21295).
+    const patch = vi.fn().mockResolvedValue(undefined)
+
+    await patchWorkspaceSessionByHost(
+      { get: vi.fn(), patch, setSync: vi.fn() },
+      { terminalLayoutsByTabId: { 'remote-tab': parkedLayout } },
+      { ...catalog, tabsByWorktree: { [remoteWorktreeId]: [remoteTab] } }
+    ).written
+
+    expect(patch).toHaveBeenCalledWith(
+      { terminalLayoutsByTabId: { 'remote-tab': parkedLayout } },
+      'runtime:env-1'
+    )
+    expect(patch).toHaveBeenCalledWith({ terminalLayoutsByTabId: {} })
+  })
+
+  it('routes a remote-session-id-only patch the same way', async () => {
+    const patch = vi.fn().mockResolvedValue(undefined)
+
+    await patchWorkspaceSessionByHost(
+      { get: vi.fn(), patch, setSync: vi.fn() },
+      { remoteSessionIdsByTabId: { 'remote-tab': 'sess-1' } },
+      { ...catalog, tabsByWorktree: { [remoteWorktreeId]: [remoteTab] } }
+    ).written
+
+    expect(patch).toHaveBeenCalledWith(
+      { remoteSessionIdsByTabId: { 'remote-tab': 'sess-1' } },
+      'runtime:env-1'
+    )
+    expect(patch).toHaveBeenCalledWith({ remoteSessionIdsByTabId: {} })
+  })
+
+  it('resolves a tab only the unified catalog lists', async () => {
+    const patch = vi.fn().mockResolvedValue(undefined)
+
+    await patchWorkspaceSessionByHost(
+      { get: vi.fn(), patch, setSync: vi.fn() },
+      { terminalLayoutsByTabId: { 'remote-tab': parkedLayout } },
+      {
+        ...catalog,
+        unifiedTabsByWorktree: {
+          [remoteWorktreeId]: [{ id: 'remote-tab', worktreeId: remoteWorktreeId }]
+        }
+      }
+    ).written
+
+    expect(patch).toHaveBeenCalledWith(
+      { terminalLayoutsByTabId: { 'remote-tab': parkedLayout } },
+      'runtime:env-1'
+    )
+  })
+
+  it("lets the payload's own tab row outrank the live catalog", async () => {
+    // Main merges the payload's tabsByWorktree into whichever partition it lands in, so the layout
+    // must follow the tab row in this write even when the store has since moved the tab.
+    const patch = vi.fn().mockResolvedValue(undefined)
+
+    await patchWorkspaceSessionByHost(
+      { get: vi.fn(), patch, setSync: vi.fn() },
+      {
+        tabsByWorktree: { [localWorktreeId]: [{ ...remoteTab, worktreeId: localWorktreeId }] },
+        terminalLayoutsByTabId: { 'remote-tab': parkedLayout }
+      },
+      { ...catalog, tabsByWorktree: { [remoteWorktreeId]: [remoteTab] } }
+    ).written
+
+    expect(patch).toHaveBeenCalledTimes(1)
+    expect(patch).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalLayoutsByTabId: { 'remote-tab': parkedLayout } })
     )
   })
 })

@@ -154,24 +154,29 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     worktreePath
   })
   const hostedReviewCreationAction = useSourceControlHostedReviewCreation({
+    activePullRequestGenerationKey: pullRequestGeneration.activePullRequestGenerationKey,
     activeRepo,
     activeWorktreeId,
     branchName,
     createHostedReview,
     createPrInFlightRef,
     createStackedHostedReview,
+    handleGeneratePullRequestFields: createReviewComposer.handleGeneratePullRequestFields,
     handlePullRequestCreated: hostedReviewCreated.handlePullRequestCreated,
     hostedReviewCreateCopy,
     hostedReviewCreateProvider,
     hostedReviewCreation,
+    prAiGenerationEnabled: createReviewComposer.prAiGenerationEnabled,
     prBase,
     prBody,
     prDraft,
+    prFieldsAreSeedPlaceholders: createReviewComposer.prFieldsAreSeedPlaceholders,
     prGenerating,
     prTitle,
     resolvedPrCreationDefaults,
     setCreatePrInFlightByWorktree,
     setCreatePrIntentNoticeForWorktree,
+    settings,
     worktreePath
   })
 

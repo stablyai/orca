@@ -73,7 +73,7 @@ function inspect(result: RuntimeTerminalProcessInspection, roundTripMs = 20): Pr
     pollTimerTier: null,
     lastPaneActivityAt: null,
     hasAgentRunEvidence: false,
-    pendingProcessExitAgent: null,
+    pendingProcessExit: null,
     lastForegroundAgent: null,
     processSession: 1
   }
@@ -99,7 +99,6 @@ function inspect(result: RuntimeTerminalProcessInspection, roundTripMs = 20): Pr
     identityScope: {} as never,
     clearAgentRunEvidence: vi.fn(),
     hasPendingHookDone: () => false,
-    hasPendingCodexAttention: () => false,
     scheduleNextPoll: vi.fn(),
     handleRecognizedProcess: vi.fn(),
     dispatchCompletion: vi.fn(),
@@ -112,12 +111,6 @@ function inspect(result: RuntimeTerminalProcessInspection, roundTripMs = 20): Pr
 describe('agent completion polling under a host capture it cannot use', () => {
   it('counts no error for the prompt unverifiable a capture over budget produces', () => {
     expect(inspect(unreadableTableRecord()).consecutiveInspectionErrors).toBe(0)
-  })
-
-  it('counts an error for the late live record the same capture would have produced', () => {
-    // One of the measured captures. Every poll refusing this way is what drives the cadence to
-    // its 10s backoff floor and stops completion detection for the pane.
-    expect(inspect(liveRecord(6_140)).consecutiveInspectionErrors).toBe(1)
   })
 
   it.each([

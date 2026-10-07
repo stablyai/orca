@@ -1,4 +1,5 @@
 import { IMAGE_FILE_EXTENSIONS } from '../../../../shared/image-file-extensions'
+import { shellEscapePath } from './pane-helpers'
 import type { TerminalTargetShell } from './terminal-drop-shell'
 
 // Why: dropped image files should be handed to terminal TUIs (Claude Code,
@@ -6,8 +7,9 @@ import type { TerminalTargetShell } from './terminal-drop-shell'
 // *bracketed paste* of the file path — exactly how clipboard screenshot paste
 // already works in Orca (see terminal-clipboard-paste.ts + issue #2842).
 const IMAGE_DROP_EXTENSIONS = new Set(IMAGE_FILE_EXTENSIONS)
-const POSIX_RAW_IMAGE_DROP_UNSAFE_RE = /["'`$;&|<>(){}[\]*?!#\\]/
-const WINDOWS_RAW_IMAGE_DROP_UNSAFE_RE = /["'`$;&|<>(){}[\]*?!#^%]/
+// Why: an ASCII space is unsafe because Codex shlex-splits a raw spaced path into several tokens.
+const POSIX_RAW_IMAGE_DROP_UNSAFE_RE = /[ "'`$;&|<>(){}[\]*?!#\\]/
+const WINDOWS_RAW_IMAGE_DROP_UNSAFE_RE = /[ "'`$;&|<>(){}[\]*?!#^%]/
 
 /**
  * Returns true when `path` looks like a local/remote image file based on its
@@ -34,6 +36,31 @@ export function canPasteImageDropPathRaw(path: string, targetShell: TerminalTarg
   const unsafeRe =
     targetShell === 'windows' ? WINDOWS_RAW_IMAGE_DROP_UNSAFE_RE : POSIX_RAW_IMAGE_DROP_UNSAFE_RE
   return !unsafeRe.test(path)
+}
+
+/**
+ * Text to bracketed-paste for a dropped image, or null when a paste would alter
+ * the path (control bytes are rewritten by the paste frame).
+ */
+export function formatImageDropPasteText(
+  path: string,
+  targetShell: TerminalTargetShell
+): string | null {
+  if (hasControlByte(path)) {
+    return null
+  }
+  if (canPasteImageDropPathRaw(path, targetShell)) {
+    return path
+  }
+  // Why: Claude Code strips only one outer quote pair, so a POSIX `'\''` splice
+  // leaks quotes into the path; backslash escapes round-trip in Claude, Codex, and shells.
+  return targetShell === 'windows'
+    ? shellEscapePath(path, 'windows')
+    : backslashEscapePosixPath(path)
+}
+
+function backslashEscapePosixPath(path: string): string {
+  return path.replace(/[^a-zA-Z0-9_./@:\-\u0080-\uffff]/g, '\\$&')
 }
 
 function hasControlByte(path: string): boolean {

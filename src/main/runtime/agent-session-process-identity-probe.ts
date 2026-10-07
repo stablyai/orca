@@ -4,14 +4,14 @@
  * Pids are reused within minutes on a busy host, and reuse happens precisely in the recovery
  * case, so a bare pid match is never proof. Every element of the identity tuple is unavailable
  * somewhere — start time costs a CIM query on Windows and is missing in some containers, /proc
- * does not exist on macOS — so an exact but unanswerable identity stays fenced in `recovering`;
- * an ownerless, unattributable reservation enters `manual-recovery`.
+ * does not exist on macOS — so an unanswerable identity reports `indeterminate` and is never read
+ * as alive or dead.
  */
 
 import { readFile } from 'node:fs/promises'
 import type {
-  AgentSessionIdentityMatchField,
-  AgentSessionOwnerProbe
+  AgentSessionOwnerProbe,
+  AgentSessionProcessIdentityField
 } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import { runProcess } from '../../shared/child-process/run-process'
@@ -114,8 +114,8 @@ async function readDarwinProcessStartTimesMs(
 }
 
 async function readWindowsProcessStartTimeMs(pid: number): Promise<number | null> {
-  // No shipped addon build exposes the creation-time flag, so without this the
-  // whole table gets scanned to produce `null` every time.
+  // A binary without the creation-time flag (one built before Orca's patch) would
+  // otherwise scan the whole table to produce `null` every time.
   if (!isWindowsProcessStartTimeAvailable()) {
     return null
   }
@@ -129,6 +129,25 @@ async function readWindowsProcessStartTimeMs(pid: number): Promise<number | null
   } catch {
     return null
   }
+}
+
+async function readWindowsProcessStartTimesMs(
+  pids: readonly number[]
+): Promise<Map<number, number | null>> {
+  const observed = new Map<number, number | null>(pids.map((pid) => [pid, null]))
+  if (pids.length === 0 || !isWindowsProcessStartTimeAvailable()) {
+    return observed
+  }
+  try {
+    const table = await readWindowsProcessIdentityTableFresh()
+    const startTimesByPid = new Map(table.map((row) => [row.pid, row.creationTimeMs ?? null]))
+    for (const pid of pids) {
+      observed.set(pid, startTimesByPid.get(pid) ?? null)
+    }
+  } catch {
+    // A missing process table is unknown, never evidence that every owner exited.
+  }
+  return observed
 }
 
 /**
@@ -159,6 +178,9 @@ export async function readProcessStartTimesMs(
   if (platform === 'darwin') {
     const table = await readDarwinProcessStartTimesMs(uniquePids)
     return new Map(uniquePids.map((pid) => [pid, table.get(pid) ?? null]))
+  }
+  if (platform === 'win32') {
+    return readWindowsProcessStartTimesMs(uniquePids)
   }
   return new Map(
     await Promise.all(
@@ -220,7 +242,7 @@ export async function probeAgentSessionProcessIdentity(args: {
   if (!isPidPresent(identity.pid)) {
     return { outcome: 'pid-absent' }
   }
-  const matchedOn: AgentSessionIdentityMatchField[] = []
+  const matchedOn: AgentSessionProcessIdentityField[] = []
   const echoedToken = await deps.readEchoedSpawnToken?.(identity).catch(() => null)
   if (echoedToken !== null && echoedToken !== undefined) {
     if (echoedToken !== identity.spawnToken) {

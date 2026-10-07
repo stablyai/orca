@@ -8,8 +8,7 @@ import {
   type RepoSummary,
   SORT_OPTIONS,
   type TaskListEntry,
-  compareTasksByRepository,
-  compareTasksByUpdated,
+  sortMobileTaskItems,
   getRepoBadgeColor,
   hasGitHubIssueSourceChoice,
   issueSourceSlug,
@@ -133,15 +132,10 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
       })),
     [workspaceRepos]
   )
-  const sortedItems = useMemo(() => {
-    const next = [...items]
-    if (taskSort === 'repository') {
-      next.sort((a, b) => compareTasksByRepository(a, b, reposById))
-    } else {
-      next.sort(compareTasksByUpdated)
-    }
-    return next
-  }, [items, reposById, taskSort])
+  const sortedItems = useMemo(
+    () => sortMobileTaskItems(items, taskSort, reposById),
+    [items, reposById, taskSort]
+  )
   const displayedEntries = useMemo<TaskListEntry[]>(() => {
     if (taskSort !== 'repository') {
       return sortedItems.map((item) => ({ type: 'item', key: item.key, item }))

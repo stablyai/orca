@@ -3,18 +3,13 @@ import type { AppState } from '@/store/types'
 import { getConnectionId } from '@/lib/connection-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import {
-  hasExplicitTuiAgentArgs,
-  hasExplicitTuiLaunchCustomization,
-  type AgentLaunchRoute,
-  type AgentLaunchRoutingInput
-} from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import type {
+  AgentSessionLaunchPlan,
+  planAgentSessionLaunch
+} from '@/lib/agent-session-launch-plan'
+import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   buildDirectWorkItemStartup,
-  markDirectWorkItemAgentTrusted,
   resolveDirectWorkItemAgent
 } from '@/lib/launch-work-item-direct-agent-routing'
 
@@ -26,11 +21,14 @@ export type DirectWorkItemAgentLaunchPreparation = {
   draftLaunchedNatively: boolean
   startupPlanFailed: boolean
   structuredLaunch: boolean
+  /** Null when no agent was selected. */
+  plan: AgentSessionLaunchPlan | null
 }
 
 export async function prepareDirectWorkItemAgentLaunch(args: {
   worktreeId: string
   worktreePath: string
+  repoId: string
   agentOverride?: TuiAgent
   agentArgs?: string | null
   repoConnectionId: string | null
@@ -41,7 +39,9 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   promptDelivery: 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
   repoProjectRuntime?: Parameters<typeof buildDirectWorkItemStartup>[0]['repoProjectRuntime']
-  routeResolver: (input: AgentLaunchRoutingInput) => AgentLaunchRoute
+  planLaunch: typeof planAgentSessionLaunch
+  /** The start action this launch serves. */
+  requestId: AgentLaunchRequestId
 }): Promise<DirectWorkItemAgentLaunchPreparation> {
   const launchConnectionId = getConnectionId(args.worktreeId) ?? args.repoConnectionId
   const agentSelection = await resolveDirectWorkItemAgent({
@@ -59,7 +59,8 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
       startupPlan: null,
       draftLaunchedNatively: false,
       startupPlanFailed: false,
-      structuredLaunch: false
+      structuredLaunch: false,
+      plan: null
     }
   }
 
@@ -91,35 +92,18 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
         : undefined
   })
 
-  const structuredLaunch =
-    effectiveAgent !== null &&
-    args.routeResolver({
-      agent: effectiveAgent,
-      settings: args.settings,
-      executionHostId: getExecutionHostIdForWorktree(args.latestStore, args.worktreeId),
-      platform: CLIENT_PLATFORM,
-      hostCapabilities: readLocalRuntimeCapabilities(),
-      workspaceKind: 'git-worktree',
-      projectRuntime: getLocalProjectExecutionRuntimeContext(
-        args.latestStore,
-        args.worktreeId,
-        CLIENT_PLATFORM
-      ),
-      promptDelivery: args.promptDelivery,
-      launchText: args.draftContent,
-      nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(launchConnectionId),
-      requiresTuiLaunchCustomization:
-        hasExplicitTuiAgentArgs(effectiveAgent, args.agentArgs) ||
-        hasExplicitTuiLaunchCustomization(args.settings, effectiveAgent),
-      initialSessionOptions: startupPlan?.sessionOptions
-    }) === 'structured-native-chat'
-
-  await markDirectWorkItemAgentTrusted({
-    structuredLaunch,
-    agent: effectiveAgent,
-    workspacePath: args.worktreePath,
-    connectionId: args.repoConnectionId
-  })
+  const plan =
+    effectiveAgent === null
+      ? null
+      : args.planLaunch(args.latestStore, {
+          requestId: args.requestId,
+          agent: effectiveAgent,
+          workspace: { kind: 'git-worktree', worktreeId: args.worktreeId, repoId: args.repoId },
+          prompt: args.draftContent,
+          promptDelivery: args.promptDelivery,
+          initialSessionOptions: startupPlan?.sessionOptions
+        })
+  const structuredLaunch = plan?.route === 'structured-native-chat'
 
   return {
     launchConnectionId,
@@ -128,6 +112,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
     startupPlan,
     draftLaunchedNatively,
     startupPlanFailed,
-    structuredLaunch
+    structuredLaunch,
+    plan
   }
 }

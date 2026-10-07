@@ -1,0 +1,81 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.native-chat-readability",
+  "family": "session.native-chat-readability",
+  "namedDeltas": [],
+  "values": {
+    "0b8777edb86c": {
+      "readable": false,
+      "worktreeId": "repo-1::/w"
+    },
+    "19b2979d7fc2": {
+      "name": "repo.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "7023dde78391": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "connectionId": "ssh-1",
+                "id": "repo-1"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-readability-remote-repo",
+    "checkpoints": [
+      {
+        "id": "unreadable",
+        "observation": {
+          "sender": ["7023dde78391"],
+          "payloads": ["19b2979d7fc2"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "0b8777edb86c",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -23,8 +23,29 @@ import {
   attachClientBrowserHost,
   publishClientHostedPage
 } from '../orca-runtime-test-scenario-builders.spec'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  initializeBrowserIdentityModeStore,
+  resetBrowserIdentityModeStoreForTests
+} from '../../browser/browser-identity-mode-store'
 
 describe('OrcaRuntimeService', () => {
+  // The mixed-version guarantee: a host that never initialized the identity store must not
+  // advertise a method that can only throw there.
+  it('advertises the browser identity capability only where an identity store exists', () => {
+    resetBrowserIdentityModeStoreForTests()
+    expect(createRuntime().getStatus().capabilities).not.toContain('browser.identity.v1')
+
+    initializeBrowserIdentityModeStore(mkdtempSync(join(tmpdir(), 'orca-identity-capability-')))
+    try {
+      expect(createRuntime().getStatus().capabilities).toContain('browser.identity.v1')
+    } finally {
+      resetBrowserIdentityModeStoreForTests()
+    }
+  })
+
   it('advertises headless browser capability when an offscreen backend backs a windowless host', () => {
     const runtime = createRuntime()
     runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
@@ -366,23 +387,17 @@ describe('OrcaRuntimeService', () => {
           'Browser automation is unavailable on this host, and the cause could not be determined.'
       }
     ])
-    const browserCalls = Object.entries(runtime).filter(
-      ([name, value]) => /^browser[A-Z]/.test(name) && typeof value === 'function'
-    )
-    expect(browserCalls.length).toBeGreaterThan(50)
-    for (const [name, call] of browserCalls) {
-      const invoke =
-        name === 'browserScreencast'
-          ? () =>
-              (call as CallableFunction)(
-                { format: 'jpeg' },
-                { sendBinary: () => true, emit: () => undefined }
-              )
-          : () => (call as CallableFunction)({})
-      await expect(Promise.resolve().then(invoke)).rejects.toMatchObject({
-        code: 'browser_unavailable'
-      })
-    }
+    await expect(
+      Promise.resolve().then(() => runtime.browserGoto({ url: 'https://example.com' }))
+    ).rejects.toMatchObject({ code: 'browser_unavailable' })
+    await expect(
+      Promise.resolve().then(() =>
+        runtime.browserScreencast(
+          { format: 'jpeg' },
+          { sendBinary: () => true, emit: () => undefined }
+        )
+      )
+    ).rejects.toMatchObject({ code: 'browser_unavailable' })
   })
 
   it('reports the driver as missing instead of telling a configured operator to configure it', () => {

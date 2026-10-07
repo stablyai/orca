@@ -3,13 +3,22 @@ import type {
   EnrichedDetectedPort,
   SshConnectionState,
   SshConnectionStatus,
+  SshManagedServerStatus,
+  SshManagedServerUpdateNote,
+  SshPlainSshMode,
   SshProviderEpoch
+} from './ssh-types'
+import {
+  SSH_MANAGED_SERVER_PHASES,
+  SSH_MANAGED_SERVER_RELAY_REASONS,
+  SSH_MANAGED_SERVER_UPDATE_STATES
 } from './ssh-types'
 import { clampUtf8TextPrefix, measureUtf8ByteLength } from './utf8-byte-limits'
 
 export const SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES = 1024
 export const SSH_CONNECTION_ERROR_MAX_UTF8_BYTES = 16 * 1024
 export const SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES = 128
+const SSH_PLAIN_SSH_REASON_MAX_UTF8_BYTES = 64
 export const SSH_DETECTED_PORTS_MAX_ENTRIES = 50
 export const SSH_DETECTED_PORT_HOST_MAX_UTF8_BYTES = 1024
 export const SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES = 4 * 1024
@@ -92,7 +101,105 @@ export function admitSshConnectionState(
     input.remotePlatform === 'darwin' ||
     input.remotePlatform === 'win32'
       ? { remotePlatform: input.remotePlatform }
-      : {})
+      : {}),
+    ...admitSshPlainSshMode(input.plainSsh),
+    ...admitSshManagedServerStatus(input.managedServer)
+  }
+}
+
+// Why field-by-field like plainSsh: an unknown kind from a newer host drops alone.
+function admitSshManagedServerStatus(value: unknown): { managedServer?: SshManagedServerStatus } {
+  if (!value || typeof value !== 'object' || !('kind' in value)) {
+    return {}
+  }
+  if (value.kind === 'managed' && 'environmentId' in value) {
+    if (!isSshRetainedIdentifier(value.environmentId)) {
+      return {}
+    }
+    const update = admitSshManagedServerUpdateNote('update' in value ? value.update : undefined)
+    const serving =
+      'serving' in value &&
+      value.serving &&
+      typeof value.serving === 'object' &&
+      'state' in value.serving &&
+      value.serving.state === 'unverifiable' &&
+      'detail' in value.serving &&
+      typeof value.serving.detail === 'string'
+        ? {
+            serving: {
+              state: 'unverifiable' as const,
+              detail: clampUtf8TextPrefix(value.serving.detail, SSH_CONNECTION_ERROR_MAX_UTF8_BYTES)
+            }
+          }
+        : {}
+    return {
+      managedServer: { kind: 'managed', environmentId: value.environmentId, ...update, ...serving }
+    }
+  }
+  if (value.kind === 'setting-up' && 'phase' in value) {
+    const phase = SSH_MANAGED_SERVER_PHASES.find((entry) => entry === value.phase)
+    return phase ? { managedServer: { kind: 'setting-up', phase } } : {}
+  }
+  if (value.kind !== 'relay' || !('reason' in value)) {
+    return {}
+  }
+  const reason = SSH_MANAGED_SERVER_RELAY_REASONS.find((entry) => entry === value.reason)
+  if (!reason) {
+    return {}
+  }
+  const detail = 'detail' in value && typeof value.detail === 'string' ? value.detail : ''
+  const terminals = 'terminals' in value ? value.terminals : undefined
+  return {
+    managedServer: {
+      kind: 'relay',
+      reason,
+      ...(detail
+        ? { detail: clampUtf8TextPrefix(detail, SSH_CONNECTION_ERROR_MAX_UTF8_BYTES) }
+        : {}),
+      ...(isNonNegativeSafeInteger(terminals) ? { terminals } : {}),
+      ...('offerMove' in value && value.offerMove === true ? { offerMove: true } : {}),
+      ...('terminalsElsewhere' in value && value.terminalsElsewhere === true
+        ? { terminalsElsewhere: true }
+        : {})
+    }
+  }
+}
+
+// Why alone: an unknown note from a newer host drops without hiding that the host is managed.
+function admitSshManagedServerUpdateNote(value: unknown): { update?: SshManagedServerUpdateNote } {
+  if (!value || typeof value !== 'object' || !('state' in value)) {
+    return {}
+  }
+  const state = SSH_MANAGED_SERVER_UPDATE_STATES.find((entry) => entry === value.state)
+  if (!state) {
+    return {}
+  }
+  const detail = 'detail' in value && typeof value.detail === 'string' ? value.detail : ''
+  return {
+    update: {
+      state,
+      ...(detail
+        ? { detail: clampUtf8TextPrefix(detail, SSH_CONNECTION_ERROR_MAX_UTF8_BYTES) }
+        : {})
+    }
+  }
+}
+
+// Why field-by-field: a malformed optional mode must drop alone, never the whole state.
+function admitSshPlainSshMode(value: unknown): { plainSsh?: SshPlainSshMode } {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  const reason = 'reason' in value ? value.reason : undefined
+  const message = 'message' in value ? value.message : undefined
+  if (typeof reason !== 'string' || typeof message !== 'string' || !reason || !message) {
+    return {}
+  }
+  return {
+    plainSsh: {
+      reason: clampUtf8TextPrefix(reason, SSH_PLAIN_SSH_REASON_MAX_UTF8_BYTES),
+      message: clampUtf8TextPrefix(message, SSH_CONNECTION_ERROR_MAX_UTF8_BYTES)
+    }
   }
 }
 
@@ -117,7 +224,9 @@ export function admitSshConnectionStateForAuthorityReconciliation(
       error: input.error,
       reconnectAttempt: input.reconnectAttempt,
       supportsFolderDownload: input.supportsFolderDownload,
-      remotePlatform: input.remotePlatform
+      remotePlatform: input.remotePlatform,
+      plainSsh: input.plainSsh,
+      managedServer: input.managedServer
     },
     expectedTargetId
   )

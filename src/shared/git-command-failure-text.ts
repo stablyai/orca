@@ -25,3 +25,16 @@ export function readGitCommandFailureText(error: unknown): string {
   }
   return parts.join('\n')
 }
+
+export function readGitCommandFailureStderr(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('stderr' in error)) {
+    return null
+  }
+  if (typeof error.stderr === 'string') {
+    return error.stderr
+  }
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(error.stderr)) {
+    return error.stderr.toString('utf8')
+  }
+  return null
+}

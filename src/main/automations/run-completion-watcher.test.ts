@@ -1,3 +1,4 @@
+import { closeTestStores, createStore, testState } from '../persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,9 +11,7 @@ import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
-const testState = { dir: '' }
 const ipcHandlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
 vi.mock('electron', () => ({
@@ -30,14 +29,6 @@ vi.mock('electron', () => ({
     decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8').slice('encrypted:'.length)
   }
 }))
-
-async function createStore() {
-  vi.resetModules()
-  installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store, initDataPath } = await import('../persistence')
-  initDataPath()
-  return new Store()
-}
 
 const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
   id: 'r1',
@@ -97,7 +88,8 @@ describe('authority-owned automation run completion', () => {
     ipcHandlers.clear()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -168,6 +160,9 @@ describe('authority-owned automation run completion', () => {
   it('reconciles stranded runs on startup without claiming completion', async () => {
     const store = await createStore()
     const automation = createAutomation(store)
+    store.updateAutomation(automation.id, { enabled: false })
+    const pendingManual = store.createAutomationRun(automation, 3_000, 'manual')
+    const pendingScheduled = store.createAutomationRun(automation, 4_000, 'scheduled')
     const dispatched = store.createAutomationRun(automation, 1_000, 'manual')
     store.updateAutomationRun({
       runId: dispatched.id,
@@ -199,6 +194,11 @@ describe('authority-owned automation run completion', () => {
     expect(readRun(store, automation.id, dispatching.id).status).toBe('dispatch_failed')
     expect(readRun(store, automation.id, dispatched.id).error).toContain('terminal')
     expect(readRun(store, automation.id, dispatching.id).error).toContain('agent started')
+    expect(readRun(store, automation.id, pendingManual.id)).toMatchObject({
+      status: 'dispatch_failed',
+      error: 'Orca stopped before this manual run could launch.'
+    })
+    expect(readRun(store, automation.id, pendingScheduled.id).status).toBe('pending')
     service.stop()
     vi.useRealTimers()
   })
@@ -322,7 +322,8 @@ describe('automationsChanged publication', () => {
     ipcHandlers.clear()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -341,7 +342,7 @@ describe('automationsChanged publication', () => {
     })
 
     const run = await service.runNow(automation.id)
-    expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run'])
+    expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run', 'run'])
     expect(seen.at(-1)?.status).toBe('dispatched')
 
     await service.markDispatchResult({
@@ -350,7 +351,7 @@ describe('automationsChanged publication', () => {
       ...LAUNCH_TARGET,
       error: null
     })
-    expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run', 'run', 'usage'])
+    expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run', 'run', 'run', 'usage'])
     expect(seen.at(-1)?.status).toBe('completed')
     // Every run/usage write names its own host, so one automation's run cannot
     // invalidate the rest of the authority.

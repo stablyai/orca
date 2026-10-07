@@ -43,6 +43,7 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { RuntimeRpcFailureError } from './runtime-client'
 
 function buildSetup(overrides: {
   id: string
@@ -99,7 +100,7 @@ describe('orca cli worktree awareness', () => {
       comment: undefined,
       runHooks: false,
       activate: true,
-      navigation: 'all',
+      navigation: 'host',
       parentWorktree: undefined,
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
@@ -587,5 +588,30 @@ describe('orca cli worktree awareness', () => {
       'worktree.create',
       expect.objectContaining({ cliProvenanceRequest: {} })
     )
+  })
+
+  it('tells the user which --setup flag answers an undecided ask repo', async () => {
+    callMock.mockRejectedValueOnce(
+      new RuntimeRpcFailureError({
+        id: 'req_create',
+        ok: false,
+        error: { code: 'runtime_error', message: 'Setup decision required for this repository' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--no-parent'],
+      '/tmp/repo'
+    )
+
+    expect(errSpy.mock.calls.flat().join('\n')).toBe(
+      'Setup decision required for this repository\n' +
+        'Next step: Pass --setup run to run the setup script, or --setup skip to create without it.'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
   })
 })

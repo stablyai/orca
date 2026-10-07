@@ -3,6 +3,7 @@ import type { RelayDispatcher } from './dispatcher'
 import { setupDaemonHandshake } from './relay-handshake'
 import { relayLogLine } from './relay-diagnostic-log'
 import type { RelaySocketOwnership } from './relay-socket-ownership'
+import { isRelaySocketPeerClosed } from './relay-socket-peer-close'
 
 type RelayReconnectCallbacks = {
   detachPrimaryInput: () => void
@@ -14,14 +15,22 @@ export class RelayReconnectListener {
   private readonly socketClients = new Map<Socket, number>()
   private acceptedSocketConnections = 0
   private acceptedSocketClient = false
+  private endpointCredential: string | undefined
+  private endpointCredentialPublished = false
 
   constructor(
     private readonly dispatcher: RelayDispatcher,
     readonly ownership: RelaySocketOwnership,
     private readonly launchVersion: string,
-    private readonly endpointCredential: string | undefined,
+    private readonly credentialFile: string | undefined,
     private readonly callbacks: RelayReconnectCallbacks
   ) {}
+
+  /** Set once the bind succeeded and the file is published; fixed for the process lifetime. */
+  setEndpointCredential(credential: string | undefined): void {
+    this.endpointCredential = credential
+    this.endpointCredentialPublished = true
+  }
 
   get clientCount(): number {
     return this.socketClients.size
@@ -40,12 +49,23 @@ export class RelayReconnectListener {
   }
 
   private acceptConnection(socket: Socket): void {
+    // Why fail closed: the credential is set right after listen() resolves, and today no
+    // connection can be delivered in between. Do not let an auth boundary rest on event-loop
+    // ordering — a client that arrives before publication is refused, never admitted unproved.
+    if (this.credentialFile !== undefined && !this.endpointCredentialPublished) {
+      relayLogLine('[relay] Client arrived before the endpoint credential was published; refusing')
+      socket.destroy()
+      return
+    }
     setupDaemonHandshake(socket, {
       launchVersion: this.launchVersion,
       endpointCredential: this.endpointCredential,
       onAccepted: (acceptedSocket, leftover) => this.attachAcceptedSocket(acceptedSocket, leftover)
     })
     socket.on('end', () => {
+      // Why detach first: a relay write between this destroy and 'close' fails, and the dispatcher
+      // would close the client as 'local', holding its PTY owner for the full grace (seen on Windows).
+      this.detachSocketClient(socket)
       if (!socket.destroyed) {
         socket.destroy()
       }
@@ -77,10 +97,18 @@ export class RelayReconnectListener {
     socket.on('error', flushDrainWaiters)
     const clientId = this.dispatcher.attachClient(
       (data, onSettled) => {
+        // Why detach before settling: a failed settlement closes the client as 'local', and a peer
+        // that reset the pipe must get the peer-closed grace floor, not the full grace.
         if (!socket.destroyed) {
           return socket.write(data, (error) => {
+            if (error && isRelaySocketPeerClosed(socket, error)) {
+              this.detachSocketClient(socket)
+            }
             onSettled(error ? { ok: false, error } : { ok: true })
           })
+        }
+        if (isRelaySocketPeerClosed(socket)) {
+          this.detachSocketClient(socket)
         }
         onSettled({ ok: false, error: new Error('Relay socket is closed') })
         return false
@@ -117,12 +145,16 @@ export class RelayReconnectListener {
     })
   }
 
-  private handleSocketClose(socket: Socket): void {
+  private detachSocketClient(socket: Socket): void {
     const clientId = this.socketClients.get(socket)
     this.socketClients.delete(socket)
     if (clientId !== undefined) {
       this.dispatcher.detachClient(clientId, 'peer-closed')
     }
+  }
+
+  private handleSocketClose(socket: Socket): void {
+    this.detachSocketClient(socket)
     relayLogLine(`[relay] Socket client closed (clients=${this.socketClients.size})`)
     if (this.socketClients.size === 0) {
       this.callbacks.onLastClientClosed()

@@ -1,8 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import {
-  DEFAULT_AGENTS_GROUP_BY,
-  DEFAULT_AGENTS_READ_FILTER
-} from '../../../../../shared/agents-view-thread-filters'
+import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
@@ -38,6 +35,7 @@ import {
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
 } from '../../../../../shared/workspace-statuses'
 
+/** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     sidebarBody: 'workspaces',
@@ -69,9 +67,6 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       const normalized = normalizeExecutionHostScope(scope)
       const visibleWorkspaceHostIds = normalized === 'all' ? null : [normalized]
       set({ workspaceHostScope: normalized, visibleWorkspaceHostIds })
-      window.api.ui
-        .set({ workspaceHostScope: normalized, visibleWorkspaceHostIds })
-        .catch(console.error)
     },
     visibleWorkspaceHostIds: null,
     setVisibleWorkspaceHostIds: (ids) => {
@@ -84,9 +79,6 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         workspaceHostScope = normalized[0]
       }
       set({ visibleWorkspaceHostIds: normalized, workspaceHostScope })
-      window.api.ui
-        .set({ visibleWorkspaceHostIds: normalized, workspaceHostScope })
-        .catch(console.error)
     },
     workspaceHostOrder: [],
     setWorkspaceHostOrder: (ids) => {
@@ -116,6 +108,19 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     alwaysShowDefaultBranchWorkspace: true,
     setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
 
+    explorerDisplayRootByWorktree: {},
+    /** Stores an explicit root choice while rejecting empty IDs and prototype-related record keys. */
+    setExplorerDisplayRootForWorktree: (worktreeId, value) => {
+      if (!worktreeId || ['__proto__', 'constructor', 'prototype'].includes(worktreeId)) {
+        return
+      }
+      set((s) => ({
+        explorerDisplayRootByWorktree: {
+          ...s.explorerDisplayRootByWorktree,
+          [worktreeId]: value
+        }
+      }))
+    },
     showDotfilesByWorktree: {},
     setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
       set((s) => {
@@ -153,37 +158,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     filterRepoIds: [],
     setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
-    agentsVisibleHostIds: null,
-    setAgentsVisibleHostIds: (ids) => {
-      const agentsVisibleHostIds = normalizeVisibleExecutionHostIds(ids)
-      set({ agentsVisibleHostIds })
-      window.api.ui.set({ agentsVisibleHostIds }).catch(console.error)
-    },
-    agentsFilterRepoIds: [],
-    setAgentsFilterRepoIds: (ids) => {
-      set({ agentsFilterRepoIds: ids })
-      window.api.ui.set({ agentsFilterRepoIds: [...ids] }).catch(console.error)
-    },
-    agentsShowChildAgents: false,
-    setAgentsShowChildAgents: (v) => {
-      set({ agentsShowChildAgents: v })
-      window.api.ui.set({ agentsShowChildAgents: v }).catch(console.error)
-    },
-    agentsCompactMode: true,
-    setAgentsCompactMode: (v) => {
-      set({ agentsCompactMode: v })
-      window.api.ui.set({ agentsCompactMode: v }).catch(console.error)
-    },
-    agentsReadFilter: DEFAULT_AGENTS_READ_FILTER,
-    setAgentsReadFilter: (v) => {
-      set({ agentsReadFilter: v })
-      window.api.ui.set({ agentsReadFilter: v }).catch(console.error)
-    },
-    agentsGroupBy: DEFAULT_AGENTS_GROUP_BY,
-    setAgentsGroupBy: (v) => {
-      set({ agentsGroupBy: v })
-      window.api.ui.set({ agentsGroupBy: v }).catch(console.error)
-    },
+    ...createAgentsViewPreferenceActions(set),
 
     collapsedGroups: new Set<string>(),
     toggleCollapsedGroup: (key) =>

@@ -1,5 +1,6 @@
 import type { OrchestrationDb } from './db'
 import type { MessageRow, WorkerReportOutcome } from './types'
+import { workerReportObservation } from './worker-report-observation'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 
 // Why: the tab half can change on pane break-out, while opaque legacy keys
@@ -40,7 +41,6 @@ export type LifecycleReconciliationResult =
 
 export type LifecycleRejectionCode =
   | 'sender_not_assignee'
-  | 'dispatch_capability_invalid'
   | 'invalid_payload'
   | 'missing_task_id'
   | 'missing_dispatch_id'
@@ -289,7 +289,8 @@ function reconcileWorkerDoneMessage(
     taskId,
     dispatchId,
     outcome: outcome as WorkerReportOutcome,
-    result
+    result,
+    observation: workerReportObservation(msg)
   })
   if (settlement.action === 'rejected') {
     return rejectLifecycleMessage(db, msg, settlement.code, settlement.reason, onLog)

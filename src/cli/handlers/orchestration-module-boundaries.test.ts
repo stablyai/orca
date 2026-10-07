@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 
 import { printResult } from '../format'
-import { HANDLER_GROUPS } from '../handler-group-manifest'
-import { ORCHESTRATION_HANDLERS } from './orchestration'
 import {
   ORCHESTRATION_DISPATCH_HANDLER,
   ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS
@@ -38,11 +36,6 @@ describe('extracted orchestration flag parsing', () => {
   })
 })
 
-it('composes handlers in the canonical command order', () => {
-  const declared = HANDLER_GROUPS.find((group) => group.name === 'orchestration')?.keys
-  expect(Object.keys(ORCHESTRATION_HANDLERS)).toEqual(declared)
-})
-
 describe('extracted orchestration worker formatting', () => {
   it('renders terminal tails without changing line boundaries', () => {
     expect(
@@ -60,6 +53,7 @@ describe('extracted orchestration worker formatting', () => {
     expect(
       formatWorkerRead({
         source: 'transcript',
+        provider: 'codex',
         transcript: {
           messages: [
             {
@@ -74,11 +68,20 @@ describe('extracted orchestration worker formatting', () => {
               timestamp: null,
               source: 'transcript'
             }
-          ]
-        }
+          ],
+          nextCursor: 'owr1_next',
+          limited: false,
+          returnedMessageCount: 1
+        },
+        cursor: 'owr1_next',
+        fallbackReason: null,
+        warnings: []
       } as never)
     ).toBe(
-      '[assistant] working\n[tool inspect] [unserializable input]\n[tool result error] failed\n[image] https://example.test/proof.png'
+      'Source: transcript (provider=codex)\n' +
+        'Archived: false\n' +
+        'Continuation cursor (opaque; pass unchanged to --cursor): owr1_next\n\n' +
+        '[assistant] working\n[tool inspect] [unserializable input]\n[tool result error] failed\n[image] https://example.test/proof.png'
     )
   })
 

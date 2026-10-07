@@ -39,6 +39,7 @@ describe('exact worker provider session selection', () => {
     expect(selected).toEqual({
       paneKey: 'tab:worker',
       processIncarnation: 'pty:incarnation',
+      connectionId: 'ssh-windows',
       agent: 'codex',
       providerSession: { key: 'session_id', id: 'exact' },
       observedAt: 250
@@ -73,6 +74,52 @@ describe('exact worker provider session selection', () => {
         launchToken: 'launch-new',
         observedAfter: 0,
         statuses: [status('tab:worker', 'prior', { launchToken: 'launch-old' })]
+      })
+    ).toBeNull()
+  })
+
+  it('accepts the matching WSL relay provenance for a local PTY', () => {
+    const selected = selectExactWorkerProviderSession({
+      paneKey: 'tab:worker',
+      processIncarnation: 'pty:wsl-incarnation',
+      connectionId: null,
+      wslDistro: 'Ubuntu',
+      launchToken: undefined,
+      observedAfter: 150,
+      statuses: [
+        status('tab:worker', 'wsl-session', {
+          connectionId: 'wsl:Ubuntu',
+          receivedAt: 250,
+          providerSession: {
+            key: 'session_id',
+            id: 'wsl-session',
+            transcriptPath: '/home/ada/.codex/sessions/rollout-wsl.jsonl'
+          }
+        })
+      ]
+    })
+
+    expect(selected).toMatchObject({
+      paneKey: 'tab:worker',
+      processIncarnation: 'pty:wsl-incarnation',
+      connectionId: 'wsl:Ubuntu',
+      wslDistro: 'Ubuntu',
+      providerSession: { id: 'wsl-session' }
+    })
+    expect(Object.keys(selected ?? {})).toContain('connectionId')
+    expect(JSON.stringify(selected)).toContain('wsl:Ubuntu')
+  })
+
+  it('rejects WSL relay provenance for a different local distro', () => {
+    expect(
+      selectExactWorkerProviderSession({
+        paneKey: 'tab:worker',
+        processIncarnation: 'pty:wsl-incarnation',
+        connectionId: null,
+        wslDistro: 'Ubuntu',
+        launchToken: undefined,
+        observedAfter: 150,
+        statuses: [status('tab:worker', 'wrong-distro', { connectionId: 'wsl:Debian' })]
       })
     ).toBeNull()
   })

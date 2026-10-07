@@ -1,5 +1,6 @@
 // Why: regression coverage for the install-probe contract — the "node-pty is not available" bug shipped because every guard layer was silent.
 
+import type * as RelayRipgrepInstallModule from './ssh-relay-ripgrep-install'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
@@ -42,6 +43,18 @@ vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
   createRelayInstallMarkerFileName: () => '.sftp-namespace-00000000000000000000000000000000'
 }))
 
+// Why: the post-launch ripgrep install would consume this file's queued exec mocks.
+// Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
+vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
+vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
+  ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
+  ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue('present'),
+  recordRemoteRipgrepReference: vi.fn().mockResolvedValue(true)
+}))
+
 vi.mock('./ssh-relay-versioned-install', () => ({
   readLocalFullVersion: vi.fn().mockReturnValue('0.1.0+testhash'),
   computeRemoteRelayDir: (home: string, v: string) => `${home}/.orca-remote/relay-${v}`,
@@ -78,6 +91,7 @@ import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import {
   abandonInstall,
   finalizeInstall,
+  gcOldRelayVersions,
   isRelayAlreadyInstalled
 } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
@@ -403,10 +417,13 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     feed([
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
       '/home/u',
-      { reject: 'Command "node -e ..." timed out after 30s' } // health probe never answered
+      { reject: 'Command "node -e ..." timed out after 30s' }, // health probe never answered
+      '', // launch namespace marker
+      'DEAD',
+      'READY'
     ])
 
-    await deployAndLaunchRelay(conn).catch(() => {})
+    const outcome = await deployAndLaunchRelay(conn).catch((error: Error) => error)
 
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
     expect(execCalls.some((c) => c.includes('npm install'))).toBe(false)
@@ -414,9 +431,19 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
     const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
     expect(warnMessages.some((m) => m.includes('Repairing missing native deps'))).toBe(false)
-    // Why no log assertion: the behavioural claim above is the real one. Asserting on warn text
-    // pinned wording that main's landed probe verdict does not use, and #18000 adds its own.
+    // Probe diagnostic wording changes independently of the repair contract.
     expect(execCalls.some((c) => c.includes("rm -rf 'node_modules/node-pty'"))).toBe(false)
+    expect(execCalls.filter((command) => command.includes('ORCA-NATIVE-DEPS-OK'))).toHaveLength(1)
+    const healthProbeIndex = execCalls.findIndex((command) =>
+      command.includes('ORCA-NATIVE-DEPS-OK')
+    )
+    await expect(vi.mocked(execCommand).mock.results[healthProbeIndex].value).rejects.toThrow(
+      'Command "node -e ..." timed out after 30s'
+    )
+    expect(
+      outcome,
+      'an unanswered health probe must still allow an intact relay to launch'
+    ).not.toBeInstanceOf(Error)
   })
 
   it('lets a probe SSH-channel failure bubble up rather than silently mapping to MISSING', async () => {
@@ -561,7 +588,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '', // clean stage root
       '', // no persisted active pipe marker
       'WAITING', // initial pipe probe
-      '', // publish the per-launch credential
       '', // WMI relay launch
       'READY', // readiness poll
       '' // persist active pipe marker
@@ -620,6 +646,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     const conn1 = makeMockConnection(sftpCapture)
     feed(makeExecResponses({ npmInstall: 'ok', probe: 'ok' }))
     await deployAndLaunchRelay(conn1)
+    await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalled())
     const firstPath = sftpCapture.paths.find((p) => p.endsWith('/package.json')) as string
     const first = sftpCapture.contents[firstPath]
 
@@ -657,7 +684,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '', // rm probe stderr
       'ORCA-NPTY-CLOEXEC:patched\n', // pty-master cloexec patch on the loadable node-pty
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -895,7 +921,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       'ORCA-NATIVE-DEPS-OK',
       '', // launch namespace marker
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -920,7 +945,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       'ORCA-NATIVE-DEPS-OK',
       '', // launch namespace marker
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 

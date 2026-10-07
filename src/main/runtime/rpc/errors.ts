@@ -2,7 +2,13 @@
 // runtime/browser error allowlists define the contract the CLI relies on to
 // format human-facing messages. Centralizing this mapping keeps the allowlist
 // auditable in one place instead of spread across per-method branches.
+import {
+  agentSessionRefusalReference,
+  isAgentSessionRefusalError,
+  type AgentSessionRefusalError
+} from '../../../shared/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
@@ -22,6 +28,12 @@ import {
 } from '../../../shared/skill-install-failure'
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
+import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
+import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
+import { WORKTREE_CREATE_COLLISION_CODE } from '../../../shared/new-workspace/worktree-create-collision'
+import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launch-pane-already-live'
+import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch-session-already-exists'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -52,6 +64,11 @@ export function errorResponse(
 // on — expanding or renaming entries without updating the CLI would silently
 // change user-visible error codes.
 const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  WORKTREE_CREATE_COLLISION_CODE,
+  AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE,
+  AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE,
+  AGENT_LAUNCH_TAB_CLOSED_CODE,
+  'agent_launch_replay_unsupported',
   'runtime_unavailable',
   'selector_not_found',
   'selector_ambiguous',
@@ -78,6 +95,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  WORKTREE_CREATE_COLLISION_CODE,
   'worktree_id_requires_full_path',
   'run_not_found',
   'run_required',
@@ -89,6 +107,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'dispatch_not_found',
   'dispatch_run_mismatch',
   'terminal_not_found',
+  // A handle that names a live agent session with no terminal. Distinct from
+  // `terminal_handle_stale`, which claims the handle went dead — nothing went stale here.
+  'terminal_unsupported_for_agent_session',
   'recipient_ambiguous',
   'recipient_run_mismatch',
   'dispatch_inactive',
@@ -108,17 +129,27 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'relay_quota_exceeded',
   'dispatch_capability_invalid',
   'agent_unconfigured',
+  'worker_prompt_too_large',
   'terminal_worktree_mismatch',
+  'terminal_is_coordinator',
   'request_mismatch',
   'mutation_ledger_full',
   'legacy_read_only',
   'orchestration_migration_required',
   'operation_unknown',
+  'dispatch_preamble_undelivered',
   'question_not_found',
   'answer_conflict',
   'stale_delivery',
   'waiter_exists',
   'invalid_argument',
+  // Why (#19334): "your archive hook failed, nothing was deleted" is a distinct decision — retry,
+  // waive, or skip the hook. Flattened to runtime_error a caller can only pattern-match the text.
+  ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
+  // Why here and not only on the transport: a method that admits paired clients only refuses
+  // with the same code the mobile-allowlist check does, so a caller reads one answer either way.
+  'forbidden',
+  NESTED_WORKER_DEPTH_EXCEEDED_CODE,
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,
   AGENT_SKILL_SHARING_DISABLED_CODE,
@@ -130,11 +161,15 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   SKILL_INSTALL_RPC_ERROR_CODE,
   // Why: an owner conflict is a distinct client decision (reload the host, re-adopt,
   // stop offering the action) — flattened to runtime_error it can only be guessed at.
-  ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES)
+  ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
+  ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES)
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
+  if (isAgentSessionRefusalError(error)) {
+    return agentSessionRefusalErrorResponse(id, meta, error)
+  }
   if (
     error instanceof Error &&
     'code' in error &&
@@ -203,6 +238,27 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     return errorResponse(id, meta, 'invalid_argument', 'Missing terminal send payload')
   }
   return errorResponse(id, meta, 'runtime_error', message)
+}
+
+/**
+ * A thrown agent-session refusal, mapped before any `'code' in error` passthrough so no other
+ * subsystem's code set can claim it. Wire code and message are exactly what the bare `Error(code)`
+ * it replaced produced — released clients classify both — and the refusal's details ride only in
+ * `data`, which they ignore.
+ */
+function agentSessionRefusalErrorResponse(
+  id: string,
+  meta: RpcEnvelopeMeta,
+  error: AgentSessionRefusalError
+): RpcFailure {
+  const { code } = error.refusal
+  return errorResponse(
+    id,
+    meta,
+    RUNTIME_PASSTHROUGH_CODES.has(code) ? code : 'runtime_error',
+    code,
+    { refusal: agentSessionRefusalReference(error.refusal) }
+  )
 }
 
 export const computerErrorData = computerUseErrorRecoveryData

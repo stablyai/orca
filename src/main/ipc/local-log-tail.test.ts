@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 
 const { handlers, watchMock, resolveAuthorizedPathMock, readRangeMock } = vi.hoisted(() => ({
   handlers: new Map<string, (...args: any[]) => unknown>(),
@@ -17,7 +18,9 @@ vi.mock('electron', () => ({
 
 vi.mock('node:fs', () => ({ watch: watchMock }))
 
-vi.mock('./filesystem-auth', () => ({ resolveAuthorizedPath: resolveAuthorizedPathMock }))
+vi.mock('./local-file-access-resolution', () => ({
+  resolveUserNamedRegularFile: resolveAuthorizedPathMock
+}))
 
 vi.mock('../ai-vault/local-log-tail-reader', () => ({
   readLocalLogTailRange: readRangeMock
@@ -28,6 +31,10 @@ import {
   getActiveLocalLogTailWatcherCount,
   registerLocalLogTailHandlers
 } from './local-log-tail'
+import type { Store } from '../persistence'
+
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: path resolution is mocked, so the store is never read.
+const NO_STORE = {} as Store
 
 type FakeWatcher = {
   close: ReturnType<typeof vi.fn>
@@ -49,18 +56,13 @@ function makeWatcher(): FakeWatcher {
 }
 
 function makeSender(id: number) {
-  let destroyedListener: (() => void) | undefined
-  return {
+  const sender = new EventEmitter()
+  return Object.assign(sender, {
     id,
     send: vi.fn(),
     isDestroyed: vi.fn(() => false),
-    once: vi.fn((event: string, listener: () => void) => {
-      if (event === 'destroyed') {
-        destroyedListener = listener
-      }
-    }),
-    destroy: () => destroyedListener?.()
-  }
+    destroy: () => sender.emit('destroyed')
+  })
 }
 
 beforeEach(() => {
@@ -68,7 +70,7 @@ beforeEach(() => {
   watchMock.mockReset()
   resolveAuthorizedPathMock.mockReset().mockImplementation(async (path: string) => path)
   readRangeMock.mockReset()
-  registerLocalLogTailHandlers({} as never)
+  registerLocalLogTailHandlers(NO_STORE)
 })
 
 afterEach(() => {
@@ -91,7 +93,7 @@ describe('local log tail IPC', () => {
     )
     emitChange?.('change')
 
-    expect(resolveAuthorizedPathMock).toHaveBeenCalledWith('/logs/session.jsonl', expect.anything())
+    expect(resolveAuthorizedPathMock).toHaveBeenCalledWith('/logs/session.jsonl', NO_STORE)
     expect(watchMock).toHaveBeenCalledWith('/logs/session.jsonl', expect.any(Function))
     expect(sender.send).toHaveBeenCalledWith('fs:localLogTailChanged', {
       subscriptionId: 'tail-1',
@@ -123,5 +125,21 @@ describe('local log tail IPC', () => {
     expect(first.close).toHaveBeenCalledTimes(1)
     expect(second.close).toHaveBeenCalledTimes(1)
     expect(getActiveLocalLogTailWatcherCount()).toBe(0)
+  })
+  it('ignores errors from a retired watcher after a same-ID replacement', async () => {
+    const first = makeWatcher()
+    const second = makeWatcher()
+    watchMock.mockReturnValueOnce(first).mockReturnValueOnce(second)
+    const sender = makeSender(10)
+    const args = { filePath: '/logs/session.jsonl', subscriptionId: 'tail' }
+    await handlers.get('fs:startLocalLogTail')?.({ sender }, args)
+    await handlers.get('fs:startLocalLogTail')?.({ sender }, args)
+
+    first.emitError()
+
+    expect(first.close).toHaveBeenCalledTimes(1)
+    expect(second.close).not.toHaveBeenCalled()
+    expect(sender.send).not.toHaveBeenCalled()
+    expect(getActiveLocalLogTailWatcherCount()).toBe(1)
   })
 })

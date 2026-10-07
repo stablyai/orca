@@ -18,6 +18,7 @@ const TERRAFORM_ROOTS = {
       'infra/terraform/relay-shared.tf',
       'infra/terraform/relay-github-workflow-trust.tf',
       'infra/terraform/relay-github-actions.tf',
+      'infra/terraform/push-deploy-identity.tf',
       'infra/terraform/relay-staging-deploy-iam.tf',
       'infra/terraform/relay-asia-topology-iam.tf',
       'infra/terraform/relay-asia-proof-iam.tf'
@@ -475,7 +476,7 @@ function collectTfvars(source, variables) {
       offset += line.length + 1
       continue
     }
-    const structured = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?=[[{])/.exec(line)
+    const structured = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*/.exec(line)
     if (structured) {
       try {
         variables[structured[1]] = parseValueAt(source, offset + structured[0].length)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  buildJiraIssueSearchJql,
+  getJiraIssueSearchQuery,
   isSmartWorkspaceSourceQueryWithinLimit
 } from './smart-workspace-source-results'
 import { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
@@ -82,16 +82,16 @@ export function useSmartWorkspaceNameFieldController({
     !textOnly &&
     foundation.linearAvailable &&
     (foundation.mode === 'smart' || foundation.mode === 'linear')
-  const jiraSearchJql =
+  const jiraSearchQuery =
     foundation.mode === 'jira' && !foundation.jiraSource.intent && sourceQueryWithinLimit
-      ? buildJiraIssueSearchJql(foundation.debouncedQuery)
+      ? getJiraIssueSearchQuery(foundation.debouncedQuery)
       : null
   const shouldQueryJira =
     !disabled &&
     !textOnly &&
     foundation.jiraSourceConnected &&
     jiraSourceContext !== null &&
-    jiraSearchJql !== null
+    jiraSearchQuery !== null
 
   useSmartWorkspaceGithubSearch({
     foundation,
@@ -105,7 +105,7 @@ export function useSmartWorkspaceNameFieldController({
     linearUrlIntent,
     linearUrlIntentOwnsInput,
     shouldQueryJira,
-    jiraSearchJql
+    jiraSearchQuery
   })
   const shouldQueryGitlab =
     sourceQueryWithinLimit &&

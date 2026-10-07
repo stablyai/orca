@@ -1,7 +1,7 @@
 import type { AgentStatus } from '../../../shared/agent-detection'
 import { detectAgentStatusFromTitle, getAgentLabel } from '../../../shared/agent-detection'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusEvidenceObservedAt,
@@ -18,14 +18,20 @@ import {
 export function isExplicitAgentStatusFresh(
   entry: Pick<
     AgentStatusEntry,
-    'updatedAt' | 'evidenceObservedAt' | 'mirroredEvidenceReceivedAt' | 'restoredUnconfirmed'
+    | 'updatedAt'
+    | 'evidenceObservedAt'
+    | 'mirroredEvidenceReceivedAt'
+    | 'restoredUnconfirmed'
+    | 'structuredHostOwned'
   >,
   now: number,
   staleAfterMs: number
 ): boolean {
   // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
   return (
-    entry.restoredUnconfirmed !== true && now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs
+    entry.restoredUnconfirmed !== true &&
+    (entry.structuredHostOwned === true ||
+      now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs)
   )
 }
 
@@ -51,7 +57,7 @@ export function resolveTitleActivityLabel(title: string): string | null {
 }
 
 /** See resolveTitleActivityLabel — the strict facet for identity decisions. */
-export function resolveCommittedTitleAgentType(title: string): TuiAgent | null {
+export function resolveCommittedTitleAgentType(title: string): TerminalAgent | null {
   return resolveExplicitTerminalTitleAgentType(title)
 }
 

@@ -20,6 +20,7 @@ import { printHelp } from './help'
 import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
 import { resolveOrchestrationCliExecutable } from './runtime/orchestration-recovery-command'
+import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
 
 export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
@@ -34,11 +35,12 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     // Why: `host list` answers "what can this machine target, and with what flag". Half of that
     // answer (paired servers) is read from this machine's own pairing store and cannot be routed,
     // so routing the other half produced one listing describing two machines at once.
-    commandPath[0] === 'host' ||
+    commandPath.join(' ') === 'host list' ||
     commandPath[0] === 'serve' ||
     commandPath[0] === 'agent' ||
     commandPath[0] === 'vm' ||
-    commandPath[0] === 'agent-context'
+    commandPath[0] === 'agent-context' ||
+    commandPath[0] === 'profile'
   )
 }
 
@@ -83,14 +85,17 @@ export async function main(
     await runClaudeTeams(argv.slice(1), cwd)
     return
   }
-  const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, COMMAND_PATHS))
+  const parsed = normalizeCommandPositionals(
+    COMMAND_SPECS,
+    parseArgs(argv, COMMAND_PATHS, COMMAND_SPECS)
+  )
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
     printHelp(COMMAND_SPECS, helpPath)
     if (
       helpPath.length > 0 &&
       !findCommandSpec(COMMAND_SPECS, helpPath) &&
-      !isCommandGroup(helpPath)
+      !isCommandGroup(COMMAND_SPECS, helpPath)
     ) {
       process.exitCode = 1
     }
@@ -107,6 +112,10 @@ export async function main(
     // lookup so users do not get misleading "Orca is not running" failures for
     // simple command typos or unsupported flags.
     validateCommandAndFlags(COMMAND_SPECS, parsed)
+    refuseConflictingSessionCallerFlags(
+      findCommandSpec(COMMAND_SPECS, parsed.commandPath),
+      parsed.flags
+    )
     const RuntimeClientClass = await loadRuntimeClientClass()
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
@@ -176,7 +185,11 @@ export async function main(
       json
     })
   } catch (error) {
-    reportCliError(error, json, { commandPath: parsed.commandPath })
+    const worktreeSelector = parsed.flags.get('worktree')
+    reportCliError(error, json, {
+      commandPath: parsed.commandPath,
+      ...(typeof worktreeSelector === 'string' ? { worktreeSelector } : {})
+    })
     process.exitCode = 1
   }
 }

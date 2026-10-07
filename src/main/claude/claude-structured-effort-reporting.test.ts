@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
-import {
-  restoreClaudeStructuredSessionOptions,
-  setClaudeStructuredOption
-} from './claude-structured-options'
+import { setClaudeStructuredOption } from './claude-structured-options'
 import { readClaudeSettingsEffort } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'
-import { acquired, fakeClaude } from './claude-structured-session-test-support'
+import { USER_MESSAGE, acquired, fakeClaude } from './claude-structured-session-test-support'
 
 /** Verbatim from Claude Code 2.1.258's get_settings response. */
 const REAL_SETTINGS = {
@@ -22,6 +19,7 @@ function sessionWith(
   listed?: { model: string; catalog: readonly Record<string, unknown>[] }
 ) {
   return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every session member the option paths under test read.
     session: {
       options: new Map<string, string>(listed ? [['model', listed.model]] : []),
       reportedOptions: {} as { model?: string; effort?: string },
@@ -47,7 +45,8 @@ function sessionWith(
             ? { applied: {}, effective: {}, sources: {} }
             : { applied: { effort: reported }, effective: { effortLevel: reported }, sources: {} }
         }
-      }
+      },
+      startup: { state: 'proven' }
     } as unknown as ClaudeSession,
     calls
   }
@@ -91,7 +90,14 @@ describe('Claude effort reporting', () => {
 
   it('keeps the init fixture free of an effort the real frame never sends', async () => {
     const events: ClaudeStructuredSessionEvent[] = []
-    await acquired(fakeClaude(), {}, events)
+    const adapter = await acquired(fakeClaude(), {}, events)
+    // Live: init arrives when the first command starts a cycle, not at startup.
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'seed-cycle',
+      body: USER_MESSAGE,
+      fence: 7
+    })
     const init = events.flatMap((event) =>
       event.type === 'message' && event.message.subtype === 'init' ? [event.message] : []
     )
@@ -228,30 +234,5 @@ describe('Claude effort against the model that must run it', () => {
     await expect(
       setClaudeStructuredOption(session, { key: 'effort', value: 'high' }, undefined)
     ).rejects.toBeInstanceOf(AgentSessionOptionRejectedError)
-  })
-
-  it('keeps a disagreeing effort through restore instead of skipping it', async () => {
-    const calls: string[] = []
-    const { session } = sessionWith('high', calls, { model: 'sonnet', catalog: [SONNET] })
-    session.options.set('effort', 'low')
-
-    await restoreClaudeStructuredSessionOptions(session, undefined)
-
-    expect(session.options.get('effort')).toBe('low')
-    expect(session.restoreSkippedOptions.has('effort')).toBe(false)
-    expect(session.confirmedOptions.has('effort')).toBe(false)
-  })
-
-  it('drops a stale effort on restore instead of replaying it onto the new model', async () => {
-    const calls: string[] = []
-    const { session } = sessionWith('high', calls, { model: 'sonnet', catalog: [HAIKU, SONNET] })
-    session.options.set('model', 'haiku')
-    session.options.set('effort', 'high')
-
-    await restoreClaudeStructuredSessionOptions(session, undefined)
-
-    expect(session.options.has('effort')).toBe(false)
-    expect(session.restoreSkippedOptions.has('effort')).toBe(true)
-    expect(calls.filter((call) => call.startsWith('apply:'))).toEqual([])
   })
 })

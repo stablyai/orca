@@ -17,6 +17,15 @@ export function getDecorativeAgentTitleSignature(title: string): string | null {
   return `${status}:${normalizeDecorativeAgentTitleText(title)}`
 }
 
+/** Equal keys mean the title changed only by spinner decoration. */
+export function getDecorativeTitleGateKey(rawTitle: string, normalizedTitle: string): string {
+  // Stable Pi/Gemini/Grok display normalization also defines their semantic gate.
+  const normalizedSignature =
+    rawTitle === normalizedTitle ? null : getDecorativeAgentTitleSignature(normalizedTitle)
+  const signature = normalizedSignature ?? getDecorativeAgentTitleSignature(rawTitle)
+  return signature === null ? `literal\u0000${normalizedTitle}` : `agent\u0000${signature}`
+}
+
 export function isDecorativeAgentTitleFrameChange(prevTitle: string, nextTitle: string): boolean {
   const prevSignature = getDecorativeAgentTitleSignature(prevTitle)
   return prevSignature !== null && prevSignature === getDecorativeAgentTitleSignature(nextTitle)

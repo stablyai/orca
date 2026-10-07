@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import type { ScrollState } from './pane-manager-types'
+import type { ScrollState, TerminalScrollIntentTarget } from './pane-manager-types'
 import {
   captureLogicalLineAnchor,
   resolveLogicalCellOffsetLine
@@ -8,7 +8,7 @@ import { forceTerminalViewportScrollbarSync } from './terminal-viewport-scrollba
 
 const terminalOutputEpochs = new WeakMap<Terminal, number>()
 const deferredScrollRestores = new WeakMap<
-  object,
+  TerminalScrollIntentTarget,
   {
     cancelled: boolean
     rafIds: number[]
@@ -17,7 +17,7 @@ const deferredScrollRestores = new WeakMap<
   }
 >()
 const pendingFitScrollRestores = new WeakMap<
-  object,
+  TerminalScrollIntentTarget,
   {
     cancelled: boolean
     rafId: number | null
@@ -38,7 +38,7 @@ export function getTerminalOutputEpoch(terminal: Terminal): number {
   return terminalOutputEpochs.get(terminal) ?? 0
 }
 
-export function cancelDeferredScrollRestore(terminal: object): void {
+export function cancelDeferredScrollRestore(terminal: TerminalScrollIntentTarget): void {
   cancelPendingFitScrollRestore(terminal)
   const pending = deferredScrollRestores.get(terminal)
   if (!pending) {
@@ -323,7 +323,7 @@ export function releaseScrollStateMarker(state: ScrollState): void {
   state.firstVisibleLineMarker = state.firstVisibleLogicalLineMarker = undefined
 }
 
-function cancelPendingFitScrollRestore(terminal: object): void {
+function cancelPendingFitScrollRestore(terminal: TerminalScrollIntentTarget): void {
   const pending = pendingFitScrollRestores.get(terminal)
   if (!pending) {
     return

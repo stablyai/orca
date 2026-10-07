@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
-import {
-  generationParamsToActionRecipe,
-  sourceControlTextGenerationDefaultsMatchTarget
-} from './source-control/ai/text-generation-defaults'
+import { sourceControlTextGenerationDefaultsMatchTarget } from './source-control/ai/text-generation-defaults'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')
@@ -40,52 +36,6 @@ describe('sourceControlTextGenerationDefaultsMatchTarget', () => {
           agentArgs: '--model sonnet'
         },
         settings: currentSettings
-      })
-    ).toBe(true)
-  })
-
-  it('returns false when the repo target has no saved override yet', () => {
-    expect(
-      sourceControlTextGenerationDefaultsMatchTarget({
-        actionId: 'commitMessage',
-        target: { type: 'repo', repoId: 'repo-1' },
-        params: {
-          agentId: 'codex',
-          model: 'gpt-5.5',
-          commandInputTemplate: '{basePrompt}',
-          agentArgs: '--model sonnet'
-        },
-        settings: settings(),
-        repo: { sourceControlAi: { enabled: true } } satisfies Pick<Repo, 'sourceControlAi'>
-      })
-    ).toBe(false)
-  })
-
-  it('returns true when the current params match the repo saved recipe', () => {
-    expect(
-      sourceControlTextGenerationDefaultsMatchTarget({
-        actionId: 'commitMessage',
-        target: { type: 'repo', repoId: 'repo-1' },
-        params: {
-          agentId: 'opencode',
-          model: '',
-          commandInputTemplate: '{basePrompt}\n\nrepo only',
-          agentArgs: ''
-        },
-        settings: settings(),
-        repo: {
-          sourceControlAi: {
-            enabled: true,
-            actionOverrides: {
-              commitMessage: generationParamsToActionRecipe({
-                agentId: 'opencode',
-                model: '',
-                commandInputTemplate: '{basePrompt}\n\nrepo only',
-                agentArgs: ''
-              })
-            }
-          }
-        } satisfies Pick<Repo, 'sourceControlAi'>
       })
     ).toBe(true)
   })

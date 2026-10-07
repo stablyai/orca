@@ -8,32 +8,32 @@ export type EventName = keyof EventMap
 export type EventProps<N extends EventName> = EventMap[N]
 
 // Why: non-`ZodObject` schemas have no `.shape`; return null so `key in undefined` can't throw at module load.
-function eventSchemaShape(schema: z.ZodTypeAny): z.ZodRawShape | null {
+// Why `object` and not zod's own field-record type: callers only ask `key in fields`.
+function eventSchemaFields(schema: z.ZodTypeAny): object | null {
   if (schema instanceof z.ZodObject) {
     return schema.shape
   }
 
-  const shapeBearingSchema = schema as { shape?: unknown }
   // Why: refined object schemas may expose `.shape` even when refinement breaks `instanceof ZodObject`.
-  if (shapeBearingSchema.shape && typeof shapeBearingSchema.shape === 'object') {
-    return shapeBearingSchema.shape as z.ZodRawShape
+  if ('shape' in schema && typeof schema.shape === 'object' && schema.shape !== null) {
+    return schema.shape
   }
   return null
 }
 
-function eventsWithShapeKey(key: string): ReadonlySet<EventName> {
+function eventsDeclaringKey(key: string): ReadonlySet<EventName> {
   return new Set(
     (Object.entries(eventSchemas) as [EventName, z.ZodTypeAny][])
       .filter(([, schema]) => {
-        const shape = eventSchemaShape(schema)
-        return shape !== null && key in shape
+        const fields = eventSchemaFields(schema)
+        return fields !== null && key in fields
       })
       .map(([name]) => name)
   )
 }
 
 // Cohort injection is gated on this derived set because `.strict()` schemas drop events that don't declare `nth_repo_added`.
-const COHORT_EXTENDED_SET = eventsWithShapeKey('nth_repo_added')
+const COHORT_EXTENDED_SET = eventsDeclaringKey('nth_repo_added')
 
 // Compile-time roster guarding the runtime injection set against silent schema drift.
 type _CohortExtendedRoster =
@@ -78,7 +78,7 @@ export function isCohortExtendedEvent(name: EventName): boolean {
 }
 
 // Events whose schema declares `cohort`: the IPC handler injects cohort only for these — a `.strict()` schema without it would reject the event.
-const ONBOARDING_COHORT_SET = eventsWithShapeKey('cohort')
+const ONBOARDING_COHORT_SET = eventsDeclaringKey('cohort')
 // `NonNullable` strips `undefined` introduced by `cohortSchema`'s `.optional()`.
 export type OnboardingCohort = NonNullable<z.infer<typeof cohortSchema>>
 

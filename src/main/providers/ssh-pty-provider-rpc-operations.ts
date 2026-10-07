@@ -1,6 +1,8 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 
 type SshPtyProviderRpcContext = {
   mux: SshChannelMultiplexer
@@ -14,7 +16,7 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
       await mux.request('pty.deleteWorktreeHistory', { worktreeId })
     },
     write: (id: string, data: string): boolean => writeToSshPty(mux, toRelayPtyId(id), data),
-    writeWithSettlement: (id: string, data: string): Promise<boolean> =>
+    writeWithSettlement: (id: string, data: string): Promise<WriteSettlement> =>
       writeToSshPtyWithSettlement(mux, toRelayPtyId(id), data),
     resize: (id: string, cols: number, rows: number): void => {
       mux.notify('pty.resize', { id: toRelayPtyId(id), cols, rows })
@@ -33,11 +35,18 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
     clearBuffer: async (id: string): Promise<void> => {
       await mux.request('pty.clearBuffer', { id: toRelayPtyId(id) })
     },
+    resetInputModes: async (id: string): Promise<void> => {
+      await mux.request('pty.resetInputModes', { id: toRelayPtyId(id) })
+    },
     closeStartupQueryAuthority: async (id: string): Promise<number> => {
       const result = (await mux.request('pty.closeStartupQueryAuthority', {
         id: toRelayPtyId(id)
       })) as { appliedSeq?: number }
       return result.appliedSeq ?? 0
+    },
+    // A notification, because an older relay drops unknown ones instead of failing.
+    setColorQueryReplyColors: (colors: TerminalOscColorQueryReplyColors): void => {
+      mux.notify('pty.setColorQueryReplyColors', { colors })
     },
     acknowledgeDataEvent: (id: string, charCount: number): void => {
       mux.notify('pty.ackData', { id: toRelayPtyId(id), charCount })

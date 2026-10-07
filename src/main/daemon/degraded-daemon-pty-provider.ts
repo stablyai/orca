@@ -19,13 +19,15 @@ import {
 } from './degraded-daemon-session-routing'
 import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
 import { DegradedDaemonOwnerRecovery } from './degraded-daemon-owner-recovery'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly isDegraded = true
 
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
-  private fallback: IPtyProvider
+  /** Runs terminals in this process, so they die with it. */
+  readonly fallback: IPtyProvider
   private sessionProviders = new Map<string, IPtyProvider>()
   private freshSpawns: DegradedDaemonFreshSpawnRouter
   private ownerRecovery: DegradedDaemonOwnerRecovery
@@ -112,11 +114,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.providerFor(id).write(id, data)
   }
 
-  async writeWithSettlement(id: string, data: string): Promise<boolean> {
-    const provider = this.providerFor(id)
-    return provider.writeWithSettlement
-      ? await provider.writeWithSettlement(id, data)
-      : provider.write(id, data) !== false
+  async writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
+    return await this.providerFor(id).writeWithSettlement(id, data)
   }
 
   resize(id: string, cols: number, rows: number): void {
@@ -170,10 +169,14 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   clearBuffer = (id: string): Promise<void> => this.providerFor(id).clearBuffer(id)
+  resetInputModes = (id: string): Promise<void> => this.providerFor(id).resetInputModes(id)
 
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.providerFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }
+
+  setColorQueryReplyColors: IPtyProvider['setColorQueryReplyColors'] = (colors) =>
+    this.allProviders().forEach((provider) => provider.setColorQueryReplyColors?.(colors))
 
   acknowledgeDataEvent(id: string, charCount: number): void {
     this.providerFor(id).acknowledgeDataEvent(id, charCount)

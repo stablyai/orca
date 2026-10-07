@@ -41,13 +41,15 @@ async function getProcessedFileStat(
 
 export async function scanClaudeUsageFiles(
   worktrees: ClaudeUsageWorktreeRef[],
-  previousProcessedFiles: ClaudeUsagePersistedFile[] = []
+  previousProcessedFiles: ClaudeUsagePersistedFile[] = [],
+  onFilesScanned?: (count: number) => void,
+  profileDirs?: string[]
 ): Promise<{
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
 }> {
-  const files = await listClaudeTranscriptFiles()
+  const files = await listClaudeTranscriptFiles(profileDirs)
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
   const worktreeLookup = await buildWorktreeLookup(worktrees)
 
@@ -94,6 +96,7 @@ export async function scanClaudeUsageFiles(
         pathsToParse.push(batch[batchIndex])
       }
     }
+    onFilesScanned?.(batch.length)
     if (index + batch.length < files.length) {
       await yieldToEventLoop()
     }
@@ -147,6 +150,7 @@ export async function scanClaudeUsageFiles(
         hasDeferredClaims
       })
     }
+    onFilesScanned?.(batch.length)
     if (index + batch.length < pathsToParse.length) {
       await yieldToEventLoop()
     }

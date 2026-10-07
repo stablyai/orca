@@ -116,7 +116,7 @@ async function enableInlineAgentCards(page: Page): Promise<void> {
 
     const state = store.getState()
     if (!state.worktreeCardProperties.includes('inline-agents')) {
-      state.toggleWorktreeCardProperty('inline-agents')
+      state.setWorktreeCardProperties([...state.worktreeCardProperties, 'inline-agents'])
     }
     state.closeActivityPage()
   })
@@ -207,7 +207,7 @@ async function createTerminalInNewSplitGroup(page: Page): Promise<SplitGroupTerm
     const tab = state.createTab(worktreeId, groupId, undefined, { activate: true })
     state.focusGroup(worktreeId, groupId)
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     return { sourceGroupId, groupId, tabId: tab.id }
   })
 }
@@ -251,8 +251,9 @@ test.describe('Activity Agent Pane Isolation', () => {
         activeLeafId: first.leafId
       })
 
-    // Revealing a workspace returns the sidebar to its workspace list.
-    await agentsSidebarButton(orcaPage).click()
+    await expect(
+      orcaPage.getByRole('button', { name: 'Turn off activity view', exact: true })
+    ).toHaveAttribute('aria-pressed', 'true')
     await orcaPage.getByRole('button').filter({ hasText: second.prompt }).first().click()
     await expect
       .poll(async () => readActivePaneSelection(orcaPage), {
@@ -271,6 +272,7 @@ test.describe('Activity Agent Pane Isolation', () => {
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
     const [first, second] = await seedActivityThreadsForSplitPanes(orcaPage, snapshot)
 
+    await orcaPage.evaluate(() => window.__store?.getState().setWorktreeCardProperties([]))
     await enableInlineAgentCards(orcaPage)
 
     await clickWorkspaceCardAgentRow(orcaPage, first.prompt)

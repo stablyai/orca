@@ -16,7 +16,12 @@ export function buildRelayHookEnvelope(
 ): AgentHookRelayEnvelope {
   return {
     source,
+    ...(event.hostEvidenceObservedAt !== undefined
+      ? { evidenceAgeMs: Math.max(0, Date.now() - event.hostEvidenceObservedAt) }
+      : {}),
+    agentPresence: event.agentPresence,
     paneKey: event.paneKey,
+    ...(event.hostTurnRevision ? { hostTurnRevision: event.hostTurnRevision } : {}),
     ...(event.launchToken ? { launchToken: event.launchToken } : {}),
     tabId: event.tabId,
     worktreeId: event.worktreeId,
@@ -25,6 +30,7 @@ export function buildRelayHookEnvelope(
     promptInteractionKey: event.promptInteractionKey,
     hookEventName: event.hookEventName,
     providerPromptId: event.providerPromptId,
+    grokPromptBoundary: event.grokPromptBoundary,
     compactTrigger: event.compactTrigger,
     toolUseId: event.toolUseId,
     toolAgentId: event.toolAgentId,

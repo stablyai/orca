@@ -9,6 +9,7 @@ import {
 } from '../../shared/orchestration-rpc-contract'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type {
+  OrchestrationEnvironmentCallOptions,
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
 } from './orchestration/environment-transport'
@@ -68,7 +69,7 @@ export class RuntimeOrchestrationFederation {
     params: unknown,
     timeoutMs?: number,
     envelope?: RuntimeOrchestrationEnvelope,
-    internal?: { contractVerified?: boolean }
+    internal?: OrchestrationEnvironmentCallOptions
   ): Promise<unknown> {
     if (!this.transport) {
       throw new OrchestrationError(
@@ -77,7 +78,14 @@ export class RuntimeOrchestrationFederation {
       )
     }
     if (isOrchestrationMutation(method, params) && !internal?.contractVerified) {
-      const statusResponse = await this.transport.call(selector, 'status.get', undefined, timeoutMs)
+      const statusResponse = await this.transport.call(
+        selector,
+        'status.get',
+        undefined,
+        timeoutMs,
+        undefined,
+        internal?.expectedEnvironmentPairingRevision
+      )
       if (statusResponse.ok === false) {
         throw new OrchestrationError(
           statusResponse.error.code,
@@ -101,7 +109,8 @@ export class RuntimeOrchestrationFederation {
       timeoutMs,
       method.startsWith('orchestration.')
         ? { ...envelope, orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION }
-        : envelope
+        : envelope,
+      internal?.expectedEnvironmentPairingRevision
     )
     if (response.ok === false) {
       throw new OrchestrationError(response.error.code, response.error.message, response.error.data)

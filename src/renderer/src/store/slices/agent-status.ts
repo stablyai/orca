@@ -17,7 +17,6 @@ import { createAgentStatusRetentionActions } from './agent-status-retention-acti
 export type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata,
-  AgentLaunchConfigStatusMetadata,
   AgentProviderSessionRecordMetadata,
   AgentProviderSessionRouting,
   AgentProviderSessionTiming,

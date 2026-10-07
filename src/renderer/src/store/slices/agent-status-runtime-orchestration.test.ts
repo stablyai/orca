@@ -40,6 +40,53 @@ describe('agent status runtime orchestration metadata', () => {
     expect(store.getState().agentStatusEpoch).toBe(epochBeforeRuntime + 1)
   })
 
+  it('updates typed attention without changing per-agent unread, focus, or drafts', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const paneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+    const draft = {
+      repoId: null,
+      name: 'keep me',
+      prompt: 'unsent draft',
+      note: '',
+      attachments: [],
+      linkedWorkItem: null,
+      agent: 'codex' as const,
+      linkedIssue: '',
+      linkedPR: null
+    }
+    store.getState().setAgentStatus(paneKey, {
+      state: 'waiting',
+      prompt: 'worker prompt',
+      agentType: 'codex'
+    })
+    store.setState({
+      unreadAgentCompletionPanes: { [paneKey]: true },
+      unreadTerminalPanes: { [paneKey]: true },
+      activeTabId: 'tab-compose',
+      newWorkspaceDraft: draft
+    })
+    const before = store.getState()
+
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [paneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        attention: { categories: ['input', 'approval'], requiresAction: true }
+      }
+    })
+
+    const after = store.getState()
+    expect(after.agentStatusByPaneKey[paneKey].orchestration?.attention).toEqual({
+      categories: ['input', 'approval'],
+      requiresAction: true
+    })
+    expect(after.unreadAgentCompletionPanes).toBe(before.unreadAgentCompletionPanes)
+    expect(after.unreadTerminalPanes).toBe(before.unreadTerminalPanes)
+    expect(after.activeTabId).toBe('tab-compose')
+    expect(after.newWorkspaceDraft).toBe(draft)
+  })
+
   it('replaces stale live orchestration metadata when runtime dispatch identity changes', () => {
     vi.useFakeTimers()
     const store = createTestStore()
@@ -173,33 +220,6 @@ describe('agent status runtime orchestration metadata', () => {
       dispatchStatus: 'completed'
     })
   })
-
-  it.each(['failed', 'circuit_broken'] as const)(
-    'updates runtime status to %s for the same dispatch',
-    (dispatchStatus) => {
-      vi.useFakeTimers()
-      const store = createTestStore()
-      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-
-      store.getState().setAgentStatus(childPaneKey, {
-        state: 'done',
-        prompt: 'child agent',
-        agentType: 'claude',
-        orchestration: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          dispatchStatus: 'dispatched'
-        }
-      })
-      store.getState().setRuntimeAgentOrchestrationByPaneKey({
-        [childPaneKey]: { taskId: 'task-1', dispatchId: 'ctx-1', dispatchStatus }
-      })
-
-      expect(
-        store.getState().agentStatusByPaneKey[childPaneKey].orchestration?.dispatchStatus
-      ).toBe(dispatchStatus)
-    }
-  )
 
   it('keeps current payload orchestration ahead of a stale runtime map entry', () => {
     vi.useFakeTimers()

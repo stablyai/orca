@@ -1,3 +1,4 @@
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -35,6 +36,7 @@ import {
 import * as ownerHydration from './settings-owner-hydration-publication'
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
@@ -55,13 +57,6 @@ type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
 function normalizeRuntimeEnvironmentId(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
-}
-
-function createOpenInApplicationId(): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `open-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-  )
 }
 
 function normalizeSettingsUpdates(
@@ -97,8 +92,13 @@ function normalizeSettingsUpdates(
   }
   if ('openInApplications' in updates) {
     sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications, {
-      createId: createOpenInApplicationId
+      createId: createBrowserUuid
     })
+  }
+  if ('nativeChatAppearance' in updates) {
+    sanitizedUpdates.nativeChatAppearance = normalizeNativeChatAppearanceSettings(
+      updates.nativeChatAppearance
+    )
   }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)

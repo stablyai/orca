@@ -9,6 +9,7 @@ import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-pas
 import { createDraftPasteReadyScanner } from '../../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from '../terminal-pty-paste-writer'
+import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
 
 import { STARTUP_DRAFT_PASTE_QUIET_MS } from './pty-connect-limits'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
@@ -122,16 +123,22 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     )
     // Why: xterm focus reports share this transport queue. Bypassing it can
     // race CSI I against the draft on ConPTY and expose a literal `[I` prefix.
-    void sendAgentDraftPasteContent(settings, ptyId, session.startupDraftPrompt, async (data) => {
-      const accepted = await writeTerminalPastePtyInput(session.transport, data)
-      if (accepted && !startupDraftInputRecorded) {
-        // Why: this transport write bypasses xterm's user-input signal; keep
-        // the composed draft from being discarded by later hibernation.
-        startupDraftInputRecorded = true
-        session.recordTerminalInputForHibernation()
+    void sendAgentDraftPasteContent(
+      settings,
+      ptyId,
+      session.startupDraftPrompt,
+      'launch',
+      async (data) => {
+        const accepted = await writeTerminalPastePtyInput(session.transport, data, 'launch')
+        if (accepted && !startupDraftInputRecorded) {
+          // Why: this transport write bypasses xterm's user-input signal; keep
+          // the composed draft from being discarded by later hibernation.
+          startupDraftInputRecorded = true
+          session.recordTerminalInputForHibernation()
+        }
+        return accepted
       }
-      return accepted
-    })
+    )
       .catch(() => false)
       .finally(() => {
         startupDraftPasteInFlight = false
@@ -168,6 +175,19 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     }
     startupDraftHardTimer = setTimeout(() => {
       startupDraftHardTimer = null
+      if (session.startupDraftAgent === 'codex') {
+        startupDraftPasteSettled = true
+        // A timed-out launch stays consumed across pane disposal and remount.
+        session.startupDraftPasteAttempted = true
+        session.cleanupStartupDraftPasteTimers()
+        createPasteReadinessTimeoutNotice({
+          worktreeId: session.deps.worktreeId,
+          tabId: session.deps.tabId,
+          agent: 'codex',
+          submitted: false
+        }).onTimeout()
+        return
+      }
       void deliverStartupDraftIfAgentOwnsPty()
     }, resolveDraftPasteReadyTimeoutMs(session.startupDraftAgent))
   }

@@ -21,7 +21,7 @@ export function createTerminalRestartActions(
       let wasSuppressed = false
       set((s) => {
         if (!s.suppressedPtyExitIds[ptyId]) {
-          return {}
+          return s
         }
         wasSuppressed = true
         const next = { ...s.suppressedPtyExitIds }
@@ -68,7 +68,7 @@ export function createTerminalRestartActions(
       let wasQueued = false
       set((s) => {
         if (!s.pendingCodexPaneRestartIds[ptyId]) {
-          return {}
+          return s
         }
         wasQueued = true
         const next = { ...s.pendingCodexPaneRestartIds }
@@ -92,13 +92,8 @@ export function createTerminalRestartActions(
           // describing two different accounts.
           const launch = existing ?? notice
           const target = { id: notice.nextAccountId, label: notice.nextAccountLabel }
-          const homeRouteChanged =
-            notice.homeRouteChanged === undefined
-              ? existing?.homeRouteChanged === true
-              : notice.homeRouteChanged
           // Why: a live Codex pane keeps its original launch account until it actually restarts, so A -> B -> A must not leave a stale restart notice.
           if (
-            !homeRouteChanged &&
             isSameCodexRestartNoticeAccount(
               { id: launch.previousAccountId, label: launch.previousAccountLabel },
               target
@@ -115,7 +110,6 @@ export function createTerminalRestartActions(
               ? {}
               : { previousAccountId: launch.previousAccountId }),
             ...(notice.nextAccountId === undefined ? {} : { nextAccountId: notice.nextAccountId }),
-            ...(homeRouteChanged ? { homeRouteChanged: true as const } : {}),
             // Why: a queued restart relaunches under whatever account is selected
             // when it runs, so a later switch does not reopen an answered prompt.
             ...(existing?.restartRequested ? { restartRequested: true as const } : {}),
@@ -144,7 +138,7 @@ export function createTerminalRestartActions(
     clearCodexRestartNotice: (ptyId) => {
       set((s) => {
         if (!s.codexRestartNoticeByPtyId[ptyId]) {
-          return {}
+          return s
         }
         const next = { ...s.codexRestartNoticeByPtyId }
         const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
@@ -175,7 +169,7 @@ export function createTerminalRestartActions(
           changed = true
         }
         if (!changed) {
-          return {}
+          return s
         }
         return {
           codexRestartNoticeByPtyId: next,
@@ -187,7 +181,7 @@ export function createTerminalRestartActions(
       set((s) => {
         const notice = s.codexRestartNoticeByPtyId[ptyId]
         if (!notice?.restartRequested) {
-          return {}
+          return s
         }
         const { restartRequested: _restartRequested, ...kept } = notice
         const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }

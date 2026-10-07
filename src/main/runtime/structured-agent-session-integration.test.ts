@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 // One structured Codex session driven end to end over `agentSession.*`.
 //
 // Nothing here is stubbed except the Codex child itself: the RPC dispatcher, the
@@ -6,7 +7,7 @@
 // that ship. The fake app-server answers the same JSON-RPC calls the real one
 // does and pushes the same notifications and blocking requests back.
 
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,26 +17,35 @@ import type {
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import {
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../shared/agent-session-journal-types'
 import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
 } from '../../shared/agent-session-wire'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { journalDirectoryFor } from '../native-chat/agent-session-journal/journal-paths'
-import { appendLegacyTranscriptMessages } from '../native-chat/agent-session-journal/journal-legacy-import'
+import { importLegacyTranscriptIntoJournal } from '../native-chat/agent-session-journal/journal-legacy-import'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { OrcaRuntimeService } from './orca-runtime'
+import { readPersistedTestAgentSessionStoreText } from './agent-session-record-store-test-harness'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
+import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const journals = createTrackedJournalOpener()
 
@@ -43,10 +53,23 @@ const SESSION = 'session-integration-1'
 const THREAD = 'thread-integration'
 const TURN = 'turn-1'
 const WORKSPACE = 'workspace-1'
+const JOURNAL_IDENTITY = {
+  sessionId: SESSION,
+  workspaceId: WORKSPACE,
+  hostId: 'local',
+  agent: 'codex' as const,
+  providerHandle: codexProviderHandle(THREAD)
+}
+// The capability set the desktop renderer advertises. Without the pending-send
+// one the host holds the reply until the send settles, which is a shim for
+// clients too old to render a pending bubble — not what this suite models.
 const CLIENT = {
   clientId: 'device-a',
   clientKind: 'runtime' as const,
-  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+  clientCapabilities: [
+    AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  ]
 }
 
 // ─── the fake `codex app-server` ────────────────────────────────────────────
@@ -205,11 +228,17 @@ function createIntentParams() {
 }
 
 let codex: CodexScript
+/** Accepted first; the delivery loop hands the send over as `turn/start` after the reply. */
+const handedOverAs = (params: Record<string, unknown>) =>
+  vi.waitFor(() =>
+    expect(codex.live().calls.at(-1)).toMatchObject({ method: 'turn/start', params })
+  )
 let root: string
 let dispatcher: RpcDispatcher
 let bootEnvironmentReads: number
 let codexOverrideReads: number
 let configuredCodexProfile: string
+let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
 
 /** Runs a one-shot method and returns its decoded reply. */
 async function call(method: string, params: unknown): Promise<RpcResponse> {
@@ -269,6 +298,13 @@ function textOf(item: AgentJournalRenderItem): string {
     : ''
 }
 
+/** The durable submission row, which settlement rewrites after the send returns. */
+async function submissionOf(clientMessageId: string): Promise<AgentJournalSubmission | undefined> {
+  return (await getStructuredAgentSessionHost()?.journalSnapshot(SESSION))?.submissions.find(
+    (entry) => entry.clientMessageId === clientMessageId
+  )
+}
+
 async function historyPage(
   direction: 'tail' | 'before' | 'after',
   extra: Record<string, unknown> = {}
@@ -288,8 +324,10 @@ beforeEach(async () => {
   bootEnvironmentReads = 0
   codexOverrideReads = 0
   configuredCodexProfile = 'configured'
+  shellEnvironmentPolicy = { inheritAll: true, names: [] }
   const runtime = {
     getRuntimeId: () => 'runtime-1',
+    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     resolveStructuredAgentSessionCreateIntent: async () => {
       const {
@@ -302,11 +340,13 @@ beforeEach(async () => {
     publishStructuredAgentSessionTab: () => {},
     ensureStructuredAgentSessionHost: () =>
       ensureStructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         stateDirectory: root,
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
         resolveCodexCommand: () => '/usr/local/bin/codex',
+        resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
         resolveEnvironment: async () => {
           bootEnvironmentReads += 1
@@ -316,6 +356,7 @@ beforeEach(async () => {
             CODEX_HOME: '/shell/home'
           }
         },
+        resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
         resolveCodexOverrides: () => {
           codexOverrideReads += 1
           return { CODEX_PROFILE: configuredCodexProfile }
@@ -323,11 +364,9 @@ beforeEach(async () => {
         openCodexConnection: codex.openConnection,
         readProcessStartTime: async () => 1_700_000_000_000
       }).then(() => undefined),
-    registerOwnedSubscriptionCleanup: vi.fn((_id: string, dispose: () => void) => {
-      return {
-        releaseIfCurrent: dispose
-      }
-    })
+    registerOwnedSubscriptionCleanup: vi.fn((_id: string, dispose: () => void) => ({
+      releaseIfCurrent: dispose
+    }))
   }
   dispatcher = new RpcDispatcher({
     runtime: runtime as unknown as OrcaRuntimeService,
@@ -372,32 +411,28 @@ afterEach(async () => {
 
 describe('a structured codex session over agentSession.*', () => {
   it('hydrates provider options after activating a legacy-imported journal', async () => {
-    const identity = {
-      sessionId: SESSION,
-      workspaceId: WORKSPACE,
-      hostId: 'local',
-      agent: 'codex' as const,
-      providerHandle: { kind: 'codex' as const, threadId: THREAD }
-    }
     const journal = await journals.open({
-      identity,
-      journalDir: journalDirectoryFor(root, identity)
+      identity: JOURNAL_IDENTITY,
+      stateDirectory: root
     })
-    await appendLegacyTranscriptMessages({
+    const rollout = join(root, 'legacy-rollout.jsonl')
+    await writeFile(
+      rollout,
+      `${JSON.stringify({
+        type: 'event_msg',
+        timestamp: '2026-08-05T10:00:02.000Z',
+        payload: { type: 'user_message', message: 'legacy question', kind: 'plain' }
+      })}\n`
+    )
+    await importLegacyTranscriptIntoJournal({
       journal,
       agent: 'codex',
       sessionId: THREAD,
       fence: 0,
-      messages: [
-        {
-          id: 'legacy-user-1',
-          role: 'user',
-          source: 'transcript',
-          timestamp: 1_800_000_000_000,
-          blocks: [{ type: 'text', text: 'legacy question' }]
-        }
-      ]
+      options: { filePath: rollout }
     })
+    // The previous process exits, closing its database.
+    await journals.closeAll()
 
     const created = await ok<{ page: { items: AgentJournalRenderItem[] } }>(
       'agentSession.create',
@@ -424,7 +459,9 @@ describe('a structured codex session over agentSession.*', () => {
       EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
       CODEX_HOME: '/home/dev/.codex'
     })
-    const store = await readFile(join(root, 'agent-sessions', 'agent-sessions.json'), 'utf-8')
+    const store = await readPersistedTestAgentSessionStoreText(root)
+    // The record this create wrote, so the checks below read the runtime's own rows.
+    expect(store).toContain('/home/dev/.codex')
     expect(store).not.toContain('EXAMPLE_GATEWAY_TOKEN')
     expect(store).not.toContain('"launchEnv"')
     const stream = await subscribe('sub-first-send')
@@ -437,18 +474,22 @@ describe('a structured codex session over agentSession.*', () => {
       envelope: envelope('agentSession.send', { body }, created.fence),
       body
     })
-    expect(sent.submission).toMatchObject({
-      dispatchState: 'accepted',
-      providerItemId: `codex:${THREAD}:${TURN}:0`
-    })
-    expect(codex.live().calls.at(-1)).toMatchObject({
-      method: 'turn/start',
-      params: { threadId: THREAD, clientUserMessageId: sent.clientMessageId }
-    })
+    // Admission, not identity. `turn/start` proves Codex owns the message, but a
+    // send coalesced into a running turn is answered with that turn's id, so
+    // which message landed where is knowable only from the echo.
+    expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
+    await handedOverAs({ threadId: THREAD, clientUserMessageId: sent.clientMessageId })
 
     codex.notify('turn/started', { turn: { id: TURN } })
+    // Codex echoes the message back carrying the `clientId` it was sent under,
+    // which is the only thing that names which submission this row settles.
     codex.notify('item/completed', {
-      item: { type: 'userMessage', id: 'item-0', content: [{ type: 'text', text: 'hi' }] }
+      item: {
+        type: 'userMessage',
+        id: 'item-0',
+        clientId: sent.clientMessageId,
+        content: [{ type: 'text', text: 'hi' }]
+      }
     })
     codex.notify('item/started', { item: { type: 'agentMessage', id: 'item-1', text: '' } })
     codex.notify('item/agentMessage/delta', { itemId: 'item-1', delta: 'Hello.' })
@@ -458,6 +499,15 @@ describe('a structured codex session over agentSession.*', () => {
     await drainStreamedEvents()
 
     expect(itemsOf(stream).map(textOf).filter(Boolean)).toEqual(['hi', 'Hello.'])
+    // The echo is the first item of this turn, so the settled key is ordinal 0 —
+    // minted by the same `identityFor` a history replay computes with, rather
+    // than guessed from the turn/start response.
+    await vi.waitFor(async () =>
+      expect(await submissionOf(sent.clientMessageId)).toMatchObject({
+        dispatchState: 'accepted',
+        providerItemId: `codex:${THREAD}:${TURN}:0`
+      })
+    )
   })
 
   it('runs create → send → stream → approval → cancel → reconnect → page history', async () => {
@@ -512,32 +562,41 @@ describe('a structured codex session over agentSession.*', () => {
       envelope: envelope('agentSession.send', { body }, fence),
       body
     })
-    // Codex named the turn, so the submission is accepted rather than
-    // "delivery unconfirmed", and adopts the provider's own item identity.
-    expect(sent.submission).toMatchObject({
-      dispatchState: 'accepted',
-      providerItemId: `codex:${THREAD}:${TURN}:0`
-    })
-    expect(codex.live().calls.at(-1)).toMatchObject({
-      method: 'turn/start',
-      params: {
-        threadId: THREAD,
-        clientUserMessageId: sent.clientMessageId,
-        model: 'gpt-live',
-        effort: 'high'
-      }
+    // Codex took the message, so the submission is pending rather than
+    // "delivery unconfirmed" — it carries no identity yet, because the response
+    // to a coalesced send names the running turn rather than this message.
+    expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
+    await handedOverAs({
+      threadId: THREAD,
+      clientUserMessageId: sent.clientMessageId,
+      model: 'gpt-live',
+      effort: 'high'
     })
 
     // ── stream ──────────────────────────────────────────────────────────────
     codex.notify('turn/started', { turn: { id: TURN } })
-    // Codex echoes the user message back as ordinal 0 of the turn. That is the
-    // key the submission adopted, so the echo has to reconcile into the bubble
-    // the client already has rather than append a second copy of it.
+    // Codex echoes the user message back as ordinal 0 of the turn, carrying the
+    // `clientId` it was sent under. That echo settles the submission's identity,
+    // and has to reconcile into the bubble the client already has rather than
+    // append a second copy of it.
     codex.notify('item/completed', {
-      item: { type: 'userMessage', id: 'item-0', content: [{ type: 'text', text: 'list files' }] }
+      item: {
+        type: 'userMessage',
+        id: 'item-0',
+        clientId: sent.clientMessageId,
+        content: [{ type: 'text', text: 'list files' }]
+      }
     })
     await drainStreamedEvents()
     expect(itemsOf(stream).filter((item) => textOf(item) === 'list files')).toHaveLength(1)
+    // Settled from the echo's own journal identity, so it is by construction the
+    // key a replay recomputes for this row.
+    await vi.waitFor(async () =>
+      expect(await submissionOf(sent.clientMessageId)).toMatchObject({
+        dispatchState: 'accepted',
+        providerItemId: `codex:${THREAD}:${TURN}:0`
+      })
+    )
 
     codex.notify('item/started', { item: { type: 'agentMessage', id: 'item-1', text: '' } })
     codex.notify('item/agentMessage/delta', { itemId: 'item-1', delta: 'Two ' })
@@ -660,8 +719,10 @@ describe('a structured codex session over agentSession.*', () => {
     expect(older.page.hasOlder).toBe(false)
     // Every step of the conversation, in order, from the durable journal alone —
     // no page overlaps another, and nothing the live stream showed is missing.
+    // The turn's lifecycle row outlives the turn: it is revised, never tombstoned.
     expect([...older.page.items, ...tail.page.items].map((item) => item.body?.kind)).toEqual([
       'message',
+      'status',
       'message',
       'tool-call',
       'approval',
@@ -670,6 +731,7 @@ describe('a structured codex session over agentSession.*', () => {
     ])
     expect([...older.page.items, ...tail.page.items].map(textOf)).toEqual([
       'list files',
+      '',
       'Two files.',
       '',
       '',
@@ -679,18 +741,24 @@ describe('a structured codex session over agentSession.*', () => {
   })
 
   it('caches shell exports but re-reads configured overrides for a resume', async () => {
+    shellEnvironmentPolicy = { inheritAll: false, names: [] }
     const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    expect(codex.live().launch.env?.EXAMPLE_GATEWAY_TOKEN).toBeUndefined()
     expect({ bootEnvironmentReads, codexOverrideReads }).toEqual({
       bootEnvironmentReads: 1,
       codexOverrideReads: 1
     })
 
     configuredCodexProfile = 'updated'
+    shellEnvironmentPolicy = { inheritAll: false, names: ['EXAMPLE_GATEWAY_TOKEN'] }
     const resumed = await ok<{ fence: number }>('agentSession.ensure', attachParams(created.fence))
 
     expect(resumed.fence).toBe(created.fence + 1)
     expect(codex.live().resumedThreadId).toBe(THREAD)
-    expect(codex.live().launch.env).toMatchObject({ CODEX_PROFILE: 'updated' })
+    expect(codex.live().launch.env).toMatchObject({
+      CODEX_PROFILE: 'updated',
+      EXAMPLE_GATEWAY_TOKEN: 'shell-exported'
+    })
     expect({ bootEnvironmentReads, codexOverrideReads }).toEqual({
       bootEnvironmentReads: 1,
       codexOverrideReads: 2
@@ -757,16 +825,9 @@ describe('a structured codex session over agentSession.*', () => {
     await stopping
 
     expect(waitedForFinalAppend).toBe(true)
-    const identity = {
-      sessionId: SESSION,
-      workspaceId: WORKSPACE,
-      hostId: 'local',
-      agent: 'codex' as const,
-      providerHandle: { kind: 'codex' as const, threadId: THREAD }
-    }
     const reopened = await journals.open({
-      identity,
-      journalDir: journalDirectoryFor(root, identity)
+      identity: JOURNAL_IDENTITY,
+      stateDirectory: root
     })
     expect(reopened.snapshot().items.map(textOf)).toContain('Final text before shutdown.')
     expect(

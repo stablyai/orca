@@ -1,10 +1,10 @@
 import type Database from '../../../../sqlite/sync-database'
 import type { TaskStatus, TaskRow } from '../../types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration-task-display'
-import { LEGACY_RUN_ID } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { TaskRuntimeLineageRow } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { selectColumns, TASK_COLUMNS } from '../row-column-lists'
 
 // ── Tasks ──
@@ -24,7 +24,10 @@ export function createTask(
     runId?: string
   }
 ): TaskRow {
-  const runId = task.runId ?? LEGACY_RUN_ID
+  const runId = task.runId
+  if (!runId) {
+    throw new Error('Run is required')
+  }
   this.requireRun(runId)
   if (task.parentId) {
     const parent = this.getTask(task.parentId)
@@ -206,9 +209,10 @@ export function listTasksWithDispatch(
 
 // Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
 export function promoteReadyTasks(this: OrchestrationDb, completedTaskId: string): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tasks schema supplies the same TEXT id/deps columns as TaskRow.
   const candidates = this.db
-    .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE status = 'pending'`)
-    .all() as TaskRow[]
+    .prepare("SELECT id, deps FROM tasks WHERE status = 'pending'")
+    .all() as Pick<TaskRow, 'id' | 'deps'>[]
 
   for (const task of candidates) {
     const deps: string[] = JSON.parse(task.deps)
@@ -221,7 +225,12 @@ export function promoteReadyTasks(this: OrchestrationDb, completedTaskId: string
       return dep?.status === 'completed'
     })
     if (allDepsCompleted) {
-      this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
+      transitionLifecycleWithDb(this.db, {
+        entity: 'task',
+        id: task.id,
+        from: 'pending',
+        to: 'ready'
+      })
     }
   }
 }

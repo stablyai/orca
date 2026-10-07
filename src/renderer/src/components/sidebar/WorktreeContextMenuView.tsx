@@ -37,7 +37,6 @@ import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import {
-  CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   getWorktreeParentPickerLabel,
   isWorktreeParentPickerDisabled,
@@ -45,6 +44,7 @@ import {
   shouldRevealWorktreeDeveloperMenu,
   shouldUseNativeContextMenu
 } from './worktree-context-menu-policy'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {
@@ -64,6 +64,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleAssignWorkspaceStatus,
     handleCloseAutoFocus,
     handleCloseTerminals,
+    handleCopyName,
     handleCopyPath,
     handleCreateGroupFromRepo,
     handleDelete,
@@ -180,6 +181,13 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
                 <Copy className="size-3.5" />
                 {translate('auto.components.sidebar.WorktreeContextMenu.3350101edb', 'Copy Path')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleCopyName} disabled={isDeleting}>
+                <Copy className="size-3.5" />
+                {translate(
+                  'auto.components.sidebar.WorktreeContextMenu.copyWorktreeName',
+                  'Copy Worktree Name'
+                )}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={handleTogglePin} disabled={isDeleting}>

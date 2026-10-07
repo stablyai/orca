@@ -5,11 +5,20 @@ on:
   # change is worth a real ibus session. A pull_request trigger here would run it on every PR.
   workflow_call:
   workflow_dispatch:
+    inputs:
+      diagnose_wayland_input:
+        description: Capture passive Wayland input diagnostics while running both native lanes
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: '30 9 * * *'
 
 permissions:
   contents: read
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
 
 jobs:
   linux-x11:
@@ -49,7 +58,7 @@ jobs:
         run: >-
           xvfb-run --auto-servernum
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1
-          pnpm run test:e2e --
+          pnpm run test:e2e
           tests/e2e/terminal-ime-exact-byte.spec.ts
           --workers=1
 
@@ -70,3 +79,41 @@ jobs:
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  linux-wayland:
+    name: Linux Wayland Hangul terminating digit
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install native build, nested compositor and IME tools
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          build-essential python3 fonts-noto-cjk dbus-x11 dconf-gsettings-backend
+          ibus ibus-hangul gnome-shell gnome-settings-daemon libglib2.0-bin
+          xdotool xvfb x11-utils imagemagick
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - name: Build Electron app for E2E
+        env:
+          VITE_EXPOSE_STORE: 'true'
+        run: |
+          pnpm run build:relay
+          pnpm exec electron-vite build --mode e2e
+          pnpm run build:web-from-renderer
+      - name: Run native Wayland Hangul terminating digit
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_WAYLAND_INPUT_DIAGNOSTICS: ${{ inputs.diagnose_wayland_input && '1' || '' }}
+        run: node config/scripts/run-terminal-ibus-hangul-e2e.mjs --nested-wayland
+      - name: Upload Wayland terminal IME evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-wayland-ime-evidence
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: error

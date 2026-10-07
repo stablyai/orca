@@ -2,16 +2,20 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as NativeChatProseModule from './native-chat-prose'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import type * as NativeChatProseModule from '../../../../shared/native-chat-prose'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type * as UnifiedPatchModule from '../../../../shared/native-chat-unified-patch'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
 // Counting real per-row work rather than a render counter: a future refactor could keep the
 // render count low while still re-deriving every row's markdown.
 const proseCalls = vi.hoisted(() => ({ count: 0 }))
-vi.mock('./native-chat-prose', async (importOriginal) => {
+vi.mock('../../../../shared/native-chat-prose', async (importOriginal) => {
   const actual = await importOriginal<typeof NativeChatProseModule>()
   return {
     ...actual,
@@ -22,8 +26,29 @@ vi.mock('./native-chat-prose', async (importOriginal) => {
   }
 })
 
+const patchCalls = vi.hoisted(() => ({ detailed: 0, summary: 0 }))
+vi.mock('../../../../shared/native-chat-unified-patch', async (importOriginal) => {
+  const actual = await importOriginal<typeof UnifiedPatchModule>()
+  return {
+    ...actual,
+    editLinesFromUnifiedPatch: (...args: Parameters<typeof actual.editLinesFromUnifiedPatch>) => {
+      patchCalls.detailed += 1
+      return actual.editLinesFromUnifiedPatch(...args)
+    },
+    summarizeUnifiedPatch: (...args: Parameters<typeof actual.summarizeUnifiedPatch>) => {
+      patchCalls.summary += 1
+      return actual.summarizeUnifiedPatch(...args)
+    }
+  }
+})
+
 const { NativeChatMessageList } = await import('./NativeChatMessageList')
 
+let restoreViewport = (): void => {}
+beforeAll(() => {
+  restoreViewport = installNativeChatMessageListTestViewport()
+})
+afterAll(() => restoreViewport())
 afterEach(cleanup)
 
 const TRANSCRIPT_LENGTH = 120
@@ -46,6 +71,7 @@ function sessionWith(messages: NativeChatMessage[]): NativeChatLiveSession {
     agent: 'codex',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier: vi.fn(),
     readPhase: 'ready'
   }
@@ -59,7 +85,6 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
         session={sessionWith(messages)}
         isWorking={true}
         expandSignal={false}
-        fontScale={1}
       />
     )
 
@@ -78,7 +103,6 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
           session={sessionWith(streaming)}
           isWorking={true}
           expandSignal={false}
-          fontScale={1}
         />
       )
     }
@@ -87,5 +111,70 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
     // Without row memoization every settled row rebuilt its markdown on every frame. Settled
     // rows keep their block identity, so only the streaming tail should rebuild.
     expect(perFrame).toBeLessThan(TRANSCRIPT_LENGTH / 10)
+  })
+
+  it('keeps structured diff rows lazy and reuses counts across journal updates', () => {
+    patchCalls.detailed = 0
+    patchCalls.summary = 0
+    const user: AgentJournalRenderItem = {
+      itemId: 'user',
+      revision: 1,
+      sequence: 1,
+      observedAt: 1000,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Edit a file' }] }
+    }
+    const diff: AgentJournalRenderItem = {
+      itemId: 'diff',
+      revision: 1,
+      sequence: 2,
+      observedAt: 2000,
+      body: {
+        kind: 'diff',
+        path: 'src/a.ts',
+        patch: {
+          head: '@@ -1 +1 @@\n-old\n+new',
+          truncated: false,
+          digest: 'fixture',
+          byteLength: 25
+        }
+      }
+    }
+    const view = (items: AgentJournalRenderItem[]) => (
+      <NativeChatMessageList
+        session={sessionWith(
+          projectStructuredAgentSessionMessages(items, [], [], { rejectedInPlace: true })
+        )}
+        journalItems={items}
+        isWorking={false}
+        expandSignal={false}
+      />
+    )
+    const { rerender } = render(view([user, diff]))
+    expect(patchCalls).toEqual({ summary: 1, detailed: 0 })
+    for (let frame = 0; frame < 20; frame += 1) {
+      rerender(
+        view([
+          user,
+          diff,
+          {
+            itemId: 'tail',
+            revision: frame + 1,
+            sequence: 3,
+            observedAt: 3000,
+            body: {
+              kind: 'message',
+              role: 'assistant',
+              blocks: [{ type: 'text', text: `Token ${frame}` }]
+            }
+          }
+        ])
+      )
+    }
+    expect(patchCalls).toEqual({ summary: 1, detailed: 0 })
+    fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
+    expect(patchCalls.detailed).toBe(0)
+    fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
+    expect(patchCalls).toEqual({ summary: 1, detailed: 1 })
+    expect(screen.getByText('new')).toBeInTheDocument()
   })
 })

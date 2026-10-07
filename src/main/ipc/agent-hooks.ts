@@ -36,6 +36,7 @@ export function registerAgentHookHandlers(
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
   ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
+  ipcMain.removeHandler('agentStatus:hasVerifiableAgentProcess')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
   registerAgentStatusRowTeardownIpcHandlers()
   registerAgentPaneAuthorityIpcHandlers({
@@ -49,9 +50,13 @@ export function registerAgentHookHandlers(
     // Why: the renderer pulls this after workspace hydration, so startup cannot
     // lose replayed statuses while its local store is still empty. Match the
     // live push enrichment in main/index.ts so parent/child rows survive replay.
-    return agentHookServer
-      .getStatusSnapshot()
-      .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
+    return (
+      agentHookServer
+        .getStatusSnapshot()
+        // Same rule as the live push: the renderer's feed bridge owns structured rows for now.
+        .filter((entry) => entry.structuredHost === undefined)
+        .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
+    )
   })
   ipcMain.handle('agentStatus:inferInterrupt', (_event, request: unknown): boolean => {
     if (typeof request !== 'object' || request === null) {
@@ -65,6 +70,9 @@ export function registerAgentHookHandlers(
     }
     return agentHookServer.inferQuestionAnswered(request as AgentQuestionAnsweredInferenceRequest)
   })
+  ipcMain.handle('agentStatus:hasVerifiableAgentProcess', (_event, paneKey: unknown): boolean =>
+    typeof paneKey === 'string' ? agentHookServer.hasVerifiableAgentProcess(paneKey) : false
+  )
   ipcMain.handle(
     'agentStatus:getMigrationUnsupportedSnapshot',
     (): MigrationUnsupportedPtyEntry[] => getMigrationUnsupportedPtySnapshot()

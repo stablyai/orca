@@ -1,35 +1,25 @@
+import type { DaemonPtyRouterDataEvent } from './daemon-pty-router-events'
+import { removeDaemonListener } from './daemon-listener-registry'
+import { emitPtyListeners } from './daemon-pty-listener-emission'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { DaemonPtySessionInventory } from './daemon-pty-session-inventory'
-import { CLEAN_DISCONNECT_PROTOCOL_VERSION } from './types'
+import {
+  CLEAN_DISCONNECT_PROTOCOL_VERSION,
+  type ListSessionsResult,
+  type ShutdownIfIdleResult
+} from './types'
+import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 import type { PtyBackgroundStreamEvent } from '../providers/types'
 
 export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInventory {
-  onData(
-    callback: (payload: {
-      id: string
-      data: string
-      sequenceChars?: number
-      transformed?: boolean
-      seq?: number
-    }) => void
-  ): () => void {
+  onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
     this.dataListeners.push(callback)
-    return () => {
-      const idx = this.dataListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.dataListeners.splice(idx, 1)
-      }
-    }
+    return () => removeDaemonListener(this.dataListeners, callback)
   }
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
     this.backgroundStreamListeners.push(callback)
-    return () => {
-      const idx = this.backgroundStreamListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.backgroundStreamListeners.splice(idx, 1)
-      }
-    }
+    return () => removeDaemonListener(this.backgroundStreamListeners, callback)
   }
 
   onReplay(_callback: (payload: { id: string; data: string }) => void): () => void {
@@ -40,29 +30,23 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
   ): () => void {
     this.exitListeners.push(callback)
-    return () => {
-      const idx = this.exitListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.exitListeners.splice(idx, 1)
-      }
-    }
+    return () => removeDaemonListener(this.exitListeners, callback)
   }
 
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
     this.writeUnavailableListeners.push(callback)
-    return () => {
-      const idx = this.writeUnavailableListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.writeUnavailableListeners.splice(idx, 1)
-      }
-    }
+    return () => removeDaemonListener(this.writeUnavailableListeners, callback)
   }
 
   protected emitWriteUnavailable(id: string): void {
-    // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-    for (const listener of [...this.writeUnavailableListeners]) {
-      listener({ id })
-    }
+    emitPtyListeners(this.writeUnavailableListeners, (listener) => {
+      try {
+        listener({ id })
+      } catch (error) {
+        // Renderer notification failure must not cancel recovery or erase write evidence.
+        console.warn('[daemon] Write unavailable listener failed:', error)
+      }
+    })
   }
 
   dispose(): void {
@@ -104,6 +88,86 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     // Why: an authenticated pair cancels the adoption watchdog and lets a never-used adapter retire its empty daemon on quit.
     await this.client.ensureConnected()
     this.recordAuthenticatedIdentity()
+  }
+
+  async requestIdleRetirement(): Promise<DaemonIdleRetirementResult> {
+    if (this.protocolVersion < CLEAN_DISCONNECT_PROTOCOL_VERSION) {
+      return { state: 'unsupported' }
+    }
+    if (this.idleRetirementState === 'retiring') {
+      return { state: 'retiring' }
+    }
+    if (this.idleRetirementPromise) {
+      return this.idleRetirementPromise
+    }
+    if (
+      this.disconnectOnlyPromise ||
+      (this.respawnAdoptionClosed && this.idleRetirementState === 'open')
+    ) {
+      return { state: 'unverifiable' }
+    }
+    this.idleRetirementAdmissionClosed = true
+    this.respawnAdoptionClosed = true
+    this.idleRetirementState = 'checking'
+    const request = this.finishIdleRetirementRequest().finally(() => {
+      if (this.idleRetirementPromise === request) {
+        this.idleRetirementPromise = null
+      }
+    })
+    this.idleRetirementPromise = request
+    return request
+  }
+
+  private async finishIdleRetirementRequest(): Promise<DaemonIdleRetirementResult> {
+    try {
+      await this.client.ensureConnected()
+    } catch {
+      // Nothing was asked of the daemon, so nothing can be retiring.
+      this.reopenAfterRefusedIdleRetirement()
+      return { state: 'unverifiable' }
+    }
+    try {
+      const result = await this.client.request<ShutdownIfIdleResult>('shutdownIfIdle', undefined)
+      if (result.retiring) {
+        this.idleRetirementState = 'retiring'
+        return { state: 'retiring' }
+      }
+      let liveSessions: number | null = null
+      try {
+        const inventory = await this.client.request<ListSessionsResult>('listSessions', undefined)
+        liveSessions = inventory.sessions.filter((session) => session.isAlive).length
+      } catch {
+        liveSessions = null
+      }
+      this.reopenAfterRefusedIdleRetirement()
+      return {
+        state: 'busy',
+        liveSessions,
+        admissionReopened: true
+      }
+    } catch {
+      // The daemon may have accepted before contact was lost; keep admission and respawn fenced.
+      this.idleRetirementState = 'unverifiable'
+      return { state: 'unverifiable' }
+    }
+  }
+
+  /** Reopens admission an idle-retirement attempt fenced without retiring the daemon. */
+  releaseIdleRetirementFence(): void {
+    // An unverifiable attempt may have been accepted, so it stays fenced like a retiring one.
+    if (
+      this.idleRetirementState !== 'retiring' &&
+      this.idleRetirementState !== 'unverifiable' &&
+      !this.idleRetirementPromise
+    ) {
+      this.reopenAfterRefusedIdleRetirement()
+    }
+  }
+
+  private reopenAfterRefusedIdleRetirement(): void {
+    this.idleRetirementState = 'open'
+    this.idleRetirementAdmissionClosed = false
+    this.respawnAdoptionClosed = false
   }
 
   // Why: unlike dispose(), leave history files unclean (no endedAt) so the next launch treats them as crash-recoverable,

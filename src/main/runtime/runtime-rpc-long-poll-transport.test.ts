@@ -44,6 +44,25 @@ describe('OrcaRuntimeRpcServer', () => {
     ).toBe('wait')
   })
 
+  it.each(['agent.launch', 'agent.launchReplay'])(
+    'keeps a prompted %s alive while it waits for the agent to be ready',
+    (method) => {
+      const prompt = { text: 'fix the build', delivery: 'submit' }
+      expect(
+        classifyRuntimeLongPoll({
+          id: 'req_launch',
+          authToken: 'token',
+          method,
+          params: { prompt }
+        })
+      ).toBe('wait')
+      // Without a prompt nothing waits on the agent, so the launch stays a short call.
+      expect(
+        classifyRuntimeLongPoll({ id: 'req_launch', authToken: 'token', method, params: {} })
+      ).toBeNull()
+    }
+  )
+
   it('keeps agent-prompt submission sockets alive during verification', () => {
     expect(
       classifyRuntimeLongPoll({
@@ -148,6 +167,8 @@ describe('OrcaRuntimeRpcServer', () => {
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
       runtime.setOrchestrationDb(db)
+      // A consuming check now requires a live pane; these transport tests only need it to block.
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
       // Why: 50ms keepalive lets us collect ≥3 frames within a 300ms wait
       // window without slowing the suite.
       const server = new OrcaRuntimeRpcServer({
@@ -189,6 +210,8 @@ describe('OrcaRuntimeRpcServer', () => {
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
       runtime.setOrchestrationDb(db)
+      // A consuming check now requires a live pane; these transport tests only need it to block.
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
       const askerPaneKey = 'tab_asker:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_asker' ? askerPaneKey : null
@@ -430,6 +453,8 @@ describe('OrcaRuntimeRpcServer', () => {
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
       runtime.setOrchestrationDb(db)
+      // A consuming check now requires a live pane; these transport tests only need it to block.
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,
@@ -490,6 +515,8 @@ describe('OrcaRuntimeRpcServer', () => {
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
       runtime.setOrchestrationDb(db)
+      // A consuming check now requires a live pane; these transport tests only need it to block.
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,
@@ -530,6 +557,8 @@ describe('OrcaRuntimeRpcServer', () => {
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
       runtime.setOrchestrationDb(db)
+      // A consuming check now requires a live pane; these transport tests only need it to block.
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,
@@ -587,6 +616,8 @@ describe('OrcaRuntimeRpcServer', () => {
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
       runtime.setOrchestrationDb(db)
+      // A consuming check now requires a live pane; these transport tests only need it to block.
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
       seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2', 'term_w3'])
       // Why: cap 4 → ask sub-cap 2, so 4 concurrent asks can only take half the budget.
       const server = new OrcaRuntimeRpcServer({
@@ -699,6 +730,8 @@ describe('OrcaRuntimeRpcServer', () => {
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
       runtime.setOrchestrationDb(db)
+      // A consuming check now requires a live pane; these transport tests only need it to block.
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,

@@ -177,6 +177,7 @@ export const createRefreshEventActions = (
             hasRepoOwner: true,
             pr: data,
             fetchedAt: event.outcome.fetchedAt,
+            fetchedHeadOid: alias.currentHeadOid,
             state: s,
             worktreeId: alias.worktreeId,
             linkedPRNumber: alias.linkedPRNumber,
@@ -229,6 +230,7 @@ export const createRefreshEventActions = (
         }
       }
 
+      // Preserve root identity so no-op writes do not notify every store subscriber.
       return changed
         ? {
             prRefreshSequences: capPrRefreshSequences(nextSequences),
@@ -237,7 +239,7 @@ export const createRefreshEventActions = (
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache
           }
-        : {}
+        : s
     })
     if (didUpdatePRCache && event.outcome && event.outcome.kind !== 'upstream-error') {
       debouncedSaveCache(get())

@@ -12,6 +12,7 @@ import type {
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { withOpenCodeSqliteScanScope } from './session-scanner-opencode-sqlite-scan-scope'
 
 // A worker_threads stand-in the tests drive directly: it records posted requests
 // and lets a test emit message/error/exit without a built worker bundle.
@@ -75,6 +76,63 @@ function makeFactory(workers: FakeWorker[]): () => Worker {
 }
 
 describe('OpenCodeSqliteWorkerClient', () => {
+  it('expires a scan in the FIFO without cancelling ordinary reads or a later scan', async () => {
+    vi.useFakeTimers()
+    const workers: FakeWorker[] = []
+    const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+    const issues: AiVaultScanIssue[] = []
+    try {
+      const ordinary = [1, 2].map((id) =>
+        client.list({
+          dbPaths: [`/ordinary-${id}.db`],
+          limit: 1,
+          issues: []
+        })
+      )
+      const scan = withOpenCodeSqliteScanScope(() =>
+        client.list({
+          dbPaths: ['/scan.db'],
+          limit: 1,
+          issues
+        })
+      )
+      await vi.advanceTimersByTimeAsync(25_000)
+      workers[0].emit('message', {
+        id: workers[0].lastId(),
+        ok: true,
+        value: { candidates: [], issues: [] }
+      })
+      await vi.advanceTimersByTimeAsync(20_000)
+      await expect(scan).resolves.toEqual([])
+      expect(issues).toEqual([
+        expect.objectContaining({
+          kind: 'scope',
+          message: expect.stringContaining('45s work budget')
+        })
+      ])
+      expect(workers[0].postedRequests).toHaveLength(2)
+      expect(workers[0].terminated).toBe(false)
+      workers[0].emit('message', {
+        id: workers[0].lastId(),
+        ok: true,
+        value: { candidates: [], issues: [] }
+      })
+      await expect(Promise.all(ordinary)).resolves.toEqual([[], []])
+      const next = withOpenCodeSqliteScanScope(() =>
+        client.list({ dbPaths: ['/next.db'], limit: 1, issues: [] })
+      )
+      workers[0].emit('message', {
+        id: workers[0].lastId(),
+        ok: true,
+        value: { candidates: [], issues: [] }
+      })
+      await expect(next).resolves.toEqual([])
+    } finally {
+      client.dispose()
+      vi.useRealTimers()
+    }
+  })
+
   it('correlates responses by id and ignores stale ids', async () => {
     const workers: FakeWorker[] = []
     const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
@@ -133,7 +191,9 @@ describe('OpenCodeSqliteWorkerClient', () => {
 
       const active = client.parse({ dbPath: '/db#a', sessionId: 'a', platform: 'darwin' })
       const queued = client.parse({ dbPath: '/db#b', sessionId: 'b', platform: 'darwin' })
-      const activeAssertion = expect(active).rejects.toThrow(/timed out/)
+      const activeAssertion = expect(active).rejects.toThrow(
+        `OpenCode SQLite worker timed out after ${PARSE_TIMEOUT_MS}ms`
+      )
 
       // The queued call's timer must not have started while it waited, so only
       // the active call fires at the parse timeout.
@@ -158,7 +218,9 @@ describe('OpenCodeSqliteWorkerClient', () => {
 
     const active = client.parse({ dbPath: '/db#a', sessionId: 'a', platform: 'darwin' })
     const queued = client.parse({ dbPath: '/db#b', sessionId: 'b', platform: 'darwin' })
-    const activeAssertion = expect(active).rejects.toThrow(/exited with code/)
+    const activeAssertion = expect(active).rejects.toThrow(
+      'OpenCode SQLite worker exited with code 1'
+    )
 
     workers[0]!.emit('exit', 1)
     await activeAssertion
@@ -184,7 +246,7 @@ describe('OpenCodeSqliteWorkerClient', () => {
       client.list({ dbPaths: ['/tmp/opencode.db'], limit: 10, issues: listIssues })
     ).resolves.toEqual([])
     expect(
-      listIssues.some((issue) => /background scanner could not start/.test(issue.message))
+      listIssues.some((issue) => issue.message.includes('background scanner could not start'))
     ).toBe(true)
     await expect(
       client.parse({ dbPath: '/tmp/opencode.db', sessionId: 'ses_skipped', platform: 'darwin' })
@@ -198,7 +260,9 @@ describe('OpenCodeSqliteWorkerClient', () => {
     const pending = Array.from({ length: MAX_CONSECUTIVE_DEATHS + 2 }, (_, i) =>
       client.parse({ dbPath: `/db#${i}`, sessionId: `s${i}`, platform: 'darwin' })
     )
-    const settled = pending.map((promise) => expect(promise).rejects.toThrow())
+    // The last crash's text has to survive into the drain message, or a log
+    // cannot say what killed the run.
+    const settled = pending.map((promise) => expect(promise).rejects.toThrow(/crash \d/))
 
     // Crash every worker as it is spawned; the client respawns up to the cap.
     for (let i = 0; i < MAX_CONSECUTIVE_DEATHS; i++) {
@@ -258,7 +322,7 @@ describe('OpenCodeSqliteWorkerClient', () => {
     const first = await client.list({ dbPaths: ['/db'], limit: 10, issues: firstIssues })
     expect(first).toEqual([])
     expect(
-      firstIssues.some((issue) => /background scanner could not start/.test(issue.message))
+      firstIssues.some((issue) => issue.message.includes('background scanner could not start'))
     ).toBe(true)
     await expect(
       client.parse({ dbPath: '/db', sessionId: 'ses_heal', platform: 'darwin' })

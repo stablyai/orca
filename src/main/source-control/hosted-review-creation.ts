@@ -238,6 +238,13 @@ export async function getHostedReviewCreationEligibility(
   }
 }
 
+/** The one refusal a provider token this build cannot create with earns, wherever it is caught. */
+export const UNSUPPORTED_HOSTED_REVIEW_PROVIDER: CreateHostedReviewResult = {
+  ok: false,
+  code: 'unsupported_provider',
+  error: 'Creating reviews for this provider is not supported yet.'
+}
+
 export async function createHostedReview(
   repoPath: string,
   input: CreateHostedReviewInput,
@@ -245,11 +252,7 @@ export async function createHostedReview(
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult> {
   if (!supportsHostedReviewCreation(input.provider)) {
-    return {
-      ok: false,
-      code: 'unsupported_provider',
-      error: 'Creating reviews for this provider is not supported yet.'
-    }
+    return UNSUPPORTED_HOSTED_REVIEW_PROVIDER
   }
   const provider = await getForgeProviderForRepository({
     repoPath,

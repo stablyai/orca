@@ -1,5 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 
 const { restoreOnRestart } = vi.hoisted(() => ({ restoreOnRestart: vi.fn() }))
 
@@ -8,6 +15,14 @@ vi.mock('./structured-agent-session-restart-restore', () => ({
 }))
 
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+
+// The restore pool is mocked; the host database only fills the deps' shape.
+const stateDirectory = mkdtempSync(join(tmpdir(), 'orca-readable-restorer-'))
+afterAll(() => {
+  closeTestJournalHostDatabases()
+  rmSync(stateDirectory, { recursive: true, force: true })
+})
 
 describe('StructuredAgentSessionReadableRestorer', () => {
   beforeEach(() => {
@@ -19,15 +34,16 @@ describe('StructuredAgentSessionReadableRestorer', () => {
       (sessionId) => ({ sessionId }) as AgentSessionRecord
     )
     const restorer = new StructuredAgentSessionReadableRestorer({
-      store: { listRecords: () => records } as never,
-      journalRoot: '/tmp/journals',
-      supportsRecord: () => true,
-      reconcile: async () => null,
-      resolveRecovery: async () => undefined,
+      openDeps: {
+        store: { getRecord: () => null, listRecords: () => records },
+        journalDatabase: openTestJournalHostDatabase(stateDirectory),
+        logger: recordingStructuredAgentSessionLogger().logger
+      },
+      reconcile: async () => true,
+      resolveRecovery: async () => true,
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
-      onReadable: () => undefined,
-      restoreHandoff: async () => undefined
+      onReadable: () => undefined
     })
 
     await restorer.restore(['visible-a', 'visible-b', 'background-a', 'background-b'])

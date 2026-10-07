@@ -240,8 +240,20 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     spawnMock.mockReturnValue({ pid: 4242, once: vi.fn(), kill: vi.fn(), killed: false })
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
 
-    expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(false)
-    expect(process.env.DISPLAY).toBeUndefined()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const sleep = vi
+      .spyOn(Atomics, 'wait')
+      .mockImplementation((_array, _index, _value, timeout) => {
+        vi.setSystemTime(Date.now() + (timeout ?? 0))
+        return 'timed-out'
+      })
+    try {
+      expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(false)
+      expect(process.env.DISPLAY).toBeUndefined()
+    } finally {
+      sleep.mockRestore()
+      vi.useRealTimers()
+    }
   })
 
   it('accepts the display once the spawned Xvfb owns its lock', async () => {

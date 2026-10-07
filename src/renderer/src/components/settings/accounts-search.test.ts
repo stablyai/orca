@@ -15,7 +15,29 @@ vi.mock('./settings-search-keywords', () => ({
   translateSearchKeyword: (_key: string, fallback: string) => [fallback]
 }))
 
-import { getAccountsMiniMaxSearchEntries, getAccountsPaneSearchEntries } from './accounts-search'
+import {
+  getAccountsMiniMaxSearchEntries,
+  getAccountsOpencodeSearchEntries,
+  getAccountsPaneSearchEntries
+} from './accounts-search'
+
+describe('getAccountsPaneSearchEntries', () => {
+  it('keeps Antigravity and GLM plan settings discoverable in pane order', () => {
+    const entries = getAccountsPaneSearchEntries()
+    const titles = entries.map((entry) => entry.title)
+    expect(
+      titles.filter((title) =>
+        ['Antigravity Accounts', 'Cursor Usage', 'GLM Coding Plan'].includes(title)
+      )
+    ).toEqual(['Antigravity Accounts', 'Cursor Usage', 'GLM Coding Plan'])
+    expect(entries.find((entry) => entry.title === 'Antigravity Accounts')?.keywords).toEqual(
+      expect.arrayContaining(['antigravity', 'agy', 'google', 'accounts'])
+    )
+    expect(entries.find((entry) => entry.title === 'GLM Coding Plan')?.keywords).toEqual(
+      expect.arrayContaining(['glm', 'zai', 'zhipu', 'bigmodel', 'coding plan'])
+    )
+  })
+})
 
 describe('getAccountsMiniMaxSearchEntries', () => {
   it('returns a single entry that targets the MiniMax session cookie flow', () => {
@@ -23,8 +45,8 @@ describe('getAccountsMiniMaxSearchEntries', () => {
     expect(entries).toHaveLength(1)
     const [entry] = entries
     expect(entry.title).toBe('MiniMax Usage')
-    expect(entry.description).toContain('platform.minimax.io')
     expect(entry.description.toLowerCase()).toContain('cookie')
+    expect(entry.description.toLowerCase()).toContain('api key')
   })
 
   it('exposes the keywords that drive the Settings search index', () => {
@@ -40,5 +62,21 @@ describe('getAccountsMiniMaxSearchEntries', () => {
     const allEntries = getAccountsPaneSearchEntries()
     const titles = allEntries.map((entry) => entry.title)
     expect(titles).toContain('MiniMax Usage')
+  })
+})
+
+describe('getAccountsOpencodeSearchEntries', () => {
+  it('tells search to paste the full Cookie header including the console session', () => {
+    const cookieEntry = getAccountsOpencodeSearchEntries().find(
+      (entry) => entry.title === 'OpenCode Go Session Cookie'
+    )
+
+    expect(cookieEntry).toBeDefined()
+    expect(cookieEntry?.description).toContain('__Host-console_session')
+    expect(cookieEntry?.description).toContain('Cookie header')
+    expect(cookieEntry?.description).not.toMatch(/Fe26\.2\*\*/)
+    expect(cookieEntry?.keywords).toEqual(
+      expect.arrayContaining(['opencode', 'cookie', 'session', 'console', 'rate limit'])
+    )
   })
 })

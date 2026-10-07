@@ -1,3 +1,10 @@
+import { readRelayDirectoryBounded } from './fs-directory-listing'
+import { listRelayMarkdownDocuments } from './fs-markdown-document-listing'
+import { markdownDocumentsFromRelativePaths } from '../shared/markdown-document-paths'
+import { joinSearchRoot } from '../shared/text-search-paths'
+import { quickOpenRecentCandidateSet } from '../shared/quick-open-recent-candidates'
+import { QUICK_OPEN_SEARCH_VERSION } from '../shared/quick-open-path-search'
+import { pathsExistOnRelay } from './fs-path-existence'
 import { tmpdir } from 'node:os'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
@@ -79,6 +86,17 @@ export class FsHandler {
 
   private registerHandlers(): void {
     this.dispatcher.onRequest('fs.readDir', (p) => readRelayDir(p))
+    this.dispatcher.onRequest('fs.readDirBounded', async (p, c) => {
+      if (typeof p.dirPath !== 'string') {
+        throw new Error('Invalid directory path')
+      }
+      const entries = await readRelayDirectoryBounded(p.dirPath, c?.signal, {
+        followSymlinks: typeof p.followSymlinks === 'boolean' ? p.followSymlinks : undefined
+      })
+      return this.responseStreams
+        ? maybeStreamRpcResponse(entries, p, c, this.responseStreams, this.dispatcher)
+        : entries
+    })
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
     this.dispatcher.onRequest('fs.readFileStream', (p, c) => this.readFileStream(p, c))
     this.dispatcher.onRequest('fs.readFileRange', (p) => this.readFileRange(p))
@@ -89,6 +107,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => writeRelayFile(p))
     this.dispatcher.onRequest('fs.writeTerminalArtifact', (p) => this.writeTerminalArtifact(p))
+    this.dispatcher.onRequest('fs.pathsExist', pathsExistOnRelay)
     this.dispatcher.onRequest('fs.stat', (p) => statRelayPath(p))
     this.dispatcher.onRequest('fs.lstat', (p) => lstatRelayPath(p))
     this.dispatcher.onRequest('fs.deletePath', (p) => deleteRelayPath(p, this.watchRegistry))
@@ -99,12 +118,40 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.renameNoClobber', (p) => renameRelayPathNoClobber(p))
     this.dispatcher.onRequest('fs.copy', (p) => copyRelayPath(p))
     this.dispatcher.onRequest('fs.realpath', (p) => realpathRelayPath(p))
-    this.dispatcher.onRequest('fs.search', (p) => this.search(p))
+    this.dispatcher.onRequest('fs.search', (p, context) => this.search(p, context))
     this.dispatcher.onRequest('fs.getCapabilities', async () => ({
-      quickOpenSearchVersion: 1,
-      rangedReadVersion: 1
+      quickOpenSearchVersion: QUICK_OPEN_SEARCH_VERSION,
+      rangedReadVersion: 1,
+      pathExistenceBatchVersion: 1
     }))
     this.dispatcher.onRequest('fs.listFiles', (p, c) => this.listFiles(p, c))
+    this.dispatcher.onRequest('fs.listMarkdownDocuments', async (p, c) => {
+      if (typeof p.rootPath !== 'string') {
+        throw new Error('Invalid Markdown discovery root')
+      }
+      const rootPath = expandTilde(p.rootPath)
+      const documents = await listRelayMarkdownDocuments(rootPath, c?.signal).catch(
+        async (error) => {
+          if (!(error instanceof RipgrepUnavailableError)) {
+            throw error
+          }
+          const paths = await this.listFiles({ rootPath }, c)
+          if (
+            !Array.isArray(paths) ||
+            !paths.every((path): path is string => typeof path === 'string')
+          ) {
+            throw new Error('Invalid fallback file listing')
+          }
+          return markdownDocumentsFromRelativePaths(rootPath, paths).map((document) => ({
+            ...document,
+            filePath: joinSearchRoot(rootPath, document.relativePath)
+          }))
+        }
+      )
+      return this.responseStreams
+        ? maybeStreamRpcResponse(documents, p, c, this.responseStreams, this.dispatcher)
+        : documents
+    })
     this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
     this.dispatcher.onRequest('fs.watch', (p, context) =>
       this.watchRegistry.watch(
@@ -182,7 +229,7 @@ export class FsHandler {
     })
   }
 
-  private async search(params: Record<string, unknown>) {
+  private async search(params: Record<string, unknown>, context?: RequestContext) {
     const query = params.query as string
     const rootPath = expandTilde(params.rootPath as string)
     const caseSensitive = params.caseSensitive as boolean | undefined
@@ -201,7 +248,8 @@ export class FsHandler {
       useRegex,
       includePattern,
       excludePattern,
-      maxResults
+      maxResults,
+      signal: context?.signal
     }
     try {
       return await searchWithRg(rootPath, query, options)
@@ -235,16 +283,36 @@ export class FsHandler {
     // don't get double-scanned. The shared helper validates the shape and
     // normalizes into root-relative prefixes; malformed input yields [] so
     // the request still succeeds (older apps omit the field entirely).
+    const candidatePaths = params.candidatePaths
+    if (
+      candidatePaths !== undefined &&
+      (!Array.isArray(candidatePaths) ||
+        !candidatePaths.every((path): path is string => typeof path === 'string'))
+    ) {
+      throw new Error('Invalid Quick Open recent candidates.')
+    }
+    const options = {
+      ...(candidatePaths === undefined
+        ? {}
+        : { candidatePaths: [...quickOpenRecentCandidateSet(candidatePaths)] }),
+
+      ...(typeof params.includeIgnored === 'boolean'
+        ? { includeIgnored: params.includeIgnored }
+        : {}),
+      ...(typeof params.followSymlinks === 'boolean'
+        ? { followSymlinks: params.followSymlinks }
+        : {})
+    }
     const excludePathPrefixes = buildExcludePathPrefixes(rootPath, params.excludePaths)
     // Why #7721: full-tree scans are the relay's most expensive request; the
     // coordinator caps them at one per client, coalescing duplicates and
     // aborting a stale scan when the workspace changes or the host cancels.
     const files = await this.listFilesScans.run({
       clientId: context?.clientId ?? 0,
-      key: JSON.stringify([rootPath, excludePathPrefixes, maxResults, searchQuery]),
+      key: JSON.stringify([rootPath, excludePathPrefixes, maxResults, searchQuery, options]),
       signal: context?.signal,
       start: (signal) =>
-        runListFilesScan(rootPath, excludePathPrefixes, signal, maxResults, searchQuery)
+        runListFilesScan(rootPath, excludePathPrefixes, signal, maxResults, searchQuery, options)
     })
     // Why: a full listing of a real monorepo serializes past the 1 MiB control lane — Orca's own
     // checkout is 22.6k paths averaging 58 characters, so a 20,001-row page is ~1.2MB — and the
@@ -263,6 +331,17 @@ export class FsHandler {
 
   dispose(): void {
     this.watchRegistry.dispose()
-    void this.streamRegistry.disposeAll()
+    void this.disposeFileStreams().catch((error: unknown) => {
+      process.stderr.write(`[relay] file stream shutdown failed: ${String(error)}\n`)
+    })
+  }
+
+  disposeFileStreams = (): Promise<void> => this.streamRegistry.disposeAll()
+
+  disposeWatchers = (): Promise<void> => this.watchRegistry.disposeAndWait()
+
+  reopen(): void {
+    this.streamRegistry.reopen()
+    this.watchRegistry.reopen()
   }
 }

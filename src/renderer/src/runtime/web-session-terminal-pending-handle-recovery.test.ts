@@ -115,6 +115,9 @@ describe('web session pending terminal handle recovery', () => {
       ]
     }
     const call = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'session.tabs.list') {
+        return { ok: true as const, result: readySnapshot }
+      }
       if (method === 'terminal.resolvePane') {
         return {
           ok: true as const,
@@ -171,7 +174,8 @@ describe('web session pending terminal handle recovery', () => {
       })
     )
     expect(call).toHaveBeenNthCalledWith(2, expect.objectContaining({ method: 'terminal.list' }))
-    expect(call).toHaveBeenLastCalledWith(
+    expect(call).toHaveBeenNthCalledWith(
+      3,
       expect.objectContaining({ method: 'terminal.adoptOrphans' })
     )
   })
@@ -279,6 +283,9 @@ describe('web session pending terminal handle recovery', () => {
     }
     let resolveAttempts = 0
     const call = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'session.tabs.list') {
+        return { ok: true as const, result: readySnapshot }
+      }
       if (method === 'terminal.resolvePane') {
         resolveAttempts += 1
         if (resolveAttempts === 1) {
@@ -363,6 +370,9 @@ describe('web session pending terminal handle recovery', () => {
     }
     let resolveAttempts = 0
     const call = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'session.tabs.list') {
+        return { ok: true as const, result: readySnapshot }
+      }
       if (method === 'terminal.resolvePane') {
         resolveAttempts += 1
         return {
@@ -534,7 +544,10 @@ describe('web session pending terminal handle recovery', () => {
           }
         : {
             ok: true as const,
-            result: { adopted: true, topologyRevision: 5, snapshot: readySnapshot }
+            result:
+              method === 'session.tabs.list'
+                ? readySnapshot
+                : { adopted: true, topologyRevision: 5, snapshot: readySnapshot }
           }
     )
 
@@ -546,7 +559,8 @@ describe('web session pending terminal handle recovery', () => {
         { call: call as never }
       )
     ).resolves.toEqual(readySnapshot)
-    expect(call).toHaveBeenLastCalledWith(
+    expect(call).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         method: 'terminal.adoptOrphans',
         params: expect.objectContaining({
@@ -707,7 +721,10 @@ describe('web session pending terminal handle recovery', () => {
           }
         : {
             ok: true as const,
-            result: { adopted: true, topologyRevision: 1, snapshot: readySnapshot }
+            result:
+              method === 'session.tabs.list'
+                ? readySnapshot
+                : { adopted: true, topologyRevision: 1, snapshot: readySnapshot }
           }
     )
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
@@ -720,7 +737,7 @@ describe('web session pending terminal handle recovery', () => {
         { expectedEnvironmentPairingRevision: 17 }
       )
     ).resolves.toEqual(readySnapshot)
-    expect(runtimeCall).toHaveBeenCalledTimes(2)
+    expect(runtimeCall).toHaveBeenCalledTimes(3)
     expect(runtimeCall).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ expectedEnvironmentPairingRevision: 17 })
@@ -728,6 +745,13 @@ describe('web session pending terminal handle recovery', () => {
     expect(runtimeCall).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ expectedEnvironmentPairingRevision: 17 })
+    )
+    expect(runtimeCall).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        method: 'session.tabs.list',
+        expectedEnvironmentPairingRevision: 17
+      })
     )
   })
 })

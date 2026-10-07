@@ -1,5 +1,5 @@
 import { FILE_SECTION_START, isFileHeaderPair } from './native-chat-diff'
-import { pushEditGap, splitEditContent, type NativeChatEditLine } from './native-chat-edit-model'
+import { MAX_EDIT_LINES, splitEditContent, type NativeChatEditLine } from './native-chat-edit-model'
 
 const HUNK_RANGES = /^@@+ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
 
@@ -22,9 +22,52 @@ export function editLinesFromUnifiedPatch(
   text: string,
   options?: { implicitFirstHunk?: boolean }
 ): UnifiedPatchLines | null {
+  const lines: NativeChatEditLine[] = []
+  const metadata = visitUnifiedPatch(
+    text,
+    (kind, raw, oldLineNumber, newLineNumber) => {
+      lines.push({ kind, text: raw, oldLineNumber, newLineNumber })
+    },
+    options
+  )
+  return metadata ? { lines, ...metadata } : null
+}
+
+/** Counts the same capped rows as a card without allocating its line models. */
+export function summarizeUnifiedPatch(text: string): {
+  added: number
+  removed: number
+  truncated: boolean
+} | null {
+  let added = 0
+  let removed = 0
+  let rowCount = 0
+  const metadata = visitUnifiedPatch(text, (kind) => {
+    rowCount += 1
+    if (rowCount <= MAX_EDIT_LINES) {
+      added += Number(kind === 'add')
+      removed += Number(kind === 'del')
+    }
+  })
+  return metadata
+    ? { added, removed, truncated: metadata.truncated || rowCount > MAX_EDIT_LINES }
+    : null
+}
+
+function visitUnifiedPatch(
+  text: string,
+  visit: (
+    kind: NativeChatEditLine['kind'],
+    text: string,
+    oldLineNumber: number | null,
+    newLineNumber: number | null
+  ) => void,
+  options?: { implicitFirstHunk?: boolean }
+): Omit<UnifiedPatchLines, 'lines'> | null {
   const source = splitEditContent(text)
   const rows = source.lines
-  const lines: NativeChatEditLine[] = []
+  let rowCount = 0
+  let lastWasGap = false
   let oldNo: number | null = null
   let newNo: number | null = null
   let sawHunk = options?.implicitFirstHunk === true
@@ -37,15 +80,15 @@ export function editLinesFromUnifiedPatch(
       const match = HUNK_RANGES.exec(raw)
       oldNo = match ? Number(match[1]) : null
       newNo = match ? Number(match[3]) : null
-      // Successive hunks are separate regions of the file; concatenated with no
-      // break the gutter jumps and the reader sees one continuous block.
-      pushEditGap(lines)
+      if (rowCount > 0 && !lastWasGap) {
+        visit('gap', '', null, null)
+        rowCount += 1
+        lastWasGap = true
+      }
       sawHunk = true
       inHunk = true
       continue
     }
-    // `\ No newline at end of file` sits mid-hunk, between the removed old last
-    // line and the added new one, so it ends nothing.
     if (raw.startsWith('\\')) {
       continue
     }
@@ -60,43 +103,22 @@ export function editLinesFromUnifiedPatch(
     if (!inHunk) {
       continue
     }
-    // Read off the rows rather than the header, so a body that opened with no
-    // header is reported as unlocatable just like a rangeless `@@`.
     ranged &&= oldNo !== null || newNo !== null
+    rowCount += 1
+    lastWasGap = false
     if (raw.startsWith('+')) {
-      lines.push({
-        kind: 'add',
-        text: raw.slice(1),
-        oldLineNumber: null,
-        newLineNumber: newNo
-      })
+      visit('add', raw.slice(1), null, newNo)
       newNo = newNo === null ? null : newNo + 1
-      continue
-    }
-    if (raw.startsWith('-')) {
-      lines.push({
-        kind: 'del',
-        text: raw.slice(1),
-        oldLineNumber: oldNo,
-        newLineNumber: null
-      })
+    } else if (raw.startsWith('-')) {
+      visit('del', raw.slice(1), oldNo, null)
       oldNo = oldNo === null ? null : oldNo + 1
-      continue
+    } else {
+      visit('context', raw.startsWith(' ') ? raw.slice(1) : raw, oldNo, newNo)
+      oldNo = oldNo === null ? null : oldNo + 1
+      newNo = newNo === null ? null : newNo + 1
     }
-    lines.push({
-      kind: 'context',
-      text: raw.startsWith(' ') ? raw.slice(1) : raw,
-      oldLineNumber: oldNo,
-      newLineNumber: newNo
-    })
-    oldNo = oldNo === null ? null : oldNo + 1
-    newNo = newNo === null ? null : newNo + 1
   }
-
-  if (!sawHunk || lines.length === 0) {
-    return null
-  }
-  return { lines, lineNumbersKnown: ranged, truncated: source.truncated }
+  return sawHunk && rowCount > 0 ? { lineNumbersKnown: ranged, truncated: source.truncated } : null
 }
 
 const GIT_DIFF_HEADER = 'diff --git '

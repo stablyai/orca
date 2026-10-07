@@ -3,19 +3,25 @@ import type { AiVaultListResult } from '../../shared/ai-vault-types'
 
 const {
   filterPathsToRunningWslDistrosAsync,
+  getCachedWslDistros,
+  hasCachedWslDistros,
   listRunningWslHomeDirsAsync,
-  scanAiVaultSessionsInWorker
+  scanAiVaultSessionsInService
 } = vi.hoisted(() => ({
   filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths]),
+  getCachedWslDistros: vi.fn((): string[] | null => null),
+  hasCachedWslDistros: vi.fn(() => false),
   listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([]),
-  scanAiVaultSessionsInWorker: vi.fn()
+  scanAiVaultSessionsInService: vi.fn()
 }))
 
-vi.mock('./session-scanner-worker-spawn', () => ({
-  scanAiVaultSessionsInWorker,
-  resetAiVaultScannerWorkerForTests: vi.fn()
+vi.mock('./session-scanner-service-spawn', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  scanAiVaultSessionsInService
 }))
 vi.mock('../wsl', () => ({
+  getCachedWslDistros,
+  hasCachedWslDistros,
   listRunningWslHomeDirsAsync
 }))
 vi.mock('../wsl-running-path-filter', () => ({ filterPathsToRunningWslDistrosAsync }))
@@ -37,7 +43,7 @@ function scanResult(scannedAt: string): AiVaultListResult {
 // mid-flight.
 function deferredScan(): { resolve: (value: AiVaultListResult) => void } {
   let resolveFn: (value: AiVaultListResult) => void = () => {}
-  scanAiVaultSessionsInWorker.mockReturnValueOnce(
+  scanAiVaultSessionsInService.mockReturnValueOnce(
     new Promise<AiVaultListResult>((resolve) => {
       resolveFn = resolve
     })
@@ -51,8 +57,10 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
     vi.spyOn(process, 'platform', 'get').mockImplementation(() => platform)
     resetAiVaultSessionListCacheForTests()
     filterPathsToRunningWslDistrosAsync.mockClear()
+    getCachedWslDistros.mockReset().mockReturnValue(null)
+    hasCachedWslDistros.mockReset().mockReturnValue(false)
     listRunningWslHomeDirsAsync.mockReset().mockResolvedValue([])
-    scanAiVaultSessionsInWorker.mockReset()
+    scanAiVaultSessionsInService.mockReset()
   })
   afterEach(() => {
     resetAiVaultSessionListCacheForTests()
@@ -73,26 +81,35 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
 
     // A non-force list must re-scan (cache empty) rather than serve A's stale
     // result — proof A's late .then() did not repopulate the cache.
-    scanAiVaultSessionsInWorker.mockResolvedValueOnce(scanResult('scan-B'))
+    scanAiVaultSessionsInService.mockResolvedValueOnce(scanResult('scan-B'))
     const next = await listAiVaultSessions()
 
     expect(next.scannedAt).toBe('scan-B')
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(2)
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
   })
 
   it('caches normally when no invalidation interrupts the scan', async () => {
-    scanAiVaultSessionsInWorker.mockResolvedValueOnce(scanResult('scan-A'))
+    scanAiVaultSessionsInService.mockResolvedValueOnce(scanResult('scan-A'))
     await listAiVaultSessions()
 
     // Second non-force call is a cache hit — no second scan.
     const cached = await listAiVaultSessions()
 
     expect(cached.scannedAt).toBe('scan-A')
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
     expect(listRunningWslHomeDirsAsync).toHaveBeenCalledTimes(1)
   })
 
-  it('resolves homes only for distros currently reported as running', async () => {
+  it('skips running-distro discovery once a probe has reported no installed WSL distro', async () => {
+    hasCachedWslDistros.mockReturnValue(true)
+    getCachedWslDistros.mockReturnValue([])
+
+    await expect(getAiVaultWslHomeDirs()).resolves.toEqual([])
+    expect(listRunningWslHomeDirsAsync).not.toHaveBeenCalled()
+  })
+
+  it('still discovers running distros before any distro probe has succeeded', async () => {
+    hasCachedWslDistros.mockReturnValue(false)
     listRunningWslHomeDirsAsync.mockResolvedValue(['\\\\wsl.localhost\\Ubuntu\\home\\ada'])
 
     await expect(getAiVaultWslHomeDirs()).resolves.toEqual(['\\\\wsl.localhost\\Ubuntu\\home\\ada'])

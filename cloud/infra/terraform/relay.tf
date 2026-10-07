@@ -169,6 +169,11 @@ resource "google_cloud_run_v2_service" "relay" {
         }
       }
 
+      env {
+        name  = "ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT"
+        value = data.external.relay_serving_regional_placement_version.result.cohort_percent
+      }
+
       ports {
         container_port = 8080
       }

@@ -1,81 +1,95 @@
+import type { RequestContext } from './dispatcher'
 import { GitHandlerOperationContext } from './git-handler-operation-context'
 import { branchCompare as branchCompareOp } from './git-handler-ops'
 import { commitCompare as commitCompareOp } from './git-handler-commit-diff-ops'
-import { parseBranchDiff } from './git-handler-utils'
-import { parseNumstat } from '../shared/git-uncommitted-line-stats'
+import { gitChangeListArgs, parseGitChangeList } from '../shared/git-change-list'
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../shared/git-remote-error'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
-import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
-import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
-import type { GitPushTarget } from '../shared/worktree/types'
+import { assertValidGitPushTarget } from '../shared/git-push-target-validation'
+import { getPublishTargetStatus } from '../shared/git-publish-target-status'
 import { getEffectiveGitUpstreamStatus } from '../shared/git-effective-upstream'
 
 export class GitHandlerComparisonOperations extends GitHandlerOperationContext {
-  async branchCompare(params: Record<string, unknown>) {
+  async branchCompare(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
     const baseRef = params.baseRef as string
     // Why: reject flag-like base refs to prevent rev-parse option injection.
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }
-    const gitBound = this.git.bind(this)
-    return branchCompareOp(gitBound, worktreePath, baseRef, async (mergeBase, headOid) => {
-      // Why: preserve non-ASCII filenames as UTF-8 for parseBranchDiff.
-      const [{ stdout }, { stdout: numstat }] = await Promise.all([
-        gitBound(
-          ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
-          worktreePath
-        ),
-        gitBound(
-          ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', mergeBase, headOid],
-          worktreePath
-        )
-      ])
-      return parseBranchDiff(stdout, parseNumstat(numstat))
-    })
+    const gitBound = this.gitForSignal(context?.signal)
+    const result = await branchCompareOp(
+      gitBound,
+      worktreePath,
+      baseRef,
+      async (mergeBase, headOid) => {
+        const { stdout } = await gitBound(gitChangeListArgs(mergeBase, headOid), worktreePath)
+        return parseGitChangeList(stdout)
+      }
+    )
+    context?.signal?.throwIfAborted()
+    return result
   }
 
-  async commitCompare(params: Record<string, unknown>) {
+  async commitCompare(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
     const commitId = params.commitId as string
-    return commitCompareOp(this.git.bind(this), worktreePath, commitId)
+    const result = await commitCompareOp(this.gitForSignal(context?.signal), worktreePath, commitId)
+    context?.signal?.throwIfAborted()
+    return result
   }
 
-  async upstreamStatus(params: Record<string, unknown>) {
+  async upstreamStatus(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
+    const git = this.gitForSignal(context?.signal)
 
     try {
       if (params.pushTarget !== undefined) {
-        assertGitPushTargetShape(params.pushTarget)
-        const pushTarget = params.pushTarget as GitPushTarget
-        await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
+        assertValidGitPushTarget(params.pushTarget)
+        const pushTarget = params.pushTarget
+        await git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
         return await getPublishTargetStatus(
-          ((args) => this.git(args, worktreePath)) as GitCommandRunner,
+          (args) => git(args, worktreePath),
           pushTarget,
-          (upstreamName) => this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
+          (upstreamName) =>
+            this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName, context?.signal)
         )
       }
       return await getEffectiveGitUpstreamStatus(
-        (args) => this.git(args, worktreePath),
-        (upstreamName) => this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
+        (args) => git(args, worktreePath),
+        (upstreamName) =>
+          this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName, context?.signal)
       )
     } catch (error) {
+      context?.signal?.throwIfAborted()
       // Why: suppress only the expected no-upstream error; surface all others.
       if (isNoUpstreamError(error)) {
         return { hasUpstream: false, ahead: 0, behind: 0 }
       }
       // Why: match fetch/push/pull normalization so execFile preamble and local paths don't leak to the renderer.
       throw new Error(normalizeGitErrorMessage(error, 'upstream'))
+    } finally {
+      context?.signal?.throwIfAborted()
     }
   }
 
   private async getBehindCommitsArePatchEquivalent(
     worktreePath: string,
-    upstreamName: string
+    upstreamName: string,
+    signal?: AbortSignal
   ): Promise<boolean> {
     try {
-      const { stdout } = await this.git(
-        ['log', '--oneline', '--cherry-mark', '--right-only', `HEAD...${upstreamName}`, '--'],
+      const { stdout } = await this.gitForSignal(signal)(
+        [
+          'log',
+          '--no-show-signature',
+          '--no-color',
+          '--oneline',
+          '--cherry-mark',
+          '--right-only',
+          `HEAD...${upstreamName}`,
+          '--'
+        ],
         worktreePath
       )
       return upstreamOnlyCommitsArePatchEquivalent(stdout)

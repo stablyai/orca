@@ -13,6 +13,10 @@ export type CompletionDispatch = (
   title: string,
   options?: { terminalIdleConfirmed?: boolean; completionIdentity?: LastCompletionIdentity | null }
 ) => boolean
+export type PendingProcessExit = {
+  process: RecognizedAgentProcess
+  firstObservedAtMonotonic: number
+}
 export type ProcessMonitorState = {
   disposed: boolean
   inspectionInFlight: boolean
@@ -23,7 +27,7 @@ export type ProcessMonitorState = {
   pollTimerTier: PollCadenceTier | null
   lastPaneActivityAt: number | null
   hasAgentRunEvidence: boolean
-  pendingProcessExitAgent: RecognizedAgentProcess | null
+  pendingProcessExit: PendingProcessExit | null
   lastForegroundAgent: RecognizedAgentProcess | null
   processSession: number
 }
@@ -35,6 +39,5 @@ export type ProcessMonitorOptions = {
   establishAgentEvidence: () => void
   clearAgentRunEvidence: () => void
   hasPendingHookDone: () => boolean
-  hasPendingCodexAttention: () => boolean
   dispatchCompletion: CompletionDispatch
 }

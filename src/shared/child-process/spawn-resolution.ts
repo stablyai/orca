@@ -27,6 +27,7 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
     cwd: spec.cwd,
     env: spec.env,
     stdio: spec.stdio ?? ['pipe', 'pipe', 'pipe'],
+    serialization: spec.serialization,
     // Why unconditional: Orca's main process is GUI-subsystem and owns no
     // console, so every console-subsystem child it starts gets a fresh visible
     // conhost that takes foreground — keystrokes typed into an Orca terminal at

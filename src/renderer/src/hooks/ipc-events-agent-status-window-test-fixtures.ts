@@ -1,3 +1,6 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 11 agent-status ipc-events specs, not shipped code, and it falls
+   outside the *.test / *.spec / tests glob set. Inlining stubReactSyncEffect and stubAuxiliaryModules would duplicate them
+   into all 11 specs and push several past the max-lines ratchet. */
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import type {
@@ -48,6 +51,8 @@ export function buildWindowApi(args: {
         onActivateWorktree: () => () => {},
         onCreateTerminal: () => () => {},
         onRequestTerminalCreate: () => () => {},
+        onPublishAgentLaunchTab: () => () => {},
+        onAgentLaunchPaneVerdict: () => () => {},
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate: () => {},
         onSplitTerminal: () => () => {},
@@ -127,6 +132,7 @@ export function buildWindowApi(args: {
         onDetectedPortsChanged: () => () => {},
         ...args.ssh
       },
+      notifications: { dispatch: vi.fn(async () => ({ delivered: false })) },
       agentStatus: {
         onSet: args.onSet,
         onClear: args.onClear ?? vi.fn(() => () => {}),

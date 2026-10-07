@@ -1,50 +1,41 @@
 // Bringing a store's in-memory state up from disk.
 //
 // Split out of the store for the same reason its collaborators were: this is the
-// ORDERING between replay, suffix repair and disclosure, and none of it belongs
+// ORDERING between replay and the notices an open owes, and none of it belongs
 // to the store's public surface. Every step here reads or writes through the
 // same host the collaborators use, so the store keeps the state and this owns
 // the sequence.
 
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { JournalEpochController } from './journal-epoch-controller'
 import { replayJournal } from './journal-open'
+import { journalOpenRefusalError } from './journal-open-failure'
 import type { JournalStoreHost } from './journal-store-collaborators'
 import { openJournalStoreState } from './journal-store-open'
-import { deleteJournalRepairedSuffix } from './journal-repair-marker'
+import { AgentSessionJournalError } from './journal-write-guards'
 
-export function restoreJournalStore(
+export async function restoreJournalStore(
   host: JournalStoreHost,
   collaborators: { epochController: JournalEpochController }
 ): Promise<void> {
+  const database = host.database()
+  if (database.readOnly) {
+    // A newer Orca's database: nothing in it is read as this build's, and nothing is written.
+    throw journalOpenRefusalError(
+      new AgentSessionJournalError(
+        'journal_read_only',
+        `agent-session journal for ${host.identity.sessionId} is in a newer Orca's database`
+      )
+    )
+  }
   return openJournalStoreState({
-    journalDir: host.journalDir,
-    loaded: host.loaded(),
-    replay: () => {
-      const opened = host.database()
-      return replayJournal(opened.db, opened.readOnly, host.identity.sessionId)
-    },
-    deleteSuffix: (fromSeq, contentFrom) =>
-      deleteJournalRepairedSuffix({
-        db: host.database().db,
-        sessionId: host.identity.sessionId,
-        epoch: host.state().epoch,
-        fromSeq,
-        contentFrom,
-        now: host.now()
-      }),
+    sessionId: host.identity.sessionId,
+    replay: () => replayJournal(database.db, host.identity.sessionId),
     start: () => collaborators.epochController.start('session_created', 0),
-    // `unreconcilable_prefix` is the durable statement that this epoch exists
-    // because a repair emptied one: replay reads it back and keeps asking for
-    // provider history until the timeline is rebuilt or the session writes.
-    publishRepairEpoch: () =>
-      collaborators.epochController.start('unreconcilable_prefix', host.state().highestFence),
     adopt: host.adopt,
-    appendDisclosure: (identity, body, fence) =>
-      host.journal().appendItem(identity, body, { fence }),
-    agent: host.identity.agent,
-    highestFence: () => host.state().highestFence,
-    malformedRows: host.malformedRows,
-    setMalformedRows: host.setMalformedRows,
-    readOnly: host.readOnly
+    // Roster notices are about the conversation, not any turn in it.
+    appendItem: (identity, body, fence) =>
+      host.journal().appendItem(identity, body, { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
+    highestFence: () => host.state().highestFence
   })
 }

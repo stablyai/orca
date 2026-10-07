@@ -7,38 +7,75 @@ import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
-import { agentSessionPtyWriteGate } from '../../../runtime/agent-session-pty-write-gate'
-import { reportAgentSessionWriteRefusal } from '../agent-session-write-refusal-report'
+import {
+  writeRefused,
+  writeUnverifiable,
+  isSettledWrite,
+  type WriteSettlement
+} from '../../../../shared/pty-write-settlement'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+
+type RuntimeWriteDeps = Pick<PtyRuntimeControllerDeps, 'runtime'>
 
 export function writePtyFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  ptyId: string,
-  data: string
-): boolean {
-  // Why: the backstop for every runtime write path — query replies, followups, deliveries —
-  // so a caller that forgets the typed gate still cannot reach a provider.
-  const admission = agentSessionPtyWriteGate.admit(ptyId)
-  if (!admission.admitted) {
-    reportAgentSessionWriteRefusal(deps.mainWindow, ptyId, admission.refusal)
-    return false
-  }
-  try {
-    return getProviderForPty(ptyId).write(ptyId, data) !== false
-  } catch {
-    return false
-  }
-}
-
-export function writePtyAgentSessionProofFromRuntimeController(
+  deps: RuntimeWriteDeps,
   ptyId: string,
   data: string,
-  authority: { sessionId: string; spawnToken: string }
-): boolean {
-  if (!agentSessionPtyWriteGate.admitProof(ptyId, authority)) {
-    return false
+  inputKind: TerminalInputKind
+): boolean
+export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
+  ptyId: string,
+  data: string,
+  inputKind: TerminalInputKind,
+  options: { waitForSettlement: true }
+): WriteSettlement | Promise<WriteSettlement>
+export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
+  ptyId: string,
+  data: string,
+  inputKind: TerminalInputKind,
+  options?: { waitForSettlement: true }
+): boolean | WriteSettlement | Promise<WriteSettlement> {
+  const observeAcceptedInput = (): void => {
+    if (inputKind === 'driving' && ptyOwnership.get(ptyId) === null) {
+      deps.runtime?.observeClaudeTerminalEvidence?.(ptyId, { kind: 'input', data })
+    }
   }
+  let provider: IPtyProvider
   try {
-    return getProviderForPty(ptyId).write(ptyId, data) !== false
+    provider = getProviderForPty(ptyId)
+  } catch {
+    return options?.waitForSettlement ? writeRefused('provider_unavailable') : false
+  }
+  if (options?.waitForSettlement) {
+    // A provider that cannot settle says so before any effect; synthesizing acceptance
+    // from the fire-and-forget write is what cleared durable mailbox reservations.
+    if (!provider.writeWithSettlement) {
+      return writeRefused('provider_cannot_settle')
+    }
+    deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
+    try {
+      const result = provider.writeWithSettlement(ptyId, data)
+      const observe = (settlement: WriteSettlement): WriteSettlement => {
+        if (settlement.outcome === 'accepted') {
+          observeAcceptedInput()
+        }
+        return settlement
+      }
+      return isSettledWrite(result) ? observe(result) : result.then(observe)
+    } catch {
+      // A synchronous throw cannot prove the transport took nothing.
+      return writeUnverifiable('provider_threw_after_handoff', true)
+    }
+  }
+  deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
+  try {
+    const accepted = provider.write(ptyId, data) !== false
+    if (accepted) {
+      observeAcceptedInput()
+    }
+    return accepted
   } catch {
     return false
   }
@@ -163,11 +200,28 @@ export async function clearBufferFromRuntimeController(
   ptyId: string
 ): Promise<void> {
   // Why: desktop xterm and daemon/SSH providers hold separate buffers; clear both so mobile resubscribe can't resurrect cleared history.
-  deps.mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
+  if (deps.mainWindow && !deps.mainWindow.isDestroyed()) {
+    deps.mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
+  }
   try {
     await getProviderForPty(ptyId).clearBuffer(ptyId)
   } catch {
     /* best effort: renderer clear still handles local PTYs */
+  }
+}
+
+export async function resetInputModesFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string
+): Promise<void> {
+  // Why: a remote client's reset must also ground this host window's view of the pane.
+  if (deps.mainWindow && !deps.mainWindow.isDestroyed()) {
+    deps.mainWindow.webContents.send('pty:resetInputModes:request', { ptyId })
+  }
+  try {
+    await getProviderForPty(ptyId).resetInputModes(ptyId)
+  } catch {
+    /* best effort: an older daemon or relay rejects the request */
   }
 }
 

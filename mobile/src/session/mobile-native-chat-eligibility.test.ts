@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import {
   canShowMobileNativeChat,
+  isMobileFolderNativeChatReadable,
   isMobileNativeChatTranscriptReadable,
   resolveMobileNativeChat
 } from './mobile-native-chat-eligibility'
@@ -80,6 +81,22 @@ describe('resolveMobileNativeChat', () => {
     })
   })
 
+  it.each(['opencode', 'opencode2'])('admits %s only on the execution host', (agent) => {
+    const tab = {
+      type: 'terminal',
+      launchAgent: agent,
+      agentStatus: status({
+        providerSession: { key: 'session_id', id: 'real-session' }
+      })
+    }
+    expect(resolveMobileNativeChat(tab, true)).toEqual({
+      agent,
+      sessionId: 'real-session',
+      transcriptPath: null
+    })
+    expect(resolveMobileNativeChat(tab, false)).toBeNull()
+  })
+
   it('returns null for unsupported agents', () => {
     expect(resolveMobileNativeChat({ type: 'terminal', launchAgent: 'gemini' })).toBeNull()
   })
@@ -137,13 +154,27 @@ describe('resolveMobileNativeChat', () => {
     })
   })
 
-  it('rejects non-Codex structured agent-session tabs', () => {
+  it('resolves Claude structured agent-session tabs on the same journal path', () => {
     expect(
       resolveMobileNativeChat({
         type: 'agent-session',
         sessionId: 'structured-1',
         agent: 'claude'
-      } as never)
+      })
+    ).toEqual({
+      agent: 'claude',
+      sessionId: 'structured-1',
+      transcriptPath: null
+    })
+  })
+
+  it('rejects structured agent-session tabs whose provider the reducer cannot replay', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'agent-session',
+        sessionId: 'structured-1',
+        agent: 'grok'
+      })
     ).toBeNull()
   })
 
@@ -151,4 +182,18 @@ describe('resolveMobileNativeChat', () => {
     expect(canShowMobileNativeChat({ type: 'terminal', launchAgent: 'claude' })).toBe(true)
     expect(canShowMobileNativeChat(null)).toBe(false)
   })
+})
+
+it('resolves folder readability from the serving host catalog and rejects Model-A SSH', () => {
+  const read = (connectionId: unknown) =>
+    isMobileFolderNativeChatReadable(
+      {
+        folderWorkspaces: [{ id: 'one', connectionId }]
+      },
+      'folder:one'
+    )
+  expect(read(null)).toBe(true)
+  expect(read('ssh:box')).toBe(false)
+  expect(isMobileFolderNativeChatReadable({ folderWorkspaces: [] }, 'folder:one')).toBe(false)
+  expect(isMobileFolderNativeChatReadable(null, 'folder:one')).toBe(false)
 })

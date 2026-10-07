@@ -33,7 +33,8 @@ export async function buildSkillDeleteRootSet(input: {
   homeDir?: string
 }): Promise<SkillDeleteRootSet> {
   if (input.target.kind === 'wsl') {
-    const { distro, homeDir, cwd } = input.target
+    const { distro, homeDir } = input.target
+    const cwd = input.target.cwd ?? homeDir
     return {
       roots: [
         ...buildSkillDiscoverySources({

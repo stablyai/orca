@@ -8,7 +8,7 @@ import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-over
 import { waitForSessionReady } from './helpers/store'
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import { recognizeAgentProcess } from '../../src/shared/agent-process-recognition'
-import { SWALLOWED_ENTER_FIXTURE_TIMEOUT_MS } from '../../src/shared/orchestration-timing-budgets'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../src/shared/orchestration-timing-budgets'
 
 const execFileAsync = promisify(execFile)
 const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), 'orca-terminal-send-agent-prompt-'))
@@ -17,7 +17,8 @@ const fixtureMarker = `ORCA_TERMINAL_SEND_E2E_${process.pid}`
 const fixtureScript = path.join(process.cwd(), 'tests', 'tools', 'repro-terminal-send-submit.mjs')
 const fakeCodex = path.join(fixtureRoot, process.platform === 'win32' ? 'codex.cmd' : 'codex')
 const fakeCodexCommand = buildFakeAgentCommandOverride(fakeCodex)
-const swallowedEnterFixtureTimeoutMs = SWALLOWED_ENTER_FIXTURE_TIMEOUT_MS
+// Outlast the submission-effect budget so a swallowed Enter fails as a timeout, not a flake.
+const swallowedEnterFixtureTimeoutMs = AGENT_PROMPT_EFFECT_TIMEOUT_MS + 30_000
 
 writeFileSync(
   fakeCodex,
@@ -135,7 +136,7 @@ test('CLI text plus Enter waits for a slow agent composer before submitting', as
   })
 })
 
-test('CLI reports a swallowed Enter without submitting a second Enter', async ({
+test('CLI reports a swallowed Enter as accepted without submitting a second Enter', async ({
   electronApp,
   orcaPage,
   testRepoPath
@@ -163,7 +164,7 @@ test('CLI reports a swallowed Enter without submitting a second Enter', async ({
         terminal,
         '--timeout-ms',
         String(swallowedEnterFixtureTimeoutMs),
-        '--expect-stalled',
+        '--expect-unsubmitted',
         '--report',
         fixtureReport,
         '--marker',
@@ -184,7 +185,8 @@ test('CLI reports a swallowed Enter without submitting a second Enter', async ({
 
   expect(JSON.parse(stdout)).toMatchObject({
     rescueSent: false,
-    sendErrorCode: 'agent_prompt_stalled',
+    sendErrorCode: null,
+    promptStages: ['input_accepted'],
     contractOk: true,
     submitted: false,
     prematureEnters: 0,

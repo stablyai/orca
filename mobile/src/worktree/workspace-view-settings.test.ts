@@ -15,6 +15,7 @@ const base: MobileViewState = {
   sortMode: 'recent',
   hideSleeping: false,
   hideDefaultBranch: false,
+  alwaysShowDefaultBranch: false,
   filterRepoIds: [],
   collapsedGroups: [],
   workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES

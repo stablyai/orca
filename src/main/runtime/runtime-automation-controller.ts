@@ -55,6 +55,11 @@ export class RuntimeAutomationController {
     this.service = service
   }
 
+  /** Completed automation run terminals no client used, closed before an update; 0 off-headless. */
+  releaseFinishedRunTerminals(): Promise<number> {
+    return this.service?.releaseFinishedRunTerminals?.() ?? Promise.resolve(0)
+  }
+
   /** Keep runtime-owned automation work ahead of queued external probes. */
   withExternalProbePriority<T>(run: () => T): T {
     const wrap = this.service?.externalProbePriority
@@ -113,7 +118,7 @@ export class RuntimeAutomationController {
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
-    return this.store.createAutomation(
+    const automation = this.store.createAutomation(
       {
         creationKey: input.creationKey,
         name: input.name,
@@ -138,6 +143,8 @@ export class RuntimeAutomationController {
         ? { destination: destination ?? input.destination }
         : undefined
     )
+    await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+    return automation
   }
 
   async update(
@@ -179,18 +186,21 @@ export class RuntimeAutomationController {
     if (!targetChanged && patch.reuseSession && current.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
-    return this.store.updateAutomation(id, patch, options)
+    const automation = this.store.updateAutomation(id, patch, options)
+    await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+    return automation
   }
 
-  delete(
+  async delete(
     id: string,
     expectedOwner?: AutomationOwnerPrecondition
-  ): { removed: boolean; id: string } {
+  ): Promise<{ removed: boolean; id: string }> {
     if (!this.store?.deleteAutomation) {
       throw new Error('runtime_unavailable')
     }
     this.show(id)
     this.store.deleteAutomation(id, expectedOwner ? { expectedOwner } : undefined)
+    await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
     return { removed: true, id }
   }
 

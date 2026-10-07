@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-30T19:21:48.563Z",
+  "platform": "darwin",
+  "command": ["cline", "--config", "<scratch>/cline-or", "--data-dir", "<scratch>/cline-or/data"],
+  "cols": 120,
+  "rows": 40,
+  "note": "cline 3.0.66, macOS, OpenRouter free router, isolated --config/--data-dir, auto-approve turned off with Shift+Tab, a turn that runs a shell command; approval prompt left unanswered",
+  "exitCode": 0
+}

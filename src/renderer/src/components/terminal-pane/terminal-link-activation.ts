@@ -29,6 +29,23 @@ export function isTerminalLinkActionActivation(event: TerminalLinkMouseEvent | u
   )
 }
 
+export function isTerminalMiddleClickActivation(
+  event: TerminalLinkMouseEvent | undefined
+): boolean {
+  return Boolean(
+    event &&
+    event.button === 1 &&
+    !event.altKey &&
+    !event.shiftKey &&
+    !event.metaKey &&
+    !event.ctrlKey
+  )
+}
+
 export function isTerminalOwnedLinkGesture(event: TerminalLinkMouseEvent | undefined): boolean {
-  return isTerminalLinkDirectActivation(event) || isTerminalLinkActionActivation(event)
+  return (
+    isTerminalLinkDirectActivation(event) ||
+    isTerminalLinkActionActivation(event) ||
+    isTerminalMiddleClickActivation(event)
+  )
 }

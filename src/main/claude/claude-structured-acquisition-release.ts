@@ -12,8 +12,8 @@ import type {
 /**
  * Cleanup for an acquisition the host could not commit or prove. A session that
  * a first-hand exit already removed is not an absence to report as proven: the
- * ladder on its connection still answers, and that answer is classified exactly
- * as a start-time failure would be.
+ * ladder on its connection still answers, and that answer is classified like
+ * any other unproven acquisition cleanup.
  */
 export async function releaseClaudeAcquisition(input: {
   sessionId: string
@@ -23,7 +23,6 @@ export async function releaseClaudeAcquisition(input: {
   onExitProven?: (sessionId: string, exit: ClaudeSessionExit) => Promise<void>
   persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle']
   onEvent?: ClaudeStructuredSessionAdapterDeps['onEvent']
-  onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged']
 }): Promise<boolean> {
   const exit = input.exits.get(input.sessionId)
   if (!exit || input.sessions.has(input.sessionId) || input.acquisitions.get(input.sessionId)) {
@@ -35,8 +34,8 @@ export async function releaseClaudeAcquisition(input: {
   const retriedProof = firstProof || (await exit.connection.close())
   if (retriedProof) {
     await input.onExitProven?.(input.sessionId, exit)
-    // Keep the first-hand exit evidence indexed until the tree proof succeeds;
-    // a failed close must be retryable and cannot look like an absent session.
+    // Only a proven close drops the exit here. An unknown one stays indexed so it is retryable and
+    // cannot look like an absent session; an observed root exit is dropped by its own settlement.
     input.exits.delete(input.sessionId)
     return true
   }

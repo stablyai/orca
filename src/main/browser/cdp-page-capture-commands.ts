@@ -1,6 +1,6 @@
 import type { WebSocket } from 'ws'
 import type { WebContents } from 'electron'
-import { captureScreenshot } from './cdp-screenshot'
+import { captureScreenshot, type CapturePaintHold } from './cdp-screenshot'
 import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 import type { CdpClientResponseWriter } from './cdp-client-response-writer'
 
@@ -13,7 +13,8 @@ export class CdpPageCaptureCommands {
 
   constructor(
     private readonly webContents: WebContents,
-    private readonly responder: CdpClientResponseWriter
+    private readonly responder: CdpClientResponseWriter,
+    private readonly holdPaint: CapturePaintHold
   ) {}
 
   clear(): void {
@@ -71,12 +72,16 @@ export class CdpPageCaptureCommands {
     this.responder.sendResult(clientId, {}, client)
   }
 
-  handleScreenshot(client: WebSocket, clientId: number, params?: Record<string, unknown>): void {
-    captureScreenshot(
-      this.webContents,
-      params,
-      (result) => this.responder.sendResult(clientId, result, client),
-      (message) => this.responder.sendError(clientId, message, client)
-    )
+  async handleScreenshot(
+    client: WebSocket,
+    clientId: number,
+    params?: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      const result = await captureScreenshot(this.webContents, params, this.holdPaint)
+      this.responder.sendResult(clientId, result, client)
+    } catch (err) {
+      this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+    }
   }
 }

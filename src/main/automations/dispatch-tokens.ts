@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 const DISPATCH_TOKEN_TTL_MS = 30 * 60_000
+export const MAX_AUTOMATION_DISPATCH_TOKENS = 1024
 
 type DispatchTokenRecord = {
   automationId: string
@@ -20,6 +21,16 @@ function pruneExpiredDispatchTokens(now = Date.now()): void {
   }
 }
 
+function trimDispatchTokens(): void {
+  while (dispatchTokens.size > MAX_AUTOMATION_DISPATCH_TOKENS) {
+    const oldestEvictable = [...dispatchTokens].find(([, record]) => !record.inFlight)
+    if (!oldestEvictable) {
+      return
+    }
+    dispatchTokens.delete(oldestEvictable[0])
+  }
+}
+
 export function createAutomationDispatchToken(automationId: string, runId: string): string {
   pruneExpiredDispatchTokens()
   const token = randomUUID()
@@ -29,7 +40,12 @@ export function createAutomationDispatchToken(automationId: string, runId: strin
     expiresAt: Date.now() + DISPATCH_TOKEN_TTL_MS,
     inFlight: false
   })
+  trimDispatchTokens()
   return token
+}
+
+export function getAutomationDispatchTokenCountForTests(): number {
+  return dispatchTokens.size
 }
 
 export function beginAutomationDispatchTokenUse(args: {

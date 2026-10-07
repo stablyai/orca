@@ -13,6 +13,7 @@ import {
 } from './settings-capability-section-renderers'
 import {
   renderArtifactsSettingsSection,
+  renderSessionHistorySettingsSection,
   renderAutomationsSettingsSection,
   renderGeneralSettingsSection,
   renderIntegrationsSettingsSection,
@@ -34,6 +35,7 @@ import {
 } from './settings-interface-primary-section-renderers'
 import {
   renderAppearanceSettingsSection,
+  renderChatSettingsSection,
   renderInputSettingsSection,
   renderNotificationsSettingsSection,
   renderShortcutsSettingsSection,
@@ -127,6 +129,7 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
                 {renderAutomationsSettingsSection(context)}
                 {renderArtifactsSettingsSection(context)}
                 {renderShareSkillsSettingsSection(context)}
+                {renderSessionHistorySettingsSection(context)}
                 {renderGitSettingsSection(context)}
                 {renderTasksSettingsSection(context)}
                 {renderTerminalSettingsSection(context)}
@@ -135,6 +138,7 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
                 {renderMobileEmulatorSettingsSection(context)}
                 {renderFloatingWorkspaceSettingsSection(context)}
                 {renderAppearanceSettingsSection(context)}
+                {renderChatSettingsSection(context)}
                 {renderInputSettingsSection(context)}
                 {renderNotificationsSettingsSection(context)}
                 {renderShortcutsSettingsSection(context)}

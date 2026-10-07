@@ -11,11 +11,16 @@ import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-launch-directory'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
-import { resolvePinnedCodexRolloutProof } from './codex-tui-rollout-proof'
+import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
+import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
+import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
 
 export type CodexStructuredLaunchResolverDeps = {
-  store: AgentSessionRecordStore
+  store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinLaunchDirectory'>
+  resolveLaunchArgs: () => Promise<string[]> | string[]
   /** Absolute path of a workspace on this host. Rejects when the workspace no
    *  longer resolves, which is the case a stale mobile client hits. */
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
@@ -24,6 +29,34 @@ export type CodexStructuredLaunchResolverDeps = {
   /** Fresh shell/configured environment for this spawn; never written to the session record. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveRollout?: typeof resolvePinnedCodexRolloutProof
+  /** The user's Agent Permissions setting as thread policy, re-read per acquisition.
+   *  States both postures outright — a resume inherits the last one for any field left absent. */
+  resolvePermissionPolicy?: () => CodexStructuredPermissionPolicy
+}
+
+export type CodexStructuredInvocation = {
+  command: string
+  environment: NodeJS.ProcessEnv | undefined
+}
+
+/**
+ * The one place a structured Codex child's binary and environment are
+ * resolved. The session launch and the session-less catalog probe both build
+ * on it, so a probe can never list under a different binary or env than the
+ * session it stands in for. Env VALUES stay out of the catalog fingerprint:
+ * drift there heals on the next refresh.
+ */
+export async function resolveCodexStructuredInvocation(
+  deps: Pick<CodexStructuredLaunchResolverDeps, 'resolveCommand' | 'resolveEnvironment'>
+): Promise<CodexStructuredInvocation> {
+  const environment = await deps.resolveEnvironment?.()
+  const pathEnv = environment?.PATH ?? environment?.Path ?? null
+  const homePath = environment?.HOME ?? environment?.USERPROFILE
+  const command = (deps.resolveCommand ?? resolveCodexCommand)({
+    pathEnv,
+    ...(homePath ? { homePath } : {})
+  })
+  return { command, environment }
 }
 
 export function createCodexStructuredLaunchResolver(
@@ -46,28 +79,32 @@ export function createCodexStructuredLaunchResolver(
         `codex structured sessions run on the local host, not ${location.executionHostId}`
       )
     }
-    if (accountHome.variable !== 'CODEX_HOME') {
-      throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)
+    const pinned = CODEX_STRUCTURED_AGENT.accountHomeVariable
+    if (accountHome.variable !== pinned) {
+      throw new Error(`codex sessions pin ${pinned}, not ${accountHome.variable}`)
     }
-    const environment = await deps.resolveEnvironment?.()
-    const pathEnv = environment?.PATH ?? environment?.Path ?? null
-    const homePath = environment?.HOME ?? environment?.USERPROFILE
-    const command = (deps.resolveCommand ?? resolveCodexCommand)({
-      pathEnv,
-      ...(homePath ? { homePath } : {})
-    })
-    const args = [...(record.launchArgs ?? []), 'app-server']
+    const { command, environment } = await resolveCodexStructuredInvocation(deps)
+    const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
+    const permissionPolicy = deps.resolvePermissionPolicy?.()
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
+    // A Codex record's chain holds only Codex handles; the attach admission refuses anything else.
+    const resumeThreadId = head?.handle.nativeId ?? null
+    // The same saved options every turn sends, so the thread and its turns name one model.
+    const model = record.options?.model
     return {
       command,
-      args,
-      cwd: await deps.resolveWorkspacePath(location.workspaceId),
+      args: [...args, 'app-server'],
+      cwd: await resolveAgentSessionLaunchDirectory(deps, record),
       codexHome: accountHome.path,
       ...(environment ? { env: { ...environment } as Record<string, string> } : {}),
       // An empty chain is a session that has never proved a thread, so it
       // starts one; anything else resumes the last link this session proved.
       resumeThreadId,
+      // Only a thread this session created may still be one Codex never saved: a resumed,
+      // forked or adopted head names a conversation Codex held.
+      ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
+      ...(permissionPolicy ? { permissionPolicy } : {}),
+      ...(model ? { model } : {}),
       ...(resumeThreadId
         ? {
             resumePath: await (deps.resolveRollout ?? resolvePinnedCodexRolloutProof)(

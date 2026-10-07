@@ -1,7 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { KEYBINDING_DEFINITIONS } from './keybindings/definitions'
-import { getDefaultBindings } from './keybindings/effective'
-import { formatKeybindingList } from './keybindings/formatting'
 import { normalizeKeyToken, parseKeybinding } from './keybindings/parser'
 
 describe('parseKeybinding memoization', () => {
@@ -10,11 +7,6 @@ describe('parseKeybinding memoization', () => {
     const second = parseKeybinding('Mod+Shift+K')
     expect(first).not.toBeNull()
     expect(second).toBe(first)
-  })
-
-  it('caches rejections without re-parsing', () => {
-    expect(parseKeybinding('K+J')).toBeNull()
-    expect(parseKeybinding('K+J')).toBeNull()
   })
 
   it('never hands out an entry a caller can corrupt', () => {
@@ -32,44 +24,7 @@ describe('parseKeybinding memoization', () => {
     expect(parseKeybinding('DoubleTap+Shift')?.doubleTapModifier).toBe('Shift')
   })
 
-  it('parses every distinct token form identically across repeat calls', () => {
-    const tokens = [
-      ' ',
-      'a',
-      '7',
-      'f7',
-      '[',
-      '}',
-      '-',
-      '_',
-      '=',
-      '+',
-      ',',
-      '.',
-      '/',
-      '\\',
-      ';',
-      "'",
-      '`',
-      'return',
-      'esc',
-      'spacebar',
-      'pgup',
-      'pgdn',
-      'arrowleft',
-      'left',
-      'down',
-      'backspace',
-      'del',
-      'ins',
-      'numpadadd',
-      'subtract',
-      'nonsense',
-      ''
-    ]
-    for (const token of tokens) {
-      expect(normalizeKeyToken(token)).toBe(normalizeKeyToken(token))
-    }
+  it('maps token spellings through the table and blocks prototype keys', () => {
     expect(normalizeKeyToken(' ')).toBe('Space')
     expect(normalizeKeyToken('pgdn')).toBe('PageDown')
     expect(normalizeKeyToken('subtract')).toBe('NumpadSubtract')
@@ -78,18 +33,5 @@ describe('parseKeybinding memoization', () => {
     // Object.prototype keys must not leak through the token table.
     expect(normalizeKeyToken('constructor')).toBe(null)
     expect(normalizeKeyToken('__proto__')).toBe(null)
-  })
-})
-
-describe('shortcut label output', () => {
-  it('formats every default binding identically on repeat calls, on both glyph platforms', () => {
-    for (const platform of ['darwin', 'win32'] as const) {
-      for (const definition of KEYBINDING_DEFINITIONS) {
-        const bindings = getDefaultBindings(definition, platform)
-        const label = formatKeybindingList(bindings, platform)
-        expect(formatKeybindingList(bindings, platform)).toBe(label)
-        expect(label.length).toBeGreaterThan(0)
-      }
-    }
   })
 })

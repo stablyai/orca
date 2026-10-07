@@ -9,7 +9,17 @@ import {
   isCurrentSshProviderAuthority,
   rotateSshProviderAuthority
 } from '../ssh/ssh-provider-authority'
+import { allowsDirectSshRelay } from '../ssh/ssh-connection-store'
+import { adoptSshConnection, runAttributedToSshOwner } from '../ssh/ssh-connection-attribution'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
+import {
+  decideHostServer,
+  recheckWhenManagedFenceClears,
+  publishHostServerDecisionFailure,
+  refineRelayTerminalDecision,
+  publishManagedServerConnect,
+  recordRelayDecision
+} from './ssh-host-server-connect'
 import { activeSessions } from './ssh-active-relay-sessions'
 import {
   assertSshConnectsNotFenced,
@@ -39,7 +49,11 @@ import {
   getPublicSshState,
   relayStateOverrides
 } from './ssh-renderer-broadcast'
-import { abandonCancelledConnectAttempt, abandonFailedSshSession } from './ssh-session-teardown'
+import {
+  abandonCancelledConnectAttempt,
+  abandonDecisionTransport,
+  abandonFailedSshSession
+} from './ssh-session-teardown'
 import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
 
 export async function connectTarget(targetId: string): Promise<SshConnectionState> {
@@ -106,12 +120,15 @@ async function doConnect(
   const existingSession = activeSessions.get(targetId)
   const existingState = connectionManager!.getState(targetId)
   const existingMux = existingSession?.getMux()
+  // Why: plain SSH mode (runtime rung D) is live without a mux; a refresh must not kill its shells.
+  const existingTransportLive = existingMux
+    ? !existingMux.isDisposed()
+    : existingSession?.getPlainSshSession?.() != null
   if (
     existingSession?.getState() === 'ready' &&
     existingState?.status === 'connected' &&
     connectionManager!.getConnection(targetId) &&
-    existingMux &&
-    !existingMux.isDisposed() &&
+    existingTransportLive &&
     !relayStateOverrides.has(targetId) &&
     !relayLostBackoff.has(targetId)
   ) {
@@ -161,6 +178,59 @@ async function doConnect(
     }
   }
 
+  // Why before the decision: a transport the relay connect below reuses was not this attempt's.
+  const priorConnection = connectionManager!.getConnection(targetId)
+  // A transport the decision's census, deploy or conversion opens is attributed to this attempt,
+  // so a cancelled attempt closes exactly that one and nothing a newer owner took over.
+  const owner = Symbol(targetId)
+  // Why after the teardown above: deploy and conversion refuse while a direct session or transport
+  // exists, and the authority rotated synchronously so concurrent connects still join this one.
+  const server = await runAttributedToSshOwner(owner, () => decideHostServer(target)).catch(
+    async (error: unknown) => {
+      if (!isCurrentConnectAttempt(targetId, authority)) {
+        await abandonDecisionTransport(targetId, owner, authority)
+        throw createCancelledConnectAttemptError()
+      }
+      // A failed setup leaves no relay to own the transport its decision dialed.
+      await abandonDecisionTransport(targetId, owner, authority)
+      publishHostServerDecisionFailure(targetId, error)
+      throw error
+    }
+  )
+  // A shutdown that began during the decision is the actionable reason, ahead of the rotation.
+  assertSshConnectsNotFenced()
+  if (!isCurrentConnectAttempt(targetId, authority)) {
+    await abandonDecisionTransport(targetId, owner, authority)
+    throw createCancelledConnectAttemptError()
+  }
+  adoptCurrentTransport(targetId, owner)
+  if (server?.route === 'managed') {
+    if (server.fenceHeld) {
+      recheckWhenManagedFenceClears(target, server.environmentId)
+    }
+    return publishManagedServerConnect(
+      targetId,
+      server.environmentId,
+      server.update,
+      server.serving
+    )
+  }
+  if (server) {
+    recordRelayDecision(target, server)
+  }
+  // Re-read: a conversion attempt may have fenced the host since the lookup above.
+  const relayTarget = getSshTargetRegistryStore()!.getTarget(targetId) ?? target
+  if (!allowsDirectSshRelay(relayTarget)) {
+    // A setup that failed but kept its fence: the relay decision's detail is the real cause.
+    const blocked = new Error(
+      server?.detail ??
+        'This SSH host serves a managed Orca server; it is reached through that server.'
+    )
+    await abandonDecisionTransport(targetId, owner, authority)
+    publishHostServerDecisionFailure(targetId, blocked)
+    throw blocked
+  }
+
   // Why here and not only at entry: this is the publication point, and it is the last statement
   // before the transport opens. Checking it in the same synchronous block as activeSessions.set
   // means a connect either registers before the shutdown drain snapshots, or registers never and
@@ -180,14 +250,12 @@ async function doConnect(
   const ownsSession = (): boolean =>
     isCurrentConnectAttempt(targetId, authority) && activeSessions.get(targetId) === session
 
-  // Why captured here and not with existingState: connect() reuses an already-connected transport,
-  // and only a transport this attempt opened is this attempt's to close when it loses the race.
-  const priorConnection = connectionManager!.getConnection(targetId)
   const mintedConnection = (): SshConnection | null =>
     conn && conn !== priorConnection ? conn : null
 
   try {
     conn = await connectionManager!.connect(target)
+    adoptSshConnection(conn, owner)
     if (!ownsSession()) {
       throw createCancelledConnectAttemptError()
     }
@@ -222,6 +290,11 @@ async function doConnect(
     })
 
     await session.establish(conn, relayGracePeriodForTarget(target))
+    if (!ownsSession()) {
+      throw createCancelledConnectAttemptError()
+    }
+    await refineRelayTerminalDecision(target, server, ownsSession)
+    // The re-check can wait seconds on the relay; a connect cancelled meanwhile must not report.
     if (!ownsSession()) {
       throw createCancelledConnectAttemptError()
     }
@@ -261,4 +334,11 @@ async function doConnect(
   })
 
   return getPublicSshState(targetId)!
+}
+
+function adoptCurrentTransport(targetId: string, owner: symbol): void {
+  const current = connectionManager!.getConnection(targetId)
+  if (current) {
+    adoptSshConnection(current, owner)
+  }
 }

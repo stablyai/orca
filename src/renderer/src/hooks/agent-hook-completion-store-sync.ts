@@ -1,3 +1,6 @@
+import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '@/components/terminal-pane/agent-task-complete-policy'
+export { isAgentHookCompletionTrackingEnabled }
+
 type CompletionNotificationSettings = {
   readonly enabled?: boolean
   readonly agentTaskComplete?: boolean
@@ -23,15 +26,6 @@ export type AgentHookCompletionStoreSnapshot = {
 }
 
 type TabVisit = () => void
-
-export function isAgentHookCompletionTrackingEnabled(
-  state: AgentHookCompletionStoreSnapshot
-): boolean {
-  const notifications = state.settings?.notifications
-  const notificationEnabled =
-    notifications?.enabled !== false && notifications?.agentTaskComplete !== false
-  return notificationEnabled || state.settings?.experimentalTerminalAttention === true
-}
 
 function terminalTabLivenessMatches(
   current: AgentHookCompletionStoreSnapshot['tabsByWorktree'],

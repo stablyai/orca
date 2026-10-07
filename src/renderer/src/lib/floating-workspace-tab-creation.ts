@@ -9,10 +9,7 @@ import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { translate } from '@/i18n/i18n'
 import { assertClientCreationActionAvailable } from './client-creation-action-policy'
 
-type FloatingWorkspaceTerminalStore = Pick<
-  AppState,
-  'activeGroupIdByWorktree' | 'createTab' | 'activateTab'
->
+type FloatingWorkspaceTerminalStore = Pick<AppState, 'activeGroupIdByWorktree' | 'createTab'>
 
 type FloatingWorkspaceBrowserStore = Pick<
   AppState,
@@ -23,16 +20,15 @@ type FloatingWorkspaceMarkdownStore = Pick<AppState, 'activeGroupIdByWorktree' |
 
 export async function createFloatingWorkspaceTerminalTab(
   store: FloatingWorkspaceTerminalStore,
-  shellOverride?: string
+  shellOverride?: string,
+  /** A split group's own "+"; omitted, the tab lands in the focused group. */
+  groupId?: string
 ): Promise<TerminalTab | null> {
-  const targetGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+  const targetGroupId = groupId ?? store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
 
   // Why: the floating workspace is a local scratchpad; a focused remote runtime
   // must not own its SSH/tmux terminals or prune them via session snapshots.
-  const tab = store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride, {
-    activate: false
-  })
-  store.activateTab(tab.id)
+  const tab = store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride)
   focusTerminalTabSurface(tab.id)
   return tab
 }

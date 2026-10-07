@@ -132,18 +132,9 @@ describe('registerDashboardPopoutHandlers', () => {
 
     store.getSettings.mockReturnValue({ experimentalAgentDashboardPopout: true })
     handlers.get('dashboardPopout:open')!({ sender: mainSender } as never)
-    expect(createPopoutMock).toHaveBeenCalledWith(store, undefined, {
+    expect(createPopoutMock).toHaveBeenCalledWith(store, {
       getKeybindings: expect.any(Function)
     })
-
-    handlers.get('dashboardPopout:open')!({ sender: mainSender } as never, 'map')
-    expect(createPopoutMock).toHaveBeenLastCalledWith(store, 'map', {
-      getKeybindings: expect.any(Function)
-    })
-
-    createPopoutMock.mockClear()
-    handlers.get('dashboardPopout:open')!({ sender: mainSender } as never, 'invalid')
-    expect(createPopoutMock).not.toHaveBeenCalled()
   })
 
   it('auto-closes the popout when the feature is disabled', () => {
@@ -254,7 +245,15 @@ describe('registerDashboardPopoutHandlers', () => {
     handlers.get('dashboardPopout:ackAgent')!({ sender: popoutSender } as never, {
       paneKey: 'tab1:leaf1'
     })
-    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:ackDashboardAgent', 'tab1:leaf1')
+    handlers.get('dashboardPopout:ackAgent')!({ sender: popoutSender } as never, {
+      paneKey: 'tab1:leaf1',
+      intent: 'explicit'
+    })
+    // Anything but a click's explicit intent reads as a view.
+    expect(sendToTrustedMock.mock.calls).toEqual([
+      ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'view' }],
+      ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'explicit' }]
+    ])
   })
 
   it('relays only valid agent launches from the popout', () => {

@@ -1,5 +1,6 @@
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -18,6 +19,8 @@ const manifestPath = join(rendererOutput, '.vite', 'manifest.json')
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 const selectedFiles = new Set(['web-index.html'])
 const visitedEntries = new Set()
+const PDFJS_VIEWER_ASSET_DIRS = ['cmaps', 'standard_fonts', 'wasm']
+const TEXT_REFERENCE_OUTPUT = /\.(?:css|html|m?js|svg)$/
 
 function assertEntryIsolation() {
   const entryKeys = new Set(
@@ -94,26 +97,48 @@ function listOutputFiles(directory, prefix = '') {
 
 function includeReferencedOutputs() {
   const candidates = listOutputFiles(rendererOutput).filter(
-    (outputPath) => !outputPath.startsWith('.vite/') && !outputPath.endsWith('.html')
+    (outputPath) =>
+      !outputPath.startsWith('.vite/') &&
+      !outputPath.endsWith('.html') &&
+      !selectedFiles.has(outputPath) &&
+      // Viewer binaries are copied unconditionally and cannot extend the reference closure.
+      (TEXT_REFERENCE_OUTPUT.test(outputPath) ||
+        !PDFJS_VIEWER_ASSET_DIRS.some((directory) => outputPath.startsWith(`${directory}/`)))
   )
-  let foundReference = true
+  const referencesByDirectory = new Map()
 
-  while (foundReference) {
-    foundReference = false
-    for (const selectedFile of selectedFiles) {
-      if (!/\.(?:css|html|m?js|svg)$/.test(selectedFile)) {
+  // Set iteration also visits newly discovered files, including transitive references.
+  for (const selectedFile of selectedFiles) {
+    if (!TEXT_REFERENCE_OUTPUT.test(selectedFile)) {
+      continue
+    }
+    const directory = posix.dirname(selectedFile)
+    let references = referencesByDirectory.get(directory)
+    if (!references) {
+      references = candidates.map((candidate) => ({
+        candidate,
+        localReference: posix.relative(directory, candidate)
+      }))
+      referencesByDirectory.set(directory, references)
+    }
+    const contents = readFileSync(join(rendererOutput, selectedFile), 'utf8')
+    for (const { candidate, localReference } of references) {
+      if (selectedFiles.has(candidate)) {
         continue
       }
-      const contents = readFileSync(join(rendererOutput, selectedFile), 'utf8')
-      for (const candidate of candidates) {
-        if (selectedFiles.has(candidate)) {
-          continue
-        }
-        const localReference = posix.relative(posix.dirname(selectedFile), candidate)
-        if (contents.includes(candidate) || contents.includes(localReference)) {
-          selectedFiles.add(candidate)
-          foundReference = true
-        }
+      if (contents.includes(candidate) || contents.includes(localReference)) {
+        selectedFiles.add(candidate)
+      }
+    }
+  }
+}
+
+function includePdfjsViewerAssets() {
+  for (const directory of PDFJS_VIEWER_ASSET_DIRS) {
+    const root = join(rendererOutput, directory)
+    if (existsSync(root)) {
+      for (const outputPath of listOutputFiles(root, directory)) {
+        addOutputPath(outputPath)
       }
     }
   }
@@ -129,7 +154,10 @@ async function minifyWebOutput() {
         const result = await transform(readFileSync(targetPath, 'utf8'), {
           legalComments: 'none',
           loader,
-          minify: true,
+          // Vite asset scripts already have short names; keep them stable across asset hash changes.
+          minifyIdentifiers: !outputPath.startsWith('assets/'),
+          minifySyntax: true,
+          minifyWhitespace: true,
           target: 'es2020'
         })
         writeFileSync(targetPath, result.code)
@@ -140,6 +168,7 @@ async function minifyWebOutput() {
 assertEntryIsolation()
 visitManifestEntry('web-index.html')
 includeReferencedOutputs()
+includePdfjsViewerAssets()
 
 rmSync(stagingOutput, { force: true, recursive: true })
 try {

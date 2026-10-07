@@ -31,6 +31,26 @@ function item(index: number): AgentJournalRenderItem {
 }
 
 describe('structured agent session message projection', () => {
+  // The host recorded it, so its row is the message from here; the outbox copy gives way.
+  it("draws a send the host rejected from the host's row, not the outbox copy", () => {
+    const rejected = { ...submission(0), dispatchState: 'rejected' as const, providerItemId: null }
+    const refusedItem = { ...item(0), itemId: agentJournalSubmissionKey(rejected.clientMessageId) }
+    const draft = createStructuredAgentSessionOutboxEntry({
+      clientMessageId: rejected.clientMessageId,
+      sessionId: 'session-1',
+      text: 'An unsent draft',
+      attachments: [],
+      queuedAt: 1
+    })
+    expect(projectStructuredAgentSessionMessages([refusedItem], [draft], [rejected])).toEqual([
+      expect.objectContaining({
+        id: refusedItem.itemId,
+        blocks: [{ type: 'text', text: 'send 0' }],
+        unsent: true
+      })
+    ])
+  })
+
   it.each([5, 10])('renders %i rapid accepted desktop sends exactly once', (sendCount) => {
     const outbox = Array.from({ length: sendCount }, (_, index) =>
       createStructuredAgentSessionOutboxEntry({

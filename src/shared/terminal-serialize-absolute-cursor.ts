@@ -6,7 +6,13 @@
 // snapshot that will be replayed into another terminal must therefore end
 // with an absolute CUP derived from the SOURCE terminal's authoritative
 // cursor position. Snapshot producers that also need the VT100 DECSC
-// saved-cursor register carried across the restore compose it here too.
+// saved-cursor register carried across the restore compose it here too, and
+// the mouse encoding the addon's mode trailer omits rides beside it.
+
+import {
+  buildMouseEncodingRestoreSequence,
+  readTerminalMouseEncoding
+} from './terminal-mouse-encoding'
 
 type SerializeCursorTerminal = {
   cols: number
@@ -81,7 +87,20 @@ export function serializeWithAbsoluteCursor<TOpts>(
   if (serialized.length === 0) {
     return serialized
   }
-  return `${serialized}${buildAbsoluteCursorRestoreSequence(terminal, savedCursor)}`
+  // Why: the addon re-arms mouse tracking but not its encoding; restoring one without the other makes X10 reports.
+  const mouseEncodingRestore = serializesModes(opts)
+    ? buildMouseEncodingRestoreSequence(readTerminalMouseEncoding(terminal))
+    : ''
+  return `${serialized}${mouseEncodingRestore}${buildAbsoluteCursorRestoreSequence(terminal, savedCursor)}`
+}
+
+function serializesModes(opts: unknown): boolean {
+  return !(
+    typeof opts === 'object' &&
+    opts !== null &&
+    'excludeModes' in opts &&
+    opts.excludeModes === true
+  )
 }
 
 /** Cursor state appended after serialized modes; safe to replay without the frame body. */

@@ -81,7 +81,7 @@ export function createMobileDiffReviewFileKey(
 function statusEntryIdentity(entry: MobileGitStatusEntry, scope: DiffReviewScope): string {
   return buildMobileDiffIdentity([
     scope,
-    entry.area,
+    entry.area ?? '',
     entry.status,
     entry.oldPath ?? '',
     entry.path,
@@ -162,8 +162,15 @@ function queueNoteCounts(
   return { noteCount, unsentNoteCount, staleNoteCount }
 }
 
+/** A row whose staging area this build can place. One with no area is in no section either. */
+type PlaceableStatusEntry = MobileGitStatusEntry & { area: MobileGitStagingArea }
+
+function isPlaceableStatusEntry(entry: MobileGitStatusEntry): entry is PlaceableStatusEntry {
+  return entry.area !== undefined
+}
+
 function statusEntryToQueueItem(
-  entry: MobileGitStatusEntry,
+  entry: PlaceableStatusEntry,
   comments: readonly DiffComment[],
   reviewState: MobileDiffReviewState
 ): MobileDiffReviewQueueItem {
@@ -233,26 +240,25 @@ function branchEntryToQueueItem(
   }
 }
 
-function compareQueueItems(
-  first: MobileDiffReviewQueueItem,
-  second: MobileDiffReviewQueueItem
-): number {
-  return (
-    SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
-    Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
-    first.filePath.localeCompare(second.filePath, undefined, { numeric: true })
-  )
-}
-
 export function buildMobileDiffReviewQueue(
   input: BuildMobileDiffReviewQueueInput
 ): MobileDiffReviewQueueItem[] {
-  return [
-    ...input.statusEntries.map((entry) =>
-      statusEntryToQueueItem(entry, input.comments, input.reviewState)
-    ),
+  const queue = [
+    ...input.statusEntries
+      .filter(isPlaceableStatusEntry)
+      .map((entry) => statusEntryToQueueItem(entry, input.comments, input.reviewState)),
     ...input.branchEntries.map((entry) => branchEntryToQueueItem(entry, input))
-  ].sort(compareQueueItems)
+  ]
+  if (queue.length > 1) {
+    const collator = new Intl.Collator(undefined, { numeric: true })
+    queue.sort(
+      (first, second) =>
+        SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
+        Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
+        collator.compare(first.filePath, second.filePath)
+    )
+  }
+  return queue
 }
 
 export function filterMobileDiffReviewQueue(

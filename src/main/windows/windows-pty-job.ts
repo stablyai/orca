@@ -33,6 +33,19 @@ type ConptyNative = {
   assignCurrentProcessToJob: () => boolean
 }
 
+type SelfOwnedPty = IPty & {
+  jobRootProcessIsWrapper?: true
+  shellProcessId?: number
+  terminateOwnedTree?: () => JobTerminationOutcome
+  listOwnedProcessIds?: () => readonly number[] | null
+}
+
+/** The gate's pid never proves that its user shell remains alive. */
+export function ptyShellProcessId(proc: IPty): number | undefined {
+  const owned: SelfOwnedPty = proc
+  return owned.jobRootProcessIsWrapper ? owned.shellProcessId : proc.pid
+}
+
 let cachedNative: ConptyNative | null | undefined
 let nativeLoader: () => ConptyNative | null = loadConptyNative
 
@@ -89,6 +102,23 @@ export type JobTerminationOutcome = 'terminated' | 'unavailable'
  * to be misread as "nothing to kill".
  */
 export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
+  const owned: SelfOwnedPty = proc
+  if (typeof owned.terminateOwnedTree === 'function') {
+    let outcome: JobTerminationOutcome
+    try {
+      outcome = owned.terminateOwnedTree()
+    } catch {
+      return 'unavailable'
+    }
+    if (outcome === 'terminated') {
+      recordSelfInitiatedTreeKill({
+        pid: proc.pid,
+        site: 'windows-pty-job-teardown',
+        scope: 'win-pty-job'
+      })
+    }
+    return outcome
+  }
   const target = ptyJobTarget(proc)
   const native = nativeLoader()
   if (!target || !native) {
@@ -132,6 +162,14 @@ export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
  * including children that detached from the console.
  */
 export function listPtyJobProcessIds(proc: IPty): readonly number[] | null {
+  const owned: SelfOwnedPty = proc
+  if (typeof owned.listOwnedProcessIds === 'function') {
+    try {
+      return owned.listOwnedProcessIds()
+    } catch {
+      return null
+    }
+  }
   const target = ptyJobTarget(proc)
   const native = nativeLoader()
   if (!target || !native) {

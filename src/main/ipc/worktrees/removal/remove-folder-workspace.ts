@@ -43,6 +43,9 @@ export async function removeFolderWorkspace(
         : {}),
       localProvider: sshPtyProvider ?? getLocalPtyProvider(),
       onPtyStopped: clearProviderPtyState,
+      // A structured session is on no PTY surface, so the sweeps above leave it attached to a
+      // workspace this removal is about to forget. Closed best-effort, exactly like those PTYs.
+      closeStructuredSessions: true,
       ...(externalHost
         ? {
             includeProviderInventory: ownerHost?.kind === 'ssh' && Boolean(sshPtyProvider),

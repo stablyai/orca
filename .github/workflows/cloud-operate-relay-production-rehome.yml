@@ -52,6 +52,11 @@ on:
         required: true
         default: '86400000'
         type: string
+      host-cooldown-ms:
+        description: Minimum gap between two rehomes of the same host
+        required: true
+        default: '604800000'
+        type: string
       drain-grace-ms:
         description: Per-host source drain grace
         required: true
@@ -99,6 +104,7 @@ jobs:
       not-before: ${{ inputs.not-before }}
       rate-per-minute: ${{ inputs.rate-per-minute }}
       preference-max-age-ms: ${{ inputs.preference-max-age-ms }}
+      host-cooldown-ms: ${{ inputs.host-cooldown-ms }}
       drain-grace-ms: ${{ inputs.drain-grace-ms }}
       confirmation: ${{ inputs.confirmation }}
       monitor-run-id: ${{ inputs.monitor-run-id }}

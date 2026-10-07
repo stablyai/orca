@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CommandSpec } from './args'
+import { COMMAND_SPECS } from './specs'
 import {
   REPEATED_FLAG_SEPARATOR,
   findCommandSpec,
@@ -212,10 +213,6 @@ describe('command aliases', () => {
     expect(findCommandSpec(specs, ['worktree', 'remove'])?.path).toEqual(['worktree', 'rm'])
   })
 
-  it('resolves each declared alias to the canonical spec', () => {
-    expect(findCommandSpec(specs, ['worktree', 'delete'])?.path).toEqual(['worktree', 'rm'])
-  })
-
   it('returns undefined for a path matching neither canonical nor alias', () => {
     expect(findCommandSpec(specs, ['worktree', 'destroy'])).toBeUndefined()
   })
@@ -323,6 +320,25 @@ describe('validateCommandAndFlags', () => {
       expect(data?.nextSteps.join('\n')).toContain('--force')
       expect(data?.nextSteps.join('\n')).toContain('Valid flags:')
     }
+  })
+
+  it('points --from at --terminal on the one verb that renamed the caller flag', () => {
+    const parsed = parseArgs(['orchestration', 'check', '--from', 'term_a'])
+
+    try {
+      validateCommandAndFlags(COMMAND_SPECS, parsed)
+      throw new Error('expected validateCommandAndFlags to throw')
+    } catch (error) {
+      const data = (error as { data?: { suggestions: string[]; nextSteps: string[] } }).data
+      expect(data?.suggestions[0]).toBe('terminal')
+      expect(data?.nextSteps[0]).toContain('--terminal')
+    }
+  })
+
+  it('leaves --from alone where the command actually accepts it', () => {
+    const parsed = parseArgs(['orchestration', 'reply', '--from', 'term_a'])
+
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, parsed)).not.toThrow()
   })
 
   it('attaches did-you-mean suggestions to unknown-command errors', () => {

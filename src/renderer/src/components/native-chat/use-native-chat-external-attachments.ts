@@ -1,22 +1,62 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import {
+  nativeChatAttachmentOwnerUnchanged,
+  type NativeChatResolvedPathOptions
+} from './native-chat-resolved-path-ownership'
+import {
+  nativeChatAttachmentOwnerChangedNotice,
+  nativeChatAttachmentUnreadableNotice,
   nativeChatLocalAttachmentUnsupportedNotice,
+  nativeChatTooManyAttachmentsNotice,
   nativeChatWorktreeNotReadyNotice,
   resolveNativeChatAttachmentOwner,
   resolveNativeChatAttachmentOwnerForWorktree,
+  resolveNativeChatRuntimeSessionAttachmentOwner,
   uploadNativeChatAttachmentPaths,
-  type NativeChatAttachmentOwner
+  type NativeChatAttachmentOwner,
+  type NativeChatStructuredAttachmentSession
 } from './native-chat-attachment-upload'
+import {
+  attachNativeChatSessionAttachmentPaths,
+  type NativeChatPendingAttachmentChips
+} from './native-chat-session-attachment-drop'
+import { userNamedFileAccess } from '@/lib/local-file-access'
+import { findTerminalTabWorktreeId } from './native-chat-file-link'
 
 export type UseNativeChatExternalAttachmentsArgs = {
   terminalTabId: string
   structuredWorktreeId?: string
+  /** The structured chat behind this composer; decides where its uploads are stored. */
+  structuredSession?: NativeChatStructuredAttachmentSession
   /** Live composer-disabled state; read at await-resume via a ref so a flip
    *  mid-upload doesn't attach into a guarded composer. */
   disabled: boolean
-  attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
+  attachResolvedPaths: (
+    paths: string[],
+    connectionId?: string | null,
+    options?: NativeChatResolvedPathOptions
+  ) => void
+  /** Chips shown while a file uploads, so Send waits for it. */
+  pendingChips: NativeChatPendingAttachmentChips
   setNotice: (notice: string | null) => void
+}
+
+type ComposerWorkspace = {
+  structuredWorktreeId?: string
+  terminalTabId: string
+  structuredSession?: NativeChatStructuredAttachmentSession
+}
+
+function isSameComposerWorkspace(captured: ComposerWorkspace, current: ComposerWorkspace): boolean {
+  return (
+    captured.structuredWorktreeId === current.structuredWorktreeId &&
+    captured.terminalTabId === current.terminalTabId &&
+    captured.structuredSession?.sessionId === current.structuredSession?.sessionId &&
+    captured.structuredSession?.runtimeEnvironmentId ===
+      current.structuredSession?.runtimeEnvironmentId
+  )
 }
 
 /**
@@ -27,8 +67,10 @@ export type UseNativeChatExternalAttachmentsArgs = {
 export function useNativeChatExternalAttachments({
   terminalTabId,
   structuredWorktreeId,
+  structuredSession,
   disabled,
   attachResolvedPaths,
+  pendingChips,
   setNotice
 }: UseNativeChatExternalAttachmentsArgs): {
   attachExternalPaths: (paths: string[]) => void
@@ -39,13 +81,40 @@ export function useNativeChatExternalAttachments({
     disabledRef.current = disabled
   }, [disabled])
 
-  const resolveAttachmentOwner = useCallback(
-    () =>
-      structuredWorktreeId
-        ? resolveNativeChatAttachmentOwnerForWorktree(useAppStore.getState(), structuredWorktreeId)
-        : resolveNativeChatAttachmentOwner(useAppStore.getState(), terminalTabId),
-    [structuredWorktreeId, terminalTabId]
-  )
+  // The post-await gate asks which workspace this composer serves now, so it
+  // reads the pane through a ref. Resolving through the render closure would
+  // re-ask the workspace the upload started in — a comparison with itself.
+  const sessionId = structuredSession?.sessionId
+  const runtimeEnvironmentId = structuredSession?.runtimeEnvironmentId ?? null
+  const workspaceRef = useRef<ComposerWorkspace>({
+    structuredWorktreeId,
+    terminalTabId,
+    structuredSession
+  })
+  useLayoutEffect(() => {
+    workspaceRef.current = {
+      structuredWorktreeId,
+      terminalTabId,
+      structuredSession: sessionId ? { sessionId, runtimeEnvironmentId } : undefined
+    }
+  }, [runtimeEnvironmentId, sessionId, structuredWorktreeId, terminalTabId])
+  const pendingChipsRef = useRef(pendingChips)
+  useLayoutEffect(() => {
+    pendingChipsRef.current = pendingChips
+  }, [pendingChips])
+
+  const resolveAttachmentOwner = useCallback(() => {
+    const { structuredWorktreeId, structuredSession, terminalTabId } = workspaceRef.current
+    if (structuredWorktreeId && structuredSession?.runtimeEnvironmentId) {
+      return resolveNativeChatRuntimeSessionAttachmentOwner({
+        sessionId: structuredSession.sessionId,
+        runtimeEnvironmentId: structuredSession.runtimeEnvironmentId
+      })
+    }
+    return structuredWorktreeId
+      ? resolveNativeChatAttachmentOwnerForWorktree(useAppStore.getState(), structuredWorktreeId)
+      : resolveNativeChatAttachmentOwner(useAppStore.getState(), terminalTabId)
+  }, [])
 
   const attachExternalPaths = useCallback(
     (paths: string[]) => {
@@ -61,16 +130,90 @@ export function useNativeChatExternalAttachments({
         setNotice(nativeChatLocalAttachmentUnsupportedNotice())
         return
       }
+      // The picker has no native cap, so it gets the same all-or-nothing limit as a drop.
+      if (paths.length > NATIVE_FILE_DROP_MAX_PATHS) {
+        setNotice(nativeChatTooManyAttachmentsNotice())
+        return
+      }
+      // Why every exit reports: a drop that reaches here and produces nothing is
+      // the silent-failure complaint in #15782. Only a disabled composer stays
+      // quiet — it is being torn down or guarded, and has no notice surface.
+      const capturedWorkspace = workspaceRef.current
+      const currentWorktreeId = (): string | null =>
+        workspaceRef.current.structuredWorktreeId ??
+        findTerminalTabWorktreeId(
+          useAppStore.getState().tabsByWorktree,
+          workspaceRef.current.terminalTabId
+        )
+      const capturedWorktreeId = currentWorktreeId()
+      // Both halves matter: a moved tab can land on a workspace that reports the
+      // same owner kind, and the owner alone would call that unchanged.
+      const ownerStillCurrent = (): boolean =>
+        isSameComposerWorkspace(capturedWorkspace, workspaceRef.current) &&
+        capturedWorktreeId === currentWorktreeId() &&
+        nativeChatAttachmentOwnerUnchanged(owner, resolveAttachmentOwner())
+      if (owner.kind === 'runtime-session') {
+        void attachNativeChatSessionAttachmentPaths({
+          paths,
+          owner,
+          chips: pendingChipsRef.current,
+          isAbandoned: () => disabledRef.current,
+          ownerStillCurrent,
+          setNotice
+        })
+        return
+      }
       if (owner.kind !== 'ssh') {
-        attachResolvedPaths(paths)
+        void (async () => {
+          const readablePaths: string[] = []
+          for (const targetPath of paths) {
+            if (disabledRef.current) {
+              return
+            }
+            if (!ownerStillCurrent()) {
+              setNotice(nativeChatAttachmentOwnerChangedNotice())
+              return
+            }
+            try {
+              await window.api.fs.stat({ filePath: targetPath, access: userNamedFileAccess() })
+              readablePaths.push(targetPath)
+            } catch {
+              // Skip unreadable paths, matching workspace composer drops.
+            }
+          }
+          if (disabledRef.current) {
+            return
+          }
+          if (!ownerStillCurrent()) {
+            setNotice(nativeChatAttachmentOwnerChangedNotice())
+            return
+          }
+          if (readablePaths.length === 0) {
+            setNotice(nativeChatAttachmentUnreadableNotice())
+            return
+          }
+          attachResolvedPaths(readablePaths, undefined, { destinationIsCurrent: ownerStillCurrent })
+        })()
         return
       }
       void (async () => {
         const remotePaths = await uploadNativeChatAttachmentPaths(paths, owner)
-        if (!remotePaths || remotePaths.length === 0 || disabledRef.current) {
+        if (disabledRef.current) {
           return
         }
-        attachResolvedPaths(remotePaths, owner.connectionId)
+        if (!remotePaths || remotePaths.length === 0) {
+          // uploadNativeChatAttachmentPaths already toasted the IPC failure;
+          // an empty result with no failure means nothing was readable.
+          setNotice(nativeChatAttachmentUnreadableNotice())
+          return
+        }
+        if (!ownerStillCurrent()) {
+          setNotice(nativeChatAttachmentOwnerChangedNotice())
+          return
+        }
+        attachResolvedPaths(remotePaths, owner.connectionId, {
+          destinationIsCurrent: ownerStillCurrent
+        })
       })()
     },
     [attachResolvedPaths, resolveAttachmentOwner, setNotice]

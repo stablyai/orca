@@ -133,6 +133,16 @@ describe('SyncDatabase statement cache', () => {
     expect(statement.get('c')).toEqual({ label: 'gamma' })
   })
 
+  it('reports whether a transaction is active', async () => {
+    const db = await createDatabase()
+
+    expect(db.isTransaction).toBe(false)
+    db.exec('BEGIN IMMEDIATE')
+    expect(db.isTransaction).toBe(true)
+    db.exec('ROLLBACK')
+    expect(db.isTransaction).toBe(false)
+  })
+
   it('preserves pragma and exec behavior', async () => {
     const db = await createDatabase()
 
@@ -203,7 +213,7 @@ describe('SyncDatabase read-only opens under contention', () => {
       thrown = error
     }
 
-    expect((thrown as { errcode?: number }).errcode).toBe(5)
+    expect(thrown).toMatchObject({ errcode: 5 })
     expect((thrown as Error).message).toContain('database is locked')
     expect(Date.now() - startedAt).toBeLessThan(200)
   })

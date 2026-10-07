@@ -23,6 +23,7 @@ export type AgentBucketCountState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
+  | 'paneForegroundAgentByPaneKey'
   | 'folderWorkspaces'
   | 'acknowledgedAgentsByPaneKey'
   | 'agentStatusEpoch'
@@ -34,8 +35,8 @@ export type AgentBucketCountState = Pick<
 
 // Why module scope rather than useShallow: zustand runs this selector on every
 // store write, and shallow() on a plain object takes the compareEntries path —
-// two Object.entries arrays, 28 tuples and two Maps allocated per write just to
-// conclude nothing moved. Fourteen `===` against the previous slices allocates
+// two Object.entries arrays, 30 tuples and two Maps allocated per write just to
+// conclude nothing moved. Fifteen `===` against the previous slices allocates
 // nothing on the unchanged path, and the result is a pure function of the state
 // so one gate can serve every mounted consumer.
 let previousState: AgentBucketCountState | null = null
@@ -60,6 +61,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     previous.terminalLayoutsByTabId === s.terminalLayoutsByTabId &&
     previous.ptyIdsByTabId === s.ptyIdsByTabId &&
     previous.runtimePaneTitlesByTabId === s.runtimePaneTitlesByTabId &&
+    previous.paneForegroundAgentByPaneKey === s.paneForegroundAgentByPaneKey &&
     previous.folderWorkspaces === s.folderWorkspaces &&
     previous.acknowledgedAgentsByPaneKey === s.acknowledgedAgentsByPaneKey &&
     previous.agentStatusEpoch === s.agentStatusEpoch
@@ -78,6 +80,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,
     ptyIdsByTabId: s.ptyIdsByTabId,
     runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+    paneForegroundAgentByPaneKey: s.paneForegroundAgentByPaneKey,
     folderWorkspaces: s.folderWorkspaces,
     acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
     agentStatusEpoch: s.agentStatusEpoch,

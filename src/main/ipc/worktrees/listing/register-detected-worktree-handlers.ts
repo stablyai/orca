@@ -5,7 +5,11 @@ import type {
   DirectSshDetectedWorktreeRequest,
   ProviderRequestId
 } from '../../../../shared/detected-worktree-provider-contract'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost
+} from '../../../../shared/execution-host'
 import {
   registerSshProviderRequestAbort,
   getSshProviderAuthority,
@@ -57,7 +61,9 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
                   status: timedOut ? 'timed-out' : 'canceled'
                 })
               }
-              controller.signal.addEventListener('abort', onAbort, { once: true })
+              controller.signal.addEventListener('abort', onAbort, {
+                once: true
+              })
               removeAbortListener = () => controller.signal.removeEventListener('abort', onAbort)
             })
           : undefined
@@ -99,17 +105,16 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
           worktrees: []
         }
       }
-      const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : undefined
-      const authority = repo.connectionId
-        ? { ...getSshProviderAuthority(repo.connectionId) }
-        : undefined
+      const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+      const provider = connectionId ? getSshGitProvider(connectionId) : undefined
+      const authority = connectionId ? { ...getSshProviderAuthority(connectionId) } : undefined
       const result = await listDetectedWorktreesForCapturedRepo(
         store,
         repo,
         () =>
           isCapturedRepoCurrent(store, repo) &&
-          (!repo.connectionId ||
-            (getSshGitProvider(repo.connectionId) === provider &&
+          (!connectionId ||
+            (getSshGitProvider(connectionId) === provider &&
               authority !== undefined &&
               isCurrentSshProviderAuthority(authority))),
         provider

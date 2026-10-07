@@ -15,21 +15,11 @@ export type LegacyFilesListResult = {
   truncated: boolean
 }
 
-// Same detection shape as isMobileGitUnavailable in mobile-git-status.ts:
-// 'forbidden' = method exists but is not mobile-allowlisted on the old
-// desktop; 'method_not_found' = desktop predates the method entirely.
-export function isMobileMethodUnavailableError(
-  code: string | undefined,
-  message: string | undefined
-): boolean {
-  return (
-    code === 'forbidden' ||
-    code === 'method_not_found' ||
-    message?.includes('not available to mobile clients') === true
-  )
-}
-
-export function directoryCacheFromFileList(files: LegacyMobileFileEntry[]): DirectoryCache {
+// Takes only the member it reads: the explorer's reply reader checks `relativePath` and passes the
+// rest of each row through, so naming the whole row here would re-declare what it deliberately did not.
+export function directoryCacheFromFileList(
+  files: readonly { relativePath: string; [member: string]: unknown }[]
+): DirectoryCache {
   const childrenByDir = new Map<string, Map<string, boolean>>()
   const ensureDir = (path: string): Map<string, boolean> => {
     let children = childrenByDir.get(path)

@@ -1,125 +1,53 @@
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
-import {
-  settleStructuredAgentLaunchPrompt,
-  type StructuredPromptDeliveryResult
-} from '@/lib/structured-agent-session-launch-prompt'
+import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
+import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
-
-export type StructuredRefusalFallback = () =>
-  | void
-  | StructuredPromptDeliveryResult
-  | Promise<void | StructuredPromptDeliveryResult>
+import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'
+import type { AgentLaunchRequestId } from './agent-launch-request-id'
 
 export type StructuredAgentLaunchOptions = {
+  /** The user action this start serves; only a re-delivery of it joins its chat. */
+  requestId: AgentLaunchRequestId
   prompt?: string
-  promptDelivery?: 'auto-submit' | 'submit-after-ready'
+  promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void
+  /** Adopt an existing provider conversation instead of starting a fresh one. Part of the launch's
+   *  identity, not a preference — see `launchIdentity`. */
+  resumeFrom?: StructuredAgentSessionResumeSource
+  /** The host the route decided on; read only by the caller that starts the launch. */
+  executionHostId?: ExecutionHostId
+  /** The saved selection a paired host reported it will seed; read only by the starting caller. */
+  hostSeedOptions?: Readonly<Record<string, string>>
+  /** The tab group the chat opens in; a request with no text reuses an empty chat only there. */
+  targetGroupId?: string
 }
 
 export type StructuredLaunchCaller = {
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
-  refusalFallback: {
-    callback: StructuredRefusalFallback | null
-    promise: Promise<boolean>
-    resolve: (ran: boolean) => void
-    reject: (error: unknown) => void
-    promptDeliveryPromise: Promise<StructuredPromptDeliveryResult | null>
-    resolvePromptDelivery: (result: StructuredPromptDeliveryResult | null) => void
-    started: boolean
-    settled: boolean
-    ran: boolean
-  }
 }
 
 export type StructuredLaunchCallerGroup = {
-  outcome: 'pending' | 'published' | 'failed' | 'refused' | 'unknown' | 'cancelled'
+  outcome: 'pending' | 'published' | 'failed' | 'unknown' | 'cancelled'
+  attempt: StructuredLaunchAttempt
+  /** When this attempt failed; a retry starts a new group, so it never outlives the failure. */
+  failedAt?: number
   entries: Set<StructuredLaunchCaller>
   promptDeliveryResults: Set<Promise<StructuredPromptDeliveryResult>>
-  refusalSettlement: {
-    promise: Promise<boolean>
-    resolve: (ran: boolean) => void
-    reject: (error: unknown) => void
-    settled: boolean
-    failure: { error: unknown } | null
-  }
   onSettled: () => void
 }
 
-export function createStructuredLaunchCallerGroup(): StructuredLaunchCallerGroup {
-  const refusalSettlement = Promise.withResolvers<boolean>()
+export function createStructuredLaunchCallerGroup(
+  attempt: StructuredLaunchAttempt
+): StructuredLaunchCallerGroup {
   return {
     outcome: 'pending',
+    attempt,
     entries: new Set(),
     promptDeliveryResults: new Set(),
-    refusalSettlement: {
-      promise: refusalSettlement.promise,
-      resolve: refusalSettlement.resolve,
-      reject: refusalSettlement.reject,
-      settled: false,
-      failure: null
-    },
     onSettled: () => {}
   }
-}
-
-function settleCallerWithoutFallback(caller: StructuredLaunchCaller): void {
-  if (caller.refusalFallback.settled) {
-    return
-  }
-  caller.refusalFallback.settled = true
-  caller.refusalFallback.resolve(false)
-  caller.refusalFallback.resolvePromptDelivery(null)
-}
-
-function finalizeRefusalSettlement(group: StructuredLaunchCallerGroup): void {
-  if (
-    group.outcome !== 'refused' ||
-    group.refusalSettlement.settled ||
-    [...group.entries].some((caller) => !caller.refusalFallback.settled)
-  ) {
-    return
-  }
-  group.refusalSettlement.settled = true
-  if (group.refusalSettlement.failure) {
-    group.refusalSettlement.reject(group.refusalSettlement.failure.error)
-  } else {
-    group.refusalSettlement.resolve([...group.entries].some((caller) => caller.refusalFallback.ran))
-  }
-  group.onSettled()
-}
-
-function runCallerRefusalFallback(
-  group: StructuredLaunchCallerGroup,
-  caller: StructuredLaunchCaller
-): void {
-  if (caller.refusalFallback.started || caller.refusalFallback.settled) {
-    return
-  }
-  caller.refusalFallback.started = true
-  const fallback = caller.refusalFallback.callback
-  if (!fallback) {
-    settleCallerWithoutFallback(caller)
-    finalizeRefusalSettlement(group)
-    return
-  }
-  void Promise.resolve()
-    .then(fallback)
-    .then(
-      (result) => {
-        caller.refusalFallback.ran = true
-        caller.refusalFallback.resolve(true)
-        caller.refusalFallback.resolvePromptDelivery(result ?? null)
-      },
-      (error) => {
-        group.refusalSettlement.failure ??= { error }
-        caller.refusalFallback.reject(error)
-        caller.refusalFallback.resolvePromptDelivery(null)
-      }
-    )
-    .finally(() => {
-      caller.refusalFallback.settled = true
-      finalizeRefusalSettlement(group)
-    })
 }
 
 function trackPromptDelivery(
@@ -137,90 +65,37 @@ function trackPromptDelivery(
 export function addStructuredLaunchCaller(args: {
   group: StructuredLaunchCallerGroup
   launchResult: Promise<{ sessionId: string; fence: number }>
+  target: RuntimeClientTarget
   options: StructuredAgentLaunchOptions
   stagedEntry: StructuredAgentSessionOutboxEntry | null
 }): StructuredLaunchCaller {
-  const fallback = Promise.withResolvers<boolean>()
-  const fallbackPromptDelivery = Promise.withResolvers<StructuredPromptDeliveryResult | null>()
-  const caller: StructuredLaunchCaller = {
-    refusalFallback: {
-      callback: null,
-      promise: fallback.promise,
-      resolve: fallback.resolve,
-      reject: fallback.reject,
-      promptDeliveryPromise: fallbackPromptDelivery.promise,
-      resolvePromptDelivery: fallbackPromptDelivery.resolve,
-      started: false,
-      settled: false,
-      ran: false
-    }
-  }
+  const caller: StructuredLaunchCaller = {}
   args.group.entries.add(caller)
   const promptDeliveryResult = settleStructuredAgentLaunchPrompt({
     launchResult: args.launchResult,
+    target: args.target,
     options: args.options,
     stagedEntry: args.stagedEntry
   })
-  caller.promptDeliveryResult = promptDeliveryResult?.catch(async (error) => {
-    if (error instanceof StructuredAgentSessionCreateRefusalError) {
-      return (
-        (await caller.refusalFallback.promptDeliveryPromise) ?? {
-          delivered: false,
-          failureNotified: true
-        }
-      )
-    }
-    return { delivered: false, failureNotified: true }
-  })
+  caller.promptDeliveryResult = promptDeliveryResult?.catch(() => ({
+    delivered: false,
+    failureNotified: true
+  }))
   if (caller.promptDeliveryResult) {
     trackPromptDelivery(args.group, caller.promptDeliveryResult)
-  }
-  if (['published', 'failed', 'cancelled'].includes(args.group.outcome)) {
-    settleCallerWithoutFallback(caller)
-  } else if (args.group.outcome === 'refused') {
-    queueMicrotask(() => runCallerRefusalFallback(args.group, caller))
   }
   return caller
 }
 
-export function settleStructuredLaunchCallersWithoutFallback(
+export function settleStructuredLaunchCallers(
   group: StructuredLaunchCallerGroup,
   outcome: 'published' | 'failed' | 'cancelled'
 ): void {
   group.outcome = outcome
-  for (const caller of group.entries) {
-    settleCallerWithoutFallback(caller)
-  }
-  if (!group.refusalSettlement.settled) {
-    group.refusalSettlement.settled = true
-    group.refusalSettlement.resolve(false)
+  if (outcome === 'failed') {
+    group.failedAt = Date.now()
   }
   group.onSettled()
-}
-
-export function settleStructuredLaunchCallersWithFallback(
-  group: StructuredLaunchCallerGroup
-): void {
-  if (group.outcome === 'refused') {
-    return
-  }
-  group.outcome = 'refused'
-  for (const caller of group.entries) {
-    runCallerRefusalFallback(group, caller)
-  }
-  finalizeRefusalSettlement(group)
-}
-
-export function claimStructuredLaunchCallerFallback(
-  group: StructuredLaunchCallerGroup,
-  caller: StructuredLaunchCaller,
-  fallback: StructuredRefusalFallback
-): Promise<boolean> {
-  caller.refusalFallback.callback ??= fallback
-  if (group.outcome === 'refused') {
-    runCallerRefusalFallback(group, caller)
-  }
-  return caller.refusalFallback.promise
 }
 
 export function releaseStructuredLaunchCallerAfterUnknownOutcome(
@@ -230,7 +105,6 @@ export function releaseStructuredLaunchCallerAfterUnknownOutcome(
   if (group.outcome !== 'unknown' || !group.entries.delete(caller)) {
     return false
   }
-  settleCallerWithoutFallback(caller)
   group.onSettled()
   return true
 }
@@ -241,7 +115,6 @@ export function structuredLaunchCallersHavePendingWork(
   return (
     group.outcome === 'pending' ||
     group.outcome === 'unknown' ||
-    group.promptDeliveryResults.size > 0 ||
-    (group.outcome === 'refused' && !group.refusalSettlement.settled)
+    group.promptDeliveryResults.size > 0
   )
 }

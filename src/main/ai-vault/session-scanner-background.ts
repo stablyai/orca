@@ -3,10 +3,9 @@ import type {
   AiVaultSessionTitleRequest,
   AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
-import {
-  readAiVaultFirstUserPrompt,
-  type ReadAiVaultFirstUserPromptArgs,
-  type ReadAiVaultFirstUserPromptResult
+import type {
+  ReadAiVaultFirstUserPromptArgs,
+  ReadAiVaultFirstUserPromptResult
 } from './session-first-user-prompt-read'
 import {
   clearAiVaultServiceRestartCircuit,
@@ -17,72 +16,52 @@ import {
   resolveAiVaultSessionTitlesInService,
   scanAiVaultSessionsInService
 } from './session-scanner-service-spawn'
-import type { AiVaultServiceSubagentRequest } from './session-scanner-service-protocol'
-import {
-  resetAiVaultScannerWorkerForTests,
-  resolveAiVaultSessionTitlesInWorker,
-  scanAiVaultSessionsInWorker
-} from './session-scanner-worker-spawn'
-import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
-import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
-
-export function shouldUseAiVaultServiceProcess(): boolean {
-  const configured = process.env.ORCA_AI_VAULT_SERVICE_PROCESS
-  if (configured === '1') {
-    return true
-  }
-  if (configured === '0') {
-    return false
-  }
-  return process.env.NODE_ENV !== 'test'
-}
+import type {
+  AiVaultServiceScanOptions,
+  AiVaultServiceSubagentRequest
+} from './session-scanner-service-protocol'
+import { isWslUncPath } from '../../shared/wsl-paths'
 
 // Let forced refreshes retry after a local service circuit opens.
 export function clearAiVaultBackgroundRestartCircuit(): void {
-  if (shouldUseAiVaultServiceProcess()) {
-    clearAiVaultServiceRestartCircuit()
-  }
+  clearAiVaultServiceRestartCircuit()
 }
 
 export function scanAiVaultSessionsInBackground(
-  options: AiVaultWorkerScanOptions,
+  options: AiVaultServiceScanOptions,
   signal?: AbortSignal
 ): Promise<AiVaultListResult> {
-  return shouldUseAiVaultServiceProcess()
-    ? scanAiVaultSessionsInService(options, signal)
-    : scanAiVaultSessionsInWorker(options, signal)
+  return scanAiVaultSessionsInService(options, signal)
 }
 
 export function resolveAiVaultSessionTitlesInBackground(
   requests: AiVaultSessionTitleRequest[],
   signal?: AbortSignal
 ): Promise<AiVaultSessionTitlesResult> {
-  return shouldUseAiVaultServiceProcess()
-    ? resolveAiVaultSessionTitlesInService(requests, signal)
-    : resolveAiVaultSessionTitlesInWorker(requests, signal)
+  return resolveAiVaultSessionTitlesInService(requests, signal)
 }
 
 export function listAiVaultSubagentSessionsInBackground(
   request: AiVaultServiceSubagentRequest
 ): Promise<AiVaultSubagentListResult> {
-  return shouldUseAiVaultServiceProcess()
-    ? listAiVaultSubagentSessionsInService(request)
-    : listLocalAiVaultSubagentSessions(request)
+  return listAiVaultSubagentSessionsInService(request)
 }
 
-export function readAiVaultFirstUserPromptInBackground(
+export async function readAiVaultFirstUserPromptInBackground(
   request: ReadAiVaultFirstUserPromptArgs
 ): Promise<ReadAiVaultFirstUserPromptResult> {
-  return shouldUseAiVaultServiceProcess()
-    ? readAiVaultFirstUserPromptInService(request)
-    : readAiVaultFirstUserPrompt(request)
+  if (process.platform === 'win32' && isWslUncPath(request.filePath)) {
+    const { localAiVaultScanRoots } = await import('./cached-session-list')
+    const roots = await localAiVaultScanRoots()
+    request = { ...request, wslOpenCodeReaders: roots.wslOpenCodeReaders ?? [] }
+  }
+  return readAiVaultFirstUserPromptInService(request)
 }
 
 export function invalidateAiVaultBackgroundCache(paths: string[]): Promise<void> {
-  return shouldUseAiVaultServiceProcess() ? invalidateAiVaultServiceCache(paths) : Promise.resolve()
+  return invalidateAiVaultServiceCache(paths)
 }
 
 export function resetAiVaultScannerBackgroundForTests(): void {
   resetAiVaultScannerServiceForTests()
-  resetAiVaultScannerWorkerForTests()
 }

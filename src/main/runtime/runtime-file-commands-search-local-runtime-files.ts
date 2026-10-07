@@ -1,27 +1,12 @@
 // @ts-nocheck -- mechanically split class members.
-import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
+import { randomUUID } from 'node:crypto'
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { RuntimeFileCommandsWithSearchRuntimeFiles } from './runtime-file-commands-search-runtime-files'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
-import {
-  DEFAULT_SEARCH_MAX_RESULTS,
-  SEARCH_TIMEOUT_MS,
-  buildRgArgs,
-  createAccumulator,
-  finalize,
-  ingestRgJsonLine
-} from '../../shared/text-search'
-import { parseWslPath, toWindowsWslPath } from '../wsl'
-import { checkRgAvailable } from '../ipc/rg-availability'
-import { searchWithGitGrep } from '../ipc/filesystem-search-git'
-import {
-  absorbPendingRipgrepSpawnError,
-  isRipgrepUnavailableExit,
-  killSpawnedRipgrepProcess
-} from '../../shared/ripgrep-process-availability'
-import type { ChildProcessHandle } from '../../shared/child-process/process-spec'
-import { wslAwareSpawn } from '../git/runner'
+import { parseWslPath } from '../wsl'
+import { runBundledRipgrepTextSearch } from '../ripgrep/bundled-ripgrep-text-search'
 import type { RuntimeFileExplorerPath } from './runtime-file-command-target'
 import type { IFilesystemProvider } from '../providers/types'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
@@ -29,145 +14,39 @@ import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtim
 export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileCommandsWithSearchRuntimeFiles {
   protected async searchLocalRuntimeFiles(
     rootPath: string,
-    options: SearchOptions
+    options: SearchOptions,
+    signal?: AbortSignal
   ): Promise<SearchResult> {
+    throwIfSignalAborted(signal)
     const store = this.host.requireStore()
-    const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
+    const authorizedRootPath = await waitForPromiseWithSignal(
+      resolveAuthorizedPath(rootPath, store),
+      signal
+    )
+    throwIfSignalAborted(signal)
     const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
       store,
       rootPath,
       authorizedRootPath
     )
-    const maxResults = Math.max(
-      1,
-      Math.min(options.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
-    )
-    const wslInfo = parseWslPath(authorizedRootPath)
-    if (
-      (wslInfo || localGitOptions.wslDistro) &&
-      !(await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro))
-    ) {
-      return searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions)
-    }
+    const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
 
-    return new Promise<SearchResult>((resolvePromise) => {
-      const searchKey = `${this.host.getRuntimeId()}:${authorizedRootPath}`
-      const rgArgs = buildRgArgs(options.query, authorizedRootPath, options)
-      const previousChild = this.activeRuntimeTextSearches.get(searchKey)
-      if (previousChild) {
-        killSpawnedRipgrepProcess(previousChild)
-      }
-
-      const acc = createAccumulator()
-      const lines = new SearchSubprocessLineAccumulator(Number.MAX_SAFE_INTEGER)
-      let resolved = false
-      let processErrorObserved = false
-      let unavailableExitObserved = false
-      let child: ChildProcessHandle | null = null
-      const transformAbsPath = wslInfo
-        ? (p: string): string => toWindowsWslPath(p, wslInfo.distro)
-        : undefined
-
-      const finish = (result: SearchResult | PromiseLike<SearchResult>): void => {
-        if (resolved) {
-          return
-        }
-        resolved = true
-        if (this.activeRuntimeTextSearches.get(searchKey) === child) {
-          this.activeRuntimeTextSearches.delete(searchKey)
-        }
-        cleanupListeners()
-        resolvePromise(result)
-      }
-      const resolveOnce = (): void => finish(finalize(acc))
-      const resolveWithoutRipgrep = (): void =>
-        finish(searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions))
-
-      let killTimeout: ReturnType<typeof setTimeout> | null = null
-      const cleanupListeners = (): void => {
-        lines.clear()
-        if (killTimeout) {
-          clearTimeout(killTimeout)
-          killTimeout = null
-        }
-        child?.stdout?.off('data', onStdoutData)
-        child?.stderr?.off('data', onStderrData)
-        child?.off('error', onError)
-        child?.off('close', onClose)
-        if (child) {
-          absorbPendingRipgrepSpawnError(child, {
-            errorObserved: processErrorObserved,
-            unavailableExitObserved
-          })
+    const searchKey = randomUUID()
+    return runBundledRipgrepTextSearch({
+      options,
+      rootPath: authorizedRootPath,
+      resultRootPath: authorizedRootPath,
+      wslDistro: localGitOptions.wslDistro,
+      wslDistroForOutput,
+      signal,
+      onSpawn: (child) => {
+        this.activeRuntimeTextSearches.set(searchKey, child)
+        return () => {
+          if (this.activeRuntimeTextSearches.get(searchKey) === child) {
+            this.activeRuntimeTextSearches.delete(searchKey)
+          }
         }
       }
-
-      const processLine = (line: string): void => {
-        const verdict = ingestRgJsonLine(
-          line,
-          authorizedRootPath,
-          acc,
-          maxResults,
-          transformAbsPath
-        )
-        if (verdict === 'stop' && child) {
-          killSpawnedRipgrepProcess(child)
-        }
-      }
-
-      const nextChild = wslAwareSpawn('rg', rgArgs, {
-        cwd: authorizedRootPath,
-        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
-      child = nextChild
-      this.activeRuntimeTextSearches.set(searchKey, nextChild)
-
-      nextChild.stdout!.setEncoding('utf-8')
-      const onStdoutData = (chunk: string): void => {
-        lines.push(chunk, processLine)
-      }
-      const onStderrData = (): void => {
-        // Drain stderr so rg cannot block on a full pipe.
-      }
-      const onError = (): void => {
-        processErrorObserved = true
-        if (child && isRipgrepUnavailableExit(child, null, null)) {
-          resolveWithoutRipgrep()
-          return
-        }
-        resolveOnce()
-      }
-      const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
-        if (
-          child &&
-          isRipgrepUnavailableExit(child, code, signal, {
-            classifyNativeLauncherExit: !(wslInfo || localGitOptions.wslDistro)
-          })
-        ) {
-          unavailableExitObserved = true
-          resolveWithoutRipgrep()
-          return
-        }
-        const tail = lines.finish()
-        if (tail !== null) {
-          processLine(tail)
-        }
-        resolveOnce()
-      }
-
-      nextChild.stdout!.on('data', onStdoutData)
-      nextChild.stderr!.on('data', onStderrData)
-      nextChild.once('error', onError)
-      nextChild.once('close', onClose)
-
-      killTimeout = setTimeout(() => {
-        acc.truncated = true
-        if (child) {
-          killSpawnedRipgrepProcess(child)
-        }
-        resolveOnce()
-      }, SEARCH_TIMEOUT_MS)
     })
   }
 
@@ -188,7 +67,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
       worktree: target.worktree,
       path: joinWorktreeRelativePath(
         target.worktree.path,
-        normalizeRuntimeRelativePath(relativePath)
+        normalizeRuntimeRelativePath(relativePath, target.worktree.path)
       ),
       executionHostId: target.executionHostId
     }))

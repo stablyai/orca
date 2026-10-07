@@ -95,7 +95,10 @@ describe('OrcaRuntimeService', () => {
           return [name, createRootDispatch(db, task.id, handles[name], paneKey(name))]
         })
       )
-      const legacyTask = db.createTask({ spec: 'legacy worker' })
+      const legacyTask = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'legacy worker'
+      })
       const legacyDispatch = createRootDispatch(
         db,
         legacyTask.id,
@@ -320,7 +323,12 @@ describe('OrcaRuntimeService', () => {
         dispatchStatus: 'dispatched',
         taskTitle: 'coordinator-created work',
         displayName: 'coordinator-created work',
-        orchestrationRunId: runA.id
+        orchestrationRunId: runA.id,
+        // The pane has no live agent status, so the fleet projection reports it as unverifiable.
+        attention: {
+          categories: ['unverifiable'],
+          requiresAction: true
+        }
       })
     } finally {
       db.close()
@@ -355,6 +363,7 @@ describe('OrcaRuntimeService', () => {
       const getTask = vi.spyOn(db, 'getTask')
       const getRun = vi.spyOn(db, 'getRun')
       const getActiveCoordinatorRun = vi.spyOn(db, 'getActiveCoordinatorRun')
+      const getWorkerAttentionFacts = vi.spyOn(db, 'getWorkerAttentionFacts')
       runtime.setOrchestrationDb(db)
       runtime.attachWindow(1)
 
@@ -382,7 +391,8 @@ describe('OrcaRuntimeService', () => {
         latestDispatch: getLatestDispatchForTerminal.mock.calls.length,
         task: getTask.mock.calls.length,
         run: getRun.mock.calls.length,
-        legacyCoordinator: getActiveCoordinatorRun.mock.calls.length
+        legacyCoordinator: getActiveCoordinatorRun.mock.calls.length,
+        attention: getWorkerAttentionFacts.mock.calls.length
       }
 
       db.completeDispatch(dispatch.id)
@@ -393,7 +403,8 @@ describe('OrcaRuntimeService', () => {
         getLatestDispatchForTerminal,
         getTask,
         getRun,
-        getActiveCoordinatorRun
+        getActiveCoordinatorRun,
+        getWorkerAttentionFacts
       ]) {
         query.mockClear()
       }
@@ -404,7 +415,8 @@ describe('OrcaRuntimeService', () => {
         latestDispatch: getLatestDispatchForTerminal.mock.calls.length,
         task: getTask.mock.calls.length,
         run: getRun.mock.calls.length,
-        legacyCoordinator: getActiveCoordinatorRun.mock.calls.length
+        legacyCoordinator: getActiveCoordinatorRun.mock.calls.length,
+        attention: getWorkerAttentionFacts.mock.calls.length
       }
       expect({
         active: {
@@ -422,6 +434,8 @@ describe('OrcaRuntimeService', () => {
           task: 1,
           run: 1,
           legacyCoordinator: 0,
+          // Per-pane attention is deferred to the single batched query, so this stays at zero.
+          attention: 0,
           total: 201
         },
         historical: {
@@ -430,6 +444,7 @@ describe('OrcaRuntimeService', () => {
           task: 0,
           run: 0,
           legacyCoordinator: 0,
+          attention: 0,
           total: 200
         }
       })

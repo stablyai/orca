@@ -1,3 +1,5 @@
+import { getStoredRepoSshConnectionId } from '../../repo-execution-host'
+import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { ipcMain } from 'electron'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
@@ -5,10 +7,15 @@ import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
 import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { isENOENT } from '../filesystem-path-containment'
 import { parseOrcaYaml } from '../../hooks'
-import { readIssueCommand, writeIssueCommand } from '../../issue-command-file'
+import {
+  isIssueCommandIgnoredByGit,
+  readIssueCommand,
+  writeIssueCommand
+} from '../../issue-command-file'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
+/** Route private command overrides to the owning host without changing shared hook settings. */
 export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): void {
   const { store } = context
 
@@ -26,9 +33,10 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
           source: 'none' as const
         }
       }
-      if (repo.connectionId) {
+      const connectionId = getStoredRepoSshConnectionId(repo)
+      if (connectionId) {
         const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
-        const fsProvider = getSshFilesystemProvider(repo.connectionId)
+        const fsProvider = getSshFilesystemProvider(connectionId)
         if (!fsProvider) {
           return {
             status: 'error',
@@ -86,9 +94,10 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
       if (!repo || isFolderRepo(repo)) {
         return
       }
-      if (repo.connectionId) {
+      const connectionId = getStoredRepoSshConnectionId(repo)
+      if (connectionId) {
         const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
-        const fsProvider = getSshFilesystemProvider(repo.connectionId)
+        const fsProvider = getSshFilesystemProvider(connectionId)
         if (!fsProvider) {
           throw new Error(
             'Remote filesystem unavailable. Reconnect the SSH target before retrying.'
@@ -104,6 +113,10 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
           return
         }
         await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
+        if (await isIssueCommandIgnoredByGit(repo.path, connectionId)) {
+          await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
+          return
+        }
         const gitignorePath = joinWorktreeRelativePath(repo.path, '.gitignore')
         try {
           const result = await fsProvider.readFile(gitignorePath)
@@ -120,7 +133,9 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
         await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
         return
       }
-      writeIssueCommand(repo.path, args.content)
+      await writeIssueCommand(repo.path, args.content, () =>
+        getLocalProjectWorktreeGitOptions(store, repo)
+      )
     }
   )
 }

@@ -8,6 +8,8 @@ export const CLAUDE_AUTH_ENV_VARS = [
 ] as const
 
 export type ClaudeEnvPatch = {
+  ORCA_CLAUDE_PROFILE_POINTER?: string
+  ORCA_CLAUDE_INJECTED_CONFIG_DIR?: string
   CLAUDE_CONFIG_DIR?: string
   ANTHROPIC_CUSTOM_HEADERS?: string
 }
@@ -33,6 +35,12 @@ export function applyClaudeEnvPatch(
     }
   }
 
+  if (patch.ORCA_CLAUDE_PROFILE_POINTER) {
+    baseEnv.ORCA_CLAUDE_PROFILE_POINTER = patch.ORCA_CLAUDE_PROFILE_POINTER
+  }
+  if (patch.ORCA_CLAUDE_INJECTED_CONFIG_DIR) {
+    baseEnv.ORCA_CLAUDE_INJECTED_CONFIG_DIR = patch.ORCA_CLAUDE_INJECTED_CONFIG_DIR
+  }
   if (patch.CLAUDE_CONFIG_DIR) {
     baseEnv.CLAUDE_CONFIG_DIR = patch.CLAUDE_CONFIG_DIR
   }
@@ -84,34 +92,6 @@ export function shouldStripClaudeAuthEnvForAccount(
  * authenticate nor beat the pinned account, while the strip removes the name regardless.
  * Refusing it would break a terminal launch that works today for no security gain.
  */
-/**
- * The inherited Anthropic auth a non-stripping launch has to carry forward explicitly.
- *
- * applyClaudeEnvPatch always strips the inherited half of a child env, and the
- * configured half is what overrides it — so a system-auth user's own key only survives
- * if the caller puts it back deliberately. Returns the exact keys present, so a
- * win32 `anthropic_api_key` is carried under the name the OS actually has.
- */
-export function claudeAuthEnvCarriedForward(
-  inherited: NodeJS.ProcessEnv,
-  platform: NodeJS.Platform = process.platform
-): Record<string, string> {
-  const carried: Record<string, string> = {}
-  for (const [key, value] of Object.entries(inherited)) {
-    if (value === undefined) {
-      continue
-    }
-    const normalized = platform === 'win32' ? key.toUpperCase() : key
-    if (
-      CLAUDE_AUTH_ENV_VARS.some((authKey) => authKey === normalized) ||
-      (normalized === 'ANTHROPIC_CUSTOM_HEADERS' && isAuthLikeCustomHeaders(value))
-    ) {
-      carried[key] = value
-    }
-  }
-  return carried
-}
-
 export function hasClaudeAuthEnvConflict(
   env: Record<string, string> | undefined,
   platform: NodeJS.Platform = process.platform

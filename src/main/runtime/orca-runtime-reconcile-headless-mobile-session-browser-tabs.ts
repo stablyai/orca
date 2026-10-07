@@ -15,7 +15,7 @@ import { sshRemotePtyLeaseAllowsReattach } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { RuntimeStore } from './runtime-store-contract'
 import { SSH_PANE_RECOVERY_GRACE_MS } from './orca-runtime-core'
-import { findTerminalTabIdForLeaf } from './workspace-session-terminal-membership-authority'
+import { findTerminalTabIdForLeaf } from '../persistence/terminal-topology/terminal-topology-membership'
 
 export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession {
   // Why: keep an existing snapshot's browser tabs in sync with the live bridge
@@ -25,11 +25,28 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     worktreeId: string,
     existing: RuntimeMobileSessionTabsSnapshot
   ): void {
-    const liveBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
-    const liveIds = liveBrowserTabs.map((tab) => tab.id)
     const existingBrowserTabs = existing.tabs.filter(
       (tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser'
     )
+    const publishedBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
+    // An attached renderer owns its browser rows; the client-page registry cannot retire them.
+    const rendererBrowserTabs =
+      this.getAvailableAuthoritativeWindow() && !this.offscreenBrowserBackend
+        ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
+        : []
+    // Keyed by id so no row can publish twice whatever the two sources overlap on; a freshly
+    // built row wins over the retained one it replaces.
+    const liveById = new Map(
+      [...rendererBrowserTabs, ...publishedBrowserTabs].map((tab) => [tab.id, tab])
+    )
+    // Emit in the order the snapshot already had, because the equality check below compares by
+    // index: rebuilding renderer-first would read a pure reordering as a change and republish.
+    const retainedInOrder = existingBrowserTabs.flatMap((tab) => {
+      const live = liveById.get(tab.id)
+      return live && liveById.delete(tab.id) ? [live] : []
+    })
+    const liveBrowserTabs = [...retainedInOrder, ...liveById.values()]
+    const liveIds = liveBrowserTabs.map((tab) => tab.id)
     const existingBrowserIds = existingBrowserTabs.map((tab) => tab.id)
     if (headlessBrowserTabsUnchanged(liveBrowserTabs, existingBrowserTabs)) {
       return
@@ -53,7 +70,6 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
       : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
     this.storeMobileSessionSnapshot(worktreeId, {
       ...existing,
-      publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
       snapshotVersion: existing.snapshotVersion + 1,
       ...(activeStillPresent
         ? {}
@@ -111,8 +127,8 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
    * binds one leaf in two tabs and orphans the PTY under the new one) and refuses the correct ones.
    * Same resolution `restoreReattachedPtyRuntime` already does for its own reattach fence.
    *
-   * Both workspace partitions are read because SSH spawns bind panes into `ssh:<target>` while
-   * reattach binds into `local`; consulting one would report "nowhere" for a pane the other holds.
+   * Both workspace partitions are read because older builds' relay reattach left SSH panes in
+   * `local`; consulting one would report "nowhere" for a pane the other holds.
    */
   protected findCurrentTerminalTabIdForLeaf(targetId: string, leafId: string): string | undefined {
     for (const leaf of this.leaves.values()) {

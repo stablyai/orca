@@ -2,21 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   capPaletteSection,
   layoutMultiPrimaryPaletteSections,
-  orderMultiPrimaryPaletteItems,
-  PALETTE_SECTION_EXPAND_STEP,
   PALETTE_SECTION_RENDER_CAP,
-  softSplitPaletteSection,
   TYPED_QUERY_LEADING_PREVIEW,
   TYPED_QUERY_TRAILING_FLOOR
 } from './palette-section-render-cap'
 
 const range = (count: number): number[] => Array.from({ length: count }, (_, index) => index)
-
-describe('PALETTE_SECTION_EXPAND_STEP', () => {
-  it('is configured to 20 entries per expansion step', () => {
-    expect(PALETTE_SECTION_EXPAND_STEP).toBe(20)
-  })
-})
 
 describe('capPaletteSection', () => {
   it('returns the original array reference when nothing overflows', () => {
@@ -51,32 +42,13 @@ describe('capPaletteSection', () => {
   it('supports an explicit cap of zero', () => {
     expect(capPaletteSection(range(3), 0)).toEqual({ visible: [], overflowCount: 3 })
   })
-})
 
-describe('softSplitPaletteSection', () => {
-  it('splits under the hard cap and reports everything after the preview', () => {
-    const split = softSplitPaletteSection(range(12), TYPED_QUERY_LEADING_PREVIEW)
+  it('keeps a retained eligible row when it crosses from 50th to 51st', () => {
+    const capped = capPaletteSection(range(60), PALETTE_SECTION_RENDER_CAP, (item) => item === 50)
 
-    expect(split.preview).toEqual(range(6))
-    expect(split.rest).toEqual([6, 7, 8, 9, 10, 11])
-    expect(split.moreCount).toBe(6)
-  })
-
-  it('includes hard-cap overflow in moreCount without rendering it', () => {
-    const split = softSplitPaletteSection(range(80), TYPED_QUERY_LEADING_PREVIEW)
-
-    expect(split.preview).toHaveLength(TYPED_QUERY_LEADING_PREVIEW)
-    expect(split.rest).toHaveLength(PALETTE_SECTION_RENDER_CAP - TYPED_QUERY_LEADING_PREVIEW)
-    expect(split.moreCount).toBe(80 - TYPED_QUERY_LEADING_PREVIEW)
-  })
-
-  it('keeps short sections intact with no remainder', () => {
-    const items = range(3)
-    const split = softSplitPaletteSection(items, TYPED_QUERY_LEADING_PREVIEW)
-
-    expect(split.preview).toEqual(items)
-    expect(split.rest).toEqual([])
-    expect(split.moreCount).toBe(0)
+    expect(capped.visible).toHaveLength(PALETTE_SECTION_RENDER_CAP)
+    expect(capped.visible.slice(-2)).toEqual([48, 50])
+    expect(capped.overflowCount).toBe(10)
   })
 })
 
@@ -150,18 +122,5 @@ describe('layoutMultiPrimaryPaletteSections', () => {
     expect(layout.leadingRest).toHaveLength(70 - 26)
     expect(layout.leadingMoreCount).toBe(80 - 26)
     expect(layout.leadingHardOverflowCount).toBe(10)
-  })
-})
-
-describe('orderMultiPrimaryPaletteItems', () => {
-  it('interleaves floor before leading rest', () => {
-    const layout = layoutMultiPrimaryPaletteSections({
-      leadingItems: range(8),
-      trailingItems: range(5).map((n) => n + 100)
-    })
-
-    expect(orderMultiPrimaryPaletteItems(layout)).toEqual([
-      0, 1, 2, 3, 4, 5, 100, 101, 102, 6, 7, 103, 104
-    ])
   })
 })

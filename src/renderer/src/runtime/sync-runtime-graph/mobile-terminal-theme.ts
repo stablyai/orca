@@ -2,6 +2,7 @@ import { getSystemPrefersDark, resolveEffectiveTerminalAppearance } from '@/lib/
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileTerminalTheme } from '../../../../shared/runtime-types'
 import { graphState } from './graph-state'
+import { normalizeTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 
 function hexToRgba(hex: string, alpha: number): string {
   let clean = hex.replace('#', '')
@@ -52,7 +53,15 @@ export function resolveMobileTerminalTheme(
       theme[key] = value
     }
   }
-  return { mode: appearance.mode, theme: theme as RuntimeMobileTerminalTheme['theme'] }
+  return {
+    mode: appearance.mode,
+    theme: theme as RuntimeMobileTerminalTheme['theme'],
+    // Why publish: mobile mirrors the desktop contrast gate, so an explicit floor has to travel with
+    // the theme or the same session would render differently on the phone (#10754).
+    minimumContrastRatio: normalizeTerminalMinimumContrastRatio(
+      settings.terminalMinimumContrastRatio
+    )
+  }
 }
 
 export function getMobileTerminalTheme(

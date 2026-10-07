@@ -7,12 +7,24 @@ import { runRelayConnectChannel } from './relay-connect-channel'
 import { runRelayOrcaCliChannel } from './relay-orca-cli-channel'
 import { runRelayDaemon } from './relay-daemon'
 import { relayLogLine } from './relay-diagnostic-log'
+import { configureRelayBundledRipgrep } from './relay-bundled-ripgrep'
+import { runRelayRuntimeSelfTestCommand } from './relay-runtime-self-test'
+import { runWindowsBreakawayLaunchIfRequested } from '../shared/windows-breakaway-launcher'
+import { RELAY_WINDOWS_BREAKAWAY_CONTRACT } from '../shared/windows-breakaway-launch'
+import { RELAY_RUNTIME_SELF_TEST_FLAG } from '../shared/relay-runtime-self-test-report'
 
 async function main(): Promise<void> {
+  const selfTestFlag = process.argv.indexOf(RELAY_RUNTIME_SELF_TEST_FLAG)
+  if (selfTestFlag !== -1) {
+    await runRelayRuntimeSelfTestCommand(process.argv[selfTestFlag + 1] ?? '')
+    return
+  }
+  if (runWindowsBreakawayLaunchIfRequested(RELAY_WINDOWS_BREAKAWAY_CONTRACT, process.argv)) {
+    return
+  }
   const options = parseRelayLaunchOptions(process.argv)
-  const endpointCredential = readRelayEndpointCredential(options.credentialFile)
   if (options.connectMode) {
-    runRelayConnectChannel(options.sockPath, endpointCredential)
+    runRelayConnectChannel(options.sockPath, readRelayEndpointCredential(options.credentialFile))
     return
   }
   if (options.cliMode) {
@@ -20,11 +32,13 @@ async function main(): Promise<void> {
     await runRelayOrcaCliChannel(
       options.sockPath,
       marker === -1 ? [] : process.argv.slice(marker + 1),
-      endpointCredential
+      readRelayEndpointCredential(options.credentialFile)
     )
     return
   }
-  await runRelayDaemon(options, endpointCredential)
+  configureRelayBundledRipgrep(options.ripgrepPath)
+  // Why no read here: the daemon publishes its credential itself, after it owns the socket.
+  await runRelayDaemon(options)
 }
 
 void main().catch((error) => {

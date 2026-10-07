@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { useAppStore } from '../../store'
-import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
+import { buildCodexAccountRestartStartup } from '@/lib/codex-account-restart-startup'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { connectPanePty } from './pty-connection'
 import { bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
+import { releasePaneTransportForRestart } from './pane-restart-transport-handoff'
 import { clearPaneTerminalError } from './terminal-error-accumulation'
 import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
@@ -58,15 +59,22 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   } = controller
 
   const handleRestartCodexPane = useCallback(
-    (
-      paneId: number,
-      restartStartup: PtyConnectionDeps['startup'] = CODEX_ACCOUNT_RESTART_STARTUP
-    ) => {
+    (paneId: number, restartStartup?: PtyConnectionDeps['startup']) => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
       if (!manager || !pane) {
         return
       }
+      const startup =
+        restartStartup ??
+        buildCodexAccountRestartStartup({
+          tabId,
+          worktreeId,
+          leafId: pane.leafId,
+          shellOverride: useAppStore
+            .getState()
+            .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.shellOverride
+        })
       const transport = paneTransportsRef.current.get(paneId)
       const panePtyBinding = panePtyBindingsRef.current.get(paneId)
       const existingPtyId = transport?.getPtyId()
@@ -78,7 +86,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       panePtyBinding?.dispose()
       panePtyBindingsRef.current.delete(paneId)
       syncPanePtyLayoutBinding(paneId, null)
-      transport?.destroy?.()
+      const replacesPtyId = releasePaneTransportForRestart(transport)
       paneTransportsRef.current.delete(paneId)
       setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
       setTerminalError(null)
@@ -87,7 +95,8 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         tabId,
         worktreeId,
         cwd,
-        startup: restartStartup,
+        startup,
+        ...(replacesPtyId ? { replacesPtyId } : {}),
         mountFollowsTerminalPark: false,
         paneTransportsRef,
         paneMode2031Ref,

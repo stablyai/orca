@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { isStreamingMethod, type RpcContext } from '../core'
+import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
 
 const { installForRuntimeHomeSerializedMock, realpathMock } = vi.hoisted(() => ({
   installForRuntimeHomeSerializedMock: vi.fn(),
@@ -23,7 +23,7 @@ const RUNTIME_HOME =
   '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\.local\\share\\orca\\codex-runtime-home\\home'
 
 function prepareMethod() {
-  const method = AGENT_HOOK_METHODS.find(
+  const method = eraseRpcMethods(AGENT_HOOK_METHODS).find(
     (candidate) => candidate.name === 'agentHooks.prepareCodexForWslPane'
   )
   if (!method || isStreamingMethod(method)) {

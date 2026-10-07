@@ -1,4 +1,5 @@
 import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
+import type { OrcadSshProvisioningIntent } from './orcad-ssh-provisioning'
 
 // ─── SSH Connection Types ───────────────────────────────────────────
 
@@ -8,6 +9,31 @@ export const LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
 export const DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS = 24 * 60 * 60
 export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 0
 export const SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD = 'relay.configureGraceTime'
+
+/**
+ * Which runtime executes the SSH relay. `legacy` runs it on the host's Node with native deps
+ * installed on the host; `pinned-node` uploads Orca's pinned Node and prebuilt addons (design D5).
+ */
+export const SSH_REMOTE_RUNTIMES = ['legacy', 'pinned-node'] as const
+export type SshRemoteRuntime = (typeof SSH_REMOTE_RUNTIMES)[number]
+export const DEFAULT_SSH_REMOTE_RUNTIME: SshRemoteRuntime = 'legacy'
+
+/** Where the design D6 fallback ladder landed; `legacy` is the host-npm path outside it. */
+export const SSH_REMOTE_RUNTIME_RUNGS = ['A', 'B', 'C', 'D', 'legacy'] as const
+export type SshRemoteRuntimeRung = (typeof SSH_REMOTE_RUNTIME_RUNGS)[number]
+
+/**
+ * Main-owned record of the last ladder decision for a host. Valid only while its key
+ * (glibc, pinned runtime hash, Orca major) still matches, so an upgrade re-evaluates.
+ */
+export type SshRemoteRuntimeResolution = {
+  rung: SshRemoteRuntimeRung
+  /** The classified refusal that stepped off Orca's pinned Node, when one did. */
+  pinnedRefusal?: string
+  glibc: string | null
+  runtimeSha256: string
+  orcaMajor: number
+}
 
 export type SshTarget = {
   id: string
@@ -55,14 +81,44 @@ export type SshTarget = {
   /** Reuse a system OpenSSH connection across setup commands. Undefined means
    *  enabled; false is an explicit per-target compatibility opt-out. */
   systemSshConnectionReuse?: boolean
+  /** Relay runtime for this host; undefined means DEFAULT_SSH_REMOTE_RUNTIME. */
+  remoteRuntime?: SshRemoteRuntime
+  /** Main-owned ladder cache; renderer updates never set it. */
+  remoteRuntimeResolution?: SshRemoteRuntimeResolution
   /** Durable registration incarnation. Advances on create / re-create / explicit
    *  re-adopt only, so automations fenced on an old registration cannot run on a
    *  later target that happens to reuse the id. Never advanced by connect state. */
   generation?: number
+  /** Main-owned provisioning intent; never fall back to a relay while it exists. */
+  orcadProvisioning?: OrcadSshProvisioningIntent
+  /**
+   * Main-owned: this host serves a managed Orca server. Deliberately not `owner`: shipped builds
+   * hide owned targets, and a downgraded build must still see and reach the host over its relay.
+   */
+  /** Main-owned: managed orcad can't run on this host; retried once this app version changes. */
+  managedServerUnavailable?: { reason: string; appVersion: string }
+  /** Main-owned: the one-time "move now" offer was shown under this app version. */
+  managedServerMoveOffered?: { appVersion: string }
+  /** Main-owned: updating the managed server to this app version failed; retried once it changes. */
+  managedServerUpdateFailure?: { reason: string; appVersion: string }
+  orcadFence?: {
+    environmentId: string
+    /** An older build changed the retained source rows: the host stays on the relay until moved again. */
+    sourceChangedAt?: string
+  }
 }
 
 /** Renderer-authored target fields; registration generations are allocated and owned by main. */
-export type SshTargetCreateInput = Omit<SshTarget, 'id' | 'generation'>
+export type SshTargetCreateInput = Omit<
+  SshTarget,
+  | 'id'
+  | 'generation'
+  | 'orcadProvisioning'
+  | 'orcadFence'
+  | 'managedServerUnavailable'
+  | 'managedServerMoveOffered'
+  | 'managedServerUpdateFailure'
+>
 export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
 
 /** Public target identity and observed host metadata safe to mirror to a paired client. */
@@ -198,6 +254,69 @@ export type SshConnectionState = {
   supportsFolderDownload?: boolean
   /** Remote OS detected by the SSH relay once available. */
   remotePlatform?: SshRemotePlatform
+  /** Set while connected without the Orca remote server (runtime ladder rung D). */
+  plainSsh?: SshPlainSshMode
+  /** Which server this host runs; optional so older clients simply ignore it. */
+  managedServer?: SshManagedServerStatus
+}
+
+export const SSH_MANAGED_SERVER_PHASES = [
+  'deploying',
+  'converting',
+  'connecting',
+  'updating',
+  'starting'
+] as const
+
+export const SSH_MANAGED_SERVER_UPDATE_STATES = ['host-newer', 'deferred', 'failed'] as const
+
+/** Why a managed server kept its version on this connect; absent when it is current or updated. */
+export type SshManagedServerUpdateNote = {
+  state: (typeof SSH_MANAGED_SERVER_UPDATE_STATES)[number]
+  detail?: string
+}
+
+/** A managed server that is down and could not be started, with why (and orcad.log's tail). */
+export type SshManagedServerServingNote = { state: 'unverifiable'; detail: string }
+
+export const SSH_MANAGED_SERVER_RELAY_REASONS = [
+  'orcad_unavailable',
+  'relay_terminals_live',
+  'relay_terminals_unverifiable',
+  'source_changed',
+  'deferred',
+  'refused',
+  'failed'
+] as const
+
+export type SshManagedServerRelayReason = (typeof SSH_MANAGED_SERVER_RELAY_REASONS)[number]
+
+export type SshManagedServerStatus =
+  | {
+      kind: 'managed'
+      environmentId: string
+      update?: SshManagedServerUpdateNote
+      /** Set when the server was not running and could not be started; never a terminal verdict. */
+      serving?: SshManagedServerServingNote
+    }
+  | { kind: 'setting-up'; phase: (typeof SSH_MANAGED_SERVER_PHASES)[number] }
+  /** `detail` names the blocker for a refusal, or why orcad can't run on the host. */
+  | {
+      kind: 'relay'
+      reason: SshManagedServerRelayReason
+      detail?: string
+      /** Relay terminals still running, when that is what keeps the host on the relay. */
+      terminals?: number
+      /** Show the one-time offer to move now, restarting those terminals. */
+      offerMove?: boolean
+      /** Those terminals belong to another Orca desktop or session, so this one offers no move. */
+      terminalsElsewhere?: boolean
+    }
+
+/** Plain SSH terminals and SFTP browsing only; `reason` is the ladder's classified cause. */
+export type SshPlainSshMode = {
+  reason: string
+  message: string
 }
 
 /** Non-secret mutation provenance. Both fields are required when an SSH provider is selected. */

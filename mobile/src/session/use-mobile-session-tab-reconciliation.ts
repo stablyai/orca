@@ -3,6 +3,7 @@ import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-pro
 import { supportsMobileQuickCommands } from '../terminal/quick-commands'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { runAcceptedMobileSessionTabsEffects } from './mobile-session-tabs-accepted-effects'
 import type { SessionTabsStreamSource } from './mobile-session-tabs-stream-health'
 import { useMobileSessionTabsFetchReporting } from './use-mobile-session-tabs-fetch-reporting'
@@ -31,6 +32,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     switchSessionTabRef,
     setBrowserScreencastSupported,
     setAgentSessionHistorySupported,
+    setAgentSessionHostSupport,
     setQuickCommandsSupported,
     nativeChatStream,
     fetchTerminals,
@@ -148,6 +150,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     if (!client || connState !== 'connected') {
       setBrowserScreencastSupported(null)
       setAgentSessionHistorySupported(null)
+      setAgentSessionHostSupport(null)
       setQuickCommandsSupported(null)
       setShowQuickCommands(false)
       hostQueryReplyInputSupportedRef.current = false
@@ -157,6 +160,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     // host; clear the prior capability before exposing host-specific actions.
     setBrowserScreencastSupported(null)
     setAgentSessionHistorySupported(null)
+    setAgentSessionHostSupport(null)
     setQuickCommandsSupported(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
@@ -165,6 +169,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     return startRuntimeCapabilityProbe(client, (capabilities) => {
       setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
       setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
+      setAgentSessionHostSupport(structuredAgentSessionHostSupport(capabilities))
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
       // Why: hosts without this capability strip inputKind from terminal.send,
       // so a forwarded xterm reply would become floor-stealing shell input.

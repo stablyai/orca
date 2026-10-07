@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split class members.
+import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem-symlink-directory-entries'
 import { RuntimeFileCommandsWithWriteTerminalArtifactFile } from './runtime-file-commands-write-terminal-artifact-file'
 import type { TerminalFileGrant } from './runtime-file-commands-mobile-file-list-limit'
 import {
@@ -19,10 +20,7 @@ import { readdir, stat } from 'node:fs/promises'
 import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
-import {
-  isRuntimeDirectoryEntry,
-  watchWindowsRuntimeFileExplorer
-} from './runtime-file-command-host'
+import { watchWindowsRuntimeFileExplorer } from './runtime-file-command-host'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import {
   armSshFileExplorerWatchRearm,
@@ -59,22 +57,28 @@ export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanoni
     return provider
   }
 
-  async readFileExplorerDir(worktreeSelector: string, relativePath: string): Promise<DirEntry[]> {
+  async readFileExplorerDir(
+    worktreeSelector: string,
+    relativePath: string,
+    options: { followSymlinks?: boolean } = {}
+  ): Promise<DirEntry[]> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     const provider = requireRuntimeFileProvider(target)
     if (provider) {
       // Why: re-sort locally — the remote relay may be an older build with
       // lexicographic ordering.
-      return sortDirEntries(await provider.readDir(target.path))
+      return sortDirEntries(await provider.readDir(target.path, options))
     }
 
     const dirPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
     const entries = await readdir(dirPath, { withFileTypes: true })
-    const mapped = entries.map((entry) => ({
-      name: entry.name,
-      isDirectory: isRuntimeDirectoryEntry(entry),
-      isSymlink: entry.isSymbolicLink()
-    }))
+    const store = this.host.requireStore()
+    const mapped = await classifyFilesystemDirectoryEntries(
+      target.path,
+      entries,
+      options.followSymlinks ?? store.getSettings().followSymlinkedDirectories ?? false,
+      (path) => resolveAuthorizedPath(path, store)
+    )
     return sortDirEntries(mapped)
   }
 
@@ -100,21 +104,47 @@ export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanoni
           if (!route.provider) {
             throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
           }
-          // Why: the RPC layer already threads AbortSignal for local watches; SSH must cancel the remote fs.watch, not wait it out.
-          const close = await route.provider.watch(target.path, callback, {
-            signal,
-            onTerminalError
-          })
-          const rearm = armSshFileExplorerWatchRearm({
-            runtimeId: this.host.getRuntimeId(),
-            connectionId: route.connectionId,
-            rootPath: target.path,
-            callback,
-            onTerminalError,
-            signal,
-            initialUnwatch: close
-          })
-          return { unsubscribe: rearm.unsubscribe, rootPaths: [target.path] }
+          const provider = route.provider
+          const isCurrentInitialProvider = (): boolean =>
+            !signal?.aborted && provider === getSshFilesystemProvider(route.connectionId)
+          let initialCallbacks = {
+            callback: (events: FsChangeEvent[]) => {
+              if (isCurrentInitialProvider()) {
+                callback(events)
+              }
+            },
+            onTerminalError: (error: Error) => {
+              if (isCurrentInitialProvider()) {
+                onTerminalError(error)
+              }
+            }
+          }
+          try {
+            // Initial callbacks join the rearm generation after setup succeeds.
+            const close = await provider.watch(
+              target.path,
+              (events) => initialCallbacks.callback(events),
+              { signal, onTerminalError: (error) => initialCallbacks.onTerminalError(error) }
+            )
+            const rearm = armSshFileExplorerWatchRearm({
+              runtimeId: this.host.getRuntimeId(),
+              connectionId: route.connectionId,
+              rootPath: target.path,
+              callback,
+              onTerminalError,
+              signal,
+              initialUnwatch: close,
+              initialProvider: provider
+            })
+            initialCallbacks = rearm.initialCallbacks
+            return { unsubscribe: rearm.unsubscribe, rootPaths: [target.path] }
+          } catch (error) {
+            initialCallbacks = {
+              callback: () => undefined,
+              onTerminalError: () => undefined
+            }
+            throw error
+          }
         }
 
         const rootPath = await resolveAuthorizedPath(target.path, this.host.requireStore())

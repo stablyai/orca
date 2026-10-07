@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -180,7 +181,9 @@ function createFixture(
     getRuntimeId: () => 'test-runtime',
     listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot),
     getClientSettings: () => ({
-      experimentalStructuredNativeChat: options.structuredNativeChatEnabled === true
+      // Why: defaults on, so a fixture that says nothing about the setting exercises capability
+      // gating alone; callers opt into the off case explicitly.
+      experimentalStructuredNativeChat: options.structuredNativeChatEnabled !== false
     }),
     ...calls
   } as unknown as OrcaRuntimeService

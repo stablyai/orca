@@ -1,4 +1,5 @@
 import type { AgentSessionSubscribeEvent } from './agent-session-wire'
+import { latestTurnAfterStructuredAgentSessionBatch } from './structured-agent-session-live-turn'
 
 export const STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS = 48
 
@@ -7,6 +8,15 @@ function bypassCoalescing(event: AgentSessionSubscribeEvent): boolean {
     event.type !== 'batch' ||
     event.batch.items.some((item) => item.body.kind !== 'message' || item.body.role !== 'assistant')
   )
+}
+
+/** The list and what rides with it. */
+function queuePublicationOf(event: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>) {
+  return {
+    queuedMessages: event.queuedMessages,
+    queuePause: event.queuePause ?? null,
+    nextQueuedMessageId: event.nextQueuedMessageId ?? null
+  }
 }
 
 function mergeBatch(
@@ -23,8 +33,20 @@ function mergeBatch(
   for (const submission of right.batch.submissions) {
     submissions.set(submission.clientMessageId, submission)
   }
+  // As applying both in turn would leave it, so an older host's rows still drop a stale claim.
+  const latestTurn = latestTurnAfterStructuredAgentSessionBatch(left.latestTurn, right)
   return {
     type: 'batch',
+    ...(right.commands !== undefined || left.commands !== undefined
+      ? { commands: right.commands !== undefined ? right.commands : left.commands }
+      : {}),
+    // Whole-list publication, latest wins: dropping it here would lose a draft
+    // update that rode a coalesced token frame. The pause rides with its list.
+    ...(right.queuedMessages !== undefined
+      ? queuePublicationOf(right)
+      : left.queuedMessages !== undefined
+        ? queuePublicationOf(left)
+        : {}),
     sessionId: right.sessionId,
     batch: {
       cursor: right.batch.cursor,
@@ -35,7 +57,6 @@ function mergeBatch(
     ...(right.fence !== undefined || left.fence !== undefined
       ? { fence: right.fence ?? left.fence }
       : {}),
-    ...(right.handoff || left.handoff ? { handoff: right.handoff ?? left.handoff } : {}),
     ...(right.backgroundTasks !== undefined || left.backgroundTasks !== undefined
       ? {
           backgroundTasks:
@@ -43,7 +64,11 @@ function mergeBatch(
               ? right.backgroundTasks
               : (left.backgroundTasks ?? null)
         }
-      : {})
+      : {}),
+    ...(right.activity !== undefined || left.activity !== undefined
+      ? { activity: right.activity !== undefined ? right.activity : (left.activity ?? null) }
+      : {}),
+    ...(latestTurn !== undefined ? { latestTurn } : {})
   }
 }
 

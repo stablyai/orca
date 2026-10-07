@@ -1,15 +1,14 @@
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   assertProjectedSessionTabVisible,
   translateProjectedSessionTabMove
 } from './session-tab-browser-placement-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'
-import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 import { ActivateTab, MoveTab, SetTabProps, UpdatePaneLayout } from './session-tabs-schemas'
 
-export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
+export const SESSION_TAB_MUTATION_METHODS = [
   defineMethod({
     name: 'session.tabs.activate',
     params: ActivateTab,
@@ -18,8 +17,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
         const visible = projectSessionTabsForClient(
           await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
           clientKind,
-          clientCapabilities,
-          clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
+          clientCapabilities
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
       }
@@ -38,12 +36,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
           })
         }
       )
-      return projectSessionTabsForMutationClient(
-        result,
-        clientKind,
-        clientCapabilities,
-        clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
-      )
+      return projectSessionTabsForMutationClient(result, clientKind, clientCapabilities)
     }
   }),
   defineMethod({
@@ -53,12 +46,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
       let translated: Parameters<typeof translateProjectedSessionTabMove>[2] = params
       if (clientKind) {
         const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
-        const projected = projectSessionTabsForClient(
-          raw,
-          clientKind,
-          clientCapabilities,
-          clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
-        )
+        const projected = projectSessionTabsForClient(raw, clientKind, clientCapabilities)
         translated = translateProjectedSessionTabMove(raw, projected, params)
       }
       const base = { tabId: translated.tabId, targetGroupId: translated.targetGroupId }
@@ -99,6 +87,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
         tabId: params.tabId,
         root: params.root,
         expandedLeafId: params.expandedLeafId ?? null,
+        chatLeafId: params.chatLeafId,
         titlesByLeafId: params.titlesByLeafId
       })
     }
@@ -141,8 +130,7 @@ async function assertVisibleMutationTab(
   const visible = projectSessionTabsForClient(
     await runtime.listMobileSessionTabs(worktree, pairedDeviceId),
     clientKind,
-    clientCapabilities,
-    clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
+    clientCapabilities
   )
   assertProjectedSessionTabVisible(visible, tabId)
 }

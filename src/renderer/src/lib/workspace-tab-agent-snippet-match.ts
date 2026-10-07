@@ -5,11 +5,9 @@ import {
   type MatchRange
 } from './palette-match/normalized-text'
 import {
-  PALETTE_MATCH_QUALITIES,
-  paletteMatchQualityRank,
-  type PaletteMatchQuality
-} from './palette-match/match-quality'
-import type { PaletteDocumentRank } from './palette-match/palette-document'
+  createPaletteFallbackRank,
+  type PaletteDocumentRank
+} from './palette-match/palette-document'
 import type { PaletteQueryToken } from './palette-match/palette-query'
 import type { AgentMetadata } from './workspace-tab-agent-metadata'
 
@@ -19,15 +17,7 @@ import type { AgentMetadata } from './workspace-tab-agent-metadata'
  * fallback preserves the pre-existing ability to find a terminal by what its agent
  * said, as a strictly last-place tier that never contributes to token coverage.
  */
-const AGENT_SNIPPET_RANK: PaletteDocumentRank = {
-  exactIntent: 1,
-  containerOnlyTokenCount: Number.MAX_SAFE_INTEGER,
-  wholeQuery: 3,
-  worstQuality: paletteMatchQualityRank(PALETTE_MATCH_QUALITIES.at(-1) as PaletteMatchQuality) + 1,
-  usesSupportingEvidence: 1,
-  fuzzyTokenCount: 0,
-  fieldHopCount: Number.MAX_SAFE_INTEGER
-}
+const AGENT_SNIPPET_RANK: PaletteDocumentRank = createPaletteFallbackRank()
 
 export type WorkspaceTabAgentSnippetMatch = {
   text: string

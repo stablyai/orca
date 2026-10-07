@@ -7,7 +7,7 @@ import { prepareLegacySharedCodexSessionResume } from './codex-legacy-session-re
 
 type CodexAiVaultRuntimeHome = Pick<
   CodexRuntimeHomeService,
-  'isHostSystemDefaultRealHome' | 'resolveSelectedHostAccountCodexHomePathForResume'
+  'isHostSystemDefaultRealHomeSelected' | 'resolveSelectedHostAccountCodexHomePathForResume'
 >
 
 /** Keeps window and serve AI Vault resumes behind the same refusing account-home gate. */
@@ -19,7 +19,8 @@ export function prepareCodexAiVaultSessionResume(
   }
 ): Promise<AiVaultPrepareSessionResumeResult> {
   return prepareLegacySharedCodexSessionResume(args, {
-    isHostSystemDefaultRealHome: () => options.runtimeHome?.isHostSystemDefaultRealHome() === true,
+    isHostSystemDefaultRealHomeSelected: () =>
+      options.runtimeHome?.isHostSystemDefaultRealHomeSelected() === true,
     getSelectedHostAccountCodexHomePath: () =>
       options.runtimeHome?.resolveSelectedHostAccountCodexHomePathForResume() ?? null,
     systemCodexHomePath: options.systemCodexHomePath

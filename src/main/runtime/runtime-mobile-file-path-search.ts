@@ -1,3 +1,5 @@
+import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+
 export type RuntimeMobileFilePathInventory = {
   paths: string[]
   totalCount: number
@@ -6,11 +8,15 @@ export type RuntimeMobileFilePathInventory = {
 
 type CacheEntry = RuntimeMobileFilePathInventory & { expiresAt: number }
 
-/** Lazy TTL/LRU cache for autocomplete inventories. It avoids launching rg for
+/** TTL/LRU cache for autocomplete inventories. It avoids launching rg for
  *  every mobile keystroke while bounding retained worktrees and paths. */
 export class RuntimeMobileFilePathSearchCache {
   private readonly entries = new Map<string, CacheEntry>()
   private readonly inFlight = new Map<string, Promise<RuntimeMobileFilePathInventory>>()
+  private readonly expirationTimers = new Map<
+    string,
+    { token: symbol; timer: ReturnType<typeof setTimeout> }
+  >()
 
   constructor(
     private readonly maxEntries: number,
@@ -29,7 +35,7 @@ export class RuntimeMobileFilePathSearchCache {
       this.entries.set(key, cached)
       return cached
     }
-    this.entries.delete(key)
+    this.removeEntry(key)
     const pending = this.inFlight.get(key)
     if (pending) {
       return pending
@@ -38,13 +44,18 @@ export class RuntimeMobileFilePathSearchCache {
       .then((loaded) => {
         // Why: a slow SSH scan should receive a full TTL after it becomes usable,
         // not arrive already expired because the clock started before its I/O.
-        this.entries.set(key, { ...loaded, expiresAt: (now ?? Date.now()) + this.ttlMs })
+        const expiresAt = (now ?? Date.now()) + this.ttlMs
+        this.entries.set(key, { ...loaded, expiresAt })
+        // Explicit per-call clocks stay caller-controlled; production uses the wall clock.
+        if (now === undefined) {
+          this.scheduleExpiry(key, expiresAt)
+        }
         while (this.entries.size > this.maxEntries) {
-          const oldest = this.entries.keys().next().value as string | undefined
+          const oldest = this.entries.keys().next().value
           if (!oldest) {
             break
           }
-          this.entries.delete(oldest)
+          this.removeEntry(oldest)
         }
         return loaded
       })
@@ -57,6 +68,53 @@ export class RuntimeMobileFilePathSearchCache {
     // prevents duplicate local rg or SSH inventory scans.
     this.inFlight.set(key, next)
     return next
+  }
+
+  private removeEntry(key: string): void {
+    this.entries.delete(key)
+    const expiration = this.expirationTimers.get(key)
+    if (expiration) {
+      clearTimeout(expiration.timer)
+      this.expirationTimers.delete(key)
+    }
+  }
+
+  private scheduleExpiry(key: string, expiresAt: number): void {
+    const previous = this.expirationTimers.get(key)
+    if (previous) {
+      clearTimeout(previous.timer)
+      this.expirationTimers.delete(key)
+    }
+    if (!Number.isFinite(expiresAt)) {
+      return
+    }
+    const token = Symbol()
+    const timer = setTimeout(
+      RuntimeMobileFilePathSearchCache.expiryCallback(new WeakRef(this), key, token),
+      Math.min(MAX_TIMER_DELAY_MS, Math.max(0, expiresAt - Date.now()))
+    )
+    timer.unref()
+    this.expirationTimers.set(key, { token, timer })
+  }
+
+  private static expiryCallback(
+    owner: WeakRef<RuntimeMobileFilePathSearchCache>,
+    key: string,
+    token: symbol
+  ): () => void {
+    return () => owner.deref()?.expireEntry(key, token)
+  }
+
+  private expireEntry(key: string, token: symbol): void {
+    if (this.expirationTimers.get(key)?.token !== token) {
+      return
+    }
+    const entry = this.entries.get(key)
+    if (!entry || Date.now() >= entry.expiresAt) {
+      this.removeEntry(key)
+    } else {
+      this.scheduleExpiry(key, entry.expiresAt)
+    }
   }
 }
 

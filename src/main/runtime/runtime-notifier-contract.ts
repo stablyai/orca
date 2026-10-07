@@ -1,7 +1,13 @@
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type {
+  AgentLaunchTabPublished,
+  AgentLaunchTabPublishRequest
+} from '../../shared/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type {
   WorktreeBaseStatusEvent,
@@ -74,11 +80,18 @@ export type RuntimeNotifier = {
     | Promise<{ tabId: string; title?: string | null; identity?: TerminalRevealIdentity }>
     | { tabId: string; title?: string | null; identity?: TerminalRevealIdentity }
     | void
+  /** Shows an agent launch's tab before its process exists; the pane attaches when it does. */
+  publishAgentLaunchTab?(
+    request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
+  ): Promise<AgentLaunchTabPublished>
+  /** A launch pane's fate, for the window to keep on its tab or act on. */
+  agentLaunchPaneVerdict?(event: AgentLaunchPaneVerdictEvent): void
   resolveLegacyWorkerTerminalRecovery?(
     paneKey: string,
     resolution: 'adopted' | 'exited' | 'rolled_back',
     ptyId?: string
   ): void
+  /** The fence lives in the workspace session, which a live renderer only re-reads at startup. */
   splitTerminal(
     tabId: string,
     paneRuntimeId: number,
@@ -91,23 +104,30 @@ export type RuntimeNotifier = {
       newLeafId?: string
     }
   ): void
-  renameTerminal(tabId: string, title: string | null): void
+  /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
+  renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
+  /**
+   * Acts only on the host's own window: 'host'/'all' move it, 'caller'/'clients' open without moving
+   * it, absent keeps the original switch. Paired clients are never navigated (intended; 'all' == 'host').
+   */
   openFile?(
     worktreeId: string,
     filePath: string,
     relativePath: string,
-    runtimeEnvironmentId?: string | null
+    runtimeEnvironmentId?: string | null,
+    navigation?: RuntimeNavigationTarget
   ): void
   openDiff?(
     worktreeId: string,
     filePath: string,
     relativePath: string,
     staged: boolean,
-    runtimeEnvironmentId?: string | null
+    runtimeEnvironmentId?: string | null,
+    navigation?: RuntimeNavigationTarget
   ): void
   readMobileMarkdownTab?(worktreeId: string, tabId: string): Promise<RuntimeMarkdownReadTabResult>
   saveMobileMarkdownTab?(
@@ -116,7 +136,10 @@ export type RuntimeNotifier = {
     baseVersion: string,
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult>
-  closeTerminal(tabId: string, paneRuntimeId?: number): void
+  /** Closes the whole tab. */
+  closeTerminal(tabId: string): void
+  /** Drops one split pane main already closed; never closes its tab. */
+  closeTerminalPane?(tabId: string, leafId: string): void
   closeTerminalTab?(
     tabId: string,
     options?: { localPtyTeardownOwnedExternally?: boolean; force?: boolean }

@@ -57,18 +57,18 @@ export function skillPackageGitTreeSha(entries: readonly SkillGitTreeFileEntry[]
       ...[...directory.directories].map(([name, child]) => ({
         mode: '40000',
         name,
+        sortKey: Buffer.from(`${name}/`),
         hash: hashDirectory(child)
       })),
       ...directory.files.map((file) => ({
         mode: file.executable ? '100755' : '100644',
         name: file.filename,
+        sortKey: Buffer.from(file.filename),
         hash: file.blobSha
       }))
     ].sort((left, right) => {
       // Git orders tree entries as raw bytes with directory names read as `name/`.
-      const leftName = left.mode === '40000' ? `${left.name}/` : left.name
-      const rightName = right.mode === '40000' ? `${right.name}/` : right.name
-      return Buffer.from(leftName).compare(Buffer.from(rightName))
+      return left.sortKey.compare(right.sortKey)
     })
     const body = Buffer.concat(
       children.map(({ mode, name, hash }) =>

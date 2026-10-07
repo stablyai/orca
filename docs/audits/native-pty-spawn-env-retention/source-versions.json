@@ -1,0 +1,59 @@
+{
+  "baselineHashes": {
+    "src/main/daemon/pty-subprocess/subprocess-handle.ts": "12ec9e8b5e5f7175310f9522c3f827b19b871c3df5b09e8b1b2c4fe1fc92ba4e"
+  },
+  "fixedHashes": {
+    "src/main/daemon/pty-subprocess/subprocess-handle.ts": "e28a2043f9c68c365109aab0550f97c49ee76fbbadc14c81dd7eb7b9aae6fc7a"
+  },
+  "namedRefs": [
+    {
+      "ref": "HEAD",
+      "revision": "b5fc27171c0273e0b9e2af873259e85724aea8c3",
+      "beforeSha256": "12ec9e8b5e5f7175310f9522c3f827b19b871c3df5b09e8b1b2c4fe1fc92ba4e",
+      "projectedSha256": "e28a2043f9c68c365109aab0550f97c49ee76fbbadc14c81dd7eb7b9aae6fc7a",
+      "matchesAuditBaseline": true,
+      "sameExitCallbackCapture": true,
+      "patchApplies": true
+    },
+    {
+      "ref": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+      "revision": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+      "beforeSha256": "12ec9e8b5e5f7175310f9522c3f827b19b871c3df5b09e8b1b2c4fe1fc92ba4e",
+      "projectedSha256": "e28a2043f9c68c365109aab0550f97c49ee76fbbadc14c81dd7eb7b9aae6fc7a",
+      "matchesAuditBaseline": true,
+      "sameExitCallbackCapture": true,
+      "patchApplies": true
+    },
+    {
+      "ref": "v1.4.198",
+      "revision": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+      "beforeSha256": "4623b60a0e362bb3cf218787573966aa056ee5fd1bdefc39fb5293446e4af70b",
+      "projectedSha256": "ed5665c33d0d4157836a5b97bd934c7c2894d84b9d8a905544fb19a7863dc262",
+      "matchesAuditBaseline": false,
+      "sameExitCallbackCapture": true,
+      "patchApplies": true
+    }
+  ],
+  "historicalRuntimeReproduced": false,
+  "callerProvenance": [
+    {
+      "path": "src/main/daemon/pty-subprocess.ts",
+      "currentSha256": "9f32c99c79fd3a23fd61d572146f81c3680fb5cbc13337e4fb3179856a0d7dc1",
+      "291b4ddd6f1c1af480169885e0fda7f9c78ff053": "9f32c99c79fd3a23fd61d572146f81c3680fb5cbc13337e4fb3179856a0d7dc1",
+      "v1.4.198": "9f32c99c79fd3a23fd61d572146f81c3680fb5cbc13337e4fb3179856a0d7dc1"
+    },
+    {
+      "path": "src/main/daemon/pty-subprocess/native-pty-spawn.ts",
+      "currentSha256": "3752b779e06d7c004bb6acfba3188f1e5dfb589bc6a9bbe024f8b5e80dad68a5",
+      "291b4ddd6f1c1af480169885e0fda7f9c78ff053": "3752b779e06d7c004bb6acfba3188f1e5dfb589bc6a9bbe024f8b5e80dad68a5",
+      "v1.4.198": "3752b779e06d7c004bb6acfba3188f1e5dfb589bc6a9bbe024f8b5e80dad68a5"
+    },
+    {
+      "path": "src/main/daemon/pty-subprocess/spawn-environment.ts",
+      "currentSha256": "ceb93773a9c57f4b0ae246399600f648c298187b158b3cc5f0183ffb85d2a565",
+      "291b4ddd6f1c1af480169885e0fda7f9c78ff053": "ceb93773a9c57f4b0ae246399600f648c298187b158b3cc5f0183ffb85d2a565",
+      "v1.4.198": "ceb93773a9c57f4b0ae246399600f648c298187b158b3cc5f0183ffb85d2a565"
+    }
+  ],
+  "sourceHashLineEndings": "canonical LF"
+}

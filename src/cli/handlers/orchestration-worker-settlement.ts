@@ -22,7 +22,7 @@ export async function requireWorkerDoneSettlement(
         tasks: { id: string; status: string; result: string | null }[]
       }>('orchestration.taskList', { status: target.expectedStatus, run: receipt.runId })
     ]).catch(() => {
-      throw workerDoneSettlementUnknown()
+      throw workerDoneSettlementUnknown(result)
     })
     const task = taskVerification.result.tasks.find((candidate) => candidate.id === target.taskId)
     if (
@@ -34,14 +34,30 @@ export async function requireWorkerDoneSettlement(
       return
     }
   }
-  throw workerDoneSettlementUnknown()
+  throw workerDoneSettlementUnknown(result)
 }
 
-function workerDoneSettlementUnknown(): RuntimeClientError {
+function workerDoneSettlementUnknown(result: unknown): RuntimeClientError {
+  const requestId = parseMutationRequestId(result)
   return new RuntimeClientError(
     'operation_unknown',
-    'The runtime accepted worker_done but did not confirm that the exact report settled its Task and Dispatch. Retry from the assigned worker after verifying its active Dispatch.'
+    requestId
+      ? `The runtime accepted worker_done under mutation request ${requestId}, but the post-verification read did not confirm settlement. Do not send a new completion; inspect the active Dispatch, then re-run the exact same worker_done command with --retry-request ${requestId}.`
+      : 'The runtime accepted worker_done but the post-verification read did not confirm settlement. Do not send a new completion; inspect the active Dispatch and preserve the original mutation identity.',
+    requestId ? { orchestrationRequestId: requestId } : undefined
   )
+}
+
+function parseMutationRequestId(result: unknown): string | undefined {
+  if (!result || typeof result !== 'object' || !('mutation' in result)) {
+    return undefined
+  }
+  const mutation = (result as { mutation?: unknown }).mutation
+  if (!mutation || typeof mutation !== 'object') {
+    return undefined
+  }
+  const requestId = (mutation as { requestId?: unknown }).requestId
+  return typeof requestId === 'string' && requestId.length > 0 ? requestId : undefined
 }
 
 function parseWorkerDoneReceipt(

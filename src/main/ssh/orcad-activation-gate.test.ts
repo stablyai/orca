@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { evaluateOrcadActivation } from './orcad-activation-gate'
+import { classifyOrcadHostUnavailable } from './orcad-host-unavailable'
 import type { ServeReadiness } from '../server/serve-readiness'
 import type { OrcadHealth, TerminalDaemonHealth } from '../orcad/orcad-health'
 
@@ -14,6 +15,7 @@ function daemon(overrides: Partial<TerminalDaemonHealth> = {}): TerminalDaemonHe
     buildVersion: '0.2.0+bb01',
     entryPath: '/home/u/.orca-remote/orcad-0.2.0+bb01/daemon-entry.js',
     protocolVersion: 3,
+    cgroupUnit: null,
     selfTest: { ok: true, coverage: 'pty-spawn', verdict: 'healthy', durationMs: 12 },
     ...overrides
   }
@@ -84,6 +86,8 @@ describe('evaluateOrcadActivation', () => {
       EXPECTED
     )
     expect(verdict).toMatchObject({ decision: 'reject', code: 'orcad_activation_daemon_absent' })
+    // A cold daemon start is transient: the host must stay eligible for the next connect's deploy.
+    expect(classifyOrcadHostUnavailable({ code: 'orcad_activation_daemon_absent' })).toBeNull()
   })
 
   it('refuses a degraded daemon, whose fresh terminals would not survive a restart', () => {

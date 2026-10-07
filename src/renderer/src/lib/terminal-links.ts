@@ -33,8 +33,9 @@ export type ResolvedTerminalFileLink = Pick<ParsedTerminalFileLink, 'line' | 'co
 // `:line` and `:col` suffixes (e.g. `src/foo.ts:12:3`, `./bin`, `/abs/path`).
 // Why: framework route files commonly use punctuation segments like
 // `app/(shop)/products/[id]/page.tsx`; keep those links whole.
+// Keep Japanese middle dots and tildes without admitting prose delimiters.
 const LOCAL_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/])[\p{L}\p{N}\p{M}._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/gu
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/])[\p{L}\p{N}\p{M}._~\-/%+@\\()[\]\u30FB\uFF65\u301C\uFF5E]*(?::\d+)?(?::\d+)?/gu
 
 // Matches separator paths whose file or folder names include spaces. This runs
 // before LOCAL_PATH_REGEX so `/Users/A/Foo Bar/file.ts` is claimed as one link

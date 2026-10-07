@@ -83,6 +83,7 @@ export async function saveNewSshHostFromForm({
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
+  const remoteRuntime = form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime
   const target = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost || host),
     configHost,
@@ -94,7 +95,8 @@ export async function saveNewSshHostFromForm({
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
-    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
+    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
+    ...(remoteRuntime ? { remoteRuntime } : {})
   }
 
   try {

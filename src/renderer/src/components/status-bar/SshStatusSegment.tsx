@@ -24,7 +24,7 @@ import {
   workspaceSyncProblemLabel
 } from './ssh-status-segment-copy'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
-import { connectRuntimeEnvironmentAndRecordStatus } from './runtime-environment-explicit-connect'
+import { connectRuntimeHostAndReloadProjects } from './runtime-environment-explicit-connect'
 import {
   overallDotColor,
   overallStatus,
@@ -33,34 +33,9 @@ import {
 } from './remote-host-connection-status'
 import {
   isConnectedRuntimeHostState,
-  runtimeHostConnectionState,
+  runtimeHostConnectionStateForEntry,
   runtimeStatusForOverall
 } from '@/runtime/runtime-host-connection-state'
-import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-
-export async function connectRuntimeHostForNavigation(args: {
-  environmentId: string
-  refreshStatus: (environmentId: string, timeoutMs: number) => Promise<boolean>
-  fetchRepos: (environmentId: string) => Promise<{ id: string }[]>
-  fetchWorktrees: (
-    repoId: string,
-    options: { executionHostId: ExecutionHostId; suppressRemoteLineageRefresh: true }
-  ) => Promise<unknown>
-  fetchLineage: (options: { executionHostId: ExecutionHostId }) => Promise<unknown>
-}): Promise<boolean> {
-  if (!(await args.refreshStatus(args.environmentId, 5_000))) {
-    return false
-  }
-  const repos = await args.fetchRepos(args.environmentId)
-  await refreshRuntimeProjectWorktreesAndLineage(
-    args.environmentId,
-    repos,
-    args.fetchWorktrees,
-    args.fetchLineage
-  )
-  return true
-}
 
 export function SshStatusSegment({
   compact,
@@ -74,7 +49,7 @@ export function SshStatusSegment({
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
-  const setRuntimeEnvironmentStatus = useAppStore((s) => s.setRuntimeEnvironmentStatus)
+  const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
   const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
   const remoteWorkspaceSyncStatusByTargetId = useAppStore(
     (s) => s.remoteWorkspaceSyncStatusByTargetId
@@ -105,7 +80,7 @@ export function SshStatusSegment({
       return {
         id: environment.id,
         label: override || environment.name || environment.id,
-        hasStatusEntry: Boolean(statusEntry),
+        snapshot: statusEntry?.snapshot,
         status: statusEntry?.status ?? null,
         active: settings?.activeRuntimeEnvironmentId === environment.id,
         remoteControl: statusEntry?.remoteControl ?? statusEntry?.status?.remoteControl ?? null
@@ -113,7 +88,7 @@ export function SshStatusSegment({
     })
   const runtimeHostRows = runtimeHosts.map((host) => ({
     ...host,
-    state: runtimeHostConnectionState(host)
+    state: runtimeHostConnectionStateForEntry(runtimeStatusByEnvironmentId.get(host.id))
   }))
   // Available remote servers are online even when they are not the active runtime.
   // Keep host health separate from the advanced active-server selection.
@@ -127,24 +102,9 @@ export function SshStatusSegment({
   const disconnectedTargets = targets.filter((target) => target.status !== 'connected')
   const connectRuntimeHost = useCallback(
     async (environmentId: string): Promise<void> => {
-      const store = useAppStore.getState()
-      const reachable = await connectRuntimeHostForNavigation({
-        environmentId,
-        refreshStatus: connectRuntimeEnvironmentAndRecordStatus,
-        fetchRepos: store.fetchRuntimeEnvironmentRepos,
-        fetchWorktrees: store.fetchWorktrees,
-        fetchLineage: store.fetchWorktreeLineage
-      })
-      if (!reachable) {
-        toast.error(
-          translate(
-            'auto.components.status.bar.SshStatusSegment.runtime_connect_unavailable',
-            'Remote host is not reachable'
-          )
-        )
-        return
+      if (await connectRuntimeHostAndReloadProjects(environmentId)) {
+        recordFeatureInteraction('ssh')
       }
-      recordFeatureInteraction('ssh')
     },
     [recordFeatureInteraction]
   )
@@ -152,11 +112,7 @@ export function SshStatusSegment({
     async (environmentId: string): Promise<void> => {
       try {
         await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
-        setRuntimeEnvironmentStatus(
-          environmentId,
-          { status: null, checkedAt: Date.now() },
-          { suppressDisconnectToast: true }
-        )
+        await readRuntimeHostStatusSnapshots()
         recordFeatureInteraction('ssh')
       } catch (err) {
         toast.error(
@@ -169,7 +125,7 @@ export function SshStatusSegment({
         )
       }
     },
-    [recordFeatureInteraction, setRuntimeEnvironmentStatus]
+    [recordFeatureInteraction, readRuntimeHostStatusSnapshots]
   )
 
   if (targets.length === 0 && runtimeHosts.length === 0) {

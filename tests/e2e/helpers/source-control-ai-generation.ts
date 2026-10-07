@@ -53,7 +53,6 @@ export async function openChecks(page: Page, worktreeId: string): Promise<void> 
           // instead of hanging on a locator that stopped matching mid-action.
           await checksButton.click({ timeout: 2_000 }).catch(() => undefined)
         }
-        await page.waitForTimeout(250)
         return page.evaluate(() => window.__store?.getState().rightSidebarTab)
       },
       { timeout: 10_000 }
@@ -135,7 +134,8 @@ export async function seedCreatePrComposer(page: Page): Promise<{
       // Ignore provider work queued before this generation-only fixture was installed.
       getEffectiveGitHubPRRefreshState: () => undefined,
       prRefreshStates: {},
-      fetchUpstreamStatus: async () => undefined,
+      fetchUpstreamStatus: async (worktreeId) =>
+        store.getState().remoteStatusesByWorktree[worktreeId] ?? null,
       setUpstreamStatus: () => undefined
     }))
 
@@ -223,8 +223,8 @@ export async function seedCommitMessageComposer(page: Page): Promise<{
           status: 'ready' as const
         }
       },
-      gitBranchCompareEntriesByWorktree: {
-        ...current.gitBranchCompareEntriesByWorktree,
+      gitBranchChangesByWorktree: {
+        ...current.gitBranchChangesByWorktree,
         [primaryWorktree.id]: []
       }
     }))
@@ -291,8 +291,8 @@ export async function seedCleanBranchEmptyState(
           status: 'ready' as const
         }
       },
-      gitBranchCompareEntriesByWorktree: {
-        ...current.gitBranchCompareEntriesByWorktree,
+      gitBranchChangesByWorktree: {
+        ...current.gitBranchChangesByWorktree,
         [primaryWorktree.id]: []
       }
     }))

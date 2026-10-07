@@ -133,14 +133,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -222,12 +222,17 @@ describe('connectPanePty', () => {
 
     expect(createdTransportOptions[0]?.commandDelivery).toBe('provider')
     expect(transport.sendInput).not.toHaveBeenCalledWith('droid\r')
-    expect(transport.sendInputAccepted).toHaveBeenCalledWith(`\x1b[200~${prompt}\x1b[201~`)
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith(
+      `\x1b[200~${prompt}\x1b[201~`,
+      'launch'
+    )
   })
 
-  it('waits past 8s for a cold Codex composer and preserves input ordering', async () => {
+  it.each([10_000, 20_000])('keeps Codex draft delivery bounded after %d ms', async (waitMs) => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
+    const { beginAgentStartupDeliveryAttempt: claimStartupDelivery } =
+      await import('@/lib/agent-startup-delayed-delivery')
 
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     const transport = createMockTransport('pty-codex')
@@ -256,7 +261,8 @@ describe('connectPanePty', () => {
     })
     vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
 
-    connectPanePty(pane as never, manager as never, deps as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the connection fields exercised here without a real terminal or DOM.
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
     await vi.advanceTimersByTimeAsync(VISIBLE_PTY_SETTLE_MS)
     await flushAsyncTicks()
     expect(capturedDataCallback.current).not.toBeNull()
@@ -273,13 +279,28 @@ describe('connectPanePty', () => {
       }
     ).mock.calls[0]?.[0]('USER_DRAFT')
     ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(waitMs)
     expect(transport.sendInputAccepted).not.toHaveBeenCalled()
     capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
     await flushAsyncTicks()
 
+    if (waitMs === 20_000) {
+      expect(transport.sendInputAccepted).not.toHaveBeenCalled()
+      expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual(['\x1b[I', 'USER_DRAFT'])
+      binding.dispose()
+      expect(
+        claimStartupDelivery({
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          launchToken: 'launch-token-1'
+        })
+      ).toBe(false)
+      return
+    }
+
     expect(transport.sendInputAccepted).toHaveBeenCalledWith(
-      '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~'
+      '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~',
+      'launch'
     )
     expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual([
       '\x1b[I',
@@ -354,7 +375,8 @@ describe('connectPanePty', () => {
 
     expect(transport.sendInputAccepted).toHaveBeenCalledTimes(1)
     expect(transport.sendInputAccepted).toHaveBeenCalledWith(
-      '\x1b[200~Linked Linear issue: STA-905\x1b[201~'
+      '\x1b[200~Linked Linear issue: STA-905\x1b[201~',
+      'launch'
     )
   })
 

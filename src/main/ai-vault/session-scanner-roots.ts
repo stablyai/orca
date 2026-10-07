@@ -1,25 +1,25 @@
+import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { normalizeAgentSessionsDir } from './session-scanner-values'
+import { resolveOmpSessionsDir } from './omp-session-root'
 
 // The default local roots for the two agents whose subagent transcripts are
 // read back by renderer-supplied path (Claude and OMP). Discovery scans these;
 // the IPC listers use the root enumerations below to reject arbitrary paths.
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
-export const OMP_SESSIONS_DIR = normalizeAgentSessionsDir(
-  process.env.OMP_CODING_AGENT_DIR?.trim() || join(homedir(), '.omp', 'agent', 'sessions'),
-  '.omp'
-)
 
 // The local host and each WSL distro's `~/.claude/projects`. Callers reading
 // Claude session files by path use these roots to reject arbitrary paths.
 export function claudeProjectsRootDirs(args: {
   claudeProjectsDir?: string
   wslHomeDirs?: readonly string[]
+  /** Passed in by a scan worker, which has no account router of its own. */
+  claudeProfileProjectsDirs?: readonly string[]
 }): string[] {
   return [
     args.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
-    ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects'))
+    ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects')),
+    ...(args.claudeProfileProjectsDirs ?? claudeProfileHistoryDirs('projects'))
   ]
 }
 
@@ -31,7 +31,7 @@ export function ompSessionsRootDirs(args: {
 }): string[] {
   return (
     sessionRootDirs(
-      args.ompSessionsDir ?? OMP_SESSIONS_DIR,
+      resolveOmpSessionsDir({ sessionsDir: args.ompSessionsDir }),
       normalizedWslHomeDirs(args.wslHomeDirs),
       ['.omp', 'agent', 'sessions']
     )

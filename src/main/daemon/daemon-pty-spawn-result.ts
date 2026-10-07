@@ -1,5 +1,6 @@
 import { isAgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
 import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
+import { daemonSpawnResultIdentity } from './daemon-spawn-result-identity'
 import { retireUnexpectedAttachOnlySpawn } from './daemon-attach-only-retirement'
 import { DaemonPtySpawnRequest, type DaemonPtySpawnContext } from './daemon-pty-spawn-request'
 import { providerSequenceFromCreateOrAttach } from './daemon-pty-provider-sequence'
@@ -78,10 +79,6 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     if (result.incarnationId) {
       this.sessionIncarnations.set(sessionId, result.incarnationId)
     }
-    const claimResult = (): Pick<PtySpawnResult, 'agentSessionEnsure'> | Record<string, never> =>
-      result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}
-    const incarnationResult = (): Pick<PtySpawnResult, 'incarnationId'> | Record<string, never> =>
-      result.incarnationId ? { incarnationId: result.incarnationId } : {}
     let providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
     // Why: explicit null from a current daemon overrides the caller's WSL preference; undefined keeps compatibility with older daemons.
     wslDistro = providerWslDistro ?? undefined
@@ -91,8 +88,6 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     } else if (providerWslDistro === null || result.isNew) {
       this.wslDistrosBySessionId.delete(sessionId)
     }
-    const launchIdentity = (): { launchAgent?: NonNullable<typeof result.launchAgent> } =>
-      result.launchAgent ? { launchAgent: result.launchAgent } : {}
 
     if (effectiveCwd) {
       this.initialCwds.set(sessionId, effectiveCwd)
@@ -116,10 +111,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       }
       return finalizeSpawnResult({
         id: sessionId,
-        ...incarnationResult(),
+        ...daemonSpawnResultIdentity(result),
         pid,
-        ...claimResult(),
-        ...launchIdentity(),
         coldRestore: cachedRestore,
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(!result.isNew ? { isReattach: true } : {})
@@ -210,10 +203,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         this.coldRestoreCache.set(sessionId, coldRestore)
         return finalizeSpawnResult({
           id: sessionId,
-          ...incarnationResult(),
+          ...daemonSpawnResultIdentity(result),
           pid,
-          ...claimResult(),
-          ...launchIdentity(),
           coldRestore,
           ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
           ...(providerSequence ? { providerSequence } : {}),
@@ -222,10 +213,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       }
       return finalizeSpawnResult({
         id: sessionId,
-        ...incarnationResult(),
+        ...daemonSpawnResultIdentity(result),
         pid,
-        ...claimResult(),
-        ...launchIdentity(),
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(providerSequence ? { providerSequence } : {})
       })
@@ -270,10 +259,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     if (!isReattach || !result.snapshot) {
       return finalizeSpawnResult({
         id: sessionId,
-        ...incarnationResult(),
+        ...daemonSpawnResultIdentity(result),
         pid,
-        ...claimResult(),
-        ...launchIdentity(),
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(providerSequence ? { providerSequence } : {}),
         ...(isReattach ? { isReattach: true } : {})
@@ -289,7 +276,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     const snapshotPrefix = reattachSnapshot.scrollbackAnsi + reattachSnapshot.rehydrateSequences
     const snapshotFrame = reattachSnapshot.snapshotAnsi
     const snapshotPayload = snapshotPrefix + snapshotFrame
-    // Why kitty flags ride beside the payload, not inside it: the snapshot reaches renderer xterms where POST_REPLAY_REATTACH_RESET's kitty reset must win (terminal-query-authority.md §kitty).
+    // Why kitty flags ride beside the payload, not inside it: renderers re-assert them in the replay epilogue, after the payload's screen switches (terminal-query-authority.md §kitty).
     // Why known `0` is no longer dropped: the pane tracker must be able to tell
     // "the app negotiated nothing" from "this reattach proved nothing".
     const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(
@@ -297,10 +284,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     )
     return finalizeSpawnResult({
       id: sessionId,
-      ...incarnationResult(),
+      ...daemonSpawnResultIdentity(result),
       pid,
-      ...claimResult(),
-      ...launchIdentity(),
       ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
       snapshot: snapshotPayload,
       snapshotCols: reattachSnapshot.cols,

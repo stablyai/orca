@@ -47,6 +47,16 @@ locals {
       description = "Cloud SQL checkpoints triggered by WAL volume instead of the timed schedule; a sustained run is the fsync loop that stalled every relay process at once on 2026-09-04."
       filter      = "resource.type=\"cloudsql_database\" AND resource.labels.database_id=\"${var.project_id}:${local.relay_database_instance_name}\" AND textPayload:\"checkpoint starting: wal\""
     }
+    # Why: `db=orca_relay,` keeps auth on the shared instance out. NOWAIT refusals ("could not
+    # obtain lock") are excluded: sweeps step aside by design at ~160/min even with rehome paused.
+    cloud_sql_lock_timeouts = {
+      description = "Relay statements Postgres cancelled after waiting out their lock timeout; a burst means one transaction is holding rows every other relay process needs."
+      filter      = "resource.type=\"cloudsql_database\" AND resource.labels.database_id=\"${var.project_id}:${local.relay_database_instance_name}\" AND textPayload:\"db=orca_relay,\" AND textPayload:\"canceling statement due to lock timeout\""
+    }
+    reservation_drift = {
+      description = "Cells whose reserved_requests disagreed with their lease units when reconciliation corrected them; should trend to zero."
+      filter      = "((resource.type=\"cloud_run_revision\" AND (${local.relay_service_log_filter})) OR resource.type=\"gce_instance\") AND jsonPayload.event=\"orca_relay_reservation_drift\""
+    }
   }
 
   relay_runtime_metrics = {
@@ -60,11 +70,29 @@ locals {
     control_renewal_latency_ms_p50     = { field = "controlRenewalLatencyMsP50", description = "Control renewal latency p50 in the interval." }
     control_renewal_latency_ms_p95     = { field = "controlRenewalLatencyMsP95", description = "Control renewal latency p95 in the interval." }
     control_renewal_latency_ms_max     = { field = "controlRenewalLatencyMsMax", description = "Maximum control renewal latency in the interval." }
+    control_renewal_flushes            = { field = "controlRenewalFlushesDelta", description = "Batched control-renewal statements issued in the interval, one per cell per flush window." }
+    control_renewal_flush_rows_max     = { field = "controlRenewalFlushRowsMax", description = "Largest number of hosts renewed by a single statement in the interval; the row ceiling is what bounds how long one flush holds its row locks." }
+    control_renewal_flush_ms_p95       = { field = "controlRenewalFlushLatencyMsP95", description = "Batched control-renewal statement duration p95 in the interval. Row locks live until the statement commits, so this is the lock hold." }
+    control_renewal_flush_ms_max       = { field = "controlRenewalFlushLatencyMsMax", description = "Maximum batched control-renewal statement duration in the interval." }
     control_renewals                   = { field = "controlRenewalsDelta", description = "Control renewal attempts in the interval." }
     control_renewal_successes          = { field = "controlRenewalSuccessesDelta", description = "Successful control renewals in the interval." }
     control_renewal_lease_misses       = { field = "controlRenewalLeaseMissesDelta", description = "Control renewals that found their activity lease missing." }
     control_activity_recoveries        = { field = "controlActivityRecoveriesDelta", description = "Control activity leases recovered after a renewal miss." }
     control_activity_recovery_failures = { field = "controlActivityRecoveryFailuresDelta", description = "Control activity lease recovery attempts that failed." }
+    control_rtt_ms_p50                 = { field = "controlRttMsP50", description = "Control-socket ping round trip p50 in the interval. The desktop echoes the pong on its main thread, so only the median reads as distance; the p95 and max below are dominated by desktop stalls." }
+    control_rtt_ms_p95                 = { field = "controlRttMsP95", description = "Control-socket ping round trip p95 in the interval; a desktop-stall signal, not a distance one." }
+    control_rtt_ms_max                 = { field = "controlRttMsMax", description = "Maximum control-socket ping round trip in the interval; a desktop-stall signal, not a distance one." }
+    control_rtt_samples                = { field = "controlRttSamplesDelta", description = "Control-socket round trips observed in the interval, one per ping answered; the percentiles above are omitted when this is zero." }
+    control_rtt_samples_dropped        = { field = "controlRttSamplesDroppedDelta", description = "Observed round trips the bounded percentile reservoir did not keep; non-zero means the percentiles above summarise a uniform sample of the interval." }
+    client_accepts_completed           = { field = "clientAcceptCompletedDelta", description = "Phone accepts that reached relay-hello in the interval; the percentiles below are omitted when this is zero." }
+    client_accept_total_ms_p50         = { field = "clientAcceptTotalMsP50", description = "Successful phone-accept duration p50, dial to relay-hello." }
+    client_accept_total_ms_p95         = { field = "clientAcceptTotalMsP95", description = "Successful phone-accept duration p95, dial to relay-hello." }
+    client_accept_total_ms_max         = { field = "clientAcceptTotalMsMax", description = "Maximum successful phone-accept duration in the interval." }
+    client_accept_assignment_ms_p95    = { field = "clientAcceptAssignmentMsP95", description = "Accept stage p95: resume/invite lookup plus assignment resolve." }
+    client_accept_credential_ms_p95    = { field = "clientAcceptCredentialMsP95", description = "Accept stage p95: outer credential reservation." }
+    client_accept_activity_ms_p95      = { field = "clientAcceptActivityMsP95", description = "Accept stage p95: credential activity lease acquisition." }
+    client_accept_attach_ms_p95        = { field = "clientAcceptAttachMsP95", description = "Accept stage p95: conn-open sent until the desktop's data leg authenticated." }
+    client_accept_basis_ms_p95         = { field = "clientAcceptBasisMsP95", description = "Accept stage p95: splice lease and connection-basis writes between the data leg and relay-hello." }
     heap_used_bytes                    = { field = "heapUsedBytes", description = "Node.js heap bytes used by the relay process." }
     event_loop_ms_p99                  = { field = "eventLoopDelayMsP99", description = "Node.js event-loop delay p99 in milliseconds." }
     forwarded_bytes                    = { field = "forwardedBytesDelta", description = "Ciphertext bytes admitted for forwarding." }
@@ -79,7 +107,98 @@ locals {
     db_waiters_max                     = { field = "databasePoolWaitersMax", description = "Maximum requests queued for a PostgreSQL connection during the interval." }
     db_oldest_wait_ms                  = { field = "databasePoolOldestWaitMs", description = "Current oldest PostgreSQL pool waiter age." }
     db_wait_ms_max                     = { field = "databasePoolWaitMsMax", description = "Maximum PostgreSQL pool wait during the interval." }
+    cell_inventory_hold_ms_max         = { field = "cellInventoryHoldMsMax", description = "Longest cell-inventory lock hold in the interval." }
+    cell_inventory_hold_ms_p95         = { field = "cellInventoryHoldMsP95", description = "Cell-inventory lock hold p95 in the interval; the bound is tuned against this." }
+    cell_inventory_holds               = { field = "cellInventoryHolds", description = "Cell-inventory locks acquired in the interval; the percentiles above summarise these." }
+    cell_inventory_lock_unavailable    = { field = "cellInventoryLockUnavailable", description = "Fail-fast cell-inventory acquisitions that found the lock held. Includes background sweeps, which step aside by design, so this is contention pressure rather than user-visible failure." }
+    cell_inventory_lock_timeouts       = { field = "cellInventoryLockTimeouts", description = "Bounded cell-inventory waits that expired, counted per attempt rather than per request. This is the user-visible lane." }
+    inventory_hold_ms_p99              = { field = "inventoryHoldMsP99", description = "Cell-inventory lock (every row, or every general row) hold p99 in the interval, this site only." }
+    rehome_target_row_hold_ms_p99      = { field = "rehomeTargetRowHoldMsP99", description = "Rehome target-row lock hold p99 in the interval, this site only." }
+    isolated_replacement_hold_ms_p99   = { field = "isolatedReplacementHoldMsP99", description = "Drain-return regional target-row lock hold p99 in the interval, this site only." }
+    isolated_replacement_holds         = { field = "isolatedReplacementHolds", description = "Drain-return regional target-row locks acquired in the interval." }
+    drain_return_service_ms_p50        = { field = "drainReturnServiceMsP50", description = "Drain-return lane slot hold p50; lane capacity is concurrency / this. Omitted when no drain return ran." }
+    drain_return_service_ms_p95        = { field = "drainReturnServiceMsP95", description = "Drain-return lane slot hold p95 in the interval." }
+    sticky_service_ms_p50              = { field = "stickyServiceMsP50", description = "Sticky lane slot hold p50, verification included; herd recovery is concurrency / this." }
+    sticky_service_ms_p99              = { field = "stickyServiceMsP99", description = "Sticky lane slot hold p99 in the interval." }
+    assign_non_drain_503s              = { field = "assignNonDrain503sDelta", description = "Director /v1/assign 503s other than scheduled drain-return deferrals; the per-cause split is assign503sByCauseDelta." }
+    db_lock_wait_samples               = { field = "dbLockWaitSamplesDelta", description = "Relay-database lock-wait samples taken by this director in the interval; divide the waiter sums below by this." }
+    db_cell_row_lock_waiters_director  = { field = "dbCellRowLockWaitersDirectorDelta", description = "Director backends waiting on a relay_cells row lock, summed over samples." }
+    db_cell_row_lock_waiters_cell      = { field = "dbCellRowLockWaitersCellDelta", description = "Cell backends waiting on a relay_cells row lock, summed over samples." }
   }
+
+  # Regions the director can hint or select. Pinned to relay-contract's RELAY_REGIONS by
+  # dev/scripts/relay-region-hint-metrics.test.mjs, which also checks the flat field names below
+  # against the emitter. A region missing here drops out of both shares the skew alert compares.
+  relay_region_keys = ["us-central1", "asia-east2"]
+  # Flat emitter fields, not the nested `requestedRegionsDelta` map: a log-based metric would need
+  # a quoted field path to reach a hyphenated map key, and the relay publishes these as zeros in
+  # every interval so no series can drop out of the alert's inner join. Spelled out rather than
+  # derived, so this literal and relay-contract's RELAY_REGION_METRIC_SEGMENTS can be compared
+  # directly; reformatting either side cannot break the check and neither can drift alone.
+  relay_region_field_segments = {
+    "us-central1" = "UsCentral1"
+    "asia-east2"  = "AsiaEast2"
+  }
+  relay_region_columns = { for key in local.relay_region_keys : key => replace(key, "-", "_") }
+  relay_region_share_metrics = merge(
+    {
+      for key in local.relay_region_keys :
+      "requested_regions_${local.relay_region_columns[key]}" => {
+        field       = "requestedRegion${local.relay_region_field_segments[key]}Delta"
+        description = "Assignment requests that hinted ${key}."
+      }
+    },
+    {
+      for key in local.relay_region_keys :
+      "selected_regions_${local.relay_region_columns[key]}" => {
+        field       = "selectedRegion${local.relay_region_field_segments[key]}Delta"
+        description = "Assignments that placed a host in ${key}."
+      }
+    }
+  )
+  relay_region_hinted_total   = join(" + ", [for key in local.relay_region_keys : "req_${local.relay_region_columns[key]}"])
+  relay_region_selected_total = join(" + ", [for key in local.relay_region_keys : "sel_${local.relay_region_columns[key]}"])
+  # MQL, not a filter condition: every runtime metric is a DELTA DISTRIBUTION, and the only scalar
+  # aligners a `condition_threshold` can apply to one are percentiles. Both shares need the sum of
+  # the extracted values, which is `sum(value.<metric>)` in MQL and unreachable otherwise.
+  relay_region_hint_skew_query = join("\n", concat(
+    ["{"],
+    flatten([
+      for index, entry in [
+        for key in local.relay_region_keys : { metric = "requested_regions_${local.relay_region_columns[key]}", column = "req_${local.relay_region_columns[key]}" }
+        ] : [
+        index == 0 ? "" : ";",
+        "  fetch cloud_run_revision::logging.googleapis.com/user/orca_relay_${entry.metric}",
+        "  | align delta(1h) | every 1h",
+        "  | group_by [], [${entry.column}: sum(value.orca_relay_${entry.metric})]"
+      ]
+    ]),
+    flatten([
+      for key in local.relay_region_keys : [
+        ";",
+        "  fetch cloud_run_revision::logging.googleapis.com/user/orca_relay_selected_regions_${local.relay_region_columns[key]}",
+        "  | align delta(1h) | every 1h",
+        "  | group_by [], [sel_${local.relay_region_columns[key]}: sum(value.orca_relay_selected_regions_${local.relay_region_columns[key]})]"
+      ]
+    ]),
+    [
+      "}",
+      "| join",
+      "| value [",
+      "    hint_share: req_asia_east2 / (${local.relay_region_hinted_total}),",
+      "    placement_share: sel_asia_east2 / (${local.relay_region_selected_total}),",
+      "    hinted_requests: ${local.relay_region_hinted_total}",
+      "  ]",
+      # Cross-multiplied, never a plain ratio of the two shares: an hour that placed nobody in the
+      # region makes that ratio 0/0 or x/0, and MQL drops the row instead of yielding a number, so
+      # the whole series vanishes before the other clauses run. That hour is the worst skew there
+      # is - every desktop asking for a region the director is putting nobody in - and it happens
+      # whenever the region is drained, fenced, or at capacity. Both forms were run read-only
+      # against production surrogates with a zero denominator: the ratio returned no rows, this
+      # returned the series with the condition true.
+      "| condition hint_share > 2 * placement_share && hint_share - placement_share > 0.15 '1' && hinted_requests > 500 '1'"
+    ]
+  ))
   relay_custom_alerts = {
     connection_headroom = {
       pages_oncall = true
@@ -201,7 +320,9 @@ locals {
 }
 
 resource "google_logging_metric" "relay_snapshot" {
-  for_each = local.relay_runtime_metrics
+  # Region-request metrics ride the same event and shape; merging adds map entries only, so the
+  # existing metric instances are untouched (a label change, not a new key, is what recreates them).
+  for_each = merge(local.relay_runtime_metrics, local.relay_region_share_metrics)
 
   project         = var.project_id
   name            = "orca_relay_${each.key}"
@@ -211,14 +332,14 @@ resource "google_logging_metric" "relay_snapshot" {
   label_extractors = {
     role    = "EXTRACT(jsonPayload.role)"
     cell_id = "EXTRACT(jsonPayload.cellId)"
-    # No region label: adding one replaces all 21 live metrics (label change = delete+create),
+    # No region label: adding one replaces all 42 live metrics (label change = delete+create),
     # which resets history and blanks the relay alert policies during the swap.
   }
 
   metric_descriptor {
     metric_kind = "DELTA"
     value_type  = "DISTRIBUTION"
-    unit        = contains(["sql_latency_ms", "control_renewal_latency_ms_p50", "control_renewal_latency_ms_p95", "control_renewal_latency_ms_max", "http_latency_ms", "event_loop_ms_p99", "db_oldest_wait_ms", "db_wait_ms_max"], each.key) ? "ms" : each.key == "queued_bytes" || each.key == "heap_used_bytes" || each.key == "forwarded_bytes" ? "By" : "1"
+    unit        = contains(["sql_latency_ms", "control_rtt_ms_p50", "control_rtt_ms_p95", "control_rtt_ms_max", "client_accept_total_ms_p50", "client_accept_total_ms_p95", "client_accept_total_ms_max", "client_accept_assignment_ms_p95", "client_accept_credential_ms_p95", "client_accept_activity_ms_p95", "client_accept_attach_ms_p95", "client_accept_basis_ms_p95", "control_renewal_latency_ms_p50", "control_renewal_latency_ms_p95", "control_renewal_latency_ms_max", "http_latency_ms", "event_loop_ms_p99", "db_oldest_wait_ms", "db_wait_ms_max", "inventory_hold_ms_p99", "rehome_target_row_hold_ms_p99", "isolated_replacement_hold_ms_p99", "drain_return_service_ms_p50", "drain_return_service_ms_p95", "sticky_service_ms_p50", "sticky_service_ms_p99"], each.key) ? "ms" : each.key == "queued_bytes" || each.key == "heap_used_bytes" || each.key == "forwarded_bytes" ? "By" : "1"
 
     labels {
       key         = "role"
@@ -254,6 +375,45 @@ resource "google_logging_metric" "relay_incident" {
     metric_kind = "DELTA"
     value_type  = "INT64"
     unit        = "1"
+  }
+}
+
+# Why: the hold sample is emitted only after COMMIT, so a failed acquisition never reads as a hold.
+# The 1,000 ms bar lives in the filter so the alert is on the sampled milliseconds, not on the
+# percentile interpolation of a wide exponential bucket.
+resource "google_logging_metric" "relay_long_cell_inventory_hold" {
+  project         = var.project_id
+  name            = "orca_relay_long_cell_inventory_hold_ms"
+  description     = "Cell-inventory lock holds of at least 1,000 ms, one value per 30-second runtime sample."
+  filter          = "${local.relay_runtime_log_filter} AND jsonPayload.cellInventoryHoldMsMax>=1000"
+  value_extractor = "EXTRACT(jsonPayload.cellInventoryHoldMsMax)"
+  label_extractors = {
+    role    = "EXTRACT(jsonPayload.role)"
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = "ms"
+
+    labels {
+      key         = "role"
+      value_type  = "STRING"
+      description = "Relay process role."
+    }
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier, or director."
+    }
+  }
+
+  bucket_options {
+    explicit_buckets {
+      bounds = [1000, 2000, 3000, 4000, 6000, 10000, 30000]
+    }
   }
 }
 
@@ -670,6 +830,325 @@ resource "google_monitoring_alert_policy" "relay_cell_process_exit" {
   }
 
   depends_on = [google_logging_metric.relay_incident]
+}
+
+# Pages on cell holds only: director holds of 1-2.5 s recur several times a day with rehoming paused,
+# and pausing rehome does not stop them, so paging on them would ask on-call to do nothing.
+resource "google_monitoring_alert_policy" "relay_long_cell_inventory_hold" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell table lock held over 1 second"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Cell table lock held at least 1,000 ms (GCE cell)"
+
+    condition_threshold {
+      # The metric filter already drops samples under 1,000 ms, so any value present is a breach.
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.relay_long_cell_inventory_hold.name}\" AND metric.label.\"role\"=\"cell\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_PERCENTILE_99"
+        cross_series_reducer = "REDUCE_MAX"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  conditions {
+    display_name = "Cell table lock held at least 1,000 ms (Cloud Run cell)"
+
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.relay_long_cell_inventory_hold.name}\" AND metric.label.\"role\"=\"cell\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_PERCENTILE_99"
+        cross_series_reducer = "REDUCE_MAX"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "A relay cell held the lock on every row of the relay cell table for at least one second. While it is held, host connects and reservation changes on every cell wait and then fail, so each hold is a fleet-wide stall of that length. Between 2026-09-20 and 2026-09-22 every cell hold came from a regional rehome committed on an asia-east2 cell (c27, c28 or c29), about 3.6 s each. First response: pause regional rehoming with the `Operate Relay Production Rehome` workflow, action `pause`. See `cloud/docs/relay-incident-monitor.md`, section \"Relay lock contention alert policies\"."
+    mime_type = "text/markdown"
+  }
+}
+
+# Visibility only, no notification channel, like the non-paging relay_custom policies.
+resource "google_monitoring_alert_policy" "relay_director_cell_inventory_hold" {
+  project               = var.project_id
+  display_name          = "Orca Relay: director cell table lock held over 1 second"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = []
+
+  conditions {
+    display_name = "Director cell table lock held at least 1,000 ms"
+
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.relay_long_cell_inventory_hold.name}\" AND metric.label.\"role\"=\"director\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_PERCENTILE_99"
+        cross_series_reducer = "REDUCE_MAX"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "The director held the lock on every row of the relay cell table for at least one second. These holds happen a few times a day even with regional rehoming paused, and pausing rehome does not stop them, so this policy does not page. Use it to explain a `Orca Relay: lock timeout burst` alert that has no cell hold in the same minute. Do not drain or restart cells for it."
+    mime_type = "text/markdown"
+  }
+}
+
+resource "google_monitoring_alert_policy" "relay_lock_timeout_burst" {
+  project               = var.project_id
+  display_name          = "Orca Relay: lock timeout burst"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Relay lock timeouts at least 20 in a minute"
+
+    condition_threshold {
+      filter          = "resource.type=\"cloudsql_database\" AND metric.type=\"logging.googleapis.com/user/orca_relay_cloud_sql_lock_timeouts\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 19
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "Postgres cancelled at least 20 relay statements in one minute because they waited too long for a lock. Each cancel is a host connect, reservation or placement that failed and retried. Only the relay database is counted; auth traffic on the same instance and fail-fast lock refusals from background sweeps are excluded. Between 2026-09-20 and 2026-09-22 all 88 such minutes overlapped a lock hold from a regional rehome on an asia-east2 cell. A burst can also come from a director hold while rehoming is paused, as on 2026-09-23 at 04:23 UTC. First response: check the `Orca Relay: cell table lock held over 1 second` policy for the same minute. If an asia-east2 cell held the lock, pause regional rehoming with the `Operate Relay Production Rehome` workflow, action `pause`. If no cell hold appears in that minute, check `Orca Relay: director cell table lock held over 1 second` instead of pausing rehome, and do not drain or restart cells for it. See `cloud/docs/relay-incident-monitor.md`, section \"Relay lock contention alert policies\"."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_incident]
+}
+
+# Why: nothing fired while US desktops sat on asia-east2 cells for weeks in 2026-08. The two
+# per-cell policies below read that as distance, and the fleet-wide one reads it as a bad region
+# hint. All three are MQL because each needs the sum of a DELTA DISTRIBUTION as a volume floor,
+# and the only scalar aligners a `condition_threshold` can apply to a distribution are percentiles.
+# `join` is an inner join and the relay omits its percentile fields on an empty interval, so an
+# idle cell drops out rather than alerting on nothing. The per-cell arms fetch `gce_instance`
+# only: production runs no Cloud Run cells (`relay_cells` is empty), and a future one would need
+# its own arm here. None of the metrics these query exist in the project yet, so what was checked
+# against production is the query shape: the same MQL run over existing metrics of the same kind
+# confirmed the distribution sum, the join arity, the unit literals, and the condition clause.
+resource "google_monitoring_alert_policy" "relay_far_cell_accept_latency" {
+  project               = var.project_id
+  display_name          = "Orca Relay: far-cell phone accept latency"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Phone accept p95 above 2 s for 15 minutes"
+
+    condition_monitoring_query_language {
+      # percentile(..., 50) over the window, not max: the published value is already a p95, so the
+      # median of the interval p95s reads as sustained slowness instead of one bad 30-second flush.
+      query    = <<-EOT
+        {
+          fetch gce_instance::logging.googleapis.com/user/orca_relay_client_accept_total_ms_p95
+          | align delta(15m) | every 15m
+          | group_by [metric.cell_id], [accept_p95_ms: percentile(value.orca_relay_client_accept_total_ms_p95, 50)]
+        ;
+          fetch gce_instance::logging.googleapis.com/user/orca_relay_client_accepts_completed
+          | align delta(15m) | every 15m
+          | group_by [metric.cell_id], [accepts: sum(value.orca_relay_client_accepts_completed)]
+        }
+        | join
+        | condition accept_p95_ms > 2000 'ms' && accepts >= 20 '1'
+      EOT
+      duration = "0s"
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "Phones on this cell are taking over two seconds to reach relay-hello. Measured separation: an in-region accept completes in 0.3-0.6 s and a cross-Pacific one in 5-10 s, so 2 s sits well outside in-region noise and well below the far-cell floor. The 20-accept floor over 15 minutes keeps a single slow accept on a quiet cell from paging. Check which regions the cell's hosts are actually in before touching capacity: the 2026-08 cause was desktops requesting the wrong region, not a slow cell. Read the per-stage `orca_relay_client_accept_*_ms_p95` metrics to separate distance from assignment, credential, or attach work."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_snapshot]
+}
+
+resource "google_monitoring_alert_policy" "relay_cell_control_rtt" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell control round trip"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Control ping p50 above 150 ms for an hour"
+
+    condition_monitoring_query_language {
+      # p50 only. The desktop echoes the pong on its main thread, so the published p95 and max
+      # track renderer stalls, not distance; the median is the only column that reads as distance.
+      query    = <<-EOT
+        {
+          fetch gce_instance::logging.googleapis.com/user/orca_relay_control_rtt_ms_p50
+          | align delta(1h) | every 1h
+          | group_by [metric.cell_id], [control_rtt_p50_ms: percentile(value.orca_relay_control_rtt_ms_p50, 50)]
+        ;
+          fetch gce_instance::logging.googleapis.com/user/orca_relay_control_rtt_samples
+          | align delta(1h) | every 1h
+          | group_by [metric.cell_id], [samples: sum(value.orca_relay_control_rtt_samples)]
+        }
+        | join
+        | condition control_rtt_p50_ms > 150 'ms' && samples >= 500 '1'
+      EOT
+      duration = "0s"
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "The median desktop on this cell is more than 150 ms away from it, which is a mis-homed population rather than a cell fault: an in-region control ping is tens of milliseconds and a US desktop on an asia-east2 cell is 200 ms or more. This is the signal that was missing while roughly 226 of 332 hosts on the asia cells were non-APAC for weeks in 2026-08. Confirm with the assignment table which regions those hosts requested, then rehome; do not restart or drain the cell on this alert alone. The 500-sample floor is about two continuously connected hosts at the 15-second control ping, so a nearly idle cell cannot alert on one desktop. Tuning risk: EU desktops on us-central1 sit at 100-130 ms, so a cell whose population is mostly European can approach 150 ms while correctly homed. Check where the hosts are before treating a first breach as mis-homing, and raise the bar only with that evidence."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_snapshot]
+}
+
+resource "google_monitoring_alert_policy" "relay_region_hint_skew" {
+  project               = var.project_id
+  display_name          = "Orca Relay: region hint skew"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "asia-east2 hint share above 2x its placement share for an hour"
+
+    condition_monitoring_query_language {
+      query    = local.relay_region_hint_skew_query
+      duration = "0s"
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "Desktops are asking the director for asia-east2 far more often than the director actually places them there, which is what silently homed US desktops on asia cells through 2026-08. The alert compares two shares of the same hour and never an absolute share, because an absolute bar is wrong at both ends: measured over twelve hours on 2026-09-07, while the desktop region probe was still mis-picking, asia-east2 was 33.8% of the 33,800 hinted requests but only 7.9% of the 45,364 assignments, and once the probe is fixed the genuine APAC share will climb past any fixed bar that would have caught this. Divergence was 4.27x with a 25.9-point gap, so the 2x and 15-point bars sit well inside the broken state and well outside a healthy one. `unhinted` requests are excluded from the denominator: they were 27% of all requests, and a client change that always sends a hint would move this number without any behaviour changing. Expect this to stay lit until the mis-homed backlog is rehomed, because sticky assignment never re-consults the hint, so a desktop already on an asia cell keeps being placed there no matter what it now asks for. Investigate the desktop region probe first, not relay placement."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_snapshot]
+}
+
+# Declared for a targeted apply after the step-2 wave. Cells only: a director-only fix must not
+# raise the level the cells are held to. sum / count of the distribution is the exact level.
+resource "google_logging_metric" "relay_cell_fix_level" {
+  project         = var.project_id
+  name            = "orca_relay_cell_fix_level"
+  description     = "RELAY_FIX_LEVEL reported by each cell's runtime metrics line."
+  filter          = "${local.relay_runtime_log_filter} AND jsonPayload.role=\"cell\" AND jsonPayload.fixLevel:*"
+  value_extractor = "EXTRACT(jsonPayload.fixLevel)"
+  label_extractors = {
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+  }
+
+  bucket_options {
+    linear_buckets {
+      num_finite_buckets = 64
+      width              = 1
+      offset             = 0
+    }
+  }
+}
+
+locals {
+  relay_cell_fix_level_hourly = "(sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_cell_fix_level_sum{monitored_resource=\"gce_instance\"}[1h])) / sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_cell_fix_level_count{monitored_resource=\"gce_instance\"}[1h])))"
+  relay_cell_serving          = "(sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_controls_sum{monitored_resource=\"gce_instance\",role=\"cell\"}[1h])) > 0)"
+}
+
+# One PromQL condition per policy, and log-based metrics allow at most 25 h of lookback, so the
+# floor is a fixed variable rather than a fleet maximum: raise it with a targeted apply once a
+# wave has rolled every serving cell. Images from before the field report no level at all.
+resource "google_monitoring_alert_policy" "relay_cell_outdated_fix_level" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell left on an outdated image"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Serving cell below fix level ${var.relay_cell_min_fix_level} for 6 hours"
+
+    condition_prometheus_query_language {
+      query    = "((${local.relay_cell_fix_level_hourly} < ${var.relay_cell_min_fix_level}) or (${local.relay_cell_serving} unless on (cell_id) ${local.relay_cell_fix_level_hourly})) and on (cell_id) ${local.relay_cell_serving}"
+      duration = "21600s"
+    }
+  }
+
+  documentation {
+    content   = "A cell holding desktops runs an image below `relay_cell_min_fix_level`, or one too old to report `fixLevel`. On 2026-09-28, 18 cells still ran images without the pg connection-error fix and crashed in a two-minute database failover, dropping ~16.3k hosts. Roll the named cell with a same-capacity roll to the current digest. Empty cells do not fire because they hold no controls. Raise the floor only after a wave has rolled every serving cell."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_cell_fix_level]
 }
 
 # Why: the four signals that had to be assembled by hand during the 2026-09-04 incident.

@@ -1,3 +1,4 @@
+import { reconcileDaemonRouterSessions } from './daemon-router-session-reconciliation'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
 import type {
@@ -12,6 +13,10 @@ import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
+import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
+import { DaemonRouterRetirement } from './daemon-router-retirement'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -19,6 +24,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
   private readonly ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
   private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
+  private readonly retirement = new DaemonRouterRetirement(() => this.allAdapters())
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
     this.current = opts.current
@@ -38,17 +44,34 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    if (opts.attachOnly && opts.sessionId) {
-      return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
+    if (this.retirement.admissionClosed) {
+      throw new Error('Terminal daemon is decommissioning')
     }
-    const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
-    const target = adapter ?? this.current
-    const result = await target.spawn(opts)
-    // Why: the adapter filters intentional recovery exits and canonical-ID races before publishing proof.
-    if (!result.exitedBeforeSpawnReply) {
-      this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
+    // Why counted: an idle-retirement census must not race a spawn it cannot yet see.
+    this.retirement.spawnInFlight++
+    try {
+      if (opts.attachOnly && opts.sessionId) {
+        return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
+      }
+      const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
+      const target = adapter ?? this.current
+      const result = await target.spawn(opts)
+      // Why: the adapter filters intentional recovery exits and canonical-ID races before publishing proof.
+      if (!result.exitedBeforeSpawnReply) {
+        this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
+      }
+      return result
+    } finally {
+      this.retirement.spawnInFlight--
     }
-    return result
+  }
+
+  requestIdleRetirement(): Promise<DaemonIdleRetirementResult> {
+    return this.retirement.requestIdleRetirement()
+  }
+
+  releaseIdleRetirementFence(): void {
+    this.retirement.releaseFence()
   }
 
   supportsGitCredentialGuardHost(sessionId?: string): boolean {
@@ -93,7 +116,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).write(id, data)
   }
 
-  writeWithSettlement(id: string, data: string): Promise<boolean> {
+  writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
     return this.adapterFor(id).writeWithSettlement(id, data)
   }
 
@@ -161,8 +184,18 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.adapterFor(id).clearBuffer(id)
   }
 
+  async resetInputModes(id: string): Promise<void> {
+    await this.adapterFor(id).resetInputModes(id)
+  }
+
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.adapterFor(id).closeStartupQueryAuthority?.(id)) ?? 0
+  }
+
+  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
+    for (const adapter of this.allAdapters()) {
+      adapter.setColorQueryReplyColors(colors)
+    }
   }
 
   acknowledgeDataEvent(id: string, charCount: number): void {
@@ -245,38 +278,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.adapterFor(sessionId).clearTombstone(sessionId)
   }
 
-  async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
-    alive: string[]
-    killed: string[]
-  }> {
-    const alive: string[] = []
-    const killed: string[] = []
-    const aliveProviders = new Map<string, Set<DaemonPtyAdapter>>()
-    for (const adapter of this.allAdapters()) {
-      const result = await adapter.reconcileOnStartup(validWorktreeIds)
-      // Why: daemon startup can reconcile many restored sessions; spreading
-      // those arrays into push can exceed JavaScript's argument limit.
-      for (const id of result.alive) {
-        alive.push(id)
-      }
-      for (const id of result.killed) {
-        killed.push(id)
-      }
-      for (const id of result.alive) {
-        const providers = aliveProviders.get(id) ?? new Set<DaemonPtyAdapter>()
-        providers.add(adapter)
-        aliveProviders.set(id, providers)
-      }
-    }
-    for (const id of new Set([...alive, ...killed])) {
-      const providers = aliveProviders.get(id)
-      if (providers?.size === 1) {
-        this.ownerResolver.recordRoute(id, providers.values().next().value!)
-      } else {
-        this.ownerResolver.forgetRoute(id)
-      }
-    }
-    return { alive, killed }
+  async reconcileOnStartup(
+    validWorktreeIds: Set<string>
+  ): Promise<{ alive: string[]; killed: string[] }> {
+    return reconcileDaemonRouterSessions(this.allAdapters(), this.ownerResolver, validWorktreeIds)
   }
 
   dispose(): void {

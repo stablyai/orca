@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { chmod, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { grantDirAclAsync, isPermissionError } from '../win32-utils'
 
@@ -28,7 +28,7 @@ async function readExistingScript(scriptPath: string): Promise<ExistingScript> {
   }
 }
 
-async function scriptStillExists(scriptPath: string): Promise<boolean> {
+export async function scriptStillExists(scriptPath: string): Promise<boolean> {
   try {
     await stat(scriptPath)
     return true
@@ -62,11 +62,25 @@ export async function refreshManagedScriptIfPresent(
   scriptPath: string,
   content: string
 ): Promise<boolean> {
+  return writeManagedScriptAtomically(scriptPath, content, false)
+}
+
+// Callers must establish ownership from a surviving managed script or registration first.
+export async function restoreManagedScript(scriptPath: string, content: string): Promise<void> {
+  await mkdir(dirname(scriptPath), { recursive: true })
+  await writeManagedScriptAtomically(scriptPath, content, true)
+}
+
+async function writeManagedScriptAtomically(
+  scriptPath: string,
+  content: string,
+  allowMissing: boolean
+): Promise<boolean> {
   const existing = await readExistingScript(scriptPath)
-  if (!existing.exists) {
+  if (!existing.exists && !allowMissing) {
     return false
   }
-  if (existing.content === content) {
+  if (existing.exists && existing.content === content) {
     if (process.platform !== 'win32') {
       await chmod(scriptPath, 0o755)
     }
@@ -79,7 +93,7 @@ export async function refreshManagedScriptIfPresent(
     if (process.platform !== 'win32') {
       await chmod(tmpPath, 0o755)
     }
-    if (!(await scriptStillExists(scriptPath))) {
+    if (!allowMissing && !(await scriptStillExists(scriptPath))) {
       return false
     }
     await rename(tmpPath, scriptPath)

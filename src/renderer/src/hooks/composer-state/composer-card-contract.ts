@@ -18,6 +18,7 @@ export type ComposerCardSourceProps = Pick<
   | 'selectedRepoExecutionHostId'
   | 'selectedRepoProjectId'
   | 'smartNameSelection'
+  | 'smartNameMode'
   | 'reuseSelectedBranch'
   | 'createMultiple'
   | 'agentPrompt'
@@ -95,7 +96,6 @@ export type ComposerCardActionProps = {
   onOpenAgentSettings: ComposerModel['handleOpenAgentSettings']
   onToggleAdvanced: () => void
   createDisabled: boolean
-  onCreate: () => void
   onNoteChange: ComposerModel['setNote']
   onBaseBranchChange: ComposerModel['handleBaseBranchChange']
   onBaseBranchPrSelect: ComposerModel['handleBaseBranchPrSelect']

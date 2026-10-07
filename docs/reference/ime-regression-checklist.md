@@ -12,6 +12,31 @@ one machine.
 | [#16950](https://github.com/stablyai/orca/issues/16950) typing diagnostic records no CJK samples                              | The probe observes echoing keydowns but not reconciled composition commits, then guesses which queued input owns opaque TUI output.                                                        | A reconciled composition is observed even when `compositionend.data` is empty; only an isolated input enters exact percentiles, while overlap or a dropped-input gap produces one aggregate ambiguous burst.                                                                                                                                                    | Recorded Linux IBus empty-data commit, isolated direct and IME samples, mixed-source ambiguity, timeout/cap gaps, UTF-8 output bytes, and stop/drain cleanup are covered.                                                                                                                                    |
 | [#17104](https://github.com/stablyai/orca/issues/17104) Korean preedit repeats the Codex placeholder                          | Generic xterm row-tail reproduction exposed an application-semantic Codex or Claude composer placeholder that presentation style cannot identify safely.                                   | Xterm always preserves generic covered row text. Orca's existing structural composer classifier masks only a verified placeholder during the exact active composition session; repaint reclassification runs only while composing, and end, blur, or disposal clears ownership, class, and listeners. Arbitrary dim output and shell lookalikes remain visible. | Codex prompt/footer and Claude prompt/frame classification, arbitrary all-dim and shell-lookalike negatives, repaint entry and exit, end/blur/disposal cleanup, and rendered Electron proof at cursor column 2 preserving generic row text are covered.                                                      |
 
+## Preedit cell advances (#19315)
+
+Single-codepoint CJK graphemes use the active Unicode provider's cell width and
+measured font advance. Ordinary inline spans preserve browser bidi and baseline
+layout; equal corrections share a run. Keep glyphs unscaled and the underline,
+caret, and candidate textarea aligned with the rendered preedit. Appending ASCII,
+emoji, or another script must not change an existing CJK prefix's correction.
+Combining sequences, emoji, other scripts, and whitespace retain native shaping.
+Font loading, typography changes, and renderer metric changes must update an open
+composition; row-tail repaints preserve its unchanged nodes.
+
+Cold font measurements and styled runs share a fixed work budget. Repeated CJK
+can remain one corrected run; after the budget is exhausted, the remaining text
+keeps its native advance. This deliberately leaves the original spacing mismatch
+in the tail of unusually varied long compositions, without switching the prefix
+back to native spacing or rebuilding thousands of spans.
+
+`terminal-ime-xterm-preedit-cell-grid.test.ts` covers text preservation, native
+clusters, lifecycle, and bounded work. `terminal-ime-preedit-cell-grid.spec.ts`
+checks rendered glyph origins, caret/textarea geometry, underlines, font changes,
+and native shaping at DPR 1, 1.25, and 2 with WebGL on/off.
+`terminal-ime-preedit-continuity.spec.ts` covers mixed suffixes and budget crossings.
+These checks use Chromium composition through CDP; they do not replace native OS
+IME evidence.
+
 ## Bounded-state and ownership contracts
 
 Every transient collection and ownership tracker must have an explicit lifetime and bound:
@@ -75,3 +100,47 @@ Each fix must pass all of these checks:
   regenerate its bundle patch and lockfile together.
 - Prefer deterministic replay or state-transition tests. Native evidence is a
   second layer, never a substitute for regression coverage.
+
+## Enter in application text fields (#25035)
+
+Use `Input`, `Textarea`, or `CommandInput` for styled fields. Existing unstyled
+fields with keyboard actions use `ImeInput` / `ImeTextarea` from
+`lib/ime-text-field.tsx`; those preserve the DOM element, styles, refs, and
+composition callbacks. They share `useImeEnterGestureOwnership` and keep
+IME-owned keys out of both field actions and bubbling form/menu shortcuts.
+Overlay primitives also reject IME-marked Escape in document capture, where
+field-level propagation guards cannot intercept dismissal.
+Do not add a second tracker at a call site already using a guarded field.
+Native Chat and the File Explorer inline name field retain their existing
+trackers because they also own specialized composition or element lifetimes.
+
+Required cases:
+
+- `isComposing`, `keyCode: 229` without `isComposing`, and `Process/229` must
+  never submit, choose a suggestion, or dismiss the field.
+- The unmarked Enter redispatch stays owned on either side of keyup, including
+  a `Process/229` release. A
+  subsequent ordinary typing/navigation key ends that carry immediately;
+  hidden renderers may defer animation frames, and typing a filename suffix
+  must not cause the next deliberate Enter to disappear.
+- Composition callbacks, blur, refs, and keyed remount cleanup still work.
+  Normal Enter, modifier submits, and Shift+Enter newlines remain available.
+- Test the actual shared field when a consumer delegates IME handling to it;
+  a mock that replaces `CommandInput` with a raw input removes the protection.
+
+`ime-text-field.test.tsx` covers primitives, raw fields, parent handlers, and
+command selection. File Explorer component tests cover all three operations
+and input replacement. `file-explorer-ime-enter.spec.ts` drives Chromium
+composition in New File, New Folder, and Rename in a folder workspace, then
+checks the complete name in the Explorer and on disk, with both continued typing
+and a redispatch followed by deliberate Enter. Overlay tests cover IME Escape
+and ordinary dismissal; Markdown tests preserve an unmarked save shortcut while
+composition state lingers. These are CDP event
+contracts, not native OS keyboard evidence.
+
+The audit also covers settings and title fields, issue/review creation and
+pickers, comments and annotations, search fields, Native Chat questions,
+notebook execution shortcuts, and Markdown menu handlers. Terminal input keeps
+its existing xterm/PTY ownership; mobile native fields use `onSubmitEditing`
+instead of desktop DOM keydown actions. Remote workspaces use the same renderer
+fields; file-operation routing and mixed-version wire contracts are unchanged.

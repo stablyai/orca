@@ -19,31 +19,26 @@
  *   node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
  */
 import { execFileSync } from 'node:child_process'
-import {
-  closeSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readSync,
-  writeFileSync
-} from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
+import { canReusePreparedRelayAddon } from './relay-windows-process-tree-prepared-addon.mjs'
 import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../src/shared/relay-artifacts.ts'
 import {
   ensureWindowsProcessTreeCommandLinePatch,
   inspectWindowsProcessTreeAddon,
   nodeGypRebuildInvocation,
   stageWindowsProcessTreeNodeAddonApiHeaders,
+  windowsProcessTreeAddonHasRelayLauncher,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR as PACKAGE_DIR
 } from './windows-process-tree-gyp-rebuild.mjs'
 
+const { PE_MACHINE, describePeMachine, readPeMachine } = createRequire(import.meta.url)(
+  './windows-pe-machine.cjs'
+)
+
 const ROOT = resolve(import.meta.dirname, '..', '..')
 const SUPPORTED_ARCHES = ['x64', 'arm64']
-
-/** PE `IMAGE_FILE_HEADER.Machine` values, so a cross-build cannot silently emit host arch. */
-const PE_MACHINE = { x64: 0x8664, arm64: 0xaa64 }
 
 function parseArgs(argv) {
   const arch = argv.find((a) => a.startsWith('--arch='))?.slice('--arch='.length) ?? process.arch
@@ -98,6 +93,273 @@ function assertPatchApplied() {
         'config/patches/@vscode__windows-process-tree@0.8.0.patch; run pnpm install.'
     )
   }
+  // Every string the repair below can write, so a repaired tree cannot be
+  // declared patched while one of the pieces is silently missing.
+  const requiredCreationTimeSources = [
+    ['src/process.h', 'CREATIONTIME = 4'],
+    ['src/process.h', 'ULONGLONG creationTimeMs'],
+    ['src/process.cc', 'GetProcessCreationTime(pinfo)'],
+    ['src/process.cc', 'GetProcessTimes(hProcess, &creationTime'],
+    ['src/process_worker.cc', 'object.Set("creationTimeMs"'],
+    ['src/addon.cc', 'exports.Set("supportedProcessDataFlags"'],
+    ['src/addon.cc', 'exports.Set("getProcessCreationTime"'],
+    ['lib/index.js', '["CreationTime"] = 4'],
+    ['lib/index.js', 'exports.supportedProcessDataFlags'],
+    ['lib/index.js', 'exports.getProcessCreationTime'],
+    ['lib/index.js', 'creationTimeMs,'],
+    ['lib/index.ts', 'CreationTime = 4'],
+    ['lib/index.ts', 'export const supportedProcessDataFlags'],
+    ['lib/index.ts', 'export const getProcessCreationTime'],
+    ['lib/index.ts', 'creationTimeMs,'],
+    ['typings/windows-process-tree.d.ts', 'creationTimeMs?: number'],
+    // A regex because IProcessInfo declares the same field: only the tree node
+    // is followed by `children`, and that is the one buildNode fills.
+    ['typings/windows-process-tree.d.ts', /creationTimeMs\?: number;\r?\n\s*children:/],
+    ['typings/windows-process-tree.d.ts', 'export const supportedProcessDataFlags'],
+    ['typings/windows-process-tree.d.ts', 'export const getProcessCreationTime']
+  ]
+  for (const [relativePath, expected] of requiredCreationTimeSources) {
+    const source = readFileSync(join(PACKAGE_DIR, relativePath), 'utf8')
+    const present = typeof expected === 'string' ? source.includes(expected) : expected.test(source)
+    if (!present) {
+      throw new Error(
+        `${relativePath} does not contain the process creation-time patch (${expected}). ` +
+          'Run pnpm install before building the relay addon.'
+      )
+    }
+  }
+  // Without the launcher a standard-user SSH host cannot start a relay that outlives the session.
+  const requiredLauncherSources = [
+    ['binding.gyp', '"src/process_launch.cc"'],
+    ['src/addon.cc', 'exports.Set("spawnOutsideJob"'],
+    ['src/process_launch.cc', 'CREATE_BREAKAWAY_FROM_JOB']
+  ]
+  for (const [relativePath, expected] of requiredLauncherSources) {
+    const filePath = join(PACKAGE_DIR, relativePath)
+    if (!existsSync(filePath) || !readFileSync(filePath, 'utf8').includes(expected)) {
+      throw new Error(
+        `${relativePath} does not contain the relay launcher patch (${expected}). ` +
+          'Run pnpm install before building the relay addon.'
+      )
+    }
+  }
+}
+
+function repairCreationTimeSources() {
+  let repaired = false
+  const rewrite = (relativePath, transform) => {
+    const filePath = join(PACKAGE_DIR, relativePath)
+    const source = readFileSync(filePath, 'utf8')
+    const next = transform(source, source.includes('\r\n') ? '\r\n' : '\n')
+    if (next !== source) {
+      writeFileSync(filePath, next)
+      repaired = true
+    }
+  }
+
+  rewrite('src/process.h', (source, eol) => {
+    let next = source
+    if (!next.includes('ULONGLONG creationTimeMs')) {
+      next = next.replace(
+        /  std::string commandLine;\r?\n/,
+        `  std::string commandLine;${eol}  ULONGLONG creationTimeMs;${eol}`
+      )
+    }
+    if (!next.includes('CREATIONTIME = 4')) {
+      next = next.replace(
+        /  COMMANDLINE = 2\r?\n/,
+        `  COMMANDLINE = 2,${eol}  CREATIONTIME = 4${eol}`
+      )
+    }
+    if (!next.includes('void GetProcessCreationTime')) {
+      next = next.replace(
+        /void GetProcessMemoryUsage\(ProcessInfo& process_info\);\r?\n/,
+        `void GetProcessMemoryUsage(ProcessInfo& process_info);${eol}${eol}` +
+          `void GetProcessCreationTime(ProcessInfo& process_info);${eol}`
+      )
+    }
+    return next
+  })
+
+  rewrite('src/process.cc', (source, eol) => {
+    let next = source.replace('ProcessInfo pinfo;', 'ProcessInfo pinfo{};')
+    if (!next.includes('GetProcessCreationTime(pinfo)')) {
+      next = next.replace(
+        /(        if \(COMMANDLINE & process_data_flags\) \{\r?\n          GetProcessCommandLine\(pinfo\);\r?\n        \})/,
+        `$1${eol}${eol}        if (CREATIONTIME & process_data_flags) {${eol}` +
+          `          GetProcessCreationTime(pinfo);${eol}        }`
+      )
+    }
+    if (!next.includes('void GetProcessCreationTime(ProcessInfo& process_info) {')) {
+      const producer = [
+        'void GetProcessCreationTime(ProcessInfo& process_info) {',
+        '  HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_info.pid);',
+        '  if (hProcess == NULL) {',
+        '    return;',
+        '  }',
+        '',
+        '  FILETIME creationTime, exitTime, kernelTime, userTime;',
+        '  if (GetProcessTimes(hProcess, &creationTime, &exitTime, &kernelTime, &userTime)) {',
+        '    ULARGE_INTEGER timestamp;',
+        '    timestamp.LowPart = creationTime.dwLowDateTime;',
+        '    timestamp.HighPart = creationTime.dwHighDateTime;',
+        '    constexpr ULONGLONG WINDOWS_EPOCH_OFFSET_100NS = 116444736000000000ULL;',
+        '    constexpr ULONGLONG HUNDRED_NS_PER_MILLISECOND = 10000ULL;',
+        '    if (timestamp.QuadPart >= WINDOWS_EPOCH_OFFSET_100NS) {',
+        '      process_info.creationTimeMs =',
+        '          (timestamp.QuadPart - WINDOWS_EPOCH_OFFSET_100NS) / HUNDRED_NS_PER_MILLISECOND;',
+        '    }',
+        '  }',
+        '',
+        '  CloseHandle(hProcess);',
+        '}',
+        ''
+      ].join(eol)
+      next = next.replace(
+        'void GetProcessMemoryUsage',
+        `${producer}${eol}void GetProcessMemoryUsage`
+      )
+    }
+    return next
+  })
+
+  rewrite('src/process_worker.cc', (source, eol) => {
+    if (source.includes('object.Set("creationTimeMs"')) {
+      return source
+    }
+    const emission = [
+      '    if ((CREATIONTIME & process_data_flags_) && pinfo.creationTimeMs != 0) {',
+      '      object.Set("creationTimeMs",',
+      '                 Napi::Number::New(env, static_cast<double>(pinfo.creationTimeMs)));',
+      '    }',
+      ''
+    ].join(eol)
+    return source.replace(
+      '    result.Set(i, object);',
+      `${emission}${eol}    result.Set(i, object);`
+    )
+  })
+
+  rewrite('src/addon.cc', (source, eol) => {
+    let next = source
+    if (!next.includes('Napi::Value ReadProcessCreationTime(')) {
+      const getter = [
+        'Napi::Value ReadProcessCreationTime(const Napi::CallbackInfo& args) {',
+        '  Napi::Env env(args.Env());',
+        '  if (args.Length() != 1 || !args[0].IsNumber()) {',
+        '    return env.Undefined();',
+        '  }',
+        '  const double pid = args[0].As<Napi::Number>().DoubleValue();',
+        '  if (!(pid >= 1 && pid <= MAXDWORD) || pid != static_cast<DWORD>(pid)) {',
+        '    return env.Undefined();',
+        '  }',
+        '  ProcessInfo pinfo{};',
+        '  pinfo.pid = static_cast<DWORD>(pid);',
+        '  GetProcessCreationTime(pinfo);',
+        '  if (pinfo.creationTimeMs == 0) {',
+        '    return env.Undefined();',
+        '  }',
+        '  return Napi::Number::New(env, static_cast<double>(pinfo.creationTimeMs));',
+        '}',
+        ''
+      ].join(eol)
+      next = next.replace('Napi::Object Init(', `${getter}${eol}Napi::Object Init(`)
+    }
+    if (!next.includes('exports.Set("getProcessCreationTime"')) {
+      next = next.replace(
+        '  exports.Set("getProcessList",',
+        `  exports.Set("getProcessCreationTime", Napi::Function::New(env, ReadProcessCreationTime));${eol}` +
+          '  exports.Set("getProcessList",'
+      )
+    }
+    if (next.includes('exports.Set("supportedProcessDataFlags"')) {
+      return next
+    }
+    return next.replace(
+      /(  exports\.Set\("getProcessCpuUsage", Napi::Function::New\(env, GetProcessCpuUsage\)\);\r?\n)/,
+      `$1  exports.Set("supportedProcessDataFlags",${eol}` +
+        `              Napi::Number::New(env, MEMORY | COMMANDLINE | CREATIONTIME));${eol}`
+    )
+  })
+
+  // Each piece is guarded on its own: an early-out on the enum alone would let a
+  // tree with the enum but no buildNode splat pass as repaired.
+  const NATIVE_CONST =
+    "const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;"
+  for (const relativePath of ['lib/index.ts', 'lib/index.js']) {
+    const isTs = relativePath.endsWith('.ts')
+    rewrite(relativePath, (source, eol) => {
+      let next = source
+      if (!next.includes('CreationTime')) {
+        next = isTs
+          ? next.replace('  CommandLine = 2', `  CommandLine = 2,${eol}  CreationTime = 4`)
+          : next.replace(
+              '    ProcessDataFlag[ProcessDataFlag["CommandLine"] = 2] = "CommandLine";',
+              '    ProcessDataFlag[ProcessDataFlag["CommandLine"] = 2] = "CommandLine";' +
+                `${eol}    ProcessDataFlag[ProcessDataFlag["CreationTime"] = 4] = "CreationTime";`
+            )
+      }
+      if (!next.includes('supportedProcessDataFlags')) {
+        const reExport = isTs
+          ? `/** The flag bits this compiled addon reports; undefined off win32. */${eol}` +
+            'export const supportedProcessDataFlags: number | undefined = native?.supportedProcessDataFlags;'
+          : 'exports.supportedProcessDataFlags = native === undefined ? undefined : native.supportedProcessDataFlags;'
+        next = next.replace(NATIVE_CONST, `${NATIVE_CONST}${eol}${reExport}`)
+      }
+      if (!next.includes('getProcessCreationTime')) {
+        const reExport = isTs
+          ? 'export const getProcessCreationTime: ((pid: number) => number | undefined) | undefined = native?.getProcessCreationTime;'
+          : 'exports.getProcessCreationTime = native === undefined ? undefined : native.getProcessCreationTime;'
+        next = next.replace(NATIVE_CONST, `${NATIVE_CONST}${eol}${reExport}`)
+      }
+      // buildNode drops any field it does not name, so the destructure and the
+      // splat have to move together.
+      next = next.replace(/(memory, commandLine)( \}, children \})/, '$1, creationTimeMs$2')
+      if (!/\bcreationTimeMs,/.test(next)) {
+        next = next.replace(
+          /(\r?\n)(\s*)commandLine,(\r?\n\s*children:)/,
+          `$1$2commandLine,$1$2creationTimeMs,$3`
+        )
+      }
+      return next
+    })
+  }
+
+  rewrite('typings/windows-process-tree.d.ts', (source, eol) => {
+    let next = source
+    if (!next.includes('CreationTime = 4')) {
+      next = next.replace('    CommandLine = 2', `    CommandLine = 2,${eol}    CreationTime = 4`)
+    }
+    if (!next.includes('supportedProcessDataFlags')) {
+      next = next.replace(
+        /(    CreationTime = 4\r?\n  \}\r?\n)/,
+        `$1${eol}  /** The flag bits the compiled addon reports; undefined off win32. */${eol}` +
+          `  export const supportedProcessDataFlags: number | undefined;${eol}`
+      )
+    }
+    if (!next.includes('export const getProcessCreationTime')) {
+      next = next.replace(
+        '  export const supportedProcessDataFlags: number | undefined;',
+        '  export const supportedProcessDataFlags: number | undefined;' +
+          `${eol}  export const getProcessCreationTime: ((pid: number) => number | undefined) | undefined;`
+      )
+    }
+    if (!next.includes('creationTimeMs?: number')) {
+      next = next.replace(
+        /    commandLine\?: string;\r?\n/,
+        `    commandLine?: string;${eol}${eol}` +
+          `    /** Process creation time in Unix milliseconds. */${eol}` +
+          `    creationTimeMs?: number;${eol}`
+      )
+    }
+    // IProcessTreeNode is the second declaration; only it is followed by children.
+    next = next.replace(
+      /(    commandLine\?: string;\r?\n)(    children:)/,
+      `$1    creationTimeMs?: number;${eol}$2`
+    )
+    return next
+  })
+  return repaired
 }
 
 // pnpm can materialize this CRLF package without applying its patch. Repair the
@@ -146,26 +408,18 @@ function applyWindowsProcessTreeBuildFixes() {
   if (processCc !== originalProcess) {
     writeFileSync(processPath, processCc)
   }
+  const repairedCreationTime = repairCreationTimeSources()
   stageWindowsProcessTreeNodeAddonApiHeaders(PACKAGE_DIR)
   const repairedCommandLine = ensureWindowsProcessTreeCommandLinePatch(PACKAGE_DIR)
-  if (bindingGyp !== originalBinding || processCc !== originalProcess || repairedCommandLine) {
+  const repaired =
+    bindingGyp !== originalBinding ||
+    processCc !== originalProcess ||
+    repairedCommandLine ||
+    repairedCreationTime
+  if (repaired) {
     console.warn('[windows-process-tree] Repaired un-applied pnpm patch hunks before build.')
   }
-}
-
-/** Read the PE machine field, so an arm64 request cannot ship an x64 binary. */
-function readPeMachine(binaryPath) {
-  const fd = openSync(binaryPath, 'r')
-  try {
-    const header = Buffer.alloc(4)
-    readSync(fd, header, 0, 4, 0x3c)
-    const peOffset = header.readUInt32LE(0)
-    const machine = Buffer.alloc(2)
-    readSync(fd, machine, 0, 2, peOffset + 4)
-    return machine.readUInt16LE(0)
-  } finally {
-    closeSync(fd)
-  }
+  return repaired
 }
 
 function main() {
@@ -179,14 +433,24 @@ function main() {
   if (!existsSync(PACKAGE_DIR)) {
     throw new Error(`${PACKAGE_DIR} is missing. Run pnpm install first.`)
   }
-  applyWindowsProcessTreeBuildFixes()
+  const sourceRepaired = applyWindowsProcessTreeBuildFixes()
   assertPatchApplied()
 
-  const gyp = nodeGypRebuildInvocation(arch)
-  console.log(`[windows-process-tree] building ${arch} from ${gyp.cwd}`)
-  execFileSync(process.execPath, gyp.args, { cwd: gyp.cwd, stdio: 'inherit' })
-
   const built = join(PACKAGE_DIR, 'build', 'Release', 'windows_process_tree.node')
+  if (
+    canReusePreparedRelayAddon({
+      enabled: process.argv.includes('--reuse-prepared-runtime'),
+      arch,
+      addonPath: built,
+      sourceRepaired
+    })
+  ) {
+    console.log(`[windows-process-tree] reusing the prepared ${arch} addon`)
+  } else {
+    const gyp = nodeGypRebuildInvocation(arch)
+    console.log(`[windows-process-tree] building ${arch} from ${gyp.cwd}`)
+    execFileSync(process.execPath, gyp.args, { cwd: gyp.cwd, stdio: 'inherit' })
+  }
   if (!existsSync(built)) {
     throw new Error(`node-gyp reported success but ${built} is missing.`)
   }
@@ -200,9 +464,18 @@ function main() {
   }
   const machine = readPeMachine(built)
   if (machine !== PE_MACHINE[arch]) {
+    const cause =
+      machine === null
+        ? 'A truncated or quarantined build output looks like this; a relay would get a binary no host can load.'
+        : 'node-gyp ignored --arch; a relay would get a binary its host cannot load.'
     throw new Error(
-      `Built binary is machine 0x${machine.toString(16)}, expected 0x${PE_MACHINE[arch].toString(16)} for ${arch}. ` +
-        'node-gyp ignored --arch; a relay would get a binary its host cannot load.'
+      `Built binary is ${describePeMachine(machine)}, expected 0x${PE_MACHINE[arch].toString(16)} for ${arch}. ${cause}`
+    )
+  }
+  if (!windowsProcessTreeAddonHasRelayLauncher(built)) {
+    throw new Error(
+      'The built addon does not export spawnOutsideJob. A relay would fall back to WMI, ' +
+        'which refuses to launch it for a standard user.'
     )
   }
 

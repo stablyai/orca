@@ -1,15 +1,19 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type {
   AgentSessionAttachResult,
-  AgentSessionMutationEnvelope,
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import {
-  createStructuredAgentSessionOperationId,
-  structuredAgentSessionPayloadFingerprint
-} from '../../../shared/structured-agent-session-mutation'
+  createStructuredAgentSessionId,
+  structuredAgentSessionCreateParams,
+  type StructuredAgentSessionCreateParams,
+  type StructuredAgentSessionResumeSource
+} from '../../../shared/structured-agent-session-create'
+import { resolveStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
+import { readAgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
@@ -18,53 +22,68 @@ import {
   recordWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-tabs-sync'
+import {
+  resolveStructuredAgentSessionOwner,
+  structuredAgentSessionFocusOwner,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { askHostCreateSupport } from '@/lib/structured-agent-session-host-admission'
+import {
+  StructuredAgentSessionCreateError,
+  StructuredAgentSessionCreateRefusalError,
+  StructuredAgentSessionCreateUnknownOutcomeError,
+  StructuredAgentSessionOwnerUnresolvedError
+} from '@/lib/structured-agent-session-launch-errors'
 
-type StructuredAgentSessionCreateParams = {
-  envelope: AgentSessionMutationEnvelope
-  worktree: string
-  agent: AgentSessionHandleProvider
+export {
+  StructuredAgentSessionCreateRefusalError,
+  StructuredAgentSessionCreateUnknownOutcomeError,
+  StructuredAgentSessionOwnerUnresolvedError
 }
 
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
   worktreeId: string
-  agent: AgentSessionHandleProvider
+  /** The host that owns the chat, fixed when the launch begins and persisted with it: worktree ids
+   *  repeat across hosts, so it is never re-derived. */
+  executionHostId: ExecutionHostId
+  /** The runtime serving `executionHostId`. */
+  target: RuntimeClientTarget
+  agent: TuiAgent
   params: StructuredAgentSessionCreateParams
+  /** The saved selection create seeds, read when the intent is built. */
+  seedOptions?: Readonly<Record<string, string>>
 }
 
-class StructuredAgentSessionCreateError extends Error {
-  constructor(
-    message: string,
-    /** The wire refusal code, or the RPC error code when the create never reached a handler. */
-    readonly code: string
-  ) {
-    super(message)
-  }
+type LaunchSeed = Readonly<Record<string, string>> | undefined
+
+/** What create will seed: this machine's saved selection for its own chats; for a paired server's,
+ *  the server's own, which it reports when it admits the chat (absent from an older server). */
+function launchSeedOptions(
+  state: ReturnType<typeof useAppStore.getState>,
+  owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
+  agent: TuiAgent,
+  hostSeedOptions: LaunchSeed
+): { seedOptions?: Readonly<Record<string, string>> } {
+  const seedOptions =
+    owner.target.kind === 'local'
+      ? resolveStructuredLaunchSeedOptions(state.settings?.nativeChatSessionOptions, agent)
+      : hostSeedOptions
+  return seedOptions ? { seedOptions } : {}
 }
 
-/**
- * The host proved it created nothing, so a caller may open a legacy terminal instead. The class
- * itself is the verdict: `launchStructuredAgentSession` is the only place that decides it, against
- * the shared allowlist, so no consumer has to remember to re-check a code.
- */
-export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSessionCreateError {
-  constructor(message: string, code: string = 'structured_agent_session_unsupported') {
-    super(message, code)
-    this.name = 'StructuredAgentSessionCreateRefusalError'
+function structuredAgentSessionOwnerTarget(
+  worktreeId: string,
+  executionHostId: ExecutionHostId | null
+): { executionHostId: ExecutionHostId; target: RuntimeClientTarget } {
+  const target = structuredAgentSessionTargetForHost(executionHostId)
+  if (!executionHostId || !target) {
+    throw new StructuredAgentSessionOwnerUnresolvedError(worktreeId)
   }
-}
-
-/**
- * Refused with a code that does not prove the session is absent. A sibling opened here would sit
- * beside a session the host may already hold, so this deliberately is NOT a refusal error: it flows
- * down the same path as a lost reply, which replays the intent and reconciles.
- */
-export class StructuredAgentSessionCreateUnknownOutcomeError extends StructuredAgentSessionCreateError {
-  constructor(message: string, code: string) {
-    super(message, code)
-    this.name = 'StructuredAgentSessionCreateUnknownOutcomeError'
-  }
+  return { executionHostId, target }
 }
 
 const DEFINITIVE_CREATE_FAILURE_CODES = [
@@ -88,19 +107,41 @@ function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string
   return null
 }
 
-export function isDefinitiveStructuredAgentSessionCreateError(error: unknown): boolean {
-  return definitiveStructuredAgentSessionCreateErrorCode(error) !== null
-}
-
+/** `executionHostId` is the host the launch was routed to; absent, the catalog must name exactly
+ *  one, or the launch is refused rather than sent to whichever host a fallback picks. */
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: TuiAgent,
+  executionHostId?: ExecutionHostId,
+  resumeFrom?: StructuredAgentSessionResumeSource,
+  hostSeedOptions?: LaunchSeed
 ): StructuredAgentSessionLaunchIntent {
-  const sessionId = `${agent}_${crypto.randomUUID().replaceAll('-', '_')}`
-  const fields = { worktree: toRuntimeWorktreeSelector(worktreeId), agent }
+  const owner = structuredAgentSessionOwnerTarget(
+    worktreeId,
+    executionHostId ?? resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
+  )
+  const sessionId = createStructuredAgentSessionId(agent, createBrowserUuid)
+  return buildStructuredAgentSessionLaunchIntent(
+    worktreeId,
+    owner,
+    agent,
+    sessionId,
+    resumeFrom,
+    hostSeedOptions
+  )
+}
+
+function buildStructuredAgentSessionLaunchIntent(
+  worktreeId: string,
+  owner: Pick<StructuredAgentSessionLaunchIntent, 'executionHostId' | 'target'>,
+  agent: TuiAgent,
+  sessionId: string,
+  resumeFrom: StructuredAgentSessionResumeSource | undefined,
+  hostSeedOptions: LaunchSeed
+): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   recordWebSessionFocusIntent(
-    { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+    structuredAgentSessionFocusOwner(owner.target),
     worktreeId,
     `agent-session:${sessionId}`,
     undefined,
@@ -109,20 +150,74 @@ export function createStructuredAgentSessionLaunchIntent(
   return {
     sessionId,
     worktreeId,
+    executionHostId: owner.executionHostId,
+    target: owner.target,
     agent,
+    params: structuredAgentSessionCreateParams({
+      sessionId,
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      agent,
+      ...(resumeFrom ? { resumeFrom } : {}),
+      randomUuid: createBrowserUuid
+    }),
+    ...launchSeedOptions(state, owner, agent, hostSeedOptions)
+  }
+}
+
+/** A definitive refusal consumed its operation id, but the provisional tab still owns its session. */
+export function retryStructuredAgentSessionLaunchIntent(
+  intent: StructuredAgentSessionLaunchIntent
+): StructuredAgentSessionLaunchIntent {
+  return buildStructuredAgentSessionLaunchIntent(
+    intent.worktreeId,
+    intent,
+    intent.agent,
+    intent.sessionId,
+    intent.params.resumeFrom,
+    intent.seedOptions
+  )
+}
+
+/** Rebuild a reload-surviving intent with the caller's current worktree selector. */
+export function restoreStructuredAgentSessionLaunchIntent(args: {
+  worktreeId: string
+  executionHostId: ExecutionHostId
+  sessionId: string
+  agent: TuiAgent
+  clientOperationId: string
+  payloadFingerprint: string
+  expectedRuntimeFence: number | null
+  resumeFrom?: StructuredAgentSessionResumeSource
+  /** A paired server's seed, kept with the launch so a reload shows what create runs. */
+  seedOptions?: Readonly<Record<string, string>>
+}): StructuredAgentSessionLaunchIntent {
+  const state = useAppStore.getState()
+  const { target } = structuredAgentSessionOwnerTarget(args.worktreeId, args.executionHostId)
+  recordWebSessionFocusIntent(
+    structuredAgentSessionFocusOwner(target),
+    args.worktreeId,
+    `agent-session:${args.sessionId}`,
+    undefined,
+    resolveWebSessionVisibleTabId(state, args.worktreeId)
+  )
+  return {
+    sessionId: args.sessionId,
+    worktreeId: args.worktreeId,
+    executionHostId: args.executionHostId,
+    target,
+    agent: args.agent,
     params: {
       envelope: {
-        sessionId,
-        clientOperationId: createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
-        expectedRuntimeFence: null,
-        payloadFingerprint: structuredAgentSessionPayloadFingerprint({
-          method: 'agentSession.create',
-          sessionId,
-          fields
-        })
+        sessionId: args.sessionId,
+        clientOperationId: args.clientOperationId,
+        expectedRuntimeFence: args.expectedRuntimeFence,
+        payloadFingerprint: args.payloadFingerprint
       },
-      ...fields
-    }
+      worktree: toRuntimeWorktreeSelector(args.worktreeId),
+      agent: args.agent,
+      ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+    },
+    ...launchSeedOptions(state, { target }, args.agent, args.seedOptions)
   }
 }
 
@@ -130,89 +225,55 @@ export function abandonStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent
 ): void {
   clearWebSessionFocusIntentIfMatches(
-    { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+    structuredAgentSessionFocusOwner(intent.target),
     intent.worktreeId,
     `agent-session:${intent.sessionId}`
   )
 }
 
-/** The host answers a worktree selector it cannot resolve yet with this rather than a verdict. */
-const SELECTOR_NOT_RESOLVABLE_CODE = 'selector_not_found'
-
 /**
- * A worktree is not resolvable for a beat after `createWorktree` resolves, so a probe fired
- * immediately after creation fails instead of answering. Measured window: under ~250ms. These
- * delays cover it with margin and bound the wait when the selector is genuinely absent.
+ * Only the host that will execute the session can answer whether it supports creating one there.
+ * Both providers ask: the host classifies per agent, and Codex inherits the
+ * unresolvable-selector retry above along with the probe. The unknown branch stays on the chat for
+ * reconciliation: a retry may follow a create whose reply was lost. Answers the seed create will use.
  */
-const CREATE_SUPPORT_RETRY_DELAYS_MS: readonly number[] = [50, 150, 300]
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-/**
- * Whether the executing host supports creating this session — retrying only while the host cannot
- * yet resolve the worktree.
- *
- * "Could not answer" and "answered no" are different states and only the second is a verdict.
- * Collapsing them sends a launch to the terminal because a selector was a beat late, which is
- * indistinguishable to the user from the gate refusing them. The retry is narrowed to that one
- * transient code so every other failure still refuses on the first ask.
- */
-async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): Promise<boolean> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      const support = await callStructuredAgentSession<{ supported: boolean; reason?: string }>(
-        { kind: 'local' },
-        'agentSession.createSupport',
-        { worktree: intent.params.worktree, agent: intent.agent }
-      )
-      return support.supported === true
-    } catch (error) {
-      const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
-      if (
-        retryDelayMs === undefined ||
-        !hasRuntimeRpcErrorCode(error, SELECTOR_NOT_RESOLVABLE_CODE)
-      ) {
-        // An unanswered probe is still not a yes.
-        return false
-      }
-      await delay(retryDelayMs)
-    }
+async function requireHostCreateSupport(
+  intent: StructuredAgentSessionLaunchIntent
+): Promise<LaunchSeed> {
+  const support = await askHostCreateSupport(intent.target, intent.params.worktree, intent.agent)
+  if (support.kind === 'unreachable') {
+    throw new StructuredAgentSessionCreateUnknownOutcomeError(
+      support.message,
+      support.code,
+      readAgentSessionErrorRefusal(support.error)
+    )
   }
-}
-
-/**
- * Only the host that will execute the session can answer whether it supports creating one there —
- * on Windows that means reading the provider child's process start time, which a client cannot
- * observe.
- *
- * Codex is absent on purpose: its answer is settled by the launch route and owned elsewhere, so
- * probing here would change Codex's wire traffic. Note that this early return is also why the
- * unresolvable-selector race above has never been able to refuse a Codex launch — the race is
- * identical for Codex, nothing asks. Whoever gives Codex a probe inherits it.
- */
-async function requireHostCreateSupport(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
-  if (intent.agent !== 'claude') {
-    return
-  }
-  if (!(await hostSupportsCreate(intent))) {
+  if (support.kind === 'declined') {
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredAgentSessionCreateRefusalError(
       'structured_agent_session_unsupported',
       'structured_agent_session_unsupported'
     )
   }
+  return support.seedOptions
 }
 
+/** Told the seed a paired server says this create will use, which may differ from an earlier
+ *  attempt's; a local launch reads its own settings instead. */
+export type StructuredLaunchHostSeedListener = (seedOptions: LaunchSeed) => void
+
 export async function launchStructuredAgentSession(
-  intent: StructuredAgentSessionLaunchIntent
+  intent: StructuredAgentSessionLaunchIntent,
+  onHostSeed?: StructuredLaunchHostSeedListener
 ): Promise<Pick<AgentSessionAttachResult, 'sessionId' | 'fence'>> {
-  await requireHostCreateSupport(intent)
+  const hostSeed = await requireHostCreateSupport(intent)
+  if (intent.target.kind !== 'local') {
+    onHostSeed?.(hostSeed)
+  }
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
   try {
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
-      { kind: 'local' },
+      intent.target,
       'agentSession.create',
       intent.params
     )
@@ -222,19 +283,22 @@ export async function launchStructuredAgentSession(
       abandonStructuredAgentSessionLaunchIntent(intent)
       throw new StructuredAgentSessionCreateRefusalError(
         error instanceof Error ? error.message : String(error),
-        code
+        code,
+        readAgentSessionErrorRefusal(error)
       )
     }
     throw error
   }
   if (!result.ok) {
-    const { code, message } = result.refusal
-    if (!isDefinitiveAgentSessionCreateRefusal(code)) {
+    const { code, message, ownerVerdict } = result.refusal
+    const refusal = readAgentSessionRefusalReference(result.refusal)
+    // A failed operation whose provider is proven gone is a failure a new operation may retry.
+    if (!isDefinitiveAgentSessionCreateRefusal(code) && ownerVerdict !== 'exited') {
       // Keep the focus intent: the session may exist, and recovery still has to adopt it.
-      throw new StructuredAgentSessionCreateUnknownOutcomeError(message, code)
+      throw new StructuredAgentSessionCreateUnknownOutcomeError(message, code, refusal)
     }
     abandonStructuredAgentSessionLaunchIntent(intent)
-    throw new StructuredAgentSessionCreateRefusalError(message, code)
+    throw new StructuredAgentSessionCreateRefusalError(message, code, refusal)
   }
   return { sessionId: result.value.sessionId, fence: result.value.fence }
 }

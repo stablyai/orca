@@ -137,7 +137,7 @@ describe('runtime file client', () => {
         ],
         totalCount: 40,
         truncated: true,
-        quickOpenSearchVersion: 1
+        quickOpenSearchVersion: 3
       },
       _meta: { runtimeId: 'remote-runtime' }
     })
@@ -506,6 +506,20 @@ describe('runtime file client', () => {
     })
   })
 
+  it('sends the Explorer name filter to local listings only', async () => {
+    fsListFiles.mockResolvedValue([])
+    const local = { settings: {}, worktreeId: 'wt-1', worktreePath: '/repo' }
+
+    await listRuntimeFiles(local, { rootPath: '/repo', nameFilter: 'AppDelegate' })
+    await listRuntimeFiles(
+      { ...local, connectionId: 'ssh-1' },
+      { rootPath: '/repo', nameFilter: 'AppDelegate' }
+    )
+
+    expect(fsListFiles.mock.calls[0][0]).toMatchObject({ nameFilter: 'AppDelegate' })
+    expect(fsListFiles.mock.calls[1][0]).not.toHaveProperty('nameFilter')
+  })
+
   it('cancelRuntimeFileList aborts the IPC listing but not environment listings (#7721)', () => {
     cancelRuntimeFileList(
       {
@@ -608,4 +622,62 @@ describe('runtime file client', () => {
     expect(fsStat).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
+})
+
+it.each([{ includeIgnored: false }, { followSymlinks: true }])(
+  'rejects unsupported listing options on a version-one host: %o',
+  async (options) => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-options',
+      ok: true,
+      result: { files: [], quickOpenSearchVersion: 1 },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const context = {
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      worktreeId: 'options-workspace',
+      worktreePath: '/remote/repo'
+    }
+    await expect(
+      searchRuntimeFilePaths(context, { query: '.env api', ...options })
+    ).rejects.toThrow('Update the remote host')
+    await expect(
+      listRuntimeFiles(context, { rootPath: '/remote/repo', ...options })
+    ).rejects.toThrow('Update the remote host')
+    expect(
+      runtimeEnvironmentCall.mock.calls.every(([request]) => request.method === 'files.searchPaths')
+    ).toBe(true)
+    expect(fsListFiles).not.toHaveBeenCalled()
+  }
+)
+
+it('forwards both listing options only to the selected current host', async () => {
+  runtimeEnvironmentCall.mockResolvedValueOnce({
+    id: 'rpc-options',
+    ok: true,
+    result: {
+      files: [{ relativePath: 'linked/.env' }],
+      quickOpenSearchVersion: 3,
+      truncated: false
+    },
+    _meta: { runtimeId: 'remote-runtime' }
+  })
+  await expect(
+    searchRuntimeFilePaths(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'options-current',
+        worktreePath: '/remote/repo'
+      },
+      { query: '.env', includeIgnored: false, followSymlinks: true }
+    )
+  ).resolves.toEqual({ files: ['linked/.env'], truncated: false })
+  expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+    expect.objectContaining({
+      selector: 'env-1',
+      method: 'files.searchPaths',
+      params: expect.objectContaining({ includeIgnored: false, followSymlinks: true })
+    })
+  )
+  expect(fsListFiles).not.toHaveBeenCalled()
 })

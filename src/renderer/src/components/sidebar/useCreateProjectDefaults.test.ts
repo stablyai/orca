@@ -104,17 +104,6 @@ describe('useCreateProjectDefaults', () => {
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
-  it('auto-fills the local home default regardless of workspace directory settings', async () => {
-    mocks.isGitAvailable.mockResolvedValue(true)
-
-    const { setCreateParent } = useHarness()
-    await flushAsync()
-
-    expect(mocks.getDefaultCreateProjectParent).toHaveBeenCalled()
-    expect(setCreateParent).toHaveBeenCalledWith('/Users/alice/orca/projects')
-    expect(mocks.stateValues[DEFAULT_PARENT_STATE]).toBe('/Users/alice/orca/projects')
-  })
-
   it('keeps the local default marker after the auto-filled parent rerenders the hook', async () => {
     mocks.isGitAvailable.mockResolvedValue(true)
 

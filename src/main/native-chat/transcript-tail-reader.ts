@@ -1,3 +1,4 @@
+import { readOpenCodeNativeChatTranscriptTail } from './transcript-opencode'
 import type {
   AgentType,
   NativeChatMessage,
@@ -12,6 +13,7 @@ import {
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { transcriptFallbackId } from './transcript-fallback-id'
+import { extendTranscriptBoundary } from './transcript-file-version'
 import {
   nativeChatTurnLifecycleDecoderForAgent,
   type NativeChatTurnLifecycleDecoder
@@ -57,7 +59,8 @@ export async function readNativeChatTranscriptTailFile(
   includeTrailingLine = false,
   endOffset?: number,
   decodeLifecycle?: NativeChatTurnLifecycleDecoder | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onConsumedBoundary?: (boundary: Buffer) => void
 ): Promise<{
   messages: NativeChatMessage[]
   lifecycle?: NativeChatTurnLifecycle
@@ -100,6 +103,11 @@ export async function readNativeChatTranscriptTailFile(
     }
     ignoreNextMalformedRecord = finalByte !== 0x0a
     let cursor = consumedTo - (finalByte === 0x0a ? 1 : 0)
+    const finalBoundaryByte = finalByte === 0x0a ? Buffer.from([finalByte]) : Buffer.alloc(0)
+    let boundaryCaptured = false
+    if (cursor === 0) {
+      onConsumedBoundary?.(finalBoundaryByte)
+    }
     while (cursor > 0 && newestFirst.length <= limit) {
       signal?.throwIfAborted()
       const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
@@ -119,6 +127,10 @@ export async function readNativeChatTranscriptTailFile(
       // than stitch non-adjacent bytes into records.
       if (bytesRead < buffer.length) {
         break
+      }
+      if (!boundaryCaptured && onConsumedBoundary) {
+        onConsumedBoundary(extendTranscriptBoundary(buffer, finalBoundaryByte))
+        boundaryCaptured = true
       }
       let segmentEnd = bytesRead
       for (let index = bytesRead - 1; index >= 0 && newestFirst.length <= limit; index--) {
@@ -181,7 +193,9 @@ export async function readNativeChatTranscriptTailFile(
     lineOffset: number,
     messages: { message: NativeChatMessage; offset: number }[]
   ): void {
-    let line = Buffer.concat([...lineParts].toReversed()).toString('utf8')
+    // Positional reads own these bytes; only multi-part records need joining in reverse order.
+    const bytes = lineParts.length === 1 ? lineParts[0] : Buffer.concat(lineParts.toReversed())
+    let line = bytes.toString('utf8')
     if (line.endsWith('\r')) {
       line = line.slice(0, -1)
     }
@@ -230,6 +244,9 @@ export async function readNativeChatTranscriptTail(
     }
   | { error: string; notFound?: true }
 > {
+  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
+    return readOpenCodeNativeChatTranscriptTail(args, {}, signal)
+  }
   const decode = nativeChatLineDecoderForAgent(args.agent)
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
   if (!decode) {

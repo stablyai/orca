@@ -39,9 +39,13 @@ After `npx skills add`, agents see a short stub that says:
 ```bash
 orca skills list
 orca skills get orca-cli
+orca skills get orchestration --references
+orca skills get orchestration --reference recovery-and-cleanup
 orca skills get orchestration --full
 orca skills get orca-linear --json
 ```
+
+A guide's action gates name conditional references. `--reference <name>` prints one of them alone, so an agent pays for the kernel plus that document instead of the whole package; `--references` lists the names. The name may be bare (`recovery-and-cleanup`) or spelled as the guide writes it (`references/recovery-and-cleanup.md`). `--full` still prints the kernel plus every reference.
 
 Add `--json` when an agent needs deterministic output for automation. `skills show` is an alias for `skills get`.
 

@@ -162,7 +162,12 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
     const pending = makeSnapshot()
     const recovered = { ...pending, publicationEpoch: 'recovered', snapshotVersion: 2 }
     const state = { state: 'before' }
-    const runtimeCall = vi.fn().mockResolvedValue({ id: 'list', ok: true, result: pending })
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'list',
+      ok: true,
+      result: pending,
+      _meta: { runtimeId: 'host-runtime' }
+    })
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
@@ -174,12 +179,14 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
 
     await refreshWebRuntimeSessionTabsSnapshot(ENVIRONMENT_ID, WORKTREE_ID)
 
+    // The post-adoption read must be fenced to the runtime that answered this list.
     expect(mocks.recoverWebSessionTerminalOrphansBeforeApply).toHaveBeenCalledWith(
       state,
       pending,
       ENVIRONMENT_ID,
       {
         expectedEnvironmentPairingRevision: 17,
+        expectedRuntimeId: 'host-runtime',
         getCurrentState: expect.any(Function)
       }
     )

@@ -1,13 +1,17 @@
 /**
  * @vitest-environment happy-dom
  */
-import { act, createRef, type ReactNode, type RefObject } from 'react'
+import { act, createRef, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import path from 'node:path'
+import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
+import { handleTerminalFileDrop } from './terminal-drop-handler'
+import { resolveNativeFileDropPath } from '../../../../shared/native-file-drop'
+import { encodeWorkspaceFilePaths, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => children,
@@ -22,17 +26,35 @@ vi.mock('@/i18n/i18n', () => ({
       fallback
     )
 }))
+vi.mock('@/store', () => ({
+  useAppStore: {
+    getState: () => ({
+      settings: { activeRuntimeEnvironmentId: null },
+      repos: [{ id: 'repo1', connectionId: null, executionHostId: 'local' }],
+      worktreesByRepo: { repo1: [{ id: 'wt-1', repoId: 'repo1', hostId: 'local', path: '/repo' }] },
+      detectedWorktreesByRepo: {},
+      folderWorkspaces: [],
+      sshConnectionStates: new Map()
+    })
+  }
+}))
+vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
+
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 function makePane(id: number): ManagedPane {
-  const leafId = `leaf-${id}` as ManagedPane['leafId']
+  const leafId = `00000000-0000-4000-8000-00000000000${id}`
+  if (!isTerminalLeafId(leafId)) {
+    throw new Error('Invalid test leaf')
+  }
   return {
     id,
     leafId,
     stablePaneId: leafId,
     container: document.createElement('div'),
     linkTooltip: document.createElement('div'),
-    terminal: {} as ManagedPane['terminal'],
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Drops only call focus on the test terminal.
+    terminal: { focus: vi.fn() } as unknown as ManagedPane['terminal'],
     fitAddon: {} as ManagedPane['fitAddon'],
     searchAddon: {} as ManagedPane['searchAddon'],
     serializeAddon: {} as ManagedPane['serializeAddon']
@@ -44,18 +66,21 @@ function renderOverlay({
   paneCount = 2,
   showAlwaysOnHeaders = true,
   showSplitButton = true,
+  isTabPinned = false,
   onClosePane = vi.fn(),
   onRemoveTitle = vi.fn(),
   onRenameSubmit = vi.fn(),
   canContinueAgentSessionInNewSession = false,
   onContinueAgentSessionInNewSession = vi.fn(),
   renameValue = '',
-  renamingPaneId = null
+  renamingPaneId = null,
+  dropSetup
 }: {
   paneTitles: Record<number, string>
   paneCount?: number
   showAlwaysOnHeaders?: boolean
   showSplitButton?: boolean
+  isTabPinned?: boolean
   onClosePane?: ReturnType<typeof vi.fn>
   onRemoveTitle?: ReturnType<typeof vi.fn>
   onRenameSubmit?: ReturnType<typeof vi.fn>
@@ -63,13 +88,19 @@ function renderOverlay({
   onContinueAgentSessionInNewSession?: ReturnType<typeof vi.fn>
   renameValue?: string
   renamingPaneId?: number | null
+  dropSetup?: {
+    panes: ManagedPane[]
+    manager: PaneManager
+    transports: Map<number, PtyTransport>
+    activate: (id: number) => void
+  }
 }): {
   container: HTMLDivElement
   onClosePane: ReturnType<typeof vi.fn>
   onRemoveTitle: ReturnType<typeof vi.fn>
   onRenameSubmit: ReturnType<typeof vi.fn>
 } {
-  const panes = [makePane(1), makePane(2)]
+  const panes = dropSetup?.panes ?? [makePane(1), makePane(2)].slice(0, paneCount)
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -81,6 +112,7 @@ function renderOverlay({
         cwd={path.join(path.sep, 'tmp')}
         showAlwaysOnHeaders={showAlwaysOnHeaders}
         showSplitButton={showSplitButton}
+        isTabPinned={isTabPinned}
         paneCount={paneCount}
         activePaneId={1}
         panes={panes}
@@ -96,15 +128,15 @@ function renderOverlay({
         paneTitleBackground="transparent"
         terminalContentVisible
         hiddenStartupStyle={{}}
-        managerRef={{ current: null } as RefObject<PaneManager | null>}
-        paneTransportsRef={{ current: new Map() } as RefObject<Map<number, PtyTransport>>}
+        managerRef={{ current: dropSetup?.manager ?? null }}
+        paneTransportsRef={{ current: dropSetup?.transports ?? new Map<number, PtyTransport>() }}
         canContinueAgentSessionInNewSession={canContinueAgentSessionInNewSession}
         onContinueAgentSessionInNewSession={
           onContinueAgentSessionInNewSession as (pane: ManagedPane) => void
         }
         onSplitPane={vi.fn()}
         onBeginPaneDrag={vi.fn()}
-        onActivatePaneTitleInteraction={vi.fn()}
+        onActivatePaneTitleInteraction={dropSetup?.activate ?? vi.fn()}
         onPaneTitleContextMenu={vi.fn()}
         onStartRename={vi.fn()}
         onRemoveTitle={onRemoveTitle as (paneId: number) => void}
@@ -145,7 +177,7 @@ afterEach(() => {
 })
 
 describe('TerminalPaneHeaderOverlay', () => {
-  it('keeps the titled-pane close affordance as remove-title while headers are always on', () => {
+  it('keeps the titled split-pane X as remove-title only', () => {
     const { container, onClosePane, onRemoveTitle } = renderOverlay({
       paneTitles: { 1: 'server', 2: '' }
     })
@@ -154,15 +186,34 @@ describe('TerminalPaneHeaderOverlay', () => {
       'button[aria-label="Remove pane title: server"]'
     )
     expect(removeTitle).not.toBeNull()
+    expect(
+      container.querySelector('.pane-title-bar[data-active-pane] button[aria-label="Close Pane"]')
+    ).toBeNull()
 
     act(() => removeTitle?.click())
 
     expect(onRemoveTitle).toHaveBeenCalledWith(1)
-    expect(onClosePane).not.toHaveBeenCalledWith(1)
+    expect(onClosePane).not.toHaveBeenCalled()
+  })
+
+  it('offers close tab beside remove-title for a titled single pane', () => {
+    const { container, onClosePane, onRemoveTitle } = renderOverlay({
+      paneTitles: { 1: 'server' },
+      paneCount: 1
+    })
+
+    expect(container.querySelector('button[aria-label="Remove pane title: server"]')).not.toBeNull()
+    const closeTab = container.querySelector<HTMLButtonElement>('button[aria-label="Close tab"]')
+    expect(closeTab).not.toBeNull()
+
+    act(() => closeTab?.click())
+
+    expect(onClosePane).toHaveBeenCalledWith(1)
+    expect(onRemoveTitle).not.toHaveBeenCalled()
   })
 
   it('keeps split and close-pane controls available for untitled split pane headers', () => {
-    const { container, onClosePane, onRemoveTitle } = renderOverlay({
+    const { container, onClosePane } = renderOverlay({
       paneTitles: { 1: '', 2: '' }
     })
 
@@ -174,7 +225,31 @@ describe('TerminalPaneHeaderOverlay', () => {
     act(() => closePane?.click())
 
     expect(onClosePane).toHaveBeenCalledWith(1)
-    expect(onRemoveTitle).not.toHaveBeenCalled()
+  })
+
+  it('offers close tab for an untitled single pane', () => {
+    const { container, onClosePane } = renderOverlay({ paneTitles: { 1: '' }, paneCount: 1 })
+
+    const closeTab = container.querySelector<HTMLButtonElement>('button[aria-label="Close tab"]')
+    expect(closeTab).not.toBeNull()
+    expect(container.querySelector('button[aria-label="Close Pane"]')).toBeNull()
+
+    act(() => closeTab?.click())
+
+    expect(onClosePane).toHaveBeenCalledWith(1)
+  })
+
+  it.each([
+    { label: 'untitled', title: '' },
+    { label: 'titled', title: 'server' }
+  ])('keeps a pinned $label single-pane tab without a close button', ({ title }) => {
+    const { container } = renderOverlay({
+      paneTitles: { 1: title },
+      paneCount: 1,
+      isTabPinned: true
+    })
+
+    expect(container.querySelector('button[aria-label="Close tab"]')).toBeNull()
   })
 
   it('omits the split control when the header affordance is hidden', () => {
@@ -185,6 +260,7 @@ describe('TerminalPaneHeaderOverlay', () => {
     })
 
     expect(container.querySelector('button[aria-label="Split Terminal Right"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Close tab"]')).toBeNull()
   })
 
   it('ignores IME composition Enter before submitting a pane title rename', () => {
@@ -224,4 +300,101 @@ describe('TerminalPaneHeaderOverlay', () => {
       expect.objectContaining({ id: 1 })
     )
   })
+})
+
+function dispatchFileDrag(target: Element, type: 'dragover' | 'drop', internal: boolean): void {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'dataTransfer', {
+    value: {
+      types: internal ? [WORKSPACE_FILE_PATHS_MIME] : ['Files'],
+      getData: () => encodeWorkspaceFilePaths(['/repo/file.txt']),
+      dropEffect: 'none'
+    }
+  })
+  target.dispatchEvent(event)
+}
+
+describe('terminal title drop ownership', () => {
+  it.each([
+    { internal: true, dragover: true },
+    { internal: true, dragover: false },
+    { internal: false, dragover: true },
+    { internal: false, dragover: false }
+  ])(
+    'delivers to pane A while B stays active (internal=$internal, dragover=$dragover)',
+    async ({ internal, dragover }) => {
+      const panes = [makePane(1), makePane(2)]
+      let active = panes[1]
+      const activate = vi.fn((id: number) => {
+        active = panes.find((pane) => pane.id === id) ?? active
+      })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The drop handler only reads panes and the active pane from this manager.
+      const manager = { getPanes: () => panes, getActivePane: () => active } as PaneManager
+      const sends = [vi.fn(() => true), vi.fn(() => true)]
+      const transports = new Map<number, PtyTransport>()
+      panes.forEach((pane, index) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every transport method used by local file drops.
+        const transport = {
+          sendInput: sends[index],
+          getPtyId: () => `pty-${pane.id}`,
+          isConnected: () => true,
+          getExecutionHostId: () => 'local'
+        } as unknown as PtyTransport
+        transports.set(pane.id, transport)
+      })
+      const { container } = renderOverlay({
+        paneTitles: { 1: 'A', 2: 'B' },
+        dropSetup: { panes, manager, transports, activate }
+      })
+      const title = container.querySelector('.pane-title-bar')
+      if (!title) {
+        throw new Error('Title A did not render')
+      }
+      const deliveries: Promise<void>[] = []
+      const legacyCapture = (event: Event): void => {
+        if (internal) {
+          return
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        const entries = event
+          .composedPath()
+          .filter((entry): entry is HTMLElement => entry instanceof HTMLElement)
+          .map((entry) => ({
+            nativeFileDropTarget: entry.dataset.nativeFileDropTarget,
+            terminalTabId: entry.dataset.terminalTabId,
+            terminalPaneLeafId: entry.dataset.terminalPaneLeafId
+          }))
+        const resolution = resolveNativeFileDropPath(entries)
+        if (resolution?.target === 'terminal') {
+          deliveries.push(
+            handleTerminalFileDrop({
+              manager,
+              paneTransports: transports,
+              worktreeId: 'wt-1',
+              tabId: 'tab-1',
+              cwd: '/repo',
+              data: { paths: ['/repo/file.txt'], ...resolution }
+            })
+          )
+        }
+      }
+      document.addEventListener('drop', legacyCapture, true)
+      try {
+        await act(async () => {
+          if (dragover) {
+            dispatchFileDrag(title, 'dragover', internal)
+          }
+          dispatchFileDrag(title, 'drop', internal)
+          await Promise.all(deliveries)
+        })
+      } finally {
+        document.removeEventListener('drop', legacyCapture, true)
+      }
+      expect(sends[0]).toHaveBeenCalledExactlyOnceWith('/repo/file.txt ', 'driving')
+      expect(sends[1]).not.toHaveBeenCalled()
+      expect(activate).not.toHaveBeenCalled()
+      expect(manager.getActivePane()).toBe(panes[1])
+    }
+  )
 })

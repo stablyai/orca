@@ -1,3 +1,4 @@
+import { paneIdentity } from './runtime-terminal-pane-identity'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -19,7 +20,7 @@ import type {
 
 type Ports = {
   canSpawn: boolean
-  markTrusted: (agent: TuiAgent, path: string) => Promise<void>
+  provisionInBackground?: () => boolean
   createTerminal: (
     selector: string,
     options: TerminalCreateOptions
@@ -93,12 +94,10 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
 
   if (sequencedStartup && ports.canSpawn) {
     try {
-      const trustAgent = args.draftPaste?.agent ?? args.createdWithAgent
-      if (trustAgent) {
-        await ports.markTrusted(trustAgent, worktree.path)
-      }
       const terminal = await ports.createTerminal(`id:${worktree.id}`, {
         command: sequencedStartup.command,
+        ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
+        ...paneIdentity(request.startupPaneKey),
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
@@ -125,11 +124,15 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   }
 
   if (shouldActivate) {
-    const runtimeWillProvision = didSpawnStartup && Boolean(setup || defaultTabs)
+    const provisionInBackground = ports.provisionInBackground?.() === true
+    const runtimeWillProvision =
+      (provisionInBackground && ports.canSpawn) ||
+      (didSpawnStartup && Boolean(setup || defaultTabs))
     if (runtimeWillProvision) {
-      const provisioned = await ports.provision(
-        provisionArgs(args, startupTerminalHandle, didSpawnStartup, wrappedSetupCommand)
-      )
+      const provisioned = await ports.provision({
+        ...provisionArgs(args, startupTerminalHandle, didSpawnStartup, wrappedSetupCommand),
+        ...(provisionInBackground ? { surfaceOwner: false as const } : {})
+      })
       didSpawnSetup = provisioned.setupSpawned
       setupTerminalHandle = provisioned.setupTerminalHandle
     }
@@ -163,7 +166,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         didSpawnSetup = true
       }
     }
-  } else if (ports.canSpawn) {
+  } else if (ports.canSpawn && !args.createdWithAgent) {
     try {
       await ports.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {

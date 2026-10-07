@@ -407,7 +407,7 @@ describe('CommentMarkdown link click handler', () => {
     expect(container.textContent).toContain('"John 3:16"')
   })
 
-  it('preserves line suffixes on valid spaced path shapes', () => {
+  it('preserves line suffixes on valid spaced path shapes, but not on bare file names', () => {
     const content =
       'Open "My Folder/notes:12", `My Notes.md:7`, and "C:\\My Folder\\notes.txt:12:3".'
     container = document.createElement('div')
@@ -428,12 +428,10 @@ describe('CommentMarkdown link click handler', () => {
     const anchors = Array.from(container.querySelectorAll<HTMLAnchorElement>('a'))
     expect(anchors.map((anchor) => anchor.textContent)).toEqual([
       'My Folder/notes:12',
-      'My Notes.md:7',
       String.raw`C:\My Folder\notes.txt:12:3`
     ])
     expect(anchors.map((anchor) => routeNativeChatHref(anchor.getAttribute('href')))).toEqual([
       { kind: 'file', pathText: 'My Folder/notes:12', line: null },
-      { kind: 'file', pathText: 'My Notes.md:7', line: null },
       { kind: 'file', pathText: String.raw`C:\My Folder\notes.txt:12:3`, line: null }
     ])
   })

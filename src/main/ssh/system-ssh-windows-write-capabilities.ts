@@ -12,11 +12,28 @@ export type WindowsRemoteWriteCapability = 'sftp-subsystem' | 'pwsh'
 // Why re-probe at all: an admin can enable the subsystem, or install PowerShell 7, without the
 // user restarting Orca. Long enough that a hardened host costs one failed probe per half hour.
 export const WINDOWS_WRITE_CAPABILITY_RETRY_INTERVAL_MS = 30 * 60_000
+const MAX_WINDOWS_WRITE_CAPABILITY_HOSTS = 256
 
 const capabilitiesByExecutionHost = new Map<
   string,
   CapabilityProbeCache<WindowsRemoteWriteCapability>
 >()
+
+function rememberCapabilityCache(
+  key: string,
+  cache: CapabilityProbeCache<WindowsRemoteWriteCapability>
+): CapabilityProbeCache<WindowsRemoteWriteCapability> {
+  capabilitiesByExecutionHost.delete(key)
+  capabilitiesByExecutionHost.set(key, cache)
+  while (capabilitiesByExecutionHost.size > MAX_WINDOWS_WRITE_CAPABILITY_HOSTS) {
+    const oldest = capabilitiesByExecutionHost.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    capabilitiesByExecutionHost.delete(oldest)
+  }
+  return cache
+}
 
 /**
  * Keyed by the endpoint that executes, not by target id: two Orca targets pointing at one host
@@ -42,9 +59,8 @@ export function getWindowsRemoteWriteCapabilities(
     cache = new CapabilityProbeCache<WindowsRemoteWriteCapability>(
       WINDOWS_WRITE_CAPABILITY_RETRY_INTERVAL_MS
     )
-    capabilitiesByExecutionHost.set(key, cache)
   }
-  return cache
+  return rememberCapabilityCache(key, cache)
 }
 
 export function clearWindowsRemoteWriteCapabilitiesForTests(): void {

@@ -1,4 +1,5 @@
 import {
+  mobileSnapshotByteBudget,
   sendSnapshotFrames,
   serializeBudgetedMobileSnapshot,
   serializeStableMobileRendererSnapshot
@@ -23,7 +24,7 @@ export async function publishLegacyBinaryInitialSnapshot(
   const {
     params,
     runtime,
-    signal,
+    registration,
     sendBinary,
     emit,
     ptyId,
@@ -33,8 +34,9 @@ export async function publishLegacyBinaryInitialSnapshot(
     rendererMountRequestedBeforePty,
     serializerGenerationBeforeMobileFit
   } = args
+  const { signal } = registration
   if (isMobile && clientId) {
-    await runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
+    await registration.addMobilePresence(ptyId, clientId, params.viewport)
   } else if (clientId && params.viewport) {
     // Why: legacy subscribe records geometry without taking ownership; only an explicit activity/claim frame may suppress the host.
     state.registeredRemoteDesktopDriver = true
@@ -44,25 +46,52 @@ export async function publishLegacyBinaryInitialSnapshot(
     return
   }
 
-  let read = await runtime.readTerminal(params.terminal)
-  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+  // Why after the fit: the seed reflows the pane's screen onto the grid the phone now owns.
+  const hydratedFromRenderer =
+    missingHeadlessStateBeforeMobileFit &&
+    (await runtime.maybeHydrateHeadlessFromRenderer?.(ptyId)) === true
   if (state.closed) {
     return
   }
-  // Why: missing model state (not blank snapshot text) signals a never-attached PTY; a renderer-sourced snapshot already proves attachment, so skip the remount.
-  const mountRequested =
+  let read = await runtime.readTerminal(params.terminal)
+  // One object for the budget and the frame it approves. Written out twice, the two drifted: the
+  // budget measured a `scrollback` and the publication sent a `resized` with a `reason` beside it.
+  // `displayMode` is not in here because the flow re-reads it below, after the snapshot is
+  // serialized; the budget takes it at its widest instead.
+  const scrollbackFrame = { kind: 'scrollback' } as const
+  let serialized = await serializeBudgetedMobileSnapshot(
+    runtime,
+    ptyId,
+    isMobile,
+    mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, scrollbackFrame)
+  )
+  if (state.closed) {
+    return
+  }
+  // Why: missing model state (not blank snapshot text) signals a never-attached PTY; any renderer answer proves a pane, and the answer is null when the host's flag is unset or stale after a pane closed over a live PTY, which falls back to the mount wait.
+  const needsRendererScreen =
     missingHeadlessStateBeforeMobileFit &&
-    serialized?.source !== 'renderer' &&
+    !hydratedFromRenderer &&
+    serialized?.source !== 'renderer'
+  let rendererReady =
+    needsRendererScreen &&
+    (await runtime.serializeRendererTerminalBuffer(ptyId, { scrollbackRows: 0 })) !== null
+  if (state.closed) {
+    return
+  }
+  const mountRequested =
+    needsRendererScreen &&
+    !rendererReady &&
     (rendererMountRequestedBeforePty || runtime.requestRendererTerminalTabMount(params.terminal))
-  if (missingHeadlessStateBeforeMobileFit && mountRequested) {
+  if (mountRequested) {
     // Why: an idle legacy PTY emits no later byte, so wait for a settle proving this remount completed before replaying its screen.
     const mountWaitController = new AbortController()
     const abortMountWait = (): void => mountWaitController.abort()
     state.abortRendererMountWait = abortMountWait
-    if (signal?.aborted) {
+    if (signal.aborted) {
       abortMountWait()
     } else {
-      signal?.addEventListener('abort', abortMountWait, { once: true })
+      signal.addEventListener('abort', abortMountWait, { once: true })
     }
     const rendererReadyPromise = runtime
       .waitForRendererTerminalSerializer(
@@ -73,7 +102,7 @@ export async function publishLegacyBinaryInitialSnapshot(
       )
       .catch(() => false)
     const finishMountWait = (): void => {
-      signal?.removeEventListener('abort', abortMountWait)
+      signal.removeEventListener('abort', abortMountWait)
       if (state.abortRendererMountWait === abortMountWait) {
         state.abortRendererMountWait = () => {}
       }
@@ -86,35 +115,47 @@ export async function publishLegacyBinaryInitialSnapshot(
         deadlineTimer.unref()
       }
     })
-    const rendererReady = await Promise.race([rendererReadyPromise, initialDeadline])
+    rendererReady = await Promise.race([rendererReadyPromise, initialDeadline])
     if (deadlineTimer) {
       clearTimeout(deadlineTimer)
     }
-    if (state.closed || signal?.aborted) {
+    if (state.closed || signal.aborted) {
       return
     }
-    if (rendererReady) {
-      read = await runtime.readTerminal(params.terminal)
-      const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(runtime, ptyId)
-      if (state.closed) {
-        return
-      }
-      if (stableRendererSnapshot?.data.length) {
-        serialized = stableRendererSnapshot
-        const trailingOutput = state.pendingOutput.flatMap((item) => {
-          const output = getOutputAfterSnapshotSeq(item, stableRendererSnapshot.seq)
-          const seq = item.meta?.seq
-          return output && typeof seq === 'number' ? [{ data: output.data, seq }] : []
-        })
-        runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
-          ptyId,
-          stableRendererSnapshot,
-          trailingOutput
-        )
-      }
-    } else {
+    if (!rendererReady) {
       // Why: a renderer can settle after the bounded initial response; keep observing so an idle PTY self-heals without bytes.
       state.lateRendererReadyPromise = rendererReadyPromise
+    }
+  }
+  if (rendererReady) {
+    read = await runtime.readTerminal(params.terminal)
+    const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(
+      runtime,
+      ptyId,
+      // The same frame, because this snapshot is published by the scrollback send below rather
+      // than by one of its own: the `resized` it used to name is a frame nothing here sends.
+      mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, scrollbackFrame)
+    )
+    if (state.closed) {
+      return
+    }
+    // Why: a blank screen may be a parked pane that has not hydrated, and a seq-less screen has no
+    // seam against buffered output, so it is safe only when nothing is pending to replay twice.
+    if (
+      stableRendererSnapshot?.data.length &&
+      (typeof stableRendererSnapshot.seq === 'number' || state.pendingOutput.length === 0)
+    ) {
+      serialized = stableRendererSnapshot
+      const trailingOutput = state.pendingOutput.flatMap((item) => {
+        const output = getOutputAfterSnapshotSeq(item, stableRendererSnapshot.seq)
+        const seq = item.meta?.seq
+        return output && typeof seq === 'number' ? [{ data: output.data, seq }] : []
+      })
+      runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
+        ptyId,
+        stableRendererSnapshot,
+        trailingOutput
+      )
     }
   }
   let initialOutputOverflowed = false
@@ -123,7 +164,15 @@ export async function publishLegacyBinaryInitialSnapshot(
     state.pendingOutputBytes = 0
     state.pendingOutputOverflowed = false
     read = await runtime.readTerminal(params.terminal)
-    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+    serialized = await serializeBudgetedMobileSnapshot(
+      runtime,
+      ptyId,
+      isMobile,
+      mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, {
+        kind: 'scrollback',
+        displayMode: state.displayMode
+      })
+    )
     if (state.closed) {
       return
     }
@@ -151,7 +200,7 @@ export async function publishLegacyBinaryInitialSnapshot(
     seq: layoutSeq
   })
   const snapshotStats = sendSnapshotFrames(state.sendFrame, {
-    kind: 'scrollback',
+    ...scrollbackFrame,
     // Why: prefer the subscriber's viewport over the 80x24 stopgap when the PTY has
     // no size yet — the mismatch made mobile burn its resubscribe budget (STA-3337).
     cols: serialized?.cols ?? size?.cols ?? params.viewport?.cols ?? 80,
@@ -178,11 +227,19 @@ export async function publishLegacyBinaryInitialSnapshot(
   // Why: baseline for resize re-stream gating; the client already rewrapped to these cols via the initial snapshot replay.
   state.lastResizeCols = serialized?.cols ?? size?.cols
   let recoveryAttempts = 0
+  // The recovery's own frame, for the same reason: this one really is a `resized`, and it is the
+  // budget and the publication that have to agree on that, not a reader comparing two literals.
+  const recoveryFrame = { kind: 'resized', reason: 'pending-output-overflow' } as const
   // Why: if the bounded pre-subscribe tail overflowed, only a fresh model snapshot covers the dropped middle without replay gaps.
   while (state.pendingOutputOverflowed && recoveryAttempts < 2) {
     state.pendingOutputOverflowed = false
     recoveryAttempts += 1
-    const recovery = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+    const recovery = await serializeBudgetedMobileSnapshot(
+      runtime,
+      ptyId,
+      isMobile,
+      mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, recoveryFrame)
+    )
     if (state.closed) {
       return
     }
@@ -195,11 +252,10 @@ export async function publishLegacyBinaryInitialSnapshot(
     }
     // Why: clients drop a repeat scrollback snapshot but apply 'resized' inline; omit seq so output-byte seqs don't pollute the layout-seq filter.
     const recoveryStats = sendSnapshotFrames(state.sendFrame, {
-      kind: 'resized',
+      ...recoveryFrame,
       cols: recovery.cols,
       rows: recovery.rows,
       displayMode: state.displayMode,
-      reason: 'pending-output-overflow',
       source: recovery.source,
       truncated: false,
       truncatedByByteBudget: recovery.truncatedByByteBudget,

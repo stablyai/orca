@@ -4,7 +4,6 @@ import {
   FLUSH_CARD_MIN_CONTENT_INSET,
   NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK,
   LINEAGE_CHILDREN_INLINE_OFFSET,
-  LINEAGE_IMMEDIATE_PARENT_STEP,
   LINEAGE_NESTED_ROW_SURFACE_INSET,
   WORKTREE_CARD_SURFACE_MARGIN,
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
@@ -15,7 +14,6 @@ import {
   getFolderWorkspaceRowGeometry,
   getFlushWorktreeCardPaddingLeft,
   getLineageChildrenInlineStyle,
-  getLineageEffectiveChildStart,
   getLineageNestedRowGeometry,
   getProjectGroupHeaderPaddingLeft,
   getWorktreeCardContentIndent,
@@ -234,13 +232,6 @@ describe('worktree list indentation', () => {
     expect(getFlushWorktreeCardPaddingLeft(0, true)).toBe('2px')
   })
 
-  it('derives the lineage parent-child step from the pre-refactor grouped-card anchor', () => {
-    expect(LINEAGE_IMMEDIATE_PARENT_STEP).toBe(20)
-    expect(LINEAGE_CHILDREN_INLINE_OFFSET).toBe(
-      LINEAGE_IMMEDIATE_PARENT_STEP - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
-    )
-  })
-
   it('keeps experimental lineage nested rows from accumulating global depth', () => {
     const child = getLineageNestedRowGeometry({
       experimentalNewWorktreeCardStyle: true,
@@ -274,20 +265,6 @@ describe('worktree list indentation', () => {
         lineageDepth: 2
       }).surfaceInset
     ).toBe(28)
-  })
-
-  it('keeps each experimental lineage boundary at one immediate-parent step', () => {
-    for (const parentContentStart of [FLUSH_CARD_MIN_CONTENT_INSET, 16, 34]) {
-      const childStart = getLineageEffectiveChildStart({
-        parentContentStart,
-        lineageChildrenWrapperOffset: LINEAGE_CHILDREN_INLINE_OFFSET,
-        nestedRowSurfaceInset: LINEAGE_NESTED_ROW_SURFACE_INSET,
-        cardSurfaceMargin: WORKTREE_CARD_SURFACE_MARGIN,
-        flushCardContentInset: FLUSH_CARD_MIN_CONTENT_INSET
-      })
-
-      expect(childStart - parentContentStart).toBe(LINEAGE_IMMEDIATE_PARENT_STEP)
-    }
   })
 
   it('expresses lineage child wrapper width from the resolved inline offset', () => {

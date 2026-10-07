@@ -4,6 +4,7 @@ import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalLayoutSnapshot } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
+import type { StructuredAgentId } from './agent-session-provider-handle'
 
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
@@ -33,6 +34,9 @@ export type RuntimeMobileSessionTerminalTab = {
 export type RuntimeMobileTerminalTheme = {
   mode: 'dark' | 'light'
   theme: TerminalColorOverrides
+  /** Optional desktop terminalMinimumContrastRatio override (#10754). Absent means the client picks
+   *  its own background-luminance floor, which is what pre-#10754 clients always do. */
+  minimumContrastRatio?: number
 }
 
 export type RuntimeMobileSessionMarkdownTab = {
@@ -93,7 +97,10 @@ export type RuntimeMobileSessionAgentTab = {
   id: string
   title: string
   sessionId: string
-  agent: 'claude' | 'codex'
+  replacesSessionId?: string
+  /** An agent the host registered. Beyond Claude and Codex, published only to clients advertising
+   *  the registered-agents capability. */
+  agent: StructuredAgentId
   color?: string | null
   isPinned?: boolean
   isActive: boolean

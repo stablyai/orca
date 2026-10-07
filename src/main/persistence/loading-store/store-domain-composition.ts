@@ -1,6 +1,6 @@
 import type { StoreRuntimeState } from './store-runtime-state'
+import type { Store } from './store'
 import { LoadedStateAdaptationOperations } from './loaded-state-adaptation'
-import { BackupRecoveryRotationOperations } from './backup-recovery-rotation'
 import { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
 import { LoadedStateParsingOperations } from './loaded-state-parsing'
 import { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
@@ -63,10 +63,36 @@ import {
   SshLeaseRecoveryOperations,
   installSshLeaseRecoveryOperationsContext
 } from './ssh-lease-recovery-operations'
+import {
+  OrcadSourceExportPersistence,
+  installOrcadSourceExportPersistenceContext
+} from '../migrating-orcad-catalog/orcad-source-export'
+import {
+  OrcadCatalogImportPersistence,
+  installOrcadCatalogImportPersistenceContext
+} from '../migrating-orcad-catalog/orcad-catalog-import'
+
+export type StoreDomainOperations = WriteSchedulingOperations &
+  PrimaryStateWriteOperations &
+  ProjectCollectionOperations &
+  RepoLifecycleOperations &
+  MobileTabSelectionPersistence &
+  SparsePresetPersistence &
+  AutomationPersistence &
+  MetadataLineageOperations &
+  ProfilePreferences &
+  SessionHostPartitionOperations &
+  SessionSnapshotOperations &
+  PtyBindingPersistenceOperations &
+  SshProfileOperations &
+  RetiredWorktreeNamePersistence &
+  SshLeaseRecoveryOperations &
+  OrcadSourceExportPersistence &
+  OrcadCatalogImportPersistence &
+  WriteFlushBarrierOperations
 
 export type StoreDomains = {
   adaptation: LoadedStateAdaptationOperations
-  backups: BackupRecoveryRotationOperations
   cohorts: LoadedCohortMigrationOperations
   loader: LoadedStateParsingOperations
   serialization: StateSerializationSecretHandlingOperations
@@ -87,6 +113,8 @@ export type StoreDomains = {
   sshProfiles: SshProfileOperations
   retiredWorktreeNames: RetiredWorktreeNamePersistence
   sshLeases: SshLeaseRecoveryOperations
+  orcadSourceExport: OrcadSourceExportPersistence
+  orcadCatalogImports: OrcadCatalogImportPersistence
 }
 
 export const STORE_DOMAIN_OPERATION_CLASSES = [
@@ -105,10 +133,12 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   SshProfileOperations,
   RetiredWorktreeNamePersistence,
   SshLeaseRecoveryOperations,
+  OrcadSourceExportPersistence,
+  OrcadCatalogImportPersistence,
   WriteFlushBarrierOperations
 ] as const
 
-export function installStoreDomainContexts(target: object, domains: StoreDomains): void {
+export function installStoreDomainContexts(target: Store, domains: StoreDomains): void {
   installWriteSchedulingOperationsContext(target, domains.scheduling)
   installPrimaryStateWriteOperationsContext(target, domains.writes)
   installProjectCollectionOperationsContext(target, domains.projects)
@@ -124,16 +154,17 @@ export function installStoreDomainContexts(target: object, domains: StoreDomains
   installSshProfileOperationsContext(target, domains.sshProfiles)
   installRetiredWorktreeNamePersistenceContext(target, domains.retiredWorktreeNames)
   installSshLeaseRecoveryOperationsContext(target, domains.sshLeases)
+  installOrcadSourceExportPersistenceContext(target, domains.orcadSourceExport)
+  installOrcadCatalogImportPersistenceContext(target, domains.orcadCatalogImports)
   installWriteFlushBarrierOperationsContext(target, domains.flushBarriers)
 }
 
 export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const adaptation = new LoadedStateAdaptationOperations(runtime)
-  const backups = new BackupRecoveryRotationOperations(runtime)
   const cohorts = new LoadedCohortMigrationOperations(runtime)
-  const loader = new LoadedStateParsingOperations(runtime, backups, cohorts)
+  const loader = new LoadedStateParsingOperations(runtime, cohorts)
   const serialization = new StateSerializationSecretHandlingOperations(runtime)
-  const writes = new PrimaryStateWriteOperations(runtime, serialization, backups)
+  const writes = new PrimaryStateWriteOperations(runtime, serialization)
   const scheduling = new WriteSchedulingOperations(runtime, writes)
   const flushBarriers = new WriteFlushBarrierOperations(runtime, writes)
   const preferences = new ProfilePreferences(runtime, scheduling)
@@ -160,9 +191,9 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     bindingRecovery,
     scheduling
   )
+  const orcadCatalogImports = new OrcadCatalogImportPersistence(runtime, repos, scheduling)
   return {
     adaptation,
-    backups,
     cohorts,
     loader,
     serialization,
@@ -182,6 +213,9 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     ptyBindings,
     sshProfiles,
     retiredWorktreeNames,
-    sshLeases
+    sshLeases,
+    // Read-only: holds the runtime state and nothing that writes.
+    orcadSourceExport: new OrcadSourceExportPersistence(runtime),
+    orcadCatalogImports
   }
 }

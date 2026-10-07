@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { connectRuntimeHostForNavigation } from './SshStatusSegment'
+import { connectRuntimeHostForNavigation } from './runtime-environment-explicit-connect'
 
 describe('connectRuntimeHostForNavigation', () => {
   it('loads the transient host catalog without writing Active Server', async () => {

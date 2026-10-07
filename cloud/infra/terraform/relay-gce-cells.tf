@@ -16,7 +16,7 @@ locals {
     backend_group_count        = 1
     public_access_config_count = 0
     backend_timeout_seconds    = 86400
-    connection_drain_seconds   = 300
+    connection_drain_seconds   = 60
   }
   relay_gce_cell_urls = {
     for cell_id, cell in var.relay_gce_cells :
@@ -82,14 +82,15 @@ check "relay_gce_fixed_one_topology" {
 
   assert {
     condition = alltrue([
+      # Region is not asserted here: the director's own rehome source and target predicates
+      # own eligibility, so this pins only cell shape.
       for cell_id in var.relay_region_rehome_source_cell_ids : try(
-        var.relay_gce_cells[cell_id].region == var.region &&
         var.relay_gce_cells[cell_id].connection_hard_cap != null &&
         !contains(var.relay_gce_fenced_cells, cell_id),
         false
       )
     ])
-    error_message = "Regional rehome sources must be configured, unfenced primary-region GCE cells with explicit connection limits."
+    error_message = "Regional rehome sources must be configured, unfenced GCE cells with explicit connection limits."
   }
 
   assert {
@@ -107,9 +108,12 @@ check "relay_gce_fixed_one_topology" {
       local.relay_gce_topology.max_unavailable == 1 &&
       local.relay_gce_topology.backend_group_count == 1 &&
       local.relay_gce_topology.public_access_config_count == 0 &&
-      local.relay_gce_topology.backend_timeout_seconds == 86400
+      local.relay_gce_topology.backend_timeout_seconds == 86400 &&
+      # A rollout drains every host off the cell before Terraform runs, so this covers only a
+      # host still mid-handshake; pinned so a raise cannot re-add rollout wall clock unseen.
+      local.relay_gce_topology.connection_drain_seconds == 60
     )
-    error_message = "Relay cells require fixed-one RECREATE MIGs, one non-public backend, and the 86,400-second WebSocket timeout."
+    error_message = "Relay cells require fixed-one RECREATE MIGs, one non-public backend, the 86,400-second WebSocket timeout, and the 60-second connection drain."
   }
 }
 

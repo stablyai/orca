@@ -5,9 +5,52 @@ import { toProcessExitStartup } from './process-exit-startup'
 import { recoverUnverifiableDirectSshReattach } from './direct-ssh-reattach-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
+import {
+  awaitAgentStatusStartupSnapshot,
+  isAgentStatusStartupSnapshotReady
+} from '@/hooks/ipc-events/agent-status-startup-snapshot'
+
 const PANE_OWNER_UNVERIFIED_ERROR = 'terminal_pane_owner_unverified'
 
 export function startDeferredSessionReattach(
+  session: ConnectPanePtySession,
+  deferredReattachSessionId: string
+): void {
+  void prepareDeferredSessionReattach(session, deferredReattachSessionId).catch(
+    (error: unknown) => {
+      if (!session.disposed) {
+        session.reportError(error instanceof Error ? error.message : String(error))
+      }
+    }
+  )
+}
+
+async function prepareDeferredSessionReattach(
+  session: ConnectPanePtySession,
+  deferredReattachSessionId: string
+): Promise<void> {
+  const generation = session.transportStreamGeneration
+  let waitedForSnapshot = false
+  if (
+    !session.runtimeEnvironmentId &&
+    !session.buildColdRestoreAgentResumeStartup() &&
+    !isAgentStatusStartupSnapshotReady()
+  ) {
+    waitedForSnapshot = true
+    await awaitAgentStatusStartupSnapshot()
+  }
+  if (
+    session.disposed ||
+    generation !== session.transportStreamGeneration ||
+    (waitedForSnapshot &&
+      session.deps.paneTransportsRef.current.get(session.pane.id) !== session.transport)
+  ) {
+    return
+  }
+  connectDeferredSessionReattach(session, deferredReattachSessionId)
+}
+
+function connectDeferredSessionReattach(
   session: ConnectPanePtySession,
   deferredReattachSessionId: string
 ): void {
@@ -90,7 +133,7 @@ export function startDeferredSessionReattach(
         if (typeof gen === 'number') {
           void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
         }
-        session.settleDirectSshPaneRetryAttempt(session.directSshRetryAttempt, 'failed')
+        session.settlePaneAttachAttempt(session.directSshRetryAttempt, 'failed')
         return
       }
       if (!result && expiredReattachError) {
@@ -153,7 +196,7 @@ export function startDeferredSessionReattach(
       }
       if (message.includes(PANE_OWNER_UNVERIFIED_ERROR)) {
         session.reportError(message)
-        session.settleDirectSshPaneRetryAttempt(session.directSshRetryAttempt, 'failed')
+        session.settlePaneAttachAttempt(session.directSshRetryAttempt, 'failed')
         return
       }
       warnTerminalLifecycleAnomaly('restored PTY reattach threw', {

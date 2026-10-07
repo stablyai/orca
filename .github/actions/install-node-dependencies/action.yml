@@ -2,6 +2,18 @@ name: Install Node dependencies
 description: Installs the Node toolchain and repository dependencies for CI jobs, with optional Electron archive caching.
 
 inputs:
+  cache-pnpm-store:
+    description: Restore or save the pnpm download store; verification and native caches are independent.
+    required: false
+    default: 'true'
+  cache-pnpm-store-lookup-only:
+    description: Auto uses measured hosted Node 24 root installs; true forces lookup, false retains archive restoration.
+    required: false
+    default: auto
+  cache-pnpm-verification:
+    description: Restore pnpm's policy-checked lockfile verification record.
+    required: false
+    default: 'true'
   native-runtime:
     description: Native runtime to prepare after the script-free install (none, node, or electron).
     required: false
@@ -10,6 +22,10 @@ inputs:
     description: Node.js version override; defaults to the version declared in package.json.
     required: false
     default: ''
+  cache-dependency-path:
+    description: Lockfiles for the pnpm download store; include mobile/pnpm-lock.yaml only when the job installs mobile dependencies.
+    required: false
+    default: pnpm-lock.yaml
   persist-native-cache:
     description: Save restored native modules at job end. Set false when a later step overwrites the same path with a different ABI.
     required: false
@@ -20,38 +36,77 @@ inputs:
     default: 'false'
 
 outputs:
+  pnpm-store-cache-hit:
+    description: Whether the requested download store matched an existing cache.
+    value: ${{ steps.pnpm-store-lookup.outputs.cache-hit || steps.pnpm-store-restore.outputs.cache-hit || steps.requested-node.outputs.cache-hit || steps.default-node.outputs.cache-hit }}
+  verification-cache-hit:
+    description: Whether pnpm's verification record was restored.
+    value: ${{ steps.verification-cache.outputs.cache-hit }}
+  verification-cache-path:
+    description: The small pnpm-owned verification record, without registry metadata.
+    value: ${{ steps.verification-cache.outputs.path }}
+  verification-cache-key:
+    description: Exact verification record key, also used by the isolated PR benchmark.
+    value: ${{ steps.verification-cache.outputs.key }}
   node-version:
     description: Resolved Node.js version used for the install.
     value: ${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}
   native-cache-scope:
     description: Operating-system image scope used by the native module cache.
-    value: ${{ steps.native-cache-scope.outputs.scope }}
+    value: ${{ steps.native-runtime.outputs.cache-scope }}
+  native-cache-key:
+    description: Exact native cache key requested after installation.
+    value: ${{ steps.native-runtime.outputs.cache-key }}
+  native-cache-path:
+    description: Native build directories covered by the requested cache.
+    value: ${{ steps.native-runtime.outputs.cache-path }}
   native-cache-hit:
     description: Whether the compiled native module cache was restored.
-    value: ${{ steps.native-cache-restore.outputs.cache-hit || steps.native-cache-restore-only.outputs.cache-hit }}
+    value: ${{ steps.native-runtime.outputs.cache-hit }}
 
 runs:
   using: composite
   steps:
+    - name: Resolve pnpm store mode
+      id: pnpm-store-mode
+      if: >-
+        github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' &&
+        (inputs.cache-pnpm-store-lookup-only == 'true' ||
+        (inputs.cache-pnpm-store-lookup-only == 'auto' &&
+        inputs.cache-dependency-path == 'pnpm-lock.yaml' &&
+        runner.environment == 'github-hosted' && job.container.id == '' &&
+        (runner.os == 'Linux' || runner.os == 'macOS' || runner.os == 'Windows') &&
+        (runner.arch == 'X64' || runner.arch == 'ARM64') &&
+        (inputs.node-version == '' || inputs.node-version == '24')))
+      shell: bash
+      env:
+        LOOKUP_REQUEST: ${{ inputs.cache-pnpm-store-lookup-only }}
+      run: |
+        lookup_only=true
+        case "$LOOKUP_REQUEST" in
+          [aA][uU][tT][oO])
+            # Hosted runners have Node for this manifest-only check before toolchain setup.
+            lookup_only="$(node -p 'const p = require("./package.json"); p.engines?.node === "24" && typeof p.packageManager === "string" && p.packageManager.split("+")[0] === "pnpm@12.8.1"')"
+            ;;
+        esac
+        printf 'lookup-only=%s\n' "$lookup_only" >> "$GITHUB_OUTPUT"
+
     # setup-node needs pnpm on PATH to locate and restore its store.
     - name: Setup pnpm
       uses: pnpm/setup@v2
       with:
         install: false
 
-    # Why both lockfiles: setup-node keys the pnpm store on the root lockfile alone, so
-    # jobs that also install mobile restored a store with none of the React Native tree
-    # in it and re-downloaded the lot on every run.
+    # Desktop-only jobs should not miss their download cache when mobile dependencies change.
     - name: Setup Node.js
       id: default-node
       if: inputs.node-version == ''
       uses: actions/setup-node@v6
       with:
         node-version-file: package.json
-        cache: pnpm
-        cache-dependency-path: |
-          pnpm-lock.yaml
-          mobile/pnpm-lock.yaml
+        cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+        package-manager-cache: false
 
     - name: Setup requested Node.js
       id: requested-node
@@ -59,10 +114,66 @@ runs:
       uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
-        cache: pnpm
-        cache-dependency-path: |
-          pnpm-lock.yaml
-          mobile/pnpm-lock.yaml
+        cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+        package-manager-cache: false
+
+    # PR-local stores compete with reusable build caches for the repository quota.
+    - name: Resolve pnpm download store
+      id: pnpm-store
+      if: >-
+        github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' &&
+        !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') &&
+        (runner.os != 'Windows' ||
+        !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) &&
+        !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml')) ||
+        (github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' &&
+        steps.pnpm-store-mode.outputs.lookup-only == 'true')
+      shell: bash
+      env:
+        LOCKFILE_HASH: ${{ hashFiles(inputs.cache-dependency-path) }}
+        STORE_LOOKUP_ONLY: ${{ steps.pnpm-store-mode.outputs.lookup-only == 'true' }}
+      run: |
+        test -n "$LOCKFILE_HASH"
+        cache_path="$(pnpm store path --silent)"
+        test -n "$cache_path"
+        printf 'path=%s\n' "$cache_path" >> "$GITHUB_OUTPUT"
+        printf 'arch=%s\n' "$(node -p 'require("node:os").arch()')" >> "$GITHUB_OUTPUT"
+        if [ "$STORE_LOOKUP_ONLY" = 'true' ]; then
+          printf 'ORCA_PNPM_STORE_CACHE_PATH=%s\n' "$cache_path" >> "$GITHUB_ENV"
+        fi
+
+    # Match setup-node's key and path so existing default-branch stores remain reusable.
+    # Direct downloads beat store restoration for the measured Linux, macOS and Windows installs.
+    - name: Restore pnpm download store without saving
+      id: pnpm-store-restore
+      if: >-
+        github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' &&
+        !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') &&
+        (runner.os != 'Windows' ||
+        !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) &&
+        !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml'))
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: node-cache-${{ runner.os }}-${{ steps.pnpm-store.outputs.arch }}-pnpm-${{ hashFiles(inputs.cache-dependency-path) }}
+
+    # Producers can refresh access and publish misses without downloading existing archives.
+    - name: Keep pnpm download store without restoring
+      id: pnpm-store-lookup
+      if: steps.pnpm-store-mode.outputs.lookup-only == 'true'
+      uses: actions/cache@v5
+      with:
+        # Twice-nested composite cleanup loses internal step outputs.
+        path: ${{ env.ORCA_PNPM_STORE_CACHE_PATH }}
+        key: node-cache-${{ runner.os }}-${{ steps.pnpm-store.outputs.arch }}-pnpm-${{ hashFiles(inputs.cache-dependency-path) }}
+        lookup-only: true
+
+    - name: Restore pnpm verification record
+      id: verification-cache
+      uses: ./.github/actions/restore-pnpm-verification
+      with:
+        enabled: ${{ inputs.cache-pnpm-verification }}
 
     - name: Validate native runtime
       shell: bash
@@ -98,6 +209,15 @@ runs:
           git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml
         fi
 
+    # pnpm checks the cached record's policy and validity; never bypass verification.
+    - name: Save pnpm verification record on main
+      if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.verification-cache.outputs.key != '' && steps.verification-cache.outputs.cache-hit != 'true'
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ steps.verification-cache.outputs.path }}
+        key: ${{ steps.verification-cache.outputs.key }}
+
     - name: Resolve Electron package cache
       id: electron-package-cache
       if: inputs.native-runtime == 'electron' || inputs.cache-electron-package == 'true'
@@ -118,74 +238,24 @@ runs:
         printf 'version=%s\n' "$(node -p "require('./node_modules/electron/package.json').version")" >> "$GITHUB_OUTPUT"
 
     - name: Cache Electron package archive
-      if: inputs.native-runtime == 'electron' || inputs.cache-electron-package == 'true'
+      if: (github.event_name != 'pull_request' || runner.os != 'Linux') && steps.electron-package-cache.outputs.version != ''
       uses: actions/cache@v5
       with:
         path: ${{ steps.electron-package-cache.outputs.cache-root }}
         key: electron-package-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-package-cache.outputs.version }}
 
-    # Why cached: `--ignore-scripts` leaves node-pty without build/Release, so
-    # ensure-native-runtime node-gyp-compiles it in every job that asks for a runtime.
-    # The artifacts are ABI-bound, so the key carries the target runtime, the resolved
-    # Node version, and the patch whose contents the build has to match.
-    # Windows extra globs are empty on Linux. No restore-keys: a partial-match key is
-    # an ABI-mismatched build, and ensure-native-runtime would recompile it anyway.
-    # Native addons built on a newer Linux image can require glibc symbols
-    # missing from an older runner/container. ImageOS distinguishes hosted
-    # Windows/macOS images; /etc/os-release also distinguishes Linux containers.
-    - name: Resolve native cache scope
-      id: native-cache-scope
-      if: inputs.native-runtime != 'none'
-      shell: bash
-      run: |
-        scope="${ImageOS:-$RUNNER_OS}"
-        if [ -r /etc/os-release ]; then
-          . /etc/os-release
-          scope="${ID:-linux}-${VERSION_ID:-unknown}"
-        fi
-        echo "scope=$scope" >> "$GITHUB_OUTPUT"
-
-    - name: Restore compiled native modules
-      id: native-cache-restore
-      if: inputs.native-runtime != 'none' && inputs.persist-native-cache != 'false'
-      uses: actions/cache@v5
-      with:
-        path: |
-          node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
-          node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
-          node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
-
-    - name: Restore compiled native modules without saving
-      id: native-cache-restore-only
-      if: inputs.native-runtime != 'none' && inputs.persist-native-cache == 'false'
+    - name: Restore Electron package archive without saving
+      if: github.event_name == 'pull_request' && runner.os == 'Linux' && steps.electron-package-cache.outputs.version != ''
       uses: actions/cache/restore@v5
       with:
-        path: |
-          node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
-          node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
-          node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
-
-    # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
-    - name: Use external node-gyp
-      if: runner.os == 'Linux' && inputs.native-runtime != 'none'
-      shell: bash
-      env:
-        NATIVE_RUNTIME: ${{ inputs.native-runtime }}
-        NATIVE_CACHE_HIT: ${{ steps.native-cache-restore.outputs.cache-hit || steps.native-cache-restore-only.outputs.cache-hit }}
-      run: |
-        # A cache hit can contain unusable addons; probe before skipping the rebuild toolchain.
-        if [ "$NATIVE_RUNTIME" = node ] && [ "$NATIVE_CACHE_HIT" = true ] &&
-          node config/scripts/ensure-native-runtime.mjs --check-only; then
-          exit 0
-        fi
-        npm install -g node-gyp@11.5.0
-        echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+        path: ${{ steps.electron-package-cache.outputs.cache-root }}
+        key: electron-package-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-package-cache.outputs.version }}
 
     - name: Prepare native runtime
+      id: native-runtime
       if: inputs.native-runtime != 'none'
-      shell: bash
-      env:
-        NATIVE_RUNTIME: ${{ inputs.native-runtime }}
-      run: node config/scripts/ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"
+      uses: ./.github/actions/prepare-native-runtime
+      with:
+        native-runtime: ${{ inputs.native-runtime }}
+        node-version: ${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}
+        persist-native-cache: ${{ inputs.persist-native-cache }}

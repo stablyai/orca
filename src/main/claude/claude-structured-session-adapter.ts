@@ -1,21 +1,19 @@
+import { dispatchClaudeCommand } from './claude-structured-command-dispatch'
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  answerClaudePrompt,
-  cancelClaudeTurn,
-  stopClaudeBackgroundTasks
-} from './claude-structured-control-actions'
+import { stopCurrentClaudeBackgroundTasks } from './claude-structured-control-actions'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
+import { claudeHoldsDispatch } from './claude-command-lifecycle'
 import { releaseClaudeAcquisition } from './claude-structured-acquisition-release'
 import { acquireClaudeSession } from './claude-structured-session-acquisition'
-export { CLAUDE_STRUCTURED_INIT_TIMEOUT_MS } from './claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
-import { setClaudeStructuredOption } from './claude-structured-options'
+import { setClaudeStructuredSessionOption } from './claude-structured-options'
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
+import { claudeStartupSettledWithin } from './claude-structured-session-startup-state'
+import { CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS } from './claude-agent-sdk-control-requests'
 import {
   ClaudeAcquisitionRegistry,
   type ClaudeAcquisitionAttempt,
@@ -27,10 +25,26 @@ import {
 import {
   closeAllClaudeSessions,
   closeClaudeSession,
-  settleClaudeExitedSession
+  finishClaudeCloseAfterExit
 } from './claude-structured-session-close'
-import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
+import { claudeStoppedRequestEndWait } from './claude-request-end-wait'
+import {
+  drainClaudeObservedExits,
+  observeClaudeSessionExit,
+  settleClaudeUnexpectedExit,
+  type ClaudeExitLifecycle
+} from './claude-structured-session-exit-lifecycle'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import { resolveClaudeProviderHistoryWindow } from './claude-structured-history-window'
+import { drainClaudeChildWork } from './claude-child-work-evidence'
+import { emitClaudeStructuredSessionEvent } from './claude-structured-event-delivery'
+import {
+  answerClaudeStructuredPrompt,
+  cancelClaudeStructuredTurn,
+  dismissClaudeStructuredPrompt,
+  settleClaudePromptFreeingChild
+} from './claude-structured-prompt-ownership'
+import { claudePromptCancelRoute } from './claude-structured-prompt-replies'
 
 export type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 export type {
@@ -38,8 +52,6 @@ export type {
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
-
-const DISPATCH_ACK_TIMEOUT_MS = 10_000
 
 function backgroundTaskState(session: ClaudeSession): AgentSessionBackgroundTaskState | null {
   const state = session.backgroundTasks.state
@@ -50,13 +62,25 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   private readonly sessions = new Map<string, ClaudeSession>()
   private readonly acquisitions = new ClaudeAcquisitionRegistry()
   private readonly exits = new Map<string, ClaudeSessionExit>()
+  private readonly settledExitErrors = new Map<string, Error>()
+  private readonly exitLifecycle: ClaudeExitLifecycle
 
-  constructor(private readonly deps: ClaudeStructuredSessionAdapterDeps) {}
+  constructor(private readonly deps: ClaudeStructuredSessionAdapterDeps) {
+    this.atRestCommands = deps.atRestCommands
+    this.exitLifecycle = {
+      sessions: this.sessions,
+      exits: this.exits,
+      settledExitErrors: this.settledExitErrors,
+      deps,
+      emit: (session, event) => this.emit(session, event)
+    }
+  }
 
   supportsLocation = supportsClaudeStructuredLocation
 
-  acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
-    acquireClaudeSession({
+  acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> => {
+    this.settledExitErrors.delete(input.identity.sessionId)
+    return acquireClaudeSession({
       input,
       deps: this.deps,
       sessions: this.sessions,
@@ -64,244 +88,210 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       exits: this.exits,
       callbacks: {
         deliver: (attempt, sessionId, event) => this.deliver(attempt, sessionId, event),
-        emit: (session, events, event) => this.emit(session, events, event),
-        handleExit: (sessionId, attempt, error) => this.handleExit(sessionId, attempt, error),
-        settleExit: (sessionId, exit) => this.settleUnexpectedExit(sessionId, exit)
+        emit: (session, _events, event) => this.emit(session, event),
+        handleExit: (sessionId, attempt, error) =>
+          observeClaudeSessionExit(this.exitLifecycle, sessionId, attempt, error),
+        finishClose: (sessionId, attempt) =>
+          finishClaudeCloseAfterExit({
+            sessions: this.sessions,
+            sessionId,
+            connection: attempt.connection,
+            deps: this.deps,
+            afterClose: (close) => this.afterClose(sessionId, close)
+          }),
+        settleExit: (sessionId, exit) =>
+          settleClaudeUnexpectedExit(this.exitLifecycle, sessionId, exit)
       }
     })
+  }
 
   private deliver(attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void): void {
     if (!attempt.published) {
       attempt.buffered.push(event)
       return
     }
-    if (this.sessions.get(sessionId)?.connection === attempt.connection) {
+    if (
+      this.sessions.get(sessionId)?.connection === attempt.connection ||
+      this.exits.get(sessionId)?.connection === attempt.connection
+    ) {
       event()
     }
   }
 
-  private handleExit(sessionId: string, attempt: ClaudeAcquisitionAttempt, error: Error): void {
-    const session = this.sessions.get(sessionId)
-    if (!session || session.connection !== attempt.connection) {
-      return
-    }
-    this.sessions.delete(sessionId)
-    // Re-enter the provider's close ladder before publishing lifecycle recovery.
-    // An exit callback is root evidence only; the retained tree proof must run
-    // before the host releases and reacquires this exact child.
-    const closePromise = session.connection.close().catch(() => false)
-    const exit: ClaudeSessionExit = {
-      connection: session.connection,
-      session,
-      error,
-      closePromise
-    }
-    this.exits.set(sessionId, exit)
-    exit.publication = closePromise
-      .then((proven) => (proven ? this.settleUnexpectedExit(sessionId, exit) : undefined))
-      .catch(() => undefined)
-  }
-
   /** Resolves once every first-hand exit observed so far has published its
-   *  lifecycle event — or has failed its tree proof and stayed indexed for a
-   *  retry. Publication trails observation by the close ladder and the
+   *  lifecycle event — or, with neither its tree proven gone nor its root's exit
+   *  observed, stayed indexed for a retry. Publication trails observation by the close ladder and the
    *  transcript cursor write, so nothing outside can otherwise tell the two
    *  apart without guessing at wall-clock. */
-  drainObservedExits = async (): Promise<void> => {
-    const awaited = new Set<Promise<void>>()
-    for (;;) {
-      const pending = [...this.exits.values()]
-        .map((exit) => exit.publication)
-        .filter(
-          (publication): publication is Promise<void> =>
-            publication !== undefined && !awaited.has(publication)
-        )
-      if (pending.length === 0) {
-        return
-      }
-      for (const publication of pending) {
-        awaited.add(publication)
-      }
-      // A publication can settle an exit that itself observes another; only the
-      // ones this pass has not already awaited keep the loop going.
-      await Promise.all(pending)
-    }
-  }
+  drainObservedExits = (): Promise<void> => drainClaudeObservedExits(this.exits)
 
-  /** Lifecycle recovery is published only after the child tree proof is true. */
-  private settleUnexpectedExit(sessionId: string, exit: ClaudeSessionExit): Promise<void> {
-    exit.settlementPromise ??= (async () => {
-      if (this.exits.get(sessionId) !== exit) {
-        settleClaudeExitedSession(exit.session)
-        return
-      }
-      // Persist the transcript-derived cursor before publishing the lifecycle
-      // event that lets the host release and reacquire this exact child.
-      await this.persistSessionHandle(sessionId, exit.session).catch(() => undefined)
-      if (this.exits.get(sessionId) !== exit) {
-        settleClaudeExitedSession(exit.session)
-        return
-      }
-      this.exits.delete(sessionId)
-      const ended: ClaudeStructuredSessionEvent = {
-        type: 'ended',
-        sessionId,
-        reason: exit.error.message,
-        cause: 'unexpected-exit',
-        fence: exit.session.fence,
-        acquisitionGeneration: exit.session.acquisitionGeneration
-      }
-      try {
-        this.emit(exit.session, exit.session.events, ended)
-      } finally {
-        settleClaudeExitedSession(exit.session)
-      }
-    })()
-    return exit.settlementPromise
-  }
+  /** Restart reconciliation reads the transcript a resume replays; these maps track liveness. */
+  providerHistoryWindow: NonNullable<StructuredAgentSessionAdapter['providerHistoryWindow']> = (
+    input
+  ) =>
+    resolveClaudeProviderHistoryWindow({
+      identity: input.identity,
+      accountHomePath: input.accountHome.path,
+      hasLiveSession:
+        this.sessions.has(input.identity.sessionId) || this.exits.has(input.identity.sessionId)
+    })
 
-  private async persistSessionHandle(sessionId: string, session: ClaudeSession): Promise<void> {
-    try {
-      const transcriptLeaf = this.deps.readTranscriptLeaf
-        ? await readClaudeTranscriptLeafWithReproof({
-            readTranscriptLeaf: this.deps.readTranscriptLeaf,
-            providerSessionId: session.providerSessionId,
-            previousLeafUuid: session.leafUuid,
-            claudeConfigDir: session.claudeConfigDir
-          })
-        : null
-      if (transcriptLeaf) {
-        session.leafUuid = transcriptLeaf
-      }
-    } catch {
-      // A stale or unavailable tail must not overwrite the last observed leaf.
-    }
-    await this.deps.persistHandle?.({
-      sessionId,
-      providerSessionId: session.providerSessionId,
-      leafUuid: session.leafUuid,
-      fence: session.fence
+  private emit(session: ClaudeSession | null, event: ClaudeStructuredSessionEvent): void {
+    emitClaudeStructuredSessionEvent({
+      session,
+      event,
+      deps: this.deps,
+      publishChildWork: (id, child, message) => this.publishChildWork(id, child, message)
     })
   }
 
-  private emit(
-    session: ClaudeSession | null,
-    _events: StructuredAgentSessionEventSink | undefined,
-    event: ClaudeStructuredSessionEvent
+  /** After the journal handled the frame, which republished the parent's own row: the host never
+   *  holds a child record ahead of the rows that frame wrote, and never before its parent. */
+  private publishChildWork(
+    sessionId: string,
+    session: ClaudeSession | null | undefined = this.sessions.get(sessionId),
+    message: Record<string, unknown> | null = null
   ): void {
-    const backgroundTasksChanged =
-      event.type === 'ended'
-        ? (session?.backgroundTasks.clear() ?? false)
-        : event.type === 'message'
-          ? (session?.backgroundTasks.observe(event.message, event.startsTurn === true) ?? false)
-          : false
-    session?.translator?.handle(event)
-    this.deps.onEvent?.(event)
-    if (backgroundTasksChanged) {
-      this.deps.onBackgroundTasksChanged?.(
-        event.sessionId,
-        session ? backgroundTaskState(session) : null
-      )
+    const evidence = drainClaudeChildWork(session, message, this.deps.now?.() ?? Date.now())
+    if (evidence.length > 0) {
+      this.deps.onChildWorkEvidence?.(sessionId, evidence)
     }
   }
 
-  bindPromptItemId(
-    sessionId: string,
-    journalItemId: string,
-    promptKey: string,
-    questionId?: string
-  ): void {
-    this.sessions.get(sessionId)?.prompts.bindJournalItemId(journalItemId, promptKey, questionId)
+  bindPromptItemId(sessionId: string, journalItemId: string, promptKey: string): void {
+    this.sessions.get(sessionId)?.prompts.bindJournalItemId(journalItemId, promptKey)
   }
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
-    dispatchClaudeTurn(
-      this.session(input.sessionId),
-      input,
-      this.deps.dispatchAckTimeoutMs ?? DISPATCH_ACK_TIMEOUT_MS
-    )
+    dispatchClaudeTurn(this.session(input.sessionId), input, input.beforeDispatch)
 
-  cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) => {
-    const session = this.session(input.sessionId)
-    const acquisitionGeneration = session.acquisitionGeneration
-    return cancelClaudeTurn(session, this.deps.requestTimeoutMs, () => {
-      // Keep every ownership check adjacent to the provider interrupt. The
-      // session map check fences a replaced child; the turn check fences a
-      // delayed cancel after a newer turn was admitted on the same child.
-      return (
-        this.sessions.get(input.sessionId) === session &&
-        session.fence === input.fence &&
-        session.acquisitionGeneration === acquisitionGeneration &&
-        (session.activeTurnId === undefined
-          ? session.dispatchSequence === 0
-          : session.activeTurnId === input.turnId &&
-            session.activeTurnSequence === session.dispatchSequence)
-      )
+  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
+    dispatchClaudeCommand(this.session(input.sessionId), input.command)
+
+  cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (request) =>
+    cancelClaudeStructuredTurn({
+      request,
+      sessions: this.sessions,
+      onDispatchSettledLate: (settlement) =>
+        this.deps.onDispatchSettledLate?.({ sessionId: request.sessionId, ...settlement }),
+      ...(this.deps.requestTimeoutMs === undefined ? {} : { timeoutMs: this.deps.requestTimeoutMs })
     })
-  }
-  stopBackgroundTasks: StructuredAgentSessionAdapter['stopBackgroundTasks'] = (input) => {
-    const session = this.session(input.sessionId)
-    const acquisitionGeneration = session.acquisitionGeneration
-    return stopClaudeBackgroundTasks(
-      session,
-      this.deps.requestTimeoutMs,
-      () =>
-        Boolean(
-          this.sessions.get(input.sessionId) === session &&
-          session.fence === input.fence &&
-          session.acquisitionGeneration === acquisitionGeneration &&
-          session.backgroundTasks.state
-        ),
-      input.taskId
-    )
-  }
-  backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
-    sessionId
-  ) => {
+  // Stop is a session boundary for Claude: an interrupt can answer while background work keeps the
+  // CLI running, and a refused one leaves the turn running.
+  stopEndsSession = (): boolean => true
+  awaitStoppedRequestEnd = claudeStoppedRequestEndWait(this.sessions)
+  routePromptCancel = claudePromptCancelRoute
+  dismissPrompt: NonNullable<StructuredAgentSessionAdapter['dismissPrompt']> = (request) =>
+    settleClaudePromptFreeingChild(this.asker(request), dismissClaudeStructuredPrompt)
+  /** The request with what frees the child it blocked (`settleClaudePromptFreeingChild`). */
+  private asker = <R extends { sessionId: string }>(request: R) => ({
+    request,
+    sessions: this.sessions,
+    free: () => this.publishChildWork(request.sessionId)
+  })
+  stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = async (
+    input
+  ) =>
+    stopCurrentClaudeBackgroundTasks({
+      ...input,
+      sessions: this.sessions,
+      session: this.session(input.sessionId),
+      timeoutMs: this.deps.requestTimeoutMs,
+      publishChildWork: (session) => this.publishChildWork(input.sessionId, session)
+    })
+  /** The tracker's own roster, for the tests that compare it with the host's child records. No
+   *  production code reads it: what runs, what a Stop reaches and what blocks a command are all
+   *  read from the host's child records. */
+  backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined => {
     const session = this.sessions.get(sessionId)
     return session ? backgroundTaskState(session) : undefined
   }
-  answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
-    answerClaudePrompt(this.session(input.sessionId), input)
+  backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
+    sessionId
+  ) =>
+    this.sessions.has(sessionId) ? { supportsTaskStop: true, supportsStopAll: true } : undefined
+  readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
+    this.sessions.get(sessionId)?.commands.commands
+  readonly atRestCommands: ClaudeStructuredSessionAdapterDeps['atRestCommands']
+  holdsDispatch = (sessionId: string): boolean => {
+    const session = this.sessions.get(sessionId)
+    return session ? claudeHoldsDispatch(session) : false
+  }
+  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
+    const session = this.sessions.get(sessionId)
+    return (
+      session?.acquisitionGeneration === acquisitionGeneration &&
+      session.connection.pid !== undefined &&
+      session.connection.exitVerdict.root === 'live'
+    )
+  }
+  answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
+    settleClaudePromptFreeingChild(this.asker(request), answerClaudeStructuredPrompt)
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
-    setClaudeStructuredOption(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
+    setClaudeStructuredSessionOption(
+      this.session(input.sessionId),
+      input,
+      this.deps.requestTimeoutMs
+    )
+  startAnswered = (sessionId: string): boolean | undefined =>
+    this.sessions.get(sessionId)?.startup.answered
+  awaitOptionWritable = (sessionId: string): Promise<void> =>
+    claudeStartupSettledWithin(
+      this.sessions.get(sessionId),
+      this.deps.requestTimeoutMs ?? CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS
+    )
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
-
   readOptionRestoreFailures = (sessionId: string): readonly string[] => [
     ...(this.sessions.get(sessionId)?.restoreSkippedOptions ?? [])
   ]
 
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
+    this.afterClose(input.sessionId, () => this.releaseProviderSession(input.sessionId))
+
+  /** A close clears the session's tasks outside `emit`; its ending still reaches the host. */
+  private async afterClose(sessionId: string, close: () => Promise<boolean>): Promise<boolean> {
+    const session = this.sessions.get(sessionId)
+    try {
+      return await close()
+    } finally {
+      this.publishChildWork(sessionId, session)
+    }
+  }
+
+  private releaseProviderSession = (sessionId: string): Promise<boolean> =>
     releaseClaudeAcquisition({
-      sessionId: input.sessionId,
+      sessionId,
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       exits: this.exits,
-      onExitProven: (sessionId, exit) => this.settleUnexpectedExit(sessionId, exit),
+      onExitProven: (sessionId, exit) =>
+        settleClaudeUnexpectedExit(this.exitLifecycle, sessionId, exit),
       ...(this.deps.persistHandle ? { persistHandle: this.deps.persistHandle } : {}),
-      ...(this.deps.onBackgroundTasksChanged
-        ? { onBackgroundTasksChanged: this.deps.onBackgroundTasksChanged }
-        : {}),
       ...(this.deps.onEvent ? { onEvent: this.deps.onEvent } : {})
     })
 
-  closeSession = (sessionId: string): Promise<boolean> => {
+  closeSession = (sessionId: string): Promise<boolean> =>
+    // After the close, not before: releasing an exit still settling settles it on the way.
+    this.closeSessionProcess(sessionId).finally(() => this.settledExitErrors.delete(sessionId))
+
+  private closeSessionProcess(sessionId: string): Promise<boolean> {
+    // An exit seen first settles as that exit, whoever asked for the close after it.
     if (this.exits.has(sessionId)) {
       return this.releaseAcquisition({ sessionId })
     }
-    return closeClaudeSession({
+    return this.afterClose(sessionId, () => this.closeProviderSession(sessionId))
+  }
+
+  private closeProviderSession = (sessionId: string): Promise<boolean> =>
+    closeClaudeSession({
       sessionId,
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       ...(this.deps.persistHandle ? { persistHandle: this.deps.persistHandle } : {}),
-      ...(this.deps.readTranscriptLeaf ? { readTranscriptLeaf: this.deps.readTranscriptLeaf } : {}),
-      ...(this.deps.onBackgroundTasksChanged
-        ? { onBackgroundTasksChanged: this.deps.onBackgroundTasksChanged }
-        : {}),
-      ...(this.deps.onEvent ? { onEvent: this.deps.onEvent } : {})
+      ...(this.deps.onEvent ? { onEvent: this.deps.onEvent } : {}),
+      ...(this.deps.logger ? { logger: this.deps.logger } : {})
     })
-  }
 
   closeAll = (): Promise<void> =>
     closeAllClaudeSessions({
@@ -315,7 +305,12 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   private session(sessionId: string): ClaudeSession {
     const session = this.sessions.get(sessionId)
     if (!session) {
-      throw new Error(`no live claude stream-json session for ${sessionId}`)
+      // A child that just exited is named by its own diagnostic, not by its absence.
+      throw (
+        this.exits.get(sessionId)?.error ??
+        this.settledExitErrors.get(sessionId) ??
+        new Error(`no live claude stream-json session for ${sessionId}`)
+      )
     }
     return session
   }

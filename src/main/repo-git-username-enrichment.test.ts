@@ -94,6 +94,22 @@ describe('enrichRepoGitUsernames', () => {
     expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(1)
   })
 
+  it('releases attempted locations after a repo is removed', async () => {
+    const repos = [makeRepo()]
+    const store = makeStore(repos)
+
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+    repos.length = 0
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+    repos.push(makeRepo({ id: 'replacement' }))
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+
+    expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(2)
+  })
+
   it('probes a local and a runtime repo that share a path separately', async () => {
     const store = makeStore([
       makeRepo(),

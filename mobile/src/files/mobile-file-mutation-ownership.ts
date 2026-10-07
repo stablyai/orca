@@ -1,9 +1,12 @@
 import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import { assertFileMutationOwnershipCapability } from '../../../src/shared/file-mutation-ownership'
-import type { RuntimeStatus } from '../../../src/shared/runtime-types'
 import type { SshConnectionState, SshMutationExpectation } from '../../../src/shared/ssh-types'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import {
+  fileOwnershipRuntimeStatusRead,
+  fileOwnershipSshStateRead,
+  fileOwnershipWorktreeRead,
+  type MobileFileOwnershipRpcSender
+} from './mobile-file-ownership-operations'
 
 const FILE_MUTATION_TIMEOUT_MS = 15_000
 const SSH_OWNER_CHANGED_MESSAGE =
@@ -13,9 +16,16 @@ export type MobileFileMutationOwnership = SshMutationExpectation & {
   expectedExecutionHostId: 'local' | `ssh:${string}`
 }
 
+// The two members the ownership gate routes on, as the reply reader hands them back. Absence and
+// an explicit `null` stay distinct: the host omits `state` for a target it holds no connection for.
+export type MobileFileMutationSshState =
+  | (Pick<SshConnectionState, 'connectionGeneration'> & { targetId?: string })
+  | null
+  | undefined
+
 export function buildMobileFileMutationOwnership(
   worktreeHostId: string | null | undefined,
-  sshState: SshConnectionState | null = null
+  sshState: MobileFileMutationSshState = null
 ): MobileFileMutationOwnership {
   const host = parseExecutionHostId(worktreeHostId)
   if (worktreeHostId !== undefined && !host) {
@@ -35,47 +45,34 @@ export function buildMobileFileMutationOwnership(
 }
 
 export async function captureMobileFileMutationOwnership(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileFileOwnershipRpcSender,
   worktree: string
 ): Promise<MobileFileMutationOwnership> {
-  const status = await requestResult<Pick<RuntimeStatus, 'capabilities'>>(
-    client,
-    'status.get',
-    undefined
-  )
+  const statusReply = await fileOwnershipRuntimeStatusRead.request(client, undefined, {
+    timeoutMs: FILE_MUTATION_TIMEOUT_MS
+  })
+  const status = fileOwnershipRuntimeStatusRead.interpret(statusReply)
   assertFileMutationOwnershipCapability(status)
 
-  const result = await requestResult<{ worktree?: { hostId?: string | null } }>(
+  const worktreeReply = await fileOwnershipWorktreeRead.request(
     client,
-    'worktree.show',
-    { worktree }
+    { worktree },
+    { timeoutMs: FILE_MUTATION_TIMEOUT_MS }
   )
-  if (!result.worktree) {
+  const summary = fileOwnershipWorktreeRead.interpret(worktreeReply)
+  if (!summary) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
 
-  const host = parseExecutionHostId(result.worktree.hostId)
-  const sshState =
-    host?.kind === 'ssh'
-      ? (
-          await requestResult<{ state: SshConnectionState | null }>(client, 'ssh.getState', {
-            targetId: host.targetId
-          })
-        ).state
-      : null
-  return buildMobileFileMutationOwnership(result.worktree.hostId, sshState)
-}
-
-async function requestResult<TResult>(
-  client: Pick<RpcClient, 'sendRequest'>,
-  method: string,
-  params: unknown
-): Promise<TResult> {
-  const response = await client.sendRequest(method, params, {
-    timeoutMs: FILE_MUTATION_TIMEOUT_MS
-  })
-  if (!response.ok) {
-    throw new Error((response as RpcFailure).error.message)
+  const host = parseExecutionHostId(summary.hostId)
+  let sshState: MobileFileMutationSshState = null
+  if (host?.kind === 'ssh') {
+    const stateReply = await fileOwnershipSshStateRead.request(
+      client,
+      { targetId: host.targetId },
+      { timeoutMs: FILE_MUTATION_TIMEOUT_MS }
+    )
+    sshState = fileOwnershipSshStateRead.interpret(stateReply)
   }
-  return (response as RpcSuccess).result as TResult
+  return buildMobileFileMutationOwnership(summary.hostId, sshState)
 }

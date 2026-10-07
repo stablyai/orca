@@ -61,6 +61,11 @@ describe('patched dependencies', () => {
       for (const file of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) {
         copyFileSync(join(PROJECT_DIR, file), join(scratch, file))
       }
+      mkdirSync(join(scratch, 'native', 'windows-registry'), { recursive: true })
+      copyFileSync(
+        join(PROJECT_DIR, 'native', 'windows-registry', 'package.json'),
+        join(scratch, 'native', 'windows-registry', 'package.json')
+      )
       mkdirSync(join(scratch, 'config'), { recursive: true })
       cpSync(join(PROJECT_DIR, 'config', 'patches'), join(scratch, 'config', 'patches'), {
         recursive: true

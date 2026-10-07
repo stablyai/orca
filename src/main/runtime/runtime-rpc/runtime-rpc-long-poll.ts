@@ -1,4 +1,5 @@
 import type { RpcRequest } from '../rpc/core'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
 
 export const KEEPALIVE_INTERVAL_MS = 10_000
 
@@ -24,6 +25,32 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   // the complete operation can run for 90–110s. Keep every local transport
   // (Unix sockets and Windows named pipes) alive for that long poll.
   if (request.method === 'orchestration.workerStart') {
+    return 'wait'
+  }
+  // A launch with a prompt waits for the agent's readiness before writing it, up to 60 s, and a
+  // reply lost to the 30 s idle timer reads as a dead runtime instead of an undelivered prompt.
+  if (
+    (request.method === 'agent.launch' || request.method === 'agent.launchReplay') &&
+    typeof request.params === 'object' &&
+    request.params !== null &&
+    'prompt' in request.params &&
+    request.params.prompt !== undefined
+  ) {
+    return 'wait'
+  }
+  // An injected task into a chat waits for its agent to accept the turn, up to 60 s; the reply
+  // must outlive the 30 s idle timer or a delivered task reads as a dead runtime. A terminal
+  // inject doesn't wait, so it keeps its short-RPC slot.
+  if (
+    request.method === 'orchestration.dispatch' &&
+    typeof request.params === 'object' &&
+    request.params !== null &&
+    'inject' in request.params &&
+    request.params.inject === true &&
+    'to' in request.params &&
+    typeof request.params.to === 'string' &&
+    request.params.to.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
+  ) {
     return 'wait'
   }
   if (request.method === 'browser.clientHost.attach') {

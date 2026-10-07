@@ -22,6 +22,9 @@ function relevantRecordEqual<T>(
   relevant: (entry: T) => boolean,
   equal: (current: T, previous: T) => boolean
 ): boolean {
+  if (current === previous) {
+    return true
+  }
   let currentCount = 0
   let previousCount = 0
   for (const [key, entry] of Object.entries(current)) {

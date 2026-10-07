@@ -3,9 +3,9 @@
  * discovered at runtime.
  *
  * The install transaction is host-agnostic — it is the relay's, and the relay runs on
- * Windows. The launch, liveness and stop path is not: it uses `nohup`, a redirected stdout,
- * `kill -0` and `ps`. Emitting a PowerShell-shaped approximation of that would produce a
- * deploy that reports success on a host where nothing is running.
+ * Windows. Every managed-orcad operation runs on Windows through the host script
+ * (`orcad-windows-host-script.ts`); the guard below remains only on POSIX command builders
+ * that the Windows paths never call.
  */
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
@@ -13,9 +13,8 @@ export class OrcadRemoteLaunchUnsupportedError extends Error {
   readonly code = 'orcad_remote_launch_unsupported_host'
   constructor(hostLabel: string) {
     super(
-      `Deploying orcad to a ${hostLabel} host is not implemented. The install transaction is ` +
-        'host-agnostic, but the launch and readiness path is POSIX-only: it uses nohup, a ' +
-        'redirected stdout and `kill -0` liveness. Use the relay for this host.'
+      `This orcad command does not run on a ${hostLabel} host. The install transaction is ` +
+        'host-agnostic, but this step is a POSIX command with a separate Windows path.'
     )
     this.name = 'OrcadRemoteLaunchUnsupportedError'
   }
@@ -27,8 +26,17 @@ export function assertPosixOrcadHost(host: RemoteHostPlatform): void {
   }
 }
 
+/** Stdout of the launched candidate: exactly one `orca_server_ready` line, then nothing. */
+export const ORCAD_READINESS_FILENAME = '.orcad-readiness'
+/** Stderr, including the bind-exposure line and every supervision message. */
+export const ORCAD_LOG_FILENAME = 'orcad.log'
+// Why a cap: the readiness file is candidate-written stdout, and a runaway writer must not be read whole.
+export const ORCAD_READINESS_MAX_BYTES = 256 * 1024
+
 /** PID of the launched orcad, written into its own version dir at launch. */
 export const ORCAD_PID_FILENAME = '.orcad-pid'
+/** Windows' `.orcad-pid`: `{"pid":N,"creationTimeMs":M|null}`, since a PID alone is no identity there. */
+export const ORCAD_WINDOWS_PROCESS_FILENAME = '.orcad-process.json'
 
 /**
  * A shell function answering whether a PID is a *running* process.
@@ -42,9 +50,17 @@ export const ORCAD_PID_FILENAME = '.orcad-pid'
  * A host without `ps` yields an empty state, which falls through to "alive" — the safe
  * direction for both callers.
  */
-export function posixProcessAliveShellFunction(): string {
+export function posixProcessAliveShellFunction(
+  options: { refuseUnverifiable?: boolean } = {}
+): string {
+  // Destructive lifecycle steps need explicit absence; permission failures cannot prove exit.
+  const probe = options.refuseUnverifiable
+    ? 'probe_error=$(LC_ALL=C kill -0 "$1" 2>&1) || { ' +
+      'case "$probe_error" in *"No such process"*) return 1;; ' +
+      '*) echo UNKNOWN; exit 0;; esac; }; '
+    : 'kill -0 "$1" 2>/dev/null || return 1; '
   return (
-    'orcad_alive() { kill -0 "$1" 2>/dev/null || return 1; ' +
+    `orcad_alive() { ${probe}` +
     'case "$(ps -o stat= -p "$1" 2>/dev/null)" in Z*) return 1;; esac; return 0; };'
   )
 }

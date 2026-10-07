@@ -1,34 +1,9 @@
-// Pure decision layer for image paste. The composer persists a pasted image to
-// a temp file (via the preload clipboard API) and then needs to know, per
-// agent, whether that file can be sent as a TUI image attachment. Confirmed
-// agents get a native attachment chip; unsupported/custom agents get a clear
-// message instead of silently injecting a path that the model reads as text.
-
-import type { AgentType } from '../../../../shared/agent-status-types'
 import { isImageDropPath } from '../terminal-pane/terminal-drop-image-path'
-
-/** How a given agent consumes a pasted image. `attachment` = bracket-paste the
- *  image path into the hosted TUI so it becomes an image chip; `unsupported` =
- *  no confirmed mechanism. */
-export type AgentImageHandling = 'attachment' | 'unsupported'
-
-const IMAGE_ATTACHMENT_AGENTS: ReadonlySet<AgentType> = new Set<AgentType>([
-  'claude',
-  'openclaude',
-  'codex',
-  'gemini',
-  'cursor',
-  'copilot',
-  'droid',
-  // Why: Grok CLI pastes images via bracketed path / image chips (see xAI
-  // terminal docs + pager paste.rs). Keep it on the same attachment path as
-  // Claude/Codex rather than treating path paste as unsupported text.
-  'grok'
-])
-
-export function getAgentImageHandling(agent: AgentType): AgentImageHandling {
-  return IMAGE_ATTACHMENT_AGENTS.has(agent) ? 'attachment' : 'unsupported'
-}
+import { NATIVE_CHAT_PASTE_FOLDER } from '../../../../shared/native-chat-paste-folder'
+export {
+  getAgentImageHandling,
+  type AgentImageHandling
+} from '../../../../shared/agent-image-paste'
 
 export function isNativeChatImageAttachmentPath(path: string): boolean {
   return isImageDropPath(path)
@@ -40,4 +15,11 @@ export function isNativeChatImageAttachmentPath(path: string): boolean {
 export function isNativeChatPastedImagePath(path: string): boolean {
   const base = path.split(/[\\/]/).findLast(Boolean) ?? path
   return /^orca-paste-.+\.png$/i.test(base)
+}
+
+/** True for a local paste Orca keeps in its paste folder, judged from the path alone; main checks
+ *  the real file before a restore keeps it. */
+export function isNativeChatKeptPastePath(path: string): boolean {
+  const parts = path.split(/[\\/]/).filter(Boolean)
+  return parts.at(-2) === NATIVE_CHAT_PASTE_FOLDER && isNativeChatPastedImagePath(path)
 }

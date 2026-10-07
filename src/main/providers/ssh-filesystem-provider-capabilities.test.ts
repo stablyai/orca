@@ -4,18 +4,29 @@ import {
   probeSshRangedReadCapability
 } from './ssh-filesystem-provider-capabilities'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
+import { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 
 describe('SSH Quick Open capability probe', () => {
-  it('recognizes the query-aware relay', async () => {
-    const mux = { request: vi.fn().mockResolvedValue({ quickOpenSearchVersion: 1 }) }
-    await expect(probeSshQuickOpenSearchCapability(mux as never)).resolves.toBe(true)
-    await expect(probeSshQuickOpenSearchCapability(mux as never)).resolves.toBe(true)
-    expect(mux.request).toHaveBeenCalledTimes(1)
-    expect(mux.request).toHaveBeenCalledWith('fs.getCapabilities', undefined, {
-      signal: undefined,
-      timeoutMs: 5_000
-    })
-  })
+  it.each([1, 2, 3, 4])(
+    'separates query and modern capabilities on version %s',
+    async (version) => {
+      const mux = new SshChannelMultiplexer({ write: vi.fn(), onData: vi.fn(), onClose: vi.fn() })
+      const request = vi
+        .spyOn(mux, 'request')
+        .mockResolvedValue({ quickOpenSearchVersion: version })
+      try {
+        await expect(probeSshQuickOpenSearchCapability(mux, undefined, 1)).resolves.toBe(true)
+        await expect(probeSshQuickOpenSearchCapability(mux)).resolves.toBe(version >= 3)
+        expect(request).toHaveBeenCalledTimes(1)
+        expect(request).toHaveBeenCalledWith('fs.getCapabilities', undefined, {
+          signal: undefined,
+          timeoutMs: 5_000
+        })
+      } finally {
+        mux.dispose()
+      }
+    }
+  )
 
   it('lets callers treat a missing capability as legacy', async () => {
     const mux = {
@@ -43,7 +54,7 @@ describe('SSH filesystem capability document', () => {
   // spend an extra round trip per connection for a document already in hand.
   it('is fetched once for every feature probe on a connection', async () => {
     const mux = {
-      request: vi.fn().mockResolvedValue({ quickOpenSearchVersion: 1, rangedReadVersion: 1 })
+      request: vi.fn().mockResolvedValue({ quickOpenSearchVersion: 3, rangedReadVersion: 1 })
     }
     await expect(probeSshQuickOpenSearchCapability(mux as never)).resolves.toBe(true)
     await expect(probeSshRangedReadCapability(mux as never)).resolves.toBe(true)
@@ -51,7 +62,7 @@ describe('SSH filesystem capability document', () => {
   })
 
   it('reads each feature independently off the shared document', async () => {
-    const mux = { request: vi.fn().mockResolvedValue({ quickOpenSearchVersion: 1 }) }
+    const mux = { request: vi.fn().mockResolvedValue({ quickOpenSearchVersion: 3 }) }
     await expect(probeSshQuickOpenSearchCapability(mux as never)).resolves.toBe(true)
     await expect(probeSshRangedReadCapability(mux as never)).resolves.toBe(false)
   })

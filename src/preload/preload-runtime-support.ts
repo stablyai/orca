@@ -4,6 +4,7 @@ import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { registerRendererRestartIpcRelays } from './renderer-restart-wiring'
 import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
+import { OS_FILE_DROP_OWNER_ATTRIBUTE } from '../shared/native-file-drop-preparation'
 import {
   ORCA_INTERNAL_FILE_DRAG_TYPE,
   createNativeFileDropPayload,
@@ -13,7 +14,8 @@ import {
   resolveNativeFileDropPath,
   type NativeDropResolution,
   type NativeFileDropPayload,
-  type NativeFileDropPathEntry
+  type NativeFileDropPathEntry,
+  type NativeFileDropRejectedPayload
 } from '../shared/native-file-drop'
 
 /** Joins the synchronous unload checkpoint with its durable renderer write. */
@@ -45,6 +47,7 @@ export function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 const nativeFileDropCallbacks: NativeFileDropCallback[] = []
 let nativeFileDropListenerRegistered = false
+let nativeFileDropHandlersInstalled = false
 
 const onNativeFileDrop = (_event: Electron.IpcRendererEvent, data: NativeFileDropPayload): void => {
   for (const callback of Array.from(nativeFileDropCallbacks)) {
@@ -77,6 +80,7 @@ function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
       pathEntries.push({
         nativeFileDropTarget: entry.dataset.nativeFileDropTarget,
         nativeFileDropDir: entry.dataset.nativeFileDropDir,
+        composerScopeKey: entry.dataset.composerScopeKey,
         terminalTabId: entry.dataset.terminalTabId,
         terminalPaneLeafId: entry.dataset.terminalPaneLeafId ?? entry.dataset.leafId
       })
@@ -85,12 +89,35 @@ function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
   return resolveNativeFileDropPath(pathEntries)
 }
 
+function nearestDropBoundaryIsOwner(event: DragEvent): boolean {
+  for (const entry of event.composedPath()) {
+    if (!(entry instanceof HTMLElement)) {
+      continue
+    }
+    if (entry.hasAttribute(OS_FILE_DROP_OWNER_ATTRIBUTE)) {
+      return true
+    }
+    if (entry.hasAttribute('data-native-file-drop-target')) {
+      return false
+    }
+  }
+  return false
+}
+
 /** Installs the one preload-side listener that converts native File objects to paths. */
 export function installNativeFileDropHandlers(): void {
+  // Preload entry points can be evaluated more than once in tests and during development reloads;
+  // duplicate document listeners retain every closure and process each drop repeatedly.
+  if (nativeFileDropHandlersInstalled) {
+    return
+  }
   document.addEventListener(
     'dragover',
     (event) => {
       if (event.dataTransfer && !hasNativeFileDragTypes(event.dataTransfer.types)) {
+        return
+      }
+      if (hasNativeFileDragTypes(event.dataTransfer?.types) && nearestDropBoundaryIsOwner(event)) {
         return
       }
       event.preventDefault()
@@ -104,6 +131,9 @@ export function installNativeFileDropHandlers(): void {
     'drop',
     (event) => {
       if (event.dataTransfer?.types.includes(ORCA_INTERNAL_FILE_DRAG_TYPE)) {
+        return
+      }
+      if (hasNativeFileDragTypes(event.dataTransfer?.types) && nearestDropBoundaryIsOwner(event)) {
         return
       }
       event.preventDefault()
@@ -132,7 +162,18 @@ export function installNativeFileDropHandlers(): void {
           paths.push(filePath)
         }
       }
-      if (paths.length === 0 || resolution?.target === 'rejected') {
+      if (resolution?.target === 'rejected') {
+        return
+      }
+      if (paths.length === 0) {
+        // The OS offered file items we could read no path from (promised or
+        // virtual files). Report it — silence here is #15782.
+        ipcRenderer.send('terminal:file-dropped-from-preload', {
+          byteLength: 0,
+          pathCount: files.length,
+          reason: 'unresolved-paths',
+          target: 'rejected'
+        } satisfies NativeFileDropRejectedPayload)
         return
       }
       const payload = createNativeFileDropPayload(resolution, paths)
@@ -142,6 +183,7 @@ export function installNativeFileDropHandlers(): void {
     },
     true
   )
+  nativeFileDropHandlersInstalled = true
 }
 
 export const browserFindSubscriptions = createBrowserFindSubscriptions()
@@ -149,12 +191,17 @@ export const browserClientPageRendererRequests = createBrowserClientPageRenderer
   ipc: ipcRenderer,
   isTopFrame: () => window.top === window
 })
+let browserFindListenerInstalled = false
 
 /** Registers browser find forwarding once for this preload context. */
 export function installBrowserFindListener(): void {
+  if (browserFindListenerInstalled) {
+    return
+  }
   ipcRenderer.on('ui:findInBrowserPage', (_event, source: unknown) => {
     browserFindSubscriptions.dispatch(source)
   })
+  browserFindListenerInstalled = true
 }
 
 export const updaterQuitAbortRelay = createUpdaterQuitAbortRelay(

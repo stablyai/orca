@@ -108,7 +108,6 @@ export function UpdateCard(): React.JSX.Element | null {
       status,
       dismissedVersion,
       cachedVersion,
-      hasStartedDownload: hasStartedDownload.current,
       updateUserInitiatedCycle,
       autoDismissed,
       collapsed
@@ -239,10 +238,7 @@ export function UpdateCard(): React.JSX.Element | null {
     !reassuranceSeen &&
     ((status.state === 'available' && !status.externallyManaged) || status.state === 'downloading')
   return (
-    <div
-      ref={cardRootRef}
-      className="fixed bottom-10 right-4 z-40 w-[360px] max-w-[calc(100vw-32px)] flex flex-col gap-2 max-[480px]:left-4 max-[480px]:right-4 max-[480px]:w-auto"
-    >
+    <div ref={cardRootRef} className="flex flex-col gap-2">
       {showReassurance && (
         <Card className={`py-0 gap-0 ${animationClass}`}>
           <div className="flex items-center gap-3 p-3">

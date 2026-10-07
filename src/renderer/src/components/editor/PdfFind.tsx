@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -60,6 +61,27 @@ export default function PdfFind({
     input.select()
   }, [])
 
+  // Subscribe before dispatching: PDF.js can report cached counts synchronously.
+  useEffect(() => {
+    const eventBus = eventBusRef.current
+    if (!eventBus || !isOpen) {
+      return
+    }
+    const handleMatchesCount = (evt: {
+      matchesCount: { current: number; total: number }
+    }): void => {
+      setActiveMatch(evt.matchesCount.current)
+      setTotalMatches(evt.matchesCount.total)
+    }
+    eventBus.on('updatefindmatchescount', handleMatchesCount)
+    // Navigation and zero-result searches report counts on the control-state event.
+    eventBus.on('updatefindcontrolstate', handleMatchesCount)
+    return () => {
+      eventBus.off('updatefindmatchescount', handleMatchesCount)
+      eventBus.off('updatefindcontrolstate', handleMatchesCount)
+    }
+  }, [eventBusRef, isOpen])
+
   useEffect(() => {
     if (!isOpen) {
       return
@@ -73,23 +95,6 @@ export default function PdfFind({
     }
     dispatchFind('')
   }, [requestQuery, isOpen, dispatchFind, eventBusRef])
-
-  useEffect(() => {
-    const eventBus = eventBusRef.current
-    if (!eventBus || !isOpen) {
-      return
-    }
-    const handleMatchesCount = (evt: {
-      matchesCount: { current: number; total: number }
-    }): void => {
-      setActiveMatch(evt.matchesCount.current)
-      setTotalMatches(evt.matchesCount.total)
-    }
-    eventBus.on('updatefindmatchescount', handleMatchesCount)
-    return () => {
-      eventBus.off('updatefindmatchescount', handleMatchesCount)
-    }
-  }, [eventBusRef, isOpen])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -122,7 +127,7 @@ export default function PdfFind({
       style={{ width: 300 }}
       onKeyDown={handleKeyDown}
     >
-      <input
+      <ImeInput
         ref={handleInputRef}
         type="text"
         value={query}

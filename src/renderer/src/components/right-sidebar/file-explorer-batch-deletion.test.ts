@@ -13,6 +13,27 @@ function node(path: string, isDirectory = false): TreeNode {
 }
 
 describe('selectDeletionRoots', () => {
+  it('normalizes each selected path once instead of once per possible parent', () => {
+    let reads = 0
+    const nodes = Array.from({ length: 1000 }, (_, i) => ({
+      ...node(`/repo/directory-${i}`, true),
+      get path() {
+        reads++
+        return `/repo/directory-${i}`
+      }
+    }))
+    const selected = selectDeletionRoots(nodes)
+    expect(reads).toBe(2000)
+    selected.forEach((entry, index) => expect(entry).toBe(nodes[index]))
+  })
+
+  it('preserves WSL case-sensitive paths while accepting UNC aliases', () => {
+    const parent = node('//wsl.localhost/Ubuntu/Repo', true)
+    const child = node('//wsl$/ubuntu/Repo/file')
+    const outside = node('//wsl$/ubuntu/repo/file')
+    expect(selectDeletionRoots([parent, child, outside])).toEqual([parent, outside])
+  })
+
   it('keeps unrelated files and directories', () => {
     const nodes = [node('/repo/a.ts'), node('/repo/b.ts'), node('/repo/docs', true)]
     expect(selectDeletionRoots(nodes)).toEqual(nodes)

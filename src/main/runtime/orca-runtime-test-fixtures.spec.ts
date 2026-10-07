@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { expect, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -16,17 +17,16 @@ import {
 
 import type {
   FolderWorkspace,
-  MessagePriority,
-  MessageRow,
-  MessageType,
   ProjectGroup,
   RpcRequest,
   TerminalLayoutSnapshot,
   WorkspaceSessionState,
   WorktreeMeta
 } from './orca-runtime-test-mocks.spec'
+import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
 import type { OrchestrationDb } from './orchestration/db'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { Store } from '../persistence'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
 type HeadlessTerminal = InstanceType<typeof HeadlessEmulator>
@@ -150,6 +150,15 @@ const RESTORED_AUTHORITY_TOKEN_HASH = createHash('sha256')
   .update(RESTORED_AUTHORITY_TOKEN)
   .digest('hex')
 
+function isLocalBranchCatalogQuery(args: string[]): boolean {
+  return (
+    args.length === 3 &&
+    args[0] === 'for-each-ref' &&
+    args[1] === '--format=%(refname)' &&
+    args[2] === 'refs/heads/'
+  )
+}
+
 function isOriginMainBaseRefProbe(args: string[]): boolean {
   return (
     args[0] === 'rev-parse' &&
@@ -211,169 +220,6 @@ function cursorBusyScreen(): string {
     'Composer 2.5 Fast                                          Run Everything',
     '~/Documents/projects/AutoGenie · main'
   ].join('\n')
-}
-
-// Why: these tests only need message-queue semantics; real SQLite would make them fail on unrelated native runtime ABI drift.
-class InMemoryOrchestrationMessages {
-  private sequence = 0
-
-  private activeCoordinatorRun: { coordinator_handle: string } | null = null
-
-  private messages: MessageRow[] = []
-
-  private runs = new Map<
-    string,
-    { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
-  >()
-
-  insertMessage(msg: {
-    from: string
-    to: string
-    subject: string
-    body?: string
-    type?: MessageType
-    priority?: MessagePriority
-    threadId?: string
-    payload?: string
-  }): MessageRow {
-    this.sequence += 1
-    const row: MessageRow = {
-      id: `msg_${this.sequence}`,
-      run_id: 'run_test',
-      from_handle: msg.from,
-      to_handle: msg.to,
-      subject: msg.subject,
-      body: msg.body ?? '',
-      type: msg.type ?? 'status',
-      priority: msg.priority ?? 'normal',
-      thread_id: msg.threadId ?? null,
-      payload: msg.payload ?? null,
-      read: 0,
-      sequence: this.sequence,
-      created_at: '1970-01-01 00:00:00',
-      delivered_at: null,
-      sender_pane_key: null
-    }
-    this.messages.push(row)
-    return row
-  }
-
-  getUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
-    return this.messages
-      .filter(
-        (message) =>
-          message.to_handle === toHandle &&
-          message.read === 0 &&
-          (!types || types.length === 0 || types.includes(message.type))
-      )
-      .sort((a, b) => a.sequence - b.sequence)
-  }
-
-  getUndeliveredUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
-    return this.getUnreadMessages(toHandle, types).filter((message) => !message.delivered_at)
-  }
-
-  getUndeliveredUnreadMailboxHandles(): string[] {
-    return [
-      ...new Set(
-        this.messages
-          .filter((message) => message.read === 0 && !message.delivered_at)
-          .map((message) => message.to_handle)
-      )
-    ]
-  }
-
-  setActiveCoordinatorRun(run: { coordinator_handle: string } | null): void {
-    this.activeCoordinatorRun = run
-  }
-
-  getActiveCoordinatorRun(): { coordinator_handle: string } | null {
-    return this.activeCoordinatorRun
-  }
-
-  setRun(run: {
-    id: string
-    coordinator_handle: string | null
-    coordinator_pane_key?: string | null
-  }): void {
-    this.runs.set(run.id, { coordinator_pane_key: null, ...run })
-  }
-
-  getRun(
-    id: string
-  ):
-    | { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
-    | undefined {
-    return this.runs.get(id)
-  }
-
-  getCurrentRunForPane(
-    paneKey: string
-  ):
-    | { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
-    | undefined {
-    return [...this.runs.values()].find((run) => run.coordinator_pane_key === paneKey)
-  }
-
-  listWorkerTerminalReleaseBacklog(): never[] {
-    return []
-  }
-
-  hasUndeliveredDirectMessageForRun(runId: string, directHandle: string): boolean {
-    return this.messages.some(
-      (message) =>
-        message.run_id === runId &&
-        message.to_handle === directHandle &&
-        message.read === 0 &&
-        !message.delivered_at
-    )
-  }
-
-  routeUnreadDirectMessagesToRunMailbox(
-    runId: string,
-    directHandle: string
-  ): { routedCount: number; hasMore: boolean; types: MessageType[] } {
-    const routed = this.messages.filter(
-      (message) =>
-        message.run_id === runId && message.to_handle === directHandle && message.read === 0
-    )
-    for (const message of routed) {
-      message.to_handle = `run:${runId}`
-    }
-    return {
-      routedCount: routed.length,
-      hasMore: false,
-      types: [...new Set(routed.map((message) => message.type))]
-    }
-  }
-
-  areUnreadMessages(toHandle: string, ids: string[]): boolean {
-    return ids.every((id) =>
-      this.messages.some(
-        (message) => message.id === id && message.to_handle === toHandle && message.read === 0
-      )
-    )
-  }
-
-  markAsDelivered(ids: string[]): void {
-    const deliveredIds = new Set(ids)
-    for (const message of this.messages) {
-      if (deliveredIds.has(message.id)) {
-        message.delivered_at = '1970-01-01 00:00:00'
-      }
-    }
-  }
-
-  markAsUndelivered(ids: string[]): void {
-    const releasedIds = new Set(ids)
-    for (const message of this.messages) {
-      if (releasedIds.has(message.id) && message.read === 0) {
-        message.delivered_at = null
-      }
-    }
-  }
-
-  close(): void {}
 }
 
 function setInMemoryOrchestrationMessages(
@@ -723,9 +569,9 @@ function makeRuntimeStoreWithWorkspaceSession(
 ): {
   runtimeStore: typeof store & {
     getWorkspaceSession: (hostId?: string) => WorkspaceSessionState
-    setWorkspaceSession: ReturnType<typeof vi.fn>
-    flushOrThrow: ReturnType<typeof vi.fn>
-    persistPtyBinding: ReturnType<typeof vi.fn>
+    setWorkspaceSession: ReturnType<typeof vi.fn<Store['setWorkspaceSession']>>
+    flushOrThrow: ReturnType<typeof vi.fn<() => void>>
+    persistPtyBinding: ReturnType<typeof vi.fn<Store['persistPtyBinding']>>
   }
   getSession: () => WorkspaceSessionState
   setSession: (next: WorkspaceSessionState) => void
@@ -734,7 +580,7 @@ function makeRuntimeStoreWithWorkspaceSession(
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
-  const runtimeStore = {
+  const runtimeStore = withDurableRuntimeStore({
     ...store,
     getWorkspaceSession: (hostId?: string) =>
       hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
@@ -742,36 +588,38 @@ function makeRuntimeStoreWithWorkspaceSession(
     // Headless close is a durable transaction; keep the in-memory fixture's
     // persistence contract equivalent to the production store.
     flushOrThrow: vi.fn(),
-    persistPtyBinding: vi.fn(
-      (args: { worktreeId: string; tabId: string; leafId: string; ptyId: string }) => {
-        const tabs = session.tabsByWorktree[args.worktreeId] ?? []
-        session = {
-          ...session,
-          tabsByWorktree: {
-            ...session.tabsByWorktree,
-            [args.worktreeId]: tabs.map((tab) =>
-              tab.id === args.tabId ? { ...tab, ptyId: args.ptyId } : tab
-            )
-          },
-          terminalLayoutsByTabId: {
-            ...session.terminalLayoutsByTabId,
-            [args.tabId]: {
-              ...(session.terminalLayoutsByTabId[args.tabId] ?? {
-                root: { type: 'leaf', leafId: args.leafId },
-                activeLeafId: args.leafId,
-                expandedLeafId: null
-              }),
-              ptyIdsByLeafId: {
-                ...session.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId,
-                [args.leafId]: args.ptyId
-              }
+    persistPtyBinding: vi.fn<Store['persistPtyBinding']>(async (input) => {
+      const args = typeof input === 'function' ? input() : input
+      if (!args) {
+        return false
+      }
+      const tabs = session.tabsByWorktree[args.worktreeId] ?? []
+      session = {
+        ...session,
+        tabsByWorktree: {
+          ...session.tabsByWorktree,
+          [args.worktreeId]: tabs.map((tab) =>
+            tab.id === args.tabId ? { ...tab, ptyId: args.ptyId } : tab
+          )
+        },
+        terminalLayoutsByTabId: {
+          ...session.terminalLayoutsByTabId,
+          [args.tabId]: {
+            ...(session.terminalLayoutsByTabId[args.tabId] ?? {
+              root: { type: 'leaf', leafId: args.leafId },
+              activeLeafId: args.leafId,
+              expandedLeafId: null
+            }),
+            ptyIdsByLeafId: {
+              ...session.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId,
+              [args.leafId]: args.ptyId
             }
           }
         }
-        return true
       }
-    )
-  }
+      return true
+    })
+  })
   return { runtimeStore, getSession: () => session, setSession }
 }
 
@@ -832,6 +680,7 @@ export { antigravityPromptBeforeModelReadyScreen, antigravityReadyScreen, bindSi
 export { createExplicitAgentStatusHarness, createFolderWorkspaceRuntimeStore, createRuntime }
 export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore, cursorBusyScreen }
 export { cursorReadyScreen, deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
+export { isLocalBranchCatalogQuery }
 export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadlessTerminalLayout }
 export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession, makeStatusFrame }
 export { makeWorkspaceSessionWithHeadlessTerminal, makeWorktreeInfo, makeWorktreeMeta }

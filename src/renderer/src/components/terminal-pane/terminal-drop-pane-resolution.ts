@@ -4,35 +4,29 @@ export function resolveNativeTerminalDropPane(
   manager: PaneManager,
   paneLeafId: string | undefined
 ): ManagedPane | null {
-  const panes = manager.getPanes()
-  if (paneLeafId) {
-    const targetedPane = panes.find((pane) => pane.leafId === paneLeafId)
-    if (targetedPane) {
-      return targetedPane
-    }
-  }
-  return manager.getActivePane() ?? panes[0] ?? null
+  return paneLeafId ? (manager.getPanes().find((pane) => pane.leafId === paneLeafId) ?? null) : null
 }
 
 export function resolveInternalTerminalDropPane(
   manager: PaneManager,
-  dropTarget: EventTarget | null | undefined
+  dropTarget: EventTarget | null | undefined,
+  paneLeafId?: string
 ): ManagedPane | null {
   const panes = manager.getPanes()
+  if (paneLeafId !== undefined) {
+    return resolveNativeTerminalDropPane(manager, paneLeafId)
+  }
   if (dropTarget) {
     const targetedPane = panes.find((pane) => paneContainsDropTarget(pane, dropTarget))
     if (targetedPane) {
       return targetedPane
     }
   }
-  return manager.getActivePane() ?? panes[0] ?? null
+  return null
 }
 
 function paneContainsDropTarget(pane: ManagedPane, dropTarget: EventTarget): boolean {
-  try {
-    // Why: synthetic drag targets are not always DOM Nodes, but browser drops are.
-    return pane.container.contains(dropTarget as Node)
-  } catch {
-    return false
-  }
+  return (
+    typeof Node !== 'undefined' && dropTarget instanceof Node && pane.container.contains(dropTarget)
+  )
 }

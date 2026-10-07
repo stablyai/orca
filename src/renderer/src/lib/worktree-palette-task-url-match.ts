@@ -24,6 +24,7 @@ import {
 import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
 import { buildWorktreePaletteTaskUrlResult } from './worktree-palette-task-url-result'
 import type { PaletteSearchResult } from './worktree-palette-search'
+import { getPaletteWorktreeExecutionHostId } from './palette-repo-resolution'
 
 export type CmdJTaskSourceUrl =
   | { provider: 'github'; link: GitHubIssueOrPRLink }
@@ -278,13 +279,14 @@ export function matchWorktreePaletteTaskUrl(args: {
   review?: HostedReviewInfo | null
 }): PaletteSearchResult | null {
   const { worktree, intent, repo, review } = args
+  const worktreeHostId = getPaletteWorktreeExecutionHostId(worktree)
   if (intent.provider === 'github') {
     if (!worktreeMatchesGitHubUrl(worktree, intent.link, repo, review)) {
       return null
     }
     return buildWorktreePaletteTaskUrlResult({
       worktreeId: worktree.id,
-      ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
+      ...(worktreeHostId ? { worktreeHostId } : {}),
       labelKind: intent.link.type === 'pr' ? 'pr' : 'issue',
       text: `${intent.link.type === 'pr' ? 'PR' : 'Issue'} #${intent.link.number}`
     })
@@ -295,7 +297,7 @@ export function matchWorktreePaletteTaskUrl(args: {
     }
     return buildWorktreePaletteTaskUrlResult({
       worktreeId: worktree.id,
-      ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
+      ...(worktreeHostId ? { worktreeHostId } : {}),
       labelKind: 'issue',
       text: intent.intent.identifier
     })
@@ -306,7 +308,7 @@ export function matchWorktreePaletteTaskUrl(args: {
     }
     return buildWorktreePaletteTaskUrlResult({
       worktreeId: worktree.id,
-      ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
+      ...(worktreeHostId ? { worktreeHostId } : {}),
       labelKind: intent.link.type === 'mr' ? 'mr' : 'issue',
       text: `${intent.link.type === 'mr' ? 'MR' : 'Issue'} #${intent.link.number}`
     })
@@ -316,7 +318,7 @@ export function matchWorktreePaletteTaskUrl(args: {
   }
   return buildWorktreePaletteTaskUrlResult({
     worktreeId: worktree.id,
-    ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
+    ...(worktreeHostId ? { worktreeHostId } : {}),
     labelKind: 'issue',
     text: intent.parsed.issueKey
   })

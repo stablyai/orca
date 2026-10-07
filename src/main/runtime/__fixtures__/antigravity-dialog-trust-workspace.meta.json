@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T04:35:20.989Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy TUI 1.2.0; workspace trust dialog live and unanswered in a throwaway untrusted directory",
+  "exitCode": 0
+}

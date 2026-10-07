@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot-reader'
+import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/relay-artifacts'
 import { reportWindowsCommandLineRecoveryHealth } from './windows-command-line-recovery-health'
 import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
+import { WindowsProcessTableTimeoutError } from './windows-process-table-timeout-error'
 
 /**
  * The only place Orca reads the Windows process table.
@@ -33,8 +35,13 @@ import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
  *
  * Dropping Memory removed the second per-process handle: it took an
  * OpenProcess(...|VM_READ) it never read through. CommandLine's own read is no
- * longer a PEB walk either -- the patched addon asks the kernel, so identity is
- * now the only flag set that opens nothing at all.
+ * longer a PEB walk either -- the patched addon asks the kernel.
+ *
+ * Both Toolhelp32 rows predate `CreationTime`, which both flag sets now also
+ * ask for and which is unmeasured here: it costs one
+ * OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION) plus GetProcessTimes per
+ * process, so identity no longer opens nothing at all -- but that pair is far
+ * cheaper than either handle the rows above measure.
  *
  * All Toolhelp32 rows assume the optional `windows-process-tree.node` addon.
  * The desktop bundles it; no released relay carries it, so on an SSH host the
@@ -70,6 +77,14 @@ type WindowsProcessTreeModule = {
     CommandLine: number
     CreationTime?: number
   }
+  /**
+   * Flag bits the COMPILED addon reports, straight from `addon.cc`. Absent on a
+   * build that predates the patch — which is not the same question as the enum
+   * above, because pnpm patches the source tree and leaves the tarball's
+   * prebuilt `.node` in place.
+   */
+  supportedProcessDataFlags?: number
+  getProcessCreationTime?: (pid: number) => number | undefined
   getAllProcesses: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags?: number
@@ -100,21 +115,26 @@ let requireNative: NativeRequire = requireFromMain
  * binding straight to the addon drops a duplicate rather than losing a guard.
  */
 type WindowsProcessTreeAddon = {
+  getProcessCreationTime?: (pid: number) => number | undefined
   getProcessList: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags: number
   ) => void
+  supportedProcessDataFlags?: number
 }
 
 /**
  * Mirrors the package's enum; the addon takes the raw bit field. `Memory` (1)
  * is listed for completeness and is deliberately never set — see the projections
  * below.
+ *
+ * Naming `CreationTime` here only decides what we ASK for; whether the binary
+ * answers is `supportedProcessDataFlags`, which the addon reports itself.
  */
-const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2 } as const
+const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 } as const
 
 /** Staged beside the relay bundle by build-relay; see RELAY_ARTIFACTS. */
-const RELAY_ADDON_FILENAME = './windows-process-tree.node'
+const RELAY_ADDON_FILENAME = `./${RELAY_WINDOWS_PROCESS_TREE_FILENAME}`
 
 /** The import whose absence tells the patched binary from the published prebuilt. */
 const FLAGGED_ADDON_IMPORT = 'ReadProcessMemory'
@@ -152,6 +172,13 @@ function stagedRelayAddonIsUnpatched(): boolean {
   }
 }
 
+/**
+ * Once per process, for the main and relay processes whose console is real. The
+ * daemon's stderr is destroyed once it reports ready, so it logs this capability
+ * to daemonLog at startup instead (daemon-entry.ts).
+ */
+let warnedAboutCimFallback = false
+
 let cachedModule: WindowsProcessTreeModule | null | undefined
 let moduleLoader: () => WindowsProcessTreeModule | null = loadWindowsProcessTree
 let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
@@ -160,6 +187,8 @@ let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
 function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
   return {
     ProcessDataFlag: PROCESS_DATA_FLAG,
+    supportedProcessDataFlags: addon.supportedProcessDataFlags,
+    getProcessCreationTime: addon.getProcessCreationTime,
     getAllProcesses: (callback, flags) => addon.getProcessList(callback, flags ?? 0)
   }
 }
@@ -276,6 +305,7 @@ let nativeReadGate: Promise<unknown> = Promise.resolve()
 
 function resetNativeReaderState(): void {
   nativeReaderEpoch += 1
+  warnedAboutCimFallback = false
   unreturnedReads.clear()
   // Chain, never replace. Dropping the old chain lets a waiter still holding it
   // run against a read queued on the new one -- two concurrent calls into one
@@ -350,6 +380,12 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
       // never silently start forking shells at the caller's poll rate. Absence
       // is the one condition that can never resolve itself — see
       // docs/reference/windows-process-enumeration.md.
+      if (!warnedAboutCimFallback) {
+        warnedAboutCimFallback = true
+        console.warn(
+          '[windows-process-table] no native binding; falling back to a powershell.exe CIM scan at each caller poll. See docs/reference/windows-process-enumeration.md.'
+        )
+      }
       return projection.cimFallback()
     }
     // Reject rather than resolve empty: an empty table is a claim that nothing
@@ -359,7 +395,9 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
   }
   if (unreturnedReads.size > 0) {
     return Promise.reject(
-      new Error('windows process table is wedged: an earlier read has not returned')
+      new WindowsProcessTableTimeoutError(
+        'windows process table is wedged: an earlier read has not returned'
+      )
     )
   }
   const readId = ++readSequence
@@ -376,7 +414,7 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
         if (readerEpoch === nativeReaderEpoch) {
           unreturnedReads.add(readId)
         }
-        reject(new Error('windows process table timed out'))
+        reject(new WindowsProcessTableTimeoutError('windows process table timed out'))
       }, WINDOWS_PROCESS_QUERY_TIMEOUT_MS)
       deadline.unref?.()
       native.getAllProcesses((processes) => {
@@ -492,13 +530,35 @@ export function isWindowsProcessTableAvailable(): boolean {
 
 /**
  * PID-reuse-safe ownership needs the native creation-time field, not merely a
- * process list. Older addon builds expose the table without that field; keep
- * structured ownership unavailable on those hosts instead of fabricating proof
- * from a PID.
+ * process list.
+ *
+ * Why the binary's own answer and not the enum: pnpm patches the package's
+ * source tree but leaves the tarball's prebuilt `.node` at the same
+ * `build/Release/` path, so a host can hold a patched `lib/index.js` — enum and
+ * all — over a binary that ignores flag 4. CI produced exactly that: the enum
+ * said available, and every row came back without `creationTimeMs`. Answering
+ * true there is worse than answering false: the owner probe would scan the
+ * whole table for nulls, and the published status would claim start times.
  */
 export function isWindowsProcessStartTimeAvailable(): boolean {
   const native = moduleLoader()
-  return native !== null && typeof native.ProcessDataFlag.CreationTime === 'number'
+  return (
+    native !== null &&
+    ((native.supportedProcessDataFlags ?? 0) & PROCESS_DATA_FLAG.CreationTime) !== 0
+  )
+}
+
+/** Fresh identity for synchronous profile admission; opens one PID without taking a table snapshot. */
+export function readWindowsProcessCreationTime(pid: number): number | null {
+  if (process.platform !== 'win32' || !Number.isSafeInteger(pid) || pid <= 0 || pid > 0xffffffff) {
+    return null
+  }
+  try {
+    const value = moduleLoader()?.getProcessCreationTime?.(pid)
+    return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null
+  } catch {
+    return null
+  }
 }
 
 function resetSnapshotReaders(): void {

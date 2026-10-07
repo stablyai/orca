@@ -45,7 +45,9 @@ describe('useNewWorktreeDrawerNavigation', () => {
     expect(nav.current.drawerView).toBe<NewWorktreeDrawerView>('transition')
     expect(nav.current.formSheetVisible).toBe(true)
 
-    act(() => vi.advanceTimersByTime(500))
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
     expect(nav.current.drawerView).toBe<NewWorktreeDrawerView>('agent')
     expect(nav.current.formSheetVisible).toBe(false)
   })
@@ -54,7 +56,9 @@ describe('useNewWorktreeDrawerNavigation', () => {
     const nav = renderNavigation(true)
     act(() => nav.current.openSourceDrawer())
     act(() => nav.current.transitionDrawer('form'))
-    act(() => vi.advanceTimersByTime(500))
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
 
     expect(nav.current.drawerView).toBe<NewWorktreeDrawerView>('form')
     expect(nav.current.formSheetVisible).toBe(true)

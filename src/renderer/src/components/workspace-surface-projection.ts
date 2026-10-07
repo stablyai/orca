@@ -49,6 +49,7 @@ export function projectWorkspaceSurfaces({
 }: {
   worktreesById: ReadonlyMap<string, Pick<Worktree, 'path'>>
   folderWorkspaces: readonly FolderWorkspaceSurfaceRow[]
+  /** Read only when `activeWorkspaceResolvedHostId` is set; inert otherwise. */
   activeWorkspaceId: string | null
   /** Resolved (not user-selected) host of the active workspace; the folder tie-break. */
   activeWorkspaceResolvedHostId: ExecutionHostId | null

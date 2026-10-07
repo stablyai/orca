@@ -41,32 +41,34 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.agentType).toBe('claude')
   })
 
-  it('normalizes a BOM-prefixed Cursor hook payload to a working state', () => {
-    const event = normalizeHookPayload(
-      state,
-      'cursor',
-      {
-        paneKey: PANE_KEY,
-        payload: '\uFEFF{"hook_event_name":"beforeSubmitPrompt","prompt":"Synthetic Cursor prompt"}'
-      },
-      'production'
-    )
+  it.each([0, 1, 2, 3])(
+    'normalizes %i leading Cursor BOMs to a working state (#21421)',
+    (count) => {
+      const event = normalizeHookPayload(
+        state,
+        'cursor',
+        {
+          paneKey: PANE_KEY,
+          payload: `${'\uFEFF'.repeat(count)}{"hook_event_name":"beforeSubmitPrompt","prompt":"Synthetic Cursor prompt"}`
+        },
+        'production'
+      )
 
-    expect(event?.payload).toMatchObject({
-      agentType: 'cursor',
-      state: 'working',
-      prompt: 'Synthetic Cursor prompt'
-    })
-    expect(event?.hookEventName).toBe('beforeSubmitPrompt')
-  })
+      expect(event?.payload).toMatchObject({
+        agentType: 'cursor',
+        state: 'working',
+        prompt: 'Synthetic Cursor prompt'
+      })
+      expect(event?.hookEventName).toBe('beforeSubmitPrompt')
+    }
+  )
 
-  // Why: pins the allowance to exactly one leading U+FEFF, so nobody widens it into a trim.
-  it('still rejects a hook payload that is malformed once the BOM is removed', () => {
+  // Only contiguous leading BOMs are transport framing; misplaced BOMs remain invalid JSON.
+  it('still rejects malformed JSON after leading BOMs are removed', () => {
     const bom = '\uFEFF'
     const body = '{"hook_event_name":"beforeSubmitPrompt"}'
     for (const payload of [
-      `${bom}${bom}${body}`,
-      `${bom}not json`,
+      `${bom}${bom}not json`,
       ` ${bom}${body}`,
       `{"hook_event_name"${bom}:"beforeSubmitPrompt"}`
     ]) {

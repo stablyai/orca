@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import type { CSSProperties, RefObject } from 'react'
 import {
   MessageSquare,
@@ -28,6 +29,7 @@ type TerminalPaneHeaderOverlayProps = {
   showAlwaysOnHeaders: boolean
   /** Used by ephemeral one-off command terminals that omit the header affordance. */
   showSplitButton?: boolean
+  isTabPinned: boolean
   paneCount: number
   activePaneId: number | null | undefined
   panes: readonly ManagedPane[]
@@ -73,6 +75,7 @@ export default function TerminalPaneHeaderOverlay({
   cwd,
   showAlwaysOnHeaders,
   showSplitButton = true,
+  isTabPinned,
   paneCount,
   activePaneId,
   panes,
@@ -126,6 +129,17 @@ export default function TerminalPaneHeaderOverlay({
         const isActivePane = activePaneId === pane.id
         const isChromeless = showAlwaysOnHeaders && !title && !isEditing
         const showHeader = overlayRect && (showAlwaysOnHeaders || Boolean(title) || isEditing)
+        const closeLabel =
+          paneCount > 1
+            ? translate(
+                'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
+                'Close Pane'
+              )
+            : translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
+        // Why: a titled split pane keeps its X as remove-title, but a titled single
+        // pane (agent terminals get runtime titles) still needs a close control.
+        const showCloseButton =
+          showAlwaysOnHeaders && (paneCount > 1 ? !title : showSplitButton && !isTabPinned)
         if (!showHeader || !overlayRect) {
           return null
         }
@@ -136,6 +150,7 @@ export default function TerminalPaneHeaderOverlay({
             className="pane-title-bar"
             data-native-file-drop-target="terminal"
             data-terminal-tab-id={tabId}
+            data-terminal-pane-leaf-id={pane.leafId}
             data-pane-prevent-terminal-focus=""
             {...(isActivePane ? { 'data-active-pane': '' } : {})}
             {...(isChromeless ? { 'data-chromeless': '' } : {})}
@@ -144,7 +159,6 @@ export default function TerminalPaneHeaderOverlay({
               title || isEditing ? () => onActivatePaneTitleInteraction(pane.id) : undefined
             }
             onDragOver={(event) => {
-              onActivatePaneTitleInteraction(pane.id)
               if (
                 event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
                 event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
@@ -162,7 +176,6 @@ export default function TerminalPaneHeaderOverlay({
               }
               event.preventDefault()
               event.stopPropagation()
-              onActivatePaneTitleInteraction(pane.id)
               const manager = managerRef.current
               if (!manager) {
                 return
@@ -174,7 +187,7 @@ export default function TerminalPaneHeaderOverlay({
                 tabId,
                 cwd,
                 dataTransfer: event.dataTransfer,
-                dropTarget: event.target
+                paneLeafId: pane.leafId
               })
             }}
             onContextMenuCapture={(event) => onPaneTitleContextMenu(event, pane.id)}
@@ -185,7 +198,7 @@ export default function TerminalPaneHeaderOverlay({
             }}
           >
             {isEditing ? (
-              <input
+              <ImeInput
                 ref={renameInputRef}
                 className="pane-title-input"
                 aria-label={translate(
@@ -368,7 +381,8 @@ export default function TerminalPaneHeaderOverlay({
                         )}
                       </TooltipContent>
                     </Tooltip>
-                  ) : paneCount > 1 && showAlwaysOnHeaders ? (
+                  ) : null}
+                  {showCloseButton ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -380,19 +394,13 @@ export default function TerminalPaneHeaderOverlay({
                             event.stopPropagation()
                             onClosePane(pane.id)
                           }}
-                          aria-label={translate(
-                            'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-                            'Close Pane'
-                          )}
+                          aria-label={closeLabel}
                         >
                           <X className="size-3" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={4}>
-                        {translate(
-                          'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-                          'Close Pane'
-                        )}
+                        {closeLabel}
                       </TooltipContent>
                     </Tooltip>
                   ) : null}

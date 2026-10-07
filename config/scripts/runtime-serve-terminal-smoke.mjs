@@ -198,7 +198,7 @@ function resolveLaunch(userDataDir) {
     label: `electron (${serveEntry})`,
     command: override ?? 'npx',
     args: override ? serveArgs : ['electron', ...serveArgs],
-    env: {}
+    env: { ORCA_DEV_USER_DATA_PATH: userDataDir }
   }
 }
 
@@ -388,7 +388,9 @@ async function main() {
       child.kill('SIGTERM')
       const exited = await Promise.race([
         new Promise((r) => child.on('exit', () => r(true))),
-        new Promise((r) => setTimeout(() => r(false), SHUTDOWN_TIMEOUT_MS))
+        // unref'd: the loser of this race must not hold the event loop open after the
+        // winner already decided. The timer still bounds the wait.
+        new Promise((r) => setTimeout(() => r(false), SHUTDOWN_TIMEOUT_MS).unref())
       ])
       if (!exited) {
         child.kill('SIGKILL')

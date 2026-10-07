@@ -1,3 +1,4 @@
+import { QUICK_OPEN_SEARCH_VERSION } from '../../shared/quick-open-path-search'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isMethodNotFoundError } from '../ssh/ssh-filesystem-stream-reader'
 import { waitForSshCapabilityProbe } from './ssh-capability-probe-waiter'
@@ -47,10 +48,13 @@ function readSshFsCapabilities(
 
 export function probeSshQuickOpenSearchCapability(
   mux: SshChannelMultiplexer,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  minimumVersion = QUICK_OPEN_SEARCH_VERSION
 ): Promise<boolean> {
   return readSshFsCapabilities(mux, signal).then(
-    (capabilities) => capabilities?.quickOpenSearchVersion === 1
+    (capabilities) =>
+      typeof capabilities?.quickOpenSearchVersion === 'number' &&
+      capabilities.quickOpenSearchVersion >= minimumVersion
   )
 }
 
@@ -60,5 +64,11 @@ export function probeSshRangedReadCapability(
 ): Promise<boolean> {
   return readSshFsCapabilities(mux, signal).then(
     (capabilities) => capabilities?.rangedReadVersion === 1
+  )
+}
+
+export function probeSshPathExistenceBatchCapability(mux: SshChannelMultiplexer): Promise<boolean> {
+  return readSshFsCapabilities(mux).then(
+    (capabilities) => capabilities?.pathExistenceBatchVersion === 1
   )
 }
