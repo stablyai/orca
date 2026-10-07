@@ -407,13 +407,16 @@ describe('useMobileSessionViewMode', () => {
         ? { onHostViewModeWriteError: args.onHostViewModeWriteError }
         : {})
     }
-    function Harness(): null {
+    function Harness() {
       controller = useMobileSessionViewMode({
         hostId: 'h',
         worktreeId: 'w',
         sessionTabViewMode: bridge
       })
-      return null
+      return createElement('Probe', {
+        testID: 'view-mode-probe',
+        dataChat: controller.isTabChatView('t1')
+      })
     }
     rerenderShared = () => {
       act(() => renderer?.update(createElement(Harness)))
@@ -546,9 +549,13 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+    const renderedChat = () =>
+      renderer?.root.find((node) => node.props.testID === 'view-mode-probe').props.dataChat
+    expect(renderedChat()).toBe(true)
     publication.version = 11
     hostViews.set('t1', 'terminal')
     rerenderShared?.()
+    expect(renderedChat()).toBe(false)
     expect(controller?.isTabChatView('t1')).toBe(false)
   })
 
