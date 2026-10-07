@@ -16,6 +16,7 @@ type SleepStateInput = {
   ptyIdsByTabId?: Record<string, string[]> | null
   browserTabsByWorktree?: Record<string, readonly TabLike[]> | null
   unifiedTabsByWorktree?: Record<string, Tab[]> | null
+  pendingReconnectWorktreeIds?: readonly string[] | null
 }
 
 type LiveAgentGeneration = {
@@ -26,6 +27,10 @@ type LiveAgentGeneration = {
 }
 
 let liveAgentGeneration: LiveAgentGeneration | null = null
+let pendingReconnectGeneration: {
+  ids: readonly string[]
+  worktreeIds: ReadonlySet<string>
+} | null = null
 
 // Why cached across cards: zustand re-runs every mounted card's selector on every
 // store write, and the live-agent set is a whole-store scan. Keyed on the same
@@ -55,6 +60,20 @@ function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): ReadonlySet<str
   return worktreeIds
 }
 
+// Same startup-reconnect exemption as the filter, cached per snapshot like the live-agent set. #16247
+function selectPendingReconnectWorktreeIds(
+  state: SleepStateInput
+): ReadonlySet<string> | undefined {
+  const ids = state.pendingReconnectWorktreeIds
+  if (!ids?.length) {
+    return undefined
+  }
+  if (pendingReconnectGeneration?.ids !== ids) {
+    pendingReconnectGeneration = { ids, worktreeIds: new Set(ids) }
+  }
+  return pendingReconnectGeneration.worktreeIds
+}
+
 /**
  * Whether a workspace is asleep: no live terminal, no browser tab, no live
  * agent holding it awake through a PTY gap, and no structured chat.
@@ -75,11 +94,13 @@ export function useIsSleepingWorktree(worktreeId: string): boolean {
       state.ptyIdsByTabId,
       state.browserTabsByWorktree,
       selectWorktreeIdsWithLiveAgent(state),
-      getWorktreeIdsWithStructuredChat(state.unifiedTabsByWorktree)
+      getWorktreeIdsWithStructuredChat(state.unifiedTabsByWorktree),
+      selectPendingReconnectWorktreeIds(state)
     )
   )
 }
 
 export function resetWorktreeSleepStateCacheForTests(): void {
   liveAgentGeneration = null
+  pendingReconnectGeneration = null
 }

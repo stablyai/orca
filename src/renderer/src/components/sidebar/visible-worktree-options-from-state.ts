@@ -32,6 +32,7 @@ export function buildVisibleWorktreeOptionsFromState(
       Date.now()
     ),
     worktreeIdsWithStructuredChat: getWorktreeIdsWithStructuredChat(state.unifiedTabsByWorktree),
+    pendingReconnectWorktreeIds: new Set(state.pendingReconnectWorktreeIds),
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
