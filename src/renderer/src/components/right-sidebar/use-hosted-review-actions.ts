@@ -4,6 +4,8 @@ import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { GitHubPRMergeMethod, PRInfo } from '../../../../shared/github/pull-request-types'
+import type { BitbucketPRMergeMethod } from '../../../../shared/bitbucket-merge-methods'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   mergeGitHubHostedReview,
@@ -13,6 +15,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import { buildGitHubPRStackMergeConfirmation } from './github-pr-stack-confirmation'
 import { useReadyHostedReviewAction } from './use-ready-hosted-review-action'
+
+export type HostedReviewMergeMethod = GitHubPRMergeMethod | BitbucketPRMergeMethod
 
 export type HostedReviewActionInfo = Pick<
   HostedReviewInfo,
@@ -33,7 +37,9 @@ export function useHostedReviewActions({
   review,
   githubPR,
   repo,
+  executionHostId = 'local',
   isGitLab,
+  isBitbucket = false,
   shortLabel,
   reviewLabel,
   defaultMergeMethod,
@@ -43,23 +49,15 @@ export function useHostedReviewActions({
   review: HostedReviewActionInfo
   githubPR?: PRInfo | null
   repo: Repo
+  executionHostId?: ExecutionHostId
   isGitLab: boolean
+  isBitbucket?: boolean
   shortLabel: string
   reviewLabel: string
-  defaultMergeMethod: GitHubPRMergeMethod
+  defaultMergeMethod: HostedReviewMergeMethod
   autoMergeAction: GitHubPRAutoMergeAction | null
   onRefreshReview: () => Promise<void>
-}): {
-  merging: boolean
-  readying: boolean
-  stateUpdating: 'open' | 'closed' | null
-  actionError: string | null
-  handleMerge: (method?: GitHubPRMergeMethod) => Promise<void>
-  handleAutoMerge: () => Promise<void>
-  handleMarkReadyForReview: () => Promise<void>
-  handleCloseReview: () => Promise<void>
-  handleReopenReview: () => Promise<void>
-} {
+}) {
   const confirm = useConfirmationDialog()
   const [merging, setMerging] = useState(false)
   const [stateUpdating, setStateUpdating] = useState<'open' | 'closed' | null>(null)
@@ -76,7 +74,7 @@ export function useHostedReviewActions({
   })
 
   const handleMerge = useCallback(
-    async (method: GitHubPRMergeMethod = defaultMergeMethod) => {
+    async (method: HostedReviewMergeMethod = defaultMergeMethod) => {
       if (!isGitLab && githubPR?.stack) {
         const usesMergeQueue =
           review.mergeQueueRequired === true || githubPR.mergeQueueRequired === true
@@ -84,7 +82,7 @@ export function useHostedReviewActions({
           buildGitHubPRStackMergeConfirmation({
             stack: githubPR.stack,
             currentPRNumber: review.number,
-            method,
+            method: method as GitHubPRMergeMethod,
             usesMergeQueue
           })
         )
@@ -100,14 +98,21 @@ export function useHostedReviewActions({
               repoPath: repo.path,
               repoId: repo.id,
               iid: review.number,
-              method
+              method: method as 'merge' | 'squash' | 'rebase'
             })
-          : await mergeGitHubHostedReview({
-              repo,
-              prNumber: review.number,
-              method,
-              prRepo: githubPR?.prRepo ?? null
-            })
+          : isBitbucket
+            ? await window.api.bitbucket.mergePR({
+                repoPath: repo.path,
+                prNumber: review.number,
+                method: method as BitbucketPRMergeMethod,
+                executionHostId
+              })
+            : await mergeGitHubHostedReview({
+                repo,
+                prNumber: review.number,
+                method: method as GitHubPRMergeMethod,
+                prRepo: githubPR?.prRepo ?? null
+              })
         if (!result.ok) {
           setActionError(result.error)
         } else {
@@ -121,10 +126,12 @@ export function useHostedReviewActions({
     },
     [
       confirm,
+      executionHostId,
       githubPR?.prRepo,
       githubPR?.mergeQueueRequired,
       githubPR?.stack,
       isGitLab,
+      isBitbucket,
       defaultMergeMethod,
       onRefreshReview,
       repo,
@@ -145,7 +152,7 @@ export function useHostedReviewActions({
         repo,
         prNumber: review.number,
         enabled,
-        method: enabled ? defaultMergeMethod : undefined,
+        method: enabled ? (defaultMergeMethod as GitHubPRMergeMethod) : undefined,
         prRepo: githubPR?.prRepo ?? null
       })
       if (!result.ok) {
@@ -209,12 +216,26 @@ export function useHostedReviewActions({
                 repoId: repo.id,
                 iid: review.number
               })
-          : await updateGitHubHostedReviewState({
-              repo,
-              prNumber: review.number,
-              prRepo: githubPR?.prRepo ?? null,
-              nextState
-            })
+          : isBitbucket
+            ? isClosing
+              ? await window.api.bitbucket.closePR({
+                  repoPath: repo.path,
+                  prNumber: review.number,
+                  executionHostId
+                })
+              : {
+                  ok: false,
+                  error: translate(
+                    'auto.components.right.sidebar.bitbucket.pr.reopenUnsupported',
+                    'Reopening declined Bitbucket pull requests is not supported.'
+                  )
+                }
+            : await updateGitHubHostedReviewState({
+                repo,
+                prNumber: review.number,
+                prRepo: githubPR?.prRepo ?? null,
+                nextState
+              })
         if (!result.ok) {
           setActionError(result.error)
           toast.error(result.error)
@@ -245,8 +266,10 @@ export function useHostedReviewActions({
     },
     [
       confirm,
+      executionHostId,
       githubPR?.prRepo,
       isGitLab,
+      isBitbucket,
       onRefreshReview,
       repo,
       review.number,

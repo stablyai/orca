@@ -62,7 +62,12 @@ export function ChecksPanelReviewHeader({
 }: ChecksPanelReviewHeaderProps): React.JSX.Element {
   const reviewNumberLabel = review.provider === 'gitlab' ? `!${review.number}` : `#${review.number}`
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
+  const reviewHostLabel =
+    review.provider === 'gitlab'
+      ? 'GitLab'
+      : review.provider === 'bitbucket'
+        ? 'Bitbucket'
+        : 'GitHub'
   const moreActionsLabel =
     review.provider === 'gitlab'
       ? translate('auto.components.right.sidebar.ChecksPanel.gitlabMoreActions', 'More MR actions')
@@ -129,18 +134,20 @@ export function ChecksPanelReviewHeader({
             disabled={!canUnlinkReview}
             onSelect={onUnlinkReview}
           />
-          <DropdownMenuItem onSelect={onLinkAnotherReview}>
-            <Link className="size-3.5" />
-            {review.provider === 'gitlab'
-              ? translate(
-                  'auto.components.right.sidebar.ChecksPanel.gitlabLinkAnother',
-                  'Link another MR'
-                )
-              : translate(
-                  'auto.components.right.sidebar.ChecksPanel.07871c0589',
-                  'Link another PR'
-                )}
-          </DropdownMenuItem>
+          {review.provider !== 'bitbucket' && (
+            <DropdownMenuItem onSelect={onLinkAnotherReview}>
+              <Link className="size-3.5" />
+              {review.provider === 'gitlab'
+                ? translate(
+                    'auto.components.right.sidebar.ChecksPanel.gitlabLinkAnother',
+                    'Link another MR'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.ChecksPanel.07871c0589',
+                    'Link another PR'
+                  )}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

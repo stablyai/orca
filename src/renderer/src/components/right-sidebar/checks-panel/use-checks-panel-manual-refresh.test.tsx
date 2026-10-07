@@ -44,6 +44,7 @@ describe('useChecksPanelManualRefresh ordering', () => {
     const input: RefreshInput = {
       activeConnectionId: null,
       activeGitLabReview: null,
+      activeReview: null,
       activeWorktreeId: null,
       activeWorktreePath: null,
       activeWorktreePushTarget: null,
