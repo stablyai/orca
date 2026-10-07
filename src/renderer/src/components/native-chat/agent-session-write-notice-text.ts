@@ -5,7 +5,10 @@ import { translate } from '@/i18n/i18n'
 import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
 import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session-refusal-notice'
 import {
+  AGENT_SESSION_CAPACITY_RETURNS_COPY as CAPACITY_RETURNS,
   AGENT_SESSION_WRITE_NOTICE_COPY as COPY,
+  agentSessionCapacityReturns,
+  type AgentSessionCapacityReturnsSentence,
   type AgentSessionWriteNoticePart,
   type AgentSessionWriteNoticeSentence
 } from '../../../../shared/agent-session-write-notice-copy'
@@ -138,6 +141,35 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   tryAgain: () => translate('components.native-chat.writeNotice.tryAgain', COPY.tryAgain)
 }
 
+const CAPACITY_RETURNS_SENTENCES: Record<
+  AgentSessionCapacityReturnsSentence,
+  (values: { time: string; day: string }) => string
+> = {
+  capacityReturnsAt: (values) =>
+    translate(
+      'components.native-chat.capacityReturnsAt',
+      CAPACITY_RETURNS.capacityReturnsAt,
+      values
+    ),
+  capacityReturnsTomorrowAt: (values) =>
+    translate(
+      'components.native-chat.capacityReturnsTomorrowAt',
+      CAPACITY_RETURNS.capacityReturnsTomorrowAt,
+      values
+    ),
+  capacityReturnsOnDayAt: (values) =>
+    translate(
+      'components.native-chat.capacityReturnsOnDayAt',
+      CAPACITY_RETURNS.capacityReturnsOnDayAt,
+      values
+    )
+}
+
+function capacityReturnsText(at: number): string {
+  const { sentence, time, day } = agentSessionCapacityReturns(at)
+  return CAPACITY_RETURNS_SENTENCES[sentence]({ time, day })
+}
+
 export function agentSessionWriteNoticeText(parts: readonly AgentSessionWriteNoticePart[]): string {
   return joinSentences(
     parts.map((part) =>
@@ -145,12 +177,14 @@ export function agentSessionWriteNoticeText(parts: readonly AgentSessionWriteNot
         ? SENTENCES[part]()
         : 'text' in part
           ? part.text
-          : agentSessionFailureSentence(
-              part.failure,
-              part.surface,
-              part.context,
-              sayAgentSessionFailureTranslated
-            )
+          : 'capacityReturnsAt' in part
+            ? capacityReturnsText(part.capacityReturnsAt)
+            : agentSessionFailureSentence(
+                part.failure,
+                part.surface,
+                part.context,
+                sayAgentSessionFailureTranslated
+              )
     )
   )
 }

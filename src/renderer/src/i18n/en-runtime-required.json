@@ -2766,6 +2766,9 @@
         "awaitingUnnamed": "Awaiting user input",
         "questionCount": "{{value0}} questions"
       },
+      "capacityReturnsAt": "Orca can take new requests again at {{time}}.",
+      "capacityReturnsOnDayAt": "Orca can take new requests again on {{day}} at {{time}}.",
+      "capacityReturnsTomorrowAt": "Orca can take new requests again tomorrow at {{time}}.",
       "composer": {
         "effort": "Effort",
         "imageUnsupported": "Image paste is not supported for this agent."

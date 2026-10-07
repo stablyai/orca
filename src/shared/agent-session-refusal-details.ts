@@ -160,7 +160,10 @@ type AgentSessionRefusalFactsByCode = {
   agent_session_identity_required: NoFacts
   agent_session_operation_conflict: NoFacts
   agent_session_operation_expired: NoFacts
-  agent_session_operation_capacity: NoFacts
+  agent_session_operation_capacity: {
+    /** Epoch ms when enough retained operations have aged out to admit a new one. */
+    capacityReturnsAt?: number
+  }
   agent_session_journal_unreadable: NoFacts
   structured_agent_session_unsupported: NoFacts
   agent_session_owner_restart_failed: NoFacts
@@ -198,10 +201,14 @@ export type AgentSessionLegacyRefusalFields = {
   rewindReason?: AgentSessionRewindReason
 }
 
+/** Every fact a reader keeps: the legacy fields, and facts only `details` carries. */
+type AgentSessionReadRefusalFacts = AgentSessionLegacyRefusalFields & { capacityReturnsAt?: number }
+
 const FACT_KEYS_BY_CODE: Partial<
-  Record<AgentSessionWireRefusalCode, readonly (keyof AgentSessionLegacyRefusalFields)[]>
+  Record<AgentSessionWireRefusalCode, readonly (keyof AgentSessionReadRefusalFacts)[]>
 > = {
   agent_session_operation_invalid: ['rewindReason'],
+  agent_session_operation_capacity: ['capacityReturnsAt'],
   agent_session_operation_unknown: ['rewindReason'],
   agent_session_checkpoint_stale: ['currentFence'],
   agent_session_item_revision_stale: ['currentRevision', 'resolution'],
@@ -215,10 +222,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function readFact(
-  key: keyof AgentSessionLegacyRefusalFields,
+  key: keyof AgentSessionReadRefusalFacts,
   value: unknown
-): AgentSessionLegacyRefusalFields {
+): AgentSessionReadRefusalFacts {
   switch (key) {
+    case 'capacityReturnsAt':
+      return Number.isSafeInteger(value) && typeof value === 'number'
+        ? { capacityReturnsAt: value }
+        : {}
     case 'currentFence':
       return Number.isSafeInteger(value) && typeof value === 'number' ? { currentFence: value } : {}
     case 'currentRevision':
@@ -259,7 +270,7 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
     return undefined
   }
   const keys = [...(FACT_KEYS_BY_CODE[code] ?? []), 'ownerVerdict' as const]
-  const facts = keys.reduce<AgentSessionLegacyRefusalFields>(
+  const facts = keys.reduce<AgentSessionReadRefusalFacts>(
     (kept, key) => ({ ...kept, ...readFact(key, value[key]) }),
     {}
   )

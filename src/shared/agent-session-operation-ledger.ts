@@ -321,13 +321,46 @@ export function evaluateAgentSessionOperation(args: {
     return {
       decision: 'refused',
       code: 'agent_session_operation_capacity',
-      details: { reason: 'operationCapacity' }
+      details: {
+        reason: 'operationCapacity',
+        capacityReturnsAt: agentSessionCapacityReturnsAt(
+          rows,
+          callerKey,
+          perClientLimit,
+          globalLimit
+        )
+      }
     }
   }
   return {
     decision: 'admit',
     row: pendingAgentSessionOperationRow({ callerKey, operationId, fingerprint, now })
   }
+}
+
+/** When enough counted rows have aged out for both caps to admit one more id. */
+function agentSessionCapacityReturnsAt(
+  rows: ReadonlyMap<string, AgentSessionOperationRow>,
+  callerKey: string,
+  perClientLimit: number,
+  globalLimit: number
+): number {
+  const all = [...rows.values()]
+  return Math.max(
+    expiryFreeingCapacity(
+      all.filter((row) => row.callerKey === callerKey),
+      perClientLimit
+    ),
+    expiryFreeingCapacity(all, globalLimit)
+  )
+}
+
+/** Pruning drops a row once `now` reaches its expiry; the one that brings the count under `limit`. */
+function expiryFreeingCapacity(rows: AgentSessionOperationRow[], limit: number): number {
+  if (rows.length < limit) {
+    return 0
+  }
+  return rows.map((row) => row.expiresAt).sort((a, b) => a - b)[rows.length - limit]
 }
 
 /** A `pending` row for this id, retained for the full replay window from `now`. */

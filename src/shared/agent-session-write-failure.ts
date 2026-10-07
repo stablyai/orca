@@ -69,12 +69,14 @@ type DurableRefusalFacts = {
   agent_session_operation_unknown: { rewindReason?: AgentSessionRewindReason }
   /** A snapshot from when it was refused; see `agentSessionOwnerVerdictAllowsFreshOperationId`. */
   agent_session_ownership_unknown: { ownerVerdict?: AgentSessionOwnerVerdict }
+  agent_session_operation_capacity: { capacityReturnsAt?: number }
 }
 
 const DURABLE_FACT_KEYS: Partial<Record<AgentSessionWireRefusalCode, readonly string[]>> = {
   agent_session_operation_invalid: ['rewindReason', 'argumentProblem'],
   agent_session_operation_unknown: ['rewindReason'],
-  agent_session_ownership_unknown: ['ownerVerdict']
+  agent_session_ownership_unknown: ['ownerVerdict'],
+  agent_session_operation_capacity: ['capacityReturnsAt']
 } satisfies { [C in keyof DurableRefusalFacts]: readonly (keyof DurableRefusalFacts[C])[] }
 
 export type AgentSessionWriteRefusalDetails<C extends AgentSessionWireRefusalCode> = {

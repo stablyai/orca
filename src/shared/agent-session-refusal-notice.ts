@@ -17,6 +17,8 @@ import {
 import {
   AGENT_SESSION_HISTORY_UNREAD_CAUSES,
   AGENT_SESSION_WRITE_NOTICE_COPY,
+  AGENT_SESSION_WRITE_NOT_DONE as NOT_DONE,
+  agentSessionCapacityReturnsEnglish,
   type AgentSessionWriteNoticePart,
   type AgentSessionWriteNoticeSentence
 } from './agent-session-write-notice-copy'
@@ -35,19 +37,6 @@ export {
   type AgentSessionRefusalAction,
   type AgentSessionRefusalReasonWords
 } from './agent-session-refusal-reason-words'
-
-const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> = {
-  'read-history': 'notDoneReadHistory',
-  send: 'notDoneSend',
-  'composer-send': 'notDoneSend',
-  stop: 'notDoneStop',
-  'stop-task': 'notDoneStopTask',
-  'stop-tasks': 'notDoneStopTasks',
-  answer: 'notDoneAnswer',
-  option: 'notDoneOption',
-  command: 'notDoneCommand',
-  goal: 'notDoneGoal'
-}
 
 /** That the write did not happen, for one that a second attempt can carry out. Only the phone says
  *  how: its message goes back to the composer and it has no Retry control. Everywhere else the
@@ -155,8 +144,13 @@ export function agentSessionWriteNoticeParts(
       return agentSessionWriteNotDoneParts(write)
     // Counted across every chat and freed only as a day's requests age out, so trying again now
     // would likely be refused again.
-    case 'agent_session_operation_capacity':
-      return ['capacity', notDone]
+    case 'agent_session_operation_capacity': {
+      const capacityReturnsAt = failure.details?.capacityReturnsAt
+      // A saved refusal can be shown again after that time, when naming it no longer helps.
+      return capacityReturnsAt === undefined || capacityReturnsAt <= Date.now()
+        ? ['capacity', notDone]
+        : ['capacity', notDone, { capacityReturnsAt }]
+    }
     // The phone resends under the same id, which the host refuses the same way again. The rest
     // stand for reasons the code does not name (a cleared conversation, a pending question, a
     // provider's own rejection...), so any cause or next step could be false.
@@ -203,7 +197,9 @@ export function agentSessionWriteNoticeEnglish(
         ? AGENT_SESSION_WRITE_NOTICE_COPY[part]
         : 'text' in part
           ? part.text
-          : agentSessionFailureSentence(part.failure, part.surface, part.context)
+          : 'capacityReturnsAt' in part
+            ? agentSessionCapacityReturnsEnglish(part.capacityReturnsAt)
+            : agentSessionFailureSentence(part.failure, part.surface, part.context)
     )
     .join(' ')
 }
