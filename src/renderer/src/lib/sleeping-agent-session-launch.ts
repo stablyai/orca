@@ -76,11 +76,11 @@ export function launchSleepingAgentSession(
     agentArgs:
       launchConfig !== undefined
         ? launchConfig.agentArgs
-        : resolveTuiAgentLaunchArgs(record.agent, state.settings?.agentDefaultArgs),
+        : resolveTuiAgentLaunchArgs(record.agent, state.settings, resumeTarget),
     agentEnv:
       launchConfig !== undefined
         ? launchConfig.agentEnv
-        : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
+        : resolveTuiAgentLaunchEnv(record.agent, state.settings),
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }

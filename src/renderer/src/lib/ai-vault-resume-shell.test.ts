@@ -10,6 +10,7 @@ import { buildAiVaultResumeCopyCommandForWorktree } from './ai-vault-resume-comm
 type ResumeShellState = Parameters<typeof buildAiVaultResumeCopyCommandForWorktree>[0]['state']
 
 function makeState(worktreeHostId?: string): ResumeShellState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume shell reads only these AppState fields.
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
@@ -18,6 +19,7 @@ function makeState(worktreeHostId?: string): ResumeShellState {
     repos: [{ id: 'repo-1', path: '/home/alice/repo' }],
     projects: [{ id: 'repo-1', sourceRepoIds: ['repo-1'] }],
     settings: {
+      agentPermissionMode: 'ask',
       agentDefaultArgs: { codex: '' },
       agentDefaultEnv: { codex: {} }
     },

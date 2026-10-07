@@ -182,8 +182,11 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
         agent: tuiAgent,
         prompt: submitStartupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
-        agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
+        agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings, {
+          platform: selectedRepoAgentLaunchPlatform,
+          shell: selectedRepoStartupShell
+        }),
+        agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings),
         sessionOptions: resolveInitialNativeChatSessionOptions(
           {
             experimentalNativeChat: settings?.experimentalNativeChat,

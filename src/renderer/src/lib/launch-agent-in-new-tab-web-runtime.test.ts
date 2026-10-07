@@ -134,11 +134,14 @@ describe('launchAgentInNewTab paired web runtime', () => {
       activate: true,
       agentSessionKind: 'fresh',
       launchAgent: 'codex',
-      command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
+      command:
+        "codex '--dangerously-bypass-approvals-and-sandbox' '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
       env: { CODEX_PROFILE: 'captured' },
       launchConfig: {
-        agentCommand: "codex '--model' 'gpt-5' '--reasoning-effort' 'high'",
-        agentArgs: '--model gpt-5 --reasoning-effort high',
+        agentCommand:
+          "codex '--dangerously-bypass-approvals-and-sandbox' '--model' 'gpt-5' '--reasoning-effort' 'high'",
+        agentArgs:
+          '--dangerously-bypass-approvals-and-sandbox --model gpt-5 --reasoning-effort high',
         agentEnv: { CODEX_PROFILE: 'captured' }
       },
       startupCommandDelivery: 'shell-ready',

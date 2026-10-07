@@ -886,7 +886,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "codex '--model' 'gpt-5.5'"
+        command: "codex '--dangerously-bypass-approvals-and-sandbox' '--model' 'gpt-5.5'"
       })
     )
   })

@@ -1,23 +1,31 @@
 import type { GlobalSettings } from './global-settings-types'
-import { isTuiAgent } from './tui-agent-config'
-import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
+import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
-  resolveStartupShell,
-  tokenizeStartupCommand,
-  type AgentStartupShell
-} from './tui-agent-startup-shell'
+  PERMISSION_AGENT_IDS,
+  resolveAgentPermissionMode,
+  YOLO_TUI_AGENT_ARGS,
+  YOLO_TUI_AGENT_ENV
+} from './tui-agent-permissions'
+import {
+  bypassFlagBeside,
+  classifyTypedAgentPermissions,
+  resolveAgentPermissionPosture
+} from './tui-agent-permission-args'
 import type { TuiAgent } from './tui-agent'
-import { resolveLocalWindowsAgentStartupShell } from './windows-terminal-shell'
+import { resolveAgentLaunchGrammar, type AgentLaunchTarget } from './tui-agent-startup-shell'
 
 const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
   opencode: ['--dangerously-skip-permissions'],
   kilo: ['--dangerously-skip-permissions']
 }
 
-export const DEFAULT_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = YOLO_TUI_AGENT_ARGS
-
-export const DEFAULT_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> =
-  YOLO_TUI_AGENT_ENV
+/** The settings slice that decides an agent's launch arguments and environment. */
+export type AgentLaunchProfileSettings = Partial<
+  Pick<
+    GlobalSettings,
+    'agentDefaultArgs' | 'agentDefaultEnv' | 'agentPermissionMode' | 'agentPermissionModeOverrides'
+  >
+>
 
 function argPattern(arg: string): RegExp {
   return new RegExp(`(^|\\s)${arg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'g')
@@ -28,35 +36,6 @@ export function hasUnsupportedTuiAgentArgs(agent: TuiAgent, value: unknown): boo
     return false
   }
   return (UNSUPPORTED_TUI_AGENT_ARGS[agent] ?? []).some((arg) => argPattern(arg).test(value))
-}
-
-/**
- * Whether the configured arguments carry this agent's permission-bypass flag.
- *
- * The Agent Permissions toggle has no storage of its own — it writes and reads this flag inside
- * the arguments string. Read the same argv the startup path builds so quoted prompt text and
- * operands after `--` cannot authorize a structured session.
- */
-export function tuiAgentArgsBypassPermissions(
-  agent: TuiAgent,
-  value: string | null | undefined,
-  shell: AgentStartupShell
-): boolean {
-  const bypassArg = YOLO_TUI_AGENT_ARGS[agent]
-  if (typeof value !== 'string' || bypassArg === undefined) {
-    return false
-  }
-  const tokenized = tokenizeStartupCommand(value, shell)
-  const bypass = tokenizeStartupCommand(bypassArg, shell)
-  if (!tokenized.ok || !bypass.ok || bypass.tokens.length === 0) {
-    return false
-  }
-  const terminator = tokenized.tokens.indexOf('--')
-  const options = terminator === -1 ? tokenized.tokens : tokenized.tokens.slice(0, terminator)
-  // A token sequence: several agents' bypass is a flag and its value (`--permission-mode X`).
-  return options.some((_, start) =>
-    bypass.tokens.every((token, offset) => options[start + offset] === token)
-  )
 }
 
 function sanitizeTuiAgentLaunchArgs(agent: TuiAgent, args: string): string {
@@ -107,64 +86,119 @@ export function normalizeTuiAgentEnvRecord(
   return normalized
 }
 
-export function getTuiAgentDefaultArgs(agent: TuiAgent): string {
-  return DEFAULT_TUI_AGENT_ARGS[agent] ?? ''
-}
-
-export function getTuiAgentDefaultEnv(agent: TuiAgent): Record<string, string> {
-  return { ...DEFAULT_TUI_AGENT_ENV[agent] }
-}
-
-export function resolveTuiAgentLaunchArgs(
-  agent: TuiAgent,
-  configuredArgs: Partial<Record<TuiAgent, string>> | null | undefined
-): string {
-  if (
-    configuredArgs &&
-    Object.hasOwn(configuredArgs, agent) &&
-    typeof configuredArgs[agent] === 'string'
-  ) {
-    return configuredArgs[agent] ?? ''
+/**
+ * A stored profile's extra text, with an explicit entry for every agent that has a bypass flag.
+ * Older builds read a missing entry as "launch with the bypass flag", so `''` keeps a downgrade Manual.
+ */
+export function normalizeStoredAgentLaunchArgs(value: unknown): Partial<Record<TuiAgent, string>> {
+  const normalized = normalizeTuiAgentArgsRecord(value)
+  for (const agent of PERMISSION_AGENT_IDS) {
+    if (agent in YOLO_TUI_AGENT_ARGS && !Object.hasOwn(normalized, agent)) {
+      normalized[agent] = ''
+    }
   }
-  return getTuiAgentDefaultArgs(agent)
+  return normalized
+}
+
+/** Environment counterpart of normalizeStoredAgentLaunchArgs, for env-driven bypass agents. */
+export function normalizeStoredAgentLaunchEnv(
+  value: unknown
+): Partial<Record<TuiAgent, Record<string, string>>> {
+  const normalized = normalizeTuiAgentEnvRecord(value)
+  for (const agent of PERMISSION_AGENT_IDS) {
+    if (agent in YOLO_TUI_AGENT_ENV && !Object.hasOwn(normalized, agent)) {
+      normalized[agent] = {}
+    }
+  }
+  return normalized
 }
 
 /**
- * Whether this agent's *resolved* launch arguments ask for a permission bypass.
- *
- * Resolved, not configured: an untouched Arguments field falls back to the default Orca ships,
- * which is the bypass flag, so bypass is the posture a user gets until they choose otherwise.
- * Choosing Manual stores an empty string, which owns the key and so beats that default.
+ * The one place a permission mode becomes a CLI flag: the mode's flag, then the extra text, all
+ * read with the shell at `target` launches with. Extra text that sets permissions itself decides
+ * alone — a repeated or conflicting flag stops clap CLIs. Per-launch text replaces the configured
+ * text but not the agent's effective mode: one whose configured Arguments ask (Codex
+ * `-a on-request`) gets no flag, one in Yolo by alias does.
  */
-export function resolvedTuiAgentArgsBypassPermissions(
+export function resolveTuiAgentLaunchArgs(
   agent: TuiAgent,
-  settings:
-    | Partial<Pick<GlobalSettings, 'agentDefaultArgs' | 'terminalWindowsShell'>>
-    | null
-    | undefined,
-  platform: NodeJS.Platform
-): boolean {
-  const shell = resolveStartupShell(
-    platform,
-    resolveLocalWindowsAgentStartupShell({
-      platform,
-      isRemote: false,
-      terminalWindowsShell: settings?.terminalWindowsShell
-    })
-  )
-  return tuiAgentArgsBypassPermissions(
-    agent,
-    resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
-    shell
-  )
+  settings: AgentLaunchProfileSettings | null | undefined,
+  target: AgentLaunchTarget,
+  extraArgs?: string | null
+): string {
+  // `undefined` means the configured text; `null` means none for this launch.
+  const extra = (
+    extraArgs === undefined ? (settings?.agentDefaultArgs?.[agent] ?? '') : (extraArgs ?? '')
+  ).trim()
+  const shell = resolveAgentLaunchGrammar(target)
+  if (
+    !YOLO_TUI_AGENT_ARGS[agent] ||
+    !resolveAgentPermissionPosture(agent, settings, target).effectiveBypass ||
+    classifyTypedAgentPermissions(agent, { args: extra }, shell).kind !== 'none'
+  ) {
+    return extra
+  }
+  const bypassArg = bypassFlagBeside(agent, extra, shell)
+  return extra ? `${bypassArg} ${extra}` : bypassArg
 }
 
+/** The launch environment for this agent: its permission mode's env, then the user's extra env. */
 export function resolveTuiAgentLaunchEnv(
   agent: TuiAgent,
-  configuredEnv: Partial<Record<TuiAgent, Record<string, string>>> | null | undefined
+  settings: AgentLaunchProfileSettings | null | undefined
 ): Record<string, string> {
-  if (configuredEnv && Object.hasOwn(configuredEnv, agent)) {
-    return { ...configuredEnv[agent] }
+  const extra = settings?.agentDefaultEnv?.[agent] ?? {}
+  const bypassEnv = YOLO_TUI_AGENT_ENV[agent]
+  return bypassEnv && resolveAgentPermissionMode(agent, settings) === 'bypass'
+    ? { ...bypassEnv, ...extra }
+    : { ...extra }
+}
+
+/** Every agent's launch-ready arguments (flag inline): the shape paired clients exchange. */
+export function composeTuiAgentLaunchArgsRecord(
+  settings: AgentLaunchProfileSettings | null | undefined,
+  target: AgentLaunchTarget
+): Partial<Record<TuiAgent, string>> {
+  const record: Partial<Record<TuiAgent, string>> = {}
+  for (const agent of Object.keys(TUI_AGENT_CONFIG)) {
+    if (isTuiAgent(agent)) {
+      record[agent] = resolveTuiAgentLaunchArgs(agent, settings, target)
+    }
   }
-  return getTuiAgentDefaultEnv(agent)
+  return record
+}
+
+/** Every agent's launch-ready environment; see composeTuiAgentLaunchArgsRecord. */
+export function composeTuiAgentLaunchEnvRecord(
+  settings: AgentLaunchProfileSettings | null | undefined
+): Partial<Record<TuiAgent, Record<string, string>>> {
+  const record: Partial<Record<TuiAgent, Record<string, string>>> = {}
+  for (const agent of Object.keys(TUI_AGENT_CONFIG)) {
+    if (isTuiAgent(agent)) {
+      record[agent] = resolveTuiAgentLaunchEnv(agent, settings)
+    }
+  }
+  return record
+}
+
+/** Reads a launch-ready record (flag inline), never stored settings; a missing key meant the bypass flag. */
+export function resolveComposedTuiAgentLaunchArgs(
+  agent: TuiAgent,
+  record: Partial<Record<TuiAgent, string>> | null | undefined
+): string {
+  if (record && Object.hasOwn(record, agent) && typeof record[agent] === 'string') {
+    return record[agent] ?? ''
+  }
+  return YOLO_TUI_AGENT_ARGS[agent] ?? ''
+}
+
+/** Environment counterpart of resolveComposedTuiAgentLaunchArgs. */
+export function resolveComposedTuiAgentLaunchEnv(
+  agent: TuiAgent,
+  record: Partial<Record<TuiAgent, Record<string, string>>> | null | undefined
+): Record<string, string> {
+  if (record && Object.hasOwn(record, agent)) {
+    return { ...record[agent] }
+  }
+  return { ...YOLO_TUI_AGENT_ENV[agent] }
 }

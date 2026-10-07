@@ -6735,8 +6735,6 @@
           "8fbe1f37c1": "Entorno",
           "2d133152fa": "Sin entorno predeterminado",
           "agentPermissions": "Permisos de Agents",
-          "agentPermissionsInfo": "Información de permisos de Agents",
-          "agentPermissionsTooltip": "No se aplica a agents con argumentos de lanzamiento sobrescritos.",
           "agentPermissionsDescription": "Elige si Orca lanza agents con menos prompts de permisos o con checks manuales.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
@@ -6749,7 +6747,15 @@
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
           "retryDetection": "Retry",
           "storedDefaultUndetected": "Guardado como predeterminado, pero no detectado en este momento",
-          "noAgentsDetected": "No se detectaron agentes. Si hay uno instalado, es posible que la sonda haya agotado su tiempo de espera."
+          "noAgentsDetected": "No se detectaron agentes. Si hay uno instalado, es posible que la sonda haya agotado su tiempo de espera.",
+          "agentPermissionsAppliesToAll": "Se aplica a todos los agentes que no tienen su propio ajuste en la lista de abajo.",
+          "agentPermissionOverride": "Permisos",
+          "agentPermissionOverrideAria": "Permisos de {{value0}}",
+          "agentPermissionOverrideDefault": "Predeterminado ({{value0}})",
+          "agentPermissionsNotFollowing": "Estos agentes no siguen este interruptor:",
+          "agentPermissionsOwnSettingReason": "se ejecuta en {{value0}}: tiene su propio ajuste.",
+          "agentPermissionsArgumentsReason": "se ejecuta en {{value0}}: sus argumentos indican {{value1}}.",
+          "agentPermissionsEnvironmentReason": "se ejecuta en {{value0}}: su entorno indica {{value1}}."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",

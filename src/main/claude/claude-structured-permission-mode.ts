@@ -1,6 +1,8 @@
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { resolvedTuiAgentArgsBypassPermissions } from '../../shared/tui-agent-launch-defaults'
+import type { AgentLaunchProfileSettings } from '../../shared/tui-agent-launch-defaults'
+import { resolveAgentPermissionPosture } from '../../shared/tui-agent-permission-args'
+import { resolveLocalAgentLaunchTarget } from '../../shared/windows-terminal-shell'
 
 /**
  * The Agent Permissions setting as the SDK's own permission mode.
@@ -9,18 +11,21 @@ import { resolvedTuiAgentArgsBypassPermissions } from '../../shared/tui-agent-la
  * latched into the session record: the setting is the one copy of this fact, so nothing can
  * disagree with it and a failed restore cannot silently downgrade a session to prompting.
  *
- * Yolo still stores itself as the agent's bypass flag inside the launch arguments, which is also
- * what a terminal launch acts on, so presence of that flag is the fact to read — resolved through
- * the same default fallback the terminal uses, which is why an untouched profile bypasses. The
- * rest of the arguments string is a terminal concern this path does not interpret.
+ * Reads the agent's typed permission mode — the same field a terminal launch turns into its
+ * flag — plus a bypass flag typed into Arguments, which a terminal launch also honours. The rest
+ * of the arguments string is a terminal concern this path does not interpret.
  */
 export function claudeStructuredPermissionModeForSettings(
   settings:
-    | Partial<Pick<GlobalSettings, 'agentDefaultArgs' | 'terminalWindowsShell'>>
+    | (AgentLaunchProfileSettings & Partial<Pick<GlobalSettings, 'terminalWindowsShell'>>)
     | null
     | undefined
 ): PermissionMode {
-  return resolvedTuiAgentArgsBypassPermissions('claude', settings, process.platform)
+  return resolveAgentPermissionPosture(
+    'claude',
+    settings,
+    resolveLocalAgentLaunchTarget(process.platform, settings?.terminalWindowsShell)
+  ).effectiveBypass
     ? 'bypassPermissions'
     : 'default'
 }

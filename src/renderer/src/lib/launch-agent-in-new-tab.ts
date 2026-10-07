@@ -137,11 +137,14 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       ...(launchPlatform ? { launchPlatform } : {})
     })
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const effectiveAgentArgs =
-    agentArgs !== undefined
-      ? agentArgs
-      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+  // Why: caller args (a Source Control action's own) replace the configured extra text, not the mode.
+  const effectiveAgentArgs = resolveTuiAgentLaunchArgs(
+    agent,
+    store.settings,
+    { platform: resolvedLaunchPlatform, shell: queuedShell },
+    agentArgs
+  )
+  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -228,7 +231,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       promptDelivery,
       pastePromptAfterReady: pasteDraftAfterLaunch,
       submitPastedPrompt,
-      agentArgs,
+      // Caller args go out with this client's mode, like the prompt launch's prebuilt command.
+      ...(agentArgs !== undefined ? { agentArgs: effectiveAgentArgs } : {}),
       // Why: omission means terminal locally, but would let a paired host apply
       // its own default; send the client's resolved terminal choice explicitly.
       viewMode: initialViewModeProps.viewMode ?? 'terminal',
@@ -266,7 +270,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
     launchAgent: agent,
-    ...(agentArgs !== undefined ? { agentArgsOverride: agentArgs } : {}),
+    // The override reaches a paired host as-is, so it carries this client's permission mode.
+    ...(agentArgs !== undefined ? { agentArgsOverride: effectiveAgentArgs } : {}),
     ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }

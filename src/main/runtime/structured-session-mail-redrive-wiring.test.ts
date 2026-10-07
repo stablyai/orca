@@ -4,6 +4,8 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import { Store } from '../persistence/loading-store/store'
 import type * as StructuredAgentSessionRuntime from './structured-agent-session-runtime'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
 
@@ -23,6 +25,35 @@ const { OrcaRuntimeService } = await import('./orca-runtime')
 const { OrchestrationDb } = await import('./orchestration/db')
 
 describe("the runtime's own structured host install", () => {
+  it('re-reads typed permissions and launch environment for generic structured agents', async () => {
+    const store = new Store({ serializedState: '{}' })
+    let settings: GlobalSettings = {
+      ...store.getSettings(),
+      agentPermissionMode: 'ask',
+      agentDefaultArgs: { grok: '--model grok-4.7' },
+      agentDefaultEnv: { goose: { EXTRA: 'value' } }
+    }
+    vi.spyOn(store, 'getSettings').mockImplementation(() => settings)
+    const runtime = new OrcaRuntimeService(store)
+    await runtime.ensureStructuredAgentSessionHost()
+    const deps = installed.deps
+    expect(deps?.resolveAgentFullAccess?.('grok')).toBe(false)
+    expect(deps?.resolveAgentLaunchEnv?.('goose')).toEqual({ EXTRA: 'value' })
+    settings = { ...settings, agentPermissionMode: 'bypass' }
+    expect(deps?.resolveAgentFullAccess?.('grok')).toBe(true)
+    expect(deps?.resolveAgentLaunchEnv?.('goose')).toEqual({ GOOSE_MODE: 'auto', EXTRA: 'value' })
+    settings = { ...settings, agentPermissionModeOverrides: { grok: 'ask', goose: 'ask' } }
+    expect(deps?.resolveAgentFullAccess?.('grok')).toBe(false)
+    expect(deps?.resolveAgentLaunchEnv?.('goose')).toEqual({ EXTRA: 'value' })
+    settings = {
+      ...settings,
+      agentDefaultArgs: { grok: '--permission-mode bypassPermissions' }
+    }
+    expect(deps?.resolveAgentFullAccess?.('grok')).toBe(true)
+    expect(deps?.resolveAgentFullAccess?.('unknown')).toBe(false)
+    expect(deps?.resolveAgentLaunchEnv?.('unknown')).toEqual({})
+  })
+
   it('reports every session status change to the mail redrive', async () => {
     const runtime = new OrcaRuntimeService()
     const redrive = vi

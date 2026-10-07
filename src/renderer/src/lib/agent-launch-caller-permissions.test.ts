@@ -1,6 +1,6 @@
 // What each call site's arguments resolve to on the launch command line, and whether the
-// permission-bypass flag survives. The bypass bit has no storage of its own — it lives inside the
-// arguments string — so losing it here is silent and security-relevant.
+// permission-bypass flag follows the agent's typed permission mode. Losing the flag here is silent
+// and security-relevant, and so is adding it against a Manual setting.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -76,23 +76,31 @@ describe('agent launch caller arguments and permission bypass', () => {
 
     const command = queuedStartupCommand(store)
     expect(command).toBeDefined()
-    // A call site that names arguments replaces the shipped default outright; one that names none
-    // inherits it. Both shapes must stay visible on the queued command.
-    const args = profile.args.agentArgs === undefined ? `'${CODEX_BYPASS}'` : "'--model' 'gpt-5.5'"
+    // A call site that names arguments replaces the configured extra text, not the permission
+    // mode; one that names none inherits both. Both shapes must stay visible on the queued command.
+    const args =
+      profile.args.agentArgs === undefined
+        ? `'${CODEX_BYPASS}'`
+        : `'${CODEX_BYPASS}' '--model' 'gpt-5.5'`
     // Why: quick-command is the ONE call site that carries a prompt and names no delivery mode, so
     // it takes the default auto-submit path and folds the prompt into argv for an argv agent.
     const argvPrompt = profile.id === 'quick-command' ? ` '${profile.args.prompt}'` : ''
     expect(command).toBe(`codex ${args}${argvPrompt}`)
   })
 
-  it.each(cases)('keeps %s on the bypass posture its arguments encode', async (_id, profile) => {
+  it.each(cases)('keeps %s on the Yolo posture the setting chose', async (_id, profile) => {
     await launch(profile)
 
-    const command = queuedStartupCommand(store) ?? ''
-    // Why: the three recipe-driven call sites hand in saved arguments, which REPLACE the shipped
-    // default rather than merging with it — a saved recipe without the flag launches without bypass.
-    const namesOwnArguments = profile.args.agentArgs !== undefined
-    expect(command.includes(CODEX_BYPASS)).toBe(!namesOwnArguments)
+    // Why: recipe-driven call sites hand in their own arguments; before the mode was typed those
+    // replaced the stored flag and silently dropped bypass.
+    expect(queuedStartupCommand(store)).toContain(CODEX_BYPASS)
+  })
+
+  it.each(cases)('keeps %s on the Manual posture the setting chose', async (_id, profile) => {
+    store.settings = { ...store.settings, agentPermissionModeOverrides: { codex: 'ask' } }
+    await launch(profile)
+
+    expect(queuedStartupCommand(store) ?? '').not.toContain(CODEX_BYPASS)
   })
 
   it.each(cases)(
@@ -106,8 +114,40 @@ describe('agent launch caller arguments and permission bypass', () => {
         // tab can tell "inherit the setting" apart from "this launch chose these".
         expect(payload).not.toHaveProperty('agentArgsOverride')
       } else {
-        expect(payload?.agentArgsOverride).toBe(profile.args.agentArgs)
+        // Why composed: a paired host launches this override as-is.
+        expect(payload?.agentArgsOverride).toBe(`${CODEX_BYPASS} ${profile.args.agentArgs}`)
       }
+    }
+  )
+
+  // Source Control and fix-checks bring their own arguments; they follow the agent's effective
+  // mode (what its card shows), so Arguments that ask keep asking and an alias Yolo stays Yolo.
+  it.each(
+    cases
+      .filter(([id]) => id === 'source-control-action' || id === 'fix-checks')
+      .flatMap(([id, profile]) =>
+        (
+          [
+            ['codex', '-a on-request', CODEX_BYPASS, false],
+            ['claude', '--permission-mode acceptEdits', '--dangerously-skip-permissions', false],
+            ['gemini', '-y', '--yolo', true]
+          ] as const
+        ).map(
+          ([agent, configured, flag, flagged]) =>
+            [id, agent, configured, flag, flagged, profile] as const
+        )
+      )
+  )(
+    '%s launches %s configured %j under Yolo with its effective mode',
+    async (_id, agent, configured, flag, flagged, profile) => {
+      store.settings = { ...store.settings, agentDefaultArgs: { [agent]: configured } }
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+      launchAgentInNewTab({ requestId: 'request-11', ...profile.args, agent })
+
+      const command = queuedStartupCommand(store) ?? ''
+      expect(command.includes(`'${flag}'`) || command.includes(` ${flag}`)).toBe(flagged)
+      expect(command).toContain('gpt-5.5')
     }
   )
 
@@ -123,14 +163,13 @@ describe('agent launch caller arguments and permission bypass', () => {
   )
 
   it.each(BYPASS_BY_AGENT)(
-    'drops the bypass flag for %s when the user stored Manual arguments',
+    'drops the bypass flag for %s when its permission mode is Manual',
     async (agent, _mode, bypassFlag) => {
-      store.settings = { ...store.settings, agentDefaultArgs: { [agent]: '' } }
+      store.settings = { ...store.settings, agentPermissionModeOverrides: { [agent]: 'ask' } }
       const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
       launchAgentInNewTab({ requestId: 'request-3', agent, worktreeId: 'wt-1' })
 
-      // A stored empty string owns the key, so it beats the shipped bypass default.
       expect(queuedStartupCommand(store)).not.toContain(bypassFlag)
     }
   )
@@ -162,7 +201,8 @@ describe('agent launch caller arguments and permission bypass', () => {
     expect(queuedStartupPayload(store)).not.toHaveProperty('agentArgsOverride')
   })
 
-  it('launches without any arguments when a caller passes agentArgs as null', async () => {
+  it('launches with no extra arguments, but the mode, when a caller passes agentArgs as null', async () => {
+    store.settings = { ...store.settings, agentDefaultArgs: { codex: '--model stored' } }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
@@ -172,8 +212,22 @@ describe('agent launch caller arguments and permission bypass', () => {
       agentArgs: null
     })
 
-    expect(queuedStartupCommand(store)).toBe('codex')
-    expect(queuedStartupPayload(store)?.agentArgsOverride).toBeNull()
+    expect(queuedStartupCommand(store)).toBe(`codex '${CODEX_BYPASS}'`)
+    expect(queuedStartupPayload(store)?.agentArgsOverride).toBe(CODEX_BYPASS)
+  })
+
+  it('does not repeat a bypass flag the caller already typed', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      requestId: 'request-12',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      agentArgs: `${CODEX_BYPASS} -m o3`
+    })
+
+    // Why: clap rejects a repeated flag, so a doubled one would fail the launch.
+    expect(queuedStartupCommand(store)).toBe(`codex '${CODEX_BYPASS}' '-m' 'o3'`)
   })
 
   it('lets a per-launch argument beat the stored setting', async () => {
@@ -187,7 +241,7 @@ describe('agent launch caller arguments and permission bypass', () => {
       agentArgs: '--model per-launch'
     })
 
-    expect(queuedStartupCommand(store)).toBe("codex '--model' 'per-launch'")
+    expect(queuedStartupCommand(store)).toBe(`codex '${CODEX_BYPASS}' '--model' 'per-launch'`)
   })
 
   it('carries the stored launch environment onto the queued tab', async () => {

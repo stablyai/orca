@@ -170,6 +170,14 @@ export function resolveStartupShell(
   return shell ?? (platform === 'win32' ? 'powershell' : 'posix')
 }
 
+/** Where an agent launch runs: the platform and shell its startup plan gets. */
+export type AgentLaunchTarget = { platform: NodeJS.Platform; shell?: AgentStartupShell | null }
+
+/** The grammar that launch's shell reads its typed Arguments with. */
+export function resolveAgentLaunchGrammar(target: AgentLaunchTarget): AgentStartupShell {
+  return resolveStartupShell(target.platform, target.shell ?? undefined)
+}
+
 /**
  * Quotes one argument so the SAME text is literal in every Unix shell Orca can
  * be typing into — sh, bash, zsh, dash and fish.

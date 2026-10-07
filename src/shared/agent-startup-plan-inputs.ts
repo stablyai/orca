@@ -9,7 +9,12 @@ import { resolveLocalWindowsAgentStartupShell } from './windows-terminal-shell'
 export type AgentStartupSettings = Partial<
   Pick<
     GlobalSettings,
-    'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv' | 'terminalWindowsShell'
+    | 'agentCmdOverrides'
+    | 'agentDefaultArgs'
+    | 'agentDefaultEnv'
+    | 'agentPermissionMode'
+    | 'agentPermissionModeOverrides'
+    | 'terminalWindowsShell'
   >
 >
 
@@ -41,13 +46,19 @@ export function resolveAgentStartupPlanInputs(args: {
   settings: AgentStartupSettings
   platform: NodeJS.Platform
   isRemote: boolean
-  /** Replaces the configured default args for this launch; `null` is "no arguments". */
+  /** Launch-ready args for this launch (a client already applied its permission mode); `null` is
+   *  "no arguments at all". Omit it to compose from this host's settings. */
   agentArgs?: string | null
   /** A requested shell is the one this PTY will be, so it owns the quoting family. */
   windowsShellOverride?: string | null
   sessionOptions?: Record<string, SessionOptionValue> | undefined
 }): AgentStartupPlanInputs {
   const { agent, settings, platform, isRemote, sessionOptions } = args
+  const shell = resolveLocalWindowsAgentStartupShell({
+    platform,
+    isRemote,
+    terminalWindowsShell: args.windowsShellOverride ?? settings.terminalWindowsShell
+  })
   return {
     agent,
     cmdOverrides: settings.agentCmdOverrides ?? {},
@@ -56,14 +67,10 @@ export function resolveAgentStartupPlanInputs(args: {
     agentArgs:
       args.agentArgs !== undefined
         ? args.agentArgs
-        : resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+        : resolveTuiAgentLaunchArgs(agent, settings, { platform, shell }),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, settings),
     platform,
-    shell: resolveLocalWindowsAgentStartupShell({
-      platform,
-      isRemote,
-      terminalWindowsShell: args.windowsShellOverride ?? settings.terminalWindowsShell
-    }),
+    shell,
     isRemote,
     ...(sessionOptions ? { sessionOptions } : {}),
     // Why: session options are an explicit per-launch pick, so they outrank configured args —

@@ -5,11 +5,20 @@ import {
   normalizeDesktopTerminalScrollbackRows
 } from '../../../shared/terminal-scrollback-policy'
 import {
-  DEFAULT_TUI_AGENT_ARGS,
-  DEFAULT_TUI_AGENT_ENV,
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../../../shared/tui-agent-launch-defaults'
+import {
+  PERMISSION_AGENT_IDS,
+  YOLO_TUI_AGENT_ARGS,
+  YOLO_TUI_AGENT_ENV
+} from '../../../shared/tui-agent-permissions'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import { resolveLocalAgentLaunchTarget } from '../../../shared/windows-terminal-shell'
+import {
+  liftAgentBypassFromTypedProfile,
+  liftComposedAgentLaunchProfile
+} from '../../../shared/agent-launch-profile-lift'
 
 export function buildWorkspaceDirHistoryForUpdate(
   current: GlobalSettings,
@@ -125,63 +134,77 @@ export function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): strin
   return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
 }
 
-export function migrateAgentYoloDefaults(
+/** The launch arguments a profile saved before the permission mode was typed would have run with. */
+function migrateAgentYoloDefaults(
   settings: GlobalSettings | undefined
 ): Pick<GlobalSettings, 'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'> {
   const existingArgs = normalizeTuiAgentArgsRecord(settings?.agentDefaultArgs)
   const existingEnv = normalizeTuiAgentEnvRecord(settings?.agentDefaultEnv)
+  // An older build's Devin default; main moved it to the current flag when it loaded (#21925).
   if (existingArgs.devin === '--permission-mode bypass') {
-    existingArgs.devin = DEFAULT_TUI_AGENT_ARGS.devin
+    existingArgs.devin = YOLO_TUI_AGENT_ARGS.devin
   }
-  if (settings?.agentYoloDefaultsMigrated === true) {
-    // Keep newly added agents manual for profiles migrated by an older build.
-    // Missing keys otherwise fall through to the current (possibly yolo) defaults.
-    for (const agent of Object.keys(DEFAULT_TUI_AGENT_ARGS)) {
-      if (!(agent in existingArgs)) {
-        existingArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
-      }
-    }
-    for (const agent of Object.keys(DEFAULT_TUI_AGENT_ENV)) {
-      if (!(agent in existingEnv)) {
-        existingEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = {}
-      }
-    }
-    return {
-      agentDefaultArgs: existingArgs,
-      agentDefaultEnv: existingEnv,
-      agentYoloDefaultsMigrated: true
-    }
-  }
-
+  // Agents missing from an older build's profile stay manual; command-override users owned theirs.
   const commandOverrides = settings?.agentCmdOverrides ?? {}
+  const keepManual = (agent: TuiAgent): boolean =>
+    settings?.agentYoloDefaultsMigrated === true || agent in commandOverrides
   const migratedArgs = { ...existingArgs }
-  for (const [agent, args] of Object.entries(DEFAULT_TUI_AGENT_ARGS)) {
-    if (agent in migratedArgs) {
-      continue
-    }
-    if (agent in commandOverrides) {
-      migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
-      continue
-    }
-    migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = args
-  }
-
   const migratedEnv = { ...existingEnv }
-  for (const [agent, env] of Object.entries(DEFAULT_TUI_AGENT_ENV)) {
-    if (agent in migratedEnv) {
-      continue
+  for (const agent of PERMISSION_AGENT_IDS) {
+    const bypassArgs = YOLO_TUI_AGENT_ARGS[agent]
+    if (bypassArgs !== undefined && !(agent in migratedArgs)) {
+      migratedArgs[agent] = keepManual(agent) ? '' : bypassArgs
     }
-    if (agent in commandOverrides) {
-      migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = {}
-      continue
+    const bypassEnv = YOLO_TUI_AGENT_ENV[agent]
+    if (bypassEnv !== undefined && !(agent in migratedEnv)) {
+      migratedEnv[agent] = keepManual(agent) ? {} : { ...bypassEnv }
     }
-    migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = { ...env }
   }
 
   return {
-    // Why: legacy users could only customize launch defaults via command overrides, so those agents count as already user-owned.
     agentDefaultArgs: migratedArgs,
     agentDefaultEnv: migratedEnv,
     agentYoloDefaultsMigrated: true
+  }
+}
+
+export type MigratedAgentLaunchProfile = Pick<
+  GlobalSettings,
+  | 'agentDefaultArgs'
+  | 'agentDefaultEnv'
+  | 'agentYoloDefaultsMigrated'
+  | 'agentPermissionMode'
+  | 'agentPermissionModeOverrides'
+>
+
+/**
+ * Loads the agent launch profile as a typed mode plus extra text. Any stored mode means already
+ * migrated (one a newer build wrote is kept as is); older profiles get the yolo-defaults pass
+ * first, then the flag lifted into the mode.
+ */
+export function migrateAgentLaunchProfile(settings: GlobalSettings | undefined): {
+  profile: MigratedAgentLaunchProfile
+  migrated: boolean
+} {
+  if (settings && settings.agentPermissionMode !== undefined) {
+    const { profile, changed } = liftAgentBypassFromTypedProfile(settings)
+    return {
+      profile: {
+        ...profile,
+        agentYoloDefaultsMigrated: true,
+        agentPermissionMode: settings.agentPermissionMode
+      },
+      migrated: changed
+    }
+  }
+  return {
+    profile: {
+      ...liftComposedAgentLaunchProfile(
+        migrateAgentYoloDefaults(settings),
+        resolveLocalAgentLaunchTarget(process.platform, settings?.terminalWindowsShell)
+      ),
+      agentYoloDefaultsMigrated: true
+    },
+    migrated: true
   }
 }

@@ -18,13 +18,14 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import {
-  normalizeTuiAgentArgsRecord,
-  normalizeTuiAgentEnvRecord
+  normalizeStoredAgentLaunchArgs,
+  normalizeStoredAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup-ui-state'
+import { normalizeAgentPermissionSettingsUpdate } from '../../../../shared/tui-agent-permissions'
 
 export function mergeWebUIState(
   base: PersistedUIState,
@@ -156,10 +157,15 @@ export function mergeSettings(
     disabledTuiAgents: normalizeDisabledTuiAgents(
       updates.disabledTuiAgents ?? base.disabledTuiAgents
     ),
-    agentDefaultArgs: normalizeTuiAgentArgsRecord(
+    agentDefaultArgs: normalizeStoredAgentLaunchArgs(
       updates.agentDefaultArgs ?? base.agentDefaultArgs
     ),
-    agentDefaultEnv: normalizeTuiAgentEnvRecord(updates.agentDefaultEnv ?? base.agentDefaultEnv),
+    agentDefaultEnv: normalizeStoredAgentLaunchEnv(updates.agentDefaultEnv ?? base.agentDefaultEnv),
+    ...normalizeAgentPermissionSettingsUpdate({
+      agentPermissionMode: updates.agentPermissionMode ?? base.agentPermissionMode,
+      agentPermissionModeOverrides:
+        updates.agentPermissionModeOverrides ?? base.agentPermissionModeOverrides
+    }),
     voice: {
       ...(base.voice ?? defaults.voice),
       ...updates.voice

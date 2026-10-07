@@ -9,7 +9,8 @@ import { buildAiVaultResumeCommand } from '../../../shared/ai-vault-resume-comma
 import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
 import {
   resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
+  resolveTuiAgentLaunchEnv,
+  type AgentLaunchProfileSettings
 } from '../../../shared/tui-agent-launch-defaults'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -25,9 +26,9 @@ export function buildAntigravityReferenceStartup(args: {
   platform: NodeJS.Platform
   shell?: AgentStartupShell
   commandOverride?: string | null
-  settings?: Partial<
-    Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv'>
-  > | null
+  settings?:
+    | (AgentLaunchProfileSettings & Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>)
+    | null
 }): AiVaultResumeStartup | null {
   const plan = buildAgentStartupPlan({
     agent: 'antigravity',
@@ -39,8 +40,11 @@ export function buildAntigravityReferenceStartup(args: {
       ...args.settings?.agentCmdOverrides,
       ...(args.commandOverride?.trim() ? { antigravity: args.commandOverride } : {})
     },
-    agentArgs: resolveTuiAgentLaunchArgs('antigravity', args.settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv('antigravity', args.settings?.agentDefaultEnv)
+    agentArgs: resolveTuiAgentLaunchArgs('antigravity', args.settings, {
+      platform: args.platform,
+      shell: args.shell
+    }),
+    agentEnv: resolveTuiAgentLaunchEnv('antigravity', args.settings)
   })
   if (!plan) {
     return null

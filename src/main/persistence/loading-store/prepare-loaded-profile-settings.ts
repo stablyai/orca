@@ -15,7 +15,10 @@ import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
-import { migrateAgentYoloDefaults } from '../applying-settings/terminal-settings-migrations'
+import {
+  migrateAgentLaunchProfile,
+  type MigratedAgentLaunchProfile
+} from '../applying-settings/terminal-settings-migrations'
 import {
   normalizeLoadedOnboardingState,
   normalizeNotificationSettings,
@@ -40,10 +43,7 @@ export type PreparedLoadedProfileSettings = {
   migratePrimarySelectionPlatformDefault: boolean
   stampPrimarySelectionTerminalDefaults: boolean
   migratedDisabledTuiAgents: GlobalSettings['disabledTuiAgents']
-  migratedAgentYoloDefaults: Pick<
-    GlobalSettings,
-    'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'
-  >
+  migratedAgentLaunchProfile: MigratedAgentLaunchProfile
   migratedWindowsRuntimeDefault: GlobalSettings['localWindowsRuntimeDefault']
   migratedLocalAccountRuntime: GlobalSettings['localAccountRuntime']
   loadedCompactWorktreeCards: boolean
@@ -133,11 +133,11 @@ export function prepareLoadedProfileSettings(
     markNeedsSave()
   }
   const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents)
-  const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
+  const { profile: migratedAgentLaunchProfile, migrated: agentLaunchProfileMigrated } =
+    migrateAgentLaunchProfile(parsed.settings)
   if (
+    agentLaunchProfileMigrated ||
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
-    parsed.settings?.agentDefaultArgs?.devin !==
-      migratedAgentYoloDefaults.agentDefaultArgs?.devin ||
     hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
     hasUnsupportedTuiAgentArgs('kilo', parsed.settings?.agentDefaultArgs?.kilo)
   ) {
@@ -243,7 +243,7 @@ export function prepareLoadedProfileSettings(
     migratePrimarySelectionPlatformDefault,
     stampPrimarySelectionTerminalDefaults,
     migratedDisabledTuiAgents,
-    migratedAgentYoloDefaults,
+    migratedAgentLaunchProfile,
     migratedWindowsRuntimeDefault,
     migratedLocalAccountRuntime,
     loadedCompactWorktreeCards,

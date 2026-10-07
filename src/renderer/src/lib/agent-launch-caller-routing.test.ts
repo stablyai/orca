@@ -250,7 +250,8 @@ describe('agent launch caller routing', () => {
         worktreeId: 'wt-1',
         environmentId: 'web-runtime',
         prompt: 'fix the flaky test',
-        agentArgs: '--model sonnet'
+        // The caller's own arguments, combined with this client's permission mode (Yolo).
+        agentArgs: '--dangerously-skip-permissions --model sonnet'
       })
     )
     expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()

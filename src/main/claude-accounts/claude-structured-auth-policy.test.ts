@@ -140,7 +140,7 @@ describe('hasClaudeAuthEnvConflict matches the strip it guards', () => {
   // record -> launch env -> the predicate the terminal preflight gates on.
   it('admits a blanked variable all the way from the settings record', () => {
     const configured = normalizeTuiAgentEnvRecord({ claude: { ANTHROPIC_API_KEY: '' } })
-    const launchEnv = resolveTuiAgentLaunchEnv('claude', configured)
+    const launchEnv = resolveTuiAgentLaunchEnv('claude', { agentDefaultEnv: configured })
 
     expect(launchEnv).toEqual({ ANTHROPIC_API_KEY: '' })
     expect(hasClaudeAuthEnvConflict(launchEnv, 'linux')).toBe(false)

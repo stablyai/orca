@@ -9,8 +9,8 @@ import { isResumableTuiAgent } from '../../../src/shared/agent-session-resume'
 import type { SleepingAgentLaunchConfig } from '../../../src/shared/agent-session-resume'
 import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
+  resolveComposedTuiAgentLaunchArgs,
+  resolveComposedTuiAgentLaunchEnv
 } from '../../../src/shared/tui-agent-launch-defaults'
 import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-resume-path'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
@@ -60,6 +60,7 @@ export function buildMobileAiVaultResumeCommand(args: {
   })
 }
 
+/** The host's `settings.get` projection: launch arguments arrive with the permission flag inline. */
 export type MobileAiVaultResumeSettings = {
   agentCmdOverrides?: Partial<Record<TuiAgent, string | null>>
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
@@ -98,8 +99,14 @@ export function buildMobileAiVaultResumeLaunch(args: {
       cmdOverrides,
       platform: args.hostPlatform,
       shell,
-      agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings?.agentDefaultEnv),
+      agentArgs: resolveComposedTuiAgentLaunchArgs(
+        args.session.agent,
+        args.settings?.agentDefaultArgs
+      ),
+      agentEnv: resolveComposedTuiAgentLaunchEnv(
+        args.session.agent,
+        args.settings?.agentDefaultEnv
+      ),
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }
         : {})

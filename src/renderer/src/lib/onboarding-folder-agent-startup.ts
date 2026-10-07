@@ -45,17 +45,18 @@ export function buildOnboardingFolderAgentStartup(
     return undefined
   }
 
+  const platform = getClientPlatform()
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: '',
     cmdOverrides: settings.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+    agentArgs: resolveTuiAgentLaunchArgs(agent, settings, { platform }),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, settings),
     sessionOptions: resolveInitialNativeChatSessionOptions(settings, {
       agent,
       nativeChatTranscriptIsLocalReadable
     }),
-    platform: getClientPlatform(),
+    platform,
     allowEmptyPromptLaunch: true
   })
   if (!startupPlan) {

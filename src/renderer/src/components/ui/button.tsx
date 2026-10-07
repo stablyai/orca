@@ -26,7 +26,9 @@ const buttonVariants = cva(
         icon: 'size-9',
         'icon-xs': "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-8',
-        'icon-lg': 'size-10'
+        'icon-lg': 'size-10',
+        // For the `link` variant inside a sentence: no box, the sentence's own type size.
+        inline: 'h-auto p-0 align-baseline text-[length:inherit]'
       }
     },
     defaultVariants: {

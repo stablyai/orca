@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import type { AgentLaunchProfileSettings } from '../../shared/tui-agent-launch-defaults'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -54,7 +55,7 @@ function resolverFor(
   value: AgentSessionRecord | null,
   resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
   resolveRollout: () => Promise<string | null> = async () => null,
-  agentDefaultArgs: Record<string, string> = { codex: '' },
+  permissionSettings: AgentLaunchProfileSettings = { agentPermissionMode: 'ask' },
   resolveLaunchArgs?: () => string[]
 ) {
   return createCodexStructuredLaunchResolver({
@@ -63,7 +64,7 @@ function resolverFor(
     resolveCommand: () => '/usr/local/bin/codex',
     resolveRollout,
     resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? []),
-    resolvePermissionPolicy: () => codexStructuredPermissionPolicyForSettings({ agentDefaultArgs })
+    resolvePermissionPolicy: () => codexStructuredPermissionPolicyForSettings(permissionSettings)
   })
 }
 
@@ -90,7 +91,7 @@ describe('codex structured launch resolution', () => {
         }),
         undefined,
         undefined,
-        { codex: '' },
+        { agentPermissionMode: 'ask', agentDefaultArgs: { codex: '' } },
         () => args
       )
       await expect(resolve({ identity: IDENTITY })).rejects.toThrow(/Arguments/)
@@ -235,7 +236,7 @@ describe('codex structured launch resolution', () => {
   // app-server owns the permission posture on the thread RPC, not process flags.
   it('resolves the bypass posture as app-server thread policy', async () => {
     const launch = await resolverFor(record(), undefined, undefined, {
-      codex: '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol'
+      agentDefaultArgs: { codex: '--model gpt-5.6-sol' }
     })({ identity: IDENTITY })
 
     expect(launch.args).toEqual(['app-server'])

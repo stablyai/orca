@@ -127,7 +127,7 @@ Variants in priority order:
 | `link`        | Inline text actions inside paragraphs.                             |
 | `destructive` | Delete, discard, irreversible. Never for Cancel.                   |
 
-Sizes: `default` (36px), `sm` (32px), `xs` (24px), `lg` (40px), plus `icon`, `icon-xs`, `icon-sm`, `icon-lg`. Match the size to the surrounding row height — don't drop a `default` button into a 28px toolbar.
+Sizes: `default` (36px), `sm` (32px), `xs` (24px), `lg` (40px), plus `icon`, `icon-xs`, `icon-sm`, `icon-lg`, and `inline` (no box, the surrounding text's size) for a `link` button inside a sentence. Match the size to the surrounding row height — don't drop a `default` button into a 28px toolbar.
 
 ### Other primitives in this repo
 

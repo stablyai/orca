@@ -6720,8 +6720,6 @@
           "8fbe1f37c1": "環境",
           "2d133152fa": "デフォルト環境なし",
           "agentPermissions": "Agent の権限",
-          "agentPermissionsInfo": "Agent 権限情報",
-          "agentPermissionsTooltip": "起動引数を上書きしている Agent には適用されません。",
           "agentPermissionsDescription": "Orca が権限プロンプトの少ない Agent を起動するか、手動チェックを含む Agent を起動するかを選択します。",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "手動",
@@ -6734,7 +6732,15 @@
           "remoteDetectionFailed": "インストールされている Agent を検出できませんでした。ホストへの接続を確認して、もう一度お試しください。",
           "retryDetection": "再試行",
           "storedDefaultUndetected": "デフォルトとして保存されていますが、現在は検出されません",
-          "noAgentsDetected": "Agent が検出されませんでした。プローブがインストールされている場合、プローブがタイムアウトした可能性があります。"
+          "noAgentsDetected": "Agent が検出されませんでした。プローブがインストールされている場合、プローブがタイムアウトした可能性があります。",
+          "agentPermissionsAppliesToAll": "下の一覧で個別に設定していないすべての Agent に適用されます。",
+          "agentPermissionOverride": "権限",
+          "agentPermissionOverrideAria": "{{value0}} の権限",
+          "agentPermissionOverrideDefault": "デフォルト（{{value0}}）",
+          "agentPermissionsNotFollowing": "次の Agent はこの設定に従いません:",
+          "agentPermissionsOwnSettingReason": "は {{value0}} で起動します: 個別の設定があります。",
+          "agentPermissionsArgumentsReason": "は {{value0}} で起動します: 引数で {{value1}} が指定されています。",
+          "agentPermissionsEnvironmentReason": "は {{value0}} で起動します: 環境変数で {{value1}} が指定されています。"
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",

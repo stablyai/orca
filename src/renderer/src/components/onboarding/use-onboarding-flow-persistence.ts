@@ -9,7 +9,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { applyAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
+import { resolveDefaultAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export async function persistStep(
@@ -166,13 +166,13 @@ export function usePersistCurrentStep({
     try {
       if (currentStepId === 'agent') {
         const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
+        const permissionMode = yoloPermissions ? 'bypass' : 'ask'
         await updateSettings({
           defaultTuiAgent,
-          ...applyAgentPermissionMode({
-            mode: yoloPermissions ? 'yolo' : 'manual',
-            agentDefaultArgs: settings.agentDefaultArgs,
-            agentDefaultEnv: settings.agentDefaultEnv
-          })
+          // Only the shared default, like the Settings switch; per-agent choices stay.
+          ...(permissionMode !== resolveDefaultAgentPermissionMode(settings)
+            ? { agentPermissionMode: permissionMode }
+            : {})
         })
         const choseAgent = defaultTuiAgent !== 'blank'
         const wasAlreadyChosen = onboardingChecklist.choseAgent

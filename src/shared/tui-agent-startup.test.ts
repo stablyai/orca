@@ -14,6 +14,8 @@ import {
   unwrapPowerShellScript
 } from './tui-agent-startup-script.test-fixture'
 
+const DARWIN = { platform: 'darwin' } as const
+
 describe('draft prefill teardown ordering (#14975)', () => {
   // Why pinned: the teardown mutates the calling shell, so it must reference
   // $fish_pid, which aborts the line under `set -u`. That is survivable ONLY
@@ -51,9 +53,13 @@ describe('tui agent startup plans', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
       prompt: '',
-      agentArgs: resolveTuiAgentLaunchArgs('claude', {
-        claude: '--dangerously-skip-permissions --model Opus'
-      }),
+      agentArgs: resolveTuiAgentLaunchArgs(
+        'claude',
+        {
+          agentDefaultArgs: { claude: '--dangerously-skip-permissions --model Opus' }
+        },
+        DARWIN
+      ),
       cmdOverrides: {},
       platform: 'linux',
       allowEmptyPromptLaunch: true
@@ -384,13 +390,13 @@ describe('tui agent startup plans', () => {
 
   it.each([
     ['yolo', 'linux', 'posix', undefined, "muse --trust-workspace '--yolo'"],
-    ['manual', 'linux', 'posix', { muse: '' }, 'muse --trust-workspace'],
+    ['manual', 'linux', 'posix', { agentPermissionMode: 'ask' }, 'muse --trust-workspace'],
     ['yolo', 'darwin', 'posix', undefined, "muse --trust-workspace '--yolo'"],
-    ['manual', 'darwin', 'posix', { muse: '' }, 'muse --trust-workspace'],
+    ['manual', 'darwin', 'posix', { agentPermissionMode: 'ask' }, 'muse --trust-workspace'],
     ['yolo', 'win32', 'powershell', undefined, "muse --trust-workspace '--yolo'"],
-    ['manual', 'win32', 'powershell', { muse: '' }, 'muse --trust-workspace'],
+    ['manual', 'win32', 'powershell', { agentPermissionMode: 'ask' }, 'muse --trust-workspace'],
     ['yolo', 'win32', 'cmd', undefined, 'muse --trust-workspace "--yolo"'],
-    ['manual', 'win32', 'cmd', { muse: '' }, 'muse --trust-workspace']
+    ['manual', 'win32', 'cmd', { agentPermissionMode: 'ask' }, 'muse --trust-workspace']
   ] as const)(
     'launches Muse in %s mode on %s/%s before delivering its prompt',
     (_, platform, shell, defaults, command) => {
@@ -400,7 +406,7 @@ describe('tui agent startup plans', () => {
         cmdOverrides: {},
         platform,
         shell,
-        agentArgs: resolveTuiAgentLaunchArgs('muse', defaults)
+        agentArgs: resolveTuiAgentLaunchArgs('muse', defaults, DARWIN)
       })
 
       expect(plan).toMatchObject({
@@ -411,6 +417,35 @@ describe('tui agent startup plans', () => {
       })
     }
   )
+
+  // The flag and the user's text are joined before tokenizing, so each shell must still see them
+  // as separate, correctly quoted arguments.
+  it.each([
+    ['posix', "claude '--dangerously-skip-permissions' '--model' 'Opus 4' '--add-dir' 'C:/a b'"],
+    [
+      'powershell',
+      "claude '--dangerously-skip-permissions' '--model' 'Opus 4' '--add-dir' 'C:/a b'"
+    ],
+    ['cmd', 'claude "--dangerously-skip-permissions" "--model" "Opus 4" "--add-dir" "C:/a b"']
+  ] as const)('quotes the permission flag and extra arguments for %s', (shell, command) => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: '',
+      cmdOverrides: {},
+      platform: shell === 'posix' ? 'linux' : 'win32',
+      shell,
+      agentArgs: resolveTuiAgentLaunchArgs(
+        'claude',
+        {
+          agentDefaultArgs: { claude: '--model "Opus 4" --add-dir "C:/a b"' }
+        },
+        DARWIN
+      ),
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe(command)
+  })
 
   it.each(['exec', 'resume', '--help'])(
     'delivers the reserved Muse prompt %s as text',
@@ -607,7 +642,7 @@ describe('tui agent startup plans', () => {
       agent: 'opencode',
       prompt: 'fix it',
       cmdOverrides: {},
-      agentArgs: resolveTuiAgentLaunchArgs('opencode', agentDefaultArgs),
+      agentArgs: resolveTuiAgentLaunchArgs('opencode', { agentDefaultArgs }, DARWIN),
       platform: 'linux'
     })
 
@@ -754,7 +789,7 @@ describe('tui agent startup plans', () => {
       agent: 'rovo',
       prompt: 'fix it',
       cmdOverrides: {},
-      agentArgs: resolveTuiAgentLaunchArgs('rovo', null),
+      agentArgs: resolveTuiAgentLaunchArgs('rovo', null, { platform: 'linux' }),
       platform: 'linux'
     })
     expect(plan).toMatchObject({
@@ -769,7 +804,7 @@ describe('tui agent startup plans', () => {
       agent: 'devin',
       prompt: 'fix the tests',
       cmdOverrides: {},
-      agentArgs: resolveTuiAgentLaunchArgs('devin', null),
+      agentArgs: resolveTuiAgentLaunchArgs('devin', null, DARWIN),
       platform: 'linux'
     })
     expect(plan).toEqual({
@@ -803,7 +838,7 @@ describe('tui agent startup plans', () => {
   })
 
   it('appends Devin default permission-mode bypass before stdin prompt delivery', () => {
-    expect(resolveTuiAgentLaunchArgs('devin', null)).toBe(
+    expect(resolveTuiAgentLaunchArgs('devin', null, DARWIN)).toBe(
       '--permission-mode bypass --respect-workspace-trust false'
     )
   })

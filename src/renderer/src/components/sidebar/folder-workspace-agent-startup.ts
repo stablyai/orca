@@ -8,7 +8,11 @@ import {
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import type {
+  AgentLaunchTarget,
+  AgentStartupShell
+} from '../../../../shared/tui-agent-startup-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 
@@ -20,6 +24,22 @@ export function getFolderWorkspaceAgentLaunchPlatform(
     return isWindowsAbsolutePathLike(parentPath) ? 'win32' : 'linux'
   }
   return parentPath && isWslUncPath(parentPath) ? 'linux' : CLIENT_PLATFORM
+}
+
+/** Where a folder workspace's agent launches: its platform and that host's startup shell. */
+export function resolveFolderWorkspaceAgentLaunchTarget(
+  projectGroup: Pick<ProjectGroup, 'connectionId' | 'parentPath'>,
+  terminalWindowsShell: string | null | undefined
+): AgentLaunchTarget & { isRemote: boolean; shell: AgentStartupShell | undefined } {
+  const platform = getFolderWorkspaceAgentLaunchPlatform(projectGroup)
+  // Why: an SSH folder group runs the plain `orca` relay shim, so the Linux-only
+  // `orca-ide` rename must not be applied for remote launches.
+  const isRemote = Boolean(projectGroup.connectionId)
+  return {
+    platform,
+    isRemote,
+    shell: resolveLocalWindowsAgentStartupShell({ platform, isRemote, terminalWindowsShell })
+  }
 }
 
 /** Resolve the linked context that should appear in the agent input without submitting. */

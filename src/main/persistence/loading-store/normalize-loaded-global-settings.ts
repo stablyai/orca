@@ -45,7 +45,7 @@ export function normalizeLoadedGlobalSettings(
     migratePrimarySelectionPlatformDefault,
     stampPrimarySelectionTerminalDefaults,
     migratedDisabledTuiAgents,
-    migratedAgentYoloDefaults,
+    migratedAgentLaunchProfile,
     migratedWindowsRuntimeDefault,
     migratedLocalAccountRuntime,
     loadedCompactWorktreeCards,
@@ -133,7 +133,7 @@ export function normalizeLoadedGlobalSettings(
       parsed.settings?.terminalShortcutPolicy
     ),
     disabledTuiAgents: migratedDisabledTuiAgents,
-    ...migratedAgentYoloDefaults,
+    ...migratedAgentLaunchProfile,
     claudeAgentTeamsDefaultDisabledMigrated: true,
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
       seedDefaults: true

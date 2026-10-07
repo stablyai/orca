@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, ExternalLink } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -14,6 +14,16 @@ import {
   AgentDefaultArgsInput,
   AgentDefaultEnvInput
 } from './AgentLaunchDefaultsEditor'
+import { AgentPermissionOverrideControl } from './AgentPermissionControls'
+import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissions'
+import type { AgentPermissionRevealTarget } from './agent-permission-exceptions'
+
+/** The control a reveal focuses: the Permissions choice, or the field whose text decides. */
+const REVEAL_FOCUS_SELECTOR: Record<AgentPermissionRevealTarget, string> = {
+  permissions: '[role="radio"][aria-checked="true"]',
+  arguments: 'input',
+  environment: 'input'
+}
 
 type AgentAvailability = 'enabled' | 'disabled'
 
@@ -74,6 +84,18 @@ export type AgentCatalogRowProps = {
   onSaveArgs: (value: string) => void
   onSaveEnv: (value: Record<string, string>) => void
   sessionSourceHome?: AgentSessionSourceHomeControl
+  /** Shows the environment editor even when empty (agents whose permission mode is an env var). */
+  envEditable?: boolean
+  /** Absent for agents with no permission flag to set. */
+  permission?: {
+    override: AgentPermissionMode | undefined
+    defaultMode: AgentPermissionMode
+    /** The field that decides the launch instead of this choice, when Arguments or env set it. */
+    decidedBy: 'arguments' | 'environment' | null
+    onChange: (choice: AgentPermissionMode | 'default') => void
+  }
+  /** A request from the Agent Permissions line to open this row and focus one of its controls. */
+  reveal?: { target: AgentPermissionRevealTarget; nonce: number }
 }
 
 export function AgentCatalogRow({
@@ -94,16 +116,70 @@ export function AgentCatalogRow({
   onSaveOverride,
   onSaveArgs,
   onSaveEnv,
-  sessionSourceHome
+  sessionSourceHome,
+  envEditable,
+  permission,
+  reveal
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
-  const [cmdOpen, setCmdOpen] = useState(
-    Boolean(cmdOverride) || argsOverride !== defaultArgs || envSummary !== defaultEnvSummary
+  const permissionControl = permission ? (
+    <AgentPermissionOverrideControl
+      agentLabel={label}
+      override={permission.override}
+      defaultMode={permission.defaultMode}
+      onChange={permission.onChange}
+    />
+  ) : null
+  const argumentsField = (
+    <div data-agent-reveal="arguments">
+      <AgentDefaultArgsInput
+        key={`${agentId}:${argsOverride}`}
+        defaultArgs={defaultArgs}
+        argsOverride={argsOverride}
+        onSaveArgs={onSaveArgs}
+      />
+    </div>
   )
+  const environmentField = (
+    <div data-agent-reveal="environment">
+      <AgentDefaultEnvInput
+        key={`${agentId}:${envSummary}`}
+        defaultEnv={defaultEnv}
+        envOverride={envOverride}
+        onSaveEnv={onSaveEnv}
+      />
+    </div>
+  )
+  const [cmdOpen, setCmdOpen] = useState(
+    Boolean(cmdOverride) ||
+      argsOverride !== defaultArgs ||
+      envSummary !== defaultEnvSummary ||
+      permission?.override !== undefined
+  )
+  // A new reveal opens the row in the same render, so its controls exist when the effect focuses.
+  const [openedForReveal, setOpenedForReveal] = useState(reveal?.nonce)
+  if (reveal && reveal.nonce !== openedForReveal) {
+    setOpenedForReveal(reveal.nonce)
+    setCmdOpen(true)
+  }
+  const rowRef = useRef<HTMLDivElement>(null)
+  const focusedReveal = useRef(reveal?.nonce)
+  useEffect(() => {
+    if (!reveal || reveal.nonce === focusedReveal.current) {
+      return
+    }
+    focusedReveal.current = reveal.nonce
+    const control = rowRef.current?.querySelector<HTMLElement>(
+      `[data-agent-reveal="${reveal.target}"] ${REVEAL_FOCUS_SELECTOR[reveal.target]}`
+    )
+    control?.scrollIntoView?.({ block: 'center' })
+    // focusVisible: after a mouse click on the link, a radio's ring would otherwise stay hidden.
+    control?.focus({ preventScroll: true, focusVisible: true })
+  }, [reveal])
 
   return (
-    <div className={cn('py-3', !isDetected && 'opacity-70')}>
+    <div ref={rowRef} data-agent-row={agentId} className={cn('py-3', !isDetected && 'opacity-70')}>
       <div className="flex flex-wrap items-start gap-3">
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
           <AgentIcon agent={agentId} size={16} />
@@ -200,6 +276,16 @@ export function AgentCatalogRow({
         </div>
       </div>
 
+      {/* An undetected agent's own choice still applies where it runs (an SSH host), so it stays clearable. */}
+      {!isDetected && permission?.override !== undefined && (
+        <div className="mt-3 pl-10">
+          {/* When Arguments or env decide, show that field too, so its link lands where it says. */}
+          {permission.decidedBy === 'arguments' && <div className="mb-2">{argumentsField}</div>}
+          {permission.decidedBy === 'environment' && <div className="mb-2">{environmentField}</div>}
+          <div data-agent-reveal="permissions">{permissionControl}</div>
+        </div>
+      )}
+
       {isDetected && cmdOpen && (
         <div className="mt-3 pl-10">
           <AgentCommandOverrideInput
@@ -208,23 +294,14 @@ export function AgentCatalogRow({
             cmdOverride={cmdOverride}
             onSaveOverride={onSaveOverride}
           />
-          <div className="mt-2">
-            <AgentDefaultArgsInput
-              key={`${agentId}:${argsOverride}`}
-              defaultArgs={defaultArgs}
-              argsOverride={argsOverride}
-              onSaveArgs={onSaveArgs}
-            />
-          </div>
-          {(defaultEnvSummary || envSummary) && (
-            <div className="mt-2">
-              <AgentDefaultEnvInput
-                key={`${agentId}:${envSummary}`}
-                defaultEnv={defaultEnv}
-                envOverride={envOverride}
-                onSaveEnv={onSaveEnv}
-              />
+          <div className="mt-2">{argumentsField}</div>
+          {permissionControl && (
+            <div className="mt-2" data-agent-reveal="permissions">
+              {permissionControl}
             </div>
+          )}
+          {(envEditable || defaultEnvSummary || envSummary) && (
+            <div className="mt-2">{environmentField}</div>
           )}
           {sessionSourceHome && (
             <div className="mt-2">

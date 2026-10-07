@@ -32,10 +32,9 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { buildWorktreeListingPage } from './worktree-listing-host-scope'
 import { structuredWorkerOwesWork } from './structured-worker-custody'
-import {
-  resolvedTuiAgentArgsBypassPermissions,
-  resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
+import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
+import { resolveAgentPermissionPosture } from '../../shared/tui-agent-permission-args'
+import { resolveLocalAgentLaunchTarget } from '../../shared/windows-terminal-shell'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { claudeStructuredPermissionModeForSettings } from '../claude/claude-structured-permission-mode'
@@ -205,9 +204,9 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       resolveLaunchArgs: (agent) =>
         structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
       resolveLaunchEnvOverlay: () =>
-        resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings().agentDefaultEnv),
+        resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings()),
       resolveClaudeLaunchEnv: () =>
-        resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv),
+        resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings()),
       // Wired only here, so a test runtime never runs a real `claude --version`.
       claudeThinkingDisplay: claudeThinkingDisplaySupport,
       resolveShellEnvironmentPolicy: () =>
@@ -220,17 +219,19 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
         claudeStructuredPermissionModeForSettings(this.requireStore().getSettings()),
       resolveCodexPermissionPolicy: () =>
         codexStructuredPermissionPolicyForSettings(this.requireStore().getSettings()),
-      resolveAgentFullAccess: (agent) =>
-        isTuiAgent(agent) &&
-        resolvedTuiAgentArgsBypassPermissions(
-          agent,
-          this.requireStore().getSettings(),
-          process.platform
-        ),
+      resolveAgentFullAccess: (agent) => {
+        const settings = this.requireStore().getSettings()
+        return (
+          isTuiAgent(agent) &&
+          resolveAgentPermissionPosture(
+            agent,
+            settings,
+            resolveLocalAgentLaunchTarget(process.platform, settings.terminalWindowsShell)
+          ).effectiveBypass
+        )
+      },
       resolveAgentLaunchEnv: (agent) =>
-        isTuiAgent(agent)
-          ? resolveTuiAgentLaunchEnv(agent, this.requireStore().getSettings().agentDefaultEnv)
-          : {},
+        isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, this.requireStore().getSettings()) : {},
       // Same gate and same settings as agentSession.createSupport, re-read on every acquisition.
       getClaudeManagedAccountGateSettings: () => this.requireStore().getSettings(),
       resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent),

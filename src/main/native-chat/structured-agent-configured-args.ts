@@ -1,10 +1,12 @@
 import type { AgentSessionHandleProvider } from '../../shared/agent-session-provider-handle'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { resolveTuiAgentLaunchArgs } from '../../shared/tui-agent-launch-defaults'
 import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 
-/** Use the same grouping rules as terminal launches before the provider filters its owned flags. */
+/**
+ * The user's extra Arguments, grouped by the same rules as terminal launches. The permission
+ * mode is not here: structured chat applies it through its own SDK/app-server policy.
+ */
 export function structuredAgentConfiguredArgs(
   agent: AgentSessionHandleProvider,
   settings: Partial<Pick<GlobalSettings, 'agentDefaultArgs' | 'terminalWindowsShell'>>,
@@ -16,10 +18,7 @@ export function structuredAgentConfiguredArgs(
       isRemote: false,
       terminalWindowsShell: settings.terminalWindowsShell
     }) ?? 'posix'
-  const parsed = tokenizeStartupCommand(
-    resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    shell
-  )
+  const parsed = tokenizeStartupCommand(settings.agentDefaultArgs?.[agent] ?? '', shell)
   if (!parsed.ok) {
     throw new Error(`${agent} Arguments are invalid: ${parsed.error}`)
   }

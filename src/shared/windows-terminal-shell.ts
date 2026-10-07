@@ -1,4 +1,4 @@
-import type { AgentStartupShell } from './tui-agent-startup-shell'
+import type { AgentLaunchTarget, AgentStartupShell } from './tui-agent-startup-shell'
 
 export const WINDOWS_GIT_BASH_SHELL = 'git-bash'
 
@@ -53,6 +53,17 @@ export function resolveLocalWindowsAgentStartupShell(args: {
     return undefined
   }
   return resolveWindowsShellStartupFamily(args.terminalWindowsShell)
+}
+
+/** A launch on this machine, with its shell resolved the way local agent launches resolve it. */
+export function resolveLocalAgentLaunchTarget(
+  platform: NodeJS.Platform,
+  terminalWindowsShell?: string | null
+): AgentLaunchTarget {
+  return {
+    platform,
+    shell: resolveLocalWindowsAgentStartupShell({ platform, isRemote: false, terminalWindowsShell })
+  }
 }
 
 /**

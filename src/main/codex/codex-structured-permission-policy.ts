@@ -1,5 +1,7 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { resolvedTuiAgentArgsBypassPermissions } from '../../shared/tui-agent-launch-defaults'
+import type { AgentLaunchProfileSettings } from '../../shared/tui-agent-launch-defaults'
+import { resolveAgentPermissionPosture } from '../../shared/tui-agent-permission-args'
+import { resolveLocalAgentLaunchTarget } from '../../shared/windows-terminal-shell'
 
 export type CodexStructuredPermissionPolicy =
   | { approvalPolicy: 'never'; sandbox: 'danger-full-access' }
@@ -29,21 +31,24 @@ const MANUAL_POLICY = { approvalPolicy: 'on-request', sandbox: 'workspace-write'
 /**
  * The Agent Permissions setting as app-server thread policy.
  *
- * Derived per acquisition from the resolved launch arguments, never from the free-text Arguments
- * field: app-server takes a narrower option set than the interactive CLI and the two are versioned
- * apart, so the only thing read out of that field is the posture the toggle stores in it. An
- * untouched profile resolves to the default Orca ships, which is the bypass flag.
+ * Derived per acquisition from the agent's typed permission mode. App-server takes a narrower
+ * option set than the interactive CLI and the two are versioned apart, so the only thing read out
+ * of the free-text Arguments is the bypass flag, which a terminal launch also honours.
  *
  * Always a policy, never `undefined`: both postures have to be said out loud, because the one
  * that goes unsaid is the one a resume silently inherits from the other.
  */
 export function codexStructuredPermissionPolicyForSettings(
   settings:
-    | Partial<Pick<GlobalSettings, 'agentDefaultArgs' | 'terminalWindowsShell'>>
+    | (AgentLaunchProfileSettings & Partial<Pick<GlobalSettings, 'terminalWindowsShell'>>)
     | null
     | undefined
 ): CodexStructuredPermissionPolicy {
-  return resolvedTuiAgentArgsBypassPermissions('codex', settings, process.platform)
+  return resolveAgentPermissionPosture(
+    'codex',
+    settings,
+    resolveLocalAgentLaunchTarget(process.platform, settings?.terminalWindowsShell)
+  ).effectiveBypass
     ? BYPASS_POLICY
     : MANUAL_POLICY
 }

@@ -1,5 +1,4 @@
-import { useMemo } from 'react'
-import { Info } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getAgentCatalog } from '@/lib/agent-catalog'
@@ -19,29 +18,26 @@ import {
   getAgentWorkspaceTrustDescription,
   getAgentWorkspaceTrustTitle
 } from './agent-workspace-trust-copy'
-import {
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader,
-  SettingsSwitchRow
-} from './SettingsFormControls'
+import { SettingsSwitchRow } from './SettingsFormControls'
 import {
   isTuiAgentEnabled,
   normalizeDisabledTuiAgents
 } from '../../../../shared/tui-agent-selection'
+import { resolveAgentPermissionPosture } from '../../../../shared/tui-agent-permission-args'
+import { resolveLocalAgentLaunchTarget } from '../../../../shared/windows-terminal-shell'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import {
-  getTuiAgentDefaultArgs,
-  getTuiAgentDefaultEnv,
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../shared/tui-agent-launch-defaults'
-import {
-  applyAgentPermissionMode,
-  resolveAgentPermissionModeSummary,
+  agentHasPermissionMode,
+  resolveDefaultAgentPermissionMode,
+  YOLO_TUI_AGENT_ENV,
   type AgentPermissionMode
 } from '../../../../shared/tui-agent-permissions'
+import { AgentPermissionsSetting } from './AgentPermissionControls'
+import {
+  buildAgentPermissionExceptions,
+  type AgentPermissionRevealTarget
+} from './agent-permission-exceptions'
 import { getSettingOwnershipSummary } from './setting-ownership'
-import { translate } from '@/i18n/i18n'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { getAgentsPaneSearchEntries } from './agents-search'
 import {
@@ -53,6 +49,7 @@ import { AgentDefaultSetting } from './AgentDefaultSetting'
 import { AgentDetectionCatalog } from './AgentDetectionCatalog'
 
 export {
+  AgentPermissionsSetting,
   buildAgentAvailabilitySettingsUpdate,
   createAgentAvailabilityUpdateQueue,
   getAgentsPaneSearchEntries,
@@ -69,79 +66,6 @@ type AgentsPaneProps = {
 }
 
 const enqueueAgentAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
-
-export function AgentPermissionsSetting({
-  mode,
-  onChange
-}: {
-  mode: AgentPermissionMode
-  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
-}): React.JSX.Element {
-  const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
-  return (
-    <section className="space-y-3">
-      <SettingsSubsectionHeader
-        title={
-          <span className="flex items-center gap-2">
-            {translate('auto.components.settings.AgentsPane.agentPermissions', 'Agent Permissions')}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={translate(
-                    'auto.components.settings.AgentsPane.agentPermissionsInfo',
-                    'Agent permissions info'
-                  )}
-                  className="grid size-5 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  <Info className="size-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {translate(
-                  'auto.components.settings.AgentsPane.agentPermissionsTooltip',
-                  "Doesn't apply to agents where you've overridden launch arguments."
-                )}
-              </TooltipContent>
-            </Tooltip>
-          </span>
-        }
-        description={translate(
-          'auto.components.settings.AgentsPane.agentPermissionsDescription',
-          'Choose whether Orca launches agents with fewer permission prompts or with manual checks.'
-        )}
-        action={
-          <SettingsSegmentedControl<AgentPermissionMode>
-            value={visibleMode}
-            onChange={(nextMode) => {
-              if (nextMode !== 'mixed') {
-                onChange(nextMode)
-              }
-            }}
-            ariaLabel={translate(
-              'auto.components.settings.AgentsPane.agentPermissions',
-              'Agent Permissions'
-            )}
-            size="sm"
-            options={[
-              {
-                value: 'yolo',
-                label: translate('auto.components.settings.AgentsPane.agentPermissionsYolo', 'Yolo')
-              },
-              {
-                value: 'manual',
-                label: translate(
-                  'auto.components.settings.AgentsPane.agentPermissionsManual',
-                  'Manual'
-                )
-              }
-            ]}
-          />
-        }
-      />
-    </section>
-  )
-}
 
 export function AgentsPane({
   settings,
@@ -182,9 +106,45 @@ export function AgentsPane({
   const cmdOverrides = settings.agentCmdOverrides ?? {}
   const agentDefaultArgs = settings.agentDefaultArgs ?? {}
   const agentDefaultEnv = settings.agentDefaultEnv ?? {}
+  const permissionOverrides = settings.agentPermissionModeOverrides ?? {}
+  const defaultPermissionMode = resolveDefaultAgentPermissionMode(settings)
+  const { agentDefaultEnv: launchEnv, agentPermissionMode, terminalWindowsShell } = settings
+  const permissionPostures = useMemo(() => {
+    const profile = {
+      agentDefaultArgs: settings.agentDefaultArgs,
+      agentDefaultEnv: launchEnv,
+      agentPermissionMode,
+      agentPermissionModeOverrides: settings.agentPermissionModeOverrides
+    }
+    // Why a local launch: the card reads Arguments as this machine's own launches read them.
+    const target = resolveLocalAgentLaunchTarget(getRendererAppPlatform(), terminalWindowsShell)
+    return new Map(
+      getAgentCatalog()
+        .filter((agent) => agentHasPermissionMode(agent.id))
+        .map((agent) => [agent.id, resolveAgentPermissionPosture(agent.id, profile, target)])
+    )
+  }, [
+    settings.agentDefaultArgs,
+    launchEnv,
+    agentPermissionMode,
+    settings.agentPermissionModeOverrides,
+    terminalWindowsShell
+  ])
   const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
   const detectedAgents =
     detectedIds === null ? [] : catalog.filter((agent) => detectedIds.has(agent.id))
+  const [permissionReveal, setPermissionReveal] = useState<{
+    agentId: TuiAgent
+    target: AgentPermissionRevealTarget
+    nonce: number
+  } | null>(null)
+  const permissionExceptions = buildAgentPermissionExceptions({
+    catalog,
+    postures: permissionPostures,
+    overrides: permissionOverrides,
+    defaultMode: defaultPermissionMode,
+    detectedIds
+  })
   const enabledDetectedAgents = detectedAgents.filter((agent) =>
     isTuiAgentEnabled(agent.id, disabledAgents)
   )
@@ -201,6 +161,31 @@ export function AgentsPane({
       enabled
     })
   }
+  const permissionRowProps = (id: TuiAgent): AgentCatalogRowProps['permission'] => {
+    const posture = permissionPostures.get(id)
+    return posture
+      ? {
+          // A stored choice this build doesn't know reads as Manual, like everywhere else.
+          override: permissionOverrides[id] === undefined ? undefined : posture.mode,
+          defaultMode: defaultPermissionMode,
+          decidedBy:
+            posture.typedArgumentOptions.length > 0
+              ? 'arguments'
+              : posture.typedEnvironmentOptions.length > 0
+                ? 'environment'
+                : null,
+          onChange: (choice) => {
+            const next = { ...permissionOverrides }
+            if (choice === 'default') {
+              delete next[id]
+            } else {
+              next[id] = choice
+            }
+            updateSettings({ agentPermissionModeOverrides: next })
+          }
+        }
+      : undefined
+  }
   const getRowProps = (
     agent: (typeof catalog)[number],
     isDetected: boolean
@@ -209,14 +194,17 @@ export function AgentsPane({
     label: agent.label,
     homepageUrl: agent.homepageUrl,
     defaultCmd: agent.cmd,
-    defaultArgs: getTuiAgentDefaultArgs(agent.id),
-    defaultEnv: getTuiAgentDefaultEnv(agent.id),
+    defaultArgs: '',
+    defaultEnv: {},
     isDetected,
     isEnabled: isTuiAgentEnabled(agent.id, disabledAgents),
     isDefault: isDetected && defaultAgent === agent.id,
     cmdOverride: isDetected ? cmdOverrides[agent.id] : undefined,
-    argsOverride: resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs),
-    envOverride: resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv),
+    argsOverride: agentDefaultArgs[agent.id] ?? '',
+    envOverride: { ...agentDefaultEnv[agent.id] },
+    envEditable: agent.id in YOLO_TUI_AGENT_ENV,
+    permission: permissionRowProps(agent.id),
+    reveal: permissionReveal?.agentId === agent.id ? permissionReveal : undefined,
     onSetDefault: isDetected ? () => updateSettings({ defaultTuiAgent: agent.id }) : () => {},
     onSetEnabled: (enabled) => setAgentEnabled(agent.id, enabled),
     onSaveOverride: isDetected
@@ -275,10 +263,23 @@ export function AgentsPane({
       ) : null}
       <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
       <AgentPermissionsSetting
-        mode={resolveAgentPermissionModeSummary({ agentDefaultArgs, agentDefaultEnv })}
-        onChange={(mode) =>
-          updateSettings(applyAgentPermissionMode({ mode, agentDefaultArgs, agentDefaultEnv }))
-        }
+        mode={defaultPermissionMode}
+        exceptions={permissionExceptions}
+        onRevealException={({ agentId, target }) => {
+          if (target) {
+            setPermissionReveal((previous) => ({
+              agentId,
+              target,
+              nonce: (previous?.nonce ?? 0) + 1
+            }))
+          }
+        }}
+        onChange={(mode: AgentPermissionMode) => {
+          // Only the shared default; each agent's own choice stays until its card says Default.
+          if (mode !== defaultPermissionMode) {
+            updateSettings({ agentPermissionMode: mode })
+          }
+        }}
       />
       <AgentDetectionCatalog
         detectedAgents={detectedAgents}

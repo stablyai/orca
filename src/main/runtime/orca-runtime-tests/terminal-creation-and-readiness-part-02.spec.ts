@@ -454,6 +454,7 @@ describe('OrcaRuntimeService', () => {
         disabledTuiAgents: [],
         agentCmdOverrides: {},
         agentDefaultArgs: { cursor: '--force' },
+        agentPermissionMode: 'ask' as const,
         agentDefaultEnv: { cursor: { CURSOR_PROFILE: 'captured' } }
       })
     }
@@ -491,6 +492,7 @@ describe('OrcaRuntimeService', () => {
         // Why: pin the arg here rather than inherit the shared yolo default, so
         // this test tracks Windows quoting and not an unrelated default's value.
         agentDefaultArgs: { cursor: '--force' },
+        agentPermissionMode: 'ask' as const,
         agentDefaultEnv: {}
       })
     }
@@ -529,6 +531,7 @@ describe('OrcaRuntimeService', () => {
           disabledTuiAgents: [],
           agentCmdOverrides: {},
           agentDefaultArgs: { 'claude-agent-teams': '' },
+          agentPermissionMode: 'ask' as const,
           agentDefaultEnv: {}
         })
       })
@@ -559,6 +562,7 @@ describe('OrcaRuntimeService', () => {
         disabledTuiAgents: [],
         agentCmdOverrides: { cursor: 'cursor-agent --beta' },
         agentDefaultArgs: { cursor: '--force' },
+        agentPermissionMode: 'ask' as const,
         agentDefaultEnv: {}
       })
     })
@@ -586,6 +590,7 @@ describe('OrcaRuntimeService', () => {
         disabledTuiAgents: [],
         agentCmdOverrides: { cursor: 'cursor-agent --beta' },
         agentDefaultArgs: { cursor: '--force' },
+        agentPermissionMode: 'ask' as const,
         agentDefaultEnv: {}
       })
     })
@@ -616,6 +621,7 @@ describe('OrcaRuntimeService', () => {
         disabledTuiAgents: [],
         agentCmdOverrides: { cursor: 'cursor-agent --beta' },
         agentDefaultArgs: { cursor: '--force' },
+        agentPermissionMode: 'ask' as const,
         agentDefaultEnv: {}
       })
     })
@@ -659,6 +665,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const folderWorkspace = makeFolderWorkspace({ folderPath })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only these store members on this launch path.
     const runtime = new OrcaRuntimeService({
       ...createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup),
       getSettings: () => ({
@@ -666,6 +673,7 @@ describe('OrcaRuntimeService', () => {
         disabledTuiAgents: [],
         agentCmdOverrides: {},
         agentDefaultArgs: { cursor: '--force' },
+        agentPermissionMode: 'ask' as const,
         agentDefaultEnv: {}
       })
     } as never)

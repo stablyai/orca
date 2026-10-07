@@ -6720,8 +6720,6 @@
           "8fbe1f37c1": "环境",
           "2d133152fa": "无默认环境",
           "agentPermissions": "智能体权限",
-          "agentPermissionsInfo": "智能体权限信息",
-          "agentPermissionsTooltip": "切换模式时，自定义智能体参数保持不变。",
           "agentPermissionsDescription": "选择 Orca 是以更少的权限提示启动智能体，还是手动检查。",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "手动",
@@ -6734,7 +6732,15 @@
           "remoteDetectionFailed": "无法检测已安装的智能体。请检查主机连接后重试。",
           "retryDetection": "Retry",
           "storedDefaultUndetected": "已保存为默认值，但目前未检测到",
-          "noAgentsDetected": "未检测到智能体。如果安装了探测器，探测器可能会超时。"
+          "noAgentsDetected": "未检测到智能体。如果安装了探测器，探测器可能会超时。",
+          "agentPermissionsAppliesToAll": "适用于下方列表中所有没有单独设置的智能体。",
+          "agentPermissionOverride": "权限",
+          "agentPermissionOverrideAria": "{{value0}} 权限",
+          "agentPermissionOverrideDefault": "默认（{{value0}}）",
+          "agentPermissionsNotFollowing": "以下智能体不跟随此开关：",
+          "agentPermissionsOwnSettingReason": "以 {{value0}} 运行：它有自己的设置。",
+          "agentPermissionsArgumentsReason": "以 {{value0}} 运行：它的参数设置了 {{value1}}。",
+          "agentPermissionsEnvironmentReason": "以 {{value0}} 运行：它的环境变量设置了 {{value1}}。"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",

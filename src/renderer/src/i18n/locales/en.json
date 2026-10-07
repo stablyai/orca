@@ -6958,8 +6958,6 @@
           "8fbe1f37c1": "Environment",
           "2d133152fa": "No default environment",
           "agentPermissions": "Agent Permissions",
-          "agentPermissionsInfo": "Agent permissions info",
-          "agentPermissionsTooltip": "Doesn't apply to agents where you've overridden launch arguments.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
@@ -6968,7 +6966,15 @@
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
           "storedDefaultUndetected": "Saved as your default, but not detected right now",
-          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out."
+          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
+          "agentPermissionsAppliesToAll": "Applies to every agent without its own setting in the list below.",
+          "agentPermissionOverride": "Permissions",
+          "agentPermissionOverrideAria": "{{value0}} permissions",
+          "agentPermissionOverrideDefault": "Default ({{value0}})",
+          "agentPermissionsNotFollowing": "These agents don't follow this switch:",
+          "agentPermissionsOwnSettingReason": "runs {{value0}}: it has its own setting.",
+          "agentPermissionsArgumentsReason": "runs {{value0}}: its Arguments set {{value1}}.",
+          "agentPermissionsEnvironmentReason": "runs {{value0}}: its environment sets {{value1}}."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",

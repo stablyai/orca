@@ -4,12 +4,12 @@ import {
   planAgentCliArgsSuffix,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
-import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import { resolveAgentLaunchGrammar } from '../../../shared/tui-agent-startup-shell'
+import { resolveSourceControlAgentLaunchTarget } from './source-control-agent-launch-target'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 
 export type SourceControlLaunchPlanDelivery =
@@ -85,14 +85,10 @@ export function planSourceControlAgentActionLaunch(args: {
   }
 
   const cmdOverrides = args.cmdOverrides ?? {}
-  const platform = args.platform ?? CLIENT_PLATFORM
   const isRemote = args.isRemote ?? false
-  const shell =
-    resolveLocalWindowsAgentStartupShell({
-      platform,
-      isRemote,
-      terminalWindowsShell: args.terminalWindowsShell
-    }) ?? (platform === 'win32' ? 'powershell' : 'posix')
+  const target = resolveSourceControlAgentLaunchTarget(args)
+  const platform = target.platform
+  const shell = resolveAgentLaunchGrammar(target)
   const plannedArgs = planAgentCliArgsSuffix(args.agentArgs, shell)
   if (!plannedArgs.ok) {
     return { ok: false, error: plannedArgs.error }

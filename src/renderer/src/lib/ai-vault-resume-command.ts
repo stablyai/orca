@@ -190,11 +190,11 @@ function buildAiVaultResumeForWorktree(
       },
       platform,
       shell: liveShell,
-      agentArgs: resolveTuiAgentLaunchArgs(
-        args.session.agent,
-        args.state.settings?.agentDefaultArgs
-      ),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv),
+      agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.state.settings, {
+        platform,
+        shell: liveShell
+      }),
+      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings),
       resumeInLaunchCwd: true,
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }

@@ -34,6 +34,7 @@ function makeState(args: {
   localWindowsRuntimePreference?: RuntimePreference
   terminalWindowsShell?: string
 }): AiVaultResumeCommandState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume command reads only these AppState fields.
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
@@ -52,6 +53,7 @@ function makeState(args: {
     settings: {
       localWindowsRuntimeDefault: { kind: 'windows-host' },
       ...(args.terminalWindowsShell ? { terminalWindowsShell: args.terminalWindowsShell } : {}),
+      agentPermissionMode: 'ask',
       agentDefaultArgs: { claude: '', codex: '' },
       agentDefaultEnv: { claude: {}, codex: {} }
     },
@@ -200,6 +202,11 @@ describe('ai vault resume command runtime', () => {
 
   it('follows the live Windows shell for Cursor resume', () => {
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+    if (!state.settings) {
+      throw new Error('Missing fixture settings')
+    }
+    // Cursor launches with its bypass flag in Yolo; this fixture defaults to Manual.
+    state.settings.agentPermissionMode = 'bypass'
 
     expect(
       buildQueuedAiVaultResumeCommand({

@@ -16,9 +16,11 @@ import {
   buildCompletedOnboardingNotificationSettings,
   buildOnboardingDismissedPayload,
   useCloseWith,
+  usePersistCurrentStep,
   type DismissedExtras,
   trackOnboardingDismissed
 } from './use-onboarding-flow-persistence'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { StepNumber } from './use-onboarding-flow-types'
 
 type CloseWithCallback = (
@@ -67,6 +69,17 @@ function renderCloseWithProbe(onReady: (closeWith: CloseWithCallback) => void): 
   return { root, container }
 }
 
+type PersistStep = ReturnType<typeof usePersistCurrentStep>
+
+function PersistStepProbe(props: {
+  deps: Parameters<typeof usePersistCurrentStep>[0]
+  onReady: (persist: PersistStep) => void
+}): null {
+  const persist = usePersistCurrentStep(props.deps)
+  useEffect(() => props.onReady(persist), [persist, props])
+  return null
+}
+
 describe('onboarding flow persistence', () => {
   let root: Root | null = null
   let container: HTMLDivElement | null = null
@@ -88,6 +101,48 @@ describe('onboarding flow persistence', () => {
     root = null
     container = null
     vi.useRealTimers()
+  })
+
+  // Like the Settings switch, the agent step's answer sets only the shared default.
+  it("keeps per-agent permission choices when the agent step's answer changes the default", async () => {
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    let persist: PersistStep | null = null
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() =>
+      root?.render(
+        createElement(PersistStepProbe, {
+          deps: {
+            currentStepId: 'agent',
+            selectedAgent: 'claude',
+            yoloPermissions: false,
+            theme: 'dark',
+            settings: {
+              ...getDefaultSettings('/tmp'),
+              agentPermissionMode: 'bypass',
+              agentPermissionModeOverrides: { codex: 'ask' }
+            },
+            updateSettings,
+            onboardingChecklist: getDefaultOnboardingState().checklist,
+            onOnboardingChange: vi.fn(),
+            setError: vi.fn()
+          },
+          onReady: (next) => {
+            persist = next
+          }
+        })
+      )
+    )
+
+    await act(async () => {
+      await persist?.()
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      defaultTuiAgent: 'claude',
+      agentPermissionMode: 'ask'
+    })
   })
 
   it('builds dismissed telemetry with the triggering advance path', () => {

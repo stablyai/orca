@@ -8,7 +8,6 @@ import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -24,13 +23,14 @@ import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-o
 import { useAppStore } from '@/store'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
-  getFolderWorkspaceAgentLaunchPlatform,
+  resolveFolderWorkspaceAgentLaunchTarget,
   resolveFolderWorkspaceLaunchDraft
 } from './folder-workspace-agent-startup'
 
 export {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchPlatform,
+  resolveFolderWorkspaceAgentLaunchTarget,
   resolveFolderWorkspaceLaunchDraft
 } from './folder-workspace-agent-startup'
 
@@ -90,15 +90,11 @@ export async function submitFolderWorkspaceCreate({
     nameIsAutoManaged && linkedName
       ? linkedName
       : name.trim() || linkedName || `${projectGroup.name} workspace`
-  const launchPlatform = getFolderWorkspaceAgentLaunchPlatform(projectGroup)
-  // Why: an SSH folder group runs the plain `orca` relay shim, so the Linux-only
-  // `orca-ide` rename must not be applied for remote launches.
-  const launchIsRemote = Boolean(projectGroup.connectionId)
-  const launchShell = resolveLocalWindowsAgentStartupShell({
+  const {
     platform: launchPlatform,
     isRemote: launchIsRemote,
-    terminalWindowsShell
-  })
+    shell: launchShell
+  } = resolveFolderWorkspaceAgentLaunchTarget(projectGroup, terminalWindowsShell)
   const startupPlan =
     quickAgent && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({

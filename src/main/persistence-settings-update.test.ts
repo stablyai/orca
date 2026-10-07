@@ -1,4 +1,13 @@
 import {
+  composeTuiAgentLaunchArgsRecord,
+  composeTuiAgentLaunchEnvRecord
+} from '../shared/tui-agent-launch-defaults'
+import {
+  PERMISSION_AGENT_IDS,
+  YOLO_TUI_AGENT_ARGS,
+  YOLO_TUI_AGENT_ENV
+} from '../shared/tui-agent-permissions'
+import {
   closeTestStores,
   testState,
   createStore,
@@ -20,6 +29,8 @@ import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
 } from './local-worktree-scan-generation'
+
+const DARWIN = { platform: 'darwin' } as const
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -60,6 +71,25 @@ vi.mock('./telemetry/client', () => ({
 vi.mock('./telemetry/cohort-classifier', () => ({
   getCohortAtEmit: getCohortAtEmitMock
 }))
+
+/** Agents an older build (main's read rule: a missing entry means the bypass default) launches in bypass. */
+function launchesReadByOlderBuild(settings: Partial<GlobalSettings>): { bypassing: string[] } {
+  const bypassing: string[] = []
+  for (const agent of PERMISSION_AGENT_IDS) {
+    const args = settings.agentDefaultArgs ?? {}
+    const env = settings.agentDefaultEnv ?? {}
+    const launchArgs =
+      Object.hasOwn(args, agent) && typeof args[agent] === 'string'
+        ? args[agent]
+        : YOLO_TUI_AGENT_ARGS[agent]
+    const launchEnv = Object.hasOwn(env, agent) ? env[agent] : YOLO_TUI_AGENT_ENV[agent]
+    const flag = YOLO_TUI_AGENT_ARGS[agent]
+    if ((flag && launchArgs?.includes(flag)) || launchEnv?.GOOSE_MODE === 'auto') {
+      bypassing.push(agent)
+    }
+  }
+  return { bypassing }
+}
 
 describe('Store', () => {
   beforeEach(() => {
@@ -451,6 +481,26 @@ describe('Store', () => {
     expect(store.getSettings().claudeAgentTeamsDefaultDisabledMigrated).toBe(true)
   })
 
+  // An older build reads a missing agent entry as "launch with the bypass flag", so a profile saved
+  // here with Manual must spell out every agent's empty text or a downgrade escalates to Yolo.
+  it('saves explicit empty launch text so an older build launches a fresh Manual profile in Manual', async () => {
+    const store = await createStore()
+    store.updateSettings({ agentPermissionMode: 'ask' })
+    store.flush()
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: readDataFile returns the JSON the store just wrote in this shape.
+    const persisted = (readDataFile() as PersistedState).settings
+    expect(launchesReadByOlderBuild(persisted)).toEqual({ bypassing: [] })
+
+    // A write that names only some agents keeps the others spelled out.
+    store.updateSettings({ agentDefaultArgs: { claude: '--model opus' } })
+    store.flush()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: readDataFile returns the JSON the store just wrote in this shape.
+    const rewritten = (readDataFile() as PersistedState).settings
+    expect(launchesReadByOlderBuild(rewritten)).toEqual({ bypassing: [] })
+    expect(rewritten.agentDefaultArgs?.claude).toBe('--model opus')
+  })
+
   it('migrates yolo default args onto untouched agent launch settings', async () => {
     writeFileSync(
       join(testState.dir, 'orca-data.json'),
@@ -462,12 +512,14 @@ describe('Store', () => {
     )
     const store = await createStore()
 
-    expect(store.getSettings().agentDefaultArgs).toMatchObject({
+    expect(store.getSettings().agentPermissionMode).toBe('bypass')
+    expect(store.getSettings().agentPermissionModeOverrides).toEqual({})
+    expect(composeTuiAgentLaunchArgsRecord(store.getSettings(), DARWIN)).toMatchObject({
       claude: '--dangerously-skip-permissions',
       codex: '--dangerously-bypass-approvals-and-sandbox',
       cursor: '--yolo'
     })
-    expect(store.getSettings().agentDefaultEnv).toMatchObject({
+    expect(composeTuiAgentLaunchEnvRecord(store.getSettings())).toMatchObject({
       goose: { GOOSE_MODE: 'auto' }
     })
     expect(store.getSettings().agentYoloDefaultsMigrated).toBe(true)
@@ -487,9 +539,36 @@ describe('Store', () => {
     )
     const store = await createStore()
 
-    expect(store.getSettings().agentDefaultArgs?.codex).toBe('')
-    expect(store.getSettings().agentDefaultEnv?.goose).toEqual({})
-    expect(store.getSettings().agentDefaultArgs?.claude).toBe('--dangerously-skip-permissions')
+    expect(store.getSettings().agentPermissionModeOverrides).toEqual({ codex: 'ask', goose: 'ask' })
+    const composed = composeTuiAgentLaunchArgsRecord(store.getSettings(), DARWIN)
+    expect(composed.codex).toBe('')
+    expect(composeTuiAgentLaunchEnvRecord(store.getSettings()).goose).toEqual({})
+    expect(composed.claude).toBe('--dangerously-skip-permissions')
+  })
+
+  // #23853: Settings showed Yolo while Claude's own Arguments held no flag, so Claude prompted.
+  it('loads custom arguments without the flag as Manual for that agent and persists it', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          agentYoloDefaultsMigrated: true,
+          agentDefaultArgs: {
+            claude: '--model opus',
+            codex: '--dangerously-bypass-approvals-and-sandbox -m o3'
+          }
+        }
+      })
+    )
+    const store = await createStore()
+    store.flush()
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: readDataFile returns the JSON the store just wrote in this shape.
+    const persisted = (readDataFile() as PersistedState).settings
+    expect(persisted.agentPermissionMode).toBe('ask')
+    expect(persisted.agentPermissionModeOverrides).toEqual({ codex: 'bypass' })
+    expect(persisted.agentDefaultArgs?.claude).toBe('--model opus')
+    expect(persisted.agentDefaultArgs?.codex).toBe('-m o3')
   })
 
   it('removes unsupported TUI skip-permissions args from migrated profiles', async () => {
@@ -511,7 +590,7 @@ describe('Store', () => {
 
     expect(store.getSettings().agentDefaultArgs?.opencode).toBe('--model opencode/gpt-5')
     expect(store.getSettings().agentDefaultArgs?.kilo).toBe('')
-    expect(store.getSettings().agentDefaultArgs?.codex).toBe(
+    expect(composeTuiAgentLaunchArgsRecord(store.getSettings(), DARWIN).codex).toBe(
       '--dangerously-bypass-approvals-and-sandbox'
     )
     expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.opencode).toBe(

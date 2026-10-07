@@ -21,6 +21,7 @@ import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custo
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import { mergeSettings, mergeWebUIState } from './web-preference-normalization'
+import { migrateStoredWebAgentLaunch } from './web-stored-agent-launch'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
 import { zcodePlanSiteOwner, settingsForZcodePlanSiteOwner } from './web-zcode-plan-site'
@@ -34,13 +35,15 @@ export function getStoredSettings(): GlobalSettings {
   const defaults = getDefaultSettings('~')
   const rawStoredSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
+  const agentLaunch = migrateStoredWebAgentLaunch(stored)
   const migratedStored = {
     ...stored,
     ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
     ...normalizeTerminalCursorStyleDefault(stored),
     ...normalizeOsc52ClipboardDefaultOn(stored),
     terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
-    uiLanguage: normalizeUiLanguage(stored.uiLanguage)
+    uiLanguage: normalizeUiLanguage(stored.uiLanguage),
+    ...agentLaunch.profile
   }
   if (
     rawStoredSettings &&
@@ -56,7 +59,8 @@ export function getStoredSettings(): GlobalSettings {
       stored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !==
         migratedStored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers ||
       stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
-      stored.uiLanguage !== migratedStored.uiLanguage)
+      stored.uiLanguage !== migratedStored.uiLanguage ||
+      agentLaunch.changed)
   ) {
     try {
       const parsed = JSON.parse(rawStoredSettings) as unknown
@@ -251,6 +255,9 @@ export async function syncRuntimeBackedSettings(
       webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = updatedVisibilityDefaults
     }
     delete runtimeSettings.worktreeVisibilityDefaults
+    // Why: agent launch settings stay client-owned here, as on load; the host's are launch-ready.
+    delete runtimeSettings.agentDefaultArgs
+    delete runtimeSettings.agentDefaultEnv
     const next = mergeSettings(localNext, runtimeSettings)
     writeStoredSettings(next)
     return next

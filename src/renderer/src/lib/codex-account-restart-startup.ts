@@ -71,11 +71,11 @@ export function buildCodexAccountRestartStartup(args: {
     agentArgs:
       launchConfig !== undefined
         ? launchConfig.agentArgs
-        : resolveTuiAgentLaunchArgs('codex', state.settings?.agentDefaultArgs),
+        : resolveTuiAgentLaunchArgs('codex', state.settings, resumeTarget),
     agentEnv:
       launchConfig !== undefined
         ? launchConfig.agentEnv
-        : resolveTuiAgentLaunchEnv('codex', state.settings?.agentDefaultEnv),
+        : resolveTuiAgentLaunchEnv('codex', state.settings),
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
