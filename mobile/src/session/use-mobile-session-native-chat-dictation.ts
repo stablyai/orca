@@ -70,6 +70,7 @@ export function useMobileSessionNativeChatDictation(
   // callback is null otherwise and the hook keeps resolving the view device-locally.
   const sessionTabViewMode = useMemo<MobileSessionTabViewModeBridge>(
     () => ({
+      hostViewSource: client,
       readHostViewMode: (tabId) => {
         const tab = sessionTabs.find((candidate) => candidate.id === tabId)
         return tab?.type === 'terminal' ? tab.viewMode : undefined

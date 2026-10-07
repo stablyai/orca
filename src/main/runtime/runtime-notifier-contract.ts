@@ -101,7 +101,7 @@ export type RuntimeNotifier = {
   setSessionTabProps?(
     worktreeId: string,
     tabId: string,
-    props: { viewMode?: 'terminal' | 'chat' }
+    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
   ): void | Promise<void>
   /**
    * Acts only on the host's own window: 'host'/'all' move it, 'caller'/'clients' open without moving

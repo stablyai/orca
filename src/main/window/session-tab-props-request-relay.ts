@@ -19,7 +19,7 @@ export async function requestSessionTabPropsFromRenderer(
   mainWindow: SessionTabPropsWindow,
   tabId: string,
   worktreeId: string,
-  props: { viewMode?: 'terminal' | 'chat' }
+  props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
 ): Promise<void> {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
     throw new Error('renderer_unavailable')

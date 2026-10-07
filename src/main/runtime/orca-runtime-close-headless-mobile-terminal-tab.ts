@@ -245,7 +245,11 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       await this.notifier.setSessionTabProps(
         worktreeId,
         hostTabId,
-        args.viewMode === undefined ? {} : { viewMode: args.viewMode }
+        {
+          ...(args.color !== undefined ? { color: args.color } : {}),
+          ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
+          ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
+        }
       )
       return { updated: true }
     }

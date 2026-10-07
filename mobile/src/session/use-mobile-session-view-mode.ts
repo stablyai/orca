@@ -48,6 +48,8 @@ export type MobileSessionViewModeController = {
  *  `writeHostViewMode` is null when the host cannot accept the write, which also means its
  *  published view is not adoptable — the two are one capability. */
 export type MobileSessionTabViewModeBridge = {
+  /** Identity of the connected client; a reconnect must not inherit old optimistic writes. */
+  hostViewSource?: object
   readHostViewMode: (tabId: string) => MobileSessionView | undefined
   /** Rejects when the host write fails; the hook clears its pending state and reverts on rejection. */
   writeHostViewMode: ((tabId: string, view: MobileSessionView) => Promise<void>) | null
@@ -81,9 +83,20 @@ export function useMobileSessionViewMode(args: {
   // Why: a host write's effect lands only when the host echoes it, so the tapped view must win in
   // the meantime; the token lets an older settle leave a newer pending write alone.
   const pendingHostViewWritesRef = useRef(
-    new Map<string, { viewMode: MobileSessionView; token: number }>()
+    new Map<
+      string,
+      {
+        hostId: string
+        worktreeId: string
+        source?: object
+        viewMode: MobileSessionView
+        token: number
+        accepted: boolean
+      }
+    >()
   )
   const nextHostViewWriteTokenRef = useRef(0)
+  const [, setPendingVersion] = useState(0)
   const mountedRef = useRef(true)
   useEffect(() => {
     mountedRef.current = true
@@ -111,6 +124,36 @@ export function useMobileSessionViewMode(args: {
   // its identity stays stable and it never captures a stale default.
   const defaultViewRef = useRef(defaultView)
   defaultViewRef.current = defaultView
+
+  // A completed RPC only means the host accepted the write. Keep the optimistic value until a
+  // session-tabs snapshot echoes it, otherwise that snapshot can briefly resurrect the old view.
+  useEffect(() => {
+    const pending = pendingHostViewWritesRef.current
+    const bridge = sessionTabViewModeRef.current
+    for (const [tabId, write] of pending) {
+      if (
+        write.hostId !== hostId ||
+        write.worktreeId !== worktreeId ||
+        write.source !== bridge?.hostViewSource
+      ) {
+        pending.delete(tabId)
+      }
+    }
+    if (!bridge?.writeHostViewMode) {
+      return
+    }
+    for (const [tabId, write] of pending) {
+      if (
+        write.hostId === hostId &&
+        write.worktreeId === worktreeId &&
+        write.source === bridge.hostViewSource &&
+        write.accepted &&
+        bridge.readHostViewMode(tabId) === write.viewMode
+      ) {
+        pending.delete(tabId)
+      }
+    }
+  })
 
   useEffect(() => {
     let active = true
@@ -161,7 +204,12 @@ export function useMobileSessionViewMode(args: {
         // Why: until the queued write settles the host still echoes the old value, so the tapped
         // view must outrank it or the tap looks dead.
         const pending = pendingHostViewWritesRef.current.get(tabId)
-        if (pending) {
+        if (
+          pending &&
+          pending.hostId === hostId &&
+          pending.worktreeId === worktreeId &&
+          pending.source === bridge.hostViewSource
+        ) {
           return pending.viewMode === 'chat'
         }
         const hostViewMode = bridge.readHostViewMode(tabId)
@@ -194,7 +242,13 @@ export function useMobileSessionViewMode(args: {
       const bridge = sessionTabViewModeRef.current
       // Why: a queued write outranks the host's stale echo here too, or a second tap before the
       // first settles recomputes the same target and is lost.
-      const pendingView = pendingHostViewWritesRef.current.get(tabId)?.viewMode
+      const pendingWrite = pendingHostViewWritesRef.current.get(tabId)
+      const pendingView =
+        pendingWrite?.hostId === hostId &&
+        pendingWrite.worktreeId === worktreeId &&
+        pendingWrite.source === bridge?.hostViewSource
+          ? pendingWrite.viewMode
+          : undefined
       const hostViewMode = bridge?.writeHostViewMode ? bridge.readHostViewMode(tabId) : undefined
       const fallbackView = currentScope.loaded ? defaultViewRef.current : 'terminal'
       const effectiveView = pendingView ?? hostViewMode
@@ -220,18 +274,38 @@ export function useMobileSessionViewMode(args: {
         const pendingWrites = pendingHostViewWritesRef.current
         const token = nextHostViewWriteTokenRef.current + 1
         nextHostViewWriteTokenRef.current = token
-        pendingWrites.set(tabId, { viewMode: nextView, token })
+        pendingWrites.set(tabId, {
+          hostId,
+          worktreeId,
+          source: bridge.hostViewSource,
+          viewMode: nextView,
+          token,
+          accepted: false
+        })
         // Why: Promise.resolve().then keeps a synchronous throw from stranding the pending record.
         void Promise.resolve()
           .then(() => writeHostViewMode(tabId, nextView))
           .then(
             () => {
-              if (pendingWrites.get(tabId)?.token === token) {
-                pendingWrites.delete(tabId)
+              const pending = pendingWrites.get(tabId)
+              if (
+                pending?.token === token &&
+                pending.hostId === hostId &&
+                pending.worktreeId === worktreeId &&
+                pending.source === bridge.hostViewSource
+              ) {
+                pending.accepted = true
+                setPendingVersion((version) => version + 1)
               }
             },
             (error) => {
-              if (pendingWrites.get(tabId)?.token === token) {
+              const pending = pendingWrites.get(tabId)
+              if (
+                pending?.token === token &&
+                pending.hostId === hostId &&
+                pending.worktreeId === worktreeId &&
+                pending.source === bridge?.hostViewSource
+              ) {
                 pendingWrites.delete(tabId)
               }
               // Why: the host never took this mode, so drop the override claiming it — unless a

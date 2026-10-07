@@ -151,36 +151,36 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,
       findTerminalAgentSessionOwner: async (params) => {
-        const providerHandle = params.adopt?.providerHandle ?? params.providerHandle
-        if (!providerHandle) {
-          return 'available'
-        }
-        if (params.location.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
-          return 'unknown'
-        }
-        const workspace = await this.resolveTerminalWorkspaceLaunchScope(
-          `id:${params.location.workspaceId}`
-        )
-        const namespace = this.getAgentSessionExecutionNamespace(workspace, params.agent)
-        if (!namespace) {
-          return 'unknown'
-        }
-        const providerSession =
-          providerHandle.kind === 'claude'
-            ? { key: 'session_id' as const, id: providerHandle.sessionId }
-            : { key: 'session_id' as const, id: providerHandle.threadId }
-        const identity = canonicalizeAgentSessionIdentity(params.agent, providerSession)
-        const claim = this.agentSessionClaimSigner.createClaim({
-          namespace,
-          identity,
-          canonicalWorktreeId: workspace.id
-        })
         try {
+          const providerHandle = params.adopt?.providerHandle ?? params.providerHandle
+          if (!providerHandle) {
+            return 'available'
+          }
+          if (params.location.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+            return 'unknown'
+          }
+          const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+            `id:${params.location.workspaceId}`
+          )
+          const namespace = this.getAgentSessionExecutionNamespace(workspace, params.agent)
+          if (!namespace) {
+            return 'unknown'
+          }
+          const providerSession =
+            providerHandle.kind === 'claude'
+              ? { key: 'session_id' as const, id: providerHandle.sessionId }
+              : { key: 'session_id' as const, id: providerHandle.threadId }
+          const identity = canonicalizeAgentSessionIdentity(params.agent, providerSession)
+          const claim = this.agentSessionClaimSigner.createClaim({
+            namespace,
+            identity,
+            canonicalWorktreeId: workspace.id
+          })
           await reconcileAgentSessionOwnerListings()
+          return agentSessionOwners.hasIdentityOwner(claim) ? 'owned' : 'available'
         } catch {
           return 'unknown'
         }
-        return agentSessionOwners.hasIdentityOwner(claim) ? 'owned' : 'available'
       },
       // The host's local trace file (the desktop's or orcad's own), plus the console.
       logger: createStructuredAgentSessionLogger(),

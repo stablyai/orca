@@ -167,6 +167,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setAgentSessionHistorySupported(null)
     setAgentSessionHostSupport(null)
     setQuickCommandsSupported(null)
+    setSessionTabsViewModeSupported(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
     // Why: the probe retries — a relay→direct cutover or request timeout rejects

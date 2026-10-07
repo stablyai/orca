@@ -51,6 +51,7 @@ vi.mock('../storage/session-view-preferences', () => ({
 describe('useMobileSessionViewMode', () => {
   let renderer: ReactTestRenderer | null = null
   let controller: MobileSessionViewModeController | null = null
+  let rerenderShared: (() => void) | null = null
 
   beforeEach(() => {
     vi.mocked(loadDefaultSessionView).mockReset().mockResolvedValue('terminal')
@@ -65,6 +66,7 @@ describe('useMobileSessionViewMode', () => {
     act(() => renderer?.unmount())
     renderer = null
     controller = null
+    rerenderShared = null
   })
 
   async function mount(args: {
@@ -387,6 +389,7 @@ describe('useMobileSessionViewMode', () => {
     overrides?: Map<string, MobileSessionView>
     hostViews: Map<string, MobileSessionView>
     writeHostViewMode: ((tabId: string, view: MobileSessionView) => Promise<void>) | null
+    hostViewSource?: object
     onHostViewModeWriteError?: (error: unknown) => void
   }): Promise<void> {
     vi.mocked(loadDefaultSessionView).mockResolvedValue(args.defaultView)
@@ -395,6 +398,7 @@ describe('useMobileSessionViewMode', () => {
       loaded: true
     })
     const bridge: MobileSessionTabViewModeBridge = {
+      hostViewSource: args.hostViewSource,
       readHostViewMode: (tabId) => args.hostViews.get(tabId),
       writeHostViewMode: args.writeHostViewMode,
       ...(args.onHostViewModeWriteError
@@ -408,6 +412,9 @@ describe('useMobileSessionViewMode', () => {
         sessionTabViewMode: bridge
       })
       return null
+    }
+    rerenderShared = () => {
+      act(() => renderer?.update(createElement(Harness)))
     }
     await act(async () => {
       renderer = create(createElement(Harness))
@@ -525,6 +532,48 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+  })
+
+  it('keeps a rapid second toggle through the first host echo until its own write is echoed', async () => {
+    const firstWrite = deferred<void>()
+    const secondWrite = deferred<void>()
+    const writes = [firstWrite, secondWrite]
+    const hostViews = new Map<string, MobileSessionView>([['t1', 'terminal']])
+    const source = {}
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews,
+      hostViewSource: source,
+      writeHostViewMode: () => writes.shift()!.promise
+    })
+
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+    firstWrite.resolve()
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+    // The first write's chat echo must not confirm the second terminal write.
+    hostViews.set('t1', 'chat')
+    rerenderShared?.()
+    expect(controller?.isTabChatView('t1')).toBe(false)
+
+    secondWrite.resolve()
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(controller?.isTabChatView('t1')).toBe(false)
+    hostViews.set('t1', 'terminal')
+    rerenderShared?.()
+    expect(controller?.isTabChatView('t1')).toBe(false)
   })
 
   it('reverts the override and reports the failure when the host rejects the write', async () => {

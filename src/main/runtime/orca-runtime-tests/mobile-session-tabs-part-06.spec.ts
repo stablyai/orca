@@ -481,10 +481,14 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'host-tab::leaf:1',
+      color: 'blue',
+      isPinned: true,
       viewMode: 'chat'
     })
 
     expect(setSessionTabProps).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'host-tab', {
+      color: 'blue',
+      isPinned: true,
       viewMode: 'chat'
     })
     expect(
