@@ -109,16 +109,27 @@ export async function startBrowserScreencast(
 
   const handleDetach = (): void => {
     options.onError?.('Browser debugger detached while streaming.')
+    // The window survives a debugger detach; restore its size even without CDP.
+    void deviceMetrics.clear().catch(() => {})
     finish()
   }
 
   dbg.on('message', handleMessage as never)
   dbg.on('detach', handleDetach as never)
 
+  const assertStartingStreamIsOpen = (): void => {
+    if (closed) {
+      throw new Error('Browser debugger detached while starting screencast.')
+    }
+  }
+
   try {
     await sendDebuggerCommand(dbg, 'Page.enable')
+    assertStartingStreamIsOpen()
     await deviceMetrics.apply()
+    assertStartingStreamIsOpen()
     await startScreencast()
+    assertStartingStreamIsOpen()
     pendingUpdate = snapshotCapture.emitSnapshotFrame(true)
   } catch (error) {
     if (deviceMetrics.isOverridden()) {

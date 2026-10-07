@@ -106,6 +106,56 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
     expect(stop).toHaveBeenCalledOnce()
   })
 
+  it('waits for the old shared stream cleanup before admitting a replacement', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const oldDone = deferred()
+    const replacementDone = deferred()
+    const events: string[] = []
+    const replacementStop = vi.fn(() => replacementDone.resolve())
+    startBrowserScreencast
+      .mockImplementationOnce(async () => {
+        events.push('start old')
+        return {
+          stop: () => events.push('stop old'),
+          done: oldDone.promise,
+          updateViewport: vi.fn(async () => {})
+        }
+      })
+      .mockImplementationOnce(async () => {
+        events.push('start replacement')
+        return {
+          stop: replacementStop,
+          done: replacementDone.promise,
+          updateViewport: vi.fn(async () => {})
+        }
+      })
+    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const params = { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' as const }
+    const first = await commands.browserScreencast(params, { sendBinary: vi.fn(() => true) })
+    first.session.stop()
+    await first.session.done
+    let admitted = false
+    const joining = commands.browserScreencast(params, { sendBinary: vi.fn(() => true) })
+    void joining.then(() => {
+      admitted = true
+    })
+    // Subscriber completion precedes page-stream cleanup; a new viewer must wait for the latter.
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    try {
+      expect(admitted).toBe(false)
+      expect(startBrowserScreencast).toHaveBeenCalledOnce()
+    } finally {
+      events.push('old cleanup complete')
+      oldDone.resolve()
+    }
+    const replacement = await joining
+    expect(events).toEqual(['start old', 'stop old', 'old cleanup complete', 'start replacement'])
+    first.session.stop()
+    expect(replacementStop).not.toHaveBeenCalled()
+    replacement.session.stop()
+    await replacement.session.done
+  })
+
   it('keeps viewport authority with sized subscribers when a sizeless viewer joins', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     const done = deferred()
