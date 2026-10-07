@@ -120,6 +120,26 @@ describe('main window webview security', () => {
     expect(preferences).not.toHaveProperty('preloadURL')
     expect(String(preferences.preload)).toMatch(/browser-window-close-preload\.js$/)
   })
+
+  it.each([
+    ['omits transparent', {}],
+    ['asks for a transparent guest', { transparent: true }]
+  ])('gives an opaque page canvas to a guest whose markup %s', (_case, markupPreferences) => {
+    const { handlers } = installOnFakeWindow()
+    mocks.isAllowedPartition.mockReturnValue(true)
+    const preferences: Record<string, unknown> = {
+      partition: 'persist:orca-browser',
+      ...markupPreferences
+    }
+
+    handlers['will-attach-webview']?.(
+      { preventDefault: vi.fn() } as never,
+      preferences as never,
+      { src: 'https://example.com' } as never
+    )
+
+    expect(preferences.transparent).toBe(false)
+  })
 })
 
 describe('orca-preview scheme admission', () => {
