@@ -33,6 +33,12 @@ import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
+import {
+  DEFAULT_INTERFACE_THEME_ID,
+  INTERFACE_THEMES_DARK,
+  INTERFACE_THEMES_LIGHT,
+  type InterfaceThemeOption
+} from '../../../../shared/interface-themes'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -43,6 +49,40 @@ type AppearanceInterfaceSectionProps = {
   isDesktopWindows: boolean
   onRequestFontSuggestions?: () => void
   forceVisiblePrimary?: boolean
+}
+
+function InterfaceThemeRow({
+  label,
+  value,
+  options,
+  onChange
+}: {
+  label: string
+  value: string
+  options: readonly InterfaceThemeOption[]
+  onChange: (value: string) => void
+}): React.JSX.Element {
+  return (
+    <SettingsRow
+      label={label}
+      control={
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger size="sm" className="min-w-[220px]" aria-label={label}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((option) => (
+              <SelectItem key={option.id} value={option.id}>
+                {option.id === DEFAULT_INTERFACE_THEME_ID
+                  ? translate('settings.appearance.interfaceTheme.default', 'Default')
+                  : option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      }
+    />
+  )
 }
 
 export function AppearanceInterfaceSection({
@@ -111,6 +151,22 @@ export function AppearanceInterfaceSection({
             />
           }
         />
+        {settings.theme !== 'light' ? (
+          <InterfaceThemeRow
+            label={translate('settings.appearance.interfaceTheme.dark', 'Dark Theme')}
+            value={settings.interfaceThemeDark}
+            options={INTERFACE_THEMES_DARK}
+            onChange={(value) => updateSettings({ interfaceThemeDark: value })}
+          />
+        ) : null}
+        {settings.theme !== 'dark' ? (
+          <InterfaceThemeRow
+            label={translate('settings.appearance.interfaceTheme.light', 'Light Theme')}
+            value={settings.interfaceThemeLight}
+            options={INTERFACE_THEMES_LIGHT}
+            onChange={(value) => updateSettings({ interfaceThemeLight: value })}
+          />
+        ) : null}
       </SearchableSetting>
 
       {SHOW_UI_LANGUAGE_SETTING ? (

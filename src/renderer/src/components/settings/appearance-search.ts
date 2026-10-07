@@ -26,7 +26,15 @@ export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] 
     keywords: [
       ...translateSearchKeyword('auto.components.settings.appearance.search.262fe1d24f', 'dark'),
       ...translateSearchKeyword('auto.components.settings.appearance.search.44d873fd18', 'light'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.3a9b69d734', 'system')
+      ...translateSearchKeyword('auto.components.settings.appearance.search.3a9b69d734', 'system'),
+      ...translateSearchKeyword('settings.appearance.interfaceTheme.keywordPalette', 'palette'),
+      ...translateSearchKeyword(
+        'settings.appearance.interfaceTheme.keywordCatppuccin',
+        'catppuccin',
+        {
+          englishOnly: true
+        }
+      )
     ]
   }
 ])

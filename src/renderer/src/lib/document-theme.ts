@@ -6,7 +6,7 @@ export const THEME_TRANSITION_DISABLED_CLASS = 'theme-transition-disabled'
 
 const DARK_MODE_QUERY = '(prefers-color-scheme: dark)'
 
-type ThemeClassList = {
+type ThemeClassList = Iterable<string> & {
   add: (...tokens: string[]) => void
   remove: (...tokens: string[]) => void
   toggle: (token: string, force?: boolean) => boolean
@@ -26,6 +26,21 @@ type ApplyDocumentThemeOptions = {
   requestAnimationFrame?: ThemeAnimationFrame
   cancelAnimationFrame?: ThemeCancelAnimationFrame
   disableTransitions?: boolean
+  /** Palette ids from shared/interface-themes; omitted leaves the current palette classes alone. */
+  interfaceThemes?: { dark: string; light: string }
+}
+
+const INTERFACE_THEME_CLASS_PREFIXES = ['ui-dark-', 'ui-light-']
+
+function applyInterfaceThemeClasses(
+  root: ThemeRoot,
+  interfaceThemes: { dark: string; light: string }
+): void {
+  const stale = [...root.classList].filter((token) =>
+    INTERFACE_THEME_CLASS_PREFIXES.some((prefix) => token.startsWith(prefix))
+  )
+  root.classList.remove(...stale)
+  root.classList.add(`ui-dark-${interfaceThemes.dark}`, `ui-light-${interfaceThemes.light}`)
 }
 
 let pendingTransitionDisableFrames: number[] = []
@@ -72,6 +87,9 @@ export function applyDocumentTheme(
   // Mirror with `light` so consumers can observe the resolved theme
   // symmetrically (Tailwind keys only on `dark`, so this is style-neutral).
   root.classList.toggle('light', !shouldUseDarkTheme)
+  if (options.interfaceThemes) {
+    applyInterfaceThemeClasses(root, options.interfaceThemes)
+  }
 
   if (!disableTransitions) {
     return

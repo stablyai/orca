@@ -20,6 +20,7 @@ import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { useAppStore } from './store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { DEFAULT_INTERFACE_THEME_ID } from '../../shared/interface-themes'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { setReactCommitCascadeRendererSurface } from './lib/react-commit-cascade-telemetry'
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
@@ -35,7 +36,13 @@ installRendererCrashDiagnostics('dashboard-popout')
 setReactCommitCascadeRendererSurface('dashboard-popout')
 
 function applyPopoutAppearance(settings: GlobalSettings | null): void {
-  applyDocumentTheme(settings?.theme ?? 'system', { disableTransitions: false })
+  applyDocumentTheme(settings?.theme ?? 'system', {
+    disableTransitions: false,
+    interfaceThemes: {
+      dark: settings?.interfaceThemeDark ?? DEFAULT_INTERFACE_THEME_ID,
+      light: settings?.interfaceThemeLight ?? DEFAULT_INTERFACE_THEME_ID
+    }
+  })
   document.documentElement.style.setProperty(
     '--app-font-family',
     buildAppFontFamily(settings?.appFontFamily)

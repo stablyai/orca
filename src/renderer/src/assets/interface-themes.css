@@ -1,0 +1,117 @@
+/* ── Interface themes ─────────────────────────────────────
+   Opt-in palettes layered over the default light/dark tokens. The root carries
+   `ui-dark-<id>` and `ui-light-<id>` (see shared/interface-themes.ts); the
+   existing `.dark`/`.light` class decides which one wins. Tokens not remapped
+   here keep Orca's defaults. */
+
+/* Catppuccin palettes: https://catppuccin.com/palette */
+.light.ui-light-catppuccin-latte {
+  --ctp-base: #eff1f5;
+  --ctp-mantle: #e6e9ef;
+  --ctp-crust: #dce0e8;
+  --ctp-surface0: #ccd0da;
+  --ctp-surface1: #bcc0cc;
+  --ctp-surface2: #acb0be;
+  --ctp-overlay0: #9ca0b0;
+  --ctp-text: #4c4f69;
+  --ctp-subtext0: #6c6f85;
+  --ctp-mauve: #8839ef;
+  --ctp-blue: #1e66f5;
+  --ctp-red: #d20f39;
+  --ctp-green: #40a02b;
+  --ctp-yellow: #df8e1d;
+}
+
+.dark.ui-dark-catppuccin-frappe {
+  --ctp-base: #303446;
+  --ctp-mantle: #292c3c;
+  --ctp-crust: #232634;
+  --ctp-surface0: #414559;
+  --ctp-surface1: #51576d;
+  --ctp-surface2: #626880;
+  --ctp-overlay0: #737994;
+  --ctp-text: #c6d0f5;
+  --ctp-subtext0: #a5adce;
+  --ctp-mauve: #ca9ee6;
+  --ctp-blue: #8caaee;
+  --ctp-red: #e78284;
+  --ctp-green: #a6d189;
+  --ctp-yellow: #e5c890;
+}
+
+.dark.ui-dark-catppuccin-macchiato {
+  --ctp-base: #24273a;
+  --ctp-mantle: #1e2030;
+  --ctp-crust: #181926;
+  --ctp-surface0: #363a4f;
+  --ctp-surface1: #494d64;
+  --ctp-surface2: #5b6078;
+  --ctp-overlay0: #6e738d;
+  --ctp-text: #cad3f5;
+  --ctp-subtext0: #a5adcb;
+  --ctp-mauve: #c6a0f6;
+  --ctp-blue: #8aadf4;
+  --ctp-red: #ed8796;
+  --ctp-green: #a6da95;
+  --ctp-yellow: #eed49f;
+}
+
+.dark.ui-dark-catppuccin-mocha {
+  --ctp-base: #1e1e2e;
+  --ctp-mantle: #181825;
+  --ctp-crust: #11111b;
+  --ctp-surface0: #313244;
+  --ctp-surface1: #45475a;
+  --ctp-surface2: #585b70;
+  --ctp-overlay0: #6c7086;
+  --ctp-text: #cdd6f4;
+  --ctp-subtext0: #a6adc8;
+  --ctp-mauve: #cba6f7;
+  --ctp-blue: #89b4fa;
+  --ctp-red: #f38ba8;
+  --ctp-green: #a6e3a1;
+  --ctp-yellow: #f9e2af;
+}
+
+/* Why: one role mapping shared by every flavour, so flavours only differ in palette. */
+.dark[class*='ui-dark-catppuccin-'],
+.light[class*='ui-light-catppuccin-'] {
+  --background: var(--ctp-base);
+  --editor-surface: var(--ctp-base);
+  --foreground: var(--ctp-text);
+  --card: var(--ctp-mantle);
+  --card-foreground: var(--ctp-text);
+  --popover: var(--ctp-mantle);
+  --popover-foreground: var(--ctp-text);
+  --primary: var(--ctp-mauve);
+  --primary-foreground: var(--ctp-base);
+  --secondary: var(--ctp-surface0);
+  --secondary-foreground: var(--ctp-text);
+  --muted: var(--ctp-surface0);
+  --muted-foreground: var(--ctp-subtext0);
+  --accent: var(--ctp-surface1);
+  --accent-foreground: var(--ctp-text);
+  --destructive: var(--ctp-red);
+  --border: var(--ctp-surface0);
+  --input: var(--ctp-surface1);
+  --ring: var(--ctp-overlay0);
+  --sidebar: var(--ctp-mantle);
+  --sidebar-foreground: var(--ctp-text);
+  --sidebar-primary: var(--ctp-blue);
+  --sidebar-primary-foreground: var(--ctp-base);
+  --sidebar-accent: var(--ctp-surface0);
+  --sidebar-accent-foreground: var(--ctp-text);
+  --sidebar-border: var(--ctp-surface0);
+  --sidebar-ring: var(--ctp-overlay0);
+  --worktree-sidebar: var(--ctp-mantle);
+  --worktree-sidebar-foreground: var(--ctp-text);
+  --worktree-sidebar-accent: var(--ctp-surface0);
+  --worktree-sidebar-accent-foreground: var(--ctp-text);
+  --worktree-sidebar-border: var(--ctp-surface0);
+  --worktree-sidebar-ring: var(--ctp-overlay0);
+  --status-success: var(--ctp-green);
+  --status-warning: var(--ctp-yellow);
+  --git-decoration-added: var(--ctp-green);
+  --git-decoration-modified: var(--ctp-yellow);
+  --git-decoration-deleted: var(--ctp-red);
+}

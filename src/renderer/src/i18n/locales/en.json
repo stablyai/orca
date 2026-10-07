@@ -255,6 +255,13 @@
         "sharper": "Sharper",
         "terminalControlledHint": "Set by terminal interface.",
         "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this."
+      },
+      "interfaceTheme": {
+        "default": "Default",
+        "dark": "Dark Theme",
+        "light": "Light Theme",
+        "keywordPalette": "palette",
+        "keywordCatppuccin": "catppuccin"
       }
     },
     "browser": {
