@@ -1234,6 +1234,58 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +    preedit.replaceChildren(...nodes);
    }
  }
+diff --git a/src/browser/renderer/dom/DomRenderer.ts b/src/browser/renderer/dom/DomRenderer.ts
+index 657217f7104c97ce54b98e88b381b325b061604c..00246e7ac935c87f37d3d227a167ba0d157eae73 100644
+--- a/src/browser/renderer/dom/DomRenderer.ts
++++ b/src/browser/renderer/dom/DomRenderer.ts
+@@ -524,6 +524,12 @@ export class DomRenderer extends Disposable implements IRenderer {
+     }
+   }
+ 
++  public setImageLayerProvider(provider: unknown): void {
++    this._rowFactory.imageLayersEnabled = !!provider;
++    this._selectionContainer.style.zIndex = provider ? '3' : '';
++    this.renderRows(0, this._bufferService.rows - 1);
++  }
++
+   public renderRows(start: number, end: number): void {
+     const buffer = this._bufferService.buffer;
+     const cursorAbsoluteY = buffer.ybase + buffer.y;
+diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
+index 6ae089a4387de14488f39f5dab7024cffdcd9d10..af7b0846a484d1f870f8307a7e3915a46d566ebf 100644
+--- a/src/browser/renderer/dom/DomRendererRowFactory.ts
++++ b/src/browser/renderer/dom/DomRendererRowFactory.ts
+@@ -43,6 +43,7 @@ export class DomRendererRowFactory {
+   private _columnSelectMode: boolean = false;
+ 
+   public defaultSpacing = 0;
++  public imageLayersEnabled = false;
+ 
+   constructor(
+     private readonly _document: Document,
+@@ -488,6 +489,22 @@ export class DomRendererRowFactory {
+       charElement.textContent = text;
+     }
+ 
++    if (this.imageLayersEnabled) {
++      for (const element of elements) {
++        const glyph = this._document.createElement('span');
++        const overlay = element.classList.contains(RowCss.CURSOR_CLASS) || element.classList.contains('xterm-decoration-top');
++        glyph.className = [...element.classList].filter(c => overlay || !c.startsWith('xterm-bg-')).join(' ');
++        glyph.style.cssText = element.style.cssText;
++        if (!overlay) glyph.style.removeProperty('background-color');
++        glyph.style.position = 'relative';
++        glyph.style.zIndex = overlay ? '4' : '1';
++        glyph.style.height = '100%';
++        glyph.style.display = 'inline-block';
++        glyph.textContent = element.textContent;
++        element.className = [...element.classList].filter(c => c.startsWith('xterm-bg-')).join(' ');
++        element.replaceChildren(glyph);
++      }
++    }
+     return elements;
+   }
+ 
 diff --git a/src/browser/renderer/dom/WidthCache.ts b/src/browser/renderer/dom/WidthCache.ts
 index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e35373864b822a4 100644
 --- a/src/browser/renderer/dom/WidthCache.ts

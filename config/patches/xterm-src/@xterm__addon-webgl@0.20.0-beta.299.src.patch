@@ -1,5 +1,41 @@
+diff --git a/src/CellColorResolver.ts b/src/CellColorResolver.ts
+index 49fdf5b1bb4d6c1f602e36470248a10a690a3479..d11ff595678ba4faed69be134f2c283a7dc6dae2 100644
+--- a/src/CellColorResolver.ts
++++ b/src/CellColorResolver.ts
+@@ -19,6 +19,7 @@ let $colors: ReadonlyColorSet | undefined;
+ let $variantOffset = 0;
+ 
+ export class CellColorResolver {
++  public hasOverlayBackground = false;
+   /**
+    * The shared result of the {@link resolve} call. This is only safe to use immediately after as
+    * any other calls will share object.
+@@ -44,6 +45,7 @@ export class CellColorResolver {
+    * overrides, inverse and selection for the cell which can then be used to feed into the renderer.
+    */
+   public resolve(cell: ICellData, x: number, y: number, deviceCellWidth: number, deviceCellHeight: number): void {
++    this.hasOverlayBackground = false;
+     this.result.bg = cell.bg;
+     this.result.fg = cell.fg;
+     this.result.ext = cell.bg & BgFlags.HAS_EXTENDED ? cell.extended.ext : 0;
+@@ -82,6 +84,7 @@ export class CellColorResolver {
+     // Apply the selection color if needed
+     $isSelected = this._selectionRenderModel.isCellSelected(this._terminal, x, y);
+     if ($isSelected) {
++      this.hasOverlayBackground = true;
+       // If the cell has a bg color, retain the color by blending it with the selection color
+       if (
+         (this.result.fg & FgFlags.INVERSE) ||
+@@ -177,6 +180,7 @@ export class CellColorResolver {
+     // Apply decorations on the top layer
+     this._decorationService.forEachDecorationAtCell(x, y, 'top', d => {
+       if (d.backgroundColorRGB) {
++        this.hasOverlayBackground = true;
+         $bg = d.backgroundColorRGB.rgba >> 8 & Attributes.RGB_MASK;
+         $hasBg = true;
+       }
 diff --git a/src/GlyphRenderer.ts b/src/GlyphRenderer.ts
-index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf935dd0eca 100644
+index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..f94637b1be4c7603fb2c7a4b18260bf794129ce2 100644
 --- a/src/GlyphRenderer.ts
 +++ b/src/GlyphRenderer.ts
 @@ -61,6 +61,8 @@ function createFragmentShaderSource(maxFragmentShaderTextureUnits: number): stri
@@ -20,6 +56,361 @@ index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf9
  }`);
  }
  
+@@ -209,7 +211,7 @@ export class GlyphRenderer extends Disposable {
+ 
+     // Allow drawing of transparent texture
+     gl.enable(gl.BLEND);
+-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
++    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+ 
+     // Set viewport
+     this.handleResize();
+@@ -303,6 +305,12 @@ export class GlyphRenderer extends Disposable {
+     }
+   }
+ 
++  public restoreAtlasTextureBinding(): void {
++    // The image pass temporarily uses texture unit zero between glyph frames.
++    this._gl.activeTexture(this._gl.TEXTURE0);
++    this._gl.bindTexture(this._gl.TEXTURE_2D, this._atlasTextures[0].texture);
++  }
++
+   public clear(): void {
+     const terminal = this._terminal;
+     const newCount = terminal.cols * terminal.rows * Constants.INDICES_PER_CELL;
+diff --git a/src/ImageLayerRenderer.ts b/src/ImageLayerRenderer.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..8a87eea52ce780fa92de8e1f31ec41f40a337776
+--- /dev/null
++++ b/src/ImageLayerRenderer.ts
+@@ -0,0 +1,186 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++import type { IDimensions } from 'browser/renderer/shared/Types';
++import type { IImageDraw, IWebGL2RenderingContext } from './Types';
++import { Disposable, toDisposable } from 'common/Lifecycle';
++import type { ILogService } from 'common/services/Services';
++import { createProgram } from './WebglUtils';
++
++const VERTEX_SHADER = `#version 300 es
++layout(location=0) in vec2 a_position;
++layout(location=1) in vec2 a_uv;
++out vec2 v_uv;
++void main() { gl_Position = vec4(a_position, 0.0, 1.0); v_uv = a_uv; }`;
++const FRAGMENT_SHADER = `#version 300 es
++precision mediump float;
++uniform sampler2D u_image;
++in vec2 v_uv;
++out vec4 outColor;
++void main() { outColor = texture(u_image, v_uv); }`;
++
++// Negative image textures are an additional bounded cache of visible sources.
++const TEXTURE_LIMIT = 32 * 1024 * 1024;
++const TEXTURE_COUNT_LIMIT = 4096;
++
++type ImageSource = IImageDraw['source'];
++type ImageTile = { texture: WebGLTexture; x: number; y: number; width: number; height: number };
++type TextureEntry = { tiles: ImageTile[]; bytes: number };
++
++export class ImageLayerRenderer extends Disposable {
++  private readonly _program: WebGLProgram;
++  private readonly _vertices: WebGLBuffer;
++  private readonly _textures = new Map<ImageSource, TextureEntry>();
++  private readonly _seen = new Set<ImageSource>();
++  private _textureBytes = 0;
++  private _textureCount = 0;
++  private readonly _quad = new Float32Array(16);
++  private readonly _maxTextureSize: number;
++  private readonly _bindVao: () => void;
++
++  constructor(private readonly _gl: IWebGL2RenderingContext, logService: ILogService) {
++    super();
++    const program = createProgram(_gl, VERTEX_SHADER, FRAGMENT_SHADER, logService);
++    const vertices = _gl.createBuffer();
++    const vao = _gl.createVertexArray();
++    if (!program || !vertices || !vao) {
++      if (program) _gl.deleteProgram(program);
++      if (vertices) _gl.deleteBuffer(vertices);
++      if (vao) _gl.deleteVertexArray(vao);
++      throw new Error('Unable to create inline image renderer');
++    }
++    this._program = program;
++    this._vertices = vertices;
++    this._maxTextureSize = _gl.getParameter(_gl.MAX_TEXTURE_SIZE);
++    _gl.bindVertexArray(vao);
++    _gl.bindBuffer(_gl.ARRAY_BUFFER, vertices);
++    _gl.enableVertexAttribArray(0);
++    _gl.enableVertexAttribArray(1);
++    _gl.vertexAttribPointer(0, 2, _gl.FLOAT, false, 16, 0);
++    _gl.vertexAttribPointer(1, 2, _gl.FLOAT, false, 16, 8);
++    this._bindVao = () => _gl.bindVertexArray(vao);
++    this._register(toDisposable(() => {
++      for (const entry of this._textures.values()) this._deleteEntry(entry);
++      this._textures.clear();
++      this._seen.clear();
++      _gl.deleteVertexArray(vao);
++      _gl.deleteBuffer(vertices);
++      _gl.deleteProgram(program);
++    }));
++  }
++
++  public render(draws: readonly IImageDraw[], behindBackground: boolean, viewport: IDimensions): void {
++    const gl = this._gl;
++    gl.useProgram(this._program);
++    this._bindVao();
++    gl.bindBuffer(gl.ARRAY_BUFFER, this._vertices);
++    gl.activeTexture(gl.TEXTURE0);
++    gl.uniform1i(gl.getUniformLocation(this._program, 'u_image'), 0);
++    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
++    try {
++      for (const draw of draws) {
++        if (draw.behindCellBackground !== behindBackground) continue;
++        const entry = this._textureFor(draw.source);
++        if (!entry) continue;
++        this._seen.add(draw.source);
++        const [sx, sy, sw, sh] = draw.sourceRect;
++        const [dx, dy, dw, dh] = draw.targetRect;
++        for (const tile of entry.tiles) {
++          const left = Math.max(sx, tile.x);
++          const top = Math.max(sy, tile.y);
++          const right = Math.min(sx + sw, tile.x + tile.width);
++          const bottom = Math.min(sy + sh, tile.y + tile.height);
++          if (left >= right || top >= bottom) continue;
++          gl.bindTexture(gl.TEXTURE_2D, tile.texture);
++          const x = (dx + (left - sx) / sw * dw) / viewport.width * 2 - 1;
++          const y = 1 - (dy + (top - sy) / sh * dh) / viewport.height * 2;
++          const xr = x + (right - left) / sw * dw / viewport.width * 2;
++          const yb = y - (bottom - top) / sh * dh / viewport.height * 2;
++          const u = (left - tile.x) / tile.width;
++          const v = (top - tile.y) / tile.height;
++          const ur = (right - tile.x) / tile.width;
++          const vb = (bottom - tile.y) / tile.height;
++          this._quad.set([x, y, u, v, x, yb, u, vb, xr, y, ur, v, xr, yb, ur, vb]);
++          gl.bufferData(gl.ARRAY_BUFFER, this._quad, gl.DYNAMIC_DRAW);
++          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
++        }
++      }
++    } finally {
++      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
++      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
++    }
++  }
++
++  public endFrame(): void {
++    for (const [source, entry] of this._textures) {
++      if (!this._seen.has(source)) {
++        this._deleteEntry(entry);
++        this._textures.delete(source);
++      }
++    }
++    this._seen.clear();
++  }
++
++  private _deleteEntry(entry: TextureEntry): void {
++    for (const tile of entry.tiles) this._gl.deleteTexture(tile.texture);
++    this._textureBytes -= entry.bytes;
++    this._textureCount -= entry.tiles.length;
++  }
++
++  private _textureFor(source: ImageSource): TextureEntry | undefined {
++    const existing = this._textures.get(source);
++    if (existing) return existing;
++    const bytes = source.width * source.height * 4;
++    const count = Math.ceil(source.width / this._maxTextureSize) * Math.ceil(source.height / this._maxTextureSize);
++    if (!bytes || bytes > TEXTURE_LIMIT || count > TEXTURE_COUNT_LIMIT) return;
++    while (this._textureCount + count > TEXTURE_COUNT_LIMIT || this._textureBytes + bytes > TEXTURE_LIMIT) {
++      const victim = [...this._textures].find(([image]) => !this._seen.has(image));
++      if (!victim) return;
++      this._deleteEntry(victim[1]);
++      this._textures.delete(victim[0]);
++    }
++    const gl = this._gl;
++    const tiles: ImageTile[] = [];
++    // Long, thin sources can exceed a GPU's dimension limit while fitting the byte budget.
++    const crop = count > 1 ? document.createElement('canvas') : undefined;
++    try {
++      for (let y = 0; y < source.height; y += this._maxTextureSize) {
++        for (let x = 0; x < source.width; x += this._maxTextureSize) {
++          const width = Math.min(source.width - x, this._maxTextureSize);
++          const height = Math.min(source.height - y, this._maxTextureSize);
++          let upload: ImageSource = source;
++          if (crop) {
++            crop.width = width;
++            crop.height = height;
++            const context = crop.getContext('2d');
++            if (!context) throw new Error('Unable to crop inline image texture');
++            context.drawImage(source, x, y, width, height, 0, 0, width, height);
++            upload = crop;
++          }
++          const texture = gl.createTexture();
++          if (!texture) throw new Error('Unable to allocate inline image texture');
++          tiles.push({ texture, x, y, width, height });
++          gl.bindTexture(gl.TEXTURE_2D, texture);
++          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
++          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
++          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
++          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
++          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
++          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
++          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, upload);
++        }
++      }
++    } catch {
++      for (const tile of tiles) gl.deleteTexture(tile.texture);
++      return;
++    } finally {
++      if (crop) { crop.width = 0; crop.height = 0; }
++    }
++    const entry = { tiles, bytes };
++    this._textures.set(source, entry);
++    this._textureBytes += bytes;
++    this._textureCount += tiles.length;
++    return entry;
++  }
++}
+diff --git a/src/RectangleRenderer.ts b/src/RectangleRenderer.ts
+index eebfda3b3df9b4c8cefcc6a64692053ed5eaeefa..44f488904018d635dd20e4ac3a759b3be0600b6e 100644
+--- a/src/RectangleRenderer.ts
++++ b/src/RectangleRenderer.ts
+@@ -83,6 +83,7 @@ export class RectangleRenderer extends Disposable {
+   private _bgFloat!: Float32Array;
+   private _cursorFloat!: Float32Array;
+ 
++  private _verticesOverlay = new Vertices();
+   private _vertices: Vertices = new Vertices();
+   private _verticesCursor: Vertices = new Vertices();
+ 
+@@ -151,11 +152,23 @@ export class RectangleRenderer extends Disposable {
+     this._renderVertices(this._vertices);
+   }
+ 
++  public renderDefaultBackground(): void {
++    this._renderVertices(this._vertices, 0, 1);
++  }
++
++  public renderCellBackgrounds(): void {
++    this._renderVertices(this._vertices, 1);
++  }
++
++  public renderOverlays(): void {
++    this._renderVertices(this._verticesOverlay);
++  }
++
+   public renderCursor(): void {
+     this._renderVertices(this._verticesCursor);
+   }
+ 
+-  private _renderVertices(vertices: Vertices): void {
++  private _renderVertices(vertices: Vertices, start: number = 0, count: number = vertices.count - start): void {
+     const gl = this._gl;
+ 
+     gl.useProgram(this._program);
+@@ -166,8 +179,8 @@ export class RectangleRenderer extends Disposable {
+ 
+     // Bind attributes buffer and draw
+     gl.bindBuffer(gl.ARRAY_BUFFER, this._attributesBuffer);
+-    gl.bufferData(gl.ARRAY_BUFFER, vertices.attributes, gl.DYNAMIC_DRAW);
+-    gl.drawElementsInstanced(this._gl.TRIANGLE_STRIP, 4, gl.UNSIGNED_BYTE, 0, vertices.count);
++    gl.bufferData(gl.ARRAY_BUFFER, vertices.attributes.subarray(start * INDICES_PER_RECTANGLE), gl.DYNAMIC_DRAW);
++    gl.drawElementsInstanced(this._gl.TRIANGLE_STRIP, 4, gl.UNSIGNED_BYTE, 0, count);
+   }
+ 
+   public handleResize(): void {
+@@ -196,12 +209,15 @@ export class RectangleRenderer extends Disposable {
+     );
+   }
+ 
+-  public updateBackgrounds(model: IRenderModel): void {
++  public updateBackgrounds(model: IRenderModel, splitOverlays: boolean = false): void {
+     const terminal = this._terminal;
+     const vertices = this._vertices;
+ 
+     // Declare variable ahead of time to avoid garbage collection
+     let rectangleCount = 1;
++    let overlayCount = 0;
++    let currentOverlay: boolean;
++    let overlay: boolean;
+     let y: number;
+     let x: number;
+     let currentStartX: number;
+@@ -219,30 +235,34 @@ export class RectangleRenderer extends Disposable {
+       currentBg = 0;
+       currentFg = 0;
+       currentInverse = false;
++      currentOverlay = false;
+       for (x = 0; x < terminal.cols; x++) {
+         modelIndex = ((y * terminal.cols) + x) * RenderModelConstants.INDICIES_PER_CELL;
+         bg = model.cells[modelIndex + RenderModelConstants.BG_OFFSET];
+         fg = model.cells[modelIndex + RenderModelConstants.FG_OFFSET];
+         inverse = !!(fg & FgFlags.INVERSE);
+-        if (bg !== currentBg || (fg !== currentFg && (currentInverse || inverse))) {
++        overlay = splitOverlays && !!model.backgroundOverlays[y * terminal.cols + x];
++        if (bg !== currentBg || (fg !== currentFg && (currentInverse || inverse)) || overlay !== currentOverlay) {
+           // A rectangle needs to be drawn if going from non-default to another color
+-          if (currentBg !== 0 || (currentInverse && currentFg !== 0)) {
+-            offset = rectangleCount++ * INDICES_PER_RECTANGLE;
+-            this._updateRectangle(vertices, offset, currentFg, currentBg, currentStartX, x, y);
++          if ((currentBg & Attributes.CM_MASK) !== Attributes.CM_DEFAULT || currentInverse) {
++            offset = (currentOverlay ? overlayCount++ : rectangleCount++) * INDICES_PER_RECTANGLE;
++            this._updateRectangle(currentOverlay ? this._verticesOverlay : vertices, offset, currentFg, currentBg, currentStartX, x, y);
+           }
+           currentStartX = x;
+           currentBg = bg;
+           currentFg = fg;
+           currentInverse = inverse;
++          currentOverlay = overlay;
+         }
+       }
+       // Finish rectangle if it's still going
+-      if (currentBg !== 0 || (currentInverse && currentFg !== 0)) {
+-        offset = rectangleCount++ * INDICES_PER_RECTANGLE;
+-        this._updateRectangle(vertices, offset, currentFg, currentBg, currentStartX, terminal.cols, y);
++      if ((currentBg & Attributes.CM_MASK) !== Attributes.CM_DEFAULT || currentInverse) {
++        offset = (currentOverlay ? overlayCount++ : rectangleCount++) * INDICES_PER_RECTANGLE;
++        this._updateRectangle(currentOverlay ? this._verticesOverlay : vertices, offset, currentFg, currentBg, currentStartX, terminal.cols, y);
+       }
+     }
+     vertices.count = rectangleCount;
++    this._verticesOverlay.count = overlayCount;
+   }
+ 
+   public updateCursor(model: IRenderModel): void {
+diff --git a/src/RenderModel.ts b/src/RenderModel.ts
+index 6113a9bdcd45206ddc448648a9f5bd81940bef19..44c6525e2eba0c79a7272fbf3e6375097c97d010 100644
+--- a/src/RenderModel.ts
++++ b/src/RenderModel.ts
+@@ -18,12 +18,14 @@ export const COMBINED_CHAR_BIT_MASK = 0x80000000;
+ 
+ export class RenderModel implements IRenderModel {
+   public cells: Uint32Array;
++  public backgroundOverlays: Uint8Array;
+   public lineLengths: Uint32Array;
+   public selection: ISelectionRenderModel;
+   public cursor?: ICursorRenderModel;
+ 
+   constructor() {
+     this.cells = new Uint32Array(0);
++    this.backgroundOverlays = new Uint8Array(0);
+     this.lineLengths = new Uint32Array(0);
+     this.selection = createSelectionRenderModel();
+   }
+@@ -32,12 +34,14 @@ export class RenderModel implements IRenderModel {
+     const indexCount = cols * rows * RenderModelConstants.INDICIES_PER_CELL;
+     if (indexCount !== this.cells.length) {
+       this.cells = new Uint32Array(indexCount);
++      this.backgroundOverlays = new Uint8Array(cols * rows);
+       this.lineLengths = new Uint32Array(rows);
+     }
+   }
+ 
+   public clear(): void {
+     this.cells.fill(0, 0);
++    this.backgroundOverlays.fill(0);
+     this.lineLengths.fill(0, 0);
+   }
+ }
 diff --git a/src/TextureAtlas.ts b/src/TextureAtlas.ts
 index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318e7db194c 100644
 --- a/src/TextureAtlas.ts
@@ -113,11 +504,107 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
      this._tmpCtx.textBaseline = TEXT_BASELINE;
  
      const powerlineGlyph = chars.length === 1 && isPowerlineGlyph(chars.charCodeAt(0));
+diff --git a/src/Types.ts b/src/Types.ts
+index bfd6fd76cebe8f55dce7bfad5406d4f7cd184320..56e481a89f8a797225b1446700ca07f107e43630 100644
+--- a/src/Types.ts
++++ b/src/Types.ts
+@@ -11,6 +11,7 @@ import type { IEvent } from 'common/Event';
+ 
+ export interface IRenderModel {
+   cells: Uint32Array;
++  backgroundOverlays: Uint8Array;
+   lineLengths: Uint32Array;
+   selection: ISelectionRenderModel;
+   cursor?: ICursorRenderModel;
+@@ -127,3 +128,15 @@ export interface IBoundingBox {
+   right: number;
+   bottom: number;
+ }
++
++// Shared shape with the image addon; optional renderer integration for pinned builds.
++export interface IImageDraw {
++  source: HTMLCanvasElement | ImageBitmap;
++  sourceRect: [number, number, number, number];
++  targetRect: [number, number, number, number];
++  behindCellBackground: boolean;
++}
++export interface IImageLayerProvider {
++  collectDraws(): readonly IImageDraw[];
++  hasNegativeImages?(): boolean;
++}
 diff --git a/src/WebglRenderer.ts b/src/WebglRenderer.ts
-index a951efba5c75e82735cd39b6b22c4b5d5fad5928..e7f80c3a8c14dd65a16a97f1d17e3da1d65ed8bf 100644
+index a951efba5c75e82735cd39b6b22c4b5d5fad5928..260891f9074d02a90922649c41eee3912bc6827c 100644
 --- a/src/WebglRenderer.ts
 +++ b/src/WebglRenderer.ts
-@@ -386,7 +386,10 @@ export class WebglRenderer extends Disposable implements IRenderer {
+@@ -4,6 +4,8 @@
+  */
+ 
+ import { ITerminal } from 'browser/Types';
++import { ImageLayerRenderer } from './ImageLayerRenderer';
++import type { IImageLayerProvider } from './Types';
+ import { CellColorResolver } from './CellColorResolver';
+ import { acquireTextureAtlas, removeTerminalFromCache } from './CharAtlasCache';
+ import { CursorBlinkStateManager } from './CursorBlinkStateManager';
+@@ -50,6 +52,11 @@ export class WebglRenderer extends Disposable implements IRenderer {
+ 
+   private _canvas: HTMLCanvasElement;
+   private _gl: IWebGL2RenderingContext;
++  public readonly imageLayerRenderPass = true;
++  private _splitImageBackgrounds = false;
++  private _imageGlyphTransparency = false;
++  private _imageProvider: IImageLayerProvider | undefined;
++  private _imageRenderer = this._register(new MutableDisposable<ImageLayerRenderer>());
+   private _rectangleRenderer: MutableDisposable<RectangleRenderer> = this._register(new MutableDisposable());
+   private _glyphRenderer: MutableDisposable<GlyphRenderer> = this._register(new MutableDisposable());
+ 
+@@ -142,6 +149,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
+       // because their contents have been lost.
+       removeTerminalFromCache(this._terminal);
+       this._initializeWebGLState();
++      this.setImageLayerProvider(this._imageProvider);
+       this._requestRedrawViewport();
+     }));
+ 
+@@ -298,7 +306,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
+ 
+     const atlas = acquireTextureAtlas(
+       this._terminal,
+-      this._optionsService.rawOptions,
++      this._imageGlyphTransparency ? { ...this._optionsService.rawOptions, allowTransparency: true } : this._optionsService.rawOptions,
+       this._themeService.colors,
+       this.dimensions.device.cell.width,
+       this.dimensions.device.cell.height,
+@@ -351,6 +359,12 @@ export class WebglRenderer extends Disposable implements IRenderer {
+     this._updateCursorBlink();
+   }
+ 
++  public setImageLayerProvider(provider: IImageLayerProvider | undefined): void {
++    this._imageRenderer.clear();
++    this._imageProvider = provider;
++
++  }
++
+   public renderRows(start: number, end: number): void {
+     if (!this._isAttached) {
+       if (this._core.screenElement?.isConnected && this._charSizeService.width && this._charSizeService.height) {
+@@ -371,6 +385,16 @@ export class WebglRenderer extends Disposable implements IRenderer {
+       return;
+     }
+ 
++    const imageDraws = this._imageProvider?.collectDraws();
++    const transparentGlyphs = this._imageProvider?.hasNegativeImages?.() ?? !!imageDraws?.length;
++    if (transparentGlyphs !== this._imageGlyphTransparency) {
++      this._imageGlyphTransparency = transparentGlyphs;
++      this._refreshCharAtlas();
++    }
++    const splitBackgrounds = !!imageDraws?.length;
++    const splitChanged = splitBackgrounds !== this._splitImageBackgrounds;
++    this._splitImageBackgrounds = splitBackgrounds;
++
+     // Tell renderer the frame is beginning
+     // upon a model clear also refresh the full viewport model
+     // (also triggered by an atlas page merge, part of #4480)
+@@ -386,7 +410,10 @@ export class WebglRenderer extends Disposable implements IRenderer {
      // page's version, so re-run the update and force a full texture rebind.
      let merged = false;
      let mergeRetries = 0;
@@ -129,3 +616,73 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..e7f80c3a8c14dd65a16a97f1d17e3da1
        merged = true;
        this._clearModel(true);
        this._updateModel(0, this._terminal.rows - 1);
+@@ -396,7 +423,19 @@ export class WebglRenderer extends Disposable implements IRenderer {
+     }
+ 
+     // Render
+-    this._rectangleRenderer.value.renderBackgrounds();
++    if (splitChanged) this._rectangleRenderer.value.updateBackgrounds(this._model, splitBackgrounds);
++    if (imageDraws?.length) {
++      if (!this._imageRenderer.value) this._imageRenderer.value = new ImageLayerRenderer(this._gl, this._logService);
++      this._rectangleRenderer.value.renderDefaultBackground();
++      this._imageRenderer.value?.render(imageDraws, true, this.dimensions.css.canvas);
++      this._rectangleRenderer.value.renderCellBackgrounds();
++      this._imageRenderer.value?.render(imageDraws, false, this.dimensions.css.canvas);
++      this._rectangleRenderer.value.renderOverlays();
++      this._glyphRenderer.value.restoreAtlasTextureBinding();
++    } else {
++      this._rectangleRenderer.value.renderBackgrounds();
++    }
++    this._imageRenderer.value?.endFrame();
+     this._glyphRenderer.value.render(this._model);
+     if (!this._cursorBlinkStateManager.value || this._cursorBlinkStateManager.value.isCursorVisible) {
+       this._rectangleRenderer.value.renderCursor();
+@@ -556,6 +595,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
+               Attributes.CM_RGB | (this._themeService.colors.cursorAccent.rgba >> 8 & Attributes.RGB_MASK);
+             this._cellColorResolver.result.bg =
+               Attributes.CM_RGB | (this._themeService.colors.cursor.rgba >> 8 & Attributes.RGB_MASK);
++            this._cellColorResolver.hasOverlayBackground = true;
+           }
+         }
+ 
+@@ -567,8 +607,13 @@ export class WebglRenderer extends Disposable implements IRenderer {
+           this._model.lineLengths[y] = x + 1;
+         }
+ 
++        const backgroundIndex = y * terminal.cols + x;
++        const overlay = this._cellColorResolver.hasOverlayBackground ? 1 : 0;
++        const overlayChanged = this._model.backgroundOverlays[backgroundIndex] !== overlay;
++        this._model.backgroundOverlays[backgroundIndex] = overlay;
++
+         // Nothing has changed, no updates needed
+-        if (this._model.cells[i] === code &&
++        if (!overlayChanged && this._model.cells[i] === code &&
+             this._model.cells[i + RenderModelConstants.BG_OFFSET] === this._cellColorResolver.result.bg &&
+             this._model.cells[i + RenderModelConstants.FG_OFFSET] === this._cellColorResolver.result.fg &&
+             this._model.cells[i + RenderModelConstants.EXT_OFFSET] === this._cellColorResolver.result.ext) {
+@@ -600,7 +645,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
+             j = ((y * terminal.cols) + x) * RenderModelConstants.INDICIES_PER_CELL;
+             // Don't re-resolve the cell color since multi-colored ligature backgrounds are not
+             // supported
+-            this._nullModelCell(x, y, j, this._cellColorResolver.result.bg, this._cellColorResolver.result.fg, this._cellColorResolver.result.ext);
++            this._nullModelCell(x, y, j, this._cellColorResolver.result.bg, this._cellColorResolver.result.fg, this._cellColorResolver.result.ext, this._cellColorResolver.hasOverlayBackground);
+           }
+           x--; // Go back to the previous update cell for next iteration
+         }
+@@ -608,13 +653,14 @@ export class WebglRenderer extends Disposable implements IRenderer {
+       this._setRowBlinkState(y, rowHasBlinkingCells);
+     }
+     if (modelUpdated) {
+-      this._rectangleRenderer.value!.updateBackgrounds(this._model);
++      this._rectangleRenderer.value!.updateBackgrounds(this._model, this._splitImageBackgrounds);
+     }
+     this._rectangleRenderer.value!.updateCursor(this._model);
+     this._updateTextBlinkState();
+   }
+ 
+-  private _nullModelCell(x: number, y: number, cellIndex: number, bg: number, fg: number, ext: number): void {
++  private _nullModelCell(x: number, y: number, cellIndex: number, bg: number, fg: number, ext: number, overlay: boolean = false): void {
++    this._model.backgroundOverlays[y * this._terminal.cols + x] = overlay ? 1 : 0;
+     this._glyphRenderer.value!.updateCell(x, y, NULL_CELL_CODE, bg, fg, ext, NULL_CELL_CHAR, 0, 0);
+     this._model.cells[cellIndex] = NULL_CELL_CODE;
+     this._model.cells[cellIndex + RenderModelConstants.BG_OFFSET] = bg;

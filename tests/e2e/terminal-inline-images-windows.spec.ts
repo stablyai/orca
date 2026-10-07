@@ -12,7 +12,7 @@ import {
   enableInlineImages,
   inlineImagePayload
 } from './helpers/terminal-inline-image-proof'
-import { getFirstWslDistro, useWslRuntimeForActiveProject } from './helpers/wsl-golden-stub-agent'
+import { prepareInlineImageRuntime } from './helpers/terminal-inline-image-runtime'
 import { nodeTerminalCommand } from './terminal-node-command'
 
 test.skip(process.platform !== 'win32', 'Native Windows and WSL PTY coverage')
@@ -27,34 +27,7 @@ for (const runtime of ['native', 'wsl'] as const) {
       await orcaPage.evaluate(async (policy) => {
         await window.__store!.getState().updateSettings({ terminalGpuAcceleration: policy })
       }, acceleration)
-      if (runtime === 'wsl') {
-        const distro = await getFirstWslDistro(orcaPage)
-        expect(distro, 'This Windows verification requires an installed WSL distro').not.toBeNull()
-        if (!distro) {
-          throw new Error('No WSL distro available')
-        }
-        await useWslRuntimeForActiveProject(orcaPage, distro)
-      } else {
-        await orcaPage.evaluate(async () => {
-          await window
-            .__store!.getState()
-            .updateSettings({ terminalWindowsShell: 'powershell.exe' })
-        })
-      }
-      const tabId = await orcaPage.evaluate(() => {
-        const state = window.__store!.getState()
-        const worktreeId = state.activeWorktreeId
-        if (!worktreeId) {
-          throw new Error('Missing verification worktree')
-        }
-        const tab = state.createTab(worktreeId)
-        window.__store!.getState().setActiveTab(tab.id)
-        window.__store!.getState().setActiveTabType('terminal', worktreeId)
-        return tab.id
-      })
-      await expect(
-        orcaPage.locator(`[data-tab-id="${tabId}"] [data-shell-icon]`).first()
-      ).toHaveAttribute('data-shell-icon', runtime === 'wsl' ? 'wsl.exe' : 'powershell.exe')
+      await prepareInlineImageRuntime(orcaPage, runtime)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await enableInlineImages(orcaPage)
       await expect

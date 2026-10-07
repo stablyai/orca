@@ -105,7 +105,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..73cedbe99f831bffd202697cc8ba80a4
      const cw = this._renderer.dimensions?.css.cell.width || CELL_SIZE_DEFAULT.width;
      const ch = this._renderer.dimensions?.css.cell.height || CELL_SIZE_DEFAULT.height;
 diff --git a/src/ImageAddon.ts b/src/ImageAddon.ts
-index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..963f814b9c1030912722909a59c94586bd3b732b 100644
+index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..a36598b0894c61d4b802fd634812f4bcc0462b07 100644
 --- a/src/ImageAddon.ts
 +++ b/src/ImageAddon.ts
 @@ -113,6 +113,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
@@ -116,7 +116,25 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..963f814b9c1030912722909a59c94586
      for (const obj of this._disposables) {
        obj.dispose();
      }
-@@ -196,7 +197,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -133,6 +134,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+     // internal data structures
+     this._renderer = new ImageRenderer(terminal);
+     this._storage = new ImageStorage(terminal, this._renderer, this._opts);
++    this._renderer.onCollectDraws = range => this._storage?.render(range ?? { start: 0, end: terminal.rows - 1 });
+     this._storage.onImageAdded = () => this._onImageAdded.fire();
+ 
+     // enable size reports
+@@ -154,9 +156,6 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+       terminal.parser.registerCsiHandler({ final: 'c' }, params => this._da1(params)),
+       terminal.parser.registerCsiHandler({ prefix: '?', final: 'S' }, params => this._xtermGraphicsAttributes(params)),
+ 
+-      // render hook
+-      terminal.onRender(range => this._storage?.render(range)),
+-
+       /**
+        * reset handlers covered:
+        * - DECSTR
+@@ -196,7 +195,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
  
      // Kitty graphics handler
      if (this._opts.kittySupport) {
@@ -126,10 +144,47 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..963f814b9c1030912722909a59c94586
        this._handlers.set('kitty', kittyHandler);
        this._disposeLater(
 diff --git a/src/ImageRenderer.ts b/src/ImageRenderer.ts
-index 5854efaec1fdf9dfcb886023542998a563b6d2f2..f3aba13205873b62bfbebbb60a5d72af54feb0cb 100644
+index 5854efaec1fdf9dfcb886023542998a563b6d2f2..10cbe2c977d65b3291ce940a1decfad77e1d63b2 100644
 --- a/src/ImageRenderer.ts
 +++ b/src/ImageRenderer.ts
-@@ -140,6 +140,10 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -6,6 +6,7 @@
+ import { toRGBA8888 } from 'sixel/lib/Colors';
+ import { IDisposable } from '@xterm/xterm';
+ import { ICellSize, ImageLayer, ITerminalExt, IImageSpec, IRenderDimensions, IRenderService } from './Types';
++import type { IImageDraw, IImageAwareRenderer } from './Types';
+ import { Disposable, MutableDisposable, toDisposable } from 'common/Lifecycle';
+ 
+ const enum Constants {
+@@ -22,12 +23,18 @@ const enum Constants {
+ export class ImageRenderer extends Disposable implements IDisposable {
+   /** @deprecated Kept for backward compat — points to top layer canvas. */
+   public get canvas(): HTMLCanvasElement | undefined { return this._layers.get('top')?.canvas; }
+-  private _layers = new Map<ImageLayer, CanvasRenderingContext2D>();
++  private _layers = new Map<ImageLayer | 'bottom-background', CanvasRenderingContext2D>();
+   private _placeholder: HTMLCanvasElement | undefined;
+   private _placeholderBitmap: ImageBitmap | undefined;
+   private _optionsRefresh = this._register(new MutableDisposable());
+   private _oldOpen: ((parent: HTMLElement) => void) | undefined;
+   private _renderService: IRenderService | undefined;
++  public onCollectDraws: ((range?: { start: number, end: number }) => void) | undefined;
++  private _renderRefresh = this._register(new MutableDisposable<IDisposable>());
++  public usesRenderPass = false;
++  private _layersEnabled = false;
++  private _collecting: IImageDraw[] | undefined;
++  private _activeRenderer: IImageAwareRenderer | undefined;
+   private _oldSetRenderer: ((renderer: any) => void) | undefined;
+ 
+   // drawing primitive - canvas
+@@ -88,6 +95,8 @@ export class ImageRenderer extends Disposable implements IDisposable {
+       }
+     });
+     this._register(toDisposable(() => {
++      this._activeRenderer?.setImageLayerProvider?.(undefined);
++      this._activeRenderer = undefined;
+       this.removeLayerFromDom();
+       this.removeLayerFromDom('bottom');
+       if (this._terminal._core && this._oldOpen) {
+@@ -140,6 +149,10 @@ export class ImageRenderer extends Disposable implements IDisposable {
      };
    }
  
@@ -140,7 +195,36 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..f3aba13205873b62bfbebbb60a5d72af
    /**
     * Clear a region of the image layer canvas.
     */
-@@ -186,16 +190,17 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -152,6 +165,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
+     }
+     if (!layer || layer === 'bottom') {
+       this._layers.get('bottom')?.clearRect(0, y, w, h);
++      this._layers.get('bottom-background')?.clearRect(0, y, w, h);
+     }
+   }
+ 
+@@ -166,6 +180,8 @@ export class ImageRenderer extends Disposable implements IDisposable {
+     if (!layer || layer === 'bottom') {
+       const ctx = this._layers.get('bottom');
+       ctx?.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
++      const background = this._layers.get('bottom-background');
++      background?.clearRect(0, 0, background.canvas.width, background.canvas.height);
+     }
+   }
+ 
+@@ -173,8 +189,9 @@ export class ImageRenderer extends Disposable implements IDisposable {
+    * Draw neighboring tiles on the image layer canvas.
+    */
+   public draw(imgSpec: IImageSpec, tileId: number, col: number, row: number, count: number = 1): void {
+-    const ctx = this._layers.get(imgSpec.layer);
+-    if (!ctx) {
++    const layer = imgSpec.layer === 'bottom' && imgSpec.zIndex < -1073741824 ? 'bottom-background' : imgSpec.layer;
++    const ctx = this._layers.get(layer);
++    if (!ctx && !(this._collecting && imgSpec.layer === 'bottom')) {
+       return;
+     }
+     const { width, height } = this.cellSize;
+@@ -186,28 +203,102 @@ export class ImageRenderer extends Disposable implements IDisposable {
  
      this._rescaleImage(imgSpec, width, height);
      const img = imgSpec.actual!;
@@ -163,9 +247,11 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..f3aba13205873b62bfbebbb60a5d72af
  
      // Floor all pixel offsets to get stable tile mapping without any overflows.
      // Note: For not pixel perfect aligned cells like in the DOM renderer
-@@ -204,10 +209,83 @@ export class ImageRenderer extends Disposable implements IDisposable {
-     ctx.drawImage(
-       img,
+     // this will move a tile slightly to the top/left (subpixel range, thus ignore it).
+     // FIX #34: avoid striping on displays with pixelDeviceRatio != 1 by ceiling height and width
+-    ctx.drawImage(
+-      img,
++    this._draw(imgSpec, ctx, img,
        Math.floor(sx), Math.floor(sy), Math.ceil(finalWidth), Math.ceil(finalHeight),
 -      Math.floor(dx), Math.floor(dy), Math.ceil(finalWidth), Math.ceil(finalHeight)
 +      Math.floor(dx), Math.floor(dy), Math.ceil(finalWidth * width / sourceWidth), Math.ceil(finalHeight * height / sourceHeight)
@@ -174,8 +260,9 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..f3aba13205873b62bfbebbb60a5d72af
  
 +  // Fit the original source into the cell grid without distorting its aspect ratio.
 +  public drawCellImage(imgSpec: IImageSpec, boxCols: number, boxRows: number, gridRow: number, gridCol: number, count: number, col: number, row: number): void {
-+    const ctx = this._layers.get(imgSpec.layer);
-+    if (!ctx) {
++    const layer = imgSpec.layer === 'bottom' && imgSpec.zIndex < -1073741824 ? 'bottom-background' : imgSpec.layer;
++    const ctx = this._layers.get(layer);
++    if (!ctx && !(this._collecting && imgSpec.layer === 'bottom')) {
 +      return;
 +    }
 +    const { width, height } = this.cellSize;
@@ -242,13 +329,13 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..f3aba13205873b62bfbebbb60a5d72af
 +    if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) {
 +      return;
 +    }
-+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
++    this._draw(imgSpec, ctx, img, sx, sy, sw, sh, dx, dy, dw, dh);
 +  }
 +
    /**
     * Extract a single tile from an image.
     */
-@@ -219,19 +297,20 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -219,19 +310,20 @@ export class ImageRenderer extends Disposable implements IDisposable {
      }
      this._rescaleImage(imgSpec, width, height);
      const img = imgSpec.actual!;
@@ -277,7 +364,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..f3aba13205873b62bfbebbb60a5d72af
        );
        return canvas;
      }
-@@ -299,11 +378,16 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -299,11 +391,16 @@ export class ImageRenderer extends Disposable implements IDisposable {
        spec.actualCellSize.height = originalHeight;
        return;
      }
@@ -299,7 +386,113 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..f3aba13205873b62bfbebbb60a5d72af
      const ctx = canvas.getContext('2d');
      if (ctx) {
        ctx.drawImage(spec.orig!, 0, 0, canvas.width, canvas.height);
-@@ -415,7 +499,11 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -313,21 +410,56 @@ export class ImageRenderer extends Disposable implements IDisposable {
+     }
+   }
+ 
+-  /**
+-   * Lazy init for the renderer.
+-   */
++  private _draw(spec: IImageSpec, ctx: CanvasRenderingContext2D | undefined, source: HTMLCanvasElement | ImageBitmap, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void {
++    if (this._collecting && spec.layer === 'bottom') {
++      this._collecting.push({ source, sourceRect: [sx, sy, sw, sh], targetRect: [dx, dy, dw, dh], behindCellBackground: spec.zIndex < -1073741824 });
++    } else {
++      ctx?.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh);
++    }
++  }
++
++  public setLayersEnabled(enabled: boolean): void {
++    if (this._layersEnabled === enabled) return;
++    this._layersEnabled = enabled;
++    if (this.usesRenderPass) return;
++    this._bindRenderer(this._activeRenderer);
++    const top = this._layers.get('top');
++    if (top) top.canvas.style.zIndex = enabled ? '2' : '0';
++  }
++
++  private _bindRenderer(renderer: IImageAwareRenderer | undefined): void {
++    this._activeRenderer?.setImageLayerProvider?.(undefined);
++    this._activeRenderer = renderer;
++    this.usesRenderPass = !!renderer?.imageLayerRenderPass;
++    renderer?.setImageLayerProvider?.(this.usesRenderPass || this._layersEnabled ? { collectDraws: () => {
++      const draws: IImageDraw[] = [];
++      this._collecting = draws;
++      try { this.onCollectDraws?.(); }
++      finally { this._collecting = undefined; }
++      return draws;
++    }, hasNegativeImages: () => this._layersEnabled } : undefined);
++  }
++
+   private _open(): void {
+     this._renderService = this._terminal._core._renderService;
++    // Buffer-change events omit redraws after renderer replacement and selection changes.
++    this._renderRefresh.value = this._renderService.onRender(range => {
++      if (!this.usesRenderPass) this.onCollectDraws?.(range);
++    });
+     this._oldSetRenderer = this._renderService.setRenderer.bind(this._renderService);
+     this._renderService.setRenderer = (renderer: any) => {
+       for (const key of [...this._layers.keys()]) {
+         this.removeLayerFromDom(key);
+       }
+       this._oldSetRenderer?.call(this._renderService, renderer);
++      this._bindRenderer(renderer);
+     };
++    this._bindRenderer(this._terminal._core._renderService._renderer?.value);
+   }
+ 
+-  public insertLayerToDom(layer: ImageLayer = 'top'): void {
++  public insertLayerToDom(layer: ImageLayer | 'bottom-background' = 'top'): void {
++    if (this.usesRenderPass && layer !== 'top') return;
++    if (layer === 'bottom') this.insertLayerToDom('bottom-background');
+     // make sure that the terminal is attached to a document and to DOM
+     if (!this.document || !this._terminal._core.screenElement) {
+       console.warn('image addon: cannot insert output canvas to DOM, missing document or screenElement');
+@@ -346,7 +478,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
+     // which would conflict with integrators (e.g. VS Code) that set their
+     // own z-index on the screen element.
+     screenElement.style.isolation = 'isolate';
+-    if (layer === 'bottom') {
++    if (layer === 'bottom-background') {
+       // Use z-index:-1 so it paints behind non-positioned text elements.
+       // The screen element needs to be a stacking context (via isolation)
+       // to contain the negative z-index, otherwise it would go behind the
+@@ -354,10 +486,8 @@ export class ImageRenderer extends Disposable implements IDisposable {
+       canvas.style.zIndex = '-1';
+       screenElement.insertBefore(canvas, screenElement.firstChild);
+     } else {
+-      // Explicit z-index ensures the image canvas reliably stacks above
+-      // the text layer (DOM renderer rows). z-index: 0 is below the
+-      // selection overlay (z-index: 1).
+-      canvas.style.zIndex = '0';
++      // Split DOM glyphs sit between negative and positive images; selection stays above both.
++      canvas.style.zIndex = layer === 'top' ? (this._layersEnabled ? '2' : '0') : (this._activeRenderer?.setImageLayerProvider ? '0' : '-1');
+       screenElement.appendChild(canvas);
+     }
+     const ctx = canvas.getContext('2d', { alpha: true });
+@@ -366,10 +496,11 @@ export class ImageRenderer extends Disposable implements IDisposable {
+       return;
+     }
+     this._layers.set(layer, ctx);
+-    this.clearAll(layer);
++    ctx.clearRect(0, 0, canvas.width, canvas.height);
+   }
+ 
+-  public removeLayerFromDom(layer: ImageLayer = 'top'): void {
++  public removeLayerFromDom(layer: ImageLayer | 'bottom-background' = 'top'): void {
++    if (layer === 'bottom') this.removeLayerFromDom('bottom-background');
+     const ctx = this._layers.get(layer);
+     if (ctx) {
+       ctx.canvas.remove();
+@@ -378,7 +509,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
+   }
+ 
+   public hasLayer(layer: ImageLayer): boolean {
+-    return this._layers.has(layer);
++    return this._layers.has(layer) || (layer === 'bottom' && this.usesRenderPass);
+   }
+ 
+   private _createPlaceHolder(height: number = Constants.PLACEHOLDER_HEIGHT): void {
+@@ -415,7 +546,11 @@ export class ImageRenderer extends Disposable implements IDisposable {
      for (let i = 0; i < width; i += bWidth) {
        ctx2.drawImage(blueprint, i, 0);
      }
@@ -313,9 +506,18 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..f3aba13205873b62bfbebbb60a5d72af
  
    public get document(): Document | undefined {
 diff --git a/src/ImageStorage.ts b/src/ImageStorage.ts
-index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..8309d80965e90bbc711f74da251ebbfd7865e2d2 100644
+index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..57f274f8befc78846d251efb8c6c3d48a583d87d 100644
 --- a/src/ImageStorage.ts
 +++ b/src/ImageStorage.ts
+@@ -8,7 +8,7 @@ import { ImageRenderer } from './ImageRenderer';
+ import {
+   ITerminalExt, IExtendedAttrsImage, IImageAddonOptions, IImageSpec,
+   IBufferLineExt, BgFlags, Cell, Content, ICellSize, ExtFlags, Attributes,
+-  UnderlineStyle, IAddImageOpts
++  UnderlineStyle, IAddImageOpts, IImageDrawCall
+ } from './Types';
+ 
+ 
 @@ -54,7 +54,7 @@ class ExtendedAttrsImage implements IExtendedAttrsImage {
    }
    public set underlineColor(value: number) {
@@ -354,7 +556,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..8309d80965e90bbc711f74da251ebbfd
    public onImageAdded: (() => void) | undefined;
    public onImageDeleted: ((storageId: number) => void) | undefined;
 +  // Placeholder cells carry image references in text and colors, not tile attributes.
-+  public onRenderLine: ((line: IBufferLineExt, row: number, cols: number) => void) | undefined;
++  public onRenderLine: ((line: IBufferLineExt, row: number, cols: number, draws: IImageDrawCall[]) => void) | undefined;
 +  public onCollectVisibleImageIds: ((line: IBufferLineExt, cols: number, ids: Set<number>) => void) | undefined;
  
    constructor(
@@ -391,7 +593,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..8309d80965e90bbc711f74da251ebbfd
    }
  
    /**
-@@ -236,6 +237,36 @@ export class ImageStorage implements IDisposable {
+@@ -236,6 +237,37 @@ export class ImageStorage implements IDisposable {
      }
    }
  
@@ -415,7 +617,8 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..8309d80965e90bbc711f74da251ebbfd
 +      virtual: true,
 +      bufferType: this._terminal.buffer.active.type,
 +      layer: opts.layer,
-+      zIndex: opts.zIndex
++      zIndex: opts.zIndex,
++      kittyId: opts.kittyId
 +    });
 +    this.onImageAdded?.();
 +    return imageId;
@@ -428,7 +631,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..8309d80965e90bbc711f74da251ebbfd
    /**
     * Method to add an image to the storage.
     * @param img - The image to add (canvas or bitmap).
-@@ -249,7 +280,7 @@ export class ImageStorage implements IDisposable {
+@@ -249,7 +281,7 @@ export class ImageStorage implements IDisposable {
     */
    public addImage(img: HTMLCanvasElement | ImageBitmap, opts: IAddImageOpts): number {
      // never allow storage to exceed memory limit
@@ -437,7 +640,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..8309d80965e90bbc711f74da251ebbfd
  
      // calc rows x cols needed to display the image
      let cellSize = this._renderer.cellSize;
-@@ -307,7 +338,7 @@ export class ImageStorage implements IDisposable {
+@@ -307,7 +339,7 @@ export class ImageStorage implements IDisposable {
      // deleted images with zero tile count
      const zero = [];
      for (const [id, spec] of this._images.entries()) {
@@ -446,15 +649,66 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..8309d80965e90bbc711f74da251ebbfd
          spec.marker?.dispose();
          zero.push(id);
        }
-@@ -430,6 +461,7 @@ export class ImageStorage implements IDisposable {
+@@ -342,7 +374,8 @@ export class ImageStorage implements IDisposable {
+       tileCount,
+       bufferType: this._terminal.buffer.active.type,
+       layer: opts.layer,
+-      zIndex: opts.zIndex
++      zIndex: opts.zIndex,
++      kittyId: opts.kittyId
+     };
+ 
+     // finally add the image
+@@ -370,6 +403,8 @@ export class ImageStorage implements IDisposable {
+       if (hasTopImages && hasBottomImages) break;
+     }
+ 
++    this._renderer.setLayersEnabled(hasBottomImages);
++
+     // Lazily insert layers that are needed
+     if (hasTopImages && !this._renderer.hasLayer('top')) {
+       this._renderer.insertLayerToDom('top');
+@@ -423,13 +458,14 @@ export class ImageStorage implements IDisposable {
+     this._renderer.clearLines(start, end);
+ 
+     // Collect draw calls so we can sort by z-index (lower z drawn first).
+-    const drawCalls: { imgSpec: IImageSpec, tileId: number, col: number, row: number, count: number }[] = [];
++    const drawCalls: IImageDrawCall[] = [];
+     const placeholderCalls: { col: number, row: number, count: number }[] = [];
+ 
+     // walk all cells in viewport and collect tiles found
      for (let row = start; row <= end; ++row) {
        const line = buffer.lines.get(row + buffer.ydisp) as IBufferLineExt;
        if (!line) return;
-+      this.onRenderLine?.(line, row, cols);
++      this.onRenderLine?.(line, row, cols, drawCalls);
        for (let col = 0; col < cols; ++col) {
          if (line.getBg(col) & BgFlags.HAS_EXTENDED) {
            let e: IExtendedAttrsImage = line._extendedAttrs[col] ?? EMPTY_ATTRS;
-@@ -581,20 +613,42 @@ export class ImageStorage implements IDisposable {
+@@ -472,7 +508,8 @@ export class ImageStorage implements IDisposable {
+     }
+ 
+     // Sort by z-index so lower z draws first (higher z renders on top)
+-    drawCalls.sort((a, b) => a.imgSpec.zIndex - b.imgSpec.zIndex);
++    drawCalls.sort((a, b) => a.imgSpec.zIndex - b.imgSpec.zIndex
++      || (a.imgSpec.kittyId ?? 0) - (b.imgSpec.kittyId ?? 0));
+ 
+     // Draw placeholders first (lowest priority)
+     for (const call of placeholderCalls) {
+@@ -481,7 +518,12 @@ export class ImageStorage implements IDisposable {
+ 
+     // Draw images in z-index order
+     for (const call of drawCalls) {
+-      this._renderer.draw(call.imgSpec, call.tileId, call.col, call.row, call.count);
++      if ('tileId' in call) {
++        this._renderer.draw(call.imgSpec, call.tileId, call.col, call.row, call.count);
++      } else {
++        this._renderer.drawCellImage(call.imgSpec, call.boxCols, call.boxRows, call.gridRow, call.gridCol,
++          call.count, call.col, call.row);
++      }
+     }
+   }
+ 
+@@ -581,20 +623,42 @@ export class ImageStorage implements IDisposable {
      }
    }
  
@@ -507,7 +761,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..8309d80965e90bbc711f74da251ebbfd
        }
      }
      return used - current;
-@@ -656,7 +710,7 @@ export class ImageStorage implements IDisposable {
+@@ -656,7 +720,7 @@ export class ImageStorage implements IDisposable {
      // deleted images with zero tile count
      const zero = [];
      for (const [id, spec] of this._images.entries()) {
@@ -665,10 +919,35 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..0711a122ea43d5212a2851add9e744b6
      return true;
    }
 diff --git a/src/Types.ts b/src/Types.ts
-index 53d357a973117b844ebf2e236d6892334f15c27b..0c28883daff5590eac3da8e4ea64477d2e429c05 100644
+index 53d357a973117b844ebf2e236d6892334f15c27b..10302beee5c83287d7aa24f6c42ceecb7113871f 100644
 --- a/src/Types.ts
 +++ b/src/Types.ts
-@@ -117,6 +117,7 @@ export interface IImageSpec {
+@@ -12,6 +12,7 @@ import type { IParams, IDcsHandler, IOscHandler, IApcHandler, IEscapeSequencePar
+ import type { IInputHandler } from 'common/Types';
+ import type { IBufferLine, IExtendedAttrs } from 'common/buffer/Types';
+ import type { ITerminal, ReadonlyColorSet } from 'browser/Types';
++import type { IRenderer } from 'browser/renderer/shared/Types';
+ import type { IRenderDimensions } from 'browser/renderer/shared/Types';
+ import type { ICoreBrowserService, IRenderService, IThemeService } from 'browser/services/Services';
+ 
+@@ -82,7 +83,7 @@ interface IInputHandlerExt extends IInputHandler {
+ export interface ICoreTerminalExt extends ITerminal {
+   _themeService: IThemeService | undefined;
+   _inputHandler: IInputHandlerExt;
+-  _renderService: IRenderService;
++  _renderService: IRenderService & { _renderer?: { value?: IImageAwareRenderer } };
+   _coreBrowserService: ICoreBrowserService | undefined;
+ }
+ 
+@@ -107,6 +108,7 @@ export interface IAddImageOpts {
+   scrolling: boolean;
+   layer: ImageLayer;
+   zIndex: number;
++  kittyId?: number;
+   cursorPos: CursorPos;
+ }
+ 
+@@ -117,7 +119,30 @@ export interface IImageSpec {
    actualCellSize: ICellSize;
    marker: IMarker | undefined;
    tileCount: number;
@@ -676,8 +955,31 @@ index 53d357a973117b844ebf2e236d6892334f15c27b..0c28883daff5590eac3da8e4ea64477d
    bufferType: 'alternate' | 'normal';
    layer: ImageLayer;
    zIndex: number;
++  kittyId?: number;
++}
++
++export type IImageDrawCall = { imgSpec: IImageSpec; col: number; row: number; count: number } & (
++  { tileId: number } | { boxCols: number; boxRows: number; gridRow: number; gridCol: number }
++);
++
++// Shared shape with the image addon; optional renderer integration for pinned builds.
++export interface IImageDraw {
++  source: HTMLCanvasElement | ImageBitmap;
++  sourceRect: [number, number, number, number];
++  targetRect: [number, number, number, number];
++  behindCellBackground: boolean;
++}
++export interface IImageLayerProvider {
++  collectDraws(): readonly IImageDraw[];
++  hasNegativeImages?(): boolean;
++}
++
++export interface IImageAwareRenderer extends IRenderer {
++  readonly imageLayerRenderPass?: boolean;
++  setImageLayerProvider?(provider: IImageLayerProvider | undefined): void;
+ }
 diff --git a/src/kitty/KittyGraphicsHandler.ts b/src/kitty/KittyGraphicsHandler.ts
-index de889dfff75d9ecc8ab47a025e6989ffe75bb202..7dea859440f8700d70461944e202e160c2c705b7 100644
+index de889dfff75d9ecc8ab47a025e6989ffe75bb202..4f5716930c913d33b15056275f309b0759f8fdc3 100644
 --- a/src/kitty/KittyGraphicsHandler.ts
 +++ b/src/kitty/KittyGraphicsHandler.ts
 @@ -7,6 +7,7 @@ import { IDisposable } from '@xterm/xterm';
@@ -861,7 +1163,34 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..7dea859440f8700d70461944e202e160
  
        let w = bitmap.width;
        let h = bitmap.height;
-@@ -660,6 +662,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -613,15 +615,12 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+       const savedY = buffer.y;
+       const savedYbase = buffer.ybase;
+ 
+-      // Determine layer based on z-index: negative = behind text, 0+ = on top.
+-      // When z<0 we always use the bottom layer even without allowTransparency —
+-      // the image will simply be hidden behind the opaque text background, which
+-      // is the correct behavior (client asked for "behind text").
++      // Negative images are below glyphs; the renderer separates the cell-background boundary.
+       const wantsBottom = cmd.zIndex !== undefined && cmd.zIndex < 0;
+       const layer: ImageLayer = wantsBottom ? 'bottom' : 'top';
+ 
+       if (w !== bitmap.width || h !== bitmap.height) {
+-        const scaled = await createImageBitmap(bitmap, { resizeWidth: w, resizeHeight: h });
++        const scaled = await createImageBitmap(bitmap, { resizeWidth: w, resizeHeight: h, premultiplyAlpha: 'premultiply' });
+         bitmap.close();
+         bitmap = scaled;
+       }
+@@ -643,7 +642,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+         }
+         offsetCtx.drawImage(bitmap, xOffset, yOffset);
+ 
+-        const offsetBitmap = await createImageBitmap(offsetCanvas);
++        const offsetBitmap = await createImageBitmap(offsetCanvas, { premultiplyAlpha: 'premultiply' });
+         offsetCanvas.width = offsetCanvas.height = 0;
+         bitmap.close();
+         bitmap = offsetBitmap;
+@@ -660,6 +659,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
          }
        }
  
@@ -869,7 +1198,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..7dea859440f8700d70461944e202e160
        const zIndex = cmd.zIndex ?? 0;
        this._kittyStorage.addImage(image.id, bitmap, true, layer, zIndex);
        bitmap = undefined;  // ownership transferred to storage
-@@ -684,6 +687,72 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -684,6 +684,72 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      }
    }
  
@@ -890,7 +1219,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..7dea859440f8700d70461944e202e160
 +    }
 +
 +    if (cropX !== 0 || cropY !== 0 || finalCropW !== bitmap.width || finalCropH !== bitmap.height) {
-+      return createImageBitmap(bitmap, cropX, cropY, finalCropW, finalCropH).then(cropped => {
++      return createImageBitmap(bitmap, cropX, cropY, finalCropW, finalCropH, { premultiplyAlpha: 'premultiply' }).then(cropped => {
 +        bitmap.close();
 +        return cropped;
 +      });
@@ -942,7 +1271,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..7dea859440f8700d70461944e202e160
    // Create ImageBitmap from already-decoded image data.
    private async _createBitmap(image: IKittyImageData): Promise<ImageBitmap> {
      let bytes: Uint8Array = new Uint8Array(await image.data.arrayBuffer());
-@@ -693,6 +762,12 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -693,6 +759,12 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      }
  
      if (image.format === KittyFormat.PNG) {
@@ -955,7 +1284,41 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..7dea859440f8700d70461944e202e160
        const blob = new Blob([bytes as BlobPart], { type: 'image/png' });
        if (!window.createImageBitmap) {
          const url = URL.createObjectURL(blob);
-@@ -775,27 +850,45 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -702,7 +774,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+             URL.revokeObjectURL(url);
+             const canvas = ImageRenderer.createCanvas(window.document, img.width, img.height);
+             canvas.getContext('2d')?.drawImage(img, 0, 0);
+-            createImageBitmap(canvas).then(resolve).catch(reject);
++            createImageBitmap(canvas, { premultiplyAlpha: 'premultiply' }).then(resolve).catch(reject);
+           });
+           img.addEventListener('error', () => {
+             URL.revokeObjectURL(url);
+@@ -711,7 +783,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+           img.src = url;
+         });
+       }
+-      return createImageBitmap(blob);
++      return createImageBitmap(blob, { premultiplyAlpha: 'premultiply' });
+     }
+ 
+     // Raw pixel data
+@@ -733,7 +805,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+ 
+     if (image.format === KittyFormat.RGBA) {
+       // RGBA: use bytes directly — no copy needed
+-      return createImageBitmap(new ImageData(new Uint8ClampedArray(bytes.buffer as ArrayBuffer, bytes.byteOffset, pixelCount * KittyPixelConstants.BYTES_PER_PIXEL_RGBA), width, height));
++      return createImageBitmap(new ImageData(new Uint8ClampedArray(bytes.buffer as ArrayBuffer, bytes.byteOffset, pixelCount * KittyPixelConstants.BYTES_PER_PIXEL_RGBA), width, height), { premultiplyAlpha: 'premultiply' });
+     }
+ 
+     // RGB→RGBA: interleave alpha using uint32 block processing (4 pixels per iteration).
+@@ -769,33 +841,51 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+       dstByte += KittyPixelConstants.BYTES_PER_PIXEL_RGBA;
+     }
+ 
+-    return createImageBitmap(new ImageData(data, width, height));
++    return createImageBitmap(new ImageData(data, width, height), { premultiplyAlpha: 'premultiply' });
+   }
+ 
    private async _decompressZlib(compressed: Uint8Array): Promise<Uint8Array> {
      try {
        return await this._decompress(compressed, 'deflate');
@@ -1131,7 +1494,7 @@ index 4288dd0a4180eca8f3ae28ec0805f834b2a0a629..158df006abdd348ca35cb1134eb3923b
 +  return location;
 +}
 diff --git a/src/kitty/KittyImageStorage.ts b/src/kitty/KittyImageStorage.ts
-index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..3212029bcdb7dfbbe7c2c779f7e748b8ef773839 100644
+index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..5bc968bee9003815268b638ffe1e1511a2da54e3 100644
 --- a/src/kitty/KittyImageStorage.ts
 +++ b/src/kitty/KittyImageStorage.ts
 @@ -4,15 +4,23 @@
@@ -1142,7 +1505,7 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..3212029bcdb7dfbbe7c2c779f7e748b8
  import { ImageStorage } from '../ImageStorage';
 -import { ImageLayer, IAddImageOpts } from '../Types';
 -import { IKittyImageData } from './KittyGraphicsTypes';
-+import { Attributes, IBufferLineExt, ImageLayer, IAddImageOpts } from '../Types';
++import { Attributes, IBufferLineExt, ImageLayer, IAddImageOpts, IImageDrawCall } from '../Types';
 +import { decodePlaceholderLocation, IKittyImageData, IPlaceholderLocation, IVirtualPlacement, PLACEHOLDER_CHAR } from './KittyGraphicsTypes';
 +
 +interface IPlaceholderCell {
@@ -1268,7 +1631,15 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..3212029bcdb7dfbbe7c2c779f7e748b8
      }
  
      this._images.set(imageId, {
-@@ -111,23 +146,68 @@ export class KittyImageStorage implements IDisposable {
+@@ -102,6 +137,7 @@ export class KittyImageStorage implements IDisposable {
+     this._addImageOpts.scrolling = scrolling;
+     this._addImageOpts.layer = layer;
+     this._addImageOpts.zIndex = zIndex;
++    this._addImageOpts.kittyId = kittyId;
+     const storageId = this._storage.addImage(image, this._addImageOpts);
+     this._kittyIdToStorageId.set(kittyId, storageId);
+     this._storageIdToKittyId.set(storageId, kittyId);
+@@ -111,23 +147,68 @@ export class KittyImageStorage implements IDisposable {
      return this._images.get(kittyId);
    }
  
@@ -1278,7 +1649,7 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..3212029bcdb7dfbbe7c2c779f7e748b8
 +  public addVirtualPlacement(kittyId: number, placementId: number, image: HTMLCanvasElement | ImageBitmap, cols: number, rows: number): void {
 +    const previous = this._virtualPlacements.get(kittyId)?.get(placementId);
 +    if (previous) this._storage.deleteImage(previous.storageId);
-+    const storageId = this._storage.addUnplacedImage(image, { scrolling: false, layer: 'top', zIndex: 0, cursorPos: 'iip' });
++    const storageId = this._storage.addUnplacedImage(image, { scrolling: false, layer: 'top', zIndex: 0, kittyId, cursorPos: 'iip' });
 +    let placements = this._virtualPlacements.get(kittyId);
 +    if (!placements) {
 +      placements = new Map();
@@ -1345,7 +1716,7 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..3212029bcdb7dfbbe7c2c779f7e748b8
    }
  
    public get images(): ReadonlyMap<number, IKittyImageData> {
-@@ -142,14 +222,111 @@ export class KittyImageStorage implements IDisposable {
+@@ -142,14 +223,111 @@ export class KittyImageStorage implements IDisposable {
      return this._nextImageId - 1;
    }
  
@@ -1366,14 +1737,14 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..3212029bcdb7dfbbe7c2c779f7e748b8
 +  }
 +
 +  // Omitted diacritics inherit only from a consecutive matching placeholder.
-+  private readonly _renderPlaceholderLine = (line: IBufferLineExt, row: number, cols: number): void => {
++  private readonly _renderPlaceholderLine = (line: IBufferLineExt, row: number, cols: number, draws: IImageDrawCall[]): void => {
 +    this._visitPlaceholderRuns(line, cols, (cell, start, count) => {
 +      const placement = this._placementForRun(cell, count);
 +      const spec = placement && this._storage.getImageSpec(placement.storageId);
 +      if (!placement || !spec) return;
 +      const gridCol = cell.location.column - count;
-+      this._renderer.drawCellImage(spec, placement.cols, placement.rows, cell.location.row - 1, gridCol,
-+        Math.min(count, placement.cols - gridCol), start, row);
++      draws.push({ imgSpec: spec, boxCols: placement.cols, boxRows: placement.rows,
++        gridRow: cell.location.row - 1, gridCol, count: Math.min(count, placement.cols - gridCol), col: start, row });
 +    });
 +  };
 +
