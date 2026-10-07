@@ -98,4 +98,17 @@ describe('local OpenCode model launch authority', () => {
     expect(callRuntimeRpc).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'pty_existing' }))
   })
+
+  it('calibrates the host model during OpenCode creation before attaching to its result', async () => {
+    const terminalImageCellSize = { width: 9.025, height: 18 }
+    await spawnIpcPty(options(), { ...connect, terminalImageCellSize })
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'terminal.createAgentSession',
+      expect.objectContaining({ terminalImageCellSize })
+    )
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'pty_host', terminalImageCellSize })
+    )
+  })
 })

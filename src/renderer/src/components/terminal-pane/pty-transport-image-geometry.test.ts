@@ -27,3 +27,22 @@ it('carries fractional CSS cell sizes only to the local execution model', async 
     ssh.disconnect()
   }
 })
+
+it('supplies the calibration at local spawn and leaves SSH activation to its host', async () => {
+  const { createIpcPtyTransport } = await import('./pty-transport')
+  const local = createIpcPtyTransport({})
+  const ssh = createIpcPtyTransport({ connectionId: 'ssh-1' })
+  const terminalImageCellSize = { width: 9.025, height: 18 }
+  try {
+    await local.connect({ url: '', terminalImageCellSize, callbacks: {} })
+    expect(window.api.pty.spawn).toHaveBeenLastCalledWith(
+      expect.objectContaining({ terminalImageCellSize })
+    )
+    await ssh.connect({ url: '', terminalImageCellSize, callbacks: {} })
+    const request = vi.mocked(window.api.pty.spawn).mock.calls.at(-1)?.[0]
+    expect(request).not.toHaveProperty('terminalImageCellSize')
+  } finally {
+    local.disconnect()
+    ssh.disconnect()
+  }
+})

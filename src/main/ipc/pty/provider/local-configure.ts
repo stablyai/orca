@@ -119,7 +119,16 @@ export function configureLocalPtyProvider(args: {
       }
       return env
     },
-    onSpawned: (id, incarnationId) => runtime?.onPtySpawned(id, incarnationId),
+    onSpawned: (id, incarnationId, context) => {
+      if (context.terminalImageCellSize) {
+        runtime?.preparePtyExecutionContext?.(id, context.wslDistro, {
+          resetIncarnation: true,
+          size: { cols: context.cols, rows: context.rows },
+          imageCellSize: context.terminalImageCellSize
+        })
+      }
+      runtime?.onPtySpawned(id, incarnationId)
+    },
     onExit: (id, code, incarnationId, cause) => {
       if (!isCurrentPtyExit({ id, incarnationId })) {
         return

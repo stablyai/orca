@@ -148,6 +148,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             ...(launchOpts.shellOverride ? { shellOverride: launchOpts.shellOverride } : {}),
             ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
             terminalKittyKeyboardProtocol: launchOpts.terminalKittyKeyboardProtocol,
+            terminalImageCellSize: launchOpts.terminalImageCellSize,
             ...(launchOpts.agentSessionClaim
               ? {
                   agentSessionEnsure: {

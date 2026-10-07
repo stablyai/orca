@@ -1,3 +1,5 @@
+import { readTerminalImageCellSize } from '../../../../../shared/terminal-image-cell-size'
+import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal-inline-images-settings'
 import { useAppStore } from '@/store'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../../shared/terminal-mode-reset-profiles'
 import { hasPtySerializer } from '../pty-buffer-serializer'
@@ -91,10 +93,17 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       session.reportError,
       toProcessExitStartup(coldRestoreOverride ?? effectiveStartup)
     )
+    const imageCellSize =
+      !session.connectionId &&
+      !session.runtimeEnvironmentId &&
+      resolveTerminalInlineImagesEnabled(useAppStore.getState().settings?.terminalInlineImages)
+        ? readTerminalImageCellSize(session.pane.terminal.dimensions?.css.cell)
+        : null
     const spawnedRaw = session.transport.connect({
       url: '',
       cols: session.cols,
       rows: session.rows,
+      ...(imageCellSize ? { terminalImageCellSize: imageCellSize } : {}),
       ...(startupOverride?.command ? { command: startupOverride.command } : {}),
       ...(session.connectionId &&
       startupOverride?.command &&

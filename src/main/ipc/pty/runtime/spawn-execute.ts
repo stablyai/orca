@@ -1,3 +1,4 @@
+import { prepareDaemonPtySpawnImages } from '../pty-spawn-image-calibration'
 import type { PtySpawnResult } from '../../../providers/types'
 import { ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
@@ -57,6 +58,14 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
           preserveExisting: !ctx.isNewDaemonSession || Boolean(stablePaneOwnerCandidate)
         }) ?? false
     }
+    const prepareFreshImages = () =>
+      prepareDaemonPtySpawnImages(
+        ctx.deps.runtime,
+        ctx.effectiveSessionAppId,
+        ctx.expectedWslDistro,
+        ctx.spawnOptions,
+        ctx.isDaemonHostSpawn && ctx.isNewDaemonSession
+      )
     const sequenceBeforeProviderSpawn = expectedPtyId
       ? (ctx.deps.runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
       : 0
@@ -86,6 +95,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
         surface: args.agentSessionEnsure.surface,
         spawn: async () => {
           assertClientStillConnected()
+          prepareFreshImages()
           providerResult = await ctx.provider.spawn(ctx.spawnOptions)
           ctx.rejectedRegistrationCandidate = providerResult
           // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.
@@ -149,6 +159,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
                 args.worktreeId,
                 args.connectionId
               ),
+            onBeforeFreshSpawn: prepareFreshImages,
             onFreshSpawn: ctx.reportPtySpawnCommitted
           })
       ctx.result = stablePaneSpawn.result

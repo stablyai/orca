@@ -71,10 +71,15 @@ export const AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'terminal.createAgentSession',
     params: CreateAgentSessionParams,
-    handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) => {
+    handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal, caller }) => {
       assertOperationTimestampWithinFutureSkew(params.clientOperationId)
+      const { terminalImageCellSize, ...launch } = params
+      const calibrated =
+        caller?.kind === 'desktop' && terminalImageCellSize
+          ? { ...launch, terminalImageCellSize }
+          : launch
       return (runtime as AgentSessionRuntime).createAgentSession(
-        withExecutionHostAgentPresentation(params, clientKind),
+        withExecutionHostAgentPresentation(calibrated, clientKind),
         callerContext(pairedDeviceId ?? clientId, clientKind, signal)
       )
     }

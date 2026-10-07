@@ -2,6 +2,7 @@ import type { AgentStatus } from '../../shared/agent-detection'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { TerminalImageCellSize } from '../../shared/terminal-image-cell-size'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalSideEffectFact } from '../../shared/terminal-side-effect-facts'
@@ -131,6 +132,11 @@ export type RuntimeHeadlessTerminal = {
   modelOperationFailed?: boolean
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
   unrepaintedReflowGrid?: { cols: number; rows: number }
+  acceptedImageCellSize?: {
+    cellSize: TerminalImageCellSize
+    generation: number
+    incarnation: PtyIncarnationId | null | undefined
+  }
 }
 
 export type RuntimeVisibleTerminalState = {

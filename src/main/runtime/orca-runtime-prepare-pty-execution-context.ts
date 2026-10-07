@@ -2,15 +2,24 @@
 import { OrcaRuntimeWithRegisterPty } from './orca-runtime-register-pty'
 import type { TerminalOutputSourceRange } from '../../shared/terminal-output-source-range'
 import type { RuntimePtyDataAdmission } from './runtime-terminal-contracts'
+import type { TerminalImageCellSize } from '../../shared/terminal-image-cell-size'
+import { readHeadlessTerminalImageConfiguration } from './headless-terminal-image-configuration'
+import { isValidTerminalHistorySize } from '../daemon/terminal-history-dimensions'
 
 export class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRegisterPty {
   preparePtyExecutionContext(
     ptyId: string,
     wslDistro: string | null,
-    options: { resetIncarnation?: boolean; preserveExisting?: boolean } = {}
+    options: {
+      resetIncarnation?: boolean
+      preserveExisting?: boolean
+      size?: { cols: number; rows: number }
+      imageCellSize?: TerminalImageCellSize
+    } = {}
   ): boolean {
     const pty = this.ptysById.get(ptyId)
-    const hadExistingContext = this.wslDistroByPtyId.has(ptyId) || pty !== undefined
+    const hadExistingContext =
+      this.wslDistroByPtyId.has(ptyId) || pty !== undefined || this.headlessTerminals.has(ptyId)
     if (options.preserveExisting && hadExistingContext) {
       // Why: attach-time settings are only a fallback; a live PTY's recorded
       // execution namespace remains authoritative until its provider replies.
@@ -41,6 +50,21 @@ export class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRe
       // inconsistent CWD; rebuild from the provider's authoritative snapshot.
       this.terminalCwdByPtyId.delete(ptyId)
       this.replaceHeadlessTerminalAfterExecutionContextChange(ptyId)
+    }
+    const images = readHeadlessTerminalImageConfiguration(options.imageCellSize)
+    if (
+      options.resetIncarnation === true &&
+      images &&
+      options.size &&
+      isValidTerminalHistorySize(options.size.cols, options.size.rows) &&
+      !this.headlessTerminals.has(ptyId)
+    ) {
+      // The spawn boundary precedes data admission; attachment must keep the existing model.
+      this.headlessTerminals.set(
+        ptyId,
+        this.createPtyHeadlessTerminalState(ptyId, options.size, images)
+      )
+      this.providerSnapshotPreferredPtys.delete(ptyId)
     }
     return options.resetIncarnation === true || !hadExistingContext || previous !== wslDistro
   }

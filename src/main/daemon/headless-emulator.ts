@@ -14,6 +14,7 @@ import {
   requireDrainedImageAddon,
   copyHeadlessModelConfiguration,
   type HeadlessModelConfiguration,
+  type HeadlessInlineImageConfiguration,
   type HeadlessModelCheckpoint
 } from './headless-model-checkpoint'
 import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
@@ -29,6 +30,7 @@ import type { TerminalSnapshot } from './types'
 import {
   captureHeadlessTerminalSnapshot,
   readHeadlessVisibleLines,
+  readHeadlessVisibleBufferRange,
   readHeadlessTerminalLines
 } from './headless-terminal-snapshot-capture'
 import { submitHeadlessTerminalWrite } from './headless-terminal-write-submission'
@@ -263,6 +265,10 @@ export class HeadlessEmulator {
     return { cols: this.terminal.cols, rows: this.terminal.rows }
   }
 
+  get imageConfiguration(): HeadlessInlineImageConfiguration | undefined {
+    return this.configuration.images ? structuredClone(this.configuration.images) : undefined
+  }
+
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
     return captureHeadlessTerminalSnapshot(this.terminal, this.serializer, opts, {
       cwd: this.oscText.cwd,
@@ -318,13 +324,7 @@ export class HeadlessEmulator {
   }
 
   getVisibleBufferRange(): { start: number; endExclusive: number; totalLength: number } {
-    const buffer = this.terminal.buffer.active
-    const start = buffer.viewportY
-    return {
-      start,
-      endExclusive: Math.min(buffer.length, start + this.terminal.rows),
-      totalLength: buffer.length
-    }
+    return readHeadlessVisibleBufferRange(this.terminal)
   }
 
   getCursorLineContext(rowsAbove = this.terminal.rows): TerminalCursorContext | null {

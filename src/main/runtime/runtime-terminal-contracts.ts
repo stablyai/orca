@@ -1,3 +1,4 @@
+import type { TerminalImageCellSize } from '../../shared/terminal-image-cell-size'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import type {
   AgentLaunchPreferences,
@@ -65,6 +66,7 @@ export type TerminalCreateOptions = {
   agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
   terminalKittyKeyboardProtocol?: boolean
+  terminalImageCellSize?: TerminalImageCellSize
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']

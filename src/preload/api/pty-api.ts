@@ -43,6 +43,7 @@ export type PtyApi = {
     shellOverride?: string
     projectRuntime?: ProjectExecutionRuntimeResolution
     terminalKittyKeyboardProtocol?: boolean
+    terminalImageCellSize?: TerminalImageCellSize
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     // Why: mark the PTY hidden before its first byte so the delivery gate owns spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean

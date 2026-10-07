@@ -1,3 +1,4 @@
+import type { TerminalImageCellSize } from '../../../../shared/terminal-image-cell-size'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
@@ -110,6 +111,7 @@ export type RuntimePtySpawnArgs = {
   persistHostSessionBinding?: boolean
   expectedSourceBinding?: PtyBindingSourceExpectation
   terminalKittyKeyboardProtocol?: boolean
+  terminalImageCellSize?: TerminalImageCellSize
   terminalColorQueryReplies?: { foreground?: string; background?: string }
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim

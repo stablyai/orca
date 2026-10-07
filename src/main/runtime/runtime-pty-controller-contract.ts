@@ -1,3 +1,4 @@
+import type { TerminalImageCellSize } from '../../shared/terminal-image-cell-size'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
@@ -72,6 +73,7 @@ export type RuntimePtyController = {
     persistHostSessionBinding?: boolean
     expectedSourceBinding?: PtyBindingSourceExpectation
     terminalKittyKeyboardProtocol?: boolean
+    terminalImageCellSize?: TerminalImageCellSize
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     agentSessionEnsure?: {
       claim: AgentSessionExecutionClaim

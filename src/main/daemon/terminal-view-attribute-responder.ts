@@ -55,7 +55,7 @@ function isValidColorIndex(value: number): boolean {
   return value >= 0 && value < TERMINAL_VIEW_ANSI_COLOR_COUNT
 }
 
-function imageColor(rgb: TerminalViewRgb): { rgba: number } {
+export function imageColor(rgb: TerminalViewRgb): { rgba: number } {
   return { rgba: rgb[0] * 0x1000000 + rgb[1] * 0x10000 + rgb[2] * 0x100 + 255 }
 }
 

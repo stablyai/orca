@@ -1,3 +1,4 @@
+import type { TerminalImageCellSize } from '../../shared/terminal-image-cell-size'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-workspace-trust-spawn-request'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
@@ -105,6 +106,7 @@ export type PtySpawnOptions = {
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   /** Fresh-spawn-only source authority installed before any PTY output is released. */
   startupIngress?: PtyStartupIngressIntent
+  terminalImageCellSize?: TerminalImageCellSize
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding

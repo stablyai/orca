@@ -54,6 +54,9 @@ export async function spawnIpcPty(
           startupCwd: transportOptions.cwd,
           placement: { tabId, leafId },
           presentation: 'background',
+          ...(connectOptions.terminalImageCellSize
+            ? { terminalImageCellSize: connectOptions.terminalImageCellSize }
+            : {}),
           ...(transportOptions.terminalKittyKeyboardProtocol === true
             ? { terminalKittyKeyboardProtocol: true }
             : {})
@@ -98,6 +101,9 @@ export async function spawnIpcPty(
   return window.api.pty.spawn({
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
+    ...(!connectionId && connectOptions.terminalImageCellSize
+      ? { terminalImageCellSize: connectOptions.terminalImageCellSize }
+      : {}),
     cwd,
     ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
     env: connectOptions.env ?? env,

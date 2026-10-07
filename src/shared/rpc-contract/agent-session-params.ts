@@ -158,6 +158,10 @@ export const EnsureAgentSessionParams: z.ZodType<RuntimeEnsureAgentSessionReques
 export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionRequest> = z
   .object({
     terminalKittyKeyboardProtocol: z.boolean().optional(),
+    terminalImageCellSize: z
+      .object({ width: z.number().positive(), height: z.number().positive() })
+      .strict()
+      .optional(),
     clientOperationId: z
       .string()
       .refine(

@@ -29,6 +29,20 @@ export function readHeadlessTerminalLines(
   return lines
 }
 
+export function readHeadlessVisibleBufferRange(terminal: Terminal): {
+  start: number
+  endExclusive: number
+  totalLength: number
+} {
+  const buffer = terminal.buffer.active
+  const start = buffer.viewportY
+  return {
+    start,
+    endExclusive: Math.min(buffer.length, start + terminal.rows),
+    totalLength: buffer.length
+  }
+}
+
 export function captureHeadlessTerminalSnapshot(
   terminal: Terminal,
   serializer: SerializeAddon,

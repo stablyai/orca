@@ -1,3 +1,5 @@
+import type { StablePaneSpawnContext } from './stable-pane-spawn-context'
+export type { StablePaneSpawnContext } from './stable-pane-spawn-context'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -6,7 +8,7 @@ import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../../shared/terminal-exit-c
 import type { Store } from '../../../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../../../runtime/mobile-session-terminal-persistence-retirement'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/types'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import {
   isDaemonEndpointGoneError,
@@ -168,18 +170,6 @@ export async function retirePersistedStablePaneOwner(
   })
 }
 
-export type StablePaneSpawnContext = {
-  runtime: OrcaRuntimeService | undefined
-  store?: Store
-  provider: IPtyProvider
-  spawnOptions: PtySpawnOptions
-  owner: StablePaneOwner | null
-  worktreeId?: string
-  connectionId?: string | null
-  resolveOwner?: () => StablePaneOwner | null
-  onFreshSpawn?: (result: PtySpawnResult) => void
-}
-
 export function stablePanePersistenceFence(
   owner: StablePaneOwner | null
 ): { ptyId: string; incarnationId?: string } | undefined {
@@ -310,6 +300,7 @@ export async function spawnForStablePane(
       return attached
     }
   }
+  args.onBeforeFreshSpawn?.()
   const result = await args.provider.spawn(args.spawnOptions)
   args.onFreshSpawn?.(result)
   return { result, owner: null }

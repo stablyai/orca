@@ -77,7 +77,12 @@ export function activateLocalPtySession(args: {
   )
   ptyLoadGeneration.set(id, getLoadGeneration())
   ptyIncarnations.set(id, incarnationId)
-  getOptions().onSpawned?.(id, incarnationId)
+  getOptions().onSpawned?.(id, incarnationId, {
+    cols: spawn.cols,
+    rows: spawn.rows,
+    terminalImageCellSize: spawn.terminalImageCellSize,
+    wslDistro: spawnedWslDistro ?? null
+  })
 
   const emitIngressData = (emission: PtyIngressEmission): void => {
     const sequenceChars = emission.rawEndSeq - emission.rawStartSeq

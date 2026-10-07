@@ -16,6 +16,7 @@ import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 import { getTerminalViewAttributes } from './terminal-view-attribute-store'
 import { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import { readHeadlessImageReplacementConfiguration } from './headless-terminal-image-configuration'
 import {
   readTerminalImageCellSize,
   type TerminalImageCellSize
@@ -164,10 +165,15 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
   }
 
   protected replaceHeadlessTerminalAfterExecutionContextChange(ptyId: string): void {
+    const images = readHeadlessImageReplacementConfiguration(
+      this.headlessTerminals.get(ptyId),
+      this.getPtyLifecycleGeneration(ptyId),
+      this.ptysById.get(ptyId)?.incarnationId
+    )
     this.disposeHeadlessTerminal(ptyId)
     this.providerSnapshotPreferredPtys.add(ptyId)
     const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
-    const state = this.createPtyHeadlessTerminalState(ptyId, dims)
+    const state = this.createPtyHeadlessTerminalState(ptyId, dims, images)
     this.headlessTerminals.set(ptyId, state)
     state.writeChain = state.writeChain
       .then(async () => {
@@ -226,6 +232,9 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const incarnation = this.ptysById.get(ptyId)?.incarnationId
     const measured = readTerminalImageCellSize(cellSize) ?? undefined
+    if (measured) {
+      state.acceptedImageCellSize = { cellSize: measured, generation, incarnation }
+    }
     const unpainted = state.unrepaintedReflowGrid
     // Why: a PTY resize off the reflowed grid makes the TUI repaint; an echo of it does not.
     if (unpainted && (unpainted.cols !== cols || unpainted.rows !== rows)) {

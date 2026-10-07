@@ -1,3 +1,4 @@
+import { ptySpawnImageCalibration } from '../pty-spawn-image-calibration'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/types'
@@ -53,6 +54,7 @@ export async function buildRuntimePtySpawnOptions(
   ctx.spawnOptions = {
     cols: args.cols,
     rows: args.rows,
+    ...ptySpawnImageCalibration(args, ctx.deps.getSettings?.()?.terminalInlineImages),
     cwd: ctx.cwd,
     env: ctx.env,
     historyIsolationEnabled: ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true,

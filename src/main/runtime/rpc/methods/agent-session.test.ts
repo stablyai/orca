@@ -1,3 +1,4 @@
+import { DESKTOP_RPC_CALLER } from '../rpc-caller-identity'
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -368,6 +369,48 @@ describe('agent session RPC methods', () => {
 
     expect(response).toMatchObject({ ok: false, error: { code } })
   })
+
+  it.each([
+    {
+      label: 'host desktop',
+      options: { caller: DESKTOP_RPC_CALLER, clientKind: 'runtime' as const },
+      accepted: true
+    },
+    {
+      label: 'paired desktop',
+      options: { pairedDeviceId: 'remote-device', clientKind: 'runtime' as const },
+      accepted: false
+    },
+    { label: 'older paired viewer', options: { pairedDeviceId: 'remote-device' }, accepted: false },
+    { label: 'local CLI', options: {}, accepted: false }
+  ])(
+    'uses the transport identity for image calibration from $label',
+    async ({ options, accepted }) => {
+      const runtime = runtimeStub()
+      const dispatcher = new RpcDispatcher({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This dispatcher exercises only getRuntimeId and createAgentSession, both supplied by the existing runtime stub.
+        runtime: runtime as unknown as OrcaRuntimeService,
+        methods: AGENT_SESSION_METHODS
+      })
+      const terminalImageCellSize = { width: 9.025, height: 18 }
+      const response = await dispatcher.dispatch(
+        request('terminal.createAgentSession', {
+          clientOperationId: '1752883200000-0123456789abcdef0123456789abcdef',
+          worktree: 'id:worktree-1',
+          agent: 'opencode',
+          terminalImageCellSize
+        }),
+        options
+      )
+      expect(response).toMatchObject({ ok: true })
+      const launch = runtime.createAgentSession.mock.calls[0]?.[0]
+      if (accepted) {
+        expect(launch).toHaveProperty('terminalImageCellSize', terminalImageCellSize)
+      } else {
+        expect(launch).not.toHaveProperty('terminalImageCellSize')
+      }
+    }
+  )
 
   it('advertises the capability without moving the mixed-version protocol fence', () => {
     expect(RUNTIME_PROTOCOL_VERSION).toBe(3)

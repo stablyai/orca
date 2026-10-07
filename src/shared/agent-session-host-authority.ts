@@ -1,3 +1,4 @@
+import type { TerminalImageCellSize } from './terminal-image-cell-size'
 import {
   hasUnsafeProviderSessionIdChars,
   isResumableTuiAgent,
@@ -127,6 +128,7 @@ export type RuntimeEnsureAgentSessionResult = {
 export type RuntimeCreateAgentSessionRequest = {
   clientOperationId: string
   terminalKittyKeyboardProtocol?: boolean
+  terminalImageCellSize?: TerminalImageCellSize
   worktree: string
   agent: TuiAgent
   prompt?: string

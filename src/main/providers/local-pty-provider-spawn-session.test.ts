@@ -587,7 +587,12 @@ describe('LocalPtyProvider', () => {
       const onSpawned = vi.fn()
       provider.configure({ onSpawned })
       const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
-      expect(onSpawned).toHaveBeenCalledWith(id, incarnationId)
+      expect(onSpawned).toHaveBeenCalledWith(id, incarnationId, {
+        cols: 80,
+        rows: 24,
+        terminalImageCellSize: undefined,
+        wslDistro: null
+      })
     })
 
     it('reports physical commit before post-spawn publication can fail', async () => {

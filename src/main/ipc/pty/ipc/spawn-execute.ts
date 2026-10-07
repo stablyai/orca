@@ -1,3 +1,4 @@
+import { prepareDaemonPtySpawnImages } from '../pty-spawn-image-calibration'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import {
   SSH_SESSION_EXPIRED_ERROR,
@@ -50,6 +51,14 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
           preserveExisting: !ctx.isMintedSessionId || Boolean(stablePaneOwnerCandidate)
         }) ?? false
     }
+    const prepareFreshImages = () =>
+      prepareDaemonPtySpawnImages(
+        ctx.deps.runtime,
+        ctx.effectiveSessionAppId,
+        ctx.expectedWslDistro,
+        ctx.spawnOptions,
+        ctx.isDaemonHostSpawn && ctx.isMintedSessionId
+      )
     const sequenceBeforeProviderSpawn = expectedPtyId
       ? (ctx.deps.runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
       : 0
@@ -63,7 +72,8 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
           owner: stablePaneOwnerCandidate,
           worktreeId: args.worktreeId,
           connectionId: args.connectionId,
-          resolveOwner
+          resolveOwner,
+          onBeforeFreshSpawn: prepareFreshImages
         })
     ctx.result = stablePaneSpawn.result
     ctx.stablePaneOwner = stablePaneSpawn.owner

@@ -1,3 +1,4 @@
+import { ptySpawnImageCalibration } from '../pty-spawn-image-calibration'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -83,6 +84,7 @@ export async function buildPtyIpcSpawnOptions(
   ctx.spawnOptions = {
     cols: args.cols,
     rows: args.rows,
+    ...ptySpawnImageCalibration(args, ctx.deps.getSettings?.()?.terminalInlineImages),
     cwd: ctx.cwd,
     ...(ctx.prevalidatedCwd && !ctx.isDaemonHostSpawn
       ? { prevalidatedCwd: ctx.prevalidatedCwd }

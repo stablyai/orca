@@ -200,6 +200,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           launchConfig: startup.launchConfig,
           launchAgent: request.agent,
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
+          terminalImageCellSize: request.terminalImageCellSize,
           startupCommandDelivery: startup.startupCommandDelivery,
           // A fresh agent this host built; the request has no surface field, so it counts as `unknown`.
           telemetry: agentStartedTelemetry(request.agent, undefined),
