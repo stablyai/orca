@@ -39,9 +39,26 @@ export function mediaHandoffMimeFor(path: string): string | null {
  */
 export type MobileFileMediaSink = {
   /** Opens the destination fresh; any earlier download of the same name is discarded. */
-  open(): void
-  appendBase64(base64: string): void
-  discard(): void
+  open(attempt: MobileFileMediaAttempt): void
+  appendBase64(base64: string, attempt: MobileFileMediaAttempt): void
+  discard(attempt: MobileFileMediaAttempt): void
+}
+
+export type MobileFileMediaAttempt = {
+  readonly cancelled: boolean
+  cancel(): void
+}
+
+export function createMobileFileMediaAttempt(): MobileFileMediaAttempt {
+  let cancelled = false
+  return {
+    get cancelled() {
+      return cancelled
+    },
+    cancel() {
+      cancelled = true
+    }
+  }
 }
 
 export type MobileFileMediaDownload = {
@@ -58,20 +75,27 @@ export async function downloadMobileFileMedia(
   client: MobileFilePreviewRpcSender,
   args: { worktreeId: string; relativePath: string },
   sink: MobileFileMediaSink,
-  onProgress?: (byteLength: number) => void
+  onProgress?: (byteLength: number) => void,
+  attempt: MobileFileMediaAttempt = createMobileFileMediaAttempt()
 ): Promise<MobileFileMediaDownload> {
-  sink.open()
+  sink.open(attempt)
   let offset = 0
   let byteLength = 0
   let appendedBytes = 0
   try {
     for (;;) {
+      if (attempt.cancelled) {
+        throw new Error('Media download cancelled')
+      }
       const reply = await fileMediaChunkRead.request(client, {
         worktree: `id:${args.worktreeId}`,
         relativePath: args.relativePath,
         offset,
         length: MEDIA_HANDOFF_CHUNK_BYTES
       })
+      if (attempt.cancelled) {
+        throw new Error('Media download cancelled')
+      }
       const verdict = fileMediaChunkRead.interpret(reply)
       if (!verdict.accepted) {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
@@ -88,7 +112,10 @@ export async function downloadMobileFileMedia(
       if (appendedBytes + chunkBytes > MEDIA_HANDOFF_MAX_BYTES) {
         throw new Error('File too large to open on this device')
       }
-      sink.appendBase64(chunk.contentBase64)
+      if (attempt.cancelled) {
+        throw new Error('Media download cancelled')
+      }
+      sink.appendBase64(chunk.contentBase64, attempt)
       appendedBytes += chunkBytes
       byteLength += chunk.bytesRead
       offset += chunk.bytesRead
@@ -98,7 +125,7 @@ export async function downloadMobileFileMedia(
       }
     }
   } catch (error) {
-    sink.discard()
+    sink.discard(attempt)
     throw error
   }
   return { byteLength }

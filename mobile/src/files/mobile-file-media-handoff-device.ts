@@ -1,6 +1,8 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { File, Paths } from 'expo-file-system'
-import type { MobileFileMediaSink } from './mobile-file-media-handoff'
+import type { MobileFileMediaAttempt, MobileFileMediaSink } from './mobile-file-media-handoff'
+
+const mediaHandoffOwners = new Map<string, MobileFileMediaAttempt>()
 
 // The device half of the media handoff: the one module here that names expo-file-system,
 // so the download loop over it stays testable without it (native-media's device split).
@@ -23,18 +25,27 @@ export function mediaHandoffSinkFor(
   worktreeId: string,
   relativePath: string
 ): MobileFileMediaSink & { uri: string } {
-  const file = new File(Paths.cache, mediaHandoffCacheName(worktreeId, relativePath))
+  const cacheName = mediaHandoffCacheName(worktreeId, relativePath)
+  const file = new File(Paths.cache, cacheName)
+  const ownerKey = file.uri
   return {
     uri: file.uri,
-    open() {
+    open(attempt) {
       if (file.exists) {
         file.delete()
       }
+      mediaHandoffOwners.set(ownerKey, attempt)
     },
-    appendBase64(base64: string) {
-      file.write(base64, { encoding: 'base64', append: true })
+    appendBase64(base64: string, attempt) {
+      if (mediaHandoffOwners.get(ownerKey) === attempt && !attempt.cancelled) {
+        file.write(base64, { encoding: 'base64', append: true })
+      }
     },
-    discard() {
+    discard(attempt) {
+      if (mediaHandoffOwners.get(ownerKey) !== attempt) {
+        return
+      }
+      mediaHandoffOwners.delete(ownerKey)
       if (file.exists) {
         file.delete()
       }

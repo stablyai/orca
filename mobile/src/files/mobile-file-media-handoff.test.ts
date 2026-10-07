@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
   downloadMobileFileMedia,
+  createMobileFileMediaAttempt,
   MEDIA_HANDOFF_CHUNK_BYTES,
   MEDIA_HANDOFF_MAX_BYTES,
   mediaHandoffBase64ByteLength,
@@ -154,5 +155,31 @@ describe('downloadMobileFileMedia', () => {
     expect(chunkBytes).toBe(3 * 1024 * 1024)
     expect(appendedBytes).toBeLessThanOrEqual(MEDIA_HANDOFF_MAX_BYTES)
     expect(appendedBytes).toBe(42 * chunkBytes)
+  })
+
+  it('stops an unmounted attempt before appending the next reply', async () => {
+    let release!: (response: RpcResponse) => void
+    const client = {
+      sendRequest: vi.fn(
+        () =>
+          new Promise<RpcResponse>((resolve) => {
+            release = resolve
+          })
+      )
+    }
+    const sink = recordingSink()
+    const attempt = createMobileFileMediaAttempt()
+    const download = downloadMobileFileMedia(
+      client,
+      { worktreeId: 'wt-1', relativePath: 'a.mp4' },
+      sink,
+      undefined,
+      attempt
+    )
+    attempt.cancel()
+    release(ok({ contentBase64: 'AAA=', bytesRead: 3, eof: true }))
+    await expect(download).rejects.toThrow('cancelled')
+    expect(sink.appends).toEqual([])
+    expect(sink.discarded).toBe(1)
   })
 })

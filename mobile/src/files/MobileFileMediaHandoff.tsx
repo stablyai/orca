@@ -4,7 +4,11 @@ import { ExternalLink } from 'lucide-react-native'
 import * as Sharing from 'expo-sharing'
 import { colors } from '../theme/mobile-theme'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import { downloadMobileFileMedia } from './mobile-file-media-handoff'
+import {
+  createMobileFileMediaAttempt,
+  downloadMobileFileMedia,
+  type MobileFileMediaAttempt
+} from './mobile-file-media-handoff'
 import { mediaHandoffSinkFor } from './mobile-file-media-handoff-device'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
@@ -31,13 +35,23 @@ export function MobileFileMediaHandoff({
   const [progressBytes, setProgressBytes] = useState(0)
   const [message, setMessage] = useState('')
   const mounted = useRef(true)
+  const activeAttempt = useRef<MobileFileMediaAttempt | null>(null)
 
   useEffect(() => {
     mounted.current = true
     return () => {
       mounted.current = false
+      activeAttempt.current?.cancel()
+      activeAttempt.current = null
     }
   }, [])
+
+  useEffect(() => {
+    return () => {
+      activeAttempt.current?.cancel()
+      activeAttempt.current = null
+    }
+  }, [client, relativePath, worktreeId])
 
   const open = useCallback(async () => {
     if (!client || downloading) {
@@ -46,6 +60,8 @@ export function MobileFileMediaHandoff({
     setDownloading(true)
     setProgressBytes(0)
     setMessage('')
+    const attempt = createMobileFileMediaAttempt()
+    activeAttempt.current = attempt
     try {
       const sink = mediaHandoffSinkFor(worktreeId, relativePath)
       // Why: the download outlives the screen, so progress must not set state after unmount.
@@ -53,7 +69,7 @@ export function MobileFileMediaHandoff({
         if (mounted.current) {
           setProgressBytes(bytes)
         }
-      })
+      }, attempt)
       // Why: navigating back mid-download must not raise the share sheet over the next screen.
       if (!mounted.current) {
         return
@@ -64,6 +80,9 @@ export function MobileFileMediaHandoff({
         setMessage(error instanceof Error ? error.message : 'Unable to open file')
       }
     } finally {
+      if (activeAttempt.current === attempt) {
+        activeAttempt.current = null
+      }
       if (mounted.current) {
         setDownloading(false)
       }

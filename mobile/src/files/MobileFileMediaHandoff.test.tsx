@@ -3,6 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import { MobileFileMediaHandoff } from './MobileFileMediaHandoff'
+import { createMobileFileMediaAttempt } from './mobile-file-media-handoff'
 import { mediaHandoffCacheName, mediaHandoffSinkFor } from './mobile-file-media-handoff-device'
 
 type FileWrite = { content: string; options: { encoding?: string; append?: boolean } | undefined }
@@ -131,16 +132,41 @@ describe('the cache sink', () => {
 
     const sink = mediaHandoffSinkFor('wt-1', 'docs/report.pdf')
     expect(sink.uri).toBe(uri)
-    sink.open()
+    const firstAttempt = createMobileFileMediaAttempt()
+    sink.open(firstAttempt)
     expect(doubles.deleted).toEqual([uri])
-    sink.appendBase64('AAA=')
-    sink.appendBase64('QQ==')
+    sink.appendBase64('AAA=', firstAttempt)
+    sink.appendBase64('QQ==', firstAttempt)
     expect(doubles.writes.get(uri)).toEqual([
       { content: 'AAA=', options: { encoding: 'base64', append: true } },
       { content: 'QQ==', options: { encoding: 'base64', append: true } }
     ])
-    sink.discard()
+    sink.discard(firstAttempt)
     expect(doubles.deleted).toHaveLength(2)
+  })
+
+  it('isolates same-path sink instances so an old attempt cannot delete the new cache', () => {
+    doubles.preexisting.clear()
+    doubles.deleted.length = 0
+    doubles.writes.clear()
+    const firstSink = mediaHandoffSinkFor('wt-1', 'docs/report.pdf')
+    const secondSink = mediaHandoffSinkFor('wt-1', 'docs/report.pdf')
+    const firstAttempt = createMobileFileMediaAttempt()
+    const secondAttempt = createMobileFileMediaAttempt()
+    doubles.preexisting.add(firstSink.uri)
+    firstSink.open(firstAttempt)
+    firstSink.appendBase64('OLD=', firstAttempt)
+    secondSink.open(secondAttempt)
+    firstAttempt.cancel()
+    firstSink.discard(firstAttempt)
+    secondSink.appendBase64('NEW=', secondAttempt)
+    expect(doubles.writes.get(firstSink.uri)).toEqual([
+      { content: 'OLD=', options: { encoding: 'base64', append: true } },
+      { content: 'NEW=', options: { encoding: 'base64', append: true } }
+    ])
+    expect(doubles.deleted).toHaveLength(2)
+    secondSink.discard(secondAttempt)
+    expect(doubles.deleted).toHaveLength(3)
   })
 })
 
