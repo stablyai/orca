@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Why: this method suite keeps repository routing and visibility contract coverage together. */
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
@@ -280,6 +281,52 @@ describe('repo RPC methods', () => {
 
     expect(runtime.cloneRepo).toHaveBeenCalledWith('https://github.com/example/orca.git', undefined)
     expect(response).toMatchObject({ ok: true, result: { repo: { id: 'repo-1' } } })
+  })
+
+  it('routes add, create, and clone to the selected SSH runtime', async () => {
+    const repo = { id: 'repo-remote', path: '/srv/remote/app', kind: 'git' as const }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial runtime fake; dispatcher reaches only the three repository mutation methods and getRuntimeId.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      addRepo: vi.fn().mockResolvedValue(repo),
+      createRepo: vi.fn().mockResolvedValue({ repo }),
+      cloneRepo: vi.fn().mockResolvedValue(repo)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.add', { path: '/srv/remote/app', kind: 'git', sshConnectionId: 'ssh-vm' })
+    )
+    await dispatcher.dispatch(
+      makeRequest('repo.create', {
+        parentPath: '/srv/remote',
+        name: 'app',
+        kind: 'git',
+        sshConnectionId: 'ssh-vm'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('repo.clone', {
+        url: 'https://github.com/example/app.git',
+        destination: '/srv/remote',
+        sshConnectionId: 'ssh-vm'
+      })
+    )
+
+    expect(runtime.addRepo).toHaveBeenCalledWith(
+      '/srv/remote/app',
+      'git',
+      undefined,
+      undefined,
+      'ssh-vm'
+    )
+    expect(runtime.createRepo).toHaveBeenCalledWith('/srv/remote', 'app', 'git', 'ssh-vm')
+    expect(runtime.cloneRepo).toHaveBeenCalledWith(
+      'https://github.com/example/app.git',
+      '/srv/remote',
+      undefined,
+      'ssh-vm'
+    )
   })
 
   it('creates a repo with a host-side default parent when the caller omits it', async () => {

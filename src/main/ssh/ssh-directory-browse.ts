@@ -51,7 +51,10 @@ export async function browseSshDirectory(
   }
 }
 
-type SshBrowseConnection = NonNullable<ReturnType<SshConnectionManager['getConnection']>>
+export type SshBrowseConnection = Pick<
+  NonNullable<ReturnType<SshConnectionManager['getConnection']>>,
+  'exec'
+>
 
 function browseWithPosixShell(
   conn: SshBrowseConnection,
