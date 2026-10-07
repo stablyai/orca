@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../../shared/integration-provider-names'
 import type { Automation } from '../../../../shared/automations-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -250,16 +251,7 @@ function getAutomationSourceAvailability(
 }
 
 function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider']): string {
-  switch (provider) {
-    case 'github':
-      return 'GitHub'
-    case 'gitlab':
-      return 'GitLab'
-    case 'linear':
-      return 'Linear'
-    case 'jira':
-      return 'Jira'
-  }
+  return INTEGRATION_PROVIDER_NAMES[provider]
 }
 
 export function getRuntimeAutomationAvailability(

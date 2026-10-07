@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../../shared/integration-provider-names'
 import { useState } from 'react'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
 import { Button } from '@/components/ui/button'
@@ -109,7 +110,7 @@ export function JiraSetupSteps(
         />
         <TaskSourceShowInTasksStep
           index={2}
-          providerLabel={translate('auto.components.settings.TasksPane.6b23a34f6d', 'Jira')}
+          providerLabel={INTEGRATION_PROVIDER_NAMES.jira}
           visible={props.visible}
           canHide={props.canHide}
           onToggleVisible={props.onToggleVisible}

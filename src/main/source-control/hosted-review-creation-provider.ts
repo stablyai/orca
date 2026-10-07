@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../shared/integration-provider-names'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { HostedReviewCreationProvider } from '../../shared/hosted-review-creation-providers'
@@ -79,7 +80,7 @@ export function reviewCopy(provider: HostedReviewProvider): {
     return {
       shortLabel: 'MR',
       reviewLabel: 'merge request',
-      providerName: 'GitLab',
+      providerName: INTEGRATION_PROVIDER_NAMES.gitlab,
       authInstruction: 'Run glab auth login'
     }
   }
@@ -87,7 +88,7 @@ export function reviewCopy(provider: HostedReviewProvider): {
     return {
       shortLabel: 'PR',
       reviewLabel: 'pull request',
-      providerName: 'Azure DevOps',
+      providerName: INTEGRATION_PROVIDER_NAMES['azure-devops'],
       authInstruction: 'Set ORCA_AZURE_DEVOPS_TOKEN'
     }
   }
@@ -95,7 +96,7 @@ export function reviewCopy(provider: HostedReviewProvider): {
     return {
       shortLabel: 'PR',
       reviewLabel: 'pull request',
-      providerName: 'Gitea',
+      providerName: INTEGRATION_PROVIDER_NAMES.gitea,
       authInstruction: 'Set ORCA_GITEA_TOKEN'
     }
   }
@@ -103,14 +104,14 @@ export function reviewCopy(provider: HostedReviewProvider): {
     return {
       shortLabel: 'PR',
       reviewLabel: 'pull request',
-      providerName: 'Bitbucket',
+      providerName: INTEGRATION_PROVIDER_NAMES.bitbucket,
       authInstruction: 'Connect Bitbucket in Settings > Integrations'
     }
   }
   return {
     shortLabel: 'PR',
     reviewLabel: 'pull request',
-    providerName: 'GitHub',
+    providerName: INTEGRATION_PROVIDER_NAMES.github,
     authInstruction: 'Run gh auth login'
   }
 }

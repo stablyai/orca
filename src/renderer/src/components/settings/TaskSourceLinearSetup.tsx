@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../../shared/integration-provider-names'
 import { useState } from 'react'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { Button } from '@/components/ui/button'
@@ -150,7 +151,7 @@ export function TaskSourceLinearSetup({
 
         <TaskSourceShowInTasksStep
           index={3}
-          providerLabel={translate('auto.components.settings.TasksPane.09ae2d7c51', 'Linear')}
+          providerLabel={INTEGRATION_PROVIDER_NAMES.linear}
           visible={visible}
           canHide={canHide}
           onToggleVisible={onToggleVisible}

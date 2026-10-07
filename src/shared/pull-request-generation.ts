@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from './integration-provider-names'
 import { truncateDiffForPrompt } from './commit-message-prompt'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 import type { HostedReviewProvider } from './hosted-review'
@@ -45,13 +46,8 @@ function limitSection(value: string, maxChars: number): string {
   return `${value.slice(0, maxChars)}\n\n[truncated: ${omitted} characters omitted]`
 }
 
-const PROVIDER_LABELS: Record<HostedReviewProvider, string> = {
-  github: 'GitHub',
-  gitlab: 'GitLab',
-  bitbucket: 'Bitbucket',
-  'azure-devops': 'Azure DevOps',
-  gitea: 'Gitea',
-  unsupported: 'hosted-review'
+function hostedReviewProviderLabel(provider: HostedReviewProvider): string {
+  return provider === 'unsupported' ? 'hosted-review' : INTEGRATION_PROVIDER_NAMES[provider]
 }
 
 function issueReferences(issue: PullRequestLinkedIssue): { complete: string; partial: string } {
@@ -74,7 +70,7 @@ export function buildPullRequestFieldsPrompt(
 ): string {
   const linkedIssue = context.linkedIssueDetails
   const provider = linkedIssue?.provider ?? context.provider ?? 'unsupported'
-  const providerLabel = PROVIDER_LABELS[provider]
+  const providerLabel = hostedReviewProviderLabel(provider)
   const references = linkedIssue ? issueReferences(linkedIssue) : null
   const linkedIssueRule = linkedIssue
     ? `- Mention the linked ${providerLabel} issue: \`${references!.complete}\` only for a ` +

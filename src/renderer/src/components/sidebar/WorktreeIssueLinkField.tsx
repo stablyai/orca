@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../../shared/integration-provider-names'
 import React, { useCallback, useId, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,9 +33,7 @@ export function issueAdornmentReserve(providerLabel: string): string {
 }
 
 function providerLabel(provider: IssueLinkProvider): string {
-  return provider === 'linear'
-    ? translate('auto.components.sidebar.WorktreeIssueLinkField.25852bfc59', 'Linear')
-    : translate('auto.components.sidebar.WorktreeIssueLinkField.5b440069e6', 'GitHub')
+  return INTEGRATION_PROVIDER_NAMES[provider]
 }
 
 function ProviderIcon({

@@ -2720,9 +2720,6 @@
   "auto.components.settings.SshTargetForm.f42d844544": {
     "ko": "예: cloudflared access ssh --hostname %h"
   },
-  "auto.components.settings.TasksPane.6b23a34f6d": {
-    "ko": "Jira"
-  },
   "auto.components.settings.TerminalAppearanceSection.16c471ee03": {
     "ko": "켜짐"
   },

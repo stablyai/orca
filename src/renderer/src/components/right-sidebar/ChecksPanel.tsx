@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../../shared/integration-provider-names'
 import React from 'react'
 import { Ellipsis, GitMerge, Link, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -62,7 +63,10 @@ export function ChecksPanelReviewHeader({
 }: ChecksPanelReviewHeaderProps): React.JSX.Element {
   const reviewNumberLabel = review.provider === 'gitlab' ? `!${review.number}` : `#${review.number}`
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
+  const reviewHostLabel =
+    review.provider === 'gitlab'
+      ? INTEGRATION_PROVIDER_NAMES.gitlab
+      : INTEGRATION_PROVIDER_NAMES.github
   const moreActionsLabel =
     review.provider === 'gitlab'
       ? translate('auto.components.right.sidebar.ChecksPanel.gitlabMoreActions', 'More MR actions')

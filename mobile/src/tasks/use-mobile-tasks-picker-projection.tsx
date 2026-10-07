@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../src/shared/integration-provider-names'
 import type { DetailCommentRenderersModel } from './use-mobile-tasks-detail-comment-renderers'
 import { type PickerOption, View, useMemo } from './mobile-tasks-dependencies'
 import {
@@ -69,8 +70,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     provider === 'github' || provider === 'gitlab'
       ? ((selectedCreateTarget as RepoSummary | null)?.displayName ?? 'Select target')
       : ((selectedCreateTarget as LinearTeam | null)?.name ?? 'Select target')
-  const providerLabel =
-    provider === 'github' ? 'GitHub' : provider === 'gitlab' ? 'GitLab' : 'Linear'
+  const providerLabel = INTEGRATION_PROVIDER_NAMES[provider]
   const showHeaderCreateTask =
     provider === 'linear' || (provider === 'github' && githubMode === 'items')
   const providerOptions = useMemo(

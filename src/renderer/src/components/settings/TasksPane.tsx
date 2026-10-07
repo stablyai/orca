@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../../shared/integration-provider-names'
 import { useState } from 'react'
 import { Github, Gitlab } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -44,7 +45,7 @@ const PROVIDER_META: Record<
 > = {
   github: {
     get label() {
-      return translate('auto.components.settings.TasksPane.e14063e727', 'GitHub')
+      return INTEGRATION_PROVIDER_NAMES.github
     },
     get description() {
       return translate(
@@ -56,7 +57,7 @@ const PROVIDER_META: Record<
   },
   gitlab: {
     get label() {
-      return translate('auto.components.settings.TasksPane.7c5d7fdc20', 'GitLab')
+      return INTEGRATION_PROVIDER_NAMES.gitlab
     },
     get description() {
       return translate(
@@ -68,7 +69,7 @@ const PROVIDER_META: Record<
   },
   linear: {
     get label() {
-      return translate('auto.components.settings.TasksPane.09ae2d7c51', 'Linear')
+      return INTEGRATION_PROVIDER_NAMES.linear
     },
     get description() {
       return translate(
@@ -80,7 +81,7 @@ const PROVIDER_META: Record<
   },
   jira: {
     get label() {
-      return translate('auto.components.settings.TasksPane.6b23a34f6d', 'Jira')
+      return INTEGRATION_PROVIDER_NAMES.jira
     },
     get description() {
       return translate(

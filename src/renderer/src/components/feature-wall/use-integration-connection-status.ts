@@ -1,4 +1,10 @@
+import {
+  INTEGRATION_PROVIDER_NAMES,
+  type IntegrationProviderName
+} from '../../../../shared/integration-provider-names'
 import { useAppStore } from '@/store'
+import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 
@@ -28,8 +34,8 @@ export function deriveIntegrationStepStates(input: {
 
 export function deriveIntegrationFlowState(input: {
   reviewConnected: boolean
-  trackerProviderName: 'Linear' | 'Jira' | null
-  codeHostTaskProviderName: 'GitHub' | 'GitLab' | null
+  trackerProviderName: IntegrationProviderName<'linear' | 'jira'> | null
+  codeHostTaskProviderName: IntegrationProviderName<'github' | 'gitlab'> | null
   trackerChecking: boolean
 }): {
   review: IntegrationStepState
@@ -96,18 +102,18 @@ export type IntegrationConnectionStatus = {
   // True once any review provider is connected/configured for this context.
   reviewConnected: boolean
   // Display name of the connected review provider, or null while none is.
-  reviewProviderName: 'GitHub' | 'GitLab' | 'Bitbucket' | 'Azure DevOps' | 'Gitea' | null
+  reviewProviderName: IntegrationProviderName<Exclude<HostedReviewProvider, 'unsupported'>> | null
   // GitHub/GitLab issues can double as tasks; token/env review providers do not.
-  codeHostTaskProviderName: 'GitHub' | 'GitLab' | null
+  codeHostTaskProviderName: IntegrationProviderName<'github' | 'gitlab'> | null
   // True once any task source is usable: a code host (its issues double as a
   // task source) or a dedicated tracker (Linear/Jira).
   trackerConnected: boolean
   // Display name of the connected tracker, or null. Code hosts are surfaced
   // via reviewProviderName, so this only names Linear/Jira.
-  trackerProviderName: 'Linear' | 'Jira' | null
+  trackerProviderName: IntegrationProviderName<'linear' | 'jira'> | null
   // Every connected task source, trackers first, for "Linear and GitHub
   // connected for tasks" summaries that don't under-report what's usable.
-  taskSourceNames: ('Linear' | 'Jira' | 'GitHub' | 'GitLab')[]
+  taskSourceNames: IntegrationProviderName<TaskProvider>[]
   // True while the code-host check is unresolved, stale, loading, or errored.
   reviewChecking: boolean
   // True while either dedicated tracker check is unresolved or stale.
@@ -172,24 +178,29 @@ export function deriveIntegrationConnectionStatus(
     !linearChecking && linearStatusCurrent && facts.linearStatus.connected === true
   const jiraConnected = !jiraChecking && jiraStatusCurrent && facts.jiraStatus.connected === true
 
+  const names = INTEGRATION_PROVIDER_NAMES
   const reviewProviderName = githubConnected
-    ? 'GitHub'
+    ? names.github
     : gitlabConnected
-      ? 'GitLab'
+      ? names.gitlab
       : bitbucketConnected
-        ? 'Bitbucket'
+        ? names.bitbucket
         : azureDevOpsConnected
-          ? 'Azure DevOps'
+          ? names['azure-devops']
           : giteaConnected
-            ? 'Gitea'
+            ? names.gitea
             : null
-  const codeHostTaskProviderName = githubConnected ? 'GitHub' : gitlabConnected ? 'GitLab' : null
-  const trackerProviderName = linearConnected ? 'Linear' : jiraConnected ? 'Jira' : null
+  const codeHostTaskProviderName = githubConnected
+    ? names.github
+    : gitlabConnected
+      ? names.gitlab
+      : null
+  const trackerProviderName = linearConnected ? names.linear : jiraConnected ? names.jira : null
   const taskSourceNames: IntegrationConnectionStatus['taskSourceNames'] = [
-    ...(linearConnected ? (['Linear'] as const) : []),
-    ...(jiraConnected ? (['Jira'] as const) : []),
-    ...(githubConnected ? (['GitHub'] as const) : []),
-    ...(gitlabConnected ? (['GitLab'] as const) : [])
+    ...(linearConnected ? [names.linear] : []),
+    ...(jiraConnected ? [names.jira] : []),
+    ...(githubConnected ? [names.github] : []),
+    ...(gitlabConnected ? [names.gitlab] : [])
   ]
   const hasUsableTaskSource = taskSourceNames.length > 0
   // Why: one resolved task source is enough for parent setup readiness, but the

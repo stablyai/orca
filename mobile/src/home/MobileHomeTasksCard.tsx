@@ -1,14 +1,9 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../src/shared/integration-provider-names'
 import { ChevronRight, ListTodo } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { TaskProviderLogo } from '../components/TaskProviderLogo'
 import type { TaskProvider } from '../tasks/mobile-task-providers'
 import { colors, radii, spacing } from '../theme/mobile-theme'
-
-const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
-  github: 'GitHub',
-  gitlab: 'GitLab',
-  linear: 'Linear'
-}
 
 export function MobileHomeTasksCard(props: {
   enabled: boolean
@@ -32,7 +27,7 @@ export function MobileHomeTasksCard(props: {
         <Text style={styles.title}>Tasks</Text>
         <Text style={styles.subtitle} numberOfLines={1}>
           {props.providers.length > 0
-            ? props.providers.map((provider) => TASK_PROVIDER_LABELS[provider]).join(' · ')
+            ? props.providers.map((provider) => INTEGRATION_PROVIDER_NAMES[provider]).join(' · ')
             : 'No task sources connected'}
         </Text>
       </View>
@@ -40,14 +35,14 @@ export function MobileHomeTasksCard(props: {
         <View
           style={styles.providerRow}
           accessibilityLabel={props.providers
-            .map((provider) => TASK_PROVIDER_LABELS[provider])
+            .map((provider) => INTEGRATION_PROVIDER_NAMES[provider])
             .join(', ')}
         >
           {props.providers.map((provider) => (
             <Pressable
               key={provider}
               accessibilityRole="button"
-              accessibilityLabel={`Open ${TASK_PROVIDER_LABELS[provider]} tasks`}
+              accessibilityLabel={`Open ${INTEGRATION_PROVIDER_NAMES[provider]} tasks`}
               hitSlop={8}
               style={({ pressed }) => [
                 styles.providerButton,

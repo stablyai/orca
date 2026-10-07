@@ -31,10 +31,6 @@ export const CROSS_LOCALE_KEY_OVERRIDES = {
     zh: '/{{value0}}',
     ja: '/{{value0}}'
   },
-  'auto.components.settings.TasksPane.6b23a34f6d': {
-    zh: 'Jira',
-    ja: 'Jira'
-  },
   'auto.components.settings.integrations.search.03a7b275be': {
     zh: 'ADO',
     ja: 'ADO'

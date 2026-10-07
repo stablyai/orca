@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../../shared/integration-provider-names'
 import type React from 'react'
 import { CaseSensitive, GitBranch, Github, Gitlab, Sparkles } from 'lucide-react'
 
@@ -51,31 +52,22 @@ export function getSmartWorkspaceNameModes(): SmartWorkspaceNameModeOption[] {
     },
     {
       id: 'github',
-      label: translate(
-        'auto.components.new.workspace.SmartWorkspaceNameField.0a180280bd',
-        'GitHub'
-      ),
+      label: INTEGRATION_PROVIDER_NAMES.github,
       Icon: Github
     },
     {
       id: 'linear',
-      label: translate(
-        'auto.components.new.workspace.SmartWorkspaceNameField.7a47af0565',
-        'Linear'
-      ),
+      label: INTEGRATION_PROVIDER_NAMES.linear,
       Icon: LinearModeIcon
     },
     {
       id: 'jira',
-      label: translate('auto.components.new.workspace.SmartWorkspaceNameField.jiraMode', 'Jira'),
+      label: INTEGRATION_PROVIDER_NAMES.jira,
       Icon: JiraIcon
     },
     {
       id: 'gitlab',
-      label: translate(
-        'auto.components.new.workspace.SmartWorkspaceNameField.2cfc6be192',
-        'GitLab'
-      ),
+      label: INTEGRATION_PROVIDER_NAMES.gitlab,
       Icon: Gitlab
     },
     {

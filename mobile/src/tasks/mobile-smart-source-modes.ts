@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../src/shared/integration-provider-names'
 import type { MrStateFilter, SmartNameMode } from './mobile-composer-source-types'
 
 // Icon each tab renders: lucide glyphs for the neutral modes, the inline brand
@@ -17,9 +18,21 @@ export type SmartModeOption = {
 // Smart · GitHub · Linear · GitLab · Branch · Name.
 export const SMART_MODE_OPTIONS: readonly SmartModeOption[] = [
   { id: 'smart', label: 'Smart', icon: { type: 'lucide', name: 'sparkles' } },
-  { id: 'github', label: 'GitHub', icon: { type: 'provider', provider: 'github' } },
-  { id: 'linear', label: 'Linear', icon: { type: 'provider', provider: 'linear' } },
-  { id: 'gitlab', label: 'GitLab', icon: { type: 'provider', provider: 'gitlab' } },
+  {
+    id: 'github',
+    label: INTEGRATION_PROVIDER_NAMES.github,
+    icon: { type: 'provider', provider: 'github' }
+  },
+  {
+    id: 'linear',
+    label: INTEGRATION_PROVIDER_NAMES.linear,
+    icon: { type: 'provider', provider: 'linear' }
+  },
+  {
+    id: 'gitlab',
+    label: INTEGRATION_PROVIDER_NAMES.gitlab,
+    icon: { type: 'provider', provider: 'gitlab' }
+  },
   { id: 'branches', label: 'Branch', icon: { type: 'lucide', name: 'git-branch' } },
   { id: 'text', label: 'Name', icon: { type: 'lucide', name: 'case-sensitive' } }
 ]

@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../src/shared/integration-provider-names'
 import {
   type PickerOption,
   type TaskProvider,
@@ -27,7 +28,7 @@ import type { LinearIssue } from './mobile-tasks-provider-detail-types'
 export const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
   {
     value: 'github',
-    label: 'GitHub',
+    label: INTEGRATION_PROVIDER_NAMES.github,
     subtitle: 'Issues and pull requests',
     renderIcon: (selected) => (
       <TaskProviderLogo
@@ -39,7 +40,7 @@ export const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
   },
   {
     value: 'gitlab',
-    label: 'GitLab',
+    label: INTEGRATION_PROVIDER_NAMES.gitlab,
     subtitle: 'Issues and merge requests',
     renderIcon: (selected) => (
       <TaskProviderLogo
@@ -51,7 +52,7 @@ export const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
   },
   {
     value: 'linear',
-    label: 'Linear',
+    label: INTEGRATION_PROVIDER_NAMES.linear,
     subtitle: 'Assigned and team issues',
     renderIcon: (selected) => (
       <TaskProviderLogo

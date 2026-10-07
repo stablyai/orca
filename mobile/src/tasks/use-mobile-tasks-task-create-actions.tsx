@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../src/shared/integration-provider-names'
 import type { LinearItemActionsModel } from './use-mobile-tasks-linear-item-actions'
 import { colors, useCallback } from './mobile-tasks-dependencies'
 import {
@@ -52,7 +53,7 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
         const repo = hostedRepos.find((entry) => entry.id === createRepoId) ?? hostedRepos[0]
         if (!repo) {
           throw new Error(
-            `Add a Git repository before creating a ${provider === 'github' ? 'GitHub' : 'GitLab'} issue.`
+            `Add a Git repository before creating a ${INTEGRATION_PROVIDER_NAMES[provider]} issue.`
           )
         }
         // Two providers, two methods: each arm sends its own operation rather than one call
@@ -75,7 +76,7 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
               )
         if (created.ok === false) {
           throw new Error(
-            created.error ?? `Failed to create ${provider === 'github' ? 'GitHub' : 'GitLab'} issue`
+            created.error ?? `Failed to create ${INTEGRATION_PROVIDER_NAMES[provider]} issue`
           )
         }
         if (typeof created.number === 'number') {

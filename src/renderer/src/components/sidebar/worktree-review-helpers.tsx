@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../../shared/integration-provider-names'
 import { createElement } from 'react'
 import { GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -10,19 +11,7 @@ export function getReviewLabel(review: WorktreeCardPrDisplay): 'MR' | 'PR' {
 }
 
 export function getProviderName(review: WorktreeCardPrDisplay): string {
-  if (review.provider === 'gitlab') {
-    return 'GitLab'
-  }
-  if (review.provider === 'bitbucket') {
-    return 'Bitbucket'
-  }
-  if (review.provider === 'azure-devops') {
-    return 'Azure DevOps'
-  }
-  if (review.provider === 'gitea') {
-    return 'Gitea'
-  }
-  return 'GitHub'
+  return INTEGRATION_PROVIDER_NAMES[review.provider ?? 'github']
 }
 
 // Why: checks only gate a review that is actually open; draft/closed/merged keep

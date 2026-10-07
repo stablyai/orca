@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_NAMES } from '../../../shared/integration-provider-names'
 import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import {
   resolveHostedReviewCreationProvider,
@@ -28,7 +29,7 @@ export function localizedHostedReviewCopy(
       shortLabel: translate('auto.i18n.hostedReview.copy.c4e8f1a2b9', 'MR'),
       reviewLabel: translate('auto.i18n.hostedReview.copy.b3d7e0f1a8', 'merge request'),
       titleLabel: translate('auto.i18n.hostedReview.copy.a2c6d9e0f7', 'Merge Request'),
-      providerName: translate('auto.i18n.hostedReview.copy.91b5c8d7e6', 'GitLab')
+      providerName: INTEGRATION_PROVIDER_NAMES.gitlab
     }
   }
   if (provider === 'azure-devops') {
@@ -36,7 +37,7 @@ export function localizedHostedReviewCopy(
       shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
       reviewLabel: translate('auto.i18n.hostedReview.copy.e9f3a7b1c0', 'pull request'),
       titleLabel: translate('auto.i18n.hostedReview.copy.d8e2f6a0b9', 'Pull Request'),
-      providerName: 'Azure DevOps'
+      providerName: INTEGRATION_PROVIDER_NAMES['azure-devops']
     }
   }
   if (provider === 'gitea') {
@@ -44,7 +45,7 @@ export function localizedHostedReviewCopy(
       shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
       reviewLabel: translate('auto.i18n.hostedReview.copy.e9f3a7b1c0', 'pull request'),
       titleLabel: translate('auto.i18n.hostedReview.copy.d8e2f6a0b9', 'Pull Request'),
-      providerName: 'Gitea'
+      providerName: INTEGRATION_PROVIDER_NAMES.gitea
     }
   }
   if (provider === 'bitbucket') {
@@ -52,13 +53,13 @@ export function localizedHostedReviewCopy(
       shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
       reviewLabel: translate('auto.i18n.hostedReview.copy.e9f3a7b1c0', 'pull request'),
       titleLabel: translate('auto.i18n.hostedReview.copy.d8e2f6a0b9', 'Pull Request'),
-      providerName: 'Bitbucket'
+      providerName: INTEGRATION_PROVIDER_NAMES.bitbucket
     }
   }
   return {
     shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
     reviewLabel: translate('auto.i18n.hostedReview.copy.e9f3a7b1c0', 'pull request'),
     titleLabel: translate('auto.i18n.hostedReview.copy.d8e2f6a0b9', 'Pull Request'),
-    providerName: translate('auto.i18n.hostedReview.copy.c7d1e5f9a8', 'GitHub')
+    providerName: INTEGRATION_PROVIDER_NAMES.github
   }
 }
