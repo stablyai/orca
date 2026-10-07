@@ -1,5 +1,5 @@
 diff --git a/src/IIPHandler.ts b/src/IIPHandler.ts
-index 559b907416eb38318f439d060d7f89311ed34c7e..0a05ebfd8cb410fe3217e9f434785ebaf63e7076 100644
+index 559b907416eb38318f439d060d7f89311ed34c7e..9ad2b346b094e42b15fd5c694c24c4b0f175cba2 100644
 --- a/src/IIPHandler.ts
 +++ b/src/IIPHandler.ts
 @@ -4,6 +4,7 @@
@@ -47,15 +47,29 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..0a05ebfd8cb410fe3217e9f434785eba
      const maxEncodedBytes = Math.ceil(this._opts.iipSizeLimit * 4 / 3);
      const initialBytes = Math.min(DecoderConst.INITIAL_DATA, maxEncodedBytes);
      this._dec = new Base64Decoder(DecoderConst.KEEP_DATA, maxEncodedBytes, initialBytes);
-@@ -55,6 +61,7 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -55,6 +61,11 @@ export class IIPHandler implements IOscHandler, IResetHandler {
    }
  
    public reset(): void {
 +    this._generation++;
++    this._aborted = true;
++    this._isMultipart = false;
++    this._abortMulti = false;
++    this._header = DEFAULT_HEADER;
      this._hp.reset();
      this._dec.release();
      this._qoiDec.release();
-@@ -92,7 +99,10 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -70,8 +81,7 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+ 
+     if (this._hp.state === HeaderState.END) {
+       if ((this._dec.put(data.subarray(start, end)) as number) !== DecoderConst.OK) {
+-        this._dec.release();
+-        this._aborted = true;
++        this._abortTransfer();
+       }
+     } else {
+       const dataPos = this._hp.parse(data, start, end);
+@@ -92,15 +102,16 @@ export class IIPHandler implements IOscHandler, IResetHandler {
              this._aborted = true;
              return;
            }
@@ -67,7 +81,25 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..0a05ebfd8cb410fe3217e9f434785eba
          } else if (this._abortMulti) {
            this._aborted = true;
            return;
-@@ -118,8 +128,9 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+         }
+         if ((this._dec.put(data.subarray(dataPos, end)) as number) !== DecoderConst.OK) {
+-          this._dec.release();
+-          this._aborted = true;
+-          if (this._isMultipart) this._abortMulti = true;
++          this._abortTransfer();
+         }
+       }
+     }
+@@ -113,13 +124,18 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+       if (this._hp.end()) return true;
+     }
+     const seqType = this._hp.fields.type;
++    if (!success) {
++      if (seqType !== SequenceType.REPORTCELLSIZE) this._abortTransfer();
++      return true;
++    }
+ 
+     if (seqType === SequenceType.FILEPART) return true;
  
      if (seqType === SequenceType.REPORTCELLSIZE) {
        // OSC 1337 ; ReportCellSize=[height];[width];[scale] ST
@@ -79,7 +111,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..0a05ebfd8cb410fe3217e9f434785eba
        if (this._renderer.dimensions) {
          w = this._renderer.dimensions.css.canvas.width / this._coreTerminal.cols;
          h = this._renderer.dimensions.css.canvas.height / this._coreTerminal.rows;
-@@ -135,7 +146,9 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -135,7 +151,9 @@ export class IIPHandler implements IOscHandler, IResetHandler {
        this._isMultipart = true;
        this._abortMulti = false;
        this._dec.release();
@@ -90,7 +122,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..0a05ebfd8cb410fe3217e9f434785eba
        return true;
      }
  
-@@ -177,41 +190,60 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -177,41 +195,66 @@ export class IIPHandler implements IOscHandler, IResetHandler {
        return true;
      }
  
@@ -130,16 +162,6 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..0a05ebfd8cb410fe3217e9f434785eba
        }
 -    } else {
 -      blob = new Blob([this._dec.data8], { type: metrics.mime });
--    }
--    this._dec.release();
--    return createImageBitmap(blob, { resizeWidth: w, resizeHeight: h })
--      .then(bm => {
--        this._storage.addImage(bm);
--        return true;
--      })
--      .catch(e => {
--        console.warn(`IIP: decoding error ${metrics.mime} ${metrics.width}x${metrics.height}`, e);
--        return true;
 +      const result = mapImageOperation(decoded, source => {
 +        owner.replace(source);
 +        checkGeneration();
@@ -150,14 +172,29 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..0a05ebfd8cb410fe3217e9f434785eba
 +          owner.transfer();
 +          return true;
 +        });
-       });
++      });
 +      return result instanceof Promise ? result.catch(failed) : result;
 +    } catch (error) {
 +      return failed(error);
 +    } finally {
 +      this._dec.release();
 +      this._qoiDec.release();
-+    }
+     }
++  }
++
++  private _abortTransfer(): void {
+     this._dec.release();
+-    return createImageBitmap(blob, { resizeWidth: w, resizeHeight: h })
+-      .then(bm => {
+-        this._storage.addImage(bm);
+-        return true;
+-      })
+-      .catch(e => {
+-        console.warn(`IIP: decoding error ${metrics.mime} ${metrics.width}x${metrics.height}`, e);
+-        return true;
+-      });
++    this._aborted = true;
++    if (this._isMultipart) this._abortMulti = true;
 +  }
 +
 +  // Why: wasm memory exhaustion must drop this image, not throw out of the parser and wedge the write queue.
@@ -1976,7 +2013,7 @@ index 53d357a973117b844ebf2e236d6892334f15c27b..b1991bb654305ac6e99fd66d00a8fd79
 +  setImageLayerProvider?(provider: IImageLayerProvider | undefined): void;
  }
 diff --git a/src/kitty/KittyGraphicsHandler.ts b/src/kitty/KittyGraphicsHandler.ts
-index de889dfff75d9ecc8ab47a025e6989ffe75bb202..a55821921c1842abe8853bf7f9a2b7e33e8466cf 100644
+index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd6f28beb6 100644
 --- a/src/kitty/KittyGraphicsHandler.ts
 +++ b/src/kitty/KittyGraphicsHandler.ts
 @@ -6,7 +6,9 @@
@@ -2013,15 +2050,16 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..a55821921c1842abe8853bf7f9a2b7e3
      // Convert decoded size limit -> max encoded bytes.
      this._maxEncodedBytes = Math.ceil(this._opts.kittySizeLimit * 4 / 3);
      // ensure we preallocate more than configured limit while using 4mb initial size.
-@@ -80,6 +85,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -80,6 +85,8 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    }
  
    public reset(): void {
 +    this._generation++;
++    this._aborted = true;
      this._cleanupAllPending();
      if (this._activeDecoder) {
        this._activeDecoder.release();
-@@ -200,8 +206,38 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -200,8 +207,38 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
        this._activeDecoder = pending.decoder;
      }
      if (!this._activeDecoder) {
@@ -2062,7 +2100,17 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..a55821921c1842abe8853bf7f9a2b7e3
      }
  
      if (this._activeDecoder.put(data.subarray(start, end)) !== DECODER_OK) {
-@@ -285,9 +321,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -217,6 +254,9 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+   public end(success: boolean): boolean | Promise<boolean> {
+     if (this._aborted || !success) {
+       if (this._activeDecoder) {
++        for (const [key, pending] of this._pendingTransmissions) {
++          if (pending.decoder === this._activeDecoder) this._removePendingEntry(key);
++        }
+         this._activeDecoder.release();
+         this._activeDecoder = null;
+       }
+@@ -285,9 +325,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      }
      this._activeDecoder = null;
  
@@ -2073,7 +2121,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..a55821921c1842abe8853bf7f9a2b7e3
      const result = this._handleCommandWithBytesAndCmd(finalCmd, imageBytes, decodeError);
      if (decoder) {
        decoder.release();
-@@ -382,8 +416,10 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -382,8 +420,10 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
        this._sendResponse(id, 'ENOENT:image not found', cmd.quiet ?? 0, cmd.placementId);
        return true;
      }
@@ -2086,7 +2134,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..a55821921c1842abe8853bf7f9a2b7e3
        this._sendResponse(id, success ? 'OK' : 'EINVAL:image rendering failed', cmd.quiet ?? 0, cmd.placementId);
        return true;
      });
-@@ -411,7 +447,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -411,7 +451,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      if (decodeError || bytes.length === 0) return true;
  
      this._kittyStorage.storeImage(cmd.id, {
@@ -2095,7 +2143,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..a55821921c1842abe8853bf7f9a2b7e3
        width: cmd.width ?? 0,
        height: cmd.height ?? 0,
        format: (cmd.format ?? KittyFormat.RGBA) as 24 | 32 | 100,
-@@ -433,14 +469,16 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -433,14 +473,16 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      const id = cmd.id ?? this._kittyStorage.lastImageId;
      const image = this._kittyStorage.getImage(id);
      if (image) {
@@ -2115,7 +2163,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..a55821921c1842abe8853bf7f9a2b7e3
      }
      return true;
    }
-@@ -500,28 +538,25 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -500,28 +542,25 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      // Per spec: default delete selector is 'a' (delete all visible placements)
      const selector = cmd.deleteSelector ?? 'a';
  
@@ -2154,7 +2202,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..a55821921c1842abe8853bf7f9a2b7e3
          }
          break;
        default:
-@@ -543,183 +578,154 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -543,183 +582,154 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
  
    // Image display
  
@@ -2459,7 +2507,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..a55821921c1842abe8853bf7f9a2b7e3
      }
  
      const bytesPerPixel = image.format === KittyFormat.RGBA ? KittyPixelConstants.BYTES_PER_PIXEL_RGBA : KittyPixelConstants.BYTES_PER_PIXEL_RGB;
-@@ -733,7 +739,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -733,7 +743,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
  
      if (image.format === KittyFormat.RGBA) {
        // RGBA: use bytes directly — no copy needed
@@ -2468,7 +2516,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..a55821921c1842abe8853bf7f9a2b7e3
      }
  
      // RGB→RGBA: interleave alpha using uint32 block processing (4 pixels per iteration).
-@@ -769,33 +775,59 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -769,33 +779,59 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
        dstByte += KittyPixelConstants.BYTES_PER_PIXEL_RGBA;
      }
  
