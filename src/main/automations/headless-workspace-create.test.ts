@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../shared/automations-types'
 import type { Repo } from '../../shared/repo-types'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
@@ -52,8 +52,8 @@ const automation: Automation = {
 }
 
 describe('headless automation workspace create args', () => {
-  it('stamps automation provenance for serve-mode new-per-run workspaces', () => {
-    const args = buildHeadlessAutomationWorktreeCreateArgs({
+  it('stamps automation provenance for serve-mode new-per-run workspaces', async () => {
+    const args = await buildHeadlessAutomationWorktreeCreateArgs({
       automation,
       run: {
         id: 'run-1',
@@ -61,7 +61,8 @@ describe('headless automation workspace create args', () => {
         scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
       },
       repo,
-      createdAt: 123
+      createdAt: 123,
+      hasRemoteTrackingRef: async () => true
     })
 
     expect(args).toMatchObject({
@@ -90,17 +91,55 @@ describe('headless automation workspace create args', () => {
     })
   })
 
-  it('falls back to skip for legacy automations without a saved setup decision', () => {
-    const args = buildHeadlessAutomationWorktreeCreateArgs({
+  it('falls back to skip for legacy automations without a saved setup decision', async () => {
+    const args = await buildHeadlessAutomationWorktreeCreateArgs({
       automation: { ...automation, setupDecision: undefined },
       run: {
         id: 'run-1',
         title: 'Nightly review run',
         scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
       },
-      repo
+      repo,
+      hasRemoteTrackingRef: async () => false
     })
 
     expect(args.setupDecision).toBe('skip')
+  })
+
+  it('starts a bare base from its remote-tracking ref when one exists', async () => {
+    const hasRemoteTrackingRef = vi.fn(async (ref: string) => ref === 'origin/main')
+    const args = await buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, baseBranch: 'main' },
+      run: { id: 'run-1', title: 'Nightly review run', scheduledFor: 1 },
+      repo,
+      hasRemoteTrackingRef
+    })
+
+    expect(args.baseBranch).toBe('origin/main')
+    expect(hasRemoteTrackingRef).toHaveBeenCalledWith('origin/main')
+  })
+
+  it('keeps a local-only base branch when no remote-tracking ref exists', async () => {
+    const args = await buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, baseBranch: 'feature' },
+      run: { id: 'run-1', title: 'Nightly review run', scheduledFor: 1 },
+      repo,
+      hasRemoteTrackingRef: async () => false
+    })
+
+    expect(args.baseBranch).toBe('feature')
+  })
+
+  it('leaves an unset base to the project default without probing', async () => {
+    const hasRemoteTrackingRef = vi.fn(async () => true)
+    const args = await buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, baseBranch: null },
+      run: { id: 'run-1', title: 'Nightly review run', scheduledFor: 1 },
+      repo,
+      hasRemoteTrackingRef
+    })
+
+    expect(args.baseBranch).toBeUndefined()
+    expect(hasRemoteTrackingRef).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,5 @@
 import type { Automation, AutomationRun } from '../../shared/automations-types'
+import { resolveAutomationRunBaseBranch } from '../../shared/automation-run-base-branch'
 import { buildAutomationWorkspaceProvenance } from '../../shared/automation-workspace-provenance'
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -21,21 +22,23 @@ export function buildHeadlessAutomationWorkspaceName(
   return `auto-${slug || 'run'}-${stamp}`
 }
 
-export function buildHeadlessAutomationWorktreeCreateArgs({
+export async function buildHeadlessAutomationWorktreeCreateArgs({
   automation,
   run,
   repo,
-  createdAt = Date.now()
+  createdAt = Date.now(),
+  hasRemoteTrackingRef
 }: {
   automation: Automation
   run: HeadlessAutomationRunForWorkspace
   repo: Repo
   createdAt?: number
-}): RuntimeCreateManagedWorktreeArgs {
+  hasRemoteTrackingRef: (remoteBase: string) => Promise<boolean>
+}): Promise<RuntimeCreateManagedWorktreeArgs> {
   return {
     repoSelector: repo.id,
     name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
-    baseBranch: automation.baseBranch ?? undefined,
+    baseBranch: await resolveAutomationRunBaseBranch(automation.baseBranch, hasRemoteTrackingRef),
     setupDecision: automation.setupDecision ?? 'skip',
     activate: false,
     createdWithAgent: automation.agentId,

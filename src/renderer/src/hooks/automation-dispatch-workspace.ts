@@ -3,6 +3,8 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
+import { searchRuntimeRepoBaseRefs } from '@/runtime/runtime-repo-client'
 import type {
   Automation,
   AutomationDispatchResult,
@@ -10,6 +12,7 @@ import type {
   AutomationRun
 } from '../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
+import { resolveAutomationRunBaseBranch } from '../../../shared/automation-run-base-branch'
 import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
@@ -24,6 +27,8 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 
 type AutomationDispatchStoreState = ReturnType<typeof useAppStore.getState>
+// Ref search is a recency-sorted prefix match; leave room for the exact ref among its siblings.
+const AUTOMATION_BASE_REF_SEARCH_LIMIT = 50
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 
 export type AutomationDispatchWorkspaceContext = {
@@ -188,7 +193,17 @@ export async function prepareAutomationDispatchWorkspace(args: {
       ? await useAppStore.getState().createWorktree(
           runRepoId,
           buildAutomationWorkspaceName(run.title, run.scheduledFor),
-          automation.baseBranch ?? undefined,
+          await resolveAutomationRunBaseBranch(automation.baseBranch, async (remoteBase) =>
+            (
+              await searchRuntimeRepoBaseRefs(
+                { activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForRepo(state, runRepoId) },
+                runRepoId,
+                remoteBase,
+                AUTOMATION_BASE_REF_SEARCH_LIMIT,
+                runHostId
+              )
+            ).includes(remoteBase)
+          ),
           automation.setupDecision ?? 'skip',
           undefined,
           'unknown',

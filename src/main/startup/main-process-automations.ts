@@ -2,6 +2,7 @@ import { AutomationService } from '../automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from '../automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from '../automations/headless-workspace-create'
 import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
+import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessAutomations(): AutomationService {
@@ -29,8 +30,23 @@ export function initializeMainProcessAutomations(): AutomationService {
           let workspaceId: string
           let workspaceDisplayName: string | null = null
           if (automation.workspaceMode === 'new_per_run') {
+            const gitOptions = getLocalProjectWorktreeGitOptions(store, target.repo)
             const created = await runtime.createManagedWorktree(
-              buildHeadlessAutomationWorktreeCreateArgs({ automation, run, repo: target.repo })
+              await buildHeadlessAutomationWorktreeCreateArgs({
+                automation,
+                run,
+                repo: target.repo,
+                hasRemoteTrackingRef: async (remoteBase) => {
+                  const base = await runtime.resolveRemoteTrackingBase(
+                    target.repo.path,
+                    remoteBase,
+                    gitOptions
+                  )
+                  return base
+                    ? runtime.hasRemoteTrackingRef(target.repo.path, base, gitOptions)
+                    : false
+                }
+              })
             )
             terminalHandle = created.startupTerminal?.handle ?? ''
             terminalSessionId = created.startupTerminal?.tabId ?? null
