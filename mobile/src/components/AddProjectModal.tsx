@@ -1,7 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
 import { View } from 'react-native'
-import { FolderOpen, Globe, Plus } from 'lucide-react-native'
-import { REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import {
   repoAddExistingRun,
   repoCloneRun,
@@ -9,14 +7,15 @@ import {
 } from '../tasks/repo-add-project-operations'
 import { REPO_CLONE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
 import type { RpcClient } from '../transport/rpc-client'
-import { ActionSheetContent } from './ActionSheetModal'
+import { AddProjectStart } from './AddProjectStart'
 import { AddProjectFolderBrowser } from './AddProjectFolderBrowser'
-import { AddProjectTargetSelector, type AddProjectTarget } from './AddProjectTargetSelector'
+import { AddProjectTargetSelector } from './AddProjectTargetSelector'
 import { BottomDrawer } from './BottomDrawer'
 import { ConfirmContent } from './ConfirmModal'
 import { AddProjectForm } from './AddProjectForm'
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 import { useAddProjectOperationScope } from './useAddProjectOperationScope'
+import { resolveAddProjectTargetState } from './addProjectTargetState'
 type AddProjectView =
   | 'start'
   | 'clone'
@@ -157,17 +156,8 @@ function AddProjectModalContent({
   const confirmingFolderRef = useRef(false)
 
   const value = view === 'clone' ? cloneUrl : projectName
-  const sshSupported = hostCapabilities.includes(REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY)
-  const targetOptions: AddProjectTarget[] = hostCapabilities.includes(
-    REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY
-  )
-    ? [{ id: null, label: 'This host' }, ...sshTargets]
-    : []
-  const activeSshConnectionId =
-    sshSupported && targetOptions.some((target) => target.id === sshConnectionId)
-      ? sshConnectionId
-      : null
-  const selectedTargetAvailable = sshConnectionId === null || activeSshConnectionId !== null
+  const { sshSupported, targetOptions, activeSshConnectionId, selectedTargetAvailable } =
+    resolveAddProjectTargetState(hostCapabilities, sshTargets, sshConnectionId)
   const operationScope = {
     client,
     visible,
@@ -317,39 +307,21 @@ function AddProjectModalContent({
     if (view === 'start') {
       return (
         <View>
-          {targetSelector}
-          <ActionSheetContent
-            title="Add project"
-            actions={[
-              {
-                label: 'Browse folder',
-                icon: FolderOpen,
-                hint: 'Existing Git repository or folder on this host',
-                onPress: () => setView('addExisting')
-              },
-              {
-                label: 'Clone from URL',
-                icon: Globe,
-                hint: 'Clone a remote Git repository',
-                onPress: () => {
-                  if (activeSshConnectionId) {
-                    setDestinationKind('clone')
-                  }
-                  setView(activeSshConnectionId ? 'pickDestination' : 'clone')
-                }
-              },
-              {
-                label: 'Create new project',
-                icon: Plus,
-                hint: 'Start from an empty folder',
-                onPress: () => {
-                  if (activeSshConnectionId) {
-                    setDestinationKind('create')
-                  }
-                  setView(activeSshConnectionId ? 'pickDestination' : 'create')
-                }
+          <AddProjectStart
+            targetSelector={targetSelector}
+            onBrowse={() => setView('addExisting')}
+            onClone={() => {
+              if (activeSshConnectionId) {
+                setDestinationKind('clone')
               }
-            ]}
+              setView(activeSshConnectionId ? 'pickDestination' : 'clone')
+            }}
+            onCreate={() => {
+              if (activeSshConnectionId) {
+                setDestinationKind('create')
+              }
+              setView(activeSshConnectionId ? 'pickDestination' : 'create')
+            }}
           />
         </View>
       )
