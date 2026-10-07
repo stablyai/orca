@@ -134,15 +134,16 @@ describe('the fetch a handoff awaits', () => {
   it('shares the in-flight request instead of leaving a concurrent caller empty-handed', async () => {
     // A holder, not a `let`: control flow would narrow a `let` to its null initializer here and
     // call the later assignment — made inside the fetch callback — unreachable typing.
-    const releaser: { release: (() => void) | null } = { release: null }
+    const releasers: Array<() => void> = []
     const catalogCalls: number[] = []
     const actionErrors: string[] = []
     const catalogErrors: (string | null)[] = []
     const catalogFetch = () =>
       new Promise((resolve) => {
         catalogCalls.push(catalogCalls.length)
-        releaser.release = () =>
+        releasers.push(() =>
           resolve({ kind: 'response', pending: { admission: { kind: 'valid' } } })
+        )
       })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reachable surface as fetchWith above.
     const args = catalogHook(
@@ -163,11 +164,14 @@ describe('the fetch a handoff awaits', () => {
     })
     const first = held.fetchWorktrees?.({ allowDuringModal: true })
     const second = held.fetchWorktrees?.({ allowDuringModal: true })
-    releaser.release?.()
+    releasers[0]?.()
     await expect(first).resolves.toEqual(CONFIRMED)
     // The Add project handoff fires right after a poll tick can have started one; it must
     // await that request's list, not resolve undefined and silently skip the session hop.
+    const secondRequest = releasers[1]
+    expect(secondRequest).toBeDefined()
+    secondRequest?.()
     await expect(second).resolves.toEqual(CONFIRMED)
-    expect(catalogCalls).toEqual([0])
+    expect(catalogCalls).toEqual([0, 1])
   })
 })

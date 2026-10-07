@@ -64,7 +64,16 @@ export function useHostWorktreeCatalog(args: {
       // empty-handed (the Add project handoff depends on getting the refreshed list back).
       const inFlight = fetchWorktreesInFlightRef.current
       if (inFlight) {
-        return inFlight
+        if (!options.allowDuringModal) {
+          return inFlight
+        }
+        // A post-mutation handoff must observe a request that started after the mutation. Wait for
+        // the pre-mutation poll, then continue through this callback so its latest client/host and
+        // modal guards are applied to the fresh request.
+        await inFlight
+        if (fetchWorktreesInFlightRef.current === inFlight) {
+          fetchWorktreesInFlightRef.current = null
+        }
       }
       const requestClient = client
       const requestHostId = hostId
