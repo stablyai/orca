@@ -3,6 +3,7 @@ import { Node, mergeAttributes } from '@tiptap/core'
 import { isEditableDetailsHtmlBlock, matchDetailsHtmlBlock } from './details-markdown-html'
 import { formatMarkdownDocLinkBody, parseMarkdownDocLink } from './markdown-doc-links'
 import { normalizeMarkdownReferenceLinks } from './markdown-reference-link-normalization'
+import { getRichMarkdownFenceRanges } from './markdown-container-code-ranges'
 import type {
   RichMarkdownEditorCodec,
   RichMarkdownSourceKind,
@@ -58,41 +59,22 @@ export function encodeRawMarkdownHtmlForRichEditor(
   const { transport } = codec
   let index = 0
   let isLineStart = true
-  let activeFence: '`' | '~' | null = null
-  let activeFenceLength = 0
+  const ranges = getRichMarkdownFenceRanges(normalizedContent)
+  if (!ranges) {
+    return content
+  }
+  let rangeIndex = 0
   let result = ''
-  const nonWhitespace = /\S/g
-  const fencePrefix = /(`{3,}|~{3,})/y
-  let fenceProbe = -1
-  let fenceMatch: RegExpExecArray | null = null
 
   while (index < normalizedContent.length) {
-    if (isLineStart) {
-      // Reuse the lookahead across blank lines, preserving cross-line fence semantics.
-      if (index > fenceProbe) {
-        nonWhitespace.lastIndex = index
-        fenceProbe = nonWhitespace.exec(normalizedContent)?.index ?? normalizedContent.length
-        fencePrefix.lastIndex = fenceProbe
-        fenceMatch = fencePrefix.exec(normalizedContent)
-      }
-      if (fenceMatch) {
-        const fenceChar = fenceMatch[1][0] as '`' | '~'
-        const fenceLength = fenceMatch[1].length
-        if (activeFence === null) {
-          activeFence = fenceChar
-          activeFenceLength = fenceLength
-        } else if (activeFence === fenceChar && fenceLength >= activeFenceLength) {
-          activeFence = null
-          activeFenceLength = 0
-        }
-      }
+    while (rangeIndex < ranges.length && index >= ranges[rangeIndex][1]) {
+      rangeIndex += 1
     }
-
-    if (activeFence) {
-      const nextChar = normalizedContent[index]
-      result += nextChar
-      isLineStart = nextChar === '\n'
-      index += 1
+    const range = ranges[rangeIndex]
+    if (range && index >= range[0]) {
+      result += normalizedContent.slice(index, range[1])
+      index = range[1]
+      isLineStart = true
       continue
     }
 

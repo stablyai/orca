@@ -1,8 +1,5 @@
-import {
-  createMarkdownFenceRangeCursor,
-  createMarkdownFenceTracker,
-  getMarkdownFenceRanges
-} from './markdown-fence-scanner'
+import { createMarkdownFenceRangeCursor, type MarkdownFenceRanges } from './markdown-fence-scanner'
+import { getRichMarkdownFenceRanges } from './markdown-container-code-ranges'
 
 type ReferenceLinkDefinition = {
   label: string
@@ -66,17 +63,21 @@ function parseReferenceDefinition(line: string): ReferenceLinkDefinition | null 
   }
 }
 
-function splitReferenceDefinitions(content: string): {
+function splitReferenceDefinitions(
+  content: string,
+  ranges: MarkdownFenceRanges
+): {
   definitions: Map<string, ReferenceLinkDefinition>
   markdown: string
 } {
   const definitions = new Map<string, ReferenceLinkDefinition>()
-  const fence = createMarkdownFenceTracker()
+  const isInsideFence = createMarkdownFenceRangeCursor(ranges)
+  let offset = 0
   let markdown = ''
 
   forEachReferenceDefinitionLine(content, (line, newline) => {
-    const isFenceLine = fence.consume(line)
-    const definition = isFenceLine || fence.insideFence ? null : parseReferenceDefinition(line)
+    const definition = isInsideFence(offset) ? null : parseReferenceDefinition(line)
+    offset += line.length + newline.length
     if (definition) {
       definitions.set(definition.label, definition)
       return
@@ -138,10 +139,14 @@ function formatInlineReferenceLink(text: string, definition: ReferenceLinkDefini
 function replaceReferenceLinks(
   markdown: string,
   definitions: Map<string, ReferenceLinkDefinition>
-): string {
+): string | null {
   let result = ''
   let index = 0
-  const isInsideFence = createMarkdownFenceRangeCursor(getMarkdownFenceRanges(markdown))
+  const ranges = getRichMarkdownFenceRanges(markdown)
+  if (!ranges) {
+    return null
+  }
+  const isInsideFence = createMarkdownFenceRangeCursor(ranges)
 
   while (index < markdown.length) {
     if (isInsideFence(index) || markdown[index] !== '[' || isEscaped(markdown, index)) {
@@ -194,7 +199,11 @@ function replaceReferenceLinks(
 }
 
 export function normalizeMarkdownReferenceLinks(content: string): string {
-  const { definitions, markdown } = splitReferenceDefinitions(content)
+  const ranges = getRichMarkdownFenceRanges(content)
+  if (!ranges) {
+    return content
+  }
+  const { definitions, markdown } = splitReferenceDefinitions(content, ranges)
   if (definitions.size === 0) {
     return content
   }
@@ -202,5 +211,5 @@ export function normalizeMarkdownReferenceLinks(content: string): string {
   // Why: Tiptap's Markdown parser drops reference definitions but leaves
   // shortcut references as plain text. Inline them before parsing so Linear
   // issue mentions keep their links in the rich description editor.
-  return replaceReferenceLinks(markdown, definitions)
+  return replaceReferenceLinks(markdown, definitions) ?? content
 }

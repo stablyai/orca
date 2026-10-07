@@ -15813,7 +15813,8 @@
             "mode": {
               "7a8ce7c7da": "Editable only in code mode because this file contains footnotes.",
               "2fd2b44073": "Editable only in code mode because this file contains reference-style links.",
-              "57128b73e1": "Editable only in code mode because this file contains HTML, JSX, or MDX."
+              "57128b73e1": "Editable only in code mode because this file contains HTML, JSX, or MDX.",
+              "unsupported": "Editable only in code mode because this file contains unsupported Markdown syntax."
             }
           }
         },

@@ -1,3 +1,5 @@
+import { Lexer } from 'marked'
+
 export type MarkdownFenceRanges = readonly (readonly [number, number])[]
 
 export type MarkdownFenceTracker = {
@@ -9,6 +11,8 @@ export type MarkdownFenceTracker = {
 
 // Top-level fence delimiters may be indented by at most three spaces.
 const FENCE_LINE = /[ ]{0,3}(`{3,}|~{3,})/y
+const INDENTED_MARKER = /[ \t]+(?:`{3,}|~{3,})/y
+const HAS_INDENTED_MARKER = new RegExp(`^${INDENTED_MARKER.source}`, 'm')
 function hasClosingSuffix(content: string, start: number, end: number): boolean {
   let sawWhitespace = false
   for (let index = start; index < end; index += 1) {
@@ -114,13 +118,49 @@ export function forEachMarkdownLine(
   }
 }
 
-/** Offsets of every fenced code block, including its delimiter lines. */
-export function getMarkdownFenceRanges(content: string): MarkdownFenceRanges {
+/** Offsets of fenced blocks and optional literal indented code. */
+export function getMarkdownFenceRanges(
+  content: string,
+  excluded: MarkdownFenceRanges = [],
+  protectIndentedMarkers = false
+): MarkdownFenceRanges {
   const ranges: [number, number][] = []
   const tracker = createMarkdownFenceTracker()
   let openStart = -1
+  const isExcluded = createMarkdownFenceRangeCursor(excluded)
+  const normalized =
+    protectIndentedMarkers && HAS_INDENTED_MARKER.test(content)
+      ? content.replace(/\r\n|\r/g, '\n')
+      : ''
+  const tokenizer = normalized ? new Lexer({ gfm: true }).options.tokenizer : null
+  let normalizedOffset = 0
+  let indentedEnd = 0
+  let indentedRange: [number, number] | null = null
 
   forEachMarkdownLine(content, (lineStart, lineEnd, nextLineStart) => {
+    const normalizedLineStart = normalizedOffset
+    normalizedOffset += lineEnd - lineStart + (nextLineStart > lineEnd ? 1 : 0)
+    if (indentedRange && normalizedLineStart < indentedEnd) {
+      indentedRange[1] = nextLineStart
+      return
+    }
+    indentedRange = null
+    if (isExcluded(lineStart)) {
+      return
+    }
+    if (tokenizer && !tracker.insideFence) {
+      INDENTED_MARKER.lastIndex = lineStart
+      if (INDENTED_MARKER.test(content)) {
+        // Indented code can contain literal fence markers without becoming a fenced block.
+        const code = tokenizer.code(normalized.slice(normalizedLineStart))
+        if (code) {
+          indentedRange = [lineStart, nextLineStart]
+          indentedEnd = normalizedLineStart + code.raw.length
+          ranges.push(indentedRange)
+          return
+        }
+      }
+    }
     const wasInside = tracker.insideFence
     const isFenceLine = tracker.consumeRange(content, lineStart, lineEnd)
     if (!wasInside && isFenceLine) {
