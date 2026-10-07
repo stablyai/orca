@@ -5,7 +5,10 @@ import {
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
 import { nativeChatReasoningDisclosureKey } from '../../../src/shared/native-chat-reasoning-row'
-import { deriveNativeChatRowContent } from '../../../src/shared/native-chat-row-content'
+import {
+  deriveNativeChatRowContent,
+  nativeChatRowRendersContent
+} from '../../../src/shared/native-chat-row-content'
 import { nativeChatLiveLine } from '../../../src/shared/native-chat-live-line'
 import {
   nativeChatTurnFold,
@@ -19,7 +22,6 @@ import {
 } from '../../../src/shared/native-chat-turn-membership'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat-messages-waiting-behind-live-turn'
 import { nativeChatRowsInDrawOrder } from '../../../src/shared/native-chat-turn-grouping'
-import { nativeChatRowRendersContent } from '../../../src/shared/native-chat-row-content'
 import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scoped-open-keys'
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import type {
