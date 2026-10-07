@@ -19,6 +19,7 @@ export function AddProjectForm({
   value,
   busy,
   error,
+  destinationPath,
   invalidTargetMessage,
   hint,
   onChangeText,
@@ -29,6 +30,7 @@ export function AddProjectForm({
   value: string
   busy: boolean
   error: string
+  destinationPath?: string
   invalidTargetMessage: string
   hint: string
   onChangeText: (value: string) => void
@@ -81,6 +83,16 @@ export function AddProjectForm({
           editable={!busy}
           accessibilityLabel={copy.label}
         />
+        {destinationPath ? (
+          <Text
+            style={styles.destinationPath}
+            numberOfLines={2}
+            ellipsizeMode="middle"
+            accessibilityLabel={`Selected destination: ${destinationPath}`}
+          >
+            Selected destination: {destinationPath}
+          </Text>
+        ) : null}
         <Text style={styles.hint}>{hint}</Text>
       </View>
       {invalidTargetMessage ? <Text style={formStyles.error}>{invalidTargetMessage}</Text> : null}
@@ -115,6 +127,12 @@ const styles = StyleSheet.create({
     marginLeft: -spacing.xs,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.xs
+  },
+  destinationPath: {
+    marginTop: spacing.xs,
+    fontSize: typography.metaSize,
+    color: colors.textSecondary,
+    flexShrink: 1
   },
   hint: { marginTop: spacing.xs, fontSize: typography.metaSize, color: colors.textMuted }
 })

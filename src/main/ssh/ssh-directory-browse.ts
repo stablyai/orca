@@ -1,5 +1,5 @@
-import type { SshConnectionManager } from './ssh-connection-manager'
 import type { SshExecOptions } from './ssh-connection-utils'
+import type { ClientChannel } from 'ssh2'
 import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
@@ -51,10 +51,9 @@ export async function browseSshDirectory(
   }
 }
 
-export type SshBrowseConnection = Pick<
-  NonNullable<ReturnType<SshConnectionManager['getConnection']>>,
-  'exec'
->
+export type SshBrowseConnection = {
+  exec: (command: string, options?: SshExecOptions) => Promise<ClientChannel>
+}
 
 function browseWithPosixShell(
   conn: SshBrowseConnection,

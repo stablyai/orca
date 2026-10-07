@@ -23,10 +23,16 @@ function sameScope(a: AddProjectOperationScope, b: AddProjectOperationScope): bo
 }
 
 export function useAddProjectOperationScope(scope: AddProjectOperationScope) {
-  const [busy, setBusy] = useState(false)
+  const [busyState, setBusyState] = useState({ scope, busy: false })
   const mountedRef = useRef(true)
   const busyRef = useRef(false)
   const tokenRef = useRef(0)
+  const previousScopeRef = useRef(scope)
+  if (!sameScope(previousScopeRef.current, scope)) {
+    previousScopeRef.current = scope
+    tokenRef.current += 1
+    busyRef.current = false
+  }
   const scopeRef = useRef(scope)
   scopeRef.current = scope
 
@@ -34,21 +40,9 @@ export function useAddProjectOperationScope(scope: AddProjectOperationScope) {
     tokenRef.current += 1
     if (busyRef.current) {
       busyRef.current = false
-      setBusy(false)
+      setBusyState({ scope: scopeRef.current, busy: false })
     }
   }, [])
-
-  useEffect(() => {
-    invalidate()
-  }, [
-    invalidate,
-    scope.client,
-    scope.visible,
-    scope.openEpoch,
-    scope.selectedTargetId,
-    scope.sshCapability,
-    scope.selectedTargetAvailable
-  ])
 
   useEffect(() => {
     mountedRef.current = true
@@ -71,7 +65,7 @@ export function useAddProjectOperationScope(scope: AddProjectOperationScope) {
     const operation = { token: tokenRef.current + 1, scope: scopeRef.current }
     tokenRef.current = operation.token
     busyRef.current = true
-    setBusy(true)
+    setBusyState({ scope: scopeRef.current, busy: true })
     return operation
   }, [])
 
@@ -88,11 +82,18 @@ export function useAddProjectOperationScope(scope: AddProjectOperationScope) {
     (operation: Operation) => {
       if (current(operation)) {
         busyRef.current = false
-        setBusy(false)
+        setBusyState({ scope: scopeRef.current, busy: false })
       }
     },
     [current]
   )
 
-  return { busy, busyRef, begin, current, finish, invalidate }
+  return {
+    busy: busyState.busy && sameScope(busyState.scope, scope),
+    busyRef,
+    begin,
+    current,
+    finish,
+    invalidate
+  }
 }

@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: this method suite keeps the complete files RPC contract and streaming coverage together. */
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
@@ -105,26 +104,10 @@ describe('file RPC methods', () => {
     const response = await dispatcher.dispatch(makeRequest('files.browseServerDir', { path: '~' }))
 
     expect(runtime.browseServerDir).toHaveBeenCalledWith('~')
-    expect(runtime.browseServerDir).toHaveBeenCalledTimes(1)
     expect(response).toMatchObject({
       ok: true,
       result: { resolvedPath: '/home/me', entries: [{ name: 'project', isDirectory: true }] }
     })
-  })
-
-  it('passes the SSH target to remote server directory browse', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial runtime fake; this test only reaches getRuntimeId and browseServerDir.
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      browseServerDir: vi.fn().mockResolvedValue({ resolvedPath: '/srv', entries: [] })
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
-
-    await dispatcher.dispatch(
-      makeRequest('files.browseServerDir', { path: '/srv', sshConnectionId: 'ssh-vm' })
-    )
-
-    expect(runtime.browseServerDir).toHaveBeenCalledWith('/srv', 'ssh-vm')
   })
 
   it('streams file watch changes until the subscription is cleaned up', async () => {

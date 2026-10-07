@@ -6,7 +6,7 @@ import { sortDirEntries } from '../../shared/file-name-sort'
 import { probeGitAvailability } from '../git/git-availability'
 import { gitExecFileAsync } from '../git/runner'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
-import { getSshConnectionManager } from '../ssh/ssh-target-registry'
+import { getSshBrowseConnection } from '../host/ssh-browse-port'
 import { browseSshDirectory } from '../ssh/ssh-directory-browse'
 
 function resolveServerBrowsePath(pathValue: string): string {
@@ -27,14 +27,16 @@ function resolveServerBrowsePath(pathValue: string): string {
 }
 
 export class RuntimeServerEnvironmentCommands {
-  async browseDirectory(pathValue: string, sshConnectionId?: string): Promise<{
+  async browseDirectory(
+    pathValue: string,
+    sshConnectionId?: string
+  ): Promise<{
     resolvedPath: string
     entries: DirEntry[]
     pathFlavor: FilesystemPathFlavor
   }> {
     if (sshConnectionId) {
-      const manager = getSshConnectionManager()
-      const connection = manager?.getConnection(sshConnectionId)
+      const connection = getSshBrowseConnection(sshConnectionId)
       if (!connection) {
         throw new Error('SSH connection not found or not connected')
       }

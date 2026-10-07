@@ -1,0 +1,34 @@
+changed-quality:
+code quality: 0 new finding(s) across 77 changed file(s).
+casting code quality: 0 new finding(s) across 77 changed file(s).
+focused plugins: 0 new finding(s) across 77 changed file(s).
+type-aware code quality: 0 new finding(s) across 77 changed file(s).
+React Doctor: 0 new finding(s) across 77 changed file(s).
+design system: 0 new finding(s) across 77 changed file(s).
+casting SAFETY: rationale: 0 new finding(s) across 77 changed file(s).
+Changed-code quality gate passed since 7faa9f7cd3bd.
+EXIT=0
+
+runtime-electron-ratchet:
+[runtime-electron-ratchet] ok — 0 entries, unchanged.
+EXIT=0
+
+max-lines-ratchet:
+max-lines ratchet OK — 7 grandfathered suppression(s), no new bypasses.
+EXIT=0
+
+oxlint-targeted: EXIT=0
+mobile AddProjectModal.test.tsx: 19 tests passed, EXIT=0
+root files-ssh-browse/repo-ssh-routing/ssh-directory-browse tests: 17 tests passed, EXIT=0
+
+typecheck attempts (local TypeScript incompatible with repository config):
+mobile/tsconfig.json(6,5): error TS5102: Option 'baseUrl' has been removed.
+  Use '"paths": {"*": ["./*"]}' instead.
+EXIT=1
+tsconfig.json(9,5): error TS5102: Option 'baseUrl' has been removed.
+tsconfig.json(11,15): error TS5090: Non-relative paths are not allowed. Did you forget a leading './'?
+EXIT=2
+
+pre-existing excluded fixture findings from original publish-review:
+mobile/scripts/mock-server.ts: curly at lines 22,24 (fixed)
+mobile/scripts/mock-server-repo-project.ts: prefer-array-find at lines 149,163 (fixed)

@@ -543,7 +543,7 @@ describe('AddProjectModal', () => {
     act(() => button(tree, 'Clone repository').props.onPress())
     expect(sendRequest).toHaveBeenCalledTimes(1)
 
-    pending.resolve({ ok: true, result: { repo: repoRow }, _meta: { runtimeId: 'r' } } as never)
+    pending.resolve({ ok: true, result: { repo: repoRow }, _meta: { runtimeId: 'r' } })
     await flushUpdates()
     expect(onClose).toHaveBeenCalledTimes(1)
   })
@@ -631,7 +631,7 @@ describe('AddProjectModal', () => {
     act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/orca.git'))
     act(() => button(tree, 'Clone repository').props.onPress())
     const oldClient = tree.root.findByType(AddProjectModal).props.client
-    const newClient = { sendRequest: newSend } as unknown as RpcClient
+    const newClient = { ...oldClient, sendRequest: newSend }
     act(() =>
       renderer.update(
         createElement(AddProjectModal, {
@@ -667,7 +667,10 @@ describe('AddProjectModal', () => {
     act(() => button(tree, 'Clone repository').props.onPress())
     await flushUpdates()
     const oldDrawer = drawer(tree)
-    const newClient = { sendRequest: vi.fn() } as unknown as RpcClient
+    const newClient = {
+      ...tree.root.findByType(AddProjectModal).props.client,
+      sendRequest: vi.fn()
+    }
     act(() =>
       renderer.update(
         createElement(AddProjectModal, {

@@ -19,12 +19,12 @@ import {
   EMPTY_HOST_CAPABILITIES,
   EMPTY_SSH_TARGETS,
   createAddProjectScope,
+  toMobileRepo,
   type AddProjectModalProps,
   type AddProjectView,
   type AddProjectHandoff,
   type FolderCandidate
 } from './addProjectTypes'
-import { toMobileRepo } from './addProjectTypes'
 import { useAddProjectOperationScope } from './useAddProjectOperationScope'
 import { resolveAddProjectTargetState, selectAddProjectTarget } from './addProjectTargetState'
 export function AddProjectModal({
@@ -320,6 +320,7 @@ function AddProjectModalContent({
           sshConnectionId={activeSshConnectionId}
           busy={busy}
           error={error}
+          destinationPath={activeSshConnectionId ? destinationPath : undefined}
           onBack={() =>
             setView(view === 'pickDestination' ? (destinationKind ?? 'start') : 'start')
           }
