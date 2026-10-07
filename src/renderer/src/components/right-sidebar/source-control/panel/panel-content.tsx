@@ -8,6 +8,7 @@ import { CompareUnavailable } from '../sync/compare-summary'
 import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { notifySourceControlBackgroundOpen } from '../listing/background-open-toast'
 
 /** The scrolling surface: status, commit affordances, the file sections and the history dock. */
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
@@ -98,6 +99,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
             unresolvedConflictReviewEntries,
             'live-summary'
           )
+          notifySourceControlBackgroundOpen(currentWorktreeId)
         }}
         repositoryHuge={repositoryHuge}
         worktreeId={currentWorktreeId}
@@ -142,6 +144,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
                 sectionViewAction.entries
               )
             }
+            notifySourceControlBackgroundOpen(currentWorktreeId)
           }}
           isExecutingBulk={isExecutingBulk}
           requestDiscardAllInArea={requestDiscardAllInArea}

@@ -1,8 +1,8 @@
-import React from 'react'
-import { AlertTriangle, ChevronDown, Workflow } from 'lucide-react'
+import { AlertTriangle, ChevronDown, FolderTree, Workflow } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useWorktreeLineageTreeStore } from '@/store/worktree-lineage-tree-store'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { LinearAgentSkillSetupPrompt } from './LinearAgentSkillSetupPrompt'
@@ -96,7 +96,10 @@ export function WorktreeCardSecondaryRows({
 
       {showLineageChildChip && (
         <div
-          className={cn('relative mt-1 flex min-w-0 justify-start', !newCardStyle && '-ml-1')}
+          className={cn(
+            'relative mt-1 flex min-w-0 items-center gap-1 justify-start',
+            !newCardStyle && '-ml-1'
+          )}
           style={{
             color: 'color-mix(in srgb, var(--muted-foreground) 42%, var(--worktree-sidebar))'
           }}
@@ -129,6 +132,35 @@ export function WorktreeCardSecondaryRows({
                     'auto.components.sidebar.WorktreeCard.57eaa61b55',
                     'Hide child workspaces'
                   )}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="relative z-10 h-[18px] w-[18px] p-0 rounded-md border border-worktree-sidebar-border bg-worktree-sidebar text-muted-foreground shadow-none hover:bg-worktree-sidebar-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
+                aria-label={translate(
+                  'auto.components.sidebar.lineageTree.viewHierarchy',
+                  'View tree hierarchy'
+                )}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  useWorktreeLineageTreeStore
+                    .getState()
+                    .openLineageTree({ worktreeId: worktree.id })
+                }}
+              >
+                <FolderTree className="size-2.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {translate(
+                'auto.components.sidebar.lineageTree.viewHierarchy',
+                'View tree hierarchy'
+              )}
             </TooltipContent>
           </Tooltip>
         </div>

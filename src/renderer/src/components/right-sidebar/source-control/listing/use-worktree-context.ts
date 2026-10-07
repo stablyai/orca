@@ -12,6 +12,7 @@ import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-com
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { selectReviewCacheData, selectReviewCacheEntry } from '../../review-cache-entry-selection'
+import { useSourceControlTargetWorktree } from '../panel/source-control-target-worktree'
 
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
@@ -22,8 +23,12 @@ const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
  * the repo-owner-routed settings that every git call must be pinned to.
  */
 export function useSourceControlWorktreeContext() {
-  const activeWorktree = useActiveWorktree()
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const target = useSourceControlTargetWorktree()
+  const storeActiveWorktree = useActiveWorktree()
+  const storeActiveWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  // invariant: inside a lineage section every read and write below is keyed by the pinned worktree
+  const activeWorktree = target ? target.worktree : storeActiveWorktree
+  const activeWorktreeId = target ? (target.worktree?.id ?? null) : storeActiveWorktreeId
   const activeWorktreeInstanceId = activeWorktree?.instanceId
   const activeGroupId = useAppStore((s) =>
     activeWorktreeId ? s.activeGroupIdByWorktree[activeWorktreeId] : undefined
@@ -137,7 +142,8 @@ export function useSourceControlWorktreeContext() {
       : getLocalProjectExecutionRuntimeContext(useAppStore.getState(), activeWorktreeId)
   })
   // Why: the sidebar stays mounted when closed, so gate polling on tab AND open or branchCompare/PR fetch would run with no visible consumer.
-  const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
+  const isBranchVisible =
+    rightSidebarTab === 'source-control' && rightSidebarOpen && (target?.isActive ?? true)
   const hasUncommittedEntries = entries.length > 0
 
   return {

@@ -142,6 +142,24 @@ describe('showSourceControlEntryFailureToast', () => {
     expect(toastDismiss).toHaveBeenCalledWith('source-control-entry-mutation')
   })
 
+  it('offers Retry for a lineage section worktree that is not the active one', () => {
+    const onRetry = vi.fn()
+    let sectionMounted = true
+    show({
+      worktreeId: 'wt-b',
+      worktreeName: 'feature-b',
+      onRetry,
+      isPanelWorktree: (worktreeId) => sectionMounted && worktreeId === 'wt-b'
+    })
+    expect(lastToast().title).toBe('Failed to stage “src/app.ts”')
+    clickRetry()
+    expect(onRetry).toHaveBeenCalledTimes(1)
+
+    sectionMounted = false
+    clickRetry()
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
   it('omits the description when the failure carried no readable message', () => {
     show({ error: 'not an Error' })
     expect(lastToast().options.description).toBeUndefined()

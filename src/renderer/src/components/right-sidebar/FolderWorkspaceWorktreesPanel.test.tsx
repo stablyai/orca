@@ -54,10 +54,16 @@ const testState = vi.hoisted(() => {
     repos: []
   }
   const cardProps: MockCardProps[] = []
+  const lineageKeys: (string | null)[] = []
+  const lineage = {
+    keys: lineageKeys,
+    supported: true,
+    refresh: vi.fn(async () => {})
+  }
   const cardClicks: string[] = []
   const cardDoubleClicks: string[] = []
   const cardDragStarts: string[] = []
-  return { store, cardProps, cardClicks, cardDoubleClicks, cardDragStarts }
+  return { store, cardProps, cardClicks, cardDoubleClicks, cardDragStarts, lineage }
 })
 
 vi.mock('@/store', () => ({
@@ -98,6 +104,31 @@ vi.mock('@/components/sidebar/WorktreeCard', () => ({
       </div>
     )
   }
+}))
+
+vi.mock('./lineage-members/use-lineage-members', () => ({
+  useLineageMembers: (key: string | null) => {
+    testState.lineage.keys.push(key)
+    return {
+      members: [],
+      loading: false,
+      supported: testState.lineage.supported,
+      refresh: testState.lineage.refresh
+    }
+  }
+}))
+
+vi.mock('./lineage-members/AddToTowerDialog', () => ({
+  AddToTowerButton: (props: { parentWorkspaceKey: string; onChanged: () => void }) => (
+    <button
+      type="button"
+      data-testid="add-to-tower"
+      data-parent={props.parentWorkspaceKey}
+      onClick={props.onChanged}
+    >
+      Add to control tower…
+    </button>
+  )
 }))
 
 import FolderWorkspaceWorktreesPanel from './FolderWorkspaceWorktreesPanel'
@@ -189,6 +220,9 @@ describe('FolderWorkspaceWorktreesPanel', () => {
     testState.cardClicks = []
     testState.cardDoubleClicks = []
     testState.cardDragStarts = []
+    testState.lineage.keys = []
+    testState.lineage.supported = true
+    testState.lineage.refresh.mockClear()
     testState.store = {
       activeWorktreeId: folderWorkspaceKey('folder-1'),
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
@@ -689,5 +723,32 @@ describe('FolderWorkspaceWorktreesPanel', () => {
 
     expect(cardFor(child.id)?.parentElement?.getAttribute('style')).toBeNull()
     expect(cardFor(grandchild.id)?.parentElement?.getAttribute('style')).toBeNull()
+  })
+
+  describe('add to control tower', () => {
+    it('offers the shared add button for a folder workspace and refreshes the tower members', () => {
+      renderPanel()
+      const button = container.querySelector<HTMLButtonElement>('[data-testid="add-to-tower"]')
+      expect(button?.dataset.parent).toBe(folderWorkspaceKey('folder-1'))
+      expect(testState.lineage.keys).toContain(folderWorkspaceKey('folder-1'))
+      act(() => {
+        button?.click()
+      })
+      expect(testState.lineage.refresh).toHaveBeenCalledTimes(1)
+    })
+
+    it('hides the button when the host has no lineage support', () => {
+      testState.lineage.supported = false
+      renderPanel()
+      expect(container.querySelector('[data-testid="add-to-tower"]')).toBeNull()
+    })
+
+    it('leaves the non-folder view unchanged', () => {
+      testState.store.activeWorkspaceKey = worktreeWorkspaceKey('repo-1::/w')
+      testState.store.activeWorktreeId = 'repo-1::/w'
+      renderPanel()
+      expect(container.querySelector('[data-testid="add-to-tower"]')).toBeNull()
+      expect(testState.lineage.keys.every((key) => key === null)).toBe(true)
+    })
   })
 })

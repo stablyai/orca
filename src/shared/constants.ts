@@ -1,4 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
+import { DEFAULT_LINEAGE_DISCOVERY } from './lineage-discovery-types'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
@@ -108,20 +109,23 @@ export function getDefaultWorkspaceDir(homeDir: string): string {
 }
 
 export function getDefaultSettings(homedir: string): GlobalSettings {
-  return buildDefaultSettings({
-    workspaceDir: getDefaultWorkspaceDir(homedir),
-    appFontFamily: DEFAULT_APP_FONT_FAMILY,
-    editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
-    primarySelectionMiddleClickPaste: getDefaultPrimarySelectionMiddleClickPaste(),
-    primarySelectionDefaultedForLinux:
-      typeof process !== 'undefined' && process.platform === 'linux',
-    terminalFontFamily: defaultTerminalFontFamily(),
-    terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
-    terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
-    notifications: getDefaultNotificationSettings(),
+  return {
+    ...buildDefaultSettings({
+      workspaceDir: getDefaultWorkspaceDir(homedir),
+      appFontFamily: DEFAULT_APP_FONT_FAMILY,
+      editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
+      primarySelectionMiddleClickPaste: getDefaultPrimarySelectionMiddleClickPaste(),
+      primarySelectionDefaultedForLinux:
+        typeof process !== 'undefined' && process.platform === 'linux',
+      terminalFontFamily: defaultTerminalFontFamily(),
+      terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
+      terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
+      notifications: getDefaultNotificationSettings(),
 
-    voice: getDefaultVoiceSettings()
-  })
+      voice: getDefaultVoiceSettings()
+    }),
+    lineageDiscovery: { ...DEFAULT_LINEAGE_DISCOVERY }
+  }
 }
 
 export function getDefaultVoiceSettings(): VoiceSettings {
@@ -165,6 +169,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     worktreeMeta: {},
     worktreeLineageById: {},
     workspaceLineageByChildKey: {},
+    lineageManualLinksByParentKey: {},
     settings: getDefaultSettings(homedir),
     ui: getDefaultUIState(),
     githubCache: { pr: {}, issue: {} },

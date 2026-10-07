@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo, useState } from 'react'
 import { Ellipsis, GitMerge, Link, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -38,6 +38,16 @@ import { useChecksPanelCreateReview } from './checks-panel/use-checks-panel-crea
 import { ChecksPanelEmptyContent } from './checks-panel/empty-content'
 import { ChecksPanelActiveContent } from './checks-panel/active-content'
 import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
+import { useAppStore } from '@/store'
+import { useActiveWorktree } from '@/store/selectors'
+import { useLineageMembers } from './lineage-members/use-lineage-members'
+import { LineageChecksSections } from './checks-panel/LineageChecksSections'
+import {
+  AddToTowerContextDialog,
+  AddToTowerEntryContext,
+  AddToTowerMenuItem
+} from './lineage-members/add-to-tower-entry'
+import { hasMembersBeyondTower } from './lineage-members/lineage-tower-members'
 
 type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
@@ -60,6 +70,7 @@ export function ChecksPanelReviewHeader({
   onUnlinkReview,
   onLinkAnotherReview
 }: ChecksPanelReviewHeaderProps): React.JSX.Element {
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const reviewNumberLabel = review.provider === 'gitlab' ? `!${review.number}` : `#${review.number}`
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
@@ -141,13 +152,15 @@ export function ChecksPanelReviewHeader({
                   'Link another PR'
                 )}
           </DropdownMenuItem>
+          <AddToTowerMenuItem onOpen={() => setLinkDialogOpen(true)} />
         </DropdownMenuContent>
       </DropdownMenu>
+      <AddToTowerContextDialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen} />
     </div>
   )
 }
 
-export default function ChecksPanel(): React.JSX.Element {
+export function SingleWorktreeChecksPanel(): React.JSX.Element {
   const baseModel = useChecksPanelControllerState()
   const contextModel = Object.assign(baseModel, useChecksPanelContextState(baseModel))
   const reviewModel = Object.assign(contextModel, useChecksPanelReviewState(contextModel))
@@ -188,4 +201,34 @@ export default function ChecksPanel(): React.JSX.Element {
   }
 
   return <ChecksPanelActiveContent model={model} ReviewHeaderComponent={ChecksPanelReviewHeader} />
+}
+
+export default function ChecksPanel(): React.JSX.Element {
+  const towerKey = useAppStore((s) => s.activeWorkspaceKey ?? s.activeWorktreeId)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorktreePath = useActiveWorktree()?.path ?? null
+  const { members, supported, refresh } = useLineageMembers(towerKey)
+  const active = { id: activeWorktreeId, path: activeWorktreePath }
+  const entry = useMemo(
+    () =>
+      supported && towerKey
+        ? { parentWorkspaceKey: towerKey, onChanged: () => void refresh() }
+        : null,
+    [supported, towerKey, refresh]
+  )
+  if (supported && hasMembersBeyondTower(members, active)) {
+    return (
+      <LineageChecksSections
+        members={members}
+        PanelComponent={SingleWorktreeChecksPanel}
+        parentWorkspaceKey={towerKey ?? undefined}
+        onMembersChanged={() => void refresh()}
+      />
+    )
+  }
+  return (
+    <AddToTowerEntryContext.Provider value={entry}>
+      <SingleWorktreeChecksPanel />
+    </AddToTowerEntryContext.Provider>
+  )
 }

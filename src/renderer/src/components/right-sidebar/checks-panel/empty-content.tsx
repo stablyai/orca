@@ -12,6 +12,7 @@ import { translate } from '@/i18n/i18n'
 import { isGitHubPRSuppressed } from '../../../../../shared/worktree/github-pr-suppression'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
 import { useNow } from '@/hooks/use-now'
+import { AddToTowerEmptyAction } from '../lineage-members/add-to-tower-entry'
 
 export function ChecksPanelEmptyContent({
   model
@@ -387,6 +388,7 @@ export function ChecksPanelEmptyContent({
             ) : null}
           </div>
         )}
+        <AddToTowerEmptyAction />
       </div>
     )
   }

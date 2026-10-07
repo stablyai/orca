@@ -3,6 +3,7 @@ import { useSourceControlStoreActions } from '../listing/use-store-actions'
 import { useSourceControlWorktreeContext } from '../listing/use-worktree-context'
 import { useSourceControlBranchLineTotalGate } from '../sync/use-branch-line-total-gate'
 import { useSourceControlStatusRefresh } from '../sync/use-status-refresh'
+import { useSourceControlTargetStatusPoll } from '../sync/use-target-status-poll'
 import { useSourceControlPanelViewState } from './use-panel-view-state'
 import { useSourceControlWorktreeOperationState } from './use-worktree-operation-state'
 
@@ -60,6 +61,11 @@ export function useSourceControlPanelState() {
     activeConnectionId,
     activeWorktreeInstanceId,
     worktreeMap
+  })
+  useSourceControlTargetStatusPoll({
+    activeConnectionId,
+    isBranchVisible,
+    refreshActiveGitStatus: statusRefresh.refreshActiveGitStatus
   })
 
   return {

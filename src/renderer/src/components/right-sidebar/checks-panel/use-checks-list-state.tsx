@@ -15,6 +15,7 @@ import {
   getCheckDetailsKey,
   isFailedCheck
 } from './check-details-model'
+import { useChecksPanelTargetWorktree } from './checks-panel-target-worktree'
 
 export type ChecksListProps = {
   checks: PRCheckDetail[]
@@ -36,7 +37,9 @@ export function useChecksListState({
   githubRepository
 }: ChecksListProps) {
   const activeWorktree = useActiveWorktree()
-  const resolvedWorktreeId = worktreeIdOverride ?? activeWorktree?.id ?? null
+  const target = useChecksPanelTargetWorktree()
+  const resolvedWorktreeId =
+    worktreeIdOverride ?? target?.worktree?.id ?? activeWorktree?.id ?? null
   const patchOpenCheckRunDetails = useAppStore((s) => s.patchOpenCheckRunDetails)
   const [checksExpanded, setChecksExpanded] = useState(true)
   const [expandedCheckKeys, setExpandedCheckKeys] = useState<Set<string>>(new Set())

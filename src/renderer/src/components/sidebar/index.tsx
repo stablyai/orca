@@ -19,6 +19,7 @@ import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
+import { useWorktreeLineageTreeStore } from '@/store/worktree-lineage-tree-store'
 
 // Why lazy: the Agents list pulls the whole activity pipeline (virtualizer, markdown
 // previews, thread derivation); users on the workspace view should not load or render any of it.
@@ -30,6 +31,7 @@ const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilit
 const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
 const ForgetSshWorkspaceDialog = lazyWithRetry(() => import('./ForgetSshWorkspaceDialog'))
 const AgentDashboardSidebarHost = lazyWithRetry(() => import('./AgentDashboardSidebarHost'))
+const WorktreeLineageTreeDialog = lazyWithRetry(() => import('./WorktreeLineageTreeDialog'))
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -89,6 +91,7 @@ function Sidebar({
   )
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
+  const hasLineageTreeRequest = useWorktreeLineageTreeStore((s) => s.request !== null)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const systemPrefersDark = useSystemPrefersDark()
   const leftSidebarStyle = useMemo(
@@ -253,6 +256,7 @@ function Sidebar({
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
+        {hasLineageTreeRequest ? <WorktreeLineageTreeDialog /> : null}
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer

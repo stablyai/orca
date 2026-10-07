@@ -190,7 +190,12 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     workspaceLineage: WorkspaceLineage | null
     warnings: WorktreeLineageWarning[]
   } {
-    return recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
+    const recorded = recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
+    // Why: a create may cache the snapshot before its edge is recorded; projections must re-read it.
+    if (recorded.lineage) {
+      this.invalidateResolvedWorktreeCache()
+    }
+    return recorded
   }
 
   protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {

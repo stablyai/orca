@@ -3,6 +3,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
+import { notifySourceControlBackgroundOpen } from '../listing/background-open-toast'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
@@ -78,6 +79,7 @@ export function useSourceControlNoteOpening({
           language,
           mode: 'edit'
         })
+        notifySourceControlBackgroundOpen(activeWorktreeId)
         setPendingEditorReveal(null)
         requestSourceControlEditorRevealFrame(pendingCommentEditorRevealFrameIdsRef, () => {
           requestSourceControlEditorRevealFrame(pendingCommentEditorRevealFrameIdsRef, () => {
@@ -122,6 +124,7 @@ export function useSourceControlNoteOpening({
         language,
         mode: 'edit'
       })
+      notifySourceControlBackgroundOpen(activeWorktreeId)
       if (commentId) {
         setEditorViewMode(absPath, 'changes')
         setScrollToDiffCommentId(commentId)

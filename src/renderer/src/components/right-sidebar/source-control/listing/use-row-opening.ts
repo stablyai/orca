@@ -8,6 +8,7 @@ import type {
 } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { buildActiveOpenFileSignature, buildActiveOpenRowKeys } from './active-open-file-keys'
+import { notifySourceControlBackgroundOpen } from './background-open-toast'
 import type { FlatEntry } from './use-selection'
 import {
   isSourceControlSplitOpenModifier,
@@ -97,6 +98,7 @@ export function useSourceControlRowOpening({
           targetGroupId,
           preview: openAsPreview
         })
+        notifySourceControlBackgroundOpen(activeWorktreeId)
         return
       }
       const language = detectLanguage(entry.path)
@@ -114,12 +116,14 @@ export function useSourceControlRowOpening({
           { targetGroupId, preview: openAsPreview }
         )
         setEditorViewMode(filePath, 'changes')
+        notifySourceControlBackgroundOpen(activeWorktreeId)
         return
       }
       openDiff(activeWorktreeId, filePath, entry.path, language, entry.area === 'staged', {
         targetGroupId,
         preview: openAsPreview
       })
+      notifySourceControlBackgroundOpen(activeWorktreeId)
     },
     [
       activeWorktreeId,
@@ -152,6 +156,7 @@ export function useSourceControlRowOpening({
         detectLanguage(entry.path),
         { targetGroupId, preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId) }
       )
+      notifySourceControlBackgroundOpen(activeWorktreeId)
     },
     [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
   )

@@ -1,3 +1,4 @@
+import { buildEditorActiveResult } from '../tabs/editor-open-target-group'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
@@ -71,10 +72,7 @@ export function createOpenCombinedDiff(
                   }
                 : f
             ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            ...buildEditorActiveResult(s, worktreeId, id)
           }
         }
         const newFile: OpenFile = {
@@ -98,10 +96,7 @@ export function createOpenCombinedDiff(
         }
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...buildEditorActiveResult(s, worktreeId, id)
         }
       })
       void openWorkspaceEditorItem(get(), id, worktreeId, label, 'diff')
@@ -129,10 +124,7 @@ export function createOpenCombinedDiff(
                   }
                 : f
             ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            ...buildEditorActiveResult(s, worktreeId, id)
           }
         }
         const newFile: OpenFile = {
@@ -154,10 +146,7 @@ export function createOpenCombinedDiff(
         }
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...buildEditorActiveResult(s, worktreeId, id)
         }
       })
       void openWorkspaceEditorItem(
@@ -194,10 +183,7 @@ export function createOpenCombinedDiff(
                   }
                 : f
             ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            ...buildEditorActiveResult(s, worktreeId, id)
           }
         }
 
@@ -219,10 +205,7 @@ export function createOpenCombinedDiff(
         }
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...buildEditorActiveResult(s, worktreeId, id)
         }
       })
       void openWorkspaceEditorItem(get(), id, worktreeId, label, 'diff')

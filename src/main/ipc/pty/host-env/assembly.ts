@@ -29,6 +29,7 @@ import {
   restoreOrStripOverlayEnv
 } from './pi-agent'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+import { injectLineageEnv } from '../../../lineage/pty-env-injector'
 import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
 
@@ -296,6 +297,8 @@ export function buildPtyHostEnv(
   // Why: must run after the prepends above — they re-read PATH from the unscrubbed
   // process.env when baseEnv carries none, which is the daemon path's normal shape.
   stripLegacyTerminalShimEnv(baseEnv, process.platform)
+
+  injectLineageEnv(baseEnv)
 
   if (!opts.isWsl) {
     ensureOpenCodeStartupPromptForLaunch(baseEnv)

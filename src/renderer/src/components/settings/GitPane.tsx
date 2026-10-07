@@ -8,6 +8,8 @@ import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { useAppStore } from '../../store'
 import { getGitPaneSearchEntries } from './git-search'
+import { LineageDiscoverySettings } from './LineageDiscoverySettings'
+import { getLineageDiscoverySearchEntries } from './lineage-discovery-search'
 import { SearchableSetting } from './SearchableSetting'
 import { BranchPrefixFeedback } from './BranchPrefixFeedback'
 import { matchesSettingsSearch } from './settings-search'
@@ -311,6 +313,15 @@ export function GitPane({
         settings={settings}
         updateSettings={updateSettings}
       />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getLineageDiscoverySearchEntries()) ? (
+      <SearchableSetting
+        key="lineage-discovery"
+        {...getLineageDiscoverySearchEntries()[0]}
+        id="git-lineage-discovery"
+      >
+        <LineageDiscoverySettings settings={settings} updateSettings={updateSettings} />
+      </SearchableSetting>
     ) : null,
     shouldShowAutoRenameBranchSetting(searchQuery, hasUnsavedBranchPromptChanges) ? (
       <AutoRenameBranchFromWorkSetting

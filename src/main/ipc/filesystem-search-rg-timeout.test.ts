@@ -26,7 +26,8 @@ const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 vi.mock('electron', () => ({
   app: { getPath: () => '/orca-test-user-data' },
   ipcMain: {
-    handle: handleMock
+    handle: handleMock,
+    removeHandler: vi.fn()
   },
   shell: {
     trashItem: vi.fn()

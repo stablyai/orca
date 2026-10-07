@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { useWorktreeLineageTreeStore } from '@/store/worktree-lineage-tree-store'
 import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -72,15 +73,24 @@ export function useWorktreeLineageDropCommit(args: {
       }
       void Promise.all(
         draggedIds.map((id) => assignWorktreeParent(id, { parentWorktreeId: parentId }))
-      ).catch((err) => {
-        console.error('Failed to nest workspace:', err)
-        toast.error(
-          translate(
-            'auto.components.sidebar.WorktreeList.failedNestWorkspace',
-            'Failed to nest workspace'
+      )
+        .then(() => {
+          if (draggedIds.length > 0) {
+            useWorktreeLineageTreeStore.getState().openLineageTree({
+              worktreeId: draggedIds[0],
+              newlyLinkedId: draggedIds[0]
+            })
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to nest workspace:', err)
+          toast.error(
+            translate(
+              'auto.components.sidebar.WorktreeList.failedNestWorkspace',
+              'Failed to nest workspace'
+            )
           )
-        )
-      })
+        })
       return true
     },
     [assignWorktreeParent, getEligibleLineageDropTarget]

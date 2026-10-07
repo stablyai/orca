@@ -3,6 +3,13 @@ import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
+import type { LineageManualLink } from '../../../shared/lineage-discovery-types'
+import {
+  dedupeLineageManualLinks,
+  isLineageManualLink
+} from '../../../shared/lineage-manual-link-shape'
+import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
+import { isWorkspaceKey } from '../../../shared/workspace-scope'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
 import {
   normalizeSshRemotePtyLease,
@@ -68,6 +75,7 @@ export function normalizeLoadedProfileState(
     workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
       parsed.workspaceLineageByChildKey
     ),
+    lineageManualLinksByParentKey: normalizeManualLinks(parsed.lineageManualLinksByParentKey),
     settings: normalizeLoadedGlobalSettings(parsed, terminal, profile),
     // Why: legacy 'recent' meant the smart sort; migrate once on the raw value so a fresh 'recent' default isn't remigrated.
     ui: normalizeLoadedUiState(
@@ -108,4 +116,21 @@ export function normalizeLoadedProfileState(
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
     onboarding: normalizedOnboarding
   }
+}
+
+export function normalizeManualLinks(value: unknown): Record<WorkspaceKey, LineageManualLink[]> {
+  const normalized: Record<WorkspaceKey, LineageManualLink[]> = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return normalized
+  }
+  for (const [key, links] of Object.entries(value)) {
+    if (!isWorkspaceKey(key) || !Array.isArray(links)) {
+      continue
+    }
+    const valid = dedupeLineageManualLinks(links.filter(isLineageManualLink))
+    if (valid.length > 0) {
+      normalized[key] = valid
+    }
+  }
+  return normalized
 }

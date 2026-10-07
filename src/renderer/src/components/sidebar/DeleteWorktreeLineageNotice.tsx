@@ -1,5 +1,6 @@
 import { Workflow } from 'lucide-react'
 import type { JSX } from 'react'
+import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
@@ -8,19 +9,26 @@ import type {
   DeleteWorktreeDirtyChangePreview
 } from './delete-worktree-dirty-change-counts'
 import { translate } from '@/i18n/i18n'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 
 type DeleteWorktreeLineageNoticeProps = {
   descendants: readonly Worktree[]
   dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
   dirtyChangePreviewsByWorktreeId: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
   changeCheckStatesByWorktreeId?: ReadonlyMap<string, DeleteWorktreeChangeCheckState>
+  /** Descendants outside the parent's repo name theirs, since lineage may span repos on one host. */
+  repoScope?: {
+    parentRepoId: string | undefined
+    repoMap: ReadonlyMap<string, Pick<Repo, 'badgeColor' | 'displayName'>>
+  }
 }
 
 export function DeleteWorktreeLineageNotice({
   descendants,
   dirtyChangeCountsByWorktreeId,
   dirtyChangePreviewsByWorktreeId,
-  changeCheckStatesByWorktreeId
+  changeCheckStatesByWorktreeId,
+  repoScope
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
   const childWorkspaceCount = descendants.length
   if (childWorkspaceCount === 0) {
@@ -53,23 +61,31 @@ export function DeleteWorktreeLineageNotice({
           {/* Why: long nowrap paths can otherwise give this grid child an
              intrinsic width wider than the modal. */}
           <div className="mt-2 min-w-0 max-w-full space-y-1 overflow-hidden rounded-sm border border-border/60 bg-background/60 px-2 py-1.5">
-            {descendants.slice(0, 4).map((child) => (
-              <div key={child.id} className="min-w-0 overflow-hidden">
-                <div className="truncate font-medium text-foreground">{child.displayName}</div>
-                <div className="truncate text-muted-foreground">{child.path}</div>
-                <DeleteWorktreeDirtyChangeHint
-                  checkState={changeCheckStatesByWorktreeId?.get(
-                    child.hostId ? getWorktreeHostIdentity(child) : child.id
-                  )}
-                  changeCount={dirtyChangeCountsByWorktreeId.get(
-                    child.hostId ? getWorktreeHostIdentity(child) : child.id
-                  )}
-                  preview={dirtyChangePreviewsByWorktreeId.get(
-                    child.hostId ? getWorktreeHostIdentity(child) : child.id
-                  )}
-                />
-              </div>
-            ))}
+            {descendants.slice(0, 4).map((child) => {
+              const otherRepo =
+                repoScope?.parentRepoId !== undefined && child.repoId !== repoScope.parentRepoId
+                  ? repoScope.repoMap.get(child.repoId)
+                  : undefined
+              const dirtyKey = child.hostId ? getWorktreeHostIdentity(child) : child.id
+              return (
+                <div key={child.id} className="min-w-0 overflow-hidden">
+                  <div className="truncate font-medium text-foreground">{child.displayName}</div>
+                  {otherRepo ? (
+                    <RepoBadgeLabel
+                      name={otherRepo.displayName}
+                      color={otherRepo.badgeColor}
+                      className="max-w-full text-muted-foreground"
+                    />
+                  ) : null}
+                  <div className="truncate text-muted-foreground">{child.path}</div>
+                  <DeleteWorktreeDirtyChangeHint
+                    checkState={changeCheckStatesByWorktreeId?.get(dirtyKey)}
+                    changeCount={dirtyChangeCountsByWorktreeId.get(dirtyKey)}
+                    preview={dirtyChangePreviewsByWorktreeId.get(dirtyKey)}
+                  />
+                </div>
+              )
+            })}
             {descendants.length > 4 ? (
               <div className="text-muted-foreground">
                 +{descendants.length - 4}{' '}

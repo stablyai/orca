@@ -12457,6 +12457,43 @@
         "UnsealedCredentialNotice": {
           "body": "{{credential}} is stored unencrypted — this system has no OS keyring Orca can use. Anyone who can read your disk or a backup of it can read the credential. Install and unlock gnome-keyring or kwallet, then save it again to seal it."
         },
+        "lineageDiscovery": {
+          "title": "Fleet / control tower",
+          "followLineage": "Follow workspace lineage",
+          "followLineageDescription": "Include workspaces created from a control tower in its checks and source control.",
+          "matchByPattern": "Match by name pattern",
+          "matchByPatternDescription": "Also include worktrees whose branch or name contains a ticket key from the control tower name.",
+          "matchOn": "Match on",
+          "matchOnDescription": "Where a ticket key must appear for a worktree to match.",
+          "branch": "Branch",
+          "worktreeName": "Worktree name",
+          "both": "Both",
+          "repoScope": "Repositories",
+          "repoScopeDescription": "Which repositories pattern matching may scan.",
+          "allRepositories": "All repositories",
+          "selectedRepositories": "Selected repositories",
+          "keyPatternRequired": "Key pattern is required",
+          "keyPatternInvalid": "Invalid key pattern",
+          "keyPattern": "Key pattern",
+          "keyPatternDescription": "Regular expression that extracts ticket keys from the control tower workspace name.",
+          "testPattern": "Test pattern",
+          "testPatternDescription": "Type a workspace name to preview the keys this pattern extracts.",
+          "towerName": "Tower name",
+          "towerNamePlaceholder": "gnios::ABC-123 new loan",
+          "noKeysFound": "No keys found",
+          "search": {
+            "title": "Fleet / control tower",
+            "description": "Choose how a control tower workspace finds its related repositories: workspace lineage, a ticket key pattern in names, and manual pull request links.",
+            "fleet": "fleet",
+            "controlTower": "control tower",
+            "lineage": "lineage",
+            "keyPattern": "key pattern",
+            "regex": "regex",
+            "ticket": "ticket",
+            "matchOn": "match on",
+            "repositories": "repositories"
+          }
+        },
         "ZcodePlanAccountsSection": {
           "site": {
             "bigmodel": "Zhipu · BigModel (open.bigmodel.cn)",
@@ -13036,6 +13073,8 @@
             "entryDiscardFailed": "Failed to discard “{{value0}}”",
             "entryDeleteFailed": "Failed to delete “{{value0}}”",
             "entryFailedInWorkspace": "{{value0}} in {{value1}}",
+            "openedInWorkspace": "Opened in {{value0}}",
+            "switchToWorkspace": "Switch",
             "diffCommentNotesCopyFailed": "Failed to copy notes"
           },
           "SourceControlAgentActionDialog": {
@@ -17144,6 +17183,37 @@
           "actionsUnavailable": "Plugin actions are not available in this client.",
           "messageTooLarge": "Message exceeds the size limit.",
           "tooManyRequests": "Too many requests."
+        },
+        "lineageChecks": {
+          "openLabel": "Open {{label}}"
+        },
+        "lineageMembers": {
+          "addPullRequestPlaceholder": "https://github.com/org/repo/pull/12 or repo#12",
+          "addPullRequestSubmit": "Add",
+          "removePullRequest": "Remove",
+          "addToTower": {
+            "searchRepositories": "Search repositories…",
+            "noRepositories": "No repositories found",
+            "searchBranches": "Search branches…",
+            "noBranches": "No branches found",
+            "changeRepository": "Change repository",
+            "open": "Add to control tower…",
+            "title": "Add to control tower",
+            "description": "Pick a worktree, a branch or a pull request from any registered repository. Checks and Source Control show it for this workspace.",
+            "worktree": "Worktree",
+            "branch": "Branch",
+            "pullRequest": "Pull request",
+            "failed": "Could not add to the control tower",
+            "searchWorktrees": "Search worktrees…",
+            "noWorktrees": "No worktrees found"
+          },
+          "removeFailed": "Could not remove {{label}}"
+        },
+        "lineageOrigin": {
+          "matchedBy": "Matched by {{matchedBy}}"
+        },
+        "lineageSourceControl": {
+          "unverifiable": "unverifiable"
         }
       },
       "link": {

@@ -42,6 +42,10 @@ import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
 import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-context'
 
 function getEnvParentWorkspace(): string | undefined {
+  const parentKey = process.env.ORCA_PARENT_WORKSPACE_KEY
+  if (typeof parentKey === 'string' && parentKey.length > 0) {
+    return isWorkspaceKey(parentKey) ? parentKey : worktreeWorkspaceKey(parentKey)
+  }
   const workspaceId = process.env.ORCA_WORKSPACE_ID
   if (typeof workspaceId === 'string' && isWorkspaceKey(workspaceId)) {
     return workspaceId

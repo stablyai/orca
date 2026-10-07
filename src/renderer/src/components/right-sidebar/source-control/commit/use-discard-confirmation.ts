@@ -16,6 +16,7 @@ import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
+import { useIsSourceControlPanelWorktree } from '../panel/source-control-target-worktree'
 import type { PendingDiscardConfirmation } from './discard-dialog'
 import type { SourceControlEntryGroups } from '../listing/section-order'
 
@@ -42,6 +43,7 @@ export function useSourceControlDiscardConfirmation({
   discardSingle: (path: string) => Promise<void>
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
+  const isPanelWorktree = useIsSourceControlPanelWorktree()
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
   // Why: reset during render so a worktree switch never paints the previous confirmation.
   const [pendingDiscardWorktreeId, setPendingDiscardWorktreeId] = useState(activeWorktreeId)
@@ -65,14 +67,21 @@ export function useSourceControlDiscardConfirmation({
           deletesFile: discardDeletesEntryFile(entry),
           error,
           worktreeId: activeWorktreeId,
-          worktreeName: worktreePath ? basename(worktreePath) : null
+          worktreeName: worktreePath ? basename(worktreePath) : null,
+          isPanelWorktree
         })
         return
       }
       dismissSourceControlEntryFailureToast(activeWorktreeId)
       await refreshActiveGitStatusAfterMutation()
     },
-    [activeWorktreeId, discardSingle, refreshActiveGitStatusAfterMutation, worktreePath]
+    [
+      activeWorktreeId,
+      discardSingle,
+      isPanelWorktree,
+      refreshActiveGitStatusAfterMutation,
+      worktreePath
+    ]
   )
 
   // Why: "Discard all" skips unresolved/resolved_locally rows (discarding can re-create the conflict or lose the resolution; no v1 UX for it).

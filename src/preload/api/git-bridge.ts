@@ -3,9 +3,32 @@ import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../share
 import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type {
+  LineageCommitProjectArgs,
+  LineageGetFileDiffArgs,
+  LineageGitStatusArgs,
+  LineageGetMembersArgs,
+  LineageAddManualLinkArgs,
+  LineageRemoveManualLinkArgs,
+  LineageTestPatternArgs
+} from '../../shared/fleet-lineage-types'
 import type { PreloadApi } from '../api-types'
 
 export const gitApi = {
+  lineageGetStatus: (args: LineageGitStatusArgs) =>
+    ipcRenderer.invoke('git:lineage-get-status', args),
+  lineageGetFileDiff: (args: LineageGetFileDiffArgs) =>
+    ipcRenderer.invoke('git:lineage-get-file-diff', args),
+  lineageCommitProject: (args: LineageCommitProjectArgs) =>
+    ipcRenderer.invoke('git:lineage-commit-project', args),
+  lineageGetMembers: (args: LineageGetMembersArgs) =>
+    ipcRenderer.invoke('lineage:get-members', args),
+  lineageAddManualLink: (args: LineageAddManualLinkArgs) =>
+    ipcRenderer.invoke('lineage:add-manual-link', args),
+  lineageRemoveManualLink: (args: LineageRemoveManualLinkArgs) =>
+    ipcRenderer.invoke('lineage:remove-manual-link', args),
+  lineageTestPattern: (args: LineageTestPatternArgs) =>
+    ipcRenderer.invoke('lineage:test-pattern', args),
   status: (args: {
     worktreePath: string
     connectionId?: string

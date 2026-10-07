@@ -9,6 +9,9 @@ import { translate } from '@/i18n/i18n'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { useState } from 'react'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { useLineageMembers } from './lineage-members/use-lineage-members'
+import { AddToTowerButton } from './lineage-members/AddToTowerDialog'
 
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -34,6 +37,11 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
       worktreeLineageById,
       worktreesByRepo
     })
+
+  // why: a folder tower with no members has no Source Control or Checks tab, so its first add starts here
+  const towerKey = folderWorkspace ? folderWorkspaceKey(folderWorkspace.id) : null
+  const { supported: lineageSupported, refresh: refreshLineageMembers } =
+    useLineageMembers(towerKey)
 
   const toggleLineage = (worktreeId: string): void => {
     setCollapsedLineageWorktreeIds((current) => {
@@ -126,7 +134,17 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="border-b border-border px-4 py-3">
-        <div className="truncate text-sm font-medium text-foreground">{folderWorkspace.name}</div>
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+            {folderWorkspace.name}
+          </div>
+          {lineageSupported && towerKey ? (
+            <AddToTowerButton
+              parentWorkspaceKey={towerKey}
+              onChanged={() => void refreshLineageMembers()}
+            />
+          ) : null}
+        </div>
         <div className="mt-1 text-xs text-muted-foreground">
           {childWorktrees.length === 1
             ? translate(

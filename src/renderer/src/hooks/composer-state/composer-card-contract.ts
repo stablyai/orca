@@ -16,7 +16,6 @@ export type ComposerCardSourceProps = Pick<
   | 'branchNameOverride'
   | 'parentWorktreeId'
   | 'selectedRepoExecutionHostId'
-  | 'selectedRepoProjectId'
   | 'smartNameSelection'
   | 'smartNameMode'
   | 'reuseSelectedBranch'

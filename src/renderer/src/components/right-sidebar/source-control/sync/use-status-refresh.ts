@@ -14,7 +14,10 @@ import type { PullRequestGenerationContext } from '@/store/slices/pull-request-g
 import { refreshGitStatusForWorktree } from '../../git-status-refresh'
 
 export type SourceControlStatusRefresh = {
-  refreshActiveGitStatus: (signal?: AbortSignal) => Promise<void>
+  refreshActiveGitStatus: (
+    signal?: AbortSignal,
+    admissionTier?: 'interactive' | 'status'
+  ) => Promise<void>
   refreshActiveGitStatusAfterMutation: () => Promise<void>
   refreshGitStatusAfterPullRequestGeneration: (
     context: PullRequestGenerationContext
@@ -47,7 +50,10 @@ export function useSourceControlStatusRefresh({
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
   const refreshActiveGitStatus = useCallback(
-    async (signal?: AbortSignal): Promise<void> => {
+    async (
+      signal?: AbortSignal,
+      admissionTier: 'interactive' | 'status' = 'interactive'
+    ): Promise<void> => {
       if (!activeWorktreeId || !worktreePath || isFolder) {
         return
       }
@@ -65,7 +71,7 @@ export function useSourceControlStatusRefresh({
           setUpstreamStatus,
           fetchUpstreamStatus
         },
-        request: { admissionTier: 'interactive', ...(signal ? { signal } : {}) }
+        request: { admissionTier, ...(signal ? { signal } : {}) }
       })
     },
     [

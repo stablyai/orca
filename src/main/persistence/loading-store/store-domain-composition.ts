@@ -35,6 +35,10 @@ import {
   installMetadataLineageOperationsContext
 } from './metadata-lineage-operations'
 import {
+  LineageManualLinkPersistence,
+  installLineageManualLinkPersistenceContext
+} from './lineage-manual-links'
+import {
   ProjectCollectionOperations,
   installProjectCollectionOperationsContext
 } from './project-collection-operations'
@@ -72,6 +76,7 @@ export type StoreDomainOperations = WriteSchedulingOperations &
   SparsePresetPersistence &
   AutomationPersistence &
   MetadataLineageOperations &
+  LineageManualLinkPersistence &
   ProfilePreferences &
   SessionHostPartitionOperations &
   SessionSnapshotOperations &
@@ -95,6 +100,7 @@ export type StoreDomains = {
   sessions: SessionHostPartitionOperations
   sessionSnapshots: SessionSnapshotOperations
   metadata: MetadataLineageOperations
+  lineageManualLinks: LineageManualLinkPersistence
   projects: ProjectCollectionOperations
   automations: AutomationPersistence
   mobileTabSelections: MobileTabSelectionPersistence
@@ -114,6 +120,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   SparsePresetPersistence,
   AutomationPersistence,
   MetadataLineageOperations,
+  LineageManualLinkPersistence,
   ProfilePreferences,
   SessionHostPartitionOperations,
   SessionSnapshotOperations,
@@ -133,6 +140,7 @@ export function installStoreDomainContexts(target: Store, domains: StoreDomains)
   installSparsePresetPersistenceContext(target, domains.sparsePresets)
   installAutomationPersistenceContext(target, domains.automations)
   installMetadataLineageOperationsContext(target, domains.metadata)
+  installLineageManualLinkPersistenceContext(target, domains.lineageManualLinks)
   installProfilePreferencesContext(target, domains.preferences)
   installSessionHostPartitionOperationsContext(target, domains.sessions)
   installSessionSnapshotOperationsContext(target, domains.sessionSnapshots)
@@ -162,6 +170,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     scheduling
   )
   const metadata = new MetadataLineageOperations(runtime, scheduling, sessions)
+  const lineageManualLinks = new LineageManualLinkPersistence(runtime, scheduling)
   const projects = new ProjectCollectionOperations(runtime, repos, scheduling, metadata)
   const automations = new AutomationPersistence(runtime, flushBarriers, preferences)
   const mobileTabSelections = new MobileTabSelectionPersistence(runtime, scheduling)
@@ -189,6 +198,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     sessions,
     sessionSnapshots,
     metadata,
+    lineageManualLinks,
     projects,
     automations,
     mobileTabSelections,

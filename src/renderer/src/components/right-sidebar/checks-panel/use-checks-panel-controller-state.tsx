@@ -28,19 +28,24 @@ import {
   type ChecksPanelGitStatusSnapshot
 } from '../checks-panel-git-status-snapshot'
 import type { ChecksAgentComposerState, HostedReviewCreationSnapshot } from './panel-state-types'
+import { useChecksPanelTargetWorktree } from './checks-panel-target-worktree'
 
 export function useChecksPanelControllerState() {
   // Why: the sidebar stays mounted when closed (perf); gate polling on visibility so we don't fetch checks/comments or poll cwd while hidden.
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const isPanelVisible = rightSidebarOpen && rightSidebarTab === 'checks'
+  const target = useChecksPanelTargetWorktree()
+  const isChecksTabVisible = rightSidebarOpen && rightSidebarTab === 'checks'
+  const isPanelVisible = target ? target.isActive && isChecksTabVisible : isChecksTabVisible
 
   // Follow the active terminal's cwd so linked-PR/checks track the worktree it's operating in (e.g. across a stack), else the sidebar selection.
   const defaultActiveWorktree = useActiveWorktree()
-  const { worktree: activeWorktree } = useChecksPanelTerminalWorktree({
+  const { worktree: terminalFollowedWorktree } = useChecksPanelTerminalWorktree({
     defaultActiveWorktree,
-    isPanelVisible
+    // why: a lineage section pins its worktree, so the terminal cwd must not be polled or followed
+    isPanelVisible: target ? false : isPanelVisible
   })
+  const activeWorktree = target ? target.worktree : terminalFollowedWorktree
   const activeWorktreeId = activeWorktree?.id ?? null
   const repo = useRepoById(activeWorktree?.repoId ?? null)
   const activeConnectionId = activeWorktreeId

@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import type { GitHistoryItem } from '../../../../../../shared/git-history'
 import { useAppStore } from '@/store'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { useSourceControlTargetWorktree } from '../panel/source-control-target-worktree'
 
 export type GitHistoryCommitAction = 'open-remote' | 'copy-hash' | 'copy-message' | 'explain'
 
@@ -19,10 +20,13 @@ export function GitHistoryCommitContextMenu({
   item: GitHistoryItem
   onAction: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }): React.JSX.Element {
+  const target = useSourceControlTargetWorktree()
   const managedBrowserCreationEnabled = useAppStore(
     (state) =>
-      getClientCreationActionPolicy(state, state.activeWorktreeId)['managed-browser'].state ===
-      'enabled'
+      getClientCreationActionPolicy(
+        state,
+        target ? (target.worktree?.id ?? null) : state.activeWorktreeId
+      )['managed-browser'].state === 'enabled'
   )
   return (
     <ContextMenuContent className="w-56">

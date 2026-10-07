@@ -41,7 +41,6 @@ type NewWorkspaceComposerAdvancedSectionProps = Pick<
   | 'parentWorktreeId'
   | 'onParentWorktreeIdChange'
   | 'selectedRepoExecutionHostId'
-  | 'selectedRepoProjectId'
   | 'activeFolderWorkspaceId'
   | 'note'
   | 'onNoteChange'
@@ -87,7 +86,6 @@ export function NewWorkspaceComposerAdvancedSection({
   parentWorktreeId = null,
   onParentWorktreeIdChange,
   selectedRepoExecutionHostId,
-  selectedRepoProjectId,
   activeFolderWorkspaceId = null,
   note,
   onNoteChange,
@@ -211,7 +209,6 @@ export function NewWorkspaceComposerAdvancedSection({
             <ComposerParentWorktreePicker
               repoId={repoId}
               executionHostId={selectedRepoExecutionHostId}
-              projectId={selectedRepoProjectId}
               value={parentWorktreeId}
               onChange={onParentWorktreeIdChange}
               activeFolderWorkspaceId={activeFolderWorkspaceId}

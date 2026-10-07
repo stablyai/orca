@@ -10,6 +10,16 @@ import type {
   GitUpstreamStatus
 } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
+import type {
+  LineageGetFileDiffArgs,
+  LineageGetFileDiffResult,
+  LineageGitStatusArgs,
+  LineageGitStatusPayload,
+  LineageGetMembersArgs,
+  LineageGetMembersResult,
+  LineageTestPatternArgs,
+  LineageTestPatternResult
+} from '../../shared/fleet-lineage-types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type {
   CommitMessageAgentCapability,
@@ -125,4 +135,8 @@ export type GitInspectionApi = {
     sha: string
     connectionId?: string
   }) => Promise<string | null>
+  lineageGetStatus: (args: LineageGitStatusArgs) => Promise<LineageGitStatusPayload>
+  lineageGetFileDiff: (args: LineageGetFileDiffArgs) => Promise<LineageGetFileDiffResult>
+  lineageGetMembers: (args: LineageGetMembersArgs) => Promise<LineageGetMembersResult>
+  lineageTestPattern: (args: LineageTestPatternArgs) => Promise<LineageTestPatternResult>
 }

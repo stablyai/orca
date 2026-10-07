@@ -39,6 +39,9 @@ export async function callAbortableRuntimeStatus<TResult>(
   }
 }
 
+const rejectFleetLineage = (): Promise<never> =>
+  Promise.reject(new Error('Fleet lineage is not supported in the web client'))
+
 export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
     status: async ({
@@ -268,7 +271,15 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         sha
       })
-    }
+    },
+    // hazard: fleet lineage has no remote RPC yet, so the web client must not pretend to support it
+    lineageGetStatus: rejectFleetLineage,
+    lineageGetFileDiff: rejectFleetLineage,
+    lineageCommitProject: rejectFleetLineage,
+    lineageGetMembers: rejectFleetLineage,
+    lineageAddManualLink: rejectFleetLineage,
+    lineageRemoveManualLink: rejectFleetLineage,
+    lineageTestPattern: rejectFleetLineage
   }
 }
 

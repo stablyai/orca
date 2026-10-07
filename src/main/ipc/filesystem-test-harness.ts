@@ -13,6 +13,7 @@ export const WORKTREE_FEATURE_PATH = path.resolve('/workspace/repo-feature')
 export const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
 
 export const handleMock: IpcMock = vi.fn()
+export const removeHandlerMock: IpcMock = vi.fn()
 export const showSaveDialogMock: IpcMock = vi.fn()
 export const showOpenDialogMock: IpcMock = vi.fn()
 export const fromWebContentsMock: IpcMock = vi.fn()
@@ -63,7 +64,7 @@ export const electronMock = {
   app: { getPath: () => '/orca-test-user-data' },
   BrowserWindow: { fromWebContents: fromWebContentsMock },
   dialog: { showSaveDialog: showSaveDialogMock, showOpenDialog: showOpenDialogMock },
-  ipcMain: { handle: handleMock },
+  ipcMain: { handle: handleMock, removeHandler: removeHandlerMock },
   shell: { trashItem: trashItemMock }
 }
 

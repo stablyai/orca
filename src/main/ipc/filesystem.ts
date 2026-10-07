@@ -19,6 +19,7 @@ import { registerFilesystemGitRemoteHandlers } from './filesystem/filesystem-git
 import { registerFilesystemGitDiffHandlers } from './filesystem/filesystem-git-diff-handlers'
 import { registerFilesystemGitIndexHandlers } from './filesystem/filesystem-git-index-handlers'
 import { registerFilesystemGitUrlHandlers } from './filesystem/filesystem-git-url-handlers'
+import { registerLineageIpcHandlers } from './lineage-ipc-handlers'
 
 export function registerFilesystemHandlers(
   store: Store,
@@ -45,4 +46,5 @@ export function registerFilesystemHandlers(
   registerFilesystemGitIndexHandlers(context)
   registerFilesystemGitUrlHandlers(context)
   registerLocalLogTailHandlers(store)
+  registerLineageIpcHandlers(store)
 }

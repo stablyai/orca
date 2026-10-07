@@ -12,6 +12,7 @@ import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt
 import type { DiffComment } from './diff-comment-types'
 import type { FolderWorkspace, WorkspaceKey } from './folder-workspace-types'
 import type { GlobalSettings } from './global-settings-types'
+import type { ManualPullRequestLink } from './lineage-discovery-types'
 import type { IssueInfo, PRInfo } from './github/pull-request-types'
 import type { OnboardingState } from './onboarding-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
@@ -83,6 +84,7 @@ export type PersistedState = {
   worktreeIdentityAliases?: Record<string, string[]>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
+  lineageManualLinksByParentKey?: Record<WorkspaceKey, ManualPullRequestLink[]>
   settings: GlobalSettings
   ui: PersistedUIState
   githubCache: {

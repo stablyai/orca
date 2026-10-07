@@ -26,6 +26,13 @@ const items: ActivityBarItem[] = [
     shortcut: '',
     gitOnly: true
   },
+  {
+    id: 'checks',
+    icon: Files,
+    title: 'Checks',
+    shortcut: '',
+    gitOnly: true
+  },
   { id: 'ports', icon: Files, title: 'Ports', shortcut: '', sshOnly: true },
   // Plugin panels carry no visibility flags, so they show in every context.
   {
@@ -44,7 +51,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
         isFolderWorkspace: false,
         isSshRepo: false
       }).map((item) => item.id)
-    ).toEqual(['explorer', 'source-control', 'plugin:orca-samples.my-plugin/dashboard'])
+    ).toEqual(['explorer', 'source-control', 'checks', 'plugin:orca-samples.my-plugin/dashboard'])
 
     expect(
       getVisibleRightSidebarActivityItems(items, {
@@ -52,7 +59,13 @@ describe('getVisibleRightSidebarActivityItems', () => {
         isFolderWorkspace: false,
         isSshRepo: true
       }).map((item) => item.id)
-    ).toEqual(['explorer', 'source-control', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
+    ).toEqual([
+      'explorer',
+      'source-control',
+      'checks',
+      'ports',
+      'plugin:orca-samples.my-plugin/dashboard'
+    ])
   })
 
   it('shows Workspaces only for folder workspaces and hides git tabs for all folder scopes', () => {
@@ -77,5 +90,32 @@ describe('getVisibleRightSidebarActivityItems', () => {
         isSshRepo: true
       }).map((item) => item.id)
     ).toEqual(['explorer', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
+  })
+
+  it('shows source-control and checks for a tower with members, even in a folder workspace', () => {
+    expect(
+      getVisibleRightSidebarActivityItems(items, {
+        isFolder: true,
+        isFolderWorkspace: true,
+        isSshRepo: false,
+        hasLineageMembers: true
+      }).map((item) => item.id)
+    ).toEqual([
+      'explorer',
+      'workspaces',
+      'pr-checks',
+      'source-control',
+      'checks',
+      'plugin:orca-samples.my-plugin/dashboard'
+    ])
+
+    expect(
+      getVisibleRightSidebarActivityItems(items, {
+        isFolder: false,
+        isFolderWorkspace: false,
+        isSshRepo: false,
+        hasLineageMembers: true
+      }).map((item) => item.id)
+    ).toEqual(['explorer', 'source-control', 'checks', 'plugin:orca-samples.my-plugin/dashboard'])
   })
 })

@@ -5,6 +5,7 @@ import { useRepoById } from '@/store/selectors'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
+import { useLineageTowerRouting } from './lineage-members/use-lineage-tower-routing'
 import { getPluginPanelActivityItems } from './plugin-panel-activity-items'
 import {
   collectInstalledPluginTabKeys,
@@ -35,6 +36,7 @@ export function useRightSidebarActivityItems({
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
   const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
+  const { showLineage: hasLineageMembers } = useLineageTowerRouting(rightSidebarOpen)
   // Why: source control and checks are meaningless for non-git folders.
   // Hide those tabs so the activity bar only shows relevant actions.
   const activeWorktree = useAppStore((s) =>
@@ -130,9 +132,10 @@ export function useRightSidebarActivityItems({
       getVisibleRightSidebarActivityItems(activityItems, {
         isFolder,
         isFolderWorkspace,
-        isSshRepo
+        isSshRepo,
+        hasLineageMembers
       }),
-    [activityItems, isFolder, isFolderWorkspace, isSshRepo]
+    [activityItems, isFolder, isFolderWorkspace, isSshRepo, hasLineageMembers]
   )
 
   const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null

@@ -3,6 +3,7 @@ import type { EditorSlice } from '../types/editor-slice'
 import { joinPath } from '@/lib/path'
 import type { ConflictReviewState, OpenFile } from '../types/open-file'
 import { toOpenConflictMetadata } from '../git/git-status-reconciliation'
+import { buildEditorActiveResult } from '../tabs/editor-open-target-group'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 
 export function createOpenConflictReview(
@@ -139,10 +140,7 @@ export function createOpenConflictReview(
                   }
                 : f
             ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            ...buildEditorActiveResult(s, worktreeId, id)
           }
         }
 
@@ -159,10 +157,7 @@ export function createOpenConflictReview(
 
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...buildEditorActiveResult(s, worktreeId, id)
         }
       })
       void openWorkspaceEditorItem(get(), id, worktreeId, 'Conflict Review', 'conflict-review')

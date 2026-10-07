@@ -9,6 +9,7 @@ import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-t
 import type { SourceControlTreeNode } from '../../source-control-tree'
 import type { SourceControlRowOpenEvent } from './split-open'
 import { BranchEntryRow } from './branch-entry-row'
+import { notifySourceControlBackgroundOpen } from './background-open-toast'
 import { SectionHeader } from './section-header'
 import { formatSourceControlRefLabel } from '../panel/branch-context-stats'
 import { SourceControlBranchTreeDirectoryRow } from './tree-directory-rows'
@@ -97,6 +98,7 @@ export function SourceControlBranchSection({
               e.stopPropagation()
               if (currentWorktreeId && worktreePath && branchSummary) {
                 openBranchAllDiffs(currentWorktreeId, worktreePath, branchSummary)
+                notifySourceControlBackgroundOpen(currentWorktreeId)
               }
             }}
           >

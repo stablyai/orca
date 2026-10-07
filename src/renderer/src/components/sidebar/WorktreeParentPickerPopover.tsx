@@ -14,7 +14,6 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useWorktreeActivityStatuses } from './use-worktree-activity-statuses'
 import { WorktreeParentPickerRow } from './WorktreeParentPickerRow'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
@@ -41,93 +40,21 @@ type WorktreeParentPickerPopoverProps = {
 
 type AnchorRect = Pick<DOMRect, 'height' | 'left' | 'top' | 'width'>
 
-type SelectParentArgs = {
-  childWorktreeId: string | null
-  parentWorktreeId: string
-  assignWorktreeParent: (worktreeId: string, args: { parentWorktreeId: string }) => Promise<void>
-  close: () => void
-  showError: (message: string) => void
-}
-
-type WorktreeParentPickerKeyboardArgs = {
-  event: React.KeyboardEvent<HTMLInputElement>
-  candidates: readonly { id: string }[]
-  activeIndex: number
-  moveHighlight: (index: number) => void
-  selectParent: (worktreeId: string) => void
-}
+export {
+  getWorktreeParentPickerFocusRestoreTarget,
+  selectWorktreeParent,
+  handleWorktreeParentPickerKeyDown,
+  type SelectParentArgs,
+  type WorktreeParentPickerKeyboardArgs
+} from './worktree-parent-picker-actions'
+import {
+  getWorktreeParentPickerFocusRestoreTarget,
+  selectWorktreeParent,
+  handleWorktreeParentPickerKeyDown
+} from './worktree-parent-picker-actions'
 
 function getAnchorRect(anchorElement: HTMLElement | null): AnchorRect | null {
   return anchorElement?.getBoundingClientRect() ?? null
-}
-
-const FOCUSABLE_ANCHOR_SELECTOR =
-  'a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])'
-
-// Why: the anchor is a non-focusable `role="option"` row, so closing focus has
-// to land on its nearest focusable container (the sidebar listbox).
-export function getWorktreeParentPickerFocusRestoreTarget(
-  anchorElement: HTMLElement | null
-): HTMLElement | null {
-  if (!anchorElement?.isConnected) {
-    return null
-  }
-  return anchorElement.closest<HTMLElement>(FOCUSABLE_ANCHOR_SELECTOR)
-}
-
-export function selectWorktreeParent({
-  childWorktreeId,
-  parentWorktreeId,
-  assignWorktreeParent,
-  close,
-  showError
-}: SelectParentArgs): void {
-  if (!childWorktreeId) {
-    return
-  }
-  close()
-  void assignWorktreeParent(childWorktreeId, { parentWorktreeId }).catch((error) => {
-    console.error('Failed to set parent worktree:', error)
-    showError(
-      translate(
-        'auto.components.sidebar.WorktreeParentPickerPopover.failedSetParent',
-        'Failed to set parent worktree'
-      )
-    )
-  })
-}
-
-export function handleWorktreeParentPickerKeyDown({
-  event,
-  candidates,
-  activeIndex,
-  moveHighlight,
-  selectParent
-}: WorktreeParentPickerKeyboardArgs): void {
-  if (isImeCompositionKeyDown(event) || candidates.length === 0) {
-    return
-  }
-  const navigate = (nextIndex: number): void => {
-    event.preventDefault()
-    event.stopPropagation()
-    moveHighlight(clampWorktreeParentPickerIndex(nextIndex, candidates.length))
-  }
-  if (event.key === 'ArrowDown') {
-    navigate(activeIndex + 1)
-  } else if (event.key === 'ArrowUp') {
-    navigate(activeIndex - 1)
-  } else if (event.key === 'Home') {
-    navigate(0)
-  } else if (event.key === 'End') {
-    navigate(candidates.length - 1)
-  } else if (event.key === 'Enter') {
-    const candidate = candidates[activeIndex]
-    if (candidate) {
-      event.preventDefault()
-      event.stopPropagation()
-      selectParent(candidate.id)
-    }
-  }
 }
 
 export function WorktreeParentPickerPopover({

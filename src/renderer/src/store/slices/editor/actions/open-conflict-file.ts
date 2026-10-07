@@ -3,7 +3,10 @@ import type { EditorSlice } from '../types/editor-slice'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '../types/open-file'
 import { toOpenConflictMetadata } from '../git/git-status-reconciliation'
-import { resolveEditorOpenTargetGroupId } from '../tabs/editor-open-target-group'
+import {
+  buildEditorActiveResult,
+  resolveEditorOpenTargetGroupId
+} from '../tabs/editor-open-target-group'
 import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
 import {
   getReplaceablePreviewFileId,
@@ -60,10 +63,7 @@ export function createOpenConflictFile(
                   }
                 : f
             ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
+            ...buildEditorActiveResult(s, worktreeId, id),
             trackedConflictPathsByWorktree:
               nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
                 ? s.trackedConflictPathsByWorktree
@@ -94,10 +94,7 @@ export function createOpenConflictFile(
                 index === replaceablePreviewIndex ? newFile : file
               ),
               ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
-              activeFileId: id,
-              activeTabType: 'editor',
-              activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-              activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
+              ...buildEditorActiveResult(s, worktreeId, id),
               trackedConflictPathsByWorktree:
                 nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
                   ? s.trackedConflictPathsByWorktree
@@ -108,10 +105,7 @@ export function createOpenConflictFile(
 
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
+          ...buildEditorActiveResult(s, worktreeId, id),
           trackedConflictPathsByWorktree:
             nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
               ? s.trackedConflictPathsByWorktree
