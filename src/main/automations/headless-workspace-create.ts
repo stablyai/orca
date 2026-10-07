@@ -25,11 +25,13 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
   automation,
   run,
   repo,
+  startAgent = true,
   createdAt = Date.now()
 }: {
   automation: Automation
   run: HeadlessAutomationRunForWorkspace
   repo: Repo
+  startAgent?: boolean
   createdAt?: number
 }): RuntimeCreateManagedWorktreeArgs {
   return {
@@ -38,9 +40,13 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     baseBranch: automation.baseBranch ?? undefined,
     setupDecision: automation.setupDecision ?? 'skip',
     activate: false,
-    createdWithAgent: automation.agentId,
-    startupAgent: automation.agentId,
-    startupPrompt: automation.prompt,
+    ...(startAgent
+      ? {
+          createdWithAgent: automation.agentId,
+          startupAgent: automation.agentId,
+          startupPrompt: automation.prompt
+        }
+      : {}),
     telemetrySource: 'unknown',
     automationProvenance: buildAutomationWorkspaceProvenance(automation, run, repo, createdAt)
   }

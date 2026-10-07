@@ -58,7 +58,7 @@ function createPrecheckResult(args: {
   }
 }
 
-function failedPrecheckResult(
+export function failedPrecheckResult(
   precheck: AutomationPrecheck,
   startedAt: number,
   error: string

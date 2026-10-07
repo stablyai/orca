@@ -10,6 +10,10 @@ import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import { createAutomationDispatchToken } from './dispatch-tokens'
 import { NO_DISPATCH_HOST, sendRendererDispatch } from './dispatch-refusal'
+import {
+  automationDefinition,
+  type RunnableAutomationTarget
+} from './automation-workspace-recovery'
 
 export type AutomationRendererChannel = Pick<WebContents, 'isDestroyed' | 'send'>
 
@@ -24,12 +28,15 @@ type DispatchContext = Pick<
   isActive(): boolean
   getRenderer(): AutomationRendererChannel | null
   headlessDispatcher: HeadlessAutomationDispatcher | null
-  resolveTarget(automation: Automation): AutomationRunTargetResult
-}
-
-function definition(automation: Automation) {
-  const { lastRunAt: _last, updatedAt: _updated, nextRunAt: _next, ...configured } = automation
-  return configured
+  resolveTarget(
+    automation: Automation
+  ): AutomationRunTargetResult | Promise<AutomationRunTargetResult>
+  prepareWorkspace?(
+    automation: Automation,
+    run: AutomationRun,
+    target: RunnableAutomationTarget,
+    assertCurrent: () => Promise<RunnableAutomationTarget>
+  ): Promise<{ automation: Automation; target: RunnableAutomationTarget }>
 }
 
 function destination(target: Extract<AutomationRunTargetResult, { ok: true }>) {
@@ -49,8 +56,8 @@ export async function requestAutomationDispatch(
   run: AutomationRun,
   expectedTarget: AutomationRunTargetResult
 ): Promise<AutomationRun> {
-  const expectedDefinition = structuredClone(definition(automation))
-  const expectedDestination = expectedTarget.ok ? destination(expectedTarget) : undefined
+  let expectedDefinition = structuredClone(automationDefinition(automation))
+  let expectedDestination = expectedTarget.ok ? destination(expectedTarget) : undefined
   const readRun = (): AutomationRun => {
     if (!ctx.isActive()) {
       throw new AutomationDispatchCancelledError(
@@ -65,12 +72,16 @@ export async function requestAutomationDispatch(
     }
     return current
   }
-  const resolveCurrentTarget = (): AutomationRunTargetResult => {
+  const resolveCurrentTarget = async (): Promise<AutomationRunTargetResult> => {
     const current = ctx.store.listAutomations().find((entry) => entry.id === automation.id)
-    if (!current || !isDeepStrictEqual(expectedDefinition, definition(current))) {
+    if (!current || !isDeepStrictEqual(expectedDefinition, automationDefinition(current))) {
       return { ok: false, error: 'The automation changed before this run could launch.' }
     }
-    const target = ctx.resolveTarget(current)
+    const target = await ctx.resolveTarget(current)
+    const latest = ctx.store.listAutomations().find((entry) => entry.id === automation.id)
+    if (!latest || !isDeepStrictEqual(expectedDefinition, automationDefinition(latest))) {
+      return { ok: false, error: 'The automation changed before this run could launch.' }
+    }
     if (
       target.ok &&
       expectedDestination &&
@@ -83,13 +94,21 @@ export async function requestAutomationDispatch(
     }
     return target
   }
-  const refuse = (error: string) =>
-    ctx.runs.updateRun({
+  const refuse = (
+    error: string,
+    status: 'skipped_unavailable' | 'skipped_needs_interactive_auth' = 'skipped_unavailable'
+  ) => {
+    const current = readRun()
+    if (current.status !== 'pending' && current.status !== 'dispatching') {
+      return returnDurable(current)
+    }
+    return ctx.runs.updateRun({
       runId: run.id,
-      status: 'skipped_unavailable',
+      status,
       workspaceId: automation.workspaceId,
       error
     })
+  }
   const returnDurable = async (current: AutomationRun) => {
     await ctx.store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
     return current
@@ -99,9 +118,16 @@ export async function requestAutomationDispatch(
   if (run.status !== 'pending') {
     return returnDurable(run)
   }
-  let target = resolveCurrentTarget()
+  let target = await resolveCurrentTarget()
   if (!target.ok || (!ctx.getRenderer() && !ctx.headlessDispatcher)) {
-    return refuse(target.ok ? NO_DISPATCH_HOST : target.error)
+    return refuse(
+      target.ok ? NO_DISPATCH_HOST : target.error,
+      target.ok ? undefined : target.status
+    )
+  }
+  run = readRun()
+  if (run.status !== 'pending') {
+    return returnDurable(run)
   }
   await ctx.runs.updateRun({
     runId: run.id,
@@ -114,9 +140,62 @@ export async function requestAutomationDispatch(
   if (run.status !== 'dispatching') {
     return returnDurable(run)
   }
-  target = resolveCurrentTarget()
+  target = await resolveCurrentTarget()
   if (!target.ok) {
-    return refuse(target.error)
+    return refuse(target.error, target.status)
+  }
+  if (ctx.prepareWorkspace && target.workspace === null) {
+    try {
+      const prepared = await ctx.prepareWorkspace(automation, run, target, async () => {
+        if (readRun().status !== 'dispatching') {
+          throw new AutomationDispatchCancelledError(
+            'The run changed before its workspace could be replaced.'
+          )
+        }
+        const latest = await resolveCurrentTarget()
+        if (!latest.ok) {
+          throw new AutomationDispatchCancelledError(latest.error)
+        }
+        if (readRun().status !== 'dispatching') {
+          throw new AutomationDispatchCancelledError(
+            'The run changed before its workspace could be replaced.'
+          )
+        }
+        return latest
+      })
+      automation = prepared.automation
+      expectedDefinition = structuredClone(automationDefinition(automation))
+      expectedDestination = destination(prepared.target)
+    } catch (error) {
+      return refuse(error instanceof Error ? error.message : String(error))
+    }
+    if (readRun().status !== 'dispatching') {
+      return returnDurable(readRun())
+    }
+    target = await resolveCurrentTarget()
+    if (!target.ok) {
+      return refuse(target.error, target.status)
+    }
+    if (readRun().status !== 'dispatching') {
+      return returnDurable(readRun())
+    }
+    if (run.workspaceId !== automation.workspaceId) {
+      run = await ctx.runs.updateRun({
+        runId: run.id,
+        status: 'dispatching',
+        workspaceId: automation.workspaceId,
+        workspaceDisplayName: target.workspace?.displayName,
+        error: null
+      })
+      target = await resolveCurrentTarget()
+      if (!target.ok) {
+        return refuse(target.error, target.status)
+      }
+    }
+  }
+  run = readRun()
+  if (run.status !== 'dispatching') {
+    return returnDurable(run)
   }
   const renderer = ctx.getRenderer()
   if (renderer) {
@@ -140,13 +219,16 @@ export async function requestAutomationDispatch(
     automation,
     run,
     target,
-    dispatcher: (request) => {
+    dispatcher: async (request) => {
       if (readRun().status !== 'dispatching') {
         throw new AutomationDispatchCancelledError('The run changed before its agent could launch.')
       }
-      const latestTarget = resolveCurrentTarget()
+      const latestTarget = await resolveCurrentTarget()
       if (!latestTarget.ok) {
         throw new AutomationDispatchCancelledError(latestTarget.error)
+      }
+      if (readRun().status !== 'dispatching') {
+        throw new AutomationDispatchCancelledError('The run changed before its agent could launch.')
       }
       return dispatcher({ ...request, target: latestTarget })
     }

@@ -9,6 +9,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/automations/automation-skip-coalescing.test.ts',
   'src/main/automations/automation-update-host-retarget.test.ts',
   'src/main/automations/automation-workspace-host-attribution.test.ts',
+  'src/main/automations/automation-workspace-recovery-service.test.ts',
   'src/main/automations/automation-zero-grace-tick-latency.test.ts',
   'src/main/automations/refused-manual-run.test.ts',
   'src/main/automations/retained-run-reconciliation.test.ts',

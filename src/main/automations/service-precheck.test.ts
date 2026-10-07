@@ -28,7 +28,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./precheck-runner', () => ({
+vi.mock(import('./precheck-runner'), async (importOriginal) => ({
+  ...(await importOriginal()),
   runAutomationPrecheck: runAutomationPrecheckMock
 }))
 

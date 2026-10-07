@@ -14,7 +14,7 @@ import {
 } from '../../shared/automations-types'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
-import { runAutomationPrecheck } from './precheck-runner'
+import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
@@ -24,6 +24,10 @@ import {
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
+import {
+  AutomationWorkspaceRecovery,
+  type AutomationWorkspaceOperations
+} from './automation-workspace-recovery'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledRefusal,
@@ -55,6 +59,7 @@ export class AutomationService {
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
+  private readonly workspaceRecovery: AutomationWorkspaceRecovery | null
   /** Installed by desktop IPC registration, where external probes live; null on
    *  runtime servers. Orca's own automation traffic parks queued external
    *  probes behind this lease, whichever transport carried it. */
@@ -70,6 +75,7 @@ export class AutomationService {
       headlessDispatcher?: HeadlessAutomationDispatcher
       terminalObserver?: AutomationRunTerminalObserver
       onAutomationsChanged?: PublishAutomationsChanged
+      workspaceOperations?: AutomationWorkspaceOperations
     } = {}
   ) {
     this.store = store
@@ -80,6 +86,15 @@ export class AutomationService {
     this.headlessDispatcher = opts.headlessDispatcher ?? null
     this.publish = opts.onAutomationsChanged ?? null
     this.runs = createAutomationRunWriter(store, this.publish)
+    this.workspaceRecovery = opts.workspaceOperations
+      ? new AutomationWorkspaceRecovery(opts.workspaceOperations, store, (id) => {
+          const selector = store.automationChangeSelector(id)
+          this.publishAutomationsChanged({
+            reason: 'definition',
+            ...(selector ? { selector } : {})
+          })
+        })
+      : null
     this.completionWatcher = opts.terminalObserver
       ? new AutomationRunCompletionWatcher({
           observer: opts.terminalObserver,
@@ -146,7 +161,7 @@ export class AutomationService {
     if (!automation) {
       throw new Error('Automation not found.')
     }
-    const target = this.resolveTarget(automation)
+    const target = await this.resolveTarget(automation)
     const run = await this.runs.createRun(automation, Date.now(), 'manual')
     return await this.requestDispatch(automation, run, target, generation)
   }
@@ -176,21 +191,9 @@ export class AutomationService {
     if (run.trigger !== 'scheduled' || !automation.precheck) {
       return null
     }
-    const target = this.resolveTarget(automation)
+    const target = await this.resolveTarget(automation)
     if (!target.ok) {
-      return {
-        command: automation.precheck.command,
-        exitCode: null,
-        timedOut: false,
-        durationMs: 0,
-        stdout: '',
-        stderr: '',
-        stdoutTruncated: false,
-        stderrTruncated: false,
-        error: target.error,
-        startedAt: Date.now(),
-        completedAt: Date.now()
-      }
+      return failedPrecheckResult(automation.precheck, Date.now(), target.error)
     }
     return await runAutomationPrecheck({
       precheck: automation.precheck,
@@ -278,7 +281,7 @@ export class AutomationService {
     // Resolved before the run exists: a refusal repeats every occurrence, and a
     // */5 automation would otherwise write ~288 identical rows a day — past
     // retention, which would evict the automation's real history.
-    const target = this.resolveTarget(automation)
+    const target = await this.resolveTarget(automation)
     const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
     const refusal = describeScheduledRefusal({ target, canDispatch })
     if (refusal && (await this.runs.repeatSkip(automation.id, refusal, scheduledFor))) {
@@ -295,10 +298,13 @@ export class AutomationService {
     await this.runs.advanceNextRun(automation.id, now)
   }
 
-  private resolveTarget(automation: Automation): AutomationRunTargetResult {
-    return resolveAutomationRunTarget(this.store, automation, {
+  private async resolveTarget(automation: Automation): Promise<AutomationRunTargetResult> {
+    const target = resolveAutomationRunTarget(this.store, automation, {
       allowRemoteHostScheduling: this.allowRemoteHostScheduling
     })
+    return target.ok && this.workspaceRecovery
+      ? this.workspaceRecovery.resolve(automation, target)
+      : target
   }
 
   private canDispatchToRenderer(): boolean {
@@ -320,6 +326,7 @@ export class AutomationService {
         getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
         headlessDispatcher: this.headlessDispatcher,
         resolveTarget: (current) => this.resolveTarget(current),
+        prepareWorkspace: this.workspaceRecovery?.prepare.bind(this.workspaceRecovery),
         runPrecheck: () => this.runPrecheck(automation.id, run.id),
         markDispatchResult: (result) => this.markDispatchResult(result),
         watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)

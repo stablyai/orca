@@ -17,6 +17,7 @@ import {
 } from '../../../shared/task-source-context'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { captureAutomationWorkspaceRecoveryTarget } from '../../../shared/automation-workspace-recovery-target'
 
 export function normalizeAutomationRunWorkspaceDisplayName(value: string | null): string | null {
   const trimmed = value?.trim()
@@ -175,7 +176,8 @@ export function getAutomationSchedulerOwner(repo: Repo | undefined): AutomationS
 }
 
 export function backfillLegacyAutomationContexts(
-  state: Pick<PersistedState, 'automations' | 'automationRuns' | 'repos' | 'projectHostSetups'>
+  state: Pick<PersistedState, 'automations' | 'automationRuns' | 'repos' | 'projectHostSetups'> &
+    Partial<Pick<PersistedState, 'folderWorkspaces' | 'worktreeMeta' | 'projectGroups'>>
 ): {
   state: Pick<PersistedState, 'automations' | 'automationRuns' | 'repos' | 'projectHostSetups'>
   changed: boolean
@@ -189,6 +191,18 @@ export function backfillLegacyAutomationContexts(
       state.projectHostSetups ?? []
     )
     const next: Automation = { ...automation }
+    if (next.workspaceMode === 'existing' && next.workspaceRecovery === undefined) {
+      next.workspaceRecovery = captureAutomationWorkspaceRecoveryTarget(
+        {
+          folderWorkspaces: state.folderWorkspaces ?? [],
+          worktreeMeta: state.worktreeMeta ?? {},
+          projectGroups: state.projectGroups ?? [],
+          repos: state.repos
+        },
+        next.workspaceId
+      )
+      changed = true
+    }
     if (!Object.hasOwn(next, 'runContext')) {
       // Why: pre-host-context automations only stored a repo id; backfill the run target once so dispatch/precheck stop inferring it.
       next.runContext = contexts.runContext

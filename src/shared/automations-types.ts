@@ -1,6 +1,7 @@
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+import type { AutomationWorkspaceRecoveryTarget } from './automation-workspace-recovery-target'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -117,6 +118,8 @@ export type Automation = {
   schedulerOwner: AutomationSchedulerOwner
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string | null
+  /** Host-owned creation inputs retained when the selected workspace is removed. */
+  workspaceRecovery?: AutomationWorkspaceRecoveryTarget | null
   baseBranch: string | null
   setupDecision?: SetupDecision
   reuseSession: boolean

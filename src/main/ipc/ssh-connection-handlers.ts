@@ -9,7 +9,11 @@ import { isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
-import { setSshTargetRegistryHandlers, getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
+import {
+  setSshTargetRegistryHandlers,
+  getSshTargetRegistryStore,
+  registeredSshTargetNeedsInteractiveCredentials
+} from '../ssh/ssh-target-registry'
 import {
   clearProviderPtyState,
   deletePtyOwnership,
@@ -227,12 +231,7 @@ export function registerSshConnectionHandlers(): void {
 
   // Why: auto-connect callers need to know whether connecting will prompt; true when the last connect required a credential and no live conn has it cached.
   ipcMain.handle('ssh:needsPassphrasePrompt', (_event, args: { targetId: string }) => {
-    const target = getSshTargetRegistryStore()!.getTarget(args.targetId)
-    if (!target?.lastRequiredPassphrase) {
-      return false
-    }
-    const conn = connectionManager!.getConnection(args.targetId)
-    return !conn?.hasCachedCredential()
+    return registeredSshTargetNeedsInteractiveCredentials(args.targetId)
   })
 
   ipcMain.handle('ssh:testConnection', async (_event, args: { targetId: string }) => {

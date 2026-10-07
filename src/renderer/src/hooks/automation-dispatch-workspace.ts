@@ -1,8 +1,8 @@
+import { getAutomationWorkspaceHostError } from './automation-workspace-host-validation'
 import { launchWorktreeBackgroundTerminals } from '@/lib/launch-worktree-background-terminals'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import type {
   Automation,
   AutomationDispatchResult,
@@ -14,11 +14,6 @@ import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
 } from '../../../shared/automation-precheck'
-import {
-  getRepoExecutionHostId,
-  parseExecutionHostId,
-  toSshExecutionHostId
-} from '../../../shared/execution-host'
 import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -66,46 +61,27 @@ export async function prepareAutomationDispatchWorkspace(args: {
   markDispatchResult: MarkDispatchResult
 }): Promise<Worktree | null> {
   const { state, automation, run, dispatchToken, resolved, markDispatchResult } = args
-  const { repo, runRepoId, automationWorkspaceScope, automationWorktree, context } = resolved
+  const { repo, runRepoId, automationWorkspaceScope, context } = resolved
+  let { automationWorktree } = resolved
   const folderWorkspaceHost =
     automationWorkspaceScope?.type === 'folder'
       ? resolveFolderWorkspaceHost(state, automationWorkspaceScope.folderWorkspaceId)
       : null
   const folderWorkspaceConnectionId =
     folderWorkspaceHost?.kind === 'ssh' ? folderWorkspaceHost.targetId : null
-  // A workspace whose host does not resolve to one place is refused, not guessed at.
-  const folderWorkspaceHostUnresolved =
-    folderWorkspaceHost !== null && folderWorkspaceHost.kind === 'ambiguous'
-  const folderWorkspaceHostId =
-    folderWorkspaceHost && automationWorktree
-      ? folderWorkspaceConnectionId
-        ? toSshExecutionHostId(folderWorkspaceConnectionId)
-        : folderWorkspaceHost.kind === 'local'
-          ? getResolvedExecutionHostIdForWorktree(state, automationWorktree.id)
-          : null
-      : null
-  const runHostId =
-    parseExecutionHostId(automation.runContext?.hostId)?.id ?? getRepoExecutionHostId(repo)
-  const workspaceMatchesRunTarget =
-    automationWorkspaceScope?.type === 'folder'
-      ? folderWorkspaceHostId !== null && folderWorkspaceHostId === runHostId
-      : !automation.runContext?.repoId ||
-        automationWorktree?.repoId === automation.runContext.repoId
-  if (automation.workspaceMode === 'existing' && automationWorktree && !workspaceMatchesRunTarget) {
+  const initialHostError = getAutomationWorkspaceHostError(
+    state,
+    automation,
+    repo,
+    automationWorktree
+  )
+  if (initialHostError) {
     await markDispatchResult({
       runId: run.id,
       status: 'skipped_unavailable',
       workspaceId: automation.workspaceId,
       workspaceDisplayName: context.workspaceDisplayName,
-      error: folderWorkspaceHostUnresolved
-        ? translate(
-            'auto.hooks.useAutomationDispatchEvents.workspaceHostUnresolved',
-            'The target workspace spans more than one host, so this run has no single host to use.'
-          )
-        : translate(
-            'auto.hooks.useAutomationDispatchEvents.3ad7d77f57',
-            'The target workspace is on a different host than this automation run target.'
-          )
+      error: initialHostError
     })
     return null
   }
@@ -150,6 +126,25 @@ export async function prepareAutomationDispatchWorkspace(args: {
     }
   }
 
+  if (automation.workspaceMode === 'existing') {
+    automationWorktree = resolveAutomationDispatchWorkspace(
+      useAppStore.getState(),
+      automation,
+      run
+    ).automationWorktree
+    if (!automationWorktree) {
+      const latest = useAppStore.getState()
+      await (automationWorkspaceScope?.type === 'folder'
+        ? latest.fetchFolderWorkspaces({ runtimeEnvironmentId: null })
+        : latest.fetchWorktrees(runRepoId, { forceLocalOwner: true }))
+      automationWorktree = resolveAutomationDispatchWorkspace(
+        useAppStore.getState(),
+        automation,
+        run
+      ).automationWorktree
+    }
+  }
+
   if (automation.workspaceMode === 'existing' && !automationWorktree) {
     await markDispatchResult({
       runId: run.id,
@@ -160,6 +155,23 @@ export async function prepareAutomationDispatchWorkspace(args: {
         'auto.hooks.useAutomationDispatchEvents.59718b120b',
         'The target workspace is no longer available.'
       )
+    })
+    return null
+  }
+
+  const hostError = getAutomationWorkspaceHostError(
+    useAppStore.getState(),
+    automation,
+    repo,
+    automationWorktree
+  )
+  if (hostError) {
+    await markDispatchResult({
+      runId: run.id,
+      status: 'skipped_unavailable',
+      workspaceId: automation.workspaceId,
+      workspaceDisplayName: automationWorktree?.displayName ?? context.workspaceDisplayName,
+      error: hostError
     })
     return null
   }

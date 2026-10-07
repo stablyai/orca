@@ -67,6 +67,7 @@ const state = {
   allWorktrees: vi.fn<() => TestWorktree[]>(() => []),
   getKnownWorktreeById: vi.fn<(worktreeId: string) => TestWorktree | undefined>(() => undefined),
   createWorktree: mockCreateWorktree,
+  fetchWorktrees: vi.fn(async () => false),
   subscribe: vi.fn(() => () => {}),
   setActiveView: vi.fn(),
   setActiveWorktree: vi.fn(),

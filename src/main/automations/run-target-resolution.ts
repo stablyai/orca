@@ -11,8 +11,19 @@ import type { Repo } from '../../shared/repo-types'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 
 export type AutomationRunTargetResult =
-  | { ok: true; cwd: string; repo: Repo; setup?: ProjectHostSetup }
-  | { ok: false; error: string }
+  | {
+      ok: true
+      cwd: string
+      repo: Repo
+      setup?: ProjectHostSetup
+      /** Null means authoritative absence; undefined means workspace verification was not installed. */
+      workspace?: { id: string; displayName: string } | null
+    }
+  | {
+      ok: false
+      error: string
+      status?: 'skipped_unavailable' | 'skipped_needs_interactive_auth'
+    }
 
 /**
  * One fixed sentence per diagnosis, and never the same sentence twice: run

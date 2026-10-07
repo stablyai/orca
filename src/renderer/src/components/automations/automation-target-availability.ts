@@ -1,4 +1,5 @@
 import type { Automation } from '../../../../shared/automations-types'
+import { getAutomationWorkspaceRecoveryTarget } from '../../../../shared/automation-workspace-recovery-target'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   describeRuntimeCompatBlock,
@@ -114,7 +115,11 @@ export function getAutomationTargetAvailability({
       )
     }
   }
-  if (automation.workspaceMode === 'existing' && !workspace) {
+  if (
+    automation.workspaceMode === 'existing' &&
+    !workspace &&
+    !getAutomationWorkspaceRecoveryTarget(automation)
+  ) {
     return unavailable('missing-workspace', 'The target workspace is no longer available.')
   }
 

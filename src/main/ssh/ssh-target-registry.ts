@@ -51,6 +51,13 @@ export function getRegisteredSshState(targetId: string): SshConnectionState | un
   return registeredGetSshState?.(targetId)
 }
 
+export function registeredSshTargetNeedsInteractiveCredentials(targetId: string): boolean {
+  return (
+    sshStore?.getTarget(targetId)?.lastRequiredPassphrase === true &&
+    !getSshConnectionManager()?.getConnection(targetId)?.hasCachedCredential()
+  )
+}
+
 /** Public targets for runtime RPC clients — same list the desktop renderer gets. */
 export function listRegisteredSshTargets(): SshTarget[] {
   return sshStore?.listTargets() ?? []

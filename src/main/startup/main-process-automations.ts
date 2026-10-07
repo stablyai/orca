@@ -2,6 +2,7 @@ import { AutomationService } from '../automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from '../automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from '../automations/headless-workspace-create'
 import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
+import { createRuntimeAutomationWorkspaceOperations } from '../automations/runtime-workspace-operations'
 import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessAutomations(): AutomationService {
@@ -15,6 +16,7 @@ export function initializeMainProcessAutomations(): AutomationService {
   const service = new AutomationService(store, {
     claudeUsage,
     codexUsage,
+    workspaceOperations: createRuntimeAutomationWorkspaceOperations(runtime, store),
     terminalObserver: createRuntimeAutomationRunTerminalObserver(runtime),
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
     // Why: desktop clients mirror remote-host automations, but only a server process should execute remote_host_service-owned schedules.

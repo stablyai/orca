@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import { captureAutomationWorkspaceRecoveryTarget } from '../../../shared/automation-workspace-recovery-target'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
@@ -98,6 +99,7 @@ export function createAutomation(
     schedulerOwner,
     workspaceMode: input.workspaceMode,
     workspaceId,
+    workspaceRecovery: captureAutomationWorkspaceRecoveryTarget(operations.state, workspaceId),
     baseBranch: input.workspaceMode === 'new_per_run' ? (input.baseBranch ?? null) : null,
     setupDecision: normalizeAutomationSetupDecisionForWorkspaceMode(
       input.workspaceMode,
@@ -219,6 +221,14 @@ export function updateAutomation(
     updatedAt: Date.now()
   }
   const previousPin = automationWorkspaceSshPin(operations.state, current.workspaceId)
+  const workspaceChanged = current.workspaceId !== merged.workspaceId
+  merged.workspaceRecovery =
+    merged.workspaceMode !== 'existing'
+      ? null
+      : workspaceChanged
+        ? captureAutomationWorkspaceRecoveryTarget(operations.state, merged.workspaceId)
+        : (current.workspaceRecovery ??
+          captureAutomationWorkspaceRecoveryTarget(operations.state, merged.workspaceId))
   const workspaceSshPin = automationWorkspaceSshPin(operations.state, merged.workspaceId)
   const workspaceSshPinMoved = previousPin?.targetId !== workspaceSshPin?.targetId
   const executionTarget = deriveAutomationExecutionTargetForUpdate({

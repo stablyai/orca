@@ -87,6 +87,29 @@ function makeRuntimeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatu
 }
 
 describe('automation target availability', () => {
+  it('allows a missing pinned workspace to be recovered by Run Now', () => {
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({ workspaceId: 'repo-1::/repo/deleted' }),
+        repo: makeRepo(),
+        workspace: null,
+        projectHostSetups: [],
+        sshConnectionStates: new Map()
+      })
+    ).toEqual({ canRunNow: true, reason: 'available', message: null })
+  })
+
+  it('does not recover a workspace belonging to a different project', () => {
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({ workspaceId: 'other-repo::/repo/deleted' }),
+        repo: makeRepo(),
+        workspace: null,
+        projectHostSetups: [],
+        sshConnectionStates: new Map()
+      }).reason
+    ).toBe('missing-workspace')
+  })
   it('allows local automations with an available existing workspace', () => {
     expect(
       getAutomationTargetAvailability({
