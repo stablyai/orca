@@ -8,6 +8,7 @@ import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { stripPiProcessOwnerEnv } from '../pty/pi-process-owner-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { removeOrcaVirtualDisplayEnv } from '../pty/virtual-display-terminal-env'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { applyScrubSafeAgentEnvAliases } from '../../shared/agent-hook-scrub-safe-env'
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-helpers'
@@ -39,6 +40,7 @@ export function buildLocalPtySpawnEnvironment(args: {
   removeUnspecifiedPaneIdentityEnv(spawnEnv, spawn.env)
   stripPiProcessOwnerEnv(spawnEnv)
   removeAppImageRuntimeEnv(spawnEnv)
+  removeOrcaVirtualDisplayEnv(spawnEnv, spawn.env)
   removeInheritedNoColor(spawnEnv)
   for (const key of spawn.envToDelete ?? []) {
     delete spawnEnv[key]
