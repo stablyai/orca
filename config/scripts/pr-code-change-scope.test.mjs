@@ -86,6 +86,7 @@ describe('docs-only path classification', () => {
 
   it('does not start desktop PR Checks for mobile-only diffs', () => {
     expect(shouldRunPrChecks(['mobile/src/App.tsx', 'mobile/package.json'])).toBe(false)
+    expect(shouldRunPrChecks(['.github/workflows/mobile-shell-fingerprint.yml'])).toBe(false)
   })
 
   it('does not start desktop PR Checks for cloud-only diffs', () => {

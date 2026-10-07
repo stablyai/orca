@@ -414,7 +414,8 @@ const DESKTOP_IRRELEVANT_PREFIXES = [
   '.github/workflows/cloud-',
   '.github/workflows/mobile.yml',
   '.github/workflows/mobile-ios-release.yml',
-  '.github/workflows/mobile-android-release.yml'
+  '.github/workflows/mobile-android-release.yml',
+  '.github/workflows/mobile-shell-fingerprint.yml'
 ]
 
 const STATIC_ANALYSIS_AUDIT_SCRIPTS = [
