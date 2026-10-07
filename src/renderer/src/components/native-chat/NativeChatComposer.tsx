@@ -176,14 +176,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     })
     const { imageAttachments, attachResolvedPaths, clearImageAttachments, removeImageAttachment } =
       attachments
-    useNativeChatWorkspaceFileDrop({
-      terminalTabId,
-      structuredWorktreeId: structuredTransport?.worktreeId,
-      disabled,
-      paneKey,
-      attachResolvedPaths,
-      setNotice
-    })
     const imageBlock = nativeChatImageSendBlock(imageAttachments)
     const sendHeld = disabled || structuredTransport?.sendOut === true || imageBlock.holdsSend
     const sendButtonDisabled = isWorking
