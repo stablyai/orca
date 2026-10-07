@@ -19,6 +19,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyManagementApi } from './pty-management-api'
 import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
 import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'
+import type { TerminalImageCellSize } from '../../shared/terminal-image-cell-size'
 
 export type PtyApi = {
   spawn: (opts: {
@@ -86,7 +87,7 @@ export type PtyApi = {
     options?: { requireWriteSettlement?: true }
   ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
-  resize: (id: string, cols: number, rows: number) => void
+  resize: (id: string, cols: number, rows: number, cellSize?: TerminalImageCellSize) => void
   claimViewport: (id: string, cols: number, rows: number) => void
   reportGeometry: (id: string, cols: number, rows: number) => void
   signal: (id: string, signal: string) => void

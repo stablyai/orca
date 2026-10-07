@@ -278,7 +278,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (!connected || !ptyId) {
         return false
       }
-      window.api.pty.resize(ptyId, cols, rows)
+      if (!connectionId && meta?.cellW !== undefined && meta.cellH !== undefined) {
+        window.api.pty.resize(ptyId, cols, rows, { width: meta.cellW, height: meta.cellH })
+      } else {
+        window.api.pty.resize(ptyId, cols, rows)
+      }
       if (meta?.claim) {
         window.api.pty.claimViewport(ptyId, cols, rows)
       }

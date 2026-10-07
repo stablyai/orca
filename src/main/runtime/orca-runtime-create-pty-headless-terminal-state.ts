@@ -16,6 +16,10 @@ import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 import { getTerminalViewAttributes } from './terminal-view-attribute-store'
 import { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import {
+  readTerminalImageCellSize,
+  type TerminalImageCellSize
+} from '../../shared/terminal-image-cell-size'
 
 export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
   protected createPtyHeadlessEmulator(
@@ -209,11 +213,19 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
       })
   }
 
-  protected resizeHeadlessTerminal(ptyId: string, cols: number, rows: number): void {
+  protected resizeHeadlessTerminal(
+    ptyId: string,
+    cols: number,
+    rows: number,
+    cellSize?: TerminalImageCellSize
+  ): void {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return
     }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const incarnation = this.ptysById.get(ptyId)?.incarnationId
+    const measured = readTerminalImageCellSize(cellSize) ?? undefined
     const unpainted = state.unrepaintedReflowGrid
     // Why: a PTY resize off the reflowed grid makes the TUI repaint; an echo of it does not.
     if (unpainted && (unpainted.cols !== cols || unpainted.rows !== rows)) {
@@ -224,7 +236,18 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     // from the wrong terminal width.
     state.writeChain = state.writeChain
       .then(() => {
-        state.emulator.resize(cols, rows)
+        if (
+          this.headlessTerminals.get(ptyId) !== state ||
+          this.getPtyLifecycleGeneration(ptyId) !== generation ||
+          this.ptysById.get(ptyId)?.incarnationId !== incarnation
+        ) {
+          return
+        }
+        if (measured) {
+          state.emulator.resize(cols, rows, measured)
+        } else {
+          state.emulator.resize(cols, rows)
+        }
       })
       .catch(() => {
         state.modelOperationFailed = true

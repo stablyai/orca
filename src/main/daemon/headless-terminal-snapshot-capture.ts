@@ -12,6 +12,11 @@ import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequen
 import { splitTerminalSnapshotAnsi } from './terminal-snapshot-ansi-buffers'
 import type { TerminalSnapshot } from './terminal-snapshot'
 
+export function readHeadlessVisibleLines(terminal: Terminal): string[] {
+  const buffer = terminal.buffer.active
+  return readHeadlessTerminalLines(buffer, buffer.viewportY, buffer.viewportY + terminal.rows)
+}
+
 export function readHeadlessTerminalLines(
   buffer: Terminal['buffer']['active'],
   start: number,

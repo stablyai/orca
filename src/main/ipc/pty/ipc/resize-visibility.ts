@@ -11,7 +11,11 @@ import {
   setRendererPtyDeliveryInterest,
   shouldDropHiddenRendererPtyData
 } from '../../pty-hidden-delivery-gate'
-import { tryGetProviderForPty, closeStartupQueryAuthorityForPty } from '../provider/registry'
+import {
+  tryGetProviderForPty,
+  closeStartupQueryAuthorityForPty,
+  localProvider
+} from '../provider/registry'
 import {
   activeRendererPtys,
   invalidatePendingPtyDrainPolicy,
@@ -28,6 +32,7 @@ import { PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS } from '../delivery/constants'
 import { applyCumulativeAck } from '../delivery/accounting'
 import { sendModelRestoreNeededMarker } from '../delivery/payload'
 import { isMainWindowPtyIpcEvent } from './write-input'
+import { readTerminalImageCellSize } from '../../../../shared/terminal-image-cell-size'
 import type { PtyIpcSession } from '../session'
 
 export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
@@ -36,32 +41,40 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
 
   // Why: resize is fire-and-forget — ipcMain.on (not .handle) halves IPC traffic by skipping the empty acknowledgement reply.
   ipcMain.removeAllListeners('pty:resize')
-  ipcMain.on('pty:resize', (_event, args: { id: string; cols: number; rows: number }) => {
-    // Why: after a desktop-fit override change the renderer's safeFit cascade re-measures ALL panes (background ones at full width), so suppress every pty:resize in this window to avoid corrupting PTY dimensions.
-    if (runtime?.isResizeSuppressed()) {
-      return
-    }
-    // Why: presence-lock defense-in-depth — while a phone or remote-desktop viewer drives the width, host-side resizes must not reach the PTY or its alt-screen grid garbles; load-bearing because the renderer mirror lags one IPC hop. See docs/mobile-presence-lock.md.
-    const mobileOwnsResize = runtime?.getDriver(args.id).kind === 'mobile'
-    const remoteDesktopOwnsResize = runtime?.isRemoteDesktopResizeDriven?.(args.id) === true
-    if (mobileOwnsResize || remoteDesktopOwnsResize) {
-      if (remoteDesktopOwnsResize) {
-        runtime?.recordRemoteDesktopHostReclaimTarget(args.id, args.cols, args.rows)
+  ipcMain.on(
+    'pty:resize',
+    (_event, args: { id: string; cols: number; rows: number; cellSize?: unknown }) => {
+      // Why: after a desktop-fit override change the renderer's safeFit cascade re-measures ALL panes (background ones at full width), so suppress every pty:resize in this window to avoid corrupting PTY dimensions.
+      if (runtime?.isResizeSuppressed()) {
+        return
       }
-      return
+      // Why: presence-lock defense-in-depth — while a phone or remote-desktop viewer drives the width, host-side resizes must not reach the PTY or its alt-screen grid garbles; load-bearing because the renderer mirror lags one IPC hop. See docs/mobile-presence-lock.md.
+      const mobileOwnsResize = runtime?.getDriver(args.id).kind === 'mobile'
+      const remoteDesktopOwnsResize = runtime?.isRemoteDesktopResizeDriven?.(args.id) === true
+      if (mobileOwnsResize || remoteDesktopOwnsResize) {
+        if (remoteDesktopOwnsResize) {
+          runtime?.recordRemoteDesktopHostReclaimTarget(args.id, args.cols, args.rows)
+        }
+        return
+      }
+      const provider = tryGetProviderForPty(args.id)
+      if (!provider) {
+        return
+      }
+      try {
+        provider.resize(args.id, args.cols, args.rows)
+      } catch {
+        return
+      }
+      ptySizes.set(args.id, { cols: args.cols, rows: args.rows })
+      const measured = provider === localProvider ? readTerminalImageCellSize(args.cellSize) : null
+      if (measured) {
+        runtime?.onExternalPtyResize(args.id, args.cols, args.rows, measured)
+      } else {
+        runtime?.onExternalPtyResize(args.id, args.cols, args.rows)
+      }
     }
-    const provider = tryGetProviderForPty(args.id)
-    if (!provider) {
-      return
-    }
-    try {
-      provider.resize(args.id, args.cols, args.rows)
-    } catch {
-      return
-    }
-    ptySizes.set(args.id, { cols: args.cols, rows: args.rows })
-    runtime?.onExternalPtyResize(args.id, args.cols, args.rows)
-  })
+  )
 
   // Why: pty:reportGeometry is a measurement-only sibling of pty:resize — it refreshes the restore-target cache (never resizes) so mobile-fit hold learns real desktop dims even while resize is blocked. See docs/mobile-fit-hold.md.
   ipcMain.removeAllListeners('pty:reportGeometry')

@@ -24,6 +24,8 @@ import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../terminal-selection-fit-guard'
 import { initializePaneGeometry, readPaneSize } from './read-pane-size'
+import { readTerminalImageCellMeasurements } from '../terminal-image-cell-measurements'
+import { installPtyResizeEvents } from './pty-resize-events'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -227,7 +229,10 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     if (queuePanePtyResizeIfHeld(session.pane.container, cols, rows)) {
       return
     }
-    session.transport.resize(cols, rows, { claim: true })
+    session.transport.resize(cols, rows, {
+      claim: true,
+      ...readTerminalImageCellMeasurements(session.pane.terminal)
+    })
   }
 
   session.onHeldPtyResizeFlush = (event: Event): void => {
@@ -242,12 +247,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     session.onHeldPtyResizeFlush
   )
 
-  session.onResizeDisposable = session.pane.terminal.onResize(({ cols, rows }) => {
-    if (session.suppressStructuralReplayPtyResize || session.suppressViewportClaimTerminalResize) {
-      return
-    }
-    session.forwardPtyResize(cols, rows)
-  })
+  installPtyResizeEvents(session)
 
   // Why: renderer resize forwarding is fire-and-forget. A visible pane can
   // finish with xterm at the right grid while the PTY silently kept an older

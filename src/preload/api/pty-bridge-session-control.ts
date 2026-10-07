@@ -16,6 +16,7 @@ import type { TerminalViewAttributes } from '../../shared/terminal-view-attribut
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { PreloadApi } from '../api-types'
+import type { TerminalImageCellSize } from '../../shared/terminal-image-cell-size'
 
 export const ptySessionControlApi = {
   spawn: (opts: {
@@ -88,8 +89,8 @@ export const ptySessionControlApi = {
     ipcRenderer.on('pty:writeUnavailable', handler)
     return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
   },
-  resize: (id: string, cols: number, rows: number): void => {
-    ipcRenderer.send('pty:resize', { id, cols, rows })
+  resize: (id: string, cols: number, rows: number, cellSize?: TerminalImageCellSize): void => {
+    ipcRenderer.send('pty:resize', { id, cols, rows, ...(cellSize ? { cellSize } : {}) })
   },
   claimViewport: (id: string, cols: number, rows: number): void => {
     ipcRenderer.send('pty:claimViewport', { id, cols, rows })

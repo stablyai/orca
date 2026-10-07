@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithHandleMobileUnsubscribe } from './orca-runtime-handle-mobile-unsubscribe'
+import type { TerminalImageCellSize } from '../../shared/terminal-image-cell-size'
 
 export class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeWithHandleMobileUnsubscribe {
   // Why: called when mode changes via terminal.setDisplayMode. Applies the
@@ -100,7 +101,12 @@ export class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeWithHandle
   // Why: called after a desktop renderer path has successfully resized the
   // PTY (local IPC or remote desktop viewport). The runtime mirror must take
   // the same accepted geometry so hidden-output restore parses at PTY width.
-  onExternalPtyResize(ptyId: string, cols: number, rows: number): void {
+  onExternalPtyResize(
+    ptyId: string,
+    cols: number,
+    rows: number,
+    cellSize?: TerminalImageCellSize
+  ): void {
     // The pty:resize IPC handler is supposed to gate via `isResizeSuppressed`
     // before calling here, but defend against callers that don't.
     if (this.isResizeSuppressed()) {
@@ -122,7 +128,7 @@ export class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeWithHandle
     // Why: a successful host resize supersedes any target retained after a
     // failed viewer reclaim; a later viewer cycle must capture this new truth.
     this.remoteDesktopFloor.clearStaleHostReclaimTarget(ptyId)
-    this.resizeHeadlessTerminal(ptyId, cols, rows)
+    this.resizeHeadlessTerminal(ptyId, cols, rows, cellSize)
     this.refreshRendererGeometry(ptyId, cols, rows)
   }
 

@@ -252,6 +252,7 @@ function createPane(paneId: number) {
     paste: vi.fn(),
     onData: vi.fn(() => ({ dispose: vi.fn() })),
     onResize: vi.fn(() => ({ dispose: vi.fn() })),
+    onDimensionsChange: vi.fn(() => ({ dispose: vi.fn() })),
     onRender: vi.fn((_listener: () => void) => ({ dispose: vi.fn() })),
     onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
     hasSelection: vi.fn(() => false),

@@ -115,6 +115,7 @@ export type MockPaneTerminal = {
   paste: Mock<(data: string) => void>
   onData: Mock
   onResize: Mock
+  onDimensionsChange: Mock
   onRender: Mock
   onTitleChange: Mock
   hasSelection: Mock<() => boolean>
@@ -190,6 +191,7 @@ export function createPane(paneId: number): MockPane {
     paste: vi.fn(),
     onData: vi.fn(() => ({ dispose: vi.fn() })),
     onResize: vi.fn(() => ({ dispose: vi.fn() })),
+    onDimensionsChange: vi.fn(() => ({ dispose: vi.fn() })),
     onRender: vi.fn((_listener: () => void) => ({ dispose: vi.fn() })),
     onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
     hasSelection: vi.fn(() => false),

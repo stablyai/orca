@@ -3,7 +3,8 @@ import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { ImageAddon } from '@xterm/addon-image'
-import { createHeadlessImageAddon } from './headless-image-addon'
+import { createHeadlessImageAddon, updateHeadlessImageCellSize } from './headless-image-addon'
+import type { TerminalImageCellSize } from '../../shared/terminal-image-cell-size'
 import {
   prepareHeadlessModelCheckpoint,
   type HeadlessModelPreparationOptions
@@ -27,6 +28,7 @@ import { installDeviceAttributesResponder } from './startup-device-attributes-re
 import type { TerminalSnapshot } from './types'
 import {
   captureHeadlessTerminalSnapshot,
+  readHeadlessVisibleLines,
   readHeadlessTerminalLines
 } from './headless-terminal-snapshot-capture'
 import { submitHeadlessTerminalWrite } from './headless-terminal-write-submission'
@@ -238,10 +240,11 @@ export class HeadlessEmulator {
     return true
   }
 
-  resize(cols: number, rows: number): void {
+  resize(cols: number, rows: number, cellSize?: TerminalImageCellSize): void {
     if (this.disposed) {
       return
     }
+    updateHeadlessImageCellSize(this.configuration.images, cellSize, this.pendingWrites)
     // Why gated: restored OSC-8 ranges are row-indexed, so a reflow
     // invalidates them — but a resize to the size already applied is not a
     // reflow. Cold restore seeds the ranges and then replays records that
@@ -311,12 +314,7 @@ export class HeadlessEmulator {
   }
 
   getVisibleLines(): string[] {
-    const buffer = this.terminal.buffer.active
-    return readHeadlessTerminalLines(
-      buffer,
-      buffer.viewportY,
-      buffer.viewportY + this.terminal.rows
-    )
+    return readHeadlessVisibleLines(this.terminal)
   }
 
   getVisibleBufferRange(): { start: number; endExclusive: number; totalLength: number } {

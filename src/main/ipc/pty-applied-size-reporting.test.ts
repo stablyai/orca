@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { onMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
+import { PTY_ID } from '../runtime/headless-hydration-ownership-test-fixture'
+import {
+  captureRuntime,
+  createCheckpointRuntime
+} from '../runtime/headless-model-checkpoint-test-fixture'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -106,6 +111,67 @@ describe('registerPtyHandlers', () => {
       }
       return call[1] as (event: unknown, args: unknown) => void
     }
+
+    it('calibrates the local model only after an accepted provider resize', async () => {
+      const runtime = createCheckpointRuntime()
+      setupProviderWithAppliedSize({ applied: { cols: 20, rows: 10 } })
+      registerPtyHandlers(undefined, runtime)
+      resizeListener()(undefined, {
+        id: PTY_ID,
+        cols: 20,
+        rows: 10,
+        cellSize: { width: 9.025, height: 18 }
+      })
+      const capture = await captureRuntime(runtime)
+      try {
+        expect(capture.checkpoint.metadata.configuration.images?.cellSize).toEqual({
+          width: 9.025,
+          height: 18
+        })
+      } finally {
+        capture.dispose()
+      }
+    })
+
+    it.each(['failed', 'suppressed', 'remote-driver', 'invalid-measurement'])(
+      'does not calibrate from a %s resize',
+      async (kind) => {
+        const runtime = createCheckpointRuntime()
+        setupProviderWithAppliedSize({
+          applied: { cols: 20, rows: 10 },
+          resize: () => {
+            if (kind === 'failed') {
+              throw new Error('Resize failed')
+            }
+          }
+        })
+        if (kind === 'suppressed') {
+          vi.spyOn(runtime, 'isResizeSuppressed').mockReturnValue(true)
+        }
+        if (kind === 'remote-driver') {
+          vi.spyOn(runtime, 'isRemoteDesktopResizeDriven').mockReturnValue(true)
+        }
+        registerPtyHandlers(undefined, runtime)
+        resizeListener()(undefined, {
+          id: PTY_ID,
+          cols: 20,
+          rows: 10,
+          cellSize: {
+            width: kind === 'invalid-measurement' ? Number.NaN : 9.025,
+            height: 18
+          }
+        })
+        const capture = await captureRuntime(runtime)
+        try {
+          expect(capture.checkpoint.metadata.configuration.images?.cellSize).toEqual({
+            width: 2,
+            height: 2
+          })
+        } finally {
+          capture.dispose()
+        }
+      }
+    )
 
     it('returns the applied (wide) size after a dropped narrow resize', async () => {
       // The daemon keeps the PTY at its wide spawn size; the narrow resize is silently dropped (fire-and-forget).
