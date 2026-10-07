@@ -1,5 +1,35 @@
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import {
+  isKnownAiVaultResumeWorkspaceTarget,
+  type AiVaultSessionResumeTargetState
+} from './ai-vault-session-resume'
+import {
+  canJumpToAiVaultSessionWorktree,
+  type AiVaultSessionWorktreeInfo
+} from './ai-vault-session-worktree'
+
+/**
+ * Where the continuation dialog opens by default. Unlike resume, this ignores
+ * host identity: the dialog's target picker owns that choice, and bridging the
+ * transcript is what makes another host viable.
+ */
+export function resolveAiVaultContinuationWorkspaceId(args: {
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+  activeWorktreeId: string | null
+  state: AiVaultSessionResumeTargetState
+}): string | null {
+  const sessionWorkspaceId = canJumpToAiVaultSessionWorktree(args.worktreeInfo)
+    ? (args.worktreeInfo?.worktreeId ?? null)
+    : null
+  const candidates = [sessionWorkspaceId, args.activeWorktreeId]
+  return (
+    candidates.find(
+      (candidate): candidate is string =>
+        Boolean(candidate) && isKnownAiVaultResumeWorkspaceTarget(args.state, candidate)
+    ) ?? null
+  )
+}
 
 export function canContinueAiVaultSessionInNewSession(
   session: AiVaultSession,
@@ -18,6 +48,12 @@ export function prepareAiVaultSessionContinuation(args: {
 }): AgentSessionContinuationRequest {
   const { session, targetWorktreeId, targetWorkspacePath } = args
   return {
+    origin: {
+      agent: session.agent,
+      sessionId: session.sessionId,
+      transcriptPath: session.filePath.trim() || null,
+      executionHostId: session.executionHostId
+    },
     source: {
       capturedText: previewTranscript(session),
       sourceAgent: session.agent,

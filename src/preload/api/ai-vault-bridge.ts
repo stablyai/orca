@@ -13,6 +13,10 @@ import type {
 } from '../../shared/ai-vault-types'
 import type { AiVaultSessionTitlesArgs } from '../../shared/ai-vault-session-title'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
+import type {
+  AiVaultSessionHandoffOutcome,
+  AiVaultSessionHandoffRequest
+} from '../../shared/ai-vault-session-handoff'
 import type { PreloadApi } from '../api-types'
 
 function searchClient(
@@ -52,6 +56,10 @@ export const aiVaultApi = {
     ipcRenderer.invoke('aiVault:getFirstUserPrompt', args),
   deleteSession: (args: AiVaultDeleteSessionArgs): Promise<AiVaultDeleteSessionResult> =>
     ipcRenderer.invoke('aiVault:deleteSession', args),
+  prepareSessionHandoff: (
+    args: AiVaultSessionHandoffRequest
+  ): Promise<AiVaultSessionHandoffOutcome> =>
+    ipcRenderer.invoke('aiVault:prepareSessionHandoff', args),
   onWindowFocused: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('aiVault:windowFocused', listener)

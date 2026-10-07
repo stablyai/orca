@@ -12,7 +12,16 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) => selector({ settings: mocks.settings })
+  useAppStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      settings: mocks.settings,
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [],
+      worktreesByRepo: {},
+      runtimeEnvironments: [],
+      sshTargetLabels: new Map()
+    })
 }))
 vi.mock('@/lib/launch-agent-session-continuation', () => ({
   detectAgentSessionContinuationAgents: mocks.detectAgents,

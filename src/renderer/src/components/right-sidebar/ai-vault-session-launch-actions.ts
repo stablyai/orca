@@ -15,8 +15,15 @@ import {
 import type { Worktree } from '../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from './ai-vault-session-filters'
-import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
-import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
+import {
+  isKnownAiVaultResumeWorkspaceTarget,
+  type AiVaultSessionResumeTargetState
+} from './ai-vault-session-resume'
+import {
+  prepareAiVaultSessionContinuation,
+  resolveAiVaultContinuationWorkspaceId
+} from './ai-vault-session-continuation'
+import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
@@ -35,11 +42,13 @@ export function useAiVaultSessionLaunchActions({
   activeWorktree,
   activeWorktreeId,
   targetState,
+  getWorktreeInfo,
   agentCmdOverrides
 }: {
   activeWorktree: Worktree | null
   activeWorktreeId: string | null
   targetState: AiVaultSessionResumeTargetState
+  getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   agentCmdOverrides?: Partial<Record<AiVaultAgent, string | null>>
 }) {
   const [continuationRequest, setContinuationRequest] =
@@ -179,21 +188,19 @@ export function useAiVaultSessionLaunchActions({
 
   const handleContinueInNewSession = useCallback(
     (session: AiVaultSession, targetWorktreeId: string): void => {
-      const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
-        sessionFilePath: session.filePath,
-        sessionExecutionHostId: session.executionHostId,
-        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
-        targetWorktreeId,
-        targetState
-      })
-      if (!targetId) {
+      // Why: unlike resume, continuation carries only transcript text, so it is
+      // not bound to the session's host — the dialog picks the real target.
+      if (!isKnownAiVaultResumeWorkspaceTarget(targetState, targetWorktreeId)) {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
+            'Open a workspace before resuming a session.'
+          )
+        )
         return
       }
 
-      const targetWorkspacePath = resolveAiVaultTargetWorkspacePath(
-        targetState,
-        targetId.worktreeId
-      )
+      const targetWorkspacePath = resolveAiVaultTargetWorkspacePath(targetState, targetWorktreeId)
       if (!targetWorkspacePath) {
         toast.error(
           translate(
@@ -206,12 +213,22 @@ export function useAiVaultSessionLaunchActions({
       setContinuationRequest(
         prepareAiVaultSessionContinuation({
           session,
-          targetWorktreeId: targetId.worktreeId,
+          targetWorktreeId,
           targetWorkspacePath
         })
       )
     },
-    [activeWorktree?.id, activeWorktreeId, targetState]
+    [targetState]
+  )
+
+  const getContinuationWorkspaceId = useCallback(
+    (session: AiVaultSession) =>
+      resolveAiVaultContinuationWorkspaceId({
+        worktreeInfo: getWorktreeInfo(session),
+        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+        state: targetState
+      }),
+    [activeWorktree?.id, activeWorktreeId, getWorktreeInfo, targetState]
   )
 
   const handleContinuationDialogOpenChange = useCallback((open: boolean): void => {
@@ -226,6 +243,7 @@ export function useAiVaultSessionLaunchActions({
     handleResume,
     handleResumeInNewChat,
     handleContinueInNewSession,
+    getContinuationWorkspaceId,
     continuationRequest,
     handleContinuationDialogOpenChange
   }

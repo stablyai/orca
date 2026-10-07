@@ -30,6 +30,7 @@ const {
   registerRuntimeEnvironmentHandlersMock,
   registerEphemeralVmHandlersMock,
   registerAiVaultHandlersMock,
+  registerAiVaultHandoffHandlerMock,
   registerAiVaultSearchHandlersMock,
   registerOrcaProfileHandlersMock,
   registerCodexAccountHandlersMock,
@@ -99,6 +100,7 @@ const {
   registerRuntimeEnvironmentHandlersMock: vi.fn(),
   registerEphemeralVmHandlersMock: vi.fn(),
   registerAiVaultHandlersMock: vi.fn(),
+  registerAiVaultHandoffHandlerMock: vi.fn(),
   registerAiVaultSearchHandlersMock: vi.fn(),
   registerOrcaProfileHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
@@ -314,6 +316,10 @@ vi.mock('../ephemeral-vm', () => ({
 
 vi.mock('../ai-vault', () => ({
   registerAiVaultHandlers: registerAiVaultHandlersMock
+}))
+
+vi.mock('../ai-vault-handoff', () => ({
+  registerAiVaultHandoffHandler: registerAiVaultHandoffHandlerMock
 }))
 
 vi.mock('../ai-vault-search', () => ({
@@ -601,6 +607,7 @@ describe('registerCoreHandlers', () => {
       })
     )
     expect(aiVaultOptions.getActiveRuntimeAiVaultHostInfos()).toEqual([])
+    expect(registerAiVaultHandoffHandlerMock).toHaveBeenCalled()
     expect(registerNativeChatHandlersMock).toHaveBeenCalled()
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
