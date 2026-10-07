@@ -146,7 +146,15 @@
         "title": "Avisar cuando una pestaña de Codex comparte un servidor",
         "description": "Muestra un aviso en un Codex que usted mismo inició cuando comparte un servidor con otras pestañas, porque su estado de agente puede ser incorrecto."
       }
-    }
+    },
+    "followSymlinkedDirectoriesKeywords": {
+      "symlink": "enlace simbólico",
+      "linkedFolder": "carpeta enlazada",
+      "quickOpen": "apertura rápida",
+      "fileExplorer": "explorador de archivos"
+    },
+    "followSymlinkedDirectories": "Seguir directorios con enlaces simbólicos",
+    "followSymlinkedDirectoriesDescription": "Busca carpetas enlazadas en Apertura rápida y expande las carpetas enlazadas locales en el Explorador de archivos."
   },
   "menu": {
     "checkForUpdates": "Buscar actualizaciones...",
@@ -1166,6 +1174,11 @@
               }
             }
           }
+        }
+      },
+      "ipcEvents": {
+        "sshManagedServer": {
+          "refusedBlocked": "Este host SSH no pudo moverse a un servidor Orca gestionado. Hosts SSH en Ajustes muestra por qué."
         }
       }
     },
@@ -3152,7 +3165,9 @@
             "42b283ecfc": "Orca no pudo volver a conectar de manera segura esta terminal porque el host no pudo verificar su sesión guardada. Orca dejó la sesión guardada sin cambios. Haga clic en Reintentar para intentar volver a conectarse ahora. Si aún no puede volver a conectarse, abra una nueva terminal.",
             "e16012e31e": "El demonio de terminal propietario de esta sesión salió, por lo que no se pudo recuperar la sesión y su desplazamiento hacia atrás. Abra una nueva terminal para continuar.",
             "sessionUnavailable": "Orca no pudo volver a conectarse a la sesión de terminal de este panel en el host. Abra una nueva terminal para continuar.",
-            "sourceRestoring": "Reconectando este terminal: se está restableciendo su salida. La sesión aún está en marcha."
+            "sourceRestoring": "Reconectando este terminal: se está restableciendo su salida. La sesión aún está en marcha.",
+            "heldByPreviousRelay": "Este terminal sigue ejecutándose en el host con la versión anterior de Orca, a la que esta versión no puede conectarse. Sigue ejecutándose hasta que salga. Abre un terminal nuevo para seguir trabajando aquí.",
+            "ownerHostMismatch": "La sesión guardada de este terminal pertenece a otra conexión de host, así que Orca no puede reconectarlo aquí. Abre un terminal nuevo para continuar."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Se alcanzó el límite de consolas de Git Bash",
@@ -7198,7 +7213,7 @@
             "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell",
             "resumeCopy": "Cuando Orca se cierra o instala una actualización, los chats que estaban trabajando se reanudan automáticamente al volver a abrir Orca.",
             "structuredTitle": "Utilice el chat nativo estructurado actualizado",
-            "structuredCopy": "Abra nuevos agentes como chats estructurados cuando sea posible. Si está desactivado, los abre en el chat respaldado por la terminal. Los chats que ya existen permanecen como están.",
+            "structuredCopy": "Abre nuevos agentes como chats estructurados cuando sea posible. Si está desactivado, los abre en el chat respaldado por la terminal. Los chats que ya existen permanecen como están.",
             "structuredScope": "Se ejecuta en esta máquina y en servidores Orca emparejados que ejecutan una versión que lo admita; los servidores más antiguos mantienen el chat de terminal. Los hosts WSL y SSH continúan usando el chat de terminal.",
             "structuredToggleLabel": "Alternar chat nativo estructurado actualizado",
             "resumeTitle": "Reanudar los chats de trabajo automáticamente después de reiniciar",
@@ -8325,8 +8340,8 @@
           "3c88ec55d6": "No se encontraron configuraciones para \"",
           "c7ad095d96": "Cargando ajustes...",
           "acc7bbdefd": "Presiona ESC de nuevo para salir de ajustes",
-          "43b68e10f0": "Hay cambios de IA sin guardar. Se descartarán al salir.",
-          "17bdee4ff1": "¿Descartar los cambios de IA sin guardar?",
+          "43b68e10f0": "Hay ajustes de IA sin guardar. Se descartarán al salir.",
+          "17bdee4ff1": "¿Descartar los ajustes de IA sin guardar?",
           "084d8fac5b": "Privacidad y seguridad",
           "23931df7e8": "Hosts remotos",
           "mobile_group": "Móvil",
@@ -12284,6 +12299,154 @@
         },
         "UnsealedCredentialNotice": {
           "body": "{{credential}} se almacena sin cifrar: este sistema no tiene ningún conjunto de claves del sistema operativo que Orca pueda usar. Cualquiera que pueda leer su disco o una copia de seguridad del mismo puede leer la credencial. Instale y desbloquee gnome-keyring o kwallet, luego guárdelo nuevamente para sellarlo."
+        },
+        "managedServers": {
+          "row": {
+            "notRunning": "No está en ejecución",
+            "refresh": "Actualizar estado",
+            "migration": "Migración: {{phase}}",
+            "update": "Actualizar",
+            "rollback": "Revertir",
+            "recover": "Recuperar",
+            "cancelStop": "Cancelar detención",
+            "confirmStop": "Detener y eliminar el servidor",
+            "keep": "Mantener en ejecución",
+            "stop": "Detener…",
+            "deferredVersion": "Actualización a {{version}} aplazada.",
+            "confirmRestore": "Restaurar instantánea y reiniciar",
+            "keepState": "Conservar estado",
+            "statusUnknown": "Estado desconocido",
+            "checking": "Comprobando…"
+          },
+          "title": "Servidores gestionados",
+          "description": "Orca instala y ejecuta un servidor en un host SSH vacío y lo mantiene actualizado.",
+          "deploy": {
+            "host": "Host SSH",
+            "hostPlaceholder": "Elige un host SSH vacío",
+            "name": "Nombre del servidor",
+            "submit": "Desplegar servidor",
+            "running": "Desplegando…"
+          },
+          "pending": {
+            "resume": "Reanudar"
+          },
+          "access": {
+            "title": "Acceso SSH para servidores emparejados",
+            "linked": "{{name}} por SSH",
+            "unlink": "Dejar de usar SSH",
+            "target": "Conectar a través del host SSH",
+            "port": "Puerto del servidor",
+            "link": "Usar SSH",
+            "linking": "Conectando…"
+          },
+          "search": {
+            "title": "Servidores gestionados",
+            "keywordSsh": "ssh"
+          },
+          "phase": {
+            "fenced": "Host bloqueado",
+            "staged": "Copia preparada",
+            "committed": "Copia confirmada",
+            "retired": "Finalizado"
+          },
+          "recovery": {
+            "activate": "Se interrumpió una actualización",
+            "rollback": "Se interrumpió una reversión",
+            "decommission": "Se interrumpió una detención"
+          },
+          "terminals": {
+            "unknown": "Terminales en ejecución: desconocido",
+            "count": "Terminales en ejecución: {{count}}"
+          },
+          "blocker": {
+            "notFound": "El host SSH ya no existe.",
+            "owned": "Este host SSH ya pertenece a un servidor gestionado.",
+            "catalog": "Los proyectos de este host aún no se pueden mover.",
+            "terminals": "Los terminales de este host siguen en ejecución ({{count}}). Ciérralos primero.",
+            "portForwards": "Los reenvíos de puertos guardados se quedan con el host SSH.",
+            "dependents": "Estado que aún no se puede mover: {{kinds}}.",
+            "unverifiable": "Orca no pudo leer la información guardada sobre {{sources}}, así que no puede determinar qué se movería."
+          },
+          "kind": {
+            "portForward": "reenvíos de puertos",
+            "terminalLease": "terminales",
+            "terminalRecovery": "registros de recuperación de terminales",
+            "workspaceSession": "pestañas abiertas y diseño",
+            "worktreeMetadata": "detalles del worktree",
+            "worktreeLineage": "historial de worktrees",
+            "workspaceLineage": "historial de espacios de trabajo",
+            "sparsePreset": "presets de sparse checkout",
+            "retiredWorktreeName": "nombres de worktrees retirados",
+            "automation": "automatizaciones",
+            "automationRun": "ejecuciones de automatización",
+            "mobileTabSelection": "selecciones de pestañas móviles",
+            "uiRouting": "ajustes de barra lateral y filtros"
+          },
+          "loadFailed": "Orca no pudo cargar los hosts SSH ni los movimientos sin terminar. Vuelve a abrir Ajustes e inténtalo de nuevo.",
+          "outcome": {
+            "live": "No se hizo: los terminales de este servidor siguen en ejecución. Ciérralos e inténtalo de nuevo.",
+            "unverifiable": "No se hizo: Orca no pudo confirmar qué se ejecuta en este servidor. Inténtalo de nuevo cuando el host esté disponible.",
+            "migration": "No se hizo: un movimiento a este servidor quedó sin terminar. Reanúdalo primero.",
+            "deferred": "Aún no se hizo: el servidor no está listo para esto. Inténtalo más tarde.",
+            "failed": "Orca no pudo completar esto en el servidor. Inténtalo de nuevo."
+          }
+        },
+        "sshHostServer": {
+          "sourceChanged": "Se modificó en una versión anterior de Orca: ejecuta el relé hasta que se mueva de nuevo a su servidor gestionado.",
+          "unavailable": "Ejecuta el relé: un servidor Orca gestionado no puede ejecutarse en este host ({{reason}}).",
+          "tunnelUnavailable": "Ejecuta el relé: el servidor SSH de este host no permite el reenvío de puertos y Orca tampoco pudo alcanzar un servidor gestionado a través de la sesión SSH.",
+          "deploying": "Configurando un servidor Orca gestionado…",
+          "converting": "Moviendo los proyectos de este host a su servidor Orca gestionado…",
+          "connecting": "Conectando al servidor Orca gestionado…",
+          "updating": "Actualizando el servidor gestionado…",
+          "starting": "Iniciando el servidor gestionado…",
+          "notServing": "El servidor Orca gestionado no está en ejecución y no se pudo iniciar.",
+          "hostNewer": "Ejecuta un servidor Orca gestionado de una versión más reciente de Orca; conserva esa versión.",
+          "terminalsLive": "Ejecuta el relé hasta que se cierren sus {{count}} terminales abiertos y luego se mueve a un servidor gestionado.",
+          "terminalsLive_one": "Ejecuta el relé hasta que se cierre su {{count}} terminal abierto y luego se mueve a un servidor gestionado.",
+          "terminalsLive_other": "Ejecuta el relé hasta que se cierren sus {{count}} terminales abiertos y luego se mueve a un servidor gestionado.",
+          "terminalsUnverifiable": "Ejecuta el relé: Orca no pudo confirmar que sus terminales estén cerrados. Se moverá en una conexión posterior.",
+          "retry": "Ejecuta el relé en esta sesión; se moverá a un servidor gestionado en una conexión posterior.",
+          "failureDetails": "Detalles",
+          "unavailableUnknown": "Ejecuta el relé: un servidor Orca gestionado no puede ejecutarse en este host.",
+          "cause": {
+            "unsupportedHost": "Orca no tiene una compilación de servidor para este sistema",
+            "artifactsUnavailable": "esta compilación de Orca no incluye el servidor",
+            "libcUnidentified": "Orca no pudo identificar las bibliotecas del sistema del host",
+            "runtimeSelfTest": "el runtime del servidor no superó su autocomprobación",
+            "securitySoftware": "el software de seguridad modificó el runtime del servidor",
+            "nativePreflight": "al host le faltan bibliotecas del sistema que el servidor necesita"
+          },
+          "updateDeferredLater": "Ejecuta un servidor Orca gestionado; se actualizará en una conexión posterior.",
+          "updateFailedPrevious": "Ejecuta un servidor Orca gestionado en su versión anterior; no se pudo actualizar.",
+          "terminalsLiveUncounted": "Ejecuta el relé hasta que se cierren sus terminales abiertos y luego se mueve a un servidor gestionado.",
+          "refusedBlocked": "No se movió a un servidor gestionado: algo en este host impide el movimiento.",
+          "terminalsElsewhere": "Ejecuta el relé mientras siguen en ejecución {{count}} terminales que otro escritorio o sesión de Orca abrió en este host.",
+          "terminalsElsewhere_one": "Ejecuta el relé mientras sigue en ejecución {{count}} terminal que otro escritorio o sesión de Orca abrió en este host.",
+          "terminalsElsewhere_other": "Ejecuta el relé mientras siguen en ejecución {{count}} terminales que otro escritorio o sesión de Orca abrió en este host.",
+          "terminalsElsewhereUncounted": "Ejecuta el relé mientras siguen en ejecución terminales que otro escritorio o sesión de Orca abrió en este host."
+        },
+        "deltaMove": {
+          "action": "Mover los proyectos nuevos…",
+          "title": "Mover los proyectos nuevos",
+          "description": "Una versión anterior de Orca modificó este host después de que se moviera a su servidor gestionado. Esto agrega al servidor lo que creó; nunca sobrescribe lo que el servidor ya tiene.",
+          "added": "Agregado al servidor",
+          "nothingNew": "No hay nada nuevo que agregar.",
+          "notReflected": "Modificado o eliminado en la versión anterior; el servidor conserva su propia copia",
+          "cancel": "Cancelar",
+          "confirm": "Mover los proyectos nuevos",
+          "kind": {
+            "repository": "Repositorio {{name}}",
+            "folder": "Carpeta {{name}}",
+            "group": "Grupo de proyectos {{name}}"
+          }
+        },
+        "keepServer": {
+          "action": "Conservar la versión del servidor…",
+          "title": "Conservar la versión del servidor",
+          "description": "Este host vuelve a su servidor gestionado tal como está. Lo que la versión anterior de Orca agregó o cambió aquí no se mueve; permanece solo en los ajustes guardados de esta computadora hasta que se limpien.",
+          "cancel": "Cancelar",
+          "confirm": "Conservar la versión del servidor"
         }
       },
       "right": {
@@ -15699,6 +15862,9 @@
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "Inserción de imagen cancelada porque el destino cambió. El archivo importado se conservó.",
           "destinationChanged": "Inserción de imagen cancelada porque el destino cambió. Inténtalo de nuevo."
+        },
+        "useMarkdownDocuments": {
+          "listFailed": "No se pudo obtener la lista de documentos Markdown."
         }
       },
       "diff": {
@@ -17522,6 +17688,28 @@
         "connecting": "Conectando…",
         "reconnect": "Reconectar",
         "retry": "Reintentar"
+      },
+      "managedServerMove": {
+        "offer": "Mueve {{host}} a un servidor Orca gestionado para conexiones más fiables. Sus {{count}} terminales abiertos se reiniciarán.",
+        "offer_one": "Mueve {{host}} a un servidor Orca gestionado para conexiones más fiables. Su {{count}} terminal abierto se reiniciará.",
+        "offer_other": "Mueve {{host}} a un servidor Orca gestionado para conexiones más fiables. Sus {{count}} terminales abiertos se reiniciarán.",
+        "moved": "{{host}} ahora ejecuta un servidor Orca gestionado.",
+        "refusedLive": "No se movió: {{count}} terminales en {{host}} siguen en ejecución.",
+        "refusedLive_one": "No se movió: {{count}} terminal en {{host}} sigue en ejecución.",
+        "refusedLive_other": "No se movió: {{count}} terminales en {{host}} siguen en ejecución.",
+        "refusedUnverifiable": "No se movió: Orca no pudo confirmar que {{count}} terminales en {{host}} se detuvieran.",
+        "refusedUnverifiable_one": "No se movió: Orca no pudo confirmar que {{count}} terminal en {{host}} se detuviera.",
+        "refusedUnverifiable_other": "No se movió: Orca no pudo confirmar que {{count}} terminales en {{host}} se detuvieran.",
+        "stayed": "{{host}} sigue ejecutando el relé. Hosts SSH en Ajustes muestra por qué.",
+        "failed": "No se pudo mover {{host}}: {{reason}}",
+        "running": "Moviendo {{host}} a un servidor Orca gestionado…",
+        "title": "Mover a un servidor gestionado",
+        "confirm": "Mover",
+        "notNow": "Ahora no",
+        "close": "Cerrar",
+        "offerUncounted": "Mueve {{host}} a un servidor Orca gestionado para conexiones más fiables. Sus terminales abiertos se reiniciarán.",
+        "refusedUnverifiableUncounted": "No se movió: Orca no pudo confirmar que los terminales en {{host}} se detuvieran.",
+        "retry": "Inténtalo de nuevo"
       }
     },
     "main": {
@@ -18149,7 +18337,32 @@
         "continue": "Continuar",
         "failed": "No se pudo continuar este chat. Inténtalo de nuevo o envía un mensaje.",
         "explanation": "Continúa y el agente comprobará primero si su último paso terminó."
-      }
+      },
+      "rewind": {
+        "unsupported": "Este chat no puede volver a un mensaje anterior.",
+        "historyNotPaginated": "Este chat de Codex más antiguo no puede volver a un mensaje anterior. Inicia un chat nuevo para usar Rebobinar hasta aquí.",
+        "busy": "Disponible cuando el agente esté inactivo y nada en este chat esté esperándote.",
+        "staleEpoch": "La conversación cambió. Revisa los últimos mensajes e inténtalo de nuevo.",
+        "invalidTarget": "La conversación no puede volver a este mensaje. No se cambió nada.",
+        "historyLimit": "Esta conversación es demasiado larga para retroceder en ella. No se cambió nada.",
+        "providerRefused": "El agente no pudo volver a este mensaje.",
+        "proofMismatch": "El historial del agente no coincidía con este chat. Revisa la conversación antes de continuar.",
+        "outcomeUnknown": "Orca no pudo confirmar si la conversación volvió a un mensaje anterior. Lo comprobará antes de enviar tu próximo mensaje.",
+        "outcomeUnknownReturned": "Orca no pudo confirmar si la conversación volvió a este mensaje. Tu mensaje está de nuevo en el compositor y Orca comprobará la conversación antes de enviar tu próximo mensaje.",
+        "timeout": "El chat no se actualizó después de volver a este mensaje. Vuelve a abrirlo para ver lo más reciente.",
+        "refused": "Orca no pudo volver a este mensaje. Revisa la conversación antes de continuar.",
+        "unavailable": "Espera a que el chat termine de conectarse.",
+        "pending": "Espera a que la conversación vuelva al mensaje anterior.",
+        "title": "¿Rebobinar hasta aquí?",
+        "confirmation": "¿Descartar este mensaje y todo lo que viene después? El mensaje vuelve al compositor para que puedas editarlo y reenviarlo. Los cambios de archivos en disco se conservan.",
+        "confirm": "Rebobinar",
+        "cancel": "Cancelar",
+        "action": "Rebobinar hasta aquí"
+      },
+      "visualUnavailable": "Visualización no disponible",
+      "visualLoading": "Cargando visualización",
+      "visualOpenInSidebar": "Abrir en la barra lateral",
+      "visualClose": "Cerrar visualización"
     },
     "tab": {
       "bar": {
@@ -19122,10 +19335,14 @@
     "codexSharedSettingsNotice": {
       "title": "Codex en Orca ahora usa ~/.codex",
       "description": "Codex puede volver a pedir que confíes en carpetas o apruebes comandos. Vuelve a agregar los servidores MCP que agregaste solo en Orca."
+    },
+    "paneMove": {
+      "failed": "No se pudo mover el panel a una pestaña nueva."
     }
   },
   "quickOpen": {
-    "moreMatchesAvailable": "Puede haber más coincidencias disponibles. Refina tu búsqueda para acotar los resultados."
+    "moreMatchesAvailable": "Puede haber más coincidencias disponibles. Refina tu búsqueda para acotar los resultados.",
+    "recentValidationFailed": "No se pudieron comprobar los archivos recientes: {{error}}"
   },
   "checksPanel": {
     "unlinked": {
@@ -19211,5 +19428,25 @@
     "unavailable": "No se puede reproducir este archivo multimedia. El archivo puede no estar disponible o usar un códec no compatible.",
     "openFailed": "No se pudo abrir el archivo en la aplicación predeterminada.",
     "openDefault": "Abrir en la aplicación predeterminada"
+  },
+  "projectBoard": {
+    "noColumnField": "Esta vista de tablero no tiene un campo de selección única ni de iteración para agrupar, así que Orca muestra los elementos en una lista.",
+    "noField": "Sin {{field}}"
+  },
+  "projectBoardCard": {
+    "restrictedItem": "Elemento restringido",
+    "itemLabel": "{{number}} — {{title}}"
+  },
+  "projectViews": {
+    "layout": {
+      "board": "Tablero"
+    },
+    "unsupported": {
+      "switchLayout": "Cambia a una vista de Tabla, Tablero o Hoja de ruta para trabajar con este proyecto en Orca.",
+      "description": "Orca representa vistas de proyectos de tabla, tablero y hoja de ruta. Esta vista usa un diseño que aún no puede representar."
+    }
+  },
+  "projectField": {
+    "updateFailed": "No se pudo actualizar el campo del proyecto"
   }
 }

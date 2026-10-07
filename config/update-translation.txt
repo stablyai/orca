@@ -121,3 +121,39 @@ Method (reproducible):
 - Gates: catalog verify, coverage --check, extraction, runtime-catalog pass; 296 locale
   tests pass (policy, zh-round5, generic-terms, etc.).
 
+## Scan 2026-10-07
+
+- HEAD scanned: de4ee59cba (origin/main; branch rebased onto it). Base: d3943c6d81
+  (the 2026-10-05 scan's HEAD). Window: d3943c6d81 .. HEAD (244 commits). Note: the last
+  5 commits that landed during the scan touch no locale catalog and add no en key.
+- Gates before fix: catalog verify PASS, coverage --check PASS (13 allowlisted), extraction
+  PASS, runtime-catalog PASS. No unkeyed strings and en.json in sync; the gap was
+  target-locale coverage only.
+- Delta since base: 331 new en keys (native-chat incl. rewind/composer/notices/visuals,
+  managed servers + SSH move, settings appearance chat, project board/views, markdown
+  callouts, media preview), 33 removed, 15 changed en values. All five locales were
+  missing the SAME 187 keys; es one extra (TerminalErrorToast.heldByPreviousRelay) —
+  177 vs 176. 11 of the 187 are intentionally untranslated provider credit-balance keys
+  pinned by provider-credit-balance-locales.test.ts (#25408). Translated the remaining
+  176 new keys x5 (es 177).
+- Changed-value review: the 15 new English values were already reflected in the locales,
+  except the two `Settings.*` unsaved-AI-settings keys, which still read "AI changes" /
+  "移動" from the retired "Git AI Author changes" wording — fixed in es/fr/ja (and the
+  ko/zh "them" pronoun re-pointed at the settings).
+- Applied 176 new keys x5 (+1 es) via apply-translation-delta.mjs (the pipeline repaired
+  ja 新しい->新規, エージェント->Agent, retry/待っている; ko/es/zh needed none). Strictly
+  additive: +881 keys, 0 removed.
+- Gates after fix: catalog verify PASS (all five 15566/15577; the 11 omissions are the
+  pinned balance keys), coverage --check PASS (13 allowlisted), extraction PASS,
+  runtime-catalog PASS, locale vitest suites PASS (43 files, 386 tests).
+- Reviews (3 of max 4 rounds; round 0 = 5 parallel translators, then 5 reviewers/round):
+  R1 applied 14 (es {{sources}} agreement via a parse-safe rephrase + informal-tú register
+  + idiomatic port-forward copy; fr rewind pronoun/coordination; ja MT artifacts the
+  pipeline's 新しい/待っている rewrites introduced, "Host locked" phase label, hostNewer
+  comparison sense, deltaMove missing object; ko old-chat wording + comma-splice; zh
+  sourceChanged until-clause + older-chat wording).
+  R2 applied 13 (all-locale unsaved-AI-settings staleness; es structuredCopy usted->tú;
+  fr {{sources}} agreement, pane->volet, comma-splice; ja outcome.deferred referent).
+  R3 sign-off clean on all five locales (0 errors, 0 warns; placeholders byte-identical,
+  0 untranslated leftovers, agent/proxy terminology verified).
+

@@ -146,7 +146,15 @@
         "title": "当 Codex 选项卡共享服务器时发出警告",
         "description": "当您自己启动的 Codex 与其他选项卡共享服务器时，在您自己启动的 Codex 上显示一条通知，因为它的智能体状态可能是错误的。"
       }
-    }
+    },
+    "followSymlinkedDirectoriesKeywords": {
+      "symlink": "符号链接",
+      "linkedFolder": "链接文件夹",
+      "quickOpen": "快速打开",
+      "fileExplorer": "文件资源管理器"
+    },
+    "followSymlinkedDirectories": "跟随符号链接目录",
+    "followSymlinkedDirectoriesDescription": "在快速打开中搜索链接文件夹，并在文件资源管理器中展开本地链接文件夹。"
   },
   "menu": {
     "checkForUpdates": "检查更新...",
@@ -1166,6 +1174,11 @@
               }
             }
           }
+        }
+      },
+      "ipcEvents": {
+        "sshManagedServer": {
+          "refusedBlocked": "此 SSH 主机无法迁移到受管的 Orca 服务器。设置中的“SSH 主机”会显示原因。"
         }
       }
     },
@@ -3153,7 +3166,8 @@
             "heldByPreviousRelay": "该终端仍在主机上以先前版本的 Orca 运行，当前版本无法连接到它。它会一直运行直到退出。请打开新终端以继续在此工作。",
             "sourceRestoring": "重新连接该终端 — 正在重新建立其输出。会话仍在进行。",
             "ptyAllocationLimit": "系统无法再分配 pty 设备。请在 Orca 或其他程序中关闭一些不用的终端，然后重试。",
-            "terminalProcessLimit": "系统无法再启动终端进程。请关闭不用的终端或退出不用的进程，然后重试。"
+            "terminalProcessLimit": "系统无法再启动终端进程。请关闭不用的终端或退出不用的进程，然后重试。",
+            "ownerHostMismatch": "此终端保存的会话属于另一个主机连接，因此 Orca 无法在此重新附加它。请打开新终端以继续。"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "已达到 Git Bash 控制台上限",
@@ -8311,7 +8325,7 @@
           "3c88ec55d6": "找不到“的设置",
           "c7ad095d96": "正在加载设置...",
           "acc7bbdefd": "再按一次 ESC 退出设置",
-          "43b68e10f0": "你有未保存的 AI 设置。离开后这些更改将被放弃。",
+          "43b68e10f0": "你有未保存的 AI 设置。离开后这些设置将被放弃。",
           "17bdee4ff1": "放弃未保存的 AI 设置？",
           "084d8fac5b": "隐私与安全",
           "23931df7e8": "远程主机",
@@ -12285,6 +12299,154 @@
         },
         "UnsealedCredentialNotice": {
           "body": "{{credential}} 未加密存储 — 该系统没有 Orca 可以使用的操作系统密钥环。任何可以读取您的磁盘或其备份的人都可以读取该凭据。安装并解锁 gnome-keyring 或 kwallet，然后再次保存以密封它。"
+        },
+        "managedServers": {
+          "row": {
+            "notRunning": "未运行",
+            "refresh": "刷新状态",
+            "migration": "迁移：{{phase}}",
+            "update": "更新",
+            "rollback": "回滚",
+            "recover": "恢复",
+            "cancelStop": "取消停止",
+            "confirmStop": "停止并移除服务器",
+            "keep": "保持运行",
+            "stop": "停止…",
+            "deferredVersion": "已推迟更新到 {{version}}。",
+            "confirmRestore": "恢复快照并重新启动",
+            "keepState": "保留状态",
+            "statusUnknown": "状态未知",
+            "checking": "正在检查…"
+          },
+          "title": "受管服务器",
+          "description": "Orca 会在空的 SSH 主机上安装并运行服务器，并使其保持最新。",
+          "deploy": {
+            "host": "SSH 主机",
+            "hostPlaceholder": "选择一个空的 SSH 主机",
+            "name": "服务器名称",
+            "submit": "部署服务器",
+            "running": "正在部署…"
+          },
+          "pending": {
+            "resume": "继续"
+          },
+          "access": {
+            "title": "配对服务器的 SSH 访问",
+            "linked": "{{name}}（通过 SSH）",
+            "unlink": "停止使用 SSH",
+            "target": "通过 SSH 主机访问",
+            "port": "服务器端口",
+            "link": "使用 SSH",
+            "linking": "正在连接…"
+          },
+          "search": {
+            "title": "受管服务器",
+            "keywordSsh": "ssh"
+          },
+          "phase": {
+            "fenced": "主机已锁定",
+            "staged": "副本已暂存",
+            "committed": "副本已提交",
+            "retired": "已完成"
+          },
+          "recovery": {
+            "activate": "更新已中断",
+            "rollback": "回滚已中断",
+            "decommission": "停止已中断"
+          },
+          "terminals": {
+            "unknown": "正在运行的终端：未知",
+            "count": "正在运行的终端：{{count}}"
+          },
+          "blocker": {
+            "notFound": "该 SSH 主机已不存在。",
+            "owned": "此 SSH 主机已属于一个受管服务器。",
+            "catalog": "此主机上的项目尚无法迁移。",
+            "terminals": "此主机上的终端仍在运行（{{count}}）。请先关闭它们。",
+            "portForwards": "已保存的端口转发会保留在 SSH 主机上。",
+            "dependents": "尚无法迁移的状态：{{kinds}}。",
+            "unverifiable": "Orca 无法读取其保存的 {{sources}}，因此无法确定将迁移哪些内容。"
+          },
+          "kind": {
+            "portForward": "端口转发",
+            "terminalLease": "终端",
+            "terminalRecovery": "终端恢复记录",
+            "workspaceSession": "打开的选项卡和布局",
+            "worktreeMetadata": "工作树详情",
+            "worktreeLineage": "工作树历史",
+            "workspaceLineage": "工作区历史",
+            "sparsePreset": "稀疏检出预设",
+            "retiredWorktreeName": "已停用工作树名称",
+            "automation": "自动化",
+            "automationRun": "自动化运行记录",
+            "mobileTabSelection": "移动端选项卡选择",
+            "uiRouting": "侧边栏和筛选设置"
+          },
+          "loadFailed": "Orca 无法加载 SSH 主机和未完成的迁移。请重新打开设置以重试。",
+          "outcome": {
+            "live": "未完成：此服务器上的终端仍在运行。请关闭它们后重试。",
+            "unverifiable": "未完成：Orca 无法确认此服务器上正在运行什么。请在主机可访问时重试。",
+            "migration": "未完成：迁移到此服务器的操作尚未完成。请先继续该操作。",
+            "deferred": "尚未完成：服务器尚未准备好执行此操作。请稍后重试。",
+            "failed": "Orca 无法在服务器上完成此操作。请重试。"
+          }
+        },
+        "sshHostServer": {
+          "sourceChanged": "在较旧版本的 Orca 上发生了更改：会持续运行中继，直到再次迁移到其受管服务器。",
+          "unavailable": "运行中继：此主机上无法运行受管的 Orca 服务器（{{reason}}）。",
+          "tunnelUnavailable": "运行中继：此主机的 SSH 服务器不允许端口转发，Orca 也无法通过 SSH 会话连接到受管服务器。",
+          "deploying": "正在设置受管的 Orca 服务器…",
+          "converting": "正在将此主机的项目迁移到其受管的 Orca 服务器…",
+          "connecting": "正在连接到受管的 Orca 服务器…",
+          "updating": "正在更新受管服务器…",
+          "starting": "正在启动受管服务器…",
+          "notServing": "受管的 Orca 服务器未运行，且无法启动。",
+          "hostNewer": "运行来自较新版本 Orca 的受管 Orca 服务器；它会保留该版本。",
+          "terminalsLive": "在其 {{count}} 个打开的终端全部关闭前运行中继，然后迁移到受管服务器。",
+          "terminalsLive_one": "在其 {{count}} 个打开的终端关闭前运行中继，然后迁移到受管服务器。",
+          "terminalsLive_other": "在其 {{count}} 个打开的终端全部关闭前运行中继，然后迁移到受管服务器。",
+          "terminalsUnverifiable": "运行中继：Orca 无法确认其终端已关闭。它会在下次连接时迁移。",
+          "retry": "本次会话运行中继；它会在下次连接时迁移到受管服务器。",
+          "failureDetails": "详情",
+          "unavailableUnknown": "运行中继：此主机上无法运行受管的 Orca 服务器。",
+          "cause": {
+            "unsupportedHost": "Orca 没有适用于此系统的服务器构建",
+            "artifactsUnavailable": "此 Orca 构建不包含该服务器",
+            "libcUnidentified": "Orca 无法识别主机的系统库",
+            "runtimeSelfTest": "服务器的运行时未通过自检",
+            "securitySoftware": "安全软件更改了服务器的运行时",
+            "nativePreflight": "主机缺少服务器所需的系统库"
+          },
+          "updateDeferredLater": "运行受管的 Orca 服务器；它会在下次连接时更新。",
+          "updateFailedPrevious": "在其先前版本上运行受管的 Orca 服务器；更新失败。",
+          "terminalsLiveUncounted": "在其打开的终端全部关闭前运行中继，然后迁移到受管服务器。",
+          "refusedBlocked": "未迁移到受管服务器：此主机上的某些因素阻止了迁移。",
+          "terminalsElsewhere": "当另一台 Orca 桌面端或会话在此主机上打开的 {{count}} 个终端仍在运行时，会运行中继。",
+          "terminalsElsewhere_one": "当另一台 Orca 桌面端或会话在此主机上打开的 {{count}} 个终端仍在运行时，会运行中继。",
+          "terminalsElsewhere_other": "当另一台 Orca 桌面端或会话在此主机上打开的 {{count}} 个终端仍在运行时，会运行中继。",
+          "terminalsElsewhereUncounted": "当另一台 Orca 桌面端或会话在此主机上打开的终端仍在运行时，会运行中继。"
+        },
+        "deltaMove": {
+          "action": "迁移新项目…",
+          "title": "迁移新项目",
+          "description": "较旧版本的 Orca 在此主机迁移到其受管服务器后对其进行了更改。这会将它所创建的内容添加到服务器；绝不会覆盖服务器已有的内容。",
+          "added": "已添加到服务器",
+          "nothingNew": "没有可添加的新内容。",
+          "notReflected": "在较旧版本上已更改或移除；服务器会保留自己的副本",
+          "cancel": "取消",
+          "confirm": "迁移新项目",
+          "kind": {
+            "repository": "仓库 {{name}}",
+            "folder": "文件夹 {{name}}",
+            "group": "项目组 {{name}}"
+          }
+        },
+        "keepServer": {
+          "action": "保留服务器的版本…",
+          "title": "保留服务器的版本",
+          "description": "此主机将按原样恢复为使用其受管服务器。较旧版本的 Orca 在此处添加或更改的内容不会被迁移；它们只会保留在这台电脑保存的设置中，直到被清理。",
+          "cancel": "取消",
+          "confirm": "保留服务器的版本"
         }
       },
       "right": {
@@ -15700,6 +15862,9 @@
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "由于目的地更改，图像插入被取消。导入的文件被保留。",
           "destinationChanged": "由于目的地更改，图像插入被取消。再试一次。"
+        },
+        "useMarkdownDocuments": {
+          "listFailed": "无法列出 Markdown 文档。"
         }
       },
       "diff": {
@@ -17523,6 +17688,28 @@
         "connecting": "正在连接…",
         "reconnect": "重新连接",
         "retry": "重试"
+      },
+      "managedServerMove": {
+        "offer": "将 {{host}} 迁移到受管的 Orca 服务器以获得更可靠的连接。其 {{count}} 个打开的终端将重新启动。",
+        "offer_one": "将 {{host}} 迁移到受管的 Orca 服务器以获得更可靠的连接。其 {{count}} 个打开的终端将重新启动。",
+        "offer_other": "将 {{host}} 迁移到受管的 Orca 服务器以获得更可靠的连接。其 {{count}} 个打开的终端将重新启动。",
+        "moved": "{{host}} 现在运行受管的 Orca 服务器。",
+        "refusedLive": "未迁移：{{host}} 上的 {{count}} 个终端仍在运行。",
+        "refusedLive_one": "未迁移：{{host}} 上的 {{count}} 个终端仍在运行。",
+        "refusedLive_other": "未迁移：{{host}} 上的 {{count}} 个终端仍在运行。",
+        "refusedUnverifiable": "未迁移：Orca 无法确认 {{host}} 上的 {{count}} 个终端已停止。",
+        "refusedUnverifiable_one": "未迁移：Orca 无法确认 {{host}} 上的 {{count}} 个终端已停止。",
+        "refusedUnverifiable_other": "未迁移：Orca 无法确认 {{host}} 上的 {{count}} 个终端已停止。",
+        "stayed": "{{host}} 仍在运行中继。设置中的“SSH 主机”会显示原因。",
+        "failed": "无法迁移 {{host}}：{{reason}}",
+        "running": "正在将 {{host}} 迁移到受管的 Orca 服务器…",
+        "title": "迁移到受管服务器",
+        "confirm": "迁移",
+        "notNow": "暂不",
+        "close": "关闭",
+        "offerUncounted": "将 {{host}} 迁移到受管的 Orca 服务器以获得更可靠的连接。其打开的终端将重新启动。",
+        "refusedUnverifiableUncounted": "未迁移：Orca 无法确认 {{host}} 上的终端已停止。",
+        "retry": "重试"
       }
     },
     "main": {
@@ -18150,7 +18337,32 @@
         "continue": "继续",
         "failed": "无法继续此聊天。请重试，或发送一条消息。",
         "explanation": "继续后，代理会先检查其上一步是否已完成。"
-      }
+      },
+      "rewind": {
+        "unsupported": "此聊天无法返回到更早的消息。",
+        "historyNotPaginated": "此旧版 Codex 聊天无法返回到更早的消息。请开始新聊天以使用“回溯到此处”。",
+        "busy": "当智能体空闲且此聊天中没有等待您处理的内容时可用。",
+        "staleEpoch": "对话已发生变化。请查看最新消息后重试。",
+        "invalidTarget": "对话无法返回到此消息。未做任何更改。",
+        "historyLimit": "此对话过长，无法回溯。未做任何更改。",
+        "providerRefused": "智能体无法返回到此消息。",
+        "proofMismatch": "智能体的历史记录与此聊天不匹配。请在继续前检查对话。",
+        "outcomeUnknown": "Orca 无法确认对话是否已返回到更早的消息。它会在发送您的下一条消息前进行检查。",
+        "outcomeUnknownReturned": "Orca 无法确认对话是否已返回到此消息。您的消息已回到输入框中，Orca 会在发送您的下一条消息前检查对话。",
+        "timeout": "返回到此消息后聊天未更新。请重新打开以查看最新内容。",
+        "refused": "Orca 无法返回到此消息。请在继续前检查对话。",
+        "unavailable": "请等待聊天完成连接。",
+        "pending": "请等待对话回溯到更早的消息。",
+        "title": "回溯到此处？",
+        "confirmation": "要丢弃此消息及其之后的所有内容吗？该消息会返回到输入框，以便您编辑并重新发送。磁盘上的文件更改会保留。",
+        "confirm": "回溯",
+        "cancel": "取消",
+        "action": "回溯到此处"
+      },
+      "visualUnavailable": "可视化不可用",
+      "visualLoading": "正在加载可视化",
+      "visualOpenInSidebar": "在侧边栏中打开",
+      "visualClose": "关闭可视化"
     },
     "tab": {
       "bar": {
@@ -18870,7 +19082,8 @@
     }
   },
   "quickOpen": {
-    "moreMatchesAvailable": "可能会有更多比赛。优化您的搜索以缩小结果范围。"
+    "moreMatchesAvailable": "可能会有更多比赛。优化您的搜索以缩小结果范围。",
+    "recentValidationFailed": "无法检查最近的文件：{{error}}"
   },
   "checksPanel": {
     "unlinked": {
@@ -19154,6 +19367,9 @@
       "confirmStopDescription": "这将关闭所有共享它的开放 Codex 会话，包括 Orca 之外的会话。",
       "cancel": "取消",
       "runs": "跑步"
+    },
+    "paneMove": {
+      "failed": "无法将窗格移动到新选项卡。"
     }
   },
   "fileSearch": {
@@ -19212,5 +19428,25 @@
     "unavailable": "无法播放此媒体文件。文件可能不可用或使用了不支持的编解码器。",
     "openFailed": "无法在默认应用中打开此文件。",
     "openDefault": "在默认应用中打开"
+  },
+  "projectBoard": {
+    "noColumnField": "此看板视图没有可用于分组的单选或迭代字段，因此 Orca 改为列出各项。",
+    "noField": "无 {{field}}"
+  },
+  "projectBoardCard": {
+    "restrictedItem": "受限项",
+    "itemLabel": "{{number}} — {{title}}"
+  },
+  "projectViews": {
+    "layout": {
+      "board": "看板"
+    },
+    "unsupported": {
+      "switchLayout": "切换到表格、看板或路线图视图以在 Orca 中处理此项目。",
+      "description": "Orca 可渲染表格、看板和路线图项目视图。此视图使用的布局尚无法渲染。"
+    }
+  },
+  "projectField": {
+    "updateFailed": "无法更新项目字段"
   }
 }

@@ -146,7 +146,15 @@
         "title": "Codex タブがサーバーを共有する場合に警告する",
         "description": "自分で開始した Codex が他のタブとサーバーを共有している場合、Agent のステータスが間違っている可能性があるため、その Codex に関する通知が表示されます。"
       }
-    }
+    },
+    "followSymlinkedDirectoriesKeywords": {
+      "symlink": "シンボリックリンク",
+      "linkedFolder": "リンクされたフォルダー",
+      "quickOpen": "クイックオープン",
+      "fileExplorer": "ファイルエクスプローラー"
+    },
+    "followSymlinkedDirectories": "シンボリックリンクされたディレクトリをたどる",
+    "followSymlinkedDirectoriesDescription": "クイックオープンでリンクされたフォルダーを検索し、ファイルエクスプローラーでローカルのリンクされたフォルダーを展開します。"
   },
   "menu": {
     "checkForUpdates": "アップデートを確認…",
@@ -1166,6 +1174,11 @@
               }
             }
           }
+        }
+      },
+      "ipcEvents": {
+        "sshManagedServer": {
+          "refusedBlocked": "この SSH ホストを管理対象の Orca サーバーに移動できませんでした。理由は設定の [SSH ホスト] で確認できます。"
         }
       }
     },
@@ -3153,7 +3166,8 @@
             "heldByPreviousRelay": "このターミナルは以前のバージョンの Orca のもとでホスト上でまだ実行中ですが、このバージョンからは接続できません。終了するまで実行され続けます。ここで作業を続けるには新しいターミナルを開いてください。",
             "sourceRestoring": "このターミナルを再接続しています — その出力が再確立されています。セッションはまだ実行中です。",
             "ptyAllocationLimit": "システムはこれ以上 pty デバイスを割り当てられません。Orca または他のプログラムで使っていないターミナルをいくつか閉じてから、もう一度お試しください。",
-            "terminalProcessLimit": "システムはこれ以上ターミナルプロセスを起動できません。使っていないターミナルを閉じるか、不要なプロセスを終了してから、もう一度お試しください。"
+            "terminalProcessLimit": "システムはこれ以上ターミナルプロセスを起動できません。使っていないターミナルを閉じるか、不要なプロセスを終了してから、もう一度お試しください。",
+            "ownerHostMismatch": "このターミナルの保存済みセッションは別のホスト接続に属しているため、Orca はここで再接続できません。続行するには、新規ターミナルを開いてください。"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash のコンソール上限に達しました",
@@ -8348,7 +8362,7 @@
           "3c88ec55d6": "検索条件に一致する設定が見つかりませんでした:「",
           "c7ad095d96": "設定を読み込んでいます…",
           "acc7bbdefd": "もう一度 ESC を押して設定を終了します",
-          "43b68e10f0": "未保存の AI 設定があります。移動すると変更は破棄されます。",
+          "43b68e10f0": "未保存の AI 設定があります。離れると破棄されます。",
           "17bdee4ff1": "未保存の AI 設定を破棄しますか？",
           "084d8fac5b": "プライバシーとセキュリティ",
           "23931df7e8": "リモートホスト",
@@ -12285,6 +12299,154 @@
           "hostOnly": "Orca を実行しているコンピュータ上のデスクトップアプリでプランサイトと API キーを変更します。",
           "detailsUnavailable": "プランの認証情報の詳細は、Orca を実行しているコンピュータでのみ読み取ることができます。",
           "siteUnavailable": "ホストプランサイトが利用できない"
+        },
+        "managedServers": {
+          "row": {
+            "notRunning": "実行していません",
+            "refresh": "ステータスを更新",
+            "migration": "移行: {{phase}}",
+            "update": "更新",
+            "rollback": "ロールバック",
+            "recover": "回復",
+            "cancelStop": "停止をキャンセル",
+            "confirmStop": "サーバーを停止して削除",
+            "keep": "実行を継続",
+            "stop": "停止…",
+            "deferredVersion": "{{version}} への更新は延期されました。",
+            "confirmRestore": "スナップショットを復元して再起動",
+            "keepState": "状態を保持",
+            "statusUnknown": "ステータス不明",
+            "checking": "確認中…"
+          },
+          "title": "管理対象サーバー",
+          "description": "Orca は空の SSH ホストにサーバーをインストールして実行し、最新の状態に保ちます。",
+          "deploy": {
+            "host": "SSH ホスト",
+            "hostPlaceholder": "空の SSH ホストを選択",
+            "name": "サーバー名",
+            "submit": "サーバーをデプロイ",
+            "running": "デプロイ中…"
+          },
+          "pending": {
+            "resume": "再開"
+          },
+          "access": {
+            "title": "ペアリングされたサーバーの SSH アクセス",
+            "linked": "{{name}}（SSH 経由）",
+            "unlink": "SSH の使用を停止",
+            "target": "SSH ホスト経由で接続",
+            "port": "サーバーポート",
+            "link": "SSH を使用",
+            "linking": "接続中…"
+          },
+          "search": {
+            "title": "管理対象サーバー",
+            "keywordSsh": "ssh"
+          },
+          "phase": {
+            "fenced": "ホストのロック完了",
+            "staged": "コピーのステージング完了",
+            "committed": "コピーのコミット完了",
+            "retired": "完了"
+          },
+          "recovery": {
+            "activate": "更新が中断されました",
+            "rollback": "ロールバックが中断されました",
+            "decommission": "停止が中断されました"
+          },
+          "terminals": {
+            "unknown": "実行中のターミナル: 不明",
+            "count": "実行中のターミナル: {{count}}"
+          },
+          "blocker": {
+            "notFound": "SSH ホストが存在しません。",
+            "owned": "この SSH ホストはすでに管理対象サーバーに属しています。",
+            "catalog": "このホスト上のプロジェクトはまだ移動できません。",
+            "terminals": "このホスト上のターミナルがまだ実行中です（{{count}}）。先に閉じてください。",
+            "portForwards": "保存済みのポート転送は SSH ホストに残ります。",
+            "dependents": "まだ移動できない状態: {{kinds}}。",
+            "unverifiable": "Orca は保存済みの {{sources}} を読み取れなかったため、何が移動するかを判別できません。"
+          },
+          "kind": {
+            "portForward": "ポート転送",
+            "terminalLease": "ターミナル",
+            "terminalRecovery": "ターミナル回復記録",
+            "workspaceSession": "開いているタブとレイアウト",
+            "worktreeMetadata": "ワークツリーの詳細",
+            "worktreeLineage": "ワークツリーの履歴",
+            "workspaceLineage": "ワークスペースの履歴",
+            "sparsePreset": "スパースチェックアウトプリセット",
+            "retiredWorktreeName": "廃止されたワークツリー名",
+            "automation": "オートメーション",
+            "automationRun": "オートメーション実行",
+            "mobileTabSelection": "モバイルのタブ選択",
+            "uiRouting": "サイドバーとフィルターの設定"
+          },
+          "loadFailed": "Orca は SSH ホストと未完了の移動を読み込めませんでした。設定を開き直して、もう一度お試しください。",
+          "outcome": {
+            "live": "未完了: このサーバー上のターミナルがまだ実行中です。閉じてから、もう一度お試しください。",
+            "unverifiable": "未完了: Orca はこのサーバーで何が実行中かを確認できませんでした。ホストに到達できるときに、もう一度お試しください。",
+            "migration": "未完了: このサーバーへの移動が終わっていません。先に再開してください。",
+            "deferred": "まだ未完了です: サーバーはこの操作の準備ができていません。しばらくしてから、もう一度お試しください。",
+            "failed": "Orca はサーバー上でこれを完了できませんでした。もう一度お試しください。"
+          }
+        },
+        "sshHostServer": {
+          "sourceChanged": "古い Orca で変更されました: 管理対象サーバーに再び移動されるまでリレーを実行します。",
+          "unavailable": "リレーを実行します: このホストでは管理対象の Orca サーバーを実行できません（{{reason}}）。",
+          "tunnelUnavailable": "リレーを実行します: このホストの SSH サーバーがポート転送を許可しておらず、Orca は SSH セッション経由でも管理対象サーバーに到達できませんでした。",
+          "deploying": "管理対象の Orca サーバーをセットアップ中…",
+          "converting": "このホストのプロジェクトを管理対象の Orca サーバーに移動中…",
+          "connecting": "管理対象の Orca サーバーに接続中…",
+          "updating": "管理対象サーバーを更新中…",
+          "starting": "管理対象サーバーを起動中…",
+          "notServing": "管理対象の Orca サーバーが実行されておらず、起動できませんでした。",
+          "hostNewer": "より上位バージョンの Orca で管理対象 Orca サーバーを実行しています。そのバージョンが維持されます。",
+          "terminalsLive": "開いている {{count}} 個のターミナルが閉じられるまでリレーを実行し、その後、管理対象サーバーに移動します。",
+          "terminalsLive_one": "開いている {{count}} 個のターミナルが閉じられるまでリレーを実行し、その後、管理対象サーバーに移動します。",
+          "terminalsLive_other": "開いている {{count}} 個のターミナルが閉じられるまでリレーを実行し、その後、管理対象サーバーに移動します。",
+          "terminalsUnverifiable": "リレーを実行します: Orca はターミナルが閉じられたことを確認できませんでした。次回の接続時に移動します。",
+          "retry": "このセッションではリレーを実行します。次回の接続時に管理対象サーバーに移動します。",
+          "failureDetails": "詳細",
+          "unavailableUnknown": "リレーを実行します: このホストでは管理対象の Orca サーバーを実行できません。",
+          "cause": {
+            "unsupportedHost": "Orca にはこのシステム用のサーバービルドがありません",
+            "artifactsUnavailable": "この Orca ビルドにはサーバーが含まれていません",
+            "libcUnidentified": "Orca はホストのシステムライブラリを特定できませんでした",
+            "runtimeSelfTest": "サーバーのランタイムが自己テストに失敗しました",
+            "securitySoftware": "セキュリティソフトウェアがサーバーのランタイムを変更しました",
+            "nativePreflight": "ホストにサーバーが必要とするシステムライブラリがありません"
+          },
+          "updateDeferredLater": "管理対象の Orca サーバーを実行しています。次回の接続時に更新されます。",
+          "updateFailedPrevious": "管理対象の Orca サーバーを以前のバージョンで実行しています。更新に失敗しました。",
+          "terminalsLiveUncounted": "開いているターミナルが閉じられるまでリレーを実行し、その後、管理対象サーバーに移動します。",
+          "refusedBlocked": "管理対象サーバーに移動されませんでした: このホスト上の何かが移動を妨げています。",
+          "terminalsElsewhere": "別の Orca デスクトップまたはセッションがこのホストで開いた {{count}} 個のターミナルが実行中である間は、リレーを実行します。",
+          "terminalsElsewhere_one": "別の Orca デスクトップまたはセッションがこのホストで開いた {{count}} 個のターミナルが実行中である間は、リレーを実行します。",
+          "terminalsElsewhere_other": "別の Orca デスクトップまたはセッションがこのホストで開いた {{count}} 個のターミナルが実行中である間は、リレーを実行します。",
+          "terminalsElsewhereUncounted": "別の Orca デスクトップまたはセッションがこのホストで開いたターミナルが実行中である間は、リレーを実行します。"
+        },
+        "deltaMove": {
+          "action": "新規プロジェクトを移動…",
+          "title": "新規プロジェクトを移動",
+          "description": "このホストは、管理対象サーバーに移動したあとに古いバージョンの Orca によって変更されました。これは作成されたものをサーバーに追加するもので、サーバーにすでにあるものをマージして上書きすることはありません。",
+          "added": "サーバーに追加されました",
+          "nothingNew": "新規に追加するものはありません。",
+          "notReflected": "古いバージョンで変更または削除されました。サーバーは自身のコピーを保持します",
+          "cancel": "キャンセル",
+          "confirm": "新規プロジェクトを移動",
+          "kind": {
+            "repository": "リポジトリ {{name}}",
+            "folder": "フォルダー {{name}}",
+            "group": "プロジェクトグループ {{name}}"
+          }
+        },
+        "keepServer": {
+          "action": "サーバーのバージョンを保持…",
+          "title": "サーバーのバージョンを保持",
+          "description": "このホストはそのまま管理対象サーバーに戻ります。古いバージョンの Orca がここに追加または変更したものは移動されず、クリーンアップされるまでこのコンピュータの保存済み設定にのみ残ります。",
+          "cancel": "キャンセル",
+          "confirm": "サーバーのバージョンを保持"
         }
       },
       "right": {
@@ -15700,6 +15862,9 @@
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "宛先が変更されたため、画像の挿入はキャンセルされました。インポートされたファイルは保持されました。",
           "destinationChanged": "宛先が変更されたため、画像の挿入はキャンセルされました。再試行。"
+        },
+        "useMarkdownDocuments": {
+          "listFailed": "Markdown ドキュメントを一覧表示できませんでした。"
         }
       },
       "diff": {
@@ -17523,6 +17688,28 @@
         "connecting": "接続中…",
         "reconnect": "再接続",
         "retry": "再試行"
+      },
+      "managedServerMove": {
+        "offer": "接続の信頼性を高めるため、{{host}} を管理対象の Orca サーバーに移動します。開いている {{count}} 個のターミナルが再起動します。",
+        "offer_one": "接続の信頼性を高めるため、{{host}} を管理対象の Orca サーバーに移動します。開いている {{count}} 個のターミナルが再起動します。",
+        "offer_other": "接続の信頼性を高めるため、{{host}} を管理対象の Orca サーバーに移動します。開いている {{count}} 個のターミナルが再起動します。",
+        "moved": "{{host}} は管理対象の Orca サーバーを実行するようになりました。",
+        "refusedLive": "移動されませんでした: {{host}} 上の {{count}} 個のターミナルがまだ実行中です。",
+        "refusedLive_one": "移動されませんでした: {{host}} 上の {{count}} 個のターミナルがまだ実行中です。",
+        "refusedLive_other": "移動されませんでした: {{host}} 上の {{count}} 個のターミナルがまだ実行中です。",
+        "refusedUnverifiable": "移動されませんでした: {{host}} 上の {{count}} 個のターミナルが停止したことを Orca が確認できませんでした。",
+        "refusedUnverifiable_one": "移動されませんでした: {{host}} 上の {{count}} 個のターミナルが停止したことを Orca が確認できませんでした。",
+        "refusedUnverifiable_other": "移動されませんでした: {{host}} 上の {{count}} 個のターミナルが停止したことを Orca が確認できませんでした。",
+        "stayed": "{{host}} はリレーを実行したままです。理由は設定の [SSH ホスト] で確認できます。",
+        "failed": "{{host}} を移動できませんでした: {{reason}}",
+        "running": "{{host}} を管理対象の Orca サーバーに移動中…",
+        "title": "管理対象サーバーに移動",
+        "confirm": "移動",
+        "notNow": "後で",
+        "close": "閉じる",
+        "offerUncounted": "接続の信頼性を高めるため、{{host}} を管理対象の Orca サーバーに移動します。開いているターミナルが再起動します。",
+        "refusedUnverifiableUncounted": "移動されませんでした: {{host}} 上のターミナルが停止したことを Orca が確認できませんでした。",
+        "retry": "再試行"
       }
     },
     "main": {
@@ -18185,7 +18372,32 @@
         "continue": "続行",
         "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
         "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。"
-      }
+      },
+      "rewind": {
+        "unsupported": "このチャットは以前のメッセージに戻れません。",
+        "historyNotPaginated": "この古い Codex チャットは以前のメッセージに戻れません。「ここに巻き戻す」を使用するには、新規チャットを開始してください。",
+        "busy": "Agent がアイドル状態になり、このチャットであなたの対応を待つものがなくなると利用できます。",
+        "staleEpoch": "会話が変更されました。最新のメッセージを確認して、もう一度お試しください。",
+        "invalidTarget": "会話をこのメッセージに戻すことはできません。何も変更されていません。",
+        "historyLimit": "この会話は長すぎて巻き戻せません。何も変更されていません。",
+        "providerRefused": "Agent はこのメッセージに戻れませんでした。",
+        "proofMismatch": "Agent の履歴がこのチャットと一致しませんでした。続行する前に会話を確認してください。",
+        "outcomeUnknown": "Orca は会話が以前のメッセージに戻ったかどうかを確認できませんでした。次のメッセージが送信される前に確認します。",
+        "outcomeUnknownReturned": "Orca は会話がこのメッセージに戻ったかどうかを確認できませんでした。メッセージは入力欄に戻っており、次のメッセージが送信される前に Orca が会話を確認します。",
+        "timeout": "このメッセージに戻った後、チャットが更新されませんでした。最新の内容を確認するには、開き直してください。",
+        "refused": "Orca はこのメッセージに戻れませんでした。続行する前に会話を確認してください。",
+        "unavailable": "チャットの接続が完了するまでお待ちください。",
+        "pending": "会話が以前のメッセージに戻るまでお待ちください。",
+        "title": "ここに巻き戻しますか?",
+        "confirmation": "このメッセージとそれ以降をすべて破棄しますか? メッセージは入力欄に戻り、編集して再送信できます。ディスク上のファイルの変更は保持されます。",
+        "confirm": "巻き戻す",
+        "cancel": "キャンセル",
+        "action": "ここに巻き戻す"
+      },
+      "visualUnavailable": "ビジュアライゼーションを利用できません",
+      "visualLoading": "ビジュアライゼーションを読み込み中",
+      "visualOpenInSidebar": "サイドバーで開く",
+      "visualClose": "ビジュアライゼーションを閉じる"
     },
     "tab": {
       "bar": {
@@ -18870,7 +19082,8 @@
     }
   },
   "quickOpen": {
-    "moreMatchesAvailable": "さらに多くの一致が利用可能になる可能性があります。検索を絞り込んで結果を絞り込みます。"
+    "moreMatchesAvailable": "さらに多くの一致が利用可能になる可能性があります。検索を絞り込んで結果を絞り込みます。",
+    "recentValidationFailed": "最近のファイルを確認できませんでした: {{error}}"
   },
   "checksPanel": {
     "unlinked": {
@@ -19154,6 +19367,9 @@
       "confirmStopDescription": "これにより、Orca 外部のものも含め、それを共有している開いている Codex セッションがすべて閉じられます。",
       "cancel": "キャンセル",
       "runs": "走る"
+    },
+    "paneMove": {
+      "failed": "ペインを新規タブに移動できませんでした。"
     }
   },
   "fileSearch": {
@@ -19212,5 +19428,25 @@
     "unavailable": "このメディアファイルを再生できません。ファイルが利用できないか、コーデックが対応していない可能性があります。",
     "openFailed": "既定のアプリでファイルを開けませんでした。",
     "openDefault": "既定のアプリで開く"
+  },
+  "projectBoard": {
+    "noColumnField": "このボードビューにはグループ化に使える単一選択フィールドまたは反復フィールドがないため、代わりに Orca が項目を一覧表示します。",
+    "noField": "{{field}} なし"
+  },
+  "projectBoardCard": {
+    "restrictedItem": "制限された項目",
+    "itemLabel": "{{number}} — {{title}}"
+  },
+  "projectViews": {
+    "layout": {
+      "board": "ボード"
+    },
+    "unsupported": {
+      "switchLayout": "Orca でこのプロジェクトを操作するには、テーブル、ボード、またはロードマップビューに切り替えます。",
+      "description": "Orca はテーブル、ボード、ロードマップのプロジェクトビューをレンダリングします。このビューは、まだレンダリングできないレイアウトを使用しています。"
+    }
+  },
+  "projectField": {
+    "updateFailed": "プロジェクトフィールドを更新できませんでした"
   }
 }
