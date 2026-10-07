@@ -281,6 +281,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
       ) : (
         <MobileFilePreviewBody
           preview={preview}
+          client={client}
           relativePath={displayPath}
           title={title || 'File'}
           editable={isEditableTerminalArtifact}
