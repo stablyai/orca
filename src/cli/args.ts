@@ -156,6 +156,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'note',
       'diagnostics',
       'linear',
+      'jira',
       'skills',
       'search',
       'agent-context'
